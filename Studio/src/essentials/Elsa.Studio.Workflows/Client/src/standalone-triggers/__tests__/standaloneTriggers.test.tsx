@@ -2,7 +2,7 @@ import React, { type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { StudioHttpError, type ElsaStudioModuleApi, type StudioEndpointContext, type StudioTriggerConfigurationEditorContribution } from "@elsa-workflows/studio-sdk";
+import { createContributionRegistry, StudioHttpError, studioSlots, type ElsaStudioModuleApi, type StudioEndpointContext, type StudioTriggerConfigurationEditorContribution, type StudioTriggerTypePresentationContribution } from "@elsa-workflows/studio-sdk";
 import { triggerClient, type TriggerClient } from "../api";
 import { ChangeReview } from "../ChangeReview";
 import { ConfigurationForm } from "../ConfigurationForm";
@@ -25,8 +25,22 @@ beforeEach(() => {
 });
 afterEach(() => { for (const root of roots) flushSync(() => root.unmount()); roots = []; document.body.innerHTML = ""; vi.restoreAllMocks(); });
 function mount(node: ReactNode) { const container = document.createElement("div"); document.body.appendChild(container); const root = createRoot(container); roots.push(root); flushSync(() => root.render(node)); return { container, render: (next: ReactNode) => flushSync(() => root.render(next)) }; }
-const button = (container: HTMLElement, text: string) => [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === text)!;
-const control = (container: HTMLElement, label: string) => container.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[aria-label="${label}"]`)!;
+const button = (container: ParentNode, text: string) => [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === text)!;
+function menuItem(text: string) {
+  return [...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(item => item.textContent === text);
+}
+function openRowMenu(container: ParentNode, label: string) {
+  const triggerBtn = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+  expect(triggerBtn, `Overflow menu "${label}" should be present`).not.toBeNull();
+  flushSync(() => triggerBtn.click());
+}
+const control = (container: ParentNode, label: string) => container.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[aria-label="${label}"]`)!;
+function radioCard(root: ParentNode, typeKey: string, schemaVersion = "1") {
+  return root.querySelector<HTMLLabelElement>(`label.wf-trigger-type-card[data-type-key="${typeKey}"][data-schema-version="${schemaVersion}"]`)!;
+}
+function dialog(root: ParentNode = document.body) {
+  return root.querySelector<HTMLElement>('[role="dialog"]')!;
+}
 function fill(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) {
   const prototype = element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(element, value);
@@ -159,11 +173,12 @@ describe("mounted standalone trigger interactions (component evidence)", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("Restricted workflow"));
     expect(container.textContent).not.toContain("Not serving");
     expect(button(container, "Edit")).toBeUndefined();
-    expect(button(container, "Authorize")).toBeUndefined();
-    expect(button(container, "Pause").disabled).toBe(false);
-    expect(button(container, "Revoke authority").disabled).toBe(false);
+    openRowMenu(container, "Actions for Restricted workflow");
+    expect(menuItem("Authorize")).toBeUndefined();
+    expect(menuItem("Pause")?.disabled).toBe(false);
+    expect(menuItem("Revoke authority")?.disabled).toBe(false);
     expect(client.mappingContext).not.toHaveBeenCalled();
-    flushSync(() => button(container, "Revoke authority").click());
+    flushSync(() => menuItem("Revoke authority")!.click());
     await vi.waitFor(() => expect(client.preview).toHaveBeenCalledWith("trigger-1", 1,
       { kind: "RevokeInvocation", subscriptionId: "sub-1", expectedSubscriptionRevision: 1, expectedGrantRevision: 1 }, expect.any(AbortSignal)));
     expect(client.mappingContext).not.toHaveBeenCalled();
@@ -188,24 +203,24 @@ describe("mounted standalone trigger interactions (component evidence)", () => {
       family: "Event", canCreate: true, configurationFields: [{ key: "payload", label: "Payload", type: "json" }] }));
     const sent: { requestId: string; schemaVersion: string; configuration: { payload: unknown } }[] = [];
     const context = { baseUrl: "https://backend.example/", http: {
-      getJson: vi.fn(async (path: string) => path.endsWith("trigger-identity") ? actor : { items: descriptors }),
+      getJson: vi.fn(async (path: string) => path.endsWith("trigger-identity") ? actor : path.includes("types") ? { items: descriptors } : { items: [] }),
       requestJson: vi.fn(async (_path: string, init: RequestInit) => { sent.push(JSON.parse(init.body as string)); throw new Error("Acknowledgement unavailable"); })
     } } as unknown as StudioEndpointContext;
-    const { container } = mount(<TriggersRoute api={apiStub(context)} view="create" navigate={vi.fn()} />);
-    await vi.waitFor(() => expect(control(container, "Trigger type")).not.toBeNull());
-    fill(control(container, "Trigger type"), "create-fingerprint:1");
-    fill(control(container, "Trigger name"), "Retryable create"); fill(control(container, "Payload"), "123");
+    mount(<TriggersRoute api={apiStub(context)} view="create" navigate={vi.fn()} />);
+    await vi.waitFor(() => expect(radioCard(document.body, "create-fingerprint", "1")).not.toBeNull());
+    flushSync(() => radioCard(document.body, "create-fingerprint", "1").click());
+    fill(control(dialog(), "Trigger name"), "Retryable create"); fill(control(dialog(), "Payload"), "123");
     const send = async (count: number) => {
-      flushSync(() => button(container, "Create trigger").click());
-      await vi.waitFor(() => { expect(sent).toHaveLength(count); expect(button(container, "Create trigger").disabled).toBe(false); });
+      flushSync(() => button(dialog(), "Create trigger").click());
+      await vi.waitFor(() => { expect(sent).toHaveLength(count); expect(button(dialog(), "Create trigger").disabled).toBe(false); });
     };
     await send(1); await send(2);
     expect(sent[1].requestId).toBe(sent[0].requestId);
-    fill(control(container, "Payload"), '{"text":"123"}'); await send(3);
+    fill(control(dialog(), "Payload"), '{"text":"123"}'); await send(3);
     expect(sent[0].configuration.payload).toBe(123); expect(sent[2].configuration.payload).toEqual({ text: "123" });
     expect(sent[2].requestId).not.toBe(sent[0].requestId);
-    fill(control(container, "Trigger type"), "create-fingerprint:2");
-    fill(control(container, "Trigger name"), "Retryable create"); fill(control(container, "Payload"), '{"text":"123"}'); await send(4);
+    flushSync(() => radioCard(document.body, "create-fingerprint", "2").click());
+    fill(control(dialog(), "Trigger name"), "Retryable create"); fill(control(dialog(), "Payload"), '{"text":"123"}'); await send(4);
     expect(sent[3].schemaVersion).toBe("2"); expect(sent[3].requestId).not.toBe(sent[2].requestId);
   });
   it("keeps missing capability and denied access distinct from an empty collection", async () => {
@@ -257,13 +272,15 @@ describe("mounted standalone trigger interactions (component evidence)", () => {
     let current = subscription();
     const client = { subscriptions: vi.fn(async () => ({ items: [current] })), read: vi.fn(async () => trigger()), preview: vi.fn(async () => preview), apply: vi.fn(async () => { current = { ...current, revision: 2, enabled: false }; return { requestId: "pause", disposition: "Applied", revision: 2 }; }) } as unknown as TriggerClient;
     const { container, render } = mount(<SubscriptionsSection api={apiStub()} client={client} actor={actor} trigger={trigger()} />);
-    await vi.waitFor(() => expect(container.textContent).toContain("Enabled · Valid"));
-    flushSync(() => button(container, "Pause").click());
-    await vi.waitFor(() => expect(button(container, "Apply reviewed change")?.disabled).toBe(false));
-    flushSync(() => button(container, "Apply reviewed change").click());
-    await vi.waitFor(() => expect(container.textContent).toContain("Paused · Valid"));
+    await vi.waitFor(() => { expect(container.textContent).toContain("Enabled"); expect(container.textContent).toContain("Valid"); });
+    openRowMenu(container, "Actions for reconcile");
+    flushSync(() => menuItem("Pause")!.click());
+    await vi.waitFor(() => expect(dialog()).not.toBeNull());
+    await vi.waitFor(() => expect(button(dialog(), "Apply reviewed change")?.disabled).toBe(false));
+    flushSync(() => button(dialog(), "Apply reviewed change").click());
+    await vi.waitFor(() => { expect(container.textContent).toContain("Paused"); expect(container.textContent).toContain("Valid"); });
     render(<SubscriptionsSection key="workflow" api={apiStub()} client={client} actor={actor} definitionId="reconcile" />);
-    await vi.waitFor(() => expect(container.textContent).toContain("Paused · Valid"));
+    await vi.waitFor(() => { expect(container.textContent).toContain("Paused"); expect(container.textContent).toContain("Valid"); });
     expect(container.textContent).toContain("independently of this draft or historical graph");
     expect(client.subscriptions).toHaveBeenLastCalledWith({ definitionId: "reconcile", after: undefined }, expect.any(AbortSignal));
   });
@@ -297,13 +314,14 @@ describe("mounted standalone trigger interactions (component evidence)", () => {
     const { container } = mount(<DeliveryDetails api={apiStub()} client={client} deliveryId="delivery-1" navigate={vi.fn()} />);
     await vi.waitFor(() => expect(button(container, "Cancel pending recipient")?.disabled).toBe(false));
     flushSync(() => button(container, "Cancel pending recipient").click());
+    await vi.waitFor(() => expect(dialog()).not.toBeNull());
     await vi.waitFor(() => expect(client.preview).toHaveBeenCalledWith("trigger-1", 7,
       { kind: "CancelPendingRecipients", deliveryId: "delivery-1", expectedDeliveryRevision: 4, recipients: [{ recipientId: "recipient-1", expectedRevision: 2 }] }, expect.any(AbortSignal)));
-    flushSync(() => button(container, "Reload and review current state").click());
+    flushSync(() => button(dialog(), "Reload and review current state").click());
     await vi.waitFor(() => expect(client.preview).toHaveBeenLastCalledWith("trigger-1", 8,
       { kind: "CancelPendingRecipients", deliveryId: "delivery-1", expectedDeliveryRevision: 5, recipients: [{ recipientId: "recipient-1", expectedRevision: 3 }] }, expect.any(AbortSignal)));
-    await vi.waitFor(() => expect(button(container, "Apply reviewed change")?.disabled).toBe(false));
-    flushSync(() => button(container, "Apply reviewed change").click());
+    await vi.waitFor(() => expect(button(dialog(), "Apply reviewed change")?.disabled).toBe(false));
+    flushSync(() => button(dialog(), "Apply reviewed change").click());
     await vi.waitFor(() => expect(client.apply).toHaveBeenCalledWith("trigger-1", 8,
       { kind: "CancelPendingRecipients", deliveryId: "delivery-1", expectedDeliveryRevision: 5, recipients: [{ recipientId: "recipient-1", expectedRevision: 3 }] }, "preview-1", expect.any(String)));
     expect(client.read).not.toHaveBeenCalled();
@@ -425,10 +443,11 @@ describe("review regression cases", () => {
     const edits = [...container.querySelectorAll<HTMLButtonElement>("button")].filter(item => item.textContent === "Edit");
     flushSync(() => edits[0].click()); flushSync(() => edits[1].click());
     resolveB(trigger());
-    await vi.waitFor(() => expect(control(container, "Configured value for Note")?.value).toBe("b"));
+    await vi.waitFor(() => expect(dialog()).not.toBeNull());
+    await vi.waitFor(() => expect(control(dialog(), "Configured value for Note")?.value).toBe("b"));
     resolveA(trigger()); await first; await new Promise(resolve => setTimeout(resolve, 20));
-    await vi.waitFor(() => expect(button(container, "Review subscription")?.disabled).toBe(false));
-    flushSync(() => button(container, "Review subscription").click());
+    await vi.waitFor(() => expect(button(dialog(), "Review subscription")?.disabled).toBe(false));
+    flushSync(() => button(dialog(), "Review subscription").click());
     await vi.waitFor(() => expect(client.preview).toHaveBeenCalledWith(trigger().id, 1, expect.objectContaining({
       kind: "SaveSubscription", subscriptionId: "sub-b", target: { definitionId: "definition-b", slotName: "default" },
       mappings: [{ inputName: "Note", binding: { kind: "Literal", value: "b" } }]
@@ -468,5 +487,260 @@ describe("review regression cases", () => {
     expect([...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].every(input => !input.disabled)).toBe(true);
     flushSync(() => button(container, "Review subscription").click());
     await vi.waitFor(() => expect(client.preview).toHaveBeenCalled());
+  });
+  it("renders a consistent collection empty state without a zero-count footer and opens a card-based create modal that navigates to the new trigger", async () => {
+    discovery.document.capabilities[0].links.push({ rel: "types", href: "custom/types" });
+    const descriptors: TriggerTypeDescriptor[] = [
+      { typeKey: "cron", schemaVersion: "1", displayName: "Cron", family: "Cron", canCreate: true, configurationFields: [{ key: "expression", label: "Cron expression", type: "string", required: true }] },
+      { typeKey: "http", schemaVersion: "1", displayName: "HTTP", family: "Http", canCreate: true, configurationFields: [{ key: "route", label: "Route", type: "string", required: true }] },
+      { typeKey: "acme.webhook", schemaVersion: "1", displayName: "Acme Webhook", family: "Custom", canCreate: true, configurationFields: [{ key: "channel", label: "Channel", type: "string", required: true }] },
+      { typeKey: "disabled-source", schemaVersion: "1", displayName: "Disabled Source", family: "Event", canCreate: false, configurationFields: [] }
+    ];
+    const CustomIcon = ({ size }: { size?: number }) => <svg data-testid="acme-icon" width={size} height={size} />;
+    const presentations = createContributionRegistry<StudioTriggerTypePresentationContribution>({ slot: studioSlots.triggerTypePresentations });
+    presentations.add({
+      id: "acme.webhook.presentation",
+      typeKey: "acme.webhook",
+      displayName: "Acme Custom Webhook",
+      description: "Receives signed webhooks from Acme.",
+      icon: CustomIcon,
+      accent: "pink",
+      category: "Partner",
+      order: 5
+    });
+    const created: TriggerView = { ...trigger(), id: "trigger-created-42", name: "Acme Hook", typeKey: "acme.webhook", schemaVersion: "1", configuration: { channel: "orders" } };
+    const context = { baseUrl: "https://backend.example/", http: {
+      getJson: vi.fn(async (path: string) => path.endsWith("trigger-identity") ? actor : path.includes("types") ? { items: descriptors } : { items: [] }),
+      requestJson: vi.fn(async () => created)
+    } } as unknown as StudioEndpointContext;
+    const navigate = vi.fn();
+    const api = { ...apiStub(context), triggerTypePresentations: presentations } as unknown as ElsaStudioModuleApi;
+    const { container } = mount(<TriggersRoute api={api} view="list" navigate={navigate} />);
+
+    await vi.waitFor(() => expect(container.querySelector(".studio-collection-empty")).not.toBeNull());
+    expect(container.querySelector(".studio-page[data-studio-collection]")).not.toBeNull();
+    expect(container.querySelector(".studio-collection-footer")).toBeNull();
+
+    flushSync(() => button(container, "Create trigger").click());
+    await vi.waitFor(() => expect(dialog()).not.toBeNull());
+    await vi.waitFor(() => expect(dialog().querySelectorAll(".wf-trigger-type-card")).toHaveLength(4));
+
+    const cards = [...dialog().querySelectorAll<HTMLLabelElement>(".wf-trigger-type-card")];
+    expect(cards.map(card => card.dataset.typeKey)).toEqual(["acme.webhook", "http", "disabled-source", "cron"]);
+    expect(cards[0].textContent).toContain("Acme Custom Webhook");
+    expect(cards[0].textContent).toContain("Receives signed webhooks from Acme.");
+    expect(cards[0].textContent).toContain("Partner");
+    expect(cards[0].querySelector('[data-testid="acme-icon"]')).not.toBeNull();
+    expect(cards[2].getAttribute("aria-disabled")).toBe("true");
+    expect(cards[2].querySelector<HTMLInputElement>('input[type="radio"]')!.disabled).toBe(true);
+
+    flushSync(() => radioCard(dialog(), "acme.webhook", "1").click());
+    fill(control(dialog(), "Trigger name"), "Acme Hook");
+    fill(control(dialog(), "Channel"), "orders");
+    flushSync(() => button(dialog(), "Create trigger").click());
+
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/workflows/triggers/trigger-created-42"));
+  });
+  it("supports interactive row click, explicit Manage action and Edit configuration deep link on populated trigger lists", async () => {
+    discovery.document.capabilities[0].links.push({ rel: "types", href: "custom/types" });
+    const rowTrigger: TriggerView = {
+      ...trigger(),
+      id: "trigger-99",
+      name: "Fire Starter",
+      typeKey: "http",
+      schemaVersion: "1",
+      http: { mode: "AsyncFanOut", admissionPolicy: "RequireAll", proposedEndpoint: "fire-starter", reservationState: "Unreserved" },
+      actions: [{ action: "SaveConfiguration", allowed: true }]
+    };
+    const descriptors: TriggerTypeDescriptor[] = [
+      { typeKey: "http", schemaVersion: "1", displayName: "HTTP Endpoint", family: "Http", canCreate: true, configurationFields: [{ key: "route", label: "Route", type: "string", required: true }] }
+    ];
+    const context = { baseUrl: "https://backend.example/", http: {
+      getJson: vi.fn(async (path: string) => path.endsWith("trigger-identity") ? actor : path.includes("types") ? { items: descriptors } : { items: [rowTrigger] })
+    } } as unknown as StudioEndpointContext;
+    const navigate = vi.fn();
+    const { container } = mount(<TriggersRoute api={apiStub(context)} view="list" navigate={navigate} />);
+
+    await vi.waitFor(() => expect(container.querySelector("tbody tr")).not.toBeNull());
+    await vi.waitFor(() => expect(container.textContent).toContain("HTTP Endpoint"));
+    expect(container.textContent).toContain("1 trigger shown");
+
+    const row = container.querySelector<HTMLTableRowElement>("tbody tr")!;
+    expect(row.hasAttribute("data-studio-row-interactive")).toBe(true);
+    flushSync(() => row.click());
+    expect(navigate).toHaveBeenCalledWith("/workflows/triggers/trigger-99");
+
+    navigate.mockClear();
+    flushSync(() => button(container, "Manage").click());
+    expect(navigate).toHaveBeenCalledWith("/workflows/triggers/trigger-99");
+
+    navigate.mockClear();
+    const menuTrigger = container.querySelector<HTMLButtonElement>('button[aria-label="Actions for Fire Starter"]')!;
+    flushSync(() => menuTrigger.click());
+    const editItem = [...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(item => item.textContent === "Edit configuration")!;
+    expect(editItem).toBeDefined();
+    flushSync(() => editItem.click());
+    expect(navigate).toHaveBeenCalledWith("/workflows/triggers/trigger-99?edit=configuration");
+  });
+  it("supports co-located trigger presentation metadata on configuration editor contributions and opens edit mode from ?edit=configuration", async () => {
+    discovery.document.capabilities[0].links.push({ rel: "types", href: "custom/types" });
+    const EditorIcon = ({ size }: { size?: number }) => <svg data-testid="editor-icon" width={size} height={size} />;
+    const editors = createContributionRegistry<StudioTriggerConfigurationEditorContribution>({ slot: studioSlots.triggerConfigurationEditors });
+    editors.add({
+      id: "acme.co-located",
+      typeKey: "acme.signal",
+      schemaVersion: "1",
+      component: ({ configuration, onChange }) => <button type="button" onClick={() => onChange({ ...configuration, topic: "updated" })}>Update signal</button>,
+      presentation: {
+        displayName: "Acme Signal",
+        description: "Delivered via co-located editor presentation.",
+        icon: EditorIcon,
+        accent: "teal",
+        category: "Signal"
+      }
+    });
+    const descriptors: TriggerTypeDescriptor[] = [
+      { typeKey: "acme.signal", schemaVersion: "1", displayName: "Raw Signal", family: "Event", canCreate: true, configurationEditorId: "acme.co-located", configurationFields: [{ key: "topic", label: "Topic", type: "string" }] }
+    ];
+    const editableTrigger: TriggerView = {
+      ...trigger(),
+      id: "trigger-edit-1",
+      name: "Signal Trigger",
+      typeKey: "acme.signal",
+      schemaVersion: "1",
+      configuration: { topic: "initial" },
+      actions: [{ action: "SaveConfiguration", allowed: true }]
+    };
+    const context = { baseUrl: "https://backend.example/", http: {
+      getJson: vi.fn(async (path: string) => path.endsWith("trigger-identity") ? actor : path.includes("types") ? { items: descriptors } : path.includes("trigger-edit-1") ? editableTrigger : { items: [] })
+    } } as unknown as StudioEndpointContext;
+    const api = { ...apiStub(context), triggerConfigurationEditors: editors } as unknown as ElsaStudioModuleApi;
+
+    mount(<TriggersRoute api={api} view="create" navigate={vi.fn()} />);
+    await vi.waitFor(() => expect(radioCard(document.body, "acme.signal", "1")).not.toBeNull());
+    const card = radioCard(document.body, "acme.signal", "1");
+    expect(card.textContent).toContain("Acme Signal");
+    expect(card.textContent).toContain("Delivered via co-located editor presentation.");
+    expect(card.querySelector('[data-testid="editor-icon"]')).not.toBeNull();
+
+    window.history.pushState({}, "", "/workflows/triggers/trigger-edit-1?edit=configuration");
+    const { container } = mount(<TriggersRoute api={api} view="details" navigate={vi.fn()} />);
+    const editDialog = () => [...document.body.querySelectorAll<HTMLElement>('[role="dialog"]')].find(item => item.textContent?.includes("Edit trigger configuration"))!;
+    await vi.waitFor(() => expect(editDialog()).toBeDefined());
+    await vi.waitFor(() => expect(button(editDialog(), "Review changes")).toBeDefined());
+    expect(control(editDialog(), "Trigger name").value).toBe("Signal Trigger");
+    expect(button(editDialog(), "Update signal")).toBeDefined();
+    // Details cards and tabs remain mounted behind the Edit configuration modal.
+    expect(container.querySelector('[aria-label="Trigger overview"]')).not.toBeNull();
+    expect(container.querySelector('[role="tablist"][aria-label="Trigger workspace sections"]')).not.toBeNull();
+    window.history.pushState({}, "", "/");
+  });
+  it("renders TriggerDetails with surface cards, tabbed Subscriptions/Deliveries workspace, and modal trigger picker in workflow direction", async () => {
+    discovery.document.capabilities[0].links.push(
+      { rel: "types", href: "custom/types" },
+      { rel: "subscriptions", href: "custom/subscriptions" },
+      { rel: "deliveries", href: "custom/deliveries" }
+    );
+    const detailTrigger: TriggerView = {
+      ...trigger(),
+      id: "trigger-tabs-1",
+      name: "Webhook Hub",
+      typeKey: "http",
+      schemaVersion: "1",
+      configuration: { path: "hooks/hub" },
+      http: { mode: "AsyncFanOut", admissionPolicy: "RequireAll", proposedEndpoint: "hooks/hub", reservationState: "Unreserved" },
+      actions: [
+        { action: "SaveConfiguration", allowed: true },
+        { action: "EnableTrigger", allowed: true },
+        { action: "AddSubscription", allowed: true },
+        { action: "ReadDeliveries", allowed: true }
+      ]
+    };
+    const context = {
+      baseUrl: "https://backend.example/",
+      http: {
+        getJson: vi.fn(async (path: string) => {
+          if (path.endsWith("trigger-identity")) return actor;
+          if (path.includes("types")) return { items: [{ typeKey: "http", schemaVersion: "1", displayName: "HTTP Endpoint", family: "Http", canCreate: true, configurationFields: [{ key: "path", label: "Route", type: "string" }] }] };
+          if (path.includes("subscriptions") || path.includes("deliveries")) return { items: [] };
+          if (path.includes("trigger-tabs-1")) return detailTrigger;
+          return { items: [] };
+        })
+      }
+    } as unknown as StudioEndpointContext;
+    window.history.pushState({}, "", "/workflows/triggers/trigger-tabs-1");
+    const { container } = mount(<TriggersRoute api={apiStub(context)} view="details" navigate={vi.fn()} />);
+
+    await vi.waitFor(() => expect(container.querySelector('[aria-label="Trigger overview"]')).not.toBeNull());
+    expect(container.querySelector('[aria-label="HTTP mode and endpoint"]')).not.toBeNull();
+    expect(container.textContent).toContain("No live associations");
+    // Deliveries tab is lazy-loaded when selected.
+    const deliveriesTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(tab => tab.textContent?.includes("Deliveries"))!;
+    expect(deliveriesTab).toBeDefined();
+    flushSync(() => deliveriesTab.click());
+    await vi.waitFor(() => expect(container.textContent).toContain("No delivery evidence yet"));
+
+    // Workflow Inspector's Add trigger opens a card-based TriggerPickerDialog modal.
+    const pickerClient = {
+      subscriptions: vi.fn(async () => ({ items: [] })),
+      list: vi.fn(async () => ({ items: [detailTrigger] })),
+      types: vi.fn(async () => ({ items: [{ typeKey: "http", schemaVersion: "1", displayName: "HTTP Endpoint", family: "Http", canCreate: true, configurationFields: [] }] })),
+      targets: vi.fn(async () => ({ items: [] })),
+      mappingContext: vi.fn(async () => ({ target: { definitionId: "wf-1", slotName: "default", state: "Available", findings: [], inputContract: { version: 1, inputs: [] } }, sourceSchema: { fields: [] }, supportedExpressions: [], findings: [] }))
+    } as unknown as TriggerClient;
+    const { container: workflowContainer } = mount(<SubscriptionsSection api={apiStub(context)} client={pickerClient} actor={actor} definitionId="wf-1" />);
+    await vi.waitFor(() => expect(button(workflowContainer, "Add trigger")).toBeDefined());
+    flushSync(() => button(workflowContainer, "Add trigger").click());
+    await vi.waitFor(() => expect(dialog()).not.toBeNull());
+    await vi.waitFor(() => expect(dialog().querySelector(".wf-trigger-picker-card")?.textContent).toContain("Webhook Hub"));
+    expect(dialog().querySelector(".wf-trigger-picker-card")?.textContent).toContain("HTTP Endpoint");
+    window.history.pushState({}, "", "/");
+  });
+  it("renders inline table findings with semantic tones in the Triggers list and panel findings on Trigger details", async () => {
+    discovery.document.capabilities[0].links.push(
+      { rel: "types", href: "custom/types" },
+      { rel: "subscriptions", href: "custom/subscriptions" }
+    );
+    const rows: TriggerView[] = [
+      {
+        ...trigger(),
+        id: "trigger-cron-1",
+        name: "Heartbeat",
+        typeKey: "cron",
+        findings: [{ code: "ScheduleCursorInactive", message: "This saved cursor is inactive; no future firing is scheduled." }]
+      },
+      {
+        ...trigger(),
+        id: "trigger-http-1",
+        name: "Webhook",
+        typeKey: "http",
+        findings: [
+          { code: "ScheduleAdmissionUnavailable", message: "Admission is temporarily unavailable." },
+          { code: "HttpRouteConflict", message: "Route is already reserved." }
+        ]
+      }
+    ];
+    const context = {
+      baseUrl: "https://backend.example/",
+      http: {
+        getJson: vi.fn(async (path: string) => {
+          if (path.endsWith("trigger-identity")) return actor;
+          if (path.includes("types") || path.includes("subscriptions")) return { items: [] };
+          if (path.includes("trigger-cron-1")) return rows[0];
+          return { items: rows };
+        })
+      }
+    } as unknown as StudioEndpointContext;
+
+    const { container } = mount(<TriggersRoute api={apiStub(context)} view="list" navigate={vi.fn()} />);
+    await vi.waitFor(() => expect(container.querySelectorAll(".wf-trigger-findings[data-variant=\"inline\"]")).toHaveLength(2));
+    const inlineFindings = [...container.querySelectorAll<HTMLLIElement>('.wf-trigger-findings[data-variant="inline"] .wf-trigger-finding')];
+    expect(inlineFindings.map(item => item.dataset.tone)).toEqual(["info", "warning", "danger"]);
+    expect(inlineFindings[0].textContent).toContain("This saved cursor is inactive; no future firing is scheduled.");
+
+    window.history.pushState({}, "", "/workflows/triggers/trigger-cron-1");
+    const { container: detailContainer } = mount(<TriggersRoute api={apiStub(context)} view="details" navigate={vi.fn()} />);
+    await vi.waitFor(() => expect(detailContainer.querySelector('.wf-trigger-findings[data-variant="panel"] .wf-trigger-finding[data-tone="info"]')).not.toBeNull());
+    window.history.pushState({}, "", "/");
   });
 });

@@ -1,0 +1,27 @@
+import React, { lazy, Suspense } from "react";
+import { ChartColumn } from "lucide-react";
+import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { createDashboardAuthoringController } from "./native/authoring";
+import { registerDashboardWeaver } from "./native/weaverAuthoring";
+export type { DashboardAuthoringController, DashboardAuthoringSnapshot, DashboardAuthoringProposal, DashboardAuthoringApplyResult } from "./native/authoring";
+
+const NamedDashboardsRoute = lazy(() => import("./native/NamedDashboards").then(module => ({ default: module.NamedDashboardsRoute })));
+
+export function register(api: ElsaStudioModuleApi) {
+  const dashboardAuthoring = createDashboardAuthoringController(api.weaver?.clientId ?? crypto.randomUUID());
+  registerDashboardWeaver(api, dashboardAuthoring);
+  const requiresBackend = [{ id: "elsa.api.studio-dashboard", contractVersion: "1" }];
+  api.navigation.add({ id: "dashboards", label: "Dashboards", path: "/dashboards", order: 12, placement: "operate", requiresBackend });
+  api.navigation.add({ id: "questions", label: "Questions", path: "/questions", order: 13, placement: "operate", icon: ChartColumn, requiresBackend });
+  for (const kind of ["dashboard", "question"] as const) {
+    const collection = `/${kind}s`;
+    const views = [["list", collection], ["create", `${collection}/new`], ["detail", `${collection}/:resourceId`]] as const;
+    const routes = kind === "dashboard" ? [["list", collection], ["create", `${collection}/new`], ["edit", `${collection}/:resourceId/edit`], ["detail", `${collection}/:resourceId`]] as const : views;
+    for (const [view, path] of routes) {
+      api.routes.add({ id: `saved-${kind}:${view}`, label: view === "list" ? `${kind === "dashboard" ? "Dashboards" : "Questions"}` : view === "create" ? `New ${kind}` : view === "edit" ? `Edit ${kind}` : `Saved ${kind}`, path, requiresBackend,
+        workspace: view === "detail" || view === "edit" ? { resourceKey: location => { const segments = location.pathname.split("/").filter(Boolean); return `${kind}:${segments[segments.length - (view === "edit" ? 2 : 1)]}`; } } : undefined,
+        component: ({ navigate }) => <Suspense fallback={<section role="status">Loading {kind}…</section>}><NamedDashboardsRoute api={api} kind={kind} view={view} authoring={dashboardAuthoring} navigate={navigate} /></Suspense>
+      });
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "CShells": {
+    "Shells": {
+      "Default": {
+        "Features": {
+          "StudioApi": {},
+          "BackendsStudio": {},
+          "FeatureManagement": {},
+          "ThemeManagement": {},
+          "ThemePicker": {},
+          "ThemeStoreCore": {}
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}

@@ -274,6 +274,9 @@ public sealed class PublicationActivator(
     private static string MapFailedStep(WorkflowActivationStep step) => step switch
     {
         WorkflowActivationStep.ChannelValidation => PublicationFailureCodes.ChannelNotDeclared,
+        WorkflowActivationStep.Mapping => PublicationFailureCodes.DefinitionUnsupported,
+        // A kernel host's route or schedule clash with what it serves is a trigger conflict.
+        WorkflowActivationStep.ServingCheck => PublicationFailureCodes.TriggerConflict,
         WorkflowActivationStep.ProjectionPreparation => PublicationFailureCodes.ProjectionPreparationFailed,
         WorkflowActivationStep.ProjectionActivation or WorkflowActivationStep.TriggerObserverNotification =>
             PublicationFailureCodes.ProjectionActivationFailed,

@@ -50,6 +50,23 @@ public static class WorkflowExecutableSourceReferenceComparer
         left.DeletedAt == right.DeletedAt &&
         StringComparer.Ordinal.Equals(left.DeletedReason, right.DeletedReason);
 
+    /// <summary>
+    /// Returns whether two references carry identical non-behavioral inspection sidecars
+    /// (layout, nested boundary layout, authored inputs, and activity presentation).
+    /// </summary>
+    public static bool SameInspectionSidecars(
+        WorkflowExecutableSourceReference left,
+        WorkflowExecutableSourceReference right)
+    {
+        ArgumentNullException.ThrowIfNull(left);
+        ArgumentNullException.ThrowIfNull(right);
+
+        return SameLayout(left.Layout, right.Layout) &&
+               SameSidecar(left.LayoutSidecar, right.LayoutSidecar) &&
+               SameAuthoredInputs(left.AuthoredInputs, right.AuthoredInputs) &&
+               SameActivityPresentation(left.ActivityPresentation, right.ActivityPresentation);
+    }
+
     /// <summary>Checks a live logical publication against its current physical scope and canonical slot/reference identities.</summary>
     /// <remarks>This compares supplied evidence; it grants no permission and does not replace atomic admission fences.
     /// A null expected owner accepts any positive slot owner, including source-managed publications.</remarks>

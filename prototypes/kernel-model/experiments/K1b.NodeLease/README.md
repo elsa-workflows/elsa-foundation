@@ -25,7 +25,8 @@ until the engine reports the sessions waiting, then releases the hold.
   - On release, p's commit in 3 and p's gain take of 5 are sent as well.
 - **`case=mutual`:** two processes past their leases whose set takes cover each other's partitions.
   - Setup: a owns {1, 2} and b owns {3, 4}.
-  - The hold writes both node records.
+  - The hold writes both node records in the deadlock controls and the versioned-read controls.
+    The ordered locking-read SQL Server run uses update locks compatible with the peer reads.
   - a's take of {3, 4} and b's take of {1, 2} are sent, then the hold is released.
 - **`case=heartbeats`:** two heartbeats and the membership reads.
   - Setup: as `heartbeat`. The hold writes partition row 0.
@@ -120,5 +121,12 @@ Under the node lease, a take whose transaction is a deadlock victim or timed out
 it as `failed: Transient mssql 1205`.
 
 Safety held in every run:
+
 - every partition ends with exactly one owner;
 - each deadlock victim's transaction rolled back whole: a losing take's rows keep their old owner and epoch.
+
+The ordered mutual fixture seeds four distinct nonzero positions with a fenced journal commit.
+Both ranges must change owner at the next epochs and retain those positions. The returned fences are
+compared with the persisted owner rows from a separate connection. On SQL Server with locking reads,
+the ordered hold uses update locks so both peer reads can finish before the renewals proceed.
+The provider-reported take transaction levels must be `ReadCommitted` even under a repeatable-read server default.

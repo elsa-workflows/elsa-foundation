@@ -127,17 +127,17 @@ public sealed class Watcher
             if (_busy.TryGetValue((node, scope), out var now) && now == what) _busy.Remove((node, scope));
     }
 
-    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount, INodeLeaseHost, IScopeSetRelease
+    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount, INodeLeaseHost, IScopeSetRelease, IScopeSetGain
     {
         public bool SupportsSetRelease => inner is IScopeSetRelease { SupportsSetRelease: true };
 
-        public async ValueTask ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken = default)
+        public async ValueTask<IReadOnlyList<int>> ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken = default)
         {
             var releasing = activations.Cast<Watched>().Where(activation => activation.BeginRelease()).ToArray();
             var cancelled = false;
             try
             {
-                await ((IScopeSetRelease)inner).ReleaseAsync(releasing.Select(activation => activation.Inner).ToArray(), cancellationToken);
+                return await ((IScopeSetRelease)inner).ReleaseAsync(releasing.Select(activation => activation.Inner).ToArray(), cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -160,15 +160,38 @@ public sealed class Watcher
         // The start's count check is layer 2's: the watcher passes it through, so a mismatch refuses the node here too.
         public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) =>
             inner is IScopeCount counted ? counted.CheckScopesAsync(scopes, cancellationToken) : ValueTask.CompletedTask;
+        public IScopeHostRun? AttachRuntime() => inner.AttachRuntime();
 
         public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
+        {
+            BeginActivation(scope);
+            IScopeActivation? activation;
+            try { activation = await inner.ActivateAsync(scope, cancellationToken); }
+            finally { watcher.Leave(node, scope, "activated"); }
+            return Record(scope, activation);
+        }
+
+        public bool SupportsSetGain => inner is IScopeSetGain { SupportsSetGain: true };
+
+        public async ValueTask<IReadOnlyList<IScopeActivation>> ActivateAsync(IReadOnlyList<int> scopes, CancellationToken cancellationToken = default)
+        {
+            foreach (var scope in scopes) BeginActivation(scope);
+            IReadOnlyList<IScopeActivation> gained;
+            try { gained = await ((IScopeSetGain)inner).ActivateAsync(scopes, cancellationToken); }
+            finally { foreach (var scope in scopes) watcher.Leave(node, scope, "activated"); }
+            var byScope = gained.ToDictionary(a => a.Scope);
+            return scopes.Select(s => Record(s, byScope.GetValueOrDefault(s))).OfType<IScopeActivation>().ToArray();
+        }
+
+        private void BeginActivation(int scope)
         {
             lock (watcher._lock)
                 if (watcher.Live(scope).Any(w => w.Node != node)) watcher.Second++;
             watcher.Enter(node, scope, "activated");
-            IScopeActivation? activation;
-            try { activation = await inner.ActivateAsync(scope, cancellationToken); }
-            finally { watcher.Leave(node, scope, "activated"); }
+        }
+
+        private IScopeActivation? Record(int scope, IScopeActivation? activation)
+        {
             if (activation is null)
             {
                 lock (watcher._lock) watcher.Declined++;

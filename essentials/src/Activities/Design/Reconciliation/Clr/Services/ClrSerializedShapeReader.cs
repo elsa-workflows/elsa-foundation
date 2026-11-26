@@ -14,8 +14,13 @@ using TypeReference = Elsa.Primitives.Models.TypeReference;
 namespace Elsa.Activities.Design.Reconciliation.Clr.Services;
 
 /// <summary>Reads serializer contract metadata without constructing a DTO, converter or attribute.</summary>
+/// <param name="hashAssets">
+/// True binds each touched assembly by the SHA-256 of its file, verified against the loaded module. False identifies it
+/// by its loaded module version id only, without reading files; declared-type shapes use this, because their members
+/// are advisory and are read on every authoring request.
+/// </param>
 internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySerializedShapeLimits limits,
-    CancellationToken cancellationToken, string? metadataSeed = null)
+    CancellationToken cancellationToken, string? metadataSeed = null, bool hashAssets = true)
 {
     private const string JsonPrefix = "System.Text.Json.Serialization.";
     private const string ConversionAttribute = "Elsa.Serialization.Core.JsonConversionAttribute";
@@ -377,6 +382,11 @@ internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySe
         _visitedTypes.Add(key + ":" + type.FullName);
         if (_assets.ContainsKey(key))
             return;
+        if (!hashAssets)
+        {
+            _assets.Add(key, "mvid:" + type.Module.ModuleVersionId.ToString("N"));
+            return;
+        }
         var path = assembly.Location;
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
             throw new FileNotFoundException("Serialized contract metadata is unavailable.");

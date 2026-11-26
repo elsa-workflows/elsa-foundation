@@ -74,3 +74,5 @@ static Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.Diagnos
 static Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.Reason(Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber! number) -> string!
 Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge.Begin(Jint.Engine! engine, bool undefinedAsNull) -> Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation!
 Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Warnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>!
+Elsa.Expressions.JavaScript.Jint.Services.JintScriptEvaluators
+static Elsa.Expressions.JavaScript.Jint.Services.JintScriptEvaluators.Create(Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions! options) -> Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptEvaluator!

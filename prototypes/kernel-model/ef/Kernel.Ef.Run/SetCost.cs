@@ -327,6 +327,7 @@ static class SetCost
         public TimeSpan? NodeLease => host.NodeLease;
         public ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken token = default) => host.ActivateAsync(scope, token);
         public ValueTask CheckScopesAsync(int scopes, CancellationToken token = default) => host.CheckScopesAsync(scopes, token);
+        public IScopeHostRun? AttachRuntime() => ((IScopeHost)host).AttachRuntime();
         public ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken token = default) => host.PassAsync(token);
 
         public async ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default)

@@ -182,7 +182,7 @@ describe("execution attached to the editor canvas", () => {
     api.browse.mockImplementation(() => new Promise(() => {}));
     const prepared = { contextIdentity: runtimeValueContextId(context), workflowExecutionId: "run-1", ancestorId: "body-4",
       selectedActivityExecutionId: chosen.activityExecutionId,
-      evidence: { activities: [chosen], observations: [], repeated: false, failed: false, denied: false } };
+      evidence: { activities: [chosen], observations: [], repeated: false, repeatedNodes: [], failed: false, denied: false } };
     render({ selectedExecution: chosen, ancestorId: "body-4", prepared });
     expect(latest.graph).toBe(graph);
     expect(latest.details).toBe(details);

@@ -1,11 +1,22 @@
 import { localDateTimeToIso, resolveStudioTimeZone, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { getNotifications } from "./notifications";
 import { StudioHttpError, useStudioWorkspaceTab } from "@elsa-workflows/studio-sdk";
-import { loadExecutionScope, activityExecutionSummaryFromInspection, type IncidentActivityInspection } from "./executionScope";
+import {
+  activityExecutionSummaryFromInspection,
+  findMatchingExecutionScope,
+  isKnownExecutionInScope,
+  loadExecutionScope,
+  resolveExecutionScopeAncestorId,
+  resolveKnownExecutionScope,
+  sameExecutionScopes,
+  trimExecutionScopesForTarget,
+  type IncidentActivityInspection
+} from "./executionScope";
 import { useExecutionFocusRequest } from "./executionFocus";
 export { activityExecutionSummaryFromInspection } from "./executionScope";
 import { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
 export { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
+import "./runWorkbench.css";
 import "./activityInspection.css";
 import "./activityExecutionBrowser.css";
 // Primary view wrappers must be laid out before their lazy history content loads.
@@ -19,7 +30,7 @@ import { runtimeValueContextId } from "./RuntimeValueEvidence";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { ReactFlow, Background, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
-import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RefreshCw, SlidersHorizontal, Sparkles, Variable, Workflow as WorkflowIcon } from "lucide-react";
+import { Activity as ActivityIcon, AlertCircle, AlertTriangle, Boxes, ChevronLeft, ChevronRight, Info, ListTree, Loader2, Maximize2, Minimize2, PanelLeftClose, Play, RefreshCw, SlidersHorizontal, Sparkles, Variable, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioWeaverRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution, StudioIncidentRootCauseProviderContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "../api/capabilities";
@@ -81,10 +92,11 @@ import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMod
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
 import { ReadOnlyFlowControls } from "./ReadOnlyFlowControls";
+import { focusRunCanvasNode, readStoredRunCanvasFocusMode, writeStoredRunCanvasFocusMode, type RunCanvasFocusMode } from "./runCanvasFocus";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { READ_ONLY_READABLE_ZOOM } from "./readableFitViewport";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
-import { StudioResultState, SkeletonRows, StudioDialog, studioRowInteraction, AdvancedSection, CopyableIdentifier, OverflowMenu, StudioShellBreadcrumbs, StudioCollectionEmptyState, StudioPageHeader, StudioButton, StudioField, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { AnchoredPopover, StudioResultState, SkeletonRows, StudioDialog, studioRowInteraction, AdvancedSection, CopyableIdentifier, OverflowMenu, StudioShellBreadcrumbs, StudioCollectionEmptyState, StudioPageHeader, StudioButton, StudioField, StudioTimestamp, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import { StudioLink } from "../StudioLink";
@@ -100,6 +112,20 @@ import { ActivityPlaybackIdentityError, type PlaybackOccurrence } from "../api/a
 import { getWorkflowHistoryEvent, getWorkflowHistoryBookmark } from "../api/runtimeHistory";
 import type { PlaybackOperation, PlaybackTarget, PreparedPlaybackSelection } from "./activityPlaybackModel";
 import type { PreparedHistoryEvent } from "./run-history/HistoryInspection";
+import { RunActivitiesTimeline } from "./run-history/RunActivitiesTimeline";
+
+type RunTimelineMode = "activities" | "events";
+
+function hasExplicitHistoryIntent(location: RunTimelineLocation): boolean {
+  return Boolean(
+    location.selection
+    || location.filters.activityExecutionId
+    || location.filters.category
+    || location.filters.name
+    || location.filters.search
+    || location.filters.detail !== "lifecycle"
+  );
+}
 
 type WorkflowRunFlowInstance = ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>;
 
@@ -905,6 +931,12 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const parsedInitialHistory = useMemo(() => initialHistoryLocation ?? readTimelineLocation(initialHistorySearch ?? ""), [initialHistoryLocation, initialHistorySearch]);
   const [historyLocation, setHistoryLocation] = useState<RunTimelineLocation>(parsedInitialHistory);
   const currentHistoryLocation = useRef(historyLocation); currentHistoryLocation.current = historyLocation;
+  const [timelineMode, setTimelineMode] = useState<RunTimelineMode>(() => hasExplicitHistoryIntent(parsedInitialHistory) ? "events" : "activities");
+  const timelineModeRef = useRef(timelineMode); timelineModeRef.current = timelineMode;
+  const [playbackOpen, setPlaybackOpen] = useState(false);
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const overviewPopoverId = useId();
+  const overviewTriggerRef = useRef<HTMLButtonElement>(null);
   const appliedHistoryIntent = useRef<{ context: string; location: string; navigation: number } | null>(null);
   const initialHistoryKey = JSON.stringify(parsedInitialHistory);
   const timelineReturn = useRef<{ context: string; historyEventId: string; activityExecutionId: string } | null>(null);
@@ -915,6 +947,11 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const [focusedRuntimeNodeId, setFocusedRuntimeNodeId] = useState<string | null>(null);
   const [moveCanvasKeyboardFocus, setMoveCanvasKeyboardFocus] = useState(true);
   const [canvasFocusRequestId, setCanvasFocusRequestId] = useState(0);
+  const [canvasFocusMode, setCanvasFocusMode] = useState<RunCanvasFocusMode>(() => readStoredRunCanvasFocusMode());
+  const updateCanvasFocusMode = useCallback((nextMode: RunCanvasFocusMode) => {
+    setCanvasFocusMode(nextMode);
+    writeStoredRunCanvasFocusMode(nextMode);
+  }, []);
   const [focusInputKey, setFocusInputKey] = useState<string | null>(null);
   const [incidentAssociationMessage, setIncidentAssociationMessage] = useState<string | null>(null);
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
@@ -947,9 +984,22 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     if (!explicitNavigation && previous?.context === browserContext && JSON.stringify(currentHistoryLocation.current) === initialHistoryKey) return;
     timelineReturn.current = null;
     setHistoryLocation(parsedInitialHistory);
+    setTimelineMode(hasExplicitHistoryIntent(parsedInitialHistory) ? "events" : "activities");
+    setOverviewOpen(false);
     historyBack.current = []; setHistoryOwnerMessage(""); setFocusHistoryInspector(true);
     appliedInitialInspectorTab.current = null; // A new exact target must open even after Issues/Details.
   }, [browserContext, initialHistoryKey, initialHistoryNavigation, parsedInitialHistory]);
+  useEffect(() => {
+    if (!overviewOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOverviewOpen(false);
+      overviewTriggerRef.current?.focus();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [overviewOpen]);
   const [browserEvidence, setBrowserEvidence] = useState<{ context: string; items: ActivityExecutionStateSummary[] }>({ context: browserContext, items: [] });
   const [executionScopes, setExecutionScopes] = useState<{ context: string; items: Array<{ execution: ActivityExecutionStateSummary; label: string }> }>({ context: browserContext, items: [] });
   const [scopeNavigation, setScopeNavigation] = useState<{ context: string; loading: boolean; error: string; retaining?: boolean }>({ context: browserContext, loading: false, error: "" });
@@ -972,6 +1022,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const [boundaryCanvas, setBoundaryCanvas] = useState<{ context: string; layout: ActivityExecutionLayout } | null>(null);
   const requestedScope = useRef<{ execution: ActivityExecutionStateSummary; includeSelf: boolean; label?: string; moveOccurrence?: boolean } | null>(null);
   const rememberedExecutions = useRef(new Map<string, ActivityExecutionStateSummary>());
+  const confirmedSingletons = useRef(new Map<string, ActivityExecutionStateSummary>());
   const loadedBrowserContext = useRef<string | null>(null);
   const loadingBrowserContext = useRef<string | null>(null);
   const failedMetadataContext = useRef<string | null>(null);
@@ -992,10 +1043,28 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const associationActivities = combineActivityExecutions(
     combineActivityExecutions(data?.details.activities ?? [], data?.incidentActivityExecutions ?? []),
     browserEvidence.context === browserContext ? browserEvidence.items : []);
+  const currentExecutionScopesRef = useRef(currentExecutionScopes);
+  currentExecutionScopesRef.current = currentExecutionScopes;
+  const associationActivitiesRef = useRef(associationActivities);
+  associationActivitiesRef.current = associationActivities;
+  const scopeNavigationLoading = scopeNavigation.context === browserContext && scopeNavigation.loading;
+  const [showScopeNavigationLoading, setShowScopeNavigationLoading] = useState(false);
+  useEffect(() => {
+    if (!scopeNavigationLoading) {
+      setShowScopeNavigationLoading(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowScopeNavigationLoading(true), 200);
+    return () => window.clearTimeout(timer);
+  }, [scopeNavigationLoading]);
   const selectedActivity = findSelectedActivityExecution(associationActivities, selectedEvidenceId, data?.details.incidents ?? []);
   const {
     containerRef,
     mode,
+    timelineDocked,
+    timelineCollapsed,
+    timelineWidth,
+    timelineMaxWidth,
     inspectorWidth,
     inspectorMaxWidth,
     inspectorCollapsed,
@@ -1011,7 +1080,11 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     toggleInspectorCollapsed,
     toggleInspectorMaximized,
     startInspectorResize,
-    handleInspectorResizeKeyDown
+    handleInspectorResizeKeyDown,
+    toggleTimelineCollapsed,
+    expandTimeline,
+    startTimelineResize,
+    handleTimelineResizeKeyDown
   } = useRunDetailLayout({ selectedActivityId: selectedActivity?.activityExecutionId });
   useEffect(() => {
     const requestedInitialTab = initialInspectorTab === "timeline" && parsedInitialHistory.selection ? "activity" : initialInspectorTab;
@@ -1217,6 +1290,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
         combineActivityExecutions(details.activities, incidentActivityResult.activities),
         initialActivityExecutionId);
       if (loadedBrowserContext.current !== browserContext) {
+        confirmedSingletons.current.clear();
         setSelectedEvidenceId(initialEvidence);
         setFrames([]);
         loadedBrowserContext.current = browserContext;
@@ -1299,7 +1373,18 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
 
   const navigateToScope = (nextFrames: ScopeFrame[]) => {
     beginEvidenceNavigation();
+    setBoundaryCanvas(null);
     setFrames(nextFrames);
+    if (currentExecutionScopes.length > 0 && rootActivity) {
+      const nextOwner = resolveScope(rootActivity, nextFrames, data?.activityCatalog)?.owner ?? rootActivity;
+      const trimmed = trimExecutionScopesForTarget(currentExecutionScopes, rootActivity, data?.executableGraph, data?.activityCatalog, nextOwner.nodeId);
+      if (trimmed.length !== currentExecutionScopes.length) {
+        scopeRequest.current?.abort();
+        requestedScope.current = null;
+        setExecutionScopes({ context: browserContext, items: trimmed });
+        setScopeNavigation({ context: browserContext, loading: false, error: "" });
+      }
+    }
   };
 
   const focusNodePath = useCallback((nodeId: string | null) => {
@@ -1440,6 +1525,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   };
 
   const selectInspectorTab = (tab: InstanceInspectorTab) => {
+    if (tab === "timeline" && timelineDocked) expandTimeline();
     if (tab === (activeInspectorTab === "timeline" ? "activity" : activeInspectorTab)) return;
     beginEvidenceNavigation();
     // Peer inspector tabs retain the exact history target; entity navigation and Back change it explicitly.
@@ -1523,9 +1609,22 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     setBrowserEvidence(current => ({ context: browserContext, items: combineActivityExecutions(
       current.context === browserContext ? current.items : [], [execution]) }));
   }, [browserContext]);
-  const rememberObservedExecutions = useCallback((executions: ActivityExecutionStateSummary[]) => {
+  const rememberObservedExecutions = useCallback((
+    executions: ActivityExecutionStateSummary[],
+    scopeObservation?: { scopeId?: string; singletons: ActivityExecutionStateSummary[]; repeatedNodes: string[] }
+  ) => {
     if (loadedBrowserContext.current !== browserContext) return;
-    setBrowserEvidence(current => ({ context: browserContext, items: combineActivityExecutions(current.context === browserContext ? current.items : [], executions) }));
+    if (executions.length > 0) {
+      setBrowserEvidence(current => ({ context: browserContext, items: combineActivityExecutions(current.context === browserContext ? current.items : [], executions) }));
+    }
+    if (scopeObservation) {
+      for (const nodeId of scopeObservation.repeatedNodes) {
+        confirmedSingletons.current.delete(JSON.stringify([browserContext, scopeObservation.scopeId, nodeId]));
+      }
+      for (const singleton of scopeObservation.singletons) {
+        confirmedSingletons.current.set(JSON.stringify([browserContext, scopeObservation.scopeId, singleton.executableNodeId]), singleton);
+      }
+    }
   }, [browserContext]);
 
   const restoreExecutionContext = useCallback(async (execution: ActivityExecutionStateSummary, includeSelf: boolean, label?: string) => {
@@ -1538,6 +1637,25 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     let committed = false;
     try {
       if (!await supportsActivityExecutionBrowsing(context) || controller.signal.aborted || generation !== loadGeneration.current || navigation !== incidentNavigationRequest.current) return;
+      const knownScopes = resolveKnownExecutionScope(workflowExecutionId, execution, {
+        graph: data?.executableGraph,
+        includeSelf,
+        label,
+        currentScopes: currentExecutionScopesRef.current,
+        knownActivities: associationActivitiesRef.current,
+        labelFor: labelForExecution
+      });
+      if (knownScopes) {
+        setBoundaryCanvas(null);
+        setExecutionScopes(current =>
+          current.context === browserContext && sameExecutionScopes(current.items, knownScopes)
+            ? current
+            : { context: browserContext, items: knownScopes });
+        focusReadyScope.current = controller;
+        setScopeNavigation({ context: browserContext, loading: false, error: "" });
+        committed = true;
+        return true;
+      }
       setScopeNavigation({ context: browserContext, loading: true, error: "" });
       const result = await loadExecutionScope(context, workflowExecutionId, execution, {
         graph: data?.executableGraph, includeSelf, label, labelFor: labelForExecution, signal: controller.signal,
@@ -1564,12 +1682,15 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const selectBrowserExecution = (execution: ActivityExecutionStateSummary, updateScope = true, focusCanvas = true, inspectorTab: InstanceInspectorTab = "activity", alignPlayback = true) => {
     timelineReturn.current = null;
     rememberExecution(execution);
-    rememberedExecutions.current.set(JSON.stringify([browserContext, executionScope?.activityExecutionId, execution.executableNodeId]), execution);
+    const nodeId = findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId;
+    const effectiveAncestorId = resolveExecutionScopeAncestorId(
+      currentExecutionScopes, rootActivity, data?.executableGraph, data?.activityCatalog, nodeId, execution.activityExecutionId
+    );
+    rememberedExecutions.current.set(JSON.stringify([browserContext, effectiveAncestorId, execution.executableNodeId]), execution);
     beginEvidenceNavigation();
     setSelectedEvidenceId(execution.activityExecutionId);
     setHistoryLocation(value => ({ ...value, selection: null }));
     setActiveInspectorTab(inspectorTab);
-    const nodeId = findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId;
     if (focusCanvas) requestCanvasFocus(nodeId);
     if (updateScope && executionScope?.executableNodeId === execution.executableNodeId && executionScope.activityExecutionId !== execution.activityExecutionId)
       void restoreExecutionContext(execution, true);
@@ -1583,6 +1704,13 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     selectBrowserExecution(known, true, inspectorTab !== "timeline", inspectorTab);
     focusNodePath(findExecutableGraphNodeId(data?.executableGraph, known) ?? known.authoredActivityId);
     void restoreExecutionContext(known, false);
+  };
+
+  const selectTimelineActivity = (execution: ActivityExecutionStateSummary) => {
+    playback.pause();
+    selectBrowserExecution(execution, true, true, "activity");
+    focusNodePath(findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId);
+    void restoreExecutionContext(execution, false);
   };
 
   const enterChildExecution = (entry: ActivityExecutionBrowseEntry) => {
@@ -1603,12 +1731,27 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     beginEvidenceNavigation();
     setHistoryLocation(value => ({ ...value, selection: null }));
     const node = data?.executableGraph?.factsByNodeId.get(nodeId);
-    const remembered = rememberedExecutions.current.get(JSON.stringify([browserContext, executionScope?.activityExecutionId, node?.executableNodeId]));
+    const matchingScope = findMatchingExecutionScope(currentExecutionScopes, node?.executableNodeId);
+    const targetAncestorId = matchingScope
+      ? currentExecutionScopes[matchingScope.index - 1]?.execution.activityExecutionId
+      : resolveExecutionScopeAncestorId(currentExecutionScopes, rootActivity, data?.executableGraph, data?.activityCatalog, nodeId, undefined);
+    const remembered = matchingScope?.entry.execution
+      ?? rememberedExecutions.current.get(JSON.stringify([browserContext, targetAncestorId, node?.executableNodeId]))
+      ?? confirmedSingletons.current.get(JSON.stringify([browserContext, targetAncestorId, node?.executableNodeId]));
+    if (currentExecutionScopes.length > 0 && rootActivity && findActivityNode(rootActivity, nodeId, data?.activityCatalog)) {
+      const trimmed = trimExecutionScopesForTarget(currentExecutionScopes, rootActivity, data?.executableGraph, data?.activityCatalog, nodeId);
+      if (trimmed.length !== currentExecutionScopes.length) {
+        scopeRequest.current?.abort();
+        requestedScope.current = null;
+        setBoundaryCanvas(null);
+        setExecutionScopes({ context: browserContext, items: trimmed });
+        setScopeNavigation({ context: browserContext, loading: false, error: "" });
+      }
+    }
     setSelectedEvidenceId(remembered?.activityExecutionId ?? nodeId);
     setActiveInspectorTab("activity");
-    requestCanvasFocus(nodeId);
     openInspector();
-    if (remembered && playback.window) void playback.inspectOccurrence(remembered.activityExecutionId);
+    if (remembered && playback.window) void playback.inspectOccurrence(remembered.activityExecutionId, false, true);
     else playback.pause("Choose a recorded execution to change the playback position.");
   };
 
@@ -1627,8 +1770,15 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     try {
       if (!await supportsActivityExecutionBrowsing(context) || !isCurrent()) return;
       setScopeNavigation({ context: browserContext, loading: true, error: "", retaining: retainPrevious });
+      const retainedOutsideGraph = Boolean(
+        retainedNode
+        && retainedNode !== execution.executableNodeId
+        && !findExecutableNodeFacts(data?.executableGraph, { executableNodeId: retainedNode })
+      );
       const scope = await loadExecutionScope(context, workflowExecutionId, execution, {
-        graph: data?.executableGraph, includeSelf: true, labelFor: labelForExecution, signal: controller.signal, isCurrent
+        graph: data?.executableGraph, includeSelf: true,
+        loadBoundaryLayout: !findExecutableNodeFacts(data?.executableGraph, execution) || retainedOutsideGraph,
+        labelFor: labelForExecution, signal: controller.signal, isCurrent
       });
       if (!isCurrent()) return;
       const page = retainedNode && retainedNode !== execution.executableNodeId ? await browseActivityExecutions(context, workflowExecutionId,
@@ -1697,11 +1847,17 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const incidentExecutionId = selectedIncident ? readIncidentActivityExecutionId(selectedIncident) : null;
   const browserExactId = selectedActivity && (selectedActivity.activityExecutionId === selectedEvidenceId || selectedActivity.activityExecutionId === incidentExecutionId)
     ? selectedActivity.activityExecutionId : undefined;
-  const browserAncestorId = executionScope?.activityExecutionId === browserExactId
-    ? currentExecutionScopes.at(-2)?.execution.activityExecutionId : executionScope?.activityExecutionId;
+  const browserGraphNodeId = browserNodeIdentity
+    ? findExecutableGraphNodeId(data?.executableGraph, browserNodeIdentity)
+      ?? (selectedEvidenceId && data?.executableGraph?.factsByNodeId.has(selectedEvidenceId) ? selectedEvidenceId : null)
+    : null;
+  const browserAncestorId = resolveExecutionScopeAncestorId(
+    currentExecutionScopes, rootActivity, data?.executableGraph, data?.activityCatalog, browserGraphNodeId, browserExactId
+  );
   function selectHistoryTarget(selection: RunHistorySelection, focusInspector = true) {
     setFocusHistoryInspector(focusInspector);
     beginEvidenceNavigation();
+    if (selection) setTimelineMode("events");
     if (selection?.kind !== historyLocation.selection?.kind || selection?.id !== historyLocation.selection?.id)
       historyBack.current.push({ location: historyLocation, evidenceId: selectedEvidenceId, focus: document.activeElement instanceof HTMLElement ? document.activeElement : null });
     setHistoryLocation(value => ({ ...value, selection }));
@@ -1720,6 +1876,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     setHistoryOwnerMessage(""); setActiveInspectorTab("activity");
   }
   function focusHistoryExecution(activityExecutionId: string) {
+    if (timelineDocked) expandTimeline();
+    setTimelineMode("events");
     beginEvidenceNavigation(true);
     setHistoryLocation(value => ({ ...value, view: "timeline", filters: { ...value.filters, activityExecutionId, includeDescendants: false } }));
   }
@@ -1750,6 +1908,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   }
   async function openHistoryEvent(event: Pick<RuntimeHistoryEvent, "historyEventId" | "activityExecutionId">, retainReturn = false) {
     if (!retainReturn) timelineReturn.current = null;
+    setTimelineMode("events");
     playback.pause(event.activityExecutionId ? undefined : "This event has no activity occurrence. Playback remains at its confirmed position.");
     const navigation = ++incidentNavigationRequest.current;
     scopeRequest.current?.abort(); historyTargetRequest.current?.abort();
@@ -1770,6 +1929,18 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       setPreparedHistoryEvent({ contextIdentity: identity, workflowExecutionId, historyEventId: event.historyEventId, value });
       setFocusHistoryInspector(false);
       setHistoryLocation(previous => ({ ...previous, selection: { kind: "event", id: event.historyEventId } }));
+      if (value.event.activityExecutionId) {
+        const known = associationActivities.find(item => item.activityExecutionId === value.event.activityExecutionId);
+        const nodeId = known
+          ? findExecutableGraphNodeId(data?.executableGraph, known) ?? known.authoredActivityId
+          : value.event.executableNodeId
+            ? [...(data?.executableGraph?.factsByNodeId.entries() ?? [])].find(([, facts]) => facts.executableNodeId === value.event.executableNodeId)?.[0] ?? null
+            : null;
+        if (nodeId) {
+          requestCanvasFocus(nodeId, false);
+          focusNodePath(nodeId);
+        }
+      }
       setHistoryOwnerMessage(""); setActiveInspectorTab("activity"); openInspector();
       if (value.event.activityExecutionId && !playback.window) void playback.selectOccurrence(value.event.activityExecutionId, event.historyEventId);
     } catch (error) {
@@ -1869,19 +2040,21 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
         setPreparedHistoryEvent({ contextIdentity: runtimeValueContextId(context), workflowExecutionId, historyEventId: eventId, value });
       setSelectedEvidenceId(entry.activityExecutionId);
       setFocusHistoryInspector(false); setHistoryOwnerMessage("");
+      const inspectActivity = Boolean(target.inspectActivity) || (timelineModeRef.current === "activities" && !target.historyEventId);
       if (!target.preserveInspector) setActiveInspectorTab("activity");
-      if (!target.preserveSelection) setHistoryLocation(previous => ({ ...previous, selection: target.inspectActivity && execution ? null : { kind: "event", id: eventId } }));
+      if (!target.preserveSelection) setHistoryLocation(previous => ({ ...previous, selection: inspectActivity && execution ? null : { kind: "event", id: eventId } }));
       setScopeNavigation({ context: browserContext, loading: false, error: "" });
       const nodeId = execution && scope ? findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId : null;
-      requestCanvasFocus(nodeId, false); if (nodeId) focusNodePath(nodeId); else setFrames([]);
+      if (!target.skipCanvasFocus) requestCanvasFocus(nodeId, false);
+      if (nodeId) focusNodePath(nodeId); else setFrames([]);
       if (!target.preserveInspector && (target.inspectActivity || currentHistoryLocation.current.view !== "diagram")) openInspector();
     } };
   }, [browserContext, context, data?.activityCatalog, data?.executableGraph, focusNodePath, labelForExecution, observationIsCurrent, openInspector, rememberExecution, workflowExecutionId]);
   const initialPlaybackSelection = parsedInitialHistory.selection;
-  const playback = useActivityPlayback({ context, workflowExecutionId, enabled: state === "ready" && !!data,
+  const playback = useActivityPlayback({ context, workflowExecutionId, enabled: state === "ready" && !!data && playbackOpen,
     activityExecutionId: historyLocation.filters.activityExecutionId, includeDescendants: historyLocation.filters.includeDescendants,
     initialActivityExecutionId: selectedActivity?.activityExecutionId ?? initialActivityExecutionId,
-    preserveInitialInspection: !!initialPlaybackSelection || !!initialActivityExecutionId,
+    preserveInitialInspection: !!initialPlaybackSelection || !!initialActivityExecutionId || !!selectedActivity || !!historyLocation.selection,
     initialSelectionKey: JSON.stringify([initialHistoryKey, initialHistoryNavigation]),
     resolveInitialSelection: initialPlaybackSelection ? async signal => {
       try {
@@ -1914,19 +2087,31 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const retainScope = scopeNavigation.context === browserContext && Boolean(scopeNavigation.retaining);
   const prepared = preparedScope?.context === browserContext && preparedScope.scopeId === executionScope?.activityExecutionId
     && preparedScope.nodeId === browserNodeIdentity?.executableNodeId ? preparedScope.prepared : undefined;
-  const browserActivityContent = scopeBlocked && !retainScope ? <p className="wf-instance-note" role="status">{scopeNavigation.loading ? "Resolving execution scope…" : scopeNavigation.error}</p> : browserNodeIdentity && data ? <Suspense fallback={<p role="status">Loading execution browser…</p>}><ActivityExecutionInspectionPanel
+  const knownConfirmedExecution = browserNodeIdentity && browserExactId && isKnownExecutionInScope(
+    workflowExecutionId,
+    browserNodeIdentity.executableNodeId,
+    selectedActivity,
+    browserAncestorId,
+    associationActivities
+  ) ? selectedActivity : undefined;
+  const browserActivityContent = scopeBlocked && !retainScope ? <p className="wf-instance-note" role="status">{scopeNavigation.loading ? "Resolving execution scope…" : scopeNavigation.error}</p> : browserNodeIdentity && data ? <Suspense fallback={<p className="wf-instance-note" role="status">Loading execution browser…</p>}><ActivityExecutionInspectionPanel
     key={`${browserContext}:${browserNodeIdentity.executableNodeId}`}
     context={context} workflowExecutionId={workflowExecutionId} nodeId={browserNodeIdentity.executableNodeId}
-    nodeLabel={browserNodeFacts?.presentation?.displayName ?? (shortTypeName(browserNodeIdentity.activityType) ?? browserNodeIdentity.activityType)}
+    nodeLabel={resolveActivityLabel(
+      browserNodeFacts?.presentation,
+      data.activityCatalog.find(item => item.activityTypeKey === browserNodeIdentity.activityType),
+      shortTypeName(browserNodeIdentity.activityType) ?? browserNodeIdentity.activityType
+    )}
     exactId={browserExactId} seed={browserExactId ? selectedActivity : null} ancestorId={browserAncestorId} refreshKey={evidenceRevision} requireExplicitSelection
     labelFor={labelForExecution} onSelect={value => selectBrowserExecution(value, true, false)} onEnter={enterChildExecution}
     onIncident={openExecutionIssues}
     choiceFocus={occurrenceChoiceFocus} captureFocusOperation={captureFocusOperation}
     initialPage={!browserExactId || prepared?.execution?.activityExecutionId === browserExactId ? prepared?.page : undefined}
-    confirmedExecution={prepared?.execution}
+    confirmedExecution={prepared?.execution ?? knownConfirmedExecution}
     onUnavailable={() => setPreparedScope(current => current?.prepared === prepared ? null : current)}
     renderDetails={(execution, navigation, children) => <WorkflowActivityExecutionDetails context={context} activity={execution}
-      initialView="journal" historyRefreshKey={historyResourceRefreshKey} onSelectHistory={selectHistoryTarget} onFocusHistory={focusHistoryExecution}
+      historyRefreshKey={historyResourceRefreshKey} onSelectHistory={selectHistoryTarget} onFocusHistory={focusHistoryExecution}
+      onOpenIncident={openIncidentInIssues} navigate={navigate}
       backendSession={backendSession} runRelatedLinks={runRelatedLinks}
       refreshKey={evidenceRevision}
       activityCatalog={data.activityCatalog} executableNodeFacts={findExecutableNodeFacts(data.executableGraph, execution)}
@@ -1948,6 +2133,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
 
   const refreshWorkspace = () => {
     playback.pause(); historyTargetRequest.current?.abort();
+    confirmedSingletons.current.clear();
     loadGeneration.current++;
     scopeRequest.current?.abort(); incidentNavigationRequest.current++;
     latestIncidentActivityLookupById.current.clear(); setIncidentAssociationMessage(null);
@@ -1955,6 +2141,29 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       ? { context: browserContext, loading: false, error: "Execution scope resolution was interrupted by refresh. Retry the scope." } : current);
     setSelectedEvidenceId(current => data?.details.incidents?.some(incident => incident.incidentId === current) ? null : current);
     reloadDetailsRequested.current = true; refreshObservation();
+  };
+
+  const runViewTabs: StudioTabItem[] = [
+    { id: "timeline", label: "Timeline", icon: <ListTree size={15} />, panelIndex: null },
+    { id: "diagram", label: "Diagram", icon: <WorkflowIcon size={15} />, panelIndex: null }
+  ];
+  const selectRunView = (id: string) => {
+    if (id === "timeline") {
+      if (timelineDocked) expandTimeline();
+      beginEvidenceNavigation(); setHistoryLocation(value => ({ ...value, view: "timeline" }));
+      const anchor = timelineReturn.current;
+      if (!historyLocation.selection && activeInspectorTab === "activity" && anchor?.context === browserContext
+        && anchor.activityExecutionId === selectedEvidenceId && observationIsCurrent()) {
+        void openHistoryEvent(anchor, true);
+        return;
+      }
+      const cursor = playback.cursor;
+      if (!historyLocation.selection && activeInspectorTab === "activity" && cursor && cursor.activityExecutionId === selectedEvidenceId
+        && !playback.outsideSelection && playback.phase !== "failed" && !playback.error)
+        void playback.selectOccurrence(cursor.activityExecutionId, cursor.historyEventId);
+      return;
+    }
+    beginEvidenceNavigation(); showCanvasForSelection(); setHistoryLocation(value => ({ ...value, view: "diagram" }));
   };
 
   const definitionId = currentData?.details.instance.definitionId?.trim();
@@ -1966,7 +2175,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       : definitionId ? `Run · ${definitionId}` : "Run";
   const runHistoryBackLocation = getRunHistoryBackLocation(initialReturnTo);
   const hasExecutionScopeContext = currentExecutionScopes.length > 0
-    || (scopeNavigation.context === browserContext && (scopeNavigation.loading || Boolean(scopeNavigation.error)));
+    || (scopeNavigation.context === browserContext && ((scopeNavigation.loading && showScopeNavigationLoading) || Boolean(scopeNavigation.error)));
   const executionBreadcrumb = hasExecutionScopeContext ? (
     <nav className="wf-execution-scope" aria-label="Execution scope">
       <StudioButton type="button" onClick={() => {
@@ -1981,7 +2190,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       {currentExecutionScopes.map(scope => (
         <StudioButton type="button" key={scope.execution.activityExecutionId} onClick={() => {
           selectBrowserExecution(scope.execution);
-          focusNodePath(scope.execution.authoredActivityId);
+          focusNodePath(findExecutableGraphNodeId(data?.executableGraph, scope.execution) ?? scope.execution.authoredActivityId);
           void restoreExecutionContext(scope.execution, true);
         }}>
           <ChevronRight size={13} />{scope.label}
@@ -2006,7 +2215,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
           />
         </Suspense>
       ) : null}
-      {scopeNavigation.context === browserContext && (scopeNavigation.loading || scopeNavigation.error) ? (
+      {scopeNavigation.context === browserContext && ((scopeNavigation.loading && showScopeNavigationLoading) || scopeNavigation.error) ? (
         <span role="status">
           {scopeNavigation.loading
             ? retainScope ? "Loading requested occurrence… Showing the previous scope." : "Resolving execution scope…"
@@ -2024,6 +2233,16 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     </nav>
   ) : null;
 
+  const activeBoundaryLayout = boundaryCanvas?.context === browserContext ? boundaryCanvas.layout : undefined;
+  const canvasScopeOwner = rootActivity && currentData
+    ? resolveScope(rootActivity, frames, currentData.activityCatalog)?.owner ?? rootActivity
+    : null;
+  const canvasExecutionScope = activeBoundaryLayout || !canvasScopeOwner || !currentData
+    ? executionScope
+    : trimExecutionScopesForTarget(currentExecutionScopes, rootActivity, currentData.executableGraph, currentData.activityCatalog, canvasScopeOwner.nodeId).at(-1)?.execution;
+  const historyWorkspace = !timelineDocked && historyLocation.view === "timeline";
+  const runHistoryEnabled = timelineDocked ? !timelineCollapsed : historyWorkspace;
+
   return (
     <>
       <div className="wf-detail-header" role="group" aria-label="Run workspace actions">
@@ -2036,6 +2255,22 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
           </></>
         </div>
         <div className="wf-detail-header__actions">
+          {currentData ? (
+            <StudioButton
+              type="button"
+              size="sm"
+              className="wf-playback-toggle-btn"
+              aria-pressed={playbackOpen}
+              aria-label={playbackOpen ? "Hide playback" : "Playback"}
+              title={playbackOpen ? "Hide activity playback controls" : "Step through activity execution playback"}
+              onClick={() => setPlaybackOpen(open => {
+                if (open) playback.pause();
+                return !open;
+              })}
+            >
+              <Play size={14} aria-hidden="true" /> Playback
+            </StudioButton>
+          ) : null}
           <StudioButton size="sm" aria-label="Refresh execution" title="Refresh execution" onClick={refreshWorkspace}><RefreshCw size={14} aria-hidden="true" /> Refresh</StudioButton>
           {currentData && selectedDefinitionCanBeReviewed && selectedDefinitionId ? <StudioButton size="sm"
             onClick={() => openDefinitionDesigner(selectedDefinitionId)}><WorkflowIcon size={14} aria-hidden="true" /> Open definition</StudioButton> : null}
@@ -2052,23 +2287,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
         {operator.status}
       </div>
       {operator.dialog}
-      {state === "ready" && data ? <nav className="wf-run-primary-views" aria-label="Run workspace views">
-        <button type="button" aria-pressed={historyLocation.view === "timeline"} onClick={() => {
-          beginEvidenceNavigation(); setHistoryLocation(value => ({ ...value, view: "timeline" }));
-          const anchor = timelineReturn.current;
-          if (!historyLocation.selection && activeInspectorTab === "activity" && anchor?.context === browserContext
-            && anchor.activityExecutionId === selectedEvidenceId && observationIsCurrent()) {
-            void openHistoryEvent(anchor, true);
-            return;
-          }
-          const cursor = playback.cursor;
-          if (!historyLocation.selection && activeInspectorTab === "activity" && cursor && cursor.activityExecutionId === selectedEvidenceId
-            && !playback.outsideSelection && playback.phase !== "failed" && !playback.error)
-            void playback.selectOccurrence(cursor.activityExecutionId, cursor.historyEventId);
-        }}><ListTree size={15} aria-hidden="true" />Timeline</button>
-        <button type="button" aria-pressed={historyLocation.view === "diagram"} onClick={() => { beginEvidenceNavigation(); showCanvasForSelection(); setHistoryLocation(value => ({ ...value, view: "diagram" })); }}><WorkflowIcon size={15} aria-hidden="true" />Diagram</button>
-      </nav> : null}
-      {state === "ready" && data ? <ActivityPlaybackControls playback={playback}
+      {state === "ready" && data && !timelineDocked ? <div className="wf-canvas-tabs wf-run-primary-views">
+        <StudioTabs tabs={runViewTabs} activeTab={historyLocation.view} ariaLabel="Run workspace views" compact onSelect={selectRunView} />
+      </div> : null}
+      {state === "ready" && data && playbackOpen ? <ActivityPlaybackControls playback={playback}
         scopeLabel={historyLocation.filters.activityExecutionId ? `Selected execution${historyLocation.filters.includeDescendants ? " and descendants" : " only"}` : "Entire run"}
         labelFor={labelForPlayback} /> : null}
       {state === "loading" ? <div className="wf-empty">Loading workflow run...</div> : null}
@@ -2081,8 +2303,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       {currentData ? (
         <div ref={containerRef} onPointerDownCapture={event => pauseForWorkbenchInteraction(event.target)}
           onKeyDownCapture={event => pauseForWorkbenchInteraction(event.target)} onWheelCapture={event => pauseForWorkbenchInteraction(event.target)}
-          className={`${historyLocation.view === "timeline" ? workbenchClassName.replace(/\binspector-(?:collapsed|maximized)\b/g, "") : workbenchClassName}${historyLocation.view === "timeline" ? " wf-run-history-workspace" : ""}`}
-          style={historyLocation.view === "timeline" ? { ...workbenchStyle, "--wf-run-inspector-width": `${Math.max(340, inspectorWidth)}px` } as CSSProperties : workbenchStyle}>
+          className={`${historyWorkspace ? workbenchClassName.replace(/\binspector-(?:collapsed|maximized)\b/g, "") : workbenchClassName}${historyWorkspace ? " wf-run-history-workspace" : ""}`}
+          style={historyWorkspace ? { ...workbenchStyle, "--wf-run-inspector-width": `${Math.max(340, inspectorWidth)}px` } as CSSProperties : workbenchStyle}>
           {currentData.incidentAssociationLookupIncomplete ? (
             <div className="wf-run-association-status" role="status">
               <span>
@@ -2092,29 +2314,146 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
               </span>
             </div>
           ) : null}
-          <div className="wf-run-history-view" hidden={historyLocation.view !== "timeline"}><Suspense fallback={<p role="status">Loading run history workspace…</p>}>
-            <RunHistorySummary context={context} instance={currentData.details.instance} name={unattributedChildDefinition ? runDisplayName ?? "Child run" : currentData.definitionName ?? currentData.definitionVersion?.definition.name ?? currentData.details.instance.definitionId}
-              activities={currentData.details.activities} labelForActivity={labelForExecution} activitiesLimited={!!currentData.details.activityNextContinuationToken} enabled={historyLocation.view === "timeline"}
-              onBookmark={id => selectHistoryTarget({ kind: "bookmark", id })} />
-            <RunHistoryTimeline context={context} workflowExecutionId={workflowExecutionId} filters={historyLocation.filters}
-              activities={associationActivities} labelForActivity={labelForExecution}
-              onFiltersChange={filters => { beginEvidenceNavigation(true); setHistoryLocation(value => ({ ...value, filters })); }}
-              onManualNavigation={() => playback.pause()}
-              selectedActivityExecutionId={selectedActivity?.activityExecutionId} selectedActivityLabel={selectedActivity ? labelForExecution(selectedActivity) : undefined}
-              selectedEventId={historyLocation.selection?.kind === "event" ? historyLocation.selection.id : null}
-              selectedEvent={preparedHistoryEvent?.contextIdentity === runtimeValueContextId(context) && preparedHistoryEvent.workflowExecutionId === workflowExecutionId
-                ? preparedHistoryEvent.value.event : undefined}
-              onSelectEvent={openHistoryEvent} labelForEvent={labelForHistoryEvent} enabled={historyLocation.view === "timeline"} />
-          </Suspense></div>
-          <div className="wf-run-diagram-view" hidden={historyLocation.view !== "diagram"}>
+          <div className="wf-run-history-view" hidden={timelineDocked ? timelineCollapsed : historyLocation.view !== "timeline"}>
+            <header className="wf-timeline-panel-header">
+              <div className="wf-timeline-mode-switch" role="group" aria-label="Timeline view">
+                <button
+                  type="button"
+                  className="wf-timeline-mode-btn"
+                  aria-pressed={timelineMode === "activities"}
+                  onClick={() => setTimelineMode("activities")}
+                >
+                  Activities
+                </button>
+                <button
+                  type="button"
+                  className="wf-timeline-mode-btn"
+                  aria-pressed={timelineMode === "events"}
+                  onClick={() => setTimelineMode("events")}
+                >
+                  Events
+                </button>
+              </div>
+              {timelineDocked ? (
+                <div className="wf-history-heading-actions">
+                  <StudioButton
+                    ref={overviewTriggerRef}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="wf-history-toolbar-btn"
+                    aria-label="Run overview"
+                    title="Run overview"
+                    aria-haspopup="dialog"
+                    aria-expanded={overviewOpen}
+                    aria-controls={overviewOpen ? overviewPopoverId : undefined}
+                    onClick={() => setOverviewOpen(open => !open)}
+                  >
+                    <Info size={14} aria-hidden="true" />
+                  </StudioButton>
+                  <StudioButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="wf-history-toolbar-btn"
+                    aria-label="Hide timeline panel"
+                    title="Hide timeline panel"
+                    onClick={toggleTimelineCollapsed}
+                  >
+                    <PanelLeftClose size={14} aria-hidden="true" />
+                  </StudioButton>
+                </div>
+              ) : null}
+            </header>
+            {timelineDocked ? (
+              <AnchoredPopover
+                anchorRef={overviewTriggerRef}
+                open={overviewOpen}
+                id={overviewPopoverId}
+                role="dialog"
+                aria-label="Run overview"
+                className="wf-history-popover"
+                minWidth={300}
+                maxHeight={420}
+                onDismiss={() => setOverviewOpen(false)}
+                onKeyDown={event => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setOverviewOpen(false);
+                    overviewTriggerRef.current?.focus();
+                  }
+                }}
+              >
+                <div className="wf-history-overview-popover">
+                  <Suspense fallback={<p className="wf-instance-note" role="status">Loading run overview…</p>}>
+                    <RunHistorySummary
+                      context={context}
+                      instance={currentData.details.instance}
+                      name={unattributedChildDefinition ? runDisplayName ?? "Child run" : currentData.definitionName ?? currentData.definitionVersion?.definition.name ?? currentData.details.instance.definitionId}
+                      activities={currentData.details.activities}
+                      labelForActivity={labelForExecution}
+                      activitiesLimited={!!currentData.details.activityNextContinuationToken}
+                      enabled={overviewOpen}
+                      onBookmark={id => { setOverviewOpen(false); selectHistoryTarget({ kind: "bookmark", id }); }}
+                    />
+                  </Suspense>
+                </div>
+              </AnchoredPopover>
+            ) : null}
+            {timelineMode === "activities" ? (
+              <RunActivitiesTimeline
+                context={context}
+                workflowExecutionId={workflowExecutionId}
+                activities={associationActivities}
+                hasMoreFromSummary={Boolean(currentData.details.activityNextContinuationToken)}
+                selectedActivityExecutionId={!historyLocation.selection ? selectedActivity?.activityExecutionId ?? null : null}
+                labelForActivity={labelForExecution}
+                onSelectActivity={selectTimelineActivity}
+                onRefresh={refreshWorkspace}
+                onExecutionsLoaded={rememberObservedExecutions}
+              />
+            ) : (
+              <Suspense fallback={<p role="status">Loading run history workspace…</p>}>
+                {!timelineDocked ? <RunHistorySummary context={context} instance={currentData.details.instance}
+                  name={unattributedChildDefinition ? runDisplayName ?? "Child run" : currentData.definitionName ?? currentData.definitionVersion?.definition.name ?? currentData.details.instance.definitionId}
+                  activities={currentData.details.activities} labelForActivity={labelForExecution} activitiesLimited={!!currentData.details.activityNextContinuationToken} enabled={runHistoryEnabled && timelineMode === "events"}
+                  onBookmark={id => selectHistoryTarget({ kind: "bookmark", id })} /> : null}
+                <RunHistoryTimeline context={context} workflowExecutionId={workflowExecutionId} filters={historyLocation.filters}
+                  embedded
+                  activities={associationActivities} labelForActivity={labelForExecution}
+                  onFiltersChange={filters => { beginEvidenceNavigation(true); setHistoryLocation(value => ({ ...value, filters })); }}
+                  onManualNavigation={() => playback.pause()}
+                  selectedActivityExecutionId={selectedActivity?.activityExecutionId} selectedActivityLabel={selectedActivity ? labelForExecution(selectedActivity) : undefined}
+                  selectedEventId={historyLocation.selection?.kind === "event" ? historyLocation.selection.id : null}
+                  selectedEvent={preparedHistoryEvent?.contextIdentity === runtimeValueContextId(context) && preparedHistoryEvent.workflowExecutionId === workflowExecutionId
+                    ? preparedHistoryEvent.value.event : undefined}
+                  onSelectEvent={openHistoryEvent} labelForEvent={labelForHistoryEvent} enabled={runHistoryEnabled && timelineMode === "events"} />
+              </Suspense>
+            )}
+          </div>
+          {timelineDocked && timelineCollapsed ? <StudioButton className="wf-run-timeline-rail" type="button" aria-label="Show timeline panel" onClick={expandTimeline}>Timeline</StudioButton> : null}
+          {timelineDocked && !timelineCollapsed ? <div
+            className="wf-side-resize-handle left"
+            role="separator"
+            aria-label="Resize timeline panel"
+            aria-orientation="vertical"
+            aria-valuemin={260}
+            aria-valuemax={timelineMaxWidth}
+            aria-valuenow={timelineWidth}
+            tabIndex={0}
+            onPointerDown={startTimelineResize}
+            onKeyDown={handleTimelineResizeKeyDown}
+          /> : null}
+          <div className="wf-run-diagram-view" hidden={!timelineDocked && historyLocation.view !== "diagram"}>
           <WorkflowInstanceCanvas
             observationIdentity={observation.identity}
             observationStatus={observation.status}
             onSelectExecutionSummary={selectBrowserExecution}
             onExecutionsObserved={rememberObservedExecutions}
             context={context}
-            boundaryLayout={boundaryCanvas?.context === browserContext ? boundaryCanvas.layout : undefined}
-            executionScope={executionScope}
+            boundaryLayout={activeBoundaryLayout}
+            executionScope={canvasExecutionScope}
             refreshKey={evidenceRevision}
             scopeLoading={scopeBlocked && !retainScope}
             executionBreadcrumb={executionBreadcrumb}
@@ -2131,7 +2470,9 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
             focusNodeId={focusedRuntimeNodeId}
             focusRequestId={canvasFocusRequestId}
             moveKeyboardFocus={moveCanvasKeyboardFocus}
-            visible={historyLocation.view === "diagram"}
+            focusMode={canvasFocusMode}
+            onFocusModeChange={updateCanvasFocusMode}
+            visible={timelineDocked || historyLocation.view === "diagram"}
             frames={frames}
             onNavigateToScope={navigateToScope}
             inactive={mode === "medium" && mediumDrawerOpen}
@@ -2147,7 +2488,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
           {mediumDrawerOpen && historyLocation.view === "diagram" ? (
             <StudioButton type="button" className="wf-run-inspector-backdrop" aria-label="Close run details" onClick={closeResponsiveInspector} />
           ) : null}
-          {(historyLocation.view === "timeline" ? mode === "desktop" : canResizeInspector) ? (
+          {(historyWorkspace ? mode === "desktop" : canResizeInspector) ? (
             <div
               className="wf-side-resize-handle right"
               role="separator"
@@ -2164,8 +2505,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
           <WorkflowInstanceInspector
             context={context}
             summary={currentData.details.instance}
-            activityContent={<>{historyTargetPending ? <p className="wf-instance-note" role="status">Loading requested recorded event… Showing the previous confirmed inspection.</p> : null}{historyOwnerMessage ? <p className="wf-instance-note" role="status">{historyOwnerMessage}</p> : null}<div hidden={!!historyLocation.selection}>{browserActivityContent ?? <p className="wf-instance-note">Select a recorded event to inspect its evidence, or open Diagram and choose an activity execution.</p>}</div>{historyLocation.selection ? <>
-              <Suspense fallback={<p role="status">Loading recorded history details…</p>}><HistoryInspection context={context}
+            activityContent={<>{historyTargetPending ? <p className="wf-instance-note" role="status">Loading requested recorded event… Showing the previous confirmed inspection.</p> : null}{historyOwnerMessage ? <p className="wf-instance-note" role="status">{historyOwnerMessage}</p> : null}<div hidden={!!historyLocation.selection}>{browserActivityContent ?? <p className="wf-instance-note">Select an activity from the list or diagram to inspect its inputs, outputs, outcomes, and incidents.</p>}</div>{historyLocation.selection ? <>
+              <Suspense fallback={<p className="wf-instance-note" role="status">Loading recorded history details…</p>}><HistoryInspection context={context}
                 workflowExecutionId={workflowExecutionId} selection={historyLocation.selection} preparedEvent={preparedHistoryEvent} focusOnSelection={focusHistoryInspector} refreshKey={historyResourceRefreshKey} onSelect={selectHistoryTarget} onBack={backFromHistory}
                 onEventUnavailable={target => {
                   if (target.contextIdentity === runtimeValueContextId(context) && target.workflowExecutionId === workflowExecutionId
@@ -2206,11 +2547,11 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
             graphNodeIds={currentData.definitionVersion ? collectWorkflowGraphNodeIds(currentData.definitionVersion, currentData.activityCatalog) : undefined}
             rootNodeId={currentData.definitionVersion?.state.rootActivity?.nodeId}
             collapsed={historyLocation.view === "timeline" ? false : inspectorCollapsed}
-            expanded={historyLocation.view === "timeline" || inspectorExpanded}
-            maximized={historyLocation.view === "timeline" ? false : inspectorMaximized}
-            layoutMode={historyLocation.view === "timeline" ? "desktop" : mode}
-            historyWorkspace={historyLocation.view === "timeline"}
-            responsiveOpen={historyLocation.view === "diagram" && (mode === "medium" ? mediumDrawerOpen : mode === "narrow" && inspectorExpanded)}
+            expanded={historyWorkspace || inspectorExpanded}
+            maximized={historyWorkspace ? false : inspectorMaximized}
+            layoutMode={historyWorkspace ? "desktop" : mode}
+            historyWorkspace={historyWorkspace}
+            responsiveOpen={!historyWorkspace && historyLocation.view === "diagram" && (mode === "medium" ? mediumDrawerOpen : mode === "narrow" && inspectorExpanded)}
             onCloseResponsive={closeResponsiveInspector}
             onToggleCollapsed={toggleInspectorCollapsedWithNavigation}
             onToggleMaximized={toggleInspectorMaximizedWithNavigation}
@@ -2439,13 +2780,15 @@ function WorkflowInstanceCanvas({
   focusNodeId,
   focusRequestId,
   moveKeyboardFocus = true,
+  focusMode = "pan",
+  onFocusModeChange,
   visible = true,
   frames,
   onNavigateToScope,
   inactive = false,
   journals,
   operator
- }: {
+}: {
   observationIdentity: string;
   observationStatus: ExecutionObservationStatus;
   context: StudioEndpointContext;
@@ -2455,7 +2798,10 @@ function WorkflowInstanceCanvas({
   scopeLoading: boolean;
   executionBreadcrumb: ReactNode;
   onSelectExecutionSummary(execution: ActivityExecutionStateSummary): void;
-  onExecutionsObserved(executions: ActivityExecutionStateSummary[]): void;
+  onExecutionsObserved(
+    executions: ActivityExecutionStateSummary[],
+    scopeObservation?: { scopeId?: string; singletons: ActivityExecutionStateSummary[]; repeatedNodes: string[] }
+  ): void;
   definitionVersion: WorkflowDefinitionVersionDetails | null;
   definitionVersionError: string;
   activityCatalog: ActivityCatalogItem[];
@@ -2469,6 +2815,8 @@ function WorkflowInstanceCanvas({
   focusNodeId: string | null;
   focusRequestId: number;
   moveKeyboardFocus?: boolean;
+  focusMode?: RunCanvasFocusMode;
+  onFocusModeChange?(mode: RunCanvasFocusMode): void;
   visible?: boolean;
   frames: ScopeFrame[];
   onNavigateToScope(frames: ScopeFrame[]): void;
@@ -2479,6 +2827,9 @@ function WorkflowInstanceCanvas({
 
   const scopeKey = getInstanceScopeKey(frames);
   const [flowInstance, setFlowInstance] = useState<WorkflowRunFlowInstance | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const focusModeRef = useRef(focusMode);
+  focusModeRef.current = focusMode;
   const journalOf = journals?.get;
   const unscopedCanvas = useMemo(
     () => buildInstanceCanvas(definitionVersion, activityCatalog, details, selectedEvidenceId, frames, onNavigateToScope, onOpenIncident, [], executableGraph, journalOf),
@@ -2492,7 +2843,17 @@ function WorkflowInstanceCanvas({
     && item.workflowExecutionId === details.instance.workflowExecutionId);
   const shownActivities = scopeLoading ? [] : selectedExecution && !scoped.activities.some(item => item.activityExecutionId === selectedEvidenceId)
     ? [...scoped.activities, selectedExecution] : scoped.activities;
-  useEffect(() => { if (scoped.activities.length > 0) onExecutionsObserved(scoped.activities); }, [onExecutionsObserved, scoped.activities]);
+  useEffect(() => {
+    if (scoped.loading) return;
+    if (scoped.activities.length === 0 && scoped.repeatedNodes.length === 0) return;
+    const repeatedSet = new Set(scoped.repeatedNodes);
+    const singletons = scoped.activities.filter(item => !repeatedSet.has(item.executableNodeId));
+    onExecutionsObserved(scoped.activities, {
+      scopeId: executionScope?.activityExecutionId,
+      singletons,
+      repeatedNodes: scoped.repeatedNodes
+    });
+  }, [executionScope?.activityExecutionId, onExecutionsObserved, scoped.activities, scoped.loading, scoped.repeatedNodes]);
   const scopedIds = new Set(shownActivities.map(item => item.activityExecutionId));
   const shownIncidents = executionScope || scopeLoading ? (details.incidents ?? []).filter(item => {
     const id = readIncidentActivityExecutionId(item);
@@ -2503,7 +2864,7 @@ function WorkflowInstanceCanvas({
   const motion = useConfirmedExecutionMotion({ identity: JSON.stringify([observationIdentity, scopeKey, executionScope?.activityExecutionId, selectedEvidenceId]),
     observationStatus, enabled: !inactive && !scopeLoading && !scoped.failed && !boundaryLayout,
     observationRevision: refreshKey, confirmedRevision: scoped.confirmedRevision,
-    ready: !scoped.loading, workflowExecutionId: details.instance.workflowExecutionId,
+    ready: !scoped.loading && !scoped.anchoring, workflowExecutionId: details.instance.workflowExecutionId,
     mode: canvas.mode === "sequence" ? "sequence" : (definitionVersion?.state.rootActivity ? resolveScope(definitionVersion.state.rootActivity, frames, activityCatalog)?.slot.mode : undefined),
     nodes: canvas.nodes, edges: canvas.edges, observations: scoped.observations });
   const animatedCanvas = decorateExecutionMotion(canvas.nodes, canvas.edges, motion);
@@ -2519,11 +2880,40 @@ function WorkflowInstanceCanvas({
     ? canvas.nodes.find(node => nodeRuntimeId(node) === focusNodeId)?.id ?? null
     : null;
   const hasScopeContext = Boolean(definitionVersion && frames.length > 0) || Boolean(executionBreadcrumb);
+  const [showScopedLoading, setShowScopedLoading] = useState(false);
+
+  useEffect(() => {
+    if (!scoped.loading) {
+      setShowScopedLoading(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowScopedLoading(true), 250);
+    return () => window.clearTimeout(timer);
+  }, [scoped.loading]);
+
+  const canvasStatus = scoped.loading
+    ? (showScopedLoading ? { tone: "loading" as const, text: "Loading visible run data…" } : null)
+    : scoped.failed
+      ? { tone: "warning" as const, text: "Some visible run data could not be loaded. Refresh to retry." }
+      : scoped.repeated
+        ? { tone: "info" as const, text: "Some activities ran more than once. Choose an occurrence to inspect." }
+        : null;
 
   useEffect(() => {
     if (!visible || canvas.mode !== "graph" || !flowInstance || !focusCanvasNodeId) return;
     const frame = requestAnimationFrame(() => {
-      flowInstance.fitView({ nodes: [{ id: focusCanvasNodeId }], duration: moveKeyboardFocus ? 220 : 0, padding: 0.35 });
+      const container = canvasContainerRef.current;
+      const rect = container?.getBoundingClientRect();
+      const containerSize = container
+        ? { width: container.clientWidth || rect?.width || 0, height: container.clientHeight || rect?.height || 0 }
+        : null;
+      focusRunCanvasNode({
+        flowInstance,
+        nodeId: focusCanvasNodeId,
+        mode: focusModeRef.current,
+        animate: moveKeyboardFocus,
+        containerSize
+      });
       if (moveKeyboardFocus) focusSelectedCanvasActivity(focusNodeId);
     });
     return () => cancelAnimationFrame(frame);
@@ -2539,9 +2929,7 @@ function WorkflowInstanceCanvas({
           {executionBreadcrumb}
         </div>
       ) : null}
-      <p className="wf-instance-note">Diagram shows the latest observed state of this execution context. Selecting a history event does not rewind it.</p>
-      {(scoped.loading || scoped.failed || scoped.repeated) ? <p className="wf-instance-note" role="status">{scoped.loading ? "Loading visible run data…" : scoped.failed ? "Some visible run data could not be loaded. Refresh to retry." : "Some activities ran more than once. Choose an occurrence to inspect."}</p> : null}
-      <div className="wf-instance-canvas" onKeyDownCapture={event => activateWorkflowCanvasNode(event, nodeId => {
+      <div ref={canvasContainerRef} className="wf-instance-canvas" onKeyDownCapture={event => activateWorkflowCanvasNode(event, nodeId => {
         const node = canvas.nodes.find(candidate => candidate.id === nodeId);
         if (node) onSelectActivity(nodeRuntimeId(node));
       })}>
@@ -2582,6 +2970,7 @@ function WorkflowInstanceCanvas({
             focusNodeId={visible && !scoped.loading ? focusCanvasNodeId : null}
             focusRequestId={focusRequestId}
             moveKeyboardFocus={moveKeyboardFocus}
+            focusMode={focusMode}
           />
         ) : canvas.nodes.length > 0 ? (
           <ReadOnlyWorkflowFlow
@@ -2592,9 +2981,19 @@ function WorkflowInstanceCanvas({
             onSelectActivity={onSelectActivity}
             onSelectEvidence={onSelectEvidence}
             focusRequestId={focusRequestId}
+            focusMode={focusMode}
+            onFocusModeChange={onFocusModeChange}
           />
         ) : null}
       </div>
+      {canvasStatus ? (
+        <div className={`wf-canvas-status-pill is-${canvasStatus.tone}`} role="status" aria-live="polite">
+          {canvasStatus.tone === "loading" ? <Loader2 size={13} className="wf-canvas-status-spinner" aria-hidden="true" />
+            : canvasStatus.tone === "warning" ? <AlertTriangle size={13} aria-hidden="true" />
+              : <Info size={13} aria-hidden="true" />}
+          <span>{canvasStatus.text}</span>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -2605,7 +3004,9 @@ function ReadOnlyWorkflowFlow({
   onInit,
   onSelectActivity,
   onSelectEvidence,
-  focusRequestId
+  focusRequestId,
+  focusMode,
+  onFocusModeChange
 }: {
   nodes: Node<WorkflowNodeData>[];
   edges: Edge<WorkflowEdgeData>[];
@@ -2613,6 +3014,8 @@ function ReadOnlyWorkflowFlow({
   onSelectActivity(nodeId: string): void;
   onSelectEvidence(evidenceId: string | null): void;
   focusRequestId: number;
+  focusMode?: RunCanvasFocusMode;
+  onFocusModeChange?(mode: RunCanvasFocusMode): void;
 }) {
 
   const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(nodes);
@@ -2637,7 +3040,7 @@ function ReadOnlyWorkflowFlow({
       <Background />
       <FitReadOnlyFlowView nodeCount={flowNodes.length} focusRequestId={focusRequestId} minReadableZoom={READ_ONLY_READABLE_ZOOM} />
       <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
-      <ReadOnlyFlowControls nodeCount={flowNodes.length} />
+      <ReadOnlyFlowControls nodeCount={flowNodes.length} focusMode={focusMode} onFocusModeChange={onFocusModeChange} />
       <RetainFlowViewport />
     </ReactFlow>
   );
@@ -2998,7 +3401,6 @@ function WorkflowInstanceInspector({
               {shownTab === "activity" || shownTab === "timeline" ? (activityContent ??
                 <WorkflowActivityExecutionDetails
                   context={context}
-                  initialView="journal"
                   activity={selectedActivity}
                   activityCatalog={activityCatalog}
                   executableNodeFacts={findExecutableNodeFacts(executableGraph, selectedActivity)}

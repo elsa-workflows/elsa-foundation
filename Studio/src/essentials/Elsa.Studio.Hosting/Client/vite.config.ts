@@ -1,10 +1,11 @@
+import { releaseInventory } from "../../../../vite.release-inventory";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   base: "/studio/",
-  plugins: [react()],
+  plugins: [releaseInventory("shell"),react()],
   define: {
     "process.env.NODE_ENV": JSON.stringify("production")
   },

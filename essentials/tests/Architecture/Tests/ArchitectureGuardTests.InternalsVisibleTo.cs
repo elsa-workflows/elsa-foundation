@@ -18,7 +18,7 @@ public sealed partial class ArchitectureGuardTests
     /// </summary>
     private static readonly HashSet<(string Project, string Target)> InternalsVisibleToExceptions =
     [
-        ("Elsa.Workbench", "Elsa.Modularity.Tests")
+        ("Elsa.Workbench.Host", "Elsa.Modularity.Tests")
     ];
 
     /// <summary>The configuration this test assembly was built in, which is the one whose production assemblies it reads.</summary>
@@ -76,7 +76,9 @@ public sealed partial class ArchitectureGuardTests
         Assert.Contains(("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFramework.Tests"), grants);
         Assert.Contains(("Elsa.ExtensionBuilder.Api", "Elsa.ExtensionBuilder.Api.Tests"), grants);
         Assert.Contains(("Elsa.Modularity.Api", "Elsa.Modularity.Tests"), grants);
-        Assert.Contains(("Elsa.Workbench", "Elsa.Modularity.Tests"), grants);
+        Assert.Contains(("Elsa.Workbench.Host", "Elsa.Modularity.Tests"), grants);
+        Assert.Contains(("Elsa.ActorFoundation.Contracts", "Elsa.ActorFoundation.Hosting"), grants);
+        Assert.Contains(("Elsa.ActorFoundation.Contracts", "Elsa.ActorFoundation.TestSupport"), grants);
     }
 
     /// <summary>
@@ -151,7 +153,7 @@ public sealed partial class ArchitectureGuardTests
             GrantProjects.Workbench,
             """<ItemGroup><InternalsVisibleTo Include="Elsa.Modularity.Tests" /><InternalsVisibleTo Include="Elsa.Tasks.Tests" /></ItemGroup>""");
         sandbox.Assembly(
-            "apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+            "apps/Elsa.Workbench.Host/bin/Release/net10.0/Elsa.Workbench.Host.dll",
             """
             [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Modularity.Tests")]
             [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Tasks.Tests")]
@@ -187,7 +189,7 @@ public sealed partial class ArchitectureGuardTests
             "Elsa.Locking.Core: no compiled assembly at essentials/src/Locking/Core/bin/Release/net10.0/Elsa.Locking.Core.dll; build it first (the Architecture tests build every production project), because its grants are read from it",
             "Elsa.Tasks -> Elsa.Events.Tests (compiled into essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll; not declared in the project file or its own sources, so a linked file, an imported build file or a computed argument): essentials/tests/Events/Tests/Elsa.Events.Tests.csproj tests domain 'Events', not the granting project's domain 'Tasks'",
             "Elsa.Tasks.Tests (essentials/tests/Tasks/Tests/Grants.cs): an InternalsVisibleTo argument that is not a string literal cannot be judged; write the assembly name as a literal",
-            "Elsa.Workbench -> Elsa.Tasks.Tests (apps/Elsa.Workbench/Elsa.Workbench.csproj): apps/Elsa.Workbench/Elsa.Workbench.csproj belongs to no domain, so it has no own test assemblies or same-domain projects to grant to",
+            "Elsa.Workbench.Host -> Elsa.Tasks.Tests (apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj): apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj belongs to no domain, so it has no own test assemblies or same-domain projects to grant to",
             "Elsa.Workflows.Design.Core -> Elsa.Workflows.Runtime.Tests (compiled into essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll; not declared in the project file or its own sources, so a linked file, an imported build file or a computed argument): essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj tests domain 'Workflows.Runtime', not the granting project's domain 'Workflows.Design'",
         ],
             violations);
@@ -196,7 +198,7 @@ public sealed partial class ArchitectureGuardTests
     /// <summary>The rule, one grant at a time, in a sandbox holding only the granting project and the project it names.</summary>
     [Theory]
     [InlineData(GrantProjects.TasksCore, GrantProjects.Tasks)]
-    [InlineData(GrantProjects.RuntimeHttp, GrantProjects.Runtime)]
+    [InlineData(GrantProjects.RuntimeCore, GrantProjects.Runtime)]
     [InlineData(GrantProjects.ExtensionBuilderCore, GrantProjects.ExtensionBuilderApi)]
     [InlineData(GrantProjects.Tasks, GrantProjects.TasksTests)]
     [InlineData(GrantProjects.Workbench, GrantProjects.ModularityTests)]
@@ -234,11 +236,12 @@ public sealed partial class ArchitectureGuardTests
         public const string EventsTests = "essentials/tests/Events/Tests/Elsa.Events.Tests.csproj";
         public const string DesignCore = "essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj";
         public const string Runtime = "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj";
-        public const string RuntimeHttp = "essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj";
+        public const string RuntimeCore = "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj";
+        public const string RuntimeHttp = "extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj";
         public const string ExtensionBuilderApi = "extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj";
         public const string ExtensionBuilderCore = "extensions/ExtensionBuilder/src/Core/Elsa.ExtensionBuilder.Core.csproj";
         public const string ModularityTests = "essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj";
-        public const string Workbench = "apps/Elsa.Workbench/Elsa.Workbench.csproj";
+        public const string Workbench = "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj";
         public const string FoundationHost = "apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
         public const string MapsGenerator = "tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj";
     }
@@ -246,8 +249,8 @@ public sealed partial class ArchitectureGuardTests
     [Theory]
     [InlineData(GrantProjects.Tasks, "Tasks")]
     [InlineData(GrantProjects.TasksTests, "Tasks")]
-    [InlineData(GrantProjects.RuntimeHttp, "Workflows.Runtime")]
-    [InlineData("essentials/tests/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj", "Workflows.Runtime")]
+    [InlineData(GrantProjects.RuntimeHttp, "extensions/Http")]
+    [InlineData("extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj", "extensions/Http")]
     [InlineData(GrantProjects.ExtensionBuilderApi, "extensions/ExtensionBuilder")]
     [InlineData("extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj", "extensions/ExtensionBuilder")]
     [InlineData(GrantProjects.Workbench, null)]

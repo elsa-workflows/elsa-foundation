@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { expectedStudioDate, selectStudioTimeZone } from "./studioDateAssertions";
 import { openQuestionSection } from "./questionNavigation";
-import type { QuestionDefinition, QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
+import type { QuestionDefinition, QueryResult } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/types";
 import { attachDashboardJson, canonicalDashboardDefinition, dashboardBackend, observeNativeWeaverBoundary, registerDashboardCleanup, seedDashboardRuns, tag, type Capture, type Resource } from "./dashboardJourneySupport";
 
 /** Derive period membership from the independent runtime inspection API, never Dashboard results. */
@@ -26,7 +26,11 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
   };
   const captureValues = async (name: string) => {
     const result = page.locator(".named-preview > .named-result");
-    await captureTarget(`${name}-periods`, result.locator(".named-result-provenance > p").last());
+    const details = result.locator(".named-result-details");
+    const compact = await details.count() > 0;
+    if (compact) await details.getByRole("button", { name: "Result details" }).click();
+    await captureTarget(`${name}-periods`, (compact ? result.locator(".named-result-details-content > p") : result.locator(".named-result-provenance > p")).last());
+    if (compact) await details.getByRole("button", { name: "Result details" }).click();
     const values = result.getByRole("region", { name: "Exact result values", exact: true });
     await values.evaluate(element => { element.scrollLeft = 0; });
     await captureTarget(`${name}-values`, values);

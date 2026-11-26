@@ -24,7 +24,7 @@ class WorkflowScopeTests(unittest.TestCase):
     def test_composed_acceptance_inputs_and_deletions_select_studio(self):
         for path in ['tools/ux-acceptance/run.py', 'tools/ci/studio_gate.py',
                      'Studio/tests/acceptance/journeys.spec.ts',
-                     'apps/Elsa.Workbench/shells.json',
+                     'apps/Elsa.Workbench.Host/shells.json',
                      'extensions/Agent/agents/Core/Manifest.cs']:
             with self.subTest(path=path):
                 self.assertTrue(self.selected(paths=[path], pull_request={'draft': True})['studio'])
@@ -70,6 +70,13 @@ class WorkflowScopeTests(unittest.TestCase):
     def test_docs_ready_event_does_not_start_unrelated_proofs(self):
         self.assertFalse(any(self.selected(paths=['docs/README.md'], action='ready_for_review').values()))
 
+    def test_release_evidence_uses_the_full_changed_set_on_push_and_merge_queue(self):
+        for event in ('push', 'pull_request', 'merge_group'):
+            self.assertTrue(self.selected(event, ['tools/versioning/package-evidence/generate.mjs',
+                                                  'docs/README.md'])['package-evidence'])
+            self.assertFalse(self.selected(event, ['docs/README.md'])['package-evidence'])
+            self.assertTrue(self.selected(event, None)['package-evidence'])
+
     def test_push_scopes_studio_and_weaver_like_a_pull_request(self):
         self.assertFalse(any(self.selected('push', ['docs/README.md']).values()))
         self.assertTrue(self.selected('push', ['essentials/src/Feature.cs'])['weaver'])
@@ -89,6 +96,13 @@ class WorkflowScopeTests(unittest.TestCase):
                          'essentials/Directory.Packages.props', 'essentials/Example.csproj',
                          'essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj',
                          'Studio/src/Feature.ts', 'extensions/Weaver/src/Feature.cs',
+                         'extensions/Dashboard/src/Core/Dataset.cs',
+                         'extensions/Dashboard/tests/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj',
+                         'extensions/Git/src/Elsa.Git/GitClient.cs',
+                         'extensions/Http/src/Activities/ActivitiesHttpFeature.cs',
+                         'extensions/Http/tests/Tests/Elsa.Http.Tests.csproj',
+                         'extensions/Secrets/src/Elsa.Secrets/Features/SecretsFeature.cs',
+                         'extensions/Secrets/tests/Tests/Elsa.Secrets.Tests.csproj',
                          'extensions/Directory.Build.props',
                          'extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client/src/module.ts',
                          'Directory.Build.props', 'tools/studio/Weaver.Conformance.Probe/browser.mjs']:

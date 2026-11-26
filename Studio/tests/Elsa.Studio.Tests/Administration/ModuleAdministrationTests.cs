@@ -51,17 +51,16 @@ public sealed class ModuleAdministrationTests
     [InlineData("ordinary")]
     [InlineData("oversized")]
     [InlineData("linked")]
-    public async Task Registry_nuspec_reads_use_native_admission_and_the_metadata_bound(string profile)
+    public async Task Registry_nuspec_reads_use_verified_archives_and_the_metadata_bound(string profile)
     {
         await using var host = await AdministrationHost.StartAsync(nativeStore: profile != "ordinary", configureNuplane: nuplane =>
         {
             if (profile == "ordinary") nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); });
         });
-        PackageAssetTests.Pack(host, "1.0.0", "payload");
+        PackageAssetTests.Pack(host, "1.0.0", "payload", oversizedNuspec: profile == "oversized");
         await PackageAssetTests.Reconcile(host);
         var installed = Assert.Single((await host.App.Services.GetRequiredService<INuplaneAdminOperations>().GetPackagesAsync(CancellationToken.None)).Packages);
         var nuspec = Assert.Single(Directory.EnumerateFiles(installed.InstallPath, "*.nuspec"));
-        if (profile == "oversized") await File.WriteAllTextAsync(nuspec, new string(' ', 1024 * 1024 + 1));
         if (profile == "linked")
         {
             var outside = Path.Combine(host.Root, "outside.nuspec");
@@ -71,7 +70,8 @@ public sealed class ModuleAdministrationTests
         }
         var result = await Registry(host);
         var package = Assert.Single(result["packages"]!.AsArray())!;
-        if (profile == "native")
+        Assert.DoesNotContain("outside-metadata-sentinel", result.ToJsonString());
+        if (profile != "oversized")
         {
             Assert.Equal("nuspec", (string?)package["manifest"]?["kind"]);
             Assert.Contains(PackageAssetTests.PackageId, (string)package["manifest"]!["text"]!);
@@ -80,7 +80,6 @@ public sealed class ModuleAdministrationTests
         {
             Assert.Equal("manifest-error", (string?)package["manifest"]?["kind"]);
             Assert.Contains(result["diagnostics"]!.AsArray(), item => (string?)item!["status"] == "metadata-unavailable");
-            Assert.DoesNotContain("outside-metadata-sentinel", result.ToJsonString());
         }
     }
 
@@ -90,6 +89,7 @@ public sealed class ModuleAdministrationTests
         await using var host = await AdministrationHost.StartAsync();
         var registry = await Registry(host);
         Assert.Equal(host.Root, (string?)registry["host"]?["contentRootPath"]);
+        Assert.NotEqual("Elsa.Studio.Workbench.Host", (string?)registry["host"]?["runtime"]);
         Assert.NotEqual("Elsa.Studio.Web", (string?)registry["host"]?["runtime"]);
         Assert.Equal("Supported", (string?)registry["retentionPolicy"]?["status"]);
         Assert.Null(registry["retentionPolicy"]?["keepNewestInactiveVersionsPerPackage"]);

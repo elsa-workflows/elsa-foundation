@@ -463,6 +463,29 @@ public sealed partial class ExternalAuthenticationHttpTests
     [Fact]
     public async Task Concurrent_real_catalog_writers_cannot_both_remove_their_last_proved_administrative_paths()
     {
+        // Both writers pass every prepare-time check against one revision before either commits. Each still sees the
+        // other's path, so only the commit-time guards stop the pair from removing both administrative paths.
+        var gate = new CatalogWriterGate(CatalogInterleaving.BothPreparedBeforeCommit);
+        var outcomes = await DisableBothAdministrativePaths(gate);
+        Assert.Single(outcomes, outcome => outcome.Saved);
+        Assert.Equal("revision-conflict", Assert.Single(outcomes, outcome => !outcome.Saved).Failure);
+        Assert.Equal(2, gate.Saves);
+    }
+
+    [Fact]
+    public async Task Catalog_writer_checked_after_a_concurrent_commit_is_refused_by_the_catalog_revision()
+    {
+        // The second writer read the same revision, then runs its identity and recovery checks after the first commit.
+        // Its identity guards are current, so the stale catalog revision alone must refuse it.
+        var gate = new CatalogWriterGate(CatalogInterleaving.FollowerCheckedAfterLeaderCommit);
+        var outcomes = await DisableBothAdministrativePaths(gate);
+        Assert.True(outcomes[0].Saved);
+        Assert.Equal("revision-conflict", outcomes[1].Failure);
+        Assert.Equal(2, gate.Saves);
+    }
+
+    private static async Task<ConnectionWriteResult[]> DisableBothAdministrativePaths(CatalogWriterGate gate)
+    {
         await using var host = await HttpHost.Start();
         await MakeAdministrative(host, "company"); await MakeAdministrative(host, "partner");
         host.Services.GetRequiredService<IOptions<AspNetCoreIdentityOptions>>().Value.Enabled = false;
@@ -484,9 +507,8 @@ public sealed partial class ExternalAuthenticationHttpTests
         await using var native = host.Scope();
         var inner = native.ServiceProvider.GetRequiredService<IConnectionCatalogStore>();
         var catalog = await inner.ReadAsync();
-        var barrier = new RecoveryReadBarrier();
-        await using var nodeA = host.RuntimeNode(catalog: new RecoverySynchronizedCatalog(inner, barrier));
-        await using var nodeB = host.RuntimeNode(catalog: new RecoverySynchronizedCatalog(inner, barrier));
+        await using var nodeA = host.RuntimeNode(catalog: new GatedCatalog(inner, gate, leader: true));
+        await using var nodeB = host.RuntimeNode(catalog: new GatedCatalog(inner, gate, leader: false));
         await using var a = nodeA.CreateAsyncScope(); await using var b = nodeB.CreateAsyncScope();
         a.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
         b.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
@@ -495,14 +517,14 @@ public sealed partial class ExternalAuthenticationHttpTests
         var outcomes = await Task.WhenAll(
             a.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, catalog.Revision, one), principal).AsTask(),
             b.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, catalog.Revision, two), principal).AsTask());
-        Assert.Single(outcomes, outcome => outcome.Saved);
-        Assert.Contains(Assert.Single(outcomes, outcome => !outcome.Saved).Failure, new[] { "revision-conflict", "identity-authority-changed" });
-        Assert.Equal(2, barrier.Reads);
+        // In both interleavings one administrative path survives, and removing it next is refused.
+        Assert.Equal(2, gate.Reads);
         var latest = await a.ServiceProvider.GetRequiredService<IConnectionCatalogStore>().ReadAsync();
         var remaining = Assert.Single(latest.Records, record => record.Enabled);
         var denied = await a.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, latest.Revision, remaining), principal);
         Assert.Equal("final-login-path", denied.Failure);
         Assert.Single((await a.ServiceProvider.GetRequiredService<IConnectionCatalogStore>().ReadAsync()).Records, record => record.Enabled);
+        return outcomes;
     }
 
     private static async Task MakeAdministrative(HttpHost host, string key)
@@ -530,27 +552,55 @@ public sealed partial class ExternalAuthenticationHttpTests
             payloads.Add((await store.FindGlobalAsync(document.Provider))!.Settings["protectedProofs"]);
         return payloads.ToArray();
     }
-    private sealed class RecoveryReadBarrier
+    private enum CatalogInterleaving { BothPreparedBeforeCommit, FollowerCheckedAfterLeaderCommit }
+
+    /// <summary>Pins the two writers' order around their catalog read and save; a missing writer fails the wait instead of hanging.</summary>
+    private sealed class CatalogWriterGate(CatalogInterleaving interleaving)
     {
+        private static readonly TimeSpan Limit = TimeSpan.FromSeconds(60);
         public int Reads;
-        private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public async Task Arrive(CancellationToken token)
+        public int Saves;
+        private readonly TaskCompletionSource bothRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource bothPrepared = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource leaderSaved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task AfterRead(bool leader, CancellationToken token)
         {
             var read = Interlocked.Increment(ref Reads);
             if (read > 2) return;
-            if (read == 2) ready.TrySetResult();
-            await ready.Task.WaitAsync(token);
+            if (read == 2) bothRead.TrySetResult();
+            await bothRead.Task.WaitAsync(Limit, token);
+            if (interleaving == CatalogInterleaving.FollowerCheckedAfterLeaderCommit && !leader) await leaderSaved.Task.WaitAsync(Limit, token);
+        }
+
+        public async Task BeforeSave(CancellationToken token)
+        {
+            var save = Interlocked.Increment(ref Saves);
+            if (interleaving != CatalogInterleaving.BothPreparedBeforeCommit || save > 2) return;
+            if (save == 2) bothPrepared.TrySetResult();
+            await bothPrepared.Task.WaitAsync(Limit, token);
+        }
+
+        public void AfterSave(bool leader)
+        {
+            if (leader) leaderSaved.TrySetResult();
         }
     }
-    private sealed class RecoverySynchronizedCatalog(IConnectionCatalogStore inner, RecoveryReadBarrier barrier) : IConnectionCatalogStore
+
+    private sealed class GatedCatalog(IConnectionCatalogStore inner, CatalogWriterGate gate, bool leader) : IConnectionCatalogStore
     {
         public bool SupportsIdentityRevisionGuards => inner.SupportsIdentityRevisionGuards;
         public async ValueTask<ConnectionCatalog> ReadAsync(CancellationToken cancellationToken = default)
         {
             var snapshot = await inner.ReadAsync(cancellationToken);
-            await barrier.Arrive(cancellationToken);
+            await gate.AfterRead(leader, cancellationToken);
             return snapshot;
         }
-        public ValueTask<CatalogSaveResult> SaveAsync(ConnectionCatalog catalog, CancellationToken cancellationToken = default) => inner.SaveAsync(catalog, cancellationToken);
+        public async ValueTask<CatalogSaveResult> SaveAsync(ConnectionCatalog catalog, CancellationToken cancellationToken = default)
+        {
+            await gate.BeforeSave(cancellationToken);
+            try { return await inner.SaveAsync(catalog, cancellationToken); }
+            finally { gate.AfterSave(leader); }
+        }
     }
 }

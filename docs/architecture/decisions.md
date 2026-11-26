@@ -101,6 +101,7 @@ Decisions are by Sipke Schoorstra, the owner, for [program #4229](https://github
 | 17 Nov | Kernel schema changes that a running version cannot read use a coordinated stop, and each release's notes state its rollback floor. | Owner card ([plan, schema compatibility](../program-goals/clean-slate-kernel.md#kernel-schema-and-protocol-compatibility-proposed)) |
 | 16 Nov | The BPMN prototype stream is parked until after release 1. | [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229) program state |
 | 16 Nov | #2531's M5 qualification and the budgets of 32 SQLite commands and 16 PostgreSQL round trips (ten WriteLines, Balanced) move to gate 3. | [#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6917342686) |
+| 23 Nov | MongoDB-specific implementation and qualification are on hold, including the MongoDB part of K4. Keep the prototype and its evidence, and continue relational K4 work behind the provider-neutral storage contract. | [Owner direction on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7108927599) |
 
 ## The seven design-now answers (16–17 November)
 
@@ -370,6 +371,14 @@ FIFO from one sender to one target. [Owner decision on #4229](https://github.com
 A finite Park deadline makes expiry eligible. The first resolution to open in a fenced commit owns the Park. Recovery may open after the deadline and recalls the outstanding expiry in that same commit.
 
 A job restarted at Open becomes eligible after recovery completes. The D-2(a) case follows its completion, reuse of the same job key at a higher generation, and recovery from a later Park. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7091685100)
+
+## Owner decisions on the release 1 activities and labels (25 November)
+
+The four palette intrinsics besides Set Variable run on the kernel: Set Output, Set Correlation Id, Set Instance Name and Finish. A model sets its own labels through `ITurn.SetLabel`; the workflow actor gives a model two of the header's four, and keeps the state version in its type data only. Backwards compatibility is not a concern before GA. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7153124235)
+
+## Owner decisions on definitions on the kernel (25 November)
+
+A kernel host replaces `IWorkflowActivationCoordinator` with a kernel coordinator that maps the compiled executable to a Native workflow and serves it. Designer expressions, JavaScript and Liquid, run as one host-evaluated binding kind through the portable expression evaluator. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7153650829); [Designer definitions on the kernel](definitions-on-the-kernel.md)
 
 ## Process
 

@@ -154,6 +154,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       current.revision++;
       current.state = createEntryState(latest, current);
       view.setState(current.state);
+      if (view.hasFocus) keepCaretInEditorView(view);
       void loadLanguageSupport(view, latest.document.language, current);
     } else if (latest.document.value !== view.state.doc.toString() && latest.document.value !== current.runtime.lastEmittedValue) {
       view.dispatch({
@@ -181,6 +182,8 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     // authoring context replaces the initial local-only providers so the visible document can
     // immediately acquire the newly available signature.
     view.dispatch({ selection: view.state.selection });
+    // A reclaimed compact view starts at the left edge; a field the author scrolled sideways keeps its position.
+    if (view.hasFocus && view.scrollDOM.scrollLeft === 0) keepCaretInEditorView(view);
   }, [props.completionProvider, props.completions, props.hoverProvider, props.signatureProvider]);
 
   return (
@@ -194,6 +197,36 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     />
   );
 }
+
+/**
+ * A refreshed state or a reclaimed compact view starts at scroll position 0, which can leave the caret of a long line
+ * out of view, and CodeMirror then hides the caret's popups. Scroll only the editor's own scroller sideways until the
+ * caret shows; unlike scrollIntoView this never moves the inspector or the page the author may have scrolled.
+ */
+function keepCaretInEditorView(view: EditorView) {
+  view.requestMeasure({
+    // One pending correction per view: both refresh paths may ask in the same frame.
+    key: caretInViewMeasure,
+    read: current => {
+      try {
+        const caret = current.coordsAtPos(current.state.selection.main.head);
+        if (!caret) return null;
+        const box = current.scrollDOM.getBoundingClientRect(), margin = 8, scrollLeft = current.scrollDOM.scrollLeft;
+        // An absolute target, so a repeated correction cannot add up.
+        if (caret.right > box.right) return scrollLeft + caret.right - box.right + margin;
+        if (caret.left < box.left) return Math.max(0, scrollLeft - (box.left - caret.left) - margin);
+        return null;
+      } catch {
+        return null; // Environments without layout (jsdom) cannot measure; nothing to correct.
+      }
+    },
+    write: (target, current) => {
+      if (target !== null) current.scrollDOM.scrollLeft = target;
+    }
+  });
+}
+
+const caretInViewMeasure = {};
 
 function claimCompactView(entry: CodeMirrorSessionEntry, profile: StudioCodeEditorEngineProps["profile"], container: HTMLElement) {
   if (profile !== "compact" || !parkedCompactView) return undefined;
@@ -348,7 +381,7 @@ function createEditingController(view: EditorView, entry: CodeMirrorSessionEntry
       const length = view.state.doc.length - (to - from) + edit.insert.length;
       const selection = edit.selection ?? { anchor: from + edit.insert.length, head: from + edit.insert.length };
       if (![selection.anchor, selection.head].every(position => Number.isInteger(position) && position >= 0 && position <= length)) return false;
-      view.dispatch({ changes: { from, to, insert: edit.insert }, selection,
+      view.dispatch({ changes: { from, to, insert: edit.insert }, selection, scrollIntoView: true,
         effects: setOwnerHistoryValue.of(payload), annotations: [isolateHistory.of("full"), Transaction.userEvent.of("input.insert.data")] });
       capturedEdits.delete(edit.expected);
       view.focus();

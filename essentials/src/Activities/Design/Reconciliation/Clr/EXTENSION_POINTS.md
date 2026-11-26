@@ -50,11 +50,16 @@ activated `IVariableTypeDescriptorCatalog` and the host's resolved `IActivityCon
 an authored alias never opens arbitrary CLR types or the runtime alias registry.
 
 Type admission alone does not establish the actual serialized profile of a Workflow input, variable or
-current item. The CLR contribution returns Unknown with `activity.shape.serialization-profile-unbound`:
-an admitted whole type can be retained, but a nonempty literal path has no asserted selected type.
-Request seeding preserves caller JSON or default System.Text.Json keys; expression and activity writers
-also differ. No value is normalized or case-folded. Those sources retain literal reads with deferred fit;
-an actual owner with authoritative schema/profile facts can contribute the same port later.
+current item. For an admitted type whose members the metadata reader can read, and for a List, Array, HashSet
+or Dictionary of one, the CLR contribution returns `Declared` with `activity.shape.declared-type`: the type's
+members under the activity-value profile (on the collection's `Element` or the map's `MapValue`), as advisory
+names for authoring help. A member path below a collection keeps the unbound answer. Validation and the Activity Data picker
+treat `Declared` as Unknown. Every other case returns Unknown with
+`activity.shape.serialization-profile-unbound`: an admitted whole type can be retained, but a nonempty
+literal path has no asserted selected type. Request seeding preserves caller JSON or default
+System.Text.Json keys; expression and activity writers also differ. No value is normalized or
+case-folded. Those sources retain literal reads with deferred fit; an actual owner with authoritative
+schema/profile facts can contribute the same port later.
 
 The feature supplies the same pure default type-capability projection as the API with `TryAdd` for
 endpoint-free hosts. A host replacement wins, and API and headless consumers resolve the same configured

@@ -17,6 +17,17 @@
 /* Paint inspector content above opacity-created canvas stacking contexts without trapping canvas dialogs. */
 .wf-editor-body > .wf-inspector { isolation: isolate; }
 
+/*
+ * An open code editor popup (completion, documentation, hover) can extend over the canvas. While one is open, lift the
+ * inspector above the canvas chrome (node actions, Add step, edge actions: z-index 10 at most), below pickers and dialogs.
+ * The floating and focus layouts raise the inspector with more specific selectors, so the rule repeats for them.
+ */
+.wf-editor-body > .wf-inspector:has(.cm-tooltip),
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body > .wf-inspector:has(.cm-tooltip),
+html[data-workspace-style="focus"] .wf-editor-body > .wf-inspector:has(.cm-tooltip) {
+  z-index: 11;
+}
+
 /* A stale "palette maximized" preference must not hide the canvas when there is no palette. */
 .wf-editor-body.palette-absent.palette-maximized .wf-canvas-shell {
   display: flex;

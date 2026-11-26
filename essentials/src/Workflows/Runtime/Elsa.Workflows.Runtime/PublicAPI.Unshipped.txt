@@ -123,7 +123,6 @@ Elsa.Workflows.Runtime.Diagnostics.NullWorkflowEngineTracer.StartCheckpointCommi
 Elsa.Workflows.Runtime.Diagnostics.NullWorkflowEngineTracer.StartDispatch(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! workItem) -> System.Diagnostics.Activity?
 Elsa.Workflows.Runtime.Diagnostics.NullWorkflowEngineTracer.StartDrainCycle(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerDrainRequest! request) -> System.Diagnostics.Activity?
 Elsa.Workflows.Runtime.Diagnostics.RuntimeAdmissionTelemetry
-Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry
 Elsa.Workflows.Runtime.Diagnostics.WorkflowExecutableCacheTelemetry
 Elsa.Workflows.Runtime.Extensions.DurableTimerServiceCollectionExtensions
 Elsa.Workflows.Runtime.Extensions.IncidentStrategyServiceCollectionExtensions
@@ -1671,27 +1670,6 @@ const Elsa.Workflows.Runtime.Diagnostics.RuntimeAdmissionTelemetry.SampleTag = "
 const Elsa.Workflows.Runtime.Diagnostics.RuntimeAdmissionTelemetry.ShedOutcome = "shed" -> string!
 const Elsa.Workflows.Runtime.Diagnostics.RuntimeAdmissionTelemetry.SupersededSample = "superseded" -> string!
 const Elsa.Workflows.Runtime.Diagnostics.RuntimeAdmissionTelemetry.UnsaturatedSample = "unsaturated" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.ActivityExecuteSpanName = "elsa.runtime.activity.execute" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.ActivitySourceName = "Elsa.Workflows.Runtime" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.CheckpointCommitSpanName = "elsa.runtime.checkpoint.commit" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.CheckpointIdTag = "elsa.checkpoint.id" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.CheckpointMandatoryTag = "elsa.checkpoint.mandatory" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.CheckpointPersistenceDecisionTag = "elsa.checkpoint.persistence_decision" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.CheckpointPostCommitIntentsTag = "elsa.checkpoint.post_commit_intents" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.CommandKindTag = "elsa.command.kind" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.DispatchSpanName = "elsa.runtime.dispatch" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.DrainItemsProcessedTag = "elsa.drain.items_processed" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.DrainMaxWorkItemsTag = "elsa.drain.max_work_items" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.DrainOutermostTag = "elsa.drain.outermost" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.DrainSpanName = "elsa.runtime.drain" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.DrainStopReasonTag = "elsa.drain.stop_reason" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.HandlerNameTag = "elsa.handler.name" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.OutcomeCompleted = "completed" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.OutcomeFaulted = "faulted" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.OutcomeTag = "elsa.outcome" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.PoisonFenceFallbackTag = "elsa.poison.fence_fallback" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.WorkItemIdTag = "elsa.work_item.id" -> string!
-const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.WorkflowExecutionIdTag = "elsa.workflow.execution_id" -> string!
 const Elsa.Workflows.Runtime.Diagnostics.WorkflowExecutableCacheTelemetry.CancelledOutcome = "cancelled" -> string!
 const Elsa.Workflows.Runtime.Diagnostics.WorkflowExecutableCacheTelemetry.CapacityReason = "capacity" -> string!
 const Elsa.Workflows.Runtime.Diagnostics.WorkflowExecutableCacheTelemetry.DeleteReason = "delete" -> string!

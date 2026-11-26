@@ -128,7 +128,8 @@ async function inspectActualRun(journey: TriggerJourney, delivery: DeliveryView,
     await expect(journey.page.getByRole("region", { name: "Current BPMN work", exact: true })).toBeVisible();
   } else {
     await expect(journey.page.getByRole("group", { name: "Run workspace actions", exact: true })).toContainText(inspection.instance.status);
-    await journey.page.getByRole("navigation", { name: "Run workspace views", exact: true }).getByRole("button", { name: "Diagram", exact: true }).click();
+    const diagramTab = journey.page.getByRole("navigation", { name: "Run workspace views", exact: true }).getByRole("button", { name: "Diagram", exact: true });
+    if (await diagramTab.isVisible()) await diagramTab.click();
     await expect(journey.page.getByRole("region", { name: "Workflow run canvas", exact: true })).toBeVisible();
     await expect(journey.page.getByRole("tabpanel").getByText("Loading workflow run...", { exact: true })).toHaveCount(0);
     await expect(journey.page.getByRole("tabpanel").getByText("Loading visible run data…", { exact: true })).toHaveCount(0);
@@ -150,13 +151,14 @@ test("standalone trigger management", async ({ page }) => {
   await page.goto("/workflows/triggers?backend=acceptance-primary");
   await expect(page.getByRole("heading", { name: "No triggers yet", exact: true })).toBeVisible(); await j.capture("triggers-empty");
   await page.getByRole("button", { name: "Create trigger", exact: true }).first().press("Enter");
-  await page.getByLabel("Trigger type", { exact: true }).selectOption("event:1");
-  await page.getByLabel("Trigger name", { exact: true }).fill("Uncommitted entry point");
+  const createDialog = page.getByRole("dialog", { name: "Create trigger", exact: true });
+  await createDialog.locator('label[data-type-key="event"][data-schema-version="1"]').click();
+  await createDialog.getByLabel("Trigger name", { exact: true }).fill("Uncommitted entry point");
   await j.capture("trigger-create");
-  await page.getByRole("button", { name: "Create trigger", exact: true }).press("Enter");
-  await expect(page.getByText("Event name is required.", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Trigger name", { exact: true })).toHaveValue("Uncommitted entry point"); await j.capture("trigger-validation");
-  await page.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
+  await createDialog.getByRole("button", { name: "Create trigger", exact: true }).press("Enter");
+  await expect(createDialog.getByText("Event name is required.", { exact: true })).toBeVisible();
+  await expect(createDialog.getByLabel("Trigger name", { exact: true })).toHaveValue("Uncommitted entry point"); await j.capture("trigger-validation");
+  await createDialog.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
   expect((await j.api<{ items: unknown[] }>("/runtime/standalone-triggers")).items).toHaveLength(0);
   const event = await j.create("event", "Shared Event");
   await expect(page.getByRole("heading", { name: "No live associations", exact: true })).toBeVisible(); await j.capture("trigger-no-subscribers");
@@ -190,7 +192,7 @@ test("standalone trigger associations and inputs", async ({ page }, info) => {
   const trigger = await j.create("event", "Shared mapped Event");
   const before = await j.api<{ state: unknown }>(`/design/workflows/drafts/${first.authored.draftId}`);
   const unpublished = await j.submit("Never published association", first.state);
-  await j.open(trigger.id); await page.getByRole("button", { name: "Add workflow", exact: true }).click();
+  await j.open(trigger.id); await page.getByRole("button", { name: "Add workflow", exact: true }).first().click();
   await j.chooseTarget(unpublished.definition.id, false, "subscription-workflow-search");
   await expect(page.getByText("Save disabled while its serving slot or input contract is unavailable.", { exact: true })).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Enable this subscription", exact: true })).not.toBeChecked();
@@ -200,8 +202,8 @@ test("standalone trigger associations and inputs", async ({ page }, info) => {
   await page.reload();
   const disabledRow = j.workflowSubscriptionRow(unpublished.definition.id);
   await expect(disabledRow).toContainText(unpublished.definition.name); await expect(disabledRow).toContainText("Not serving"); await j.capture("subscription-unpublished");
-  await disabledRow.getByRole("button", { name: "Remove", exact: true }).click(); await j.review();
-  await page.getByRole("button", { name: "Add workflow", exact: true }).click();
+  await j.subscriptionAction(disabledRow, "Remove"); await j.review();
+  await page.getByRole("button", { name: "Add workflow", exact: true }).first().click();
   await j.chooseTarget(second.authored.definition.id, true);
   await expect(page.getByRole("region", { name: "Add live subscription", exact: true }).getByText(/^Serving version:/)).toBeVisible();
   await j.capture("subscription-runtime-targets");
@@ -241,7 +243,7 @@ test("standalone trigger associations and inputs", async ({ page }, info) => {
   // The serving contract emits mappings in canonical destination order; both independent values must survive editing its sibling.
   expect((await j.subscriptions(trigger.id)).find(item => item.target.definitionId === second.authored.definition.id)?.mappings).toEqual([configured("amount", 7.25), configured("message", "Independent mapping")]);
   await page.goto(definitionPath(first.authored.definition.id)); await j.openWorkflowTriggers();
-  await page.getByRole("row").filter({ hasText: trigger.name }).getByRole("button", { name: "Remove", exact: true }).click(); await j.review();
+  await j.subscriptionAction(page.getByRole("row").filter({ hasText: trigger.name }), "Remove"); await j.review();
   await page.reload(); await j.openWorkflowTriggers();
   await expect(page.getByRole("heading", { name: "No live associations", exact: true })).toBeVisible();
   await j.open(trigger.id); expect((await j.subscriptions(trigger.id)).map(item => item.id)).not.toContain(firstSubscription.id);
@@ -340,7 +342,7 @@ test("standalone HTTP modes", async ({ page }) => {
   await workflowHttpSummary(j, owner.definition.id, sync, { mode: "WorkflowResponse" }, "workflow-http-workflow-response");
   const response = await j.sourceRequest(sync, { actual: "workflow owns response" }, 201); expect(response.body.text).toBe("Response from the actual subscribed workflow");
   const ambiguous = await j.submit("Second HTTP response owner", responseState); await j.publish(ambiguous);
-  await j.open(sync.id); await page.getByRole("button", { name: "Add workflow", exact: true }).click();
+  await j.open(sync.id); await page.getByRole("button", { name: "Add workflow", exact: true }).first().click();
   await j.chooseTarget(ambiguous.definition.id);
   for (const [name, value] of [["message", "second owner"], ["count", "7"]]) { await page.getByLabel(`Value source for ${name}`, { exact: true }).selectOption("Literal"); await page.getByLabel(`Configured value for ${name}`, { exact: true }).fill(value); }
   await page.getByRole("checkbox", { name: "Enable this subscription", exact: true }).check(); await page.getByRole("checkbox", { name: "Authorize this shared trigger to invoke the workflow", exact: true }).check();
@@ -544,8 +546,8 @@ test("standalone genuine BPMN inputs", async ({ page }) => {
     reason: "foundation-inputs-v1 supports literal null VALUES, which this journey must consume. It refuses explicit-null model/worker DEFAULTS while presence is observable, before envelope serialization or publication. A nullable Design JSON path may erase presence before that guard; this journey does not qualify null-default authoring or consumption.",
     qualificationScope: "Owning publication/model guard tests qualified separately in #4504; this browser journey does not claim an actual null-default refusal through Design JSON.",
     evidence: ["specs/1217-standalone-triggers/contracts/targets.md",
-      "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnAuthoredDirectPublisherTests.cs: Authored_explicit_null_defaults_are_refused_before_lossy_projection_or_publication / Authored_null_default_case_aliases_are_refused_before_nullable_deserialization",
-      "Essentials/tests/Activities/Bpmn/Tests/BpmnDirectExecutionTests.Inputs.cs: Input_profile_refuses_an_explicit_null_model_default_before_persistence / Input_profile_refuses_an_explicit_null_pinned_worker_default_before_serializing_its_envelope"] });
+      "extensions/Bpmn/tests/Interchange/Tests/BpmnAuthoredDirectPublisherTests.cs: Authored_explicit_null_defaults_are_refused_before_lossy_projection_or_publication / Authored_null_default_case_aliases_are_refused_before_nullable_deserialization",
+      "extensions/Bpmn/tests/Tests/BpmnDirectExecutionTests.Inputs.cs: Input_profile_refuses_an_explicit_null_model_default_before_persistence / Input_profile_refuses_an_explicit_null_pinned_worker_default_before_serializing_its_envelope"] });
   const worker = await j.echo("Actual declared-input service");
   const process = await j.submit("Genuine authored process", { inputs: [input("processMessage")], outputs: [], variables: [], rootActivity: {
     nodeId: "process", activityVersionId: await j.version("Elsa.Activities.Bpmn.Activities.BpmnProcess"), inputs: [], outputs: [], structure: { kind: "elsa.bpmn.structure", schemaVersion: "1.0.0", payload: {
@@ -733,7 +735,7 @@ test("standalone access and availability", async ({ page, browser }) => {
     await j.open(creatorTrigger.id);
     await expect(j.workflowSubscriptionRow(creatorTarget.authored.definition.id)).toContainText("Invocation: Granted");
     await j.capture("trigger-creator-departed", j.workflowSubscriptionRow(creatorTarget.authored.definition.id));
-    await j.workflowSubscriptionRow(creatorTarget.authored.definition.id).getByRole("button", { name: "Revoke authority", exact: true }).click(); await j.review();
+    await j.subscriptionAction(j.workflowSubscriptionRow(creatorTarget.authored.definition.id), "Revoke authority"); await j.review();
     expect((await j.subscriptions(creatorTrigger.id))[0].invocationGrant.state).toBe("Revoked");
     const beforeRevokedSource = await j.deliveries(creatorTrigger.id);
     const refusedAfterRevocation = await j.sourceRequest(await j.read(creatorTrigger.id), { actual: "resource grant revoked" });
@@ -757,7 +759,9 @@ test("standalone access and availability", async ({ page, browser }) => {
       typeKey: "event", schemaVersion: "1", configuration: { eventName: `isolated.${j.stamp}` } });
     await j.open(trigger.id); await page.getByRole("button", { name: "Edit configuration", exact: true }).click();
     await page.getByLabel("Trigger name", { exact: true }).fill(`Unsaved previous connection ${j.stamp}`);
-    await switchProfile("Owned alternate connection", "acceptance-alternate");
+    // The Edit configuration dialog is modal and makes the background chrome inert; navigate directly to the alternate backend profile to verify unsaved edits are cleared on scope switch.
+    await page.goto(triggerPath(trigger.id).replace("backend=acceptance-primary", "backend=acceptance-alternate"));
+    await expect(page).toHaveURL(/backend=acceptance-alternate/);
     await expect(page.getByLabel("Trigger name", { exact: true })).toHaveCount(0);
     await expect(page.getByText(`Unsaved previous connection ${j.stamp}`, { exact: true })).toHaveCount(0);
     await page.goto(triggerPath(peerTrigger.id).replace("backend=acceptance-primary", "backend=acceptance-alternate"));
@@ -799,7 +803,7 @@ test("standalone access and availability", async ({ page, browser }) => {
     await switchProfile("Default backend", "acceptance-primary");
     await j.openInstalledConfigurationEditor(async () => {
       await page.goto("/workflows/triggers/new?backend=acceptance-primary");
-      await page.getByLabel("Trigger type", { exact: true }).selectOption("acceptance-event:1");
+      await page.getByRole("dialog", { name: "Create trigger", exact: true }).locator('label[data-type-key="acceptance-event"][data-schema-version="1"]').click();
     });
     await page.getByLabel("Trigger name", { exact: true }).fill(`Independent editor ${j.stamp}`);
     await page.getByLabel("Acme topic", { exact: true }).fill("saved through independently built editor");
@@ -863,6 +867,7 @@ test("standalone access and availability", async ({ page, browser }) => {
     await j.host("start"); await page.getByRole("button", { name: "Retry", exact: true }).click();
     await expect(page.getByRole("heading", { name: trigger.name, exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "No live associations", exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: "Deliveries", exact: true }).click();
     await expect(page.getByRole("heading", { name: "No delivery evidence yet", exact: true })).toBeVisible();
     await j.capture("triggers-recovered");
     j.observed.push("Separate real operator, reader and signed-in denied identities; direct API mutation and read refusals", "UI sign-out cleared the reader resource before denied sign-in; actual tenant-scoped login could not read the first tenant", "Provider-owned configuration was persisted through the real management committer and displayed read-only", "Normal backend-profile navigation cleared an unsaved edit; isolated Runtime/Design stores showed distinct data while sharing the owned Identity/session authority", "With ordinary Studio host and backend authentication enabled, a real authenticated collection request was held at a controlled browser transport boundary; no response was replaced and the backend stayed live. Supported full-navigation switching replaced the old document, then release could not overwrite the isolated peer's resource data. Request cancellation is recorded only when actually observed", "Independently built source-consumer modules supplied backend authoring and a public SDK configuration editor; actual Studio feature removal preserved metadata editing, and restoring the module retained corrected values", "Normal feature removal/restart preserved saved configuration and demonstrated missing family and missing capability", "A controlled authenticated-request delay established actual loading without blocking token acquisition; stopped backend caused separate refresh and initial-route failures; a new owned process and Retry recovered the same resource");

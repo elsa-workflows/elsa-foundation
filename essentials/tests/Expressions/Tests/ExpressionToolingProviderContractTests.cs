@@ -99,11 +99,96 @@ public sealed class ExpressionToolingProviderContractTests
         var hover = await provider.GetHoverAsync(
             new(scope, "variables.customer.name", new(0, "variables.customer.name".Length)),
             CancellationToken.None);
+        var functionHover = await provider.GetHoverAsync(
+            new(scope, "getCurrentValue", new(0, "getCurrentValue".Length)),
+            CancellationToken.None);
 
         Assert.DoesNotContain(root.Payload!.Items, item => item.Label.StartsWith("getCur", StringComparison.Ordinal));
         Assert.Equal("currentValue", Assert.Single(member.Payload!.Items).Label);
         Assert.Equal("name", Assert.Single(nested.Payload!.Items).Label);
         Assert.Contains("Customer name.", hover.Payload!.Contents, StringComparison.Ordinal);
+        // A signature already names the function, so it is the whole first line.
+        Assert.Equal("getCurrentValue()", functionHover.Payload!.Contents.Split(Environment.NewLine)[0]);
+    }
+
+    [Fact]
+    public async Task Member_hover_keeps_its_name_when_the_type_name_starts_with_it()
+    {
+        var shape = new ExpressionValueShape("Order", ExpressionValueKind.Object,
+            Members: [new("Date", new("DateTime", ExpressionValueKind.Scalar, false), "Placed on.")]);
+        var symbol = new ExpressionSymbol("order", "order", ExpressionSymbolKind.Variable, shape);
+
+        var javascript = await new JavaScriptExpressionToolingProvider().GetHoverAsync(
+            new(CreateScope("JavaScript", [symbol]), "variables.order.Date", new(0, "variables.order.Date".Length)), CancellationToken.None);
+        var liquid = await new LiquidExpressionToolingProvider().GetHoverAsync(
+            new(CreateScope("Liquid", [symbol]), "{{ order.Date }}", new(0, "{{ order.Date".Length)), CancellationToken.None);
+
+        Assert.StartsWith("Date: DateTime" + Environment.NewLine, javascript.Payload!.Contents, StringComparison.Ordinal);
+        Assert.StartsWith("Date: DateTime" + Environment.NewLine, liquid.Payload!.Contents, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Typed_variable_members_complete_after_variables_dot_and_never_produce_member_diagnostics()
+    {
+        const string note = "From the declared type `shop.address`; the stored value may differ.";
+        var provider = new JavaScriptExpressionToolingProvider();
+        var customerShape = new ExpressionValueShape("shop.address", ExpressionValueKind.Object,
+            Members: [new("city", new("String", ExpressionValueKind.Scalar, false), note),
+                new("home", new("shop.street", ExpressionValueKind.Object, Members: [new("street", new("String", ExpressionValueKind.Scalar, false), note)]), note)]);
+        var scope = CreateScope("JavaScript", [new("customer", "customer", ExpressionSymbolKind.Variable, customerShape)]);
+
+        var completion = await provider.GetCompletionsAsync(new(scope, "variables.customer.ci", new(0, 21)), CancellationToken.None);
+        var validation = await provider.ValidateAsync(new(scope, "variables.customer.cty"), CancellationToken.None);
+        var hover = await provider.GetHoverAsync(new(scope, "variables.customer.city", new(0, 23)), CancellationToken.None);
+
+        var nested = await provider.GetCompletionsAsync(new(scope, "variables.customer.home.", new(0, 24)), CancellationToken.None);
+        Assert.Equal("street", Assert.Single(nested.Payload!.Items).Label);
+        var item = Assert.Single(completion.Payload!.Items);
+        Assert.Equal("city", item.Label);
+        Assert.Equal("String", item.Detail);
+        Assert.Equal(note, item.Documentation);
+        Assert.Empty(validation.Payload!.Diagnostics);
+        Assert.Contains("the stored value may differ", hover.Payload!.Contents, StringComparison.Ordinal);
+        Assert.StartsWith("city: String" + Environment.NewLine, hover.Payload.Contents, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Typed_collection_items_complete_after_an_index_and_never_produce_member_diagnostics()
+    {
+        const string note = "From the declared type `shop.address`; the stored value may differ.";
+        var provider = new JavaScriptExpressionToolingProvider();
+        var address = new ExpressionValueShape("shop.address", ExpressionValueKind.Object,
+            Members: [new("city", new("String", ExpressionValueKind.Scalar, false), note),
+                new("home", new("shop.street", ExpressionValueKind.Object, Members: [new("street", new("String", ExpressionValueKind.Scalar, false), note)]), note)]);
+        var scope = CreateScope("JavaScript", [
+            new("orders", "orders", ExpressionSymbolKind.Variable, new("shop.address", ExpressionValueKind.Array, Item: address)),
+            new("lookup", "lookup", ExpressionSymbolKind.Variable, new("shop.address", ExpressionValueKind.Map, Key: new("String"), Value: address))
+        ]);
+        async Task<string[]> Labels(string source) =>
+            (await provider.GetCompletionsAsync(new(scope, source, new(0, source.Length)), CancellationToken.None)).Payload!.Items.Select(x => x.Label).Order().ToArray();
+
+        Assert.Equal(["city", "home"], await Labels("variables.orders[0]."));
+        Assert.Equal(["city"], await Labels("variables.orders[i + 1].ci"));
+        Assert.Equal(["street"], await Labels("variables.orders[0].home."));
+        Assert.Equal(["city", "home"], await Labels("variables.lookup[\"north.east\"]."));
+        Assert.Equal(["city", "home"], await Labels("variables[\"orders\"][0]."));
+        Assert.Equal(["city", "home"], await Labels("total(variables.orders[0]."));
+        Assert.Empty(await Labels("variables.orders."));
+        Assert.Empty(await Labels("variables.orders[0]"));
+
+        var item = (await provider.GetCompletionsAsync(new(scope, "variables.orders[0].ci", new(0, 22)), CancellationToken.None)).Payload!.Items.Single();
+        Assert.Equal("String", item.Detail);
+        Assert.Equal(note, item.Documentation);
+        var hover = await provider.GetHoverAsync(new(scope, "variables.orders[0].city", new(0, 24)), CancellationToken.None);
+        Assert.Contains("the stored value may differ", hover.Payload!.Contents, StringComparison.Ordinal);
+        // Hover on the collection itself names the collection, not a member after the index.
+        foreach (var (text, at) in new[] { ("variables.orders[0]", 13), ("variables.orders[0].city", 13), ("variables.lookup[\"k\"]", 13) })
+        {
+            var collection = await provider.GetHoverAsync(new(scope, text, new(0, at)), CancellationToken.None);
+            Assert.StartsWith(text[10..text.IndexOf('[')], collection.Payload!.Contents, StringComparison.Ordinal);
+        }
+        var validation = await provider.ValidateAsync(new(scope, "variables.orders[0].cty + variables.lookup[\"k\"].home.stret"), CancellationToken.None);
+        Assert.Empty(validation.Payload!.Diagnostics);
     }
 
     [Fact]
@@ -130,9 +215,14 @@ public sealed class ExpressionToolingProviderContractTests
         var liquidCompletion = await liquid.GetCompletionsAsync(
             new(liquidScope, "producer.", new(0, "producer.".Length)),
             CancellationToken.None);
+        var liquidHover = await liquid.GetHoverAsync(
+            new(liquidScope, "{{ producer.output }}", new(0, "{{ producer.output".Length)),
+            CancellationToken.None);
 
         Assert.Equal("output", Assert.Single(javascriptCompletion.Payload!.Items).Label);
         Assert.Contains("Producer output.", javascriptHover.Payload!.Contents, StringComparison.Ordinal);
+        Assert.StartsWith("output: String" + Environment.NewLine, javascriptHover.Payload.Contents, StringComparison.Ordinal);
+        Assert.StartsWith("output: String" + Environment.NewLine, liquidHover.Payload!.Contents, StringComparison.Ordinal);
         Assert.Contains(liquidCompletion.Payload!.Items, item => item.Label == "output");
     }
 

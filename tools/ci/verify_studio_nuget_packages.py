@@ -75,6 +75,17 @@ def _verify_pinned_layout(root: Path, inventory: dict) -> None:
         for item in manifest["projects"]
         if item.get("product") == "studio"
     ]
+    # A project moved or renamed after consolidation keeps its frozen manifest row under the original path and identity.
+    renamed = {item["renamed_from"]: item for item in inventory["packable_projects"] + inventory["non_packable_projects"]
+               if "renamed_from" in item}
+    stale = sorted(set(renamed) - {path for path, _ in projected})
+    if stale:
+        raise ValueError(f"Renamed Studio projects are missing from the pinned layout manifest: {stale}.")
+    for path, (package_id, _) in projected:
+        if path in renamed and package_id != Path(path).stem:
+            raise ValueError(f"Renamed Studio project {path} has frozen identity {package_id!r}, expected {Path(path).stem!r}.")
+    projected = [(renamed[path]["project"], (renamed[path]["id"], identity[1])) if path in renamed else (path, identity)
+                 for path, identity in projected]
     actual = dict(projected)
     if len(actual) != len(projected):
         raise ValueError("Duplicate projected Studio project paths in the pinned layout manifest.")
@@ -105,6 +116,13 @@ def verify_project_inventory(root: Path) -> dict:
     _verify_pinned_layout(root, inventory)
     packable = inventory["packable_projects"]
     non_packable = inventory["non_packable_projects"]
+    # Manual image qualification checks the exact producer checkout. A path-only move keeps the
+    # prior source location valid for older artifacts with the same pinned package identity.
+    for item in packable + non_packable:
+        previous = item.get("renamed_from")
+        if previous and Path(previous).stem == item["id"] and not (root / item["project"]).is_file() and (root / previous).is_file():
+            item["project"] = previous
+
     expected_paths = {item["project"] for item in packable + non_packable}
     actual_paths = _studio_projects(root)
     if actual_paths != expected_paths:
@@ -447,6 +465,17 @@ def _pinned_layout_self_test(root: Path, inventory: dict) -> None:
         unexpected = json.loads(json.dumps(manifest))
         unexpected["projects"][studio_index]["target"] += ".unexpected"
         verify(unexpected, "Pinned Studio project identity mismatch")
+        for renamed in [item for item in inventory["packable_projects"] + inventory["non_packable_projects"] if "renamed_from" in item]:
+            def renamed_row(document: dict) -> dict:
+                return next(item for item in document["projects"]
+                            if item.get("product") == "studio" and _normalize_layout_target(item["target"]) == renamed["renamed_from"])
+            moved = json.loads(json.dumps(manifest))
+            renamed_row(moved)["target"] += ".moved"
+            verify(moved, "missing from the pinned layout manifest")
+            for value in ["Unexpected.Package.Identity", None]:
+                relabelled = json.loads(json.dumps(manifest))
+                renamed_row(relabelled)["package_id"] = value
+                verify(relabelled, "has frozen identity")
         collision = json.loads(json.dumps(manifest))
         alias = dict(collision["projects"][studio_index])
         alias["target"] = _normalize_layout_target(alias["target"])

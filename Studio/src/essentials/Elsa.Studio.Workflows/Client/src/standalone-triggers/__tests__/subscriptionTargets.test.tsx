@@ -27,18 +27,21 @@ function client() {
     preview: vi.fn().mockResolvedValue({ previewId: "review", expiresAt: "2099-01-01T00:00:00Z", observedRevision: 1, commandFingerprint: "digest", canApply: true, findings: [], impact: [] }) } as unknown as TriggerClient;
 }
 async function choose(container: HTMLElement) {
-  const search = container.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Workflow"]');
+  const search = container.querySelector<HTMLInputElement>('input[aria-label="Search workflows"]');
   expect(search, "The trigger direction offers authorized workflow name search").not.toBeNull();
   fill(search!, "Reconcile");
   await vi.waitFor(() => expect(container.querySelector('[role="option"]')?.textContent).toContain("Reconcile Accounts"));
   flushSync(() => (container.querySelector('[role="option"]') as HTMLElement).click());
+  const next = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.includes("Continue to inputs"))!;
+  await vi.waitFor(() => expect(next.disabled).toBe(false));
+  flushSync(() => next.click());
 }
 it("selects a never-published workflow by name and reviews a disabled association using Runtime context", async () => {
   vi.mocked(listDefinitions).mockResolvedValue({ definitions: [definition], page: 1, pageSize: 20, isPaged: true });
   vi.mocked(getDefinition).mockResolvedValue(details("Reconcile Accounts"));
   const transport = client(), context = api(); const { container } = mount(<SubscriptionEditor api={context} client={transport} actor={actor} trigger={trigger} onCancel={vi.fn()} onSaved={vi.fn()} />);
   await choose(container);
-  expect(listDefinitions).toHaveBeenCalledWith(context.backend, expect.objectContaining({ search: "Reconcile", state: "all" }));
+  expect(listDefinitions).toHaveBeenCalledWith(context.backend, expect.objectContaining({ search: "Reconcile", state: "all" }), expect.any(AbortSignal));
   await vi.waitFor(() => expect(transport.mappingContext).toHaveBeenCalledWith("trigger", 1, { definitionId: "opaque", slotName: "default" }, [], expect.any(AbortSignal)));
   const review = () => [...container.querySelectorAll("button")].find(button => button.textContent === "Review subscription")!;
   await vi.waitFor(() => expect(review().disabled).toBe(false)); flushSync(() => review().click());
@@ -48,11 +51,44 @@ it("keeps published Runtime target selection usable when Design name search is d
   vi.mocked(listDefinitions).mockRejectedValue(new Error("Design read denied")); vi.mocked(getDefinition).mockRejectedValue(new Error("Design read denied"));
   const transport = client(); vi.mocked(transport.targets).mockResolvedValue({ items: [{ definitionId: "runtime-only", slotName: "blue", displayName: "runtime-only", state: "Available", findings: [] }] });
   const { container } = mount(<SubscriptionEditor api={api()} client={transport} actor={actor} trigger={trigger} onCancel={vi.fn()} onSaved={vi.fn()} />);
-  const search = container.querySelector<HTMLInputElement>('[role="combobox"][aria-label="Workflow"]'); expect(search).not.toBeNull(); fill(search!, "Reconcile");
   await vi.waitFor(() => expect(container.textContent).toContain("Design read denied"));
-  await vi.waitFor(() => expect(container.querySelector('select[aria-label="Workflow and publication slot"] option[value*=runtime-only]')).not.toBeNull());
-  fill(container.querySelector<HTMLSelectElement>('select[aria-label="Workflow and publication slot"]')!, JSON.stringify({ definitionId: "runtime-only", slotName: "blue" }));
+  await vi.waitFor(() => expect(container.querySelector('[role="option"][data-definition-id="runtime-only"][data-slot-name="blue"]')).not.toBeNull());
+  flushSync(() => (container.querySelector('[role="option"][data-definition-id="runtime-only"][data-slot-name="blue"]') as HTMLElement).click());
   await vi.waitFor(() => expect(transport.mappingContext).toHaveBeenCalledWith("trigger", 1, { definitionId: "runtime-only", slotName: "blue" }, [], expect.any(AbortSignal)));
+});
+it("loads workflows immediately on open with Runtime slot enrichment, HTTP compatibility badge, and smart slot pills", async () => {
+  vi.mocked(listDefinitions).mockResolvedValue({
+    definitions: [definition, { ...definition, id: "draft-only", name: "Draft Only Workflow" }],
+    page: 1,
+    pageSize: 20,
+    isPaged: true
+  });
+  vi.mocked(getDefinition).mockResolvedValue(details("Reconcile Accounts"));
+  const transport = client();
+  vi.mocked(transport.targets).mockResolvedValue({
+    items: [
+      { definitionId: "opaque", slotName: "default", displayName: "Reconcile Accounts", state: "Available", serving: { slotRevision: 1, version: "2" }, supportsWorkflowOwnedHttpResponse: false, findings: [] },
+      { definitionId: "opaque", slotName: "canary", displayName: "Reconcile Accounts", state: "Available", serving: { slotRevision: 2, version: "3" }, supportsWorkflowOwnedHttpResponse: true, findings: [] }
+    ]
+  });
+  const httpTrigger: TriggerView = {
+    ...trigger,
+    http: { mode: "WorkflowResponse", proposedEndpoint: "reconcile", reservationState: "Unreserved" }
+  };
+  const { container } = mount(<SubscriptionEditor api={api()} client={transport} actor={actor} trigger={httpTrigger} onCancel={vi.fn()} onSaved={vi.fn()} />);
+  await vi.waitFor(() => expect(container.querySelectorAll('[role="option"]')).toHaveLength(2));
+  const options = [...container.querySelectorAll<HTMLElement>('[role="option"]')];
+  expect(options[0].textContent).toContain("Reconcile Accounts");
+  expect(options[0].textContent).toContain("Available");
+  expect(options[0].textContent).toContain("No HTTP response");
+  expect(options[1].textContent).toContain("Draft Only Workflow");
+  expect(options[1].textContent).toContain("Unpublished");
+
+  flushSync(() => options[0].click());
+  await vi.waitFor(() => expect(container.querySelectorAll(".wf-trigger-slot-pill")).toHaveLength(2));
+  const canaryPill = [...container.querySelectorAll<HTMLButtonElement>(".wf-trigger-slot-pill")].find(pill => pill.textContent?.includes("canary"))!;
+  flushSync(() => canaryPill.click());
+  expect(container.querySelector<HTMLInputElement>('input[aria-label="Publication slot"]')?.value).toBe("canary");
 });
 const subscription: SubscriptionView = { id: "subscription", revision: 1, triggerId: "trigger", enabled: false, origin: { kind: "Studio", configurationReadOnly: false }, target: { definitionId: "opaque", slotName: "default" }, mappings: [], invocationGrant: { state: "Absent" }, compatibility: "ValidationPending", findings: [], actions: [] };
 it("labels subscription rows with authorized names and retains copyable exact identity", async () => {

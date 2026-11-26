@@ -37,6 +37,8 @@ import { activityDataMembersJourney } from "./activityDataMembersJourney";
 import { activityDataSourcesJourney } from "./activityDataSourcesJourney";
 import { activityExpressionInsertionJourney, expressionModulePreservationJourney } from "./activityExpressionInsertionJourney";
 import { numericBindingJourney } from "./numericBindingJourney";
+import { typedVariableCompletionJourney } from "./typedVariableCompletionJourney";
+import { typedCollectionCompletionJourney } from "./typedCollectionCompletionJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
 import { variableRenameJourney } from "./variableRenameJourney";
 import { variableLifecycleJourney } from "./variableLifecycleJourney";
@@ -1105,6 +1107,12 @@ test("insert JavaScript activity data", async ({ page }, info) => {
 });
 test("insert Liquid activity data", async ({ page }, info) => {
   await activityExpressionInsertionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); }, "Liquid");
+});
+test("complete typed variable members in JavaScript", async ({ page }, info) => {
+  await typedVariableCompletionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+test("complete typed collection items in JavaScript", async ({ page }, info) => {
+  await typedCollectionCompletionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 if (process.env.UX_ACTIVITY_DATA_COMPOSITION === "minimal") {
   test("preserve expression data without optional modules", async ({ page }, info) => {

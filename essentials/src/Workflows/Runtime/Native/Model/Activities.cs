@@ -1,0 +1,887 @@
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using Kernel.Graph;
+using Kernel.Graph.Exceptions;
+using Kernel.Graph.Internal;
+using Kernel.Graph.Internal.Policies;
+using Kernel.Graph.Models;
+
+namespace Kernel.Native;
+
+// The ported activities. Semantics follow the Elsa 4 sources the activity map names; what differs is in NATIVE.md.
+
+// ---- composites ------------------------------------------------------------------------------------------------------
+
+/// <summary>Stateless: the next child follows from the position of the one that completed.</summary>
+[InterventionParent(1)]
+public sealed class Sequence : CompositeActivity, IInterventionParent
+{
+    System.Text.Json.Nodes.JsonNode? IInterventionParent.PrepareRetry(Node definition, System.Text.Json.Nodes.JsonNode? state, RetryChild child)
+    {
+        if (state is not null || definition.Children.Count(n => n.Id == child.Node) != 1)
+            throw new InvalidOperationException("Invalid sequence retry obligation.");
+        return null;
+    }
+    protected internal override void Execute(CompositeContext context)
+    {
+        if (context.Children.Count == 0) context.Complete();
+        else context.Schedule(context.Children[0]);
+    }
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        if (child.Outcome == "Break")
+        {
+            context.Complete("Break");
+            return;
+        }
+        var next = context.Children.ToList().FindIndex(c => c.Id == child.Node) + 1;
+        if (next < context.Children.Count) context.Schedule(context.Children[next]);
+        else context.Complete();
+    }
+}
+
+/// <summary>Then and Else are the children tagged by the builder; the outcome is True or False either way, so a flowchart can route on it.</summary>
+public sealed class If : CompositeActivity
+{
+    [Input] public bool Condition { get; set; }
+
+    protected internal override void Execute(CompositeContext context)
+    {
+        var outcome = Condition ? "True" : "False";
+        if (context.Children.FirstOrDefault(c => c.Slot == (Condition ? "Then" : "Else")) is { } branch) context.Schedule(branch, outcome);
+        else context.Complete(outcome);
+    }
+
+    // A branch that ends on Break ends the If on Break, so that the nearest loop hears of it (the old core's #299).
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
+        context.Complete(child.Outcome == Break.Outcome ? Break.Outcome : child.Tag!);
+}
+
+/// <summary>
+/// The old core's Switch: the first case whose condition holds runs, or whose label equals <see cref="Value"/> when it has
+/// no condition; otherwise the default branch. Conditions are evaluated in order, only as far as the first match. The
+/// Switch completes with the case's label or <see cref="DefaultOutcome"/>, also when the selected slot has no branch,
+/// and with Break when its branch does.
+/// </summary>
+public sealed class Switch : CompositeActivity
+{
+    public const string DefaultSlot = "Default";
+    public const string DefaultOutcome = "Default";
+    public static string CaseSlot(string label) => "Case:" + label;
+
+    /// <summary>What a case without a condition is compared with: a string, or null, which matches no case.</summary>
+    [Input] public JsonNode? Value { get; set; }
+
+    protected internal override void Execute(CompositeContext context)
+    {
+        foreach (var @case in context.Node.Cases)
+        {
+            bool matches;
+            if (@case.Condition is not { } condition)
+            {
+                // The value is read only when a case without a condition is reached, as on the old core, and compared as a
+                // string; a number or anything else faults, where the old core needs an authored conversion.
+                string? value = null;
+                if (Value is not null && !(Value is JsonValue text && text.GetValueKind() == JsonValueKind.String && text.TryGetValue(out value)))
+                {
+                    context.Fault(new ActivityFault("switch.value.invalid", $"The Switch's value is {Value.ToJsonString()}, not a string."));
+                    return;
+                }
+                matches = value is not null && StringComparer.Ordinal.Equals(@case.Label, value);
+            }
+            // A condition is a Boolean; null faults, as on the old core, where only an unbound condition is false.
+            else if (context.Evaluate(condition) is JsonValue scalar && scalar.GetValueKind() is JsonValueKind.True or JsonValueKind.False) matches = scalar.GetValueKind() == JsonValueKind.True;
+            else
+            {
+                context.Fault(new ActivityFault("switch.condition.invalid", $"The condition of case '{@case.Label}' is not a Boolean."));
+                return;
+            }
+            if (matches)
+            {
+                Run(context, CaseSlot(@case.Label), @case.Label);
+                return;
+            }
+        }
+        Run(context, DefaultSlot, DefaultOutcome);
+    }
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        if (child.Outcome == Break.Outcome) { context.Complete(Break.Outcome); return; }
+        var slot = context.Children.First(c => c.Id == child.Node).Slot!;
+        context.Complete(slot == DefaultSlot ? DefaultOutcome : slot["Case:".Length..]);
+    }
+
+    private static void Run(CompositeContext context, string slot, string outcome)
+    {
+        if (context.Children.FirstOrDefault(c => c.Slot == slot) is { } branch) context.Schedule(branch);
+        else context.Complete(outcome);
+    }
+
+    /// <summary>The definition's own rules, checked when it is registered: unique labels (an empty one too, as the old core allows), and one branch per case or default.</summary>
+    internal static void Validate(Node node, string workflow)
+    {
+        var labels = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var @case in node.Cases)
+            if (@case.Label is null || !labels.Add(@case.Label))
+                throw new InvalidOperationException($"Switch '{node.Id}' in '{workflow}' needs unique case labels ('{@case.Label}').");
+        var slots = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var child in node.Children)
+            if (child.Slot is not { } slot || !(slot == DefaultSlot || slot.StartsWith("Case:", StringComparison.Ordinal) && labels.Contains(slot["Case:".Length..])) || !slots.Add(slot))
+                throw new InvalidOperationException($"Child '{child.Id}' of Switch '{node.Id}' in '{workflow}' must fill one case's slot or the default, once ('{child.Slot}').");
+    }
+}
+
+/// <summary>A composite that a graph Complete in its body can end (<see cref="ExitEffect"/>).</summary>
+internal interface IExitBoundary
+{
+    void OnExit(CompositeContext context, string outcome);
+}
+
+/// <summary>A GraphActivity's frame: its body's scope, and the outputs a Set Output in its body assigned.</summary>
+public sealed record GraphState(string Scope)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, JsonNode?>? Assigned { get; init; }
+}
+
+/// <summary>
+/// The old core's GraphActivity, a placed reusable activity: its body (its one child) runs in a scope that declares its
+/// inputs and, within that, its local variables, and sees nothing outside it, as the old core's closed graph scope: a read
+/// of an undeclared name is null and a write of one stays in the body's variables. Its input bindings are read where it is placed. It completes with an outcome its mappings give the body's outcome, or
+/// with the one a Complete in its body names, which ends the rest of the body. Its result is its outputs, read in that
+/// scope as it completes. A nested GraphActivity is its own boundary.
+/// </summary>
+public sealed class GraphActivity : CompositeActivity, IExitBoundary
+{
+    public const string CompleteOutcomeUnknownFaultCode = "activity.graph.complete.outcome-unknown";
+    public const string EntryCompletedWithoutMappingFaultCode = "activity.graph.entry-completed-without-mapping";
+    public const string OutcomeUnmappedFaultCode = "activity.graph.outcome-unmapped";
+    public const string InputRequiredFaultCode = "activity.graph.input-required";
+    public const string CompleteOutsideFaultCode = "activity.graph.complete.outside";
+    public const string OutputRequiredFaultCode = "activity.graph.output-required";
+
+    protected internal override void Execute(CompositeContext context)
+    {
+        var graph = context.Node.Graph!;
+        var inputs = new Dictionary<string, JsonNode?>(StringComparer.Ordinal);
+        foreach (var input in graph.Inputs)
+        {
+            // A bound input is supplied, also when it evaluates to null, as the old core tells a supplied null from absence.
+            if (context.Node.Inputs.TryGetValue(input.Name, out var binding)) inputs[input.Name] = context.Evaluate(binding);
+            else if (input.Default is { } fallback) inputs[input.Name] = context.EvaluateOver(fallback, inputs);     // sees the inputs given so far, nothing outside
+            else if (input.Required)
+            {
+                context.Fault(new ActivityFault(InputRequiredFaultCode, $"Required input '{input.Name}' of GraphActivity '{context.Node.Id}' has no value."));
+                return;
+            }
+            else inputs[input.Name] = null;
+        }
+        var inputScope = context.CreateLexicalScope(inputs);
+        var variables = graph.Variables.ToDictionary(v => v.Name, v => v.Value is { } value ? context.EvaluateInScope(value, inputScope, closed: true) : null, StringComparer.Ordinal);
+        var scope = context.CreateLexicalScope(variables, inputScope);
+        context.SetState(new GraphState(scope));
+        context.ScheduleInScope(context.Children[0], scope);
+    }
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        var graph = context.Node.Graph!;
+        if (graph.OutcomeMappings.Count == 0)
+        {
+            // When every outcome comes from a Complete, a body that ends without reaching one has chosen none.
+            if (graph.CompleteOutcomes.Count != 0)
+                context.Fault(new ActivityFault(EntryCompletedWithoutMappingFaultCode, $"The body of GraphActivity '{context.Node.Id}' ended without reaching a Complete, and no outcome mapping covers it."));
+            else Finish(context, "Done");
+            return;
+        }
+        if (graph.OutcomeMappings.TryGetValue(child.Outcome, out var outcome)) Finish(context, outcome);
+        else context.Fault(new ActivityFault(OutcomeUnmappedFaultCode, $"The body of GraphActivity '{context.Node.Id}' ended on '{child.Outcome}', which no outcome mapping covers."));
+    }
+
+    void IExitBoundary.OnExit(CompositeContext context, string key)
+    {
+        if (context.Node.Graph!.CompleteOutcomes.TryGetValue(key, out var outcome)) Finish(context, outcome);
+        else context.Fault(new ActivityFault(CompleteOutcomeUnknownFaultCode, $"A Complete names outcome '{key}', which GraphActivity '{context.Node.Id}' does not declare."));
+    }
+
+    // Completing ends whatever of the body still runs, then releases its scopes.
+    private static void Finish(CompositeContext context, string outcome)
+    {
+        var graph = context.Node.Graph!;
+        JsonObject? outputs = null;
+        if (graph.Outputs.Count != 0)
+        {
+            var state = context.ReadState<GraphState>()!;
+            outputs = [];
+            // An output is its mapping read in the boundary's scope, or what a Set Output in the body assigned it.
+            foreach (var output in graph.Outputs)
+            {
+                if (output.Value is { } mapping) outputs[output.Name] = context.EvaluateInScope(mapping, state.Scope, closed: true);
+                else if (state.Assigned?.TryGetValue(output.Name, out var assigned) == true) outputs[output.Name] = assigned?.DeepClone();
+                else if (output.Required)
+                {
+                    context.Fault(new ActivityFault(OutputRequiredFaultCode, $"Required output '{output.Name}' of GraphActivity '{context.Node.Id}' was neither assigned nor mapped."));
+                    return;
+                }
+            }
+        }
+        context.Complete(outcome, outputs);
+    }
+
+    /// <summary>The definition's own rules, checked when it is registered.</summary>
+    internal static void Validate(Node node, string workflow)
+    {
+        if (node.Graph is not { } graph) throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' declares no boundary.");
+        if (node.Children.Count != 1) throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' needs exactly one body.");
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in graph.Inputs.Select(i => i.Name).Concat(graph.Variables.Select(v => v.Name)))
+            if (string.IsNullOrEmpty(name) || !names.Add(name))
+                throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' needs unique, non-empty input and variable names ('{name}').");
+        if (graph.Outputs.Select(o => o.Name).Distinct(StringComparer.Ordinal).Count() != graph.Outputs.Count || graph.Outputs.Any(o => string.IsNullOrEmpty(o.Name)))
+            throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' needs unique, non-empty output names.");
+        // Inputs are bound by name without case, so two inputs may not differ by case alone.
+        if (graph.Inputs.Select(i => i.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != graph.Inputs.Count)
+            throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' declares inputs whose names differ only by case.");
+        if (graph.OutcomeMappings.Concat(graph.CompleteOutcomes).Any(p => string.IsNullOrWhiteSpace(p.Key) || string.IsNullOrWhiteSpace(p.Value)))
+            throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' maps from a blank outcome or key, or to an empty outcome.");
+        // An input bound under a name the boundary does not declare is a mistake, as the old core refuses unknown input keys.
+        if (node.Inputs.Keys.FirstOrDefault(key => !graph.Inputs.Any(i => string.Equals(i.Name, key, StringComparison.OrdinalIgnoreCase))) is { } unknown)
+            throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' binds '{unknown}', which it does not declare as an input.");
+    }
+
+    /// <summary>A Set Output names a literal output; inside a GraphActivity's body, one the boundary declares and maps no binding to.</summary>
+    internal static void ValidateOutput(Node setOutput, Node? boundary, string workflow)
+    {
+        if (!(setOutput.Inputs.GetValueOrDefault("Name") is LiteralBinding { Value: JsonValue literal } && literal.TryGetValue<string>(out var name) && !string.IsNullOrWhiteSpace(name)))
+            throw new InvalidOperationException($"Set Output '{setOutput.Id}' in '{workflow}' needs a literal, non-blank output name.");
+        if (boundary is not null && boundary.Graph?.Outputs.FirstOrDefault(o => o.Name == name) is not { Value: null })
+            throw new InvalidOperationException($"Set Output '{setOutput.Id}' in '{workflow}' names '{name}', which GraphActivity '{boundary.Id}' does not declare as an output to assign.");
+    }
+
+    /// <summary>A Complete needs an enclosing GraphActivity, and a literal outcome must be one that boundary declares.</summary>
+    internal static void ValidateExit(Node complete, Node? boundary, string workflow)
+    {
+        if (boundary is null) throw new InvalidOperationException($"Complete '{complete.Id}' in '{workflow}' has no enclosing GraphActivity.");
+        if (complete.Captures.Count != 0) throw new InvalidOperationException($"Complete '{complete.Id}' in '{workflow}' has no result to capture.");
+        if (complete.Inputs.GetValueOrDefault("Outcome") is LiteralBinding { Value: JsonValue literal } && literal.TryGetValue<string>(out var key) &&
+            !string.IsNullOrWhiteSpace(key) && boundary.Graph?.CompleteOutcomes.ContainsKey(key) != true)
+            throw new InvalidOperationException($"Complete '{complete.Id}' in '{workflow}' names outcome '{key}', which GraphActivity '{boundary.Id}' does not declare.");
+    }
+}
+
+/// <summary>A For loop's range, pinned when it starts, and the index of the pass that runs.</summary>
+public sealed record ForState
+{
+    public int Index { get; set; }
+    public int End { get; set; }
+    public int Step { get; set; }
+    public bool EndInclusive { get; set; }
+}
+
+/// <summary>
+/// The old core's For: the body runs once per index from <see cref="Start"/>, by <see cref="Step"/>, up to
+/// <see cref="End"/> (exclusive unless <see cref="EndInclusive"/>), each pass in an iteration scope that declares
+/// <see cref="IndexVariable"/>. The range is read once, when the loop starts, as the old core pins it, so the index only
+/// moves one way and no two passes share it. A step away from the end runs nothing; a zero step faults. Break ends the loop.
+/// </summary>
+public sealed class For : CompositeActivity
+{
+    /// <summary>The variable each pass declares: the old core's <c>index</c>, named as on the old core, as the Native ForEach names its own (currentItem, currentIndex).</summary>
+    public const string IndexVariable = "index";
+
+    [Input] public int Start { get; set; }
+    [Input] public int End { get; set; }
+    [Input] public int Step { get; set; } = 1;
+    [Input] public bool EndInclusive { get; set; }
+
+    /// <summary>The body's iteration is its committed scope's index (round 5 C); a pinned range never repeats one.</summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) =>
+        childScope is not null && childScope.TryGetValue(IndexVariable, out var index) && index is JsonValue v && v.TryGetValue<int>(out var i) ? i.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
+
+    protected internal override void Execute(CompositeContext context)
+    {
+        if (Step == 0) { context.Fault(new ActivityFault("for.step.invalid", "A For loop's step must not be zero.")); return; }
+        Next(context, new ForState { End = End, Step = Step, EndInclusive = EndInclusive }, Start);
+    }
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        if (child.Outcome == Break.Outcome) { context.Complete(); return; }
+        var range = context.GetState<ForState>();
+        Next(context, range, (long)range.Index + range.Step);
+    }
+
+    private static void Next(CompositeContext context, ForState range, long index)
+    {
+        var within = range.Step > 0 ? range.EndInclusive ? index <= range.End : index < range.End : range.EndInclusive ? index >= range.End : index > range.End;
+        if (!within || context.Children.Count == 0) { context.Complete(); return; }
+        range.Index = (int)index;
+        context.SetState(range);
+        context.Schedule(context.Children[0], scope: new Dictionary<string, JsonNode?> { [IndexVariable] = (int)index });
+    }
+}
+
+/// <summary>
+/// The old core's Do: the body runs once before the condition is read, then again while <see cref="Condition"/> holds
+/// after a pass. Break ends the loop without reading the condition.
+/// </summary>
+public sealed class Do : CompositeActivity
+{
+    [Input] public bool Condition { get; set; }
+
+    /// <summary>The body's iteration is this loop's committed pass count (round 5 C), as While's.</summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) =>
+        (Values.To<WhileState>(state)?.Iteration ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    protected internal override void Execute(CompositeContext context) => Next(context, new WhileState());
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        if (child.Outcome == Break.Outcome || !Condition) { context.Complete(); return; }
+        Next(context, context.GetState<WhileState>());
+    }
+
+    private static void Next(CompositeContext context, WhileState state)
+    {
+        if (context.Children.Count == 0) { context.Complete(); return; }
+        state.Iteration++;
+        context.SetState(state);
+        context.Schedule(context.Children[0]);
+    }
+}
+
+public sealed record ParallelState
+{
+    public List<string> Pending { get; set; } = [];
+    public int Done { get; set; }
+    public int Faulted { get; set; }
+    public bool Joined { get; set; }
+}
+
+/// <summary>Fork and threshold join. It counts its branches in its own state, where Elsa 4 queried the activity-state store.</summary>
+[InterventionParent(1)]
+public sealed class Parallel : CompositeActivity, IInterventionParent
+{
+    System.Text.Json.Nodes.JsonNode? IInterventionParent.PrepareRetry(Node definition, System.Text.Json.Nodes.JsonNode? state, RetryChild child)
+    {
+        var progress = Values.To<ParallelState>(state?.DeepClone()) ?? throw new InvalidOperationException("Missing parallel retry obligation.");
+        if (progress.Joined || progress.Pending is null || progress.Done < 0 || progress.Faulted < 0 || progress.Pending.Count + progress.Done + progress.Faulted != definition.Children.Count ||
+            progress.Pending.Distinct(StringComparer.Ordinal).Count() != progress.Pending.Count || progress.Pending.Count(f => f == child.Source) != 1 || progress.Pending.Contains(child.Successor) ||
+            child.Tag != child.Node || definition.Children.Count(n => n.Id == child.Node) != 1)
+            throw new InvalidOperationException("Invalid parallel retry obligation.");
+        progress.Pending[progress.Pending.IndexOf(child.Source)] = child.Successor;
+        return Values.From(progress);
+    }
+    [Input] public int? Threshold { get; set; }
+
+    protected internal override void Execute(CompositeContext context)
+    {
+        if (context.Children.Count == 0)
+        {
+            context.Complete();
+            return;
+        }
+        var state = new ParallelState();
+        foreach (var branch in context.Children) state.Pending.Add(context.Schedule(branch, branch.Id));
+        context.SetState(state);
+    }
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        var state = context.GetState<ParallelState>();
+        state.Pending.Remove(child.Frame);
+        var guarded = !context.Flawed(NativeFlaw.JoinWithoutGuard);
+        if (guarded && state.Joined) return;
+        state.Done++;
+        var threshold = Math.Clamp(Threshold ?? context.Children.Count, 1, context.Children.Count);
+        if (state.Done >= threshold && !(guarded && state.Joined))
+        {
+            state.Joined = true;
+            context.SetState(state);
+            context.Join();     // records the join, completes, and cancels the branches still running
+            return;
+        }
+        context.SetState(state);
+    }
+
+    protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child)
+    {
+        var state = context.GetState<ParallelState>();
+        state.Pending.Remove(child.Frame);
+        state.Faulted++;
+        context.SetState(state);
+        var threshold = Math.Clamp(Threshold ?? context.Children.Count, 1, context.Children.Count);
+        if (context.Children.Count - state.Faulted < threshold) context.Fault(child.Fault);   // the threshold can no longer be met
+    }
+}
+
+public sealed record ForEachState
+{
+    public JsonArray Items { get; set; } = [];
+    public int Index { get; set; }
+}
+
+/// <summary>Each pass runs the body in an iteration scope that declares currentItem and currentIndex.</summary>
+[InterventionParent(2)]
+public sealed class ForEach : CompositeActivity, IInterventionParent
+{
+    JsonNode? IInterventionParent.PrepareRetry(Node definition, JsonNode? state, RetryChild child)
+    {
+        var progress = Values.To<ForEachState>(state) ?? throw new InvalidOperationException("Missing iteration retry obligation.");
+        if (progress.Items is null || progress.Index < 0 || progress.Index >= progress.Items.Count || child.Tag is not null || definition.Children.Count != 1 || definition.Children[0].Id != child.Node ||
+            child.Scope is not { Count: 2 } || !child.Scope.TryGetValue("currentIndex", out var index) || index is not JsonValue value || !value.TryGetValue<int>(out var current) || current != progress.Index ||
+            !child.Scope.TryGetValue("currentItem", out var item) || !JsonNode.DeepEquals(item, progress.Items[progress.Index]))
+            throw new InvalidOperationException("Invalid iteration retry obligation.");
+        return state?.DeepClone(); // only ordinary successful completion advances Index
+    }
+    [Input] public JsonArray? Items { get; set; }
+
+    /// <summary>The body's iteration is its committed scope's currentIndex (round 5 C).</summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) =>
+        childScope is not null && childScope.TryGetValue("currentIndex", out var index) && index is JsonValue v && v.TryGetValue<int>(out var i) ? i.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
+
+    protected internal override void Execute(CompositeContext context)
+    {
+        var state = new ForEachState { Items = Items ?? [] };
+        context.SetState(state);
+        Next(context, state);
+    }
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        var state = context.GetState<ForEachState>();
+        if (child.Outcome == "Break")
+        {
+            context.Complete();
+            return;
+        }
+        state.Index++;
+        context.SetState(state);
+        Next(context, state);
+    }
+
+    private static void Next(CompositeContext context, ForEachState state)
+    {
+        if (state.Index >= state.Items.Count || context.Children.Count == 0)
+        {
+            context.Complete();
+            return;
+        }
+        context.Schedule(context.Children[0], scope: new Dictionary<string, JsonNode?>
+        {
+            ["currentItem"] = state.Items[state.Index]?.DeepClone(),
+            ["currentIndex"] = state.Index,
+        });
+    }
+}
+
+public sealed record WhileState
+{
+    /// <summary>The pass of the body that runs, from 1. Committed with the instance, so a replay re-derives it (round 5 C).</summary>
+    public int Iteration { get; set; }
+}
+
+/// <summary>Composite inputs are evaluated at every activation, so the condition is read again after each pass without a marker.</summary>
+public sealed class While : CompositeActivity
+{
+    [Input] public bool Condition { get; set; }
+
+    /// <summary>The body's iteration is this loop's committed pass count (round 5 C).</summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) =>
+        (Values.To<WhileState>(state)?.Iteration ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    protected internal override void Execute(CompositeContext context) => Next(context, new WhileState());
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        if (child.Outcome == "Break") { context.Complete(); return; }
+        Next(context, context.GetState<WhileState>());
+    }
+
+    private void Next(CompositeContext context, WhileState state)
+    {
+        if (!Condition || context.Children.Count == 0) { context.Complete(); return; }
+        state.Iteration++;
+        context.SetState(state);
+        context.Schedule(context.Children[0]);
+    }
+}
+
+/// <summary>
+/// A Flowchart on the graph engine (models/Graph, main's Flowchart engine): token flow with execution paths, iteration
+/// keys, arrivals at joins and dead paths. The engine decides; this composite is its host: it schedules what the
+/// engine asks for (the path and scope ride on the child's tag), hands each completion back, keeps the engine's state
+/// as its private state, and cancels a child whose path the engine cancelled (a first-wins loser).
+/// </summary>
+public sealed class Flowchart : CompositeActivity
+{
+    private static readonly ConditionalWeakTable<Node, FlowchartGraph> Graphs = new();
+    private static readonly ConcurrentDictionary<FlowchartFlaws, FlowchartExecutionEngine> Engines = new();
+
+    // The engine's state is rewritten at every commit of the instance, so it is kept compact: defaults (nulls, zeros,
+    // Active) are not written; reading them back gives the same records.
+    private static readonly JsonSerializerOptions Compact = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault };
+
+    // A run started by a trigger that is a child of this Flowchart begins there (main's SelectEntryNode), so that the
+    // trigger is delivered; otherwise at the start node.
+    protected internal override void Execute(CompositeContext context) =>
+        Step(context, null, new(StringComparer.Ordinal), (engine, run) => engine.Start(GraphOf(context.Node), run), context.PendingTrigger);
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        var (path, scope, _, _) = Decode(child.Tag);
+        if (!TryReadState(context, out var before, out var firings)) return;
+        Step(context, before, firings, (engine, run) => engine.OnChildCompleted(GraphOf(context.Node), run, before,
+            new FlowchartChildCompletion(child.Node, child.Frame, [child.Outcome], path, scope)), source: child);
+    }
+
+    // The engine faults the Flowchart when a child faults (main, #308); the fault the instance carries is the child's
+    // own, as the other native composites pass it on, not the engine's generic flowchart.child.faulted.
+    protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child)
+    {
+        if (!TryReadState(context, out var before, out var firings)) return;
+        Step(context, before, firings, (engine, run) => engine.OnChildFaulted(GraphOf(context.Node), run, before, child.Node), fault: child.Fault);
+    }
+
+    /// <summary>
+    /// The frame's state before this callback: the engine's state and this host's own join firing counts (round 5 C),
+    /// committed together; corrupt state faults the Flowchart.
+    /// </summary>
+    private static bool TryReadState(CompositeContext context, out FlowchartExecutionState? state, out Dictionary<string, int> firings)
+    {
+        firings = new(StringComparer.Ordinal);
+        try
+        {
+            var node = context.ReadState<JsonNode>();
+            state = ReadEngineState(node);
+            firings = ReadFirings(node);
+            return true;
+        }
+        catch (JsonException exception)
+        {
+            context.Fault(new ActivityFault("flowchart.invalid", exception.Message));
+            state = null;
+            return false;
+        }
+    }
+
+    private static void Step(CompositeContext context, FlowchartExecutionState? before, Dictionary<string, int> firings, Func<FlowchartExecutionEngine, FlowchartRun, FlowchartStep> call, string? trigger = null, ActivityFault? fault = null, ChildCompleted? source = null)
+    {
+        FlowchartStep step;
+        try
+        {
+            step = call(EngineFor(context), new FlowchartRun(context.FrameId, trigger));
+        }
+        catch (Exception exception) when (exception is FlowchartExecutionException or InvalidOperationException or JsonException)
+        {
+            context.Fault(new ActivityFault("flowchart.invalid", exception.Message));
+            return;
+        }
+
+        foreach (var entry in Trace(context.FrameId, context.Node.Id, before, step)) context.Record(entry);
+        if (context.Flawed(NativeFlaw.TurnLocalJoinOrdinal)) firings = new(StringComparer.Ordinal);   // MUTATION: the count restarts every turn and is never committed
+        var scheduling = new List<(Node Child, string Tag)>();
+        foreach (var scheduled in step.Scheduled)
+        {
+            // A join fires once per scheduling id the engine gives the firing (the releasing completion, or the producer
+            // of the first live arrival when a waiting join is released) in its round: behind a merge it may fire once
+            // per token, so the round alone is not unique. A merge continues on every arrival and records no join.
+            // A join is a node with several inbound connections, whatever the engine calls the firing (one released by
+            // the graph going quiet consumes a single arrival and is a "continuation").
+            if (scheduled.SchedulingCause is "join" or "continuation" && context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) != Gateway.Merge
+                && context.Node.Connections.Count(c => c.Target == scheduled.NodeId) > 1)     // as the engine counts them
+                context.RecordJoin($"{scheduled.NodeId}:{scheduled.IterationKey ?? "-"}:{scheduled.SchedulingActivityExecutionId}");
+            scheduling.Add((context.Children.First(c => c.Id == scheduled.NodeId), Encode(scheduled.ExecutionPathId, scheduled.ExecutionScopeId, scheduled.IterationKey, Token(context, scheduled, source, firings))));
+        }
+        // Diagnostics are main's audit trail and the engine never reads them back; here the journal is the trail, so
+        // they are not kept in the instance's state (the rest is the state main stages). The join firing counts ride
+        // beside the engine's state when there are any; a Flowchart without a join keeps the engine's state alone.
+        var engine = JsonSerializer.SerializeToNode(step.State with { Diagnostics = [] }, Compact);
+        context.SetState(firings.Count == 0 || context.Flawed(NativeFlaw.TurnLocalJoinOrdinal) ? engine : new JsonObject { ["engine"] = engine, ["firings"] = new JsonObject(firings.Select(f => KeyValuePair.Create(f.Key, (JsonNode?)f.Value))) });
+        foreach (var (child, tag) in scheduling) context.Schedule(child, tag);
+        switch (step.Kind)
+        {
+            case FlowchartStepKind.Complete:
+                context.Complete(step.Outcome ?? FlowchartOutcomes.Done);
+                return;
+            case FlowchartStepKind.Fault:
+                context.Fault(fault ?? new ActivityFault(step.Fault!.Code, step.Fault.Message));
+                return;
+        }
+
+        // A child whose path the engine no longer counts as active (a first-wins loser) is cancelled: no path outlives
+        // its cancelled scope. Main lets the loser run on and ignores its completion.
+        var active = step.State.ActiveChildren.Select(c => c.ExecutionPathId).ToHashSet(StringComparer.Ordinal);
+        foreach (var (frame, tag) in context.RunningWithTags)
+            if (!active.Contains(Decode(tag).Path ?? "")) context.Cancel(frame);
+    }
+
+    /// <summary>
+    /// The graph engine's journal entries for one step (DESIGN.md: each engine writes its own), what the simulation's
+    /// graph checks read: the paths this step cancelled (<c>g|x</c>), every node scheduled by a join or a continuation
+    /// with the sources of the arrivals it consumed, live and dead (<c>g|f</c>), and a completion with the paths still
+    /// live (<c>g|c</c>). They ride in the turn's commit, so they cost no database call.
+    /// </summary>
+    private static IEnumerable<string> Trace(string frame, string flow, FlowchartExecutionState? before, FlowchartStep step)
+    {
+        var live = step.Live;
+        var wasCancelled = before?.ExecutionPaths.Where(p => p.Status == ExecutionPathStatus.Canceled).Select(p => p.ExecutionPathId).ToHashSet(StringComparer.Ordinal) ?? [];
+        foreach (var path in live.ExecutionPaths.Where(p => p.Status == ExecutionPathStatus.Canceled && !wasCancelled.Contains(p.ExecutionPathId)))
+            yield return $"g|x|{frame}|{flow}|{path.CurrentNodeId}|{path.IterationKey ?? "-"}";
+
+        // An arrival's own status says Consumed once a node took it; whether it was dead is in the state before (a
+        // dead arrival carried over) or in this step's diagnostic for the dead path it rode on.
+        var beforeArrivals = before?.Arrivals.ToDictionary(a => a.ArrivalId, StringComparer.Ordinal) ?? [];
+        var deadPaths = live.Diagnostics.Where(d => d.Kind == FlowchartDiagnosticKind.DeadPath && d.ExecutionPathId is not null).Select(d => d.ExecutionPathId!).ToHashSet(StringComparer.Ordinal);
+        var consumed = live.Arrivals
+            .Where(a => a.Status == FlowchartArrivalStatus.Consumed && beforeArrivals.GetValueOrDefault(a.ArrivalId)?.Status != FlowchartArrivalStatus.Consumed)
+            .Select(a => (Arrival: a, Dead: beforeArrivals.GetValueOrDefault(a.ArrivalId)?.Status == FlowchartArrivalStatus.Dead || deadPaths.Contains(a.ExecutionPathId)))
+            .ToList();
+        foreach (var scheduled in step.Scheduled.Where(s => s.SchedulingCause is "join" or "continuation"))
+        {
+            var taken = consumed.Where(c => c.Arrival.TargetNodeId == scheduled.NodeId && c.Arrival.ExecutionScopeId == scheduled.ExecutionScopeId && c.Arrival.IterationKey == scheduled.IterationKey).ToList();
+            yield return $"g|f|{frame}|{flow}|{scheduled.NodeId}|{scheduled.IterationKey ?? "-"}|{string.Join(",", taken.Where(t => !t.Dead).Select(t => t.Arrival.SourceNodeId))}|{string.Join(",", taken.Where(t => t.Dead).Select(t => t.Arrival.SourceNodeId))}";
+        }
+        if (step.Kind == FlowchartStepKind.Complete)
+            yield return $"g|c|{frame}|{flow}|{live.ExecutionPaths.Count(p => p.Status is ExecutionPathStatus.Active or ExecutionPathStatus.Waiting)}";
+    }
+
+    private static FlowchartExecutionEngine EngineFor(CompositeContext context)
+    {
+        var flaws = FlowchartFlaws.None;
+        if (context.Flawed(NativeFlaw.NoDeadPaths)) flaws |= FlowchartFlaws.NoDeadPaths;
+        if (context.Flawed(NativeFlaw.NoRoundReset)) flaws |= FlowchartFlaws.NoRoundReset;
+        if (context.Flawed(NativeFlaw.DeadPathRunsNode)) flaws |= FlowchartFlaws.DeadPathRunsNode;
+        if (context.Flawed(NativeFlaw.CancelLeavesPaths)) flaws |= FlowchartFlaws.CancelLeavesPaths;
+        return Engines.GetOrAdd(flaws, static f => FlowchartEngines.Create(new FlowchartOptions { Flaws = f }));
+    }
+
+    /// <summary>The engine's state as a Flowchart frame keeps it (for the simulation's checks too): alone, or beside the host's join firing counts.</summary>
+    public static FlowchartExecutionState? ReadEngineState(JsonNode? state) =>
+        (state is JsonObject o && o.ContainsKey("engine") ? o["engine"] : state)?.Deserialize<FlowchartExecutionState>(Compact);
+
+    /// <summary>How often each join has fired in each round (<c>node|round</c>), from the frame's committed state (round 5 C).</summary>
+    private static Dictionary<string, int> ReadFirings(JsonNode? state) =>
+        state is JsonObject o && o["firings"] is JsonObject firings
+            ? firings.ToDictionary(f => f.Key, f => f.Value!.GetValue<int>(), StringComparer.Ordinal)
+            : new(StringComparer.Ordinal);
+
+    /// <summary>The path a child of a Flowchart frame runs on, from its tag.</summary>
+    public static string? PathOf(string? tag) => Decode(tag).Path;
+
+    public static FlowchartGraph GraphOf(Node node) => Graphs.GetValue(node, static n => FlowchartGraph.From(
+        [.. n.Children.Select(child => new FlowchartNode(child.Id, IsTrigger: IsEntry(n, child)))],
+        new FlowchartStructure(
+            [.. n.Connections.Select(c => new FlowchartConnection(new FlowchartEndpoint(c.Source, c.Outcome), new FlowchartEndpoint(c.Target)))],
+            nodeMetadata: n.Gateways.ToDictionary(g => g.Key, g => new FlowchartNodeMetadata(KindOf(g.Value)), StringComparer.Ordinal))));
+
+    /// <summary>
+    /// A child a run can be started at by its trigger: an HttpEndpoint that no connection leads to (<see cref="HttpRoutes"/>
+    /// registers these as start routes for a root Flowchart; a nested Flowchart marks them too). The graph engine roots its
+    /// loop classification at the start node and then at these, so a loop reached from an entry is classified from where
+    /// the run enters it, whatever the node ids.
+    /// </summary>
+    internal static bool IsEntry(Node flowchart, Node child) =>
+        (child.Type == typeof(HttpEndpoint) || child.Type == typeof(Timer) || child.Type == typeof(Cron)) && !flowchart.Connections.Any(connection => connection.Target == child.Id);
+
+    private static string KindOf(Gateway gateway) => gateway switch
+    {
+        Gateway.Decision => FlowchartPolicyKinds.Decision,
+        Gateway.ParallelFork => FlowchartPolicyKinds.ParallelFork,
+        Gateway.ParallelJoin => FlowchartPolicyKinds.ParallelJoin,
+        Gateway.InclusiveFork => FlowchartPolicyKinds.InclusiveFork,
+        Gateway.InclusiveJoin => FlowchartPolicyKinds.InclusiveJoin,
+        Gateway.FirstWins => FlowchartPolicyKinds.FirstWins,
+        Gateway.Merge => FlowchartPolicyKinds.Merge,
+        _ => throw new ArgumentOutOfRangeException(nameof(gateway), gateway, null),
+    };
+
+    /// <summary>
+    /// The child's iteration for the effect key (round 5 C): the engine's iteration key of the round it was scheduled in
+    /// (<c>head:2</c>: the loop head and the round, from the engine's committed state) and the token it rides
+    /// (<see cref="Token"/>), both carried on the tag. A node outside a loop, not forward of a merge and not a join has
+    /// none: it fires once per instance.
+    /// </summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope)
+    {
+        var (_, _, round, token) = Decode(childTag);
+        return round is null && token is null ? null : (round?.Replace(':', '-') ?? "") + (token ?? "");
+    }
+
+    /// <summary>
+    /// What tells two firings of one node in one round apart (the owner's decision of 16 November: the node plus its
+    /// iteration numbers, which replay cannot reorder, and different activations always get different keys), from
+    /// committed facts only. A node with one inbound connection fires once per token: it inherits the token of the
+    /// completing child that reached it, and a Merge appends <c>^merge-source</c> (each arrival identified by its source).
+    /// A join (several inbound connections, not a Merge) fires once per round unless it lies forward of a merge, where
+    /// it fires once per token under whichever arrival releases it; it gets its firing ordinal in the round from this
+    /// host's committed count, <c>^join#n</c>: the nth firing is the nth in the lost turn and in its replay, whatever
+    /// arrivals made it up. Nodes after the join inherit that token. A new round starts afresh. The engine's path ids are
+    /// not used: they are minted in mutation order.
+    /// </summary>
+    private static string? Token(CompositeContext context, FlowchartScheduledNode scheduled, ChildCompleted? source, Dictionary<string, int> firings)
+    {
+        if (context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) != Gateway.Merge && context.Node.Connections.Count(c => c.Target == scheduled.NodeId) > 1)
+        {
+            var round = $"{scheduled.NodeId}|{scheduled.IterationKey ?? "-"}";
+            var ordinal = firings[round] = firings.GetValueOrDefault(round) + 1;
+            return $"^{scheduled.NodeId}#{ordinal}";
+        }
+        if (source is null) return null;
+        var (_, _, sourceRound, token) = Decode(source.Tag);
+        var inherited = sourceRound == scheduled.IterationKey ? token : null;
+        return context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) == Gateway.Merge ? $"{inherited}^{scheduled.NodeId}-{source.Node}" : inherited;
+    }
+
+    private static string Encode(string path, string scope, string? iteration, string? token) =>
+        iteration is null && token is null ? path + "|" + scope : path + "|" + scope + "|" + iteration + "|" + token;
+
+    private static (string? Path, string? Scope, string? Iteration, string? Token) Decode(string? tag) => tag?.Split('|') switch
+    {
+        [var path, var scope] => (path, scope, null, null),
+        [var path, var scope, var iteration] => (path, scope, iteration is "" ? null : iteration, null),
+        [var path, var scope, var iteration, var token] => (path, scope, iteration is "" ? null : iteration, token is "" ? null : token),
+        _ => (null, null, null, null),
+    };
+}
+
+// ---- waiting ---------------------------------------------------------------------------------------------------------
+
+public sealed record DispatchResult(JsonNode? Output, string Status);
+
+public sealed record DispatchState(string Workflow);
+
+public sealed record ChildDone(string Status, JsonNode? Output, string Child);
+
+/// <summary>
+/// Elsa 4 read the parent's state, executable and node pin from stores and staged a dispatch record. Here: without a
+/// wait, a detached start effect; with a wait, a child trigger (the kernel's Start) and its child-finished message.
+/// </summary>
+public sealed class DispatchWorkflow : StatefulActivity<DispatchResult, DispatchState, ChildDone>
+{
+    [Input] public string Workflow { get; set; } = "";
+    [Input] public JsonObject? Input { get; set; }
+    [Input] public bool WaitForCompletion { get; set; }
+    [Input] public string Mode { get; set; } = Modes.Balanced;
+
+    protected override ValueTask<Transition> ExecuteAsync(StartContext<ChildDone> context) =>
+        new(WaitForCompletion
+            ? Suspend(new DispatchState(Workflow), new ChildTrigger(Workflow, Input, Mode))
+            : Complete(new DispatchResult(null, "Dispatched"), "Dispatched").With(new DispatchEffect(Workflow, Input, Mode)));
+
+    protected override ValueTask<Transition> ResumeAsync(ResumeContext<DispatchState, ChildDone> context)
+    {
+        var outcome = context.Trigger.Status switch { "Finished" => "Completed", var other => other };
+        return new(Complete(new DispatchResult(context.Trigger.Output, context.Trigger.Status), outcome));
+    }
+}
+
+// ---- HTTP ------------------------------------------------------------------------------------------------------------
+
+/// <summary>An HTTP request as a workflow receives it. Its headers and query string follow the <see cref="HttpFields"/> rules.</summary>
+public sealed record HttpRequest(string Method, string Path, JsonNode? Body = null)
+{
+    private readonly IReadOnlyDictionary<string, string> _query = HttpFields.None;
+    private readonly IReadOnlyDictionary<string, string> _headers = HttpFields.None;
+
+    /// <summary>The query parameters by name, exactly as sent; a repeated parameter's values joined with ",".</summary>
+    public IReadOnlyDictionary<string, string> Query { get => _query; init => _query = HttpFields.Query(value); }
+
+    /// <summary>The header fields by lower-case name, credentials left out; a repeated field's values joined with ", ".</summary>
+    public IReadOnlyDictionary<string, string> Headers { get => _headers; init => _headers = HttpFields.RequestHeaders(value); }
+
+    /// <summary>The values of the route template's parameters by lower-case name, as the HTTP edge matched and decoded them.</summary>
+    public IReadOnlyDictionary<string, string> RouteValues { get => _routeValues; init => _routeValues = HttpFields.RouteValues(value); }
+    private readonly IReadOnlyDictionary<string, string> _routeValues = HttpFields.None;
+}
+
+/// <summary>An HTTP response as a workflow writes it. Its headers follow the <see cref="HttpFields"/> rules.</summary>
+public sealed record HttpResponse(int StatusCode, string ContentType, JsonNode? Body)
+{
+    private readonly IReadOnlyDictionary<string, string> _headers = HttpFields.None;
+
+    /// <summary>The header fields by lower-case name, one value each, besides the content type and the edge's own (<see cref="HttpFields.Reserved"/>).</summary>
+    public IReadOnlyDictionary<string, string> Headers { get => _headers; init => _headers = HttpFields.ResponseHeaders(value); }
+}
+
+public sealed record HttpWaitState(string Method, string Path);
+
+/// <summary>
+/// As a start trigger it completes with the request. In the middle of a workflow it waits for a request on its route: its
+/// <see cref="Path"/> is a route template, resolved with <see cref="RouteValues"/>, so that only a request for these values
+/// resumes it (<c>orders/{id}/cancel</c> with <c>{ id: 42 }</c> waits on <c>orders/42/cancel</c>).
+/// </summary>
+public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, HttpRequest>
+{
+    [Input] public string Path { get; set; } = "";
+    /// <summary>
+    /// In the middle of a workflow, the values of its route's parameters: an object of strings, numbers or booleans. Bound,
+    /// it makes <see cref="Path"/> a template to resolve; unbound, the path is literal.
+    /// </summary>
+    [Input] public JsonObject? RouteValues { get => _routeValues; set => (_routeValues, _routeValuesBound) = (value, true); }
+    private JsonObject? _routeValues;
+    private bool _routeValuesBound;     // the hydrator sets an input only when the node binds it
+    [Input] public string Method { get; set; } = "POST";
+    /// <summary>The route's opt-out of the release rule: its caller is answered when the turn ends, not after its commit.</summary>
+    [Input] public bool RespondBeforeCommit { get; set; }
+    /// <summary>Whether a request on its route starts a run where one begins; false, it only waits (<see cref="NativeStartTriggers"/>).</summary>
+    [Input] public bool CanStartWorkflow { get; set; } = true;
+
+    protected override ValueTask<Transition> ExecuteAsync(StartContext<HttpRequest> context)
+    {
+        if (CanStartWorkflow && context.TryGetTrigger(out var request)) return new(Complete(request));
+        // Without route values bound the path is a literal route, as before templates: an expression may compute it,
+        // braces and all (HttpRoutes refuses a literal template with parameters and no RouteValues bound). Bound values that
+        // came out null on a template fault here rather than wait on a key no request reaches.
+        if (!_routeValuesBound || RouteValues is null && !IsTemplate(Path))
+            return new(Suspend(new HttpWaitState(Method, Path), new HttpTrigger(Method, Path)));
+        if (RouteValues is null) return new(Fault("http.route.invalid", $"The route '{Path}' has parameters and its route values are null."));
+        string path;
+        bool parameters;
+        try
+        {
+            var values = RouteValues is null ? null : HttpFields.RouteValues(HttpFields.Scalars(RouteValues, "route value"));
+            var template = HttpRouteTemplate.Parse(Path);
+            parameters = template.Segments.Any(segment => segment.Kind != HttpRouteSegmentKind.Literal);
+            path = template.Resolve(values);
+        }
+        catch (ArgumentException refused) when (refused is HttpRouteTemplateException or HttpFieldsException)
+        {
+            return new(Fault("http.route.invalid", refused.Message));
+        }
+        // A template without parameters is a literal route (HttpRoutes.WaitKey keys it so too).
+        return new(Suspend(new HttpWaitState(Method, path), new HttpTrigger(Method, path, Resolved: parameters)));
+    }
+
+    protected override ValueTask<Transition> ResumeAsync(ResumeContext<HttpWaitState, HttpRequest> context) => new(Complete(context.Trigger));
+
+    private static bool IsTemplate(string path)
+    {
+        try { return HttpRouteTemplate.Parse(path).Segments.Any(segment => segment.Kind != HttpRouteSegmentKind.Literal); }
+        catch (HttpRouteTemplateException) { return false; }
+    }
+}
+
+/// <summary>The response is the activity's result and goes out on the live channel. It does not end the workflow.</summary>
+public sealed class WriteHttpResponse : Activity<HttpResponse>
+{
+    [Input] public int StatusCode { get; set; } = 200;
+    [Input] public string ContentType { get; set; } = "text/plain";
+    [Input] public JsonNode? Body { get; set; }
+    /// <summary>The response headers besides the content type: an object of strings, numbers or booleans.</summary>
+    [Input] public JsonObject? Headers { get; set; }
+
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
+    {
+        IReadOnlyDictionary<string, string> headers;
+        try { headers = HttpFields.ResponseHeaders(Headers); }
+        catch (HttpFieldsException refused) { return new(Fault("http.headers.invalid", refused.Message)); }
+        var response = new HttpResponse(StatusCode, ContentType, Body) { Headers = headers };
+        return new(Complete(response).With(new EmitEffect("response", Values.From(response))));
+    }
+}

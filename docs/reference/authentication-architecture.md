@@ -210,7 +210,7 @@ Enable these feature sets per shell. All scenarios also require `FoundationIdent
 Local users and roles, the backend login page, a seeded dev admin (`admin` / `Password123!`, sourced from the
 `SeedAdmin*` settings in `shells.json` under `IsDevelopmentOrDemo` only — no credential constants in code),
 cookie sign-in, and first-party JWT issuance. This is exactly what the
-checked-in `Essentials/apps/Elsa.Workbench/shells.json` enables. **`FoundationIdentityOidc` is also enabled in
+checked-in `apps/Elsa.Workbench.Host/shells.json` enables. **`FoundationIdentityOidc` is also enabled in
 the default shell but is inert until you configure an `Authority`/`ClientId`** — with no provider
 configured, its interactive OpenID Connect handler is not even registered, and bearer validation
 stays the default so unauthenticated API calls return `401`.
@@ -470,8 +470,8 @@ The runtime checks current user and selected-session eligibility before refresh 
 sessions bind the exact admitted link revision; historical content lacking that authority fails closed.
 These are prepared source behaviors, not current-source execution results.
 
-The [managed runtime](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/README.md)
-and [HTTP API](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md) own composition,
+The [managed runtime](../../extensions/Identity/src/Elsa.Foundation.Identity.ExternalAuthentication/README.md)
+and [HTTP API](../../extensions/Identity/src/Api/README.md) own composition,
 full deployment overrides, callbacks, preview and guarded link/session administration. The optional API connects
 admission to the canonical cookie/token pipeline; upstream role names grant no Elsa permissions automatically.
 The [owned qualification sources](../../tools/identity/ExternalAuthentication.Probe/README.md) cover controlled

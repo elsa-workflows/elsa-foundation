@@ -54,7 +54,8 @@
     { "id": "Elsa.Studio.Hosting.Themes", "project": "Studio/src/essentials/Elsa.Studio.Hosting.Themes/Elsa.Studio.Hosting.Themes.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Hosting.Nuplane", "project": "Studio/src/essentials/Elsa.Studio.Hosting.Nuplane/Elsa.Studio.Hosting.Nuplane.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Backends", "project": "Studio/src/essentials/Elsa.Studio.Backends/Elsa.Studio.Backends.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
-    { "id": "Elsa.Studio.Dashboard", "project": "Studio/src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" },
+    { "id": "Elsa.Studio.Hosting.Distribution", "project": "Studio/src/essentials/Elsa.Studio.Hosting.Distribution/Elsa.Studio.Hosting.Distribution.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
+    { "id": "Elsa.Studio.Dashboard", "project": "extensions/Dashboard/studio/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj", "renamed_from": "Studio/src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" },
     { "id": "Elsa.Studio.UserTasks", "project": "extensions/UserTasks/studio/Elsa.Studio.UserTasks/Elsa.Studio.UserTasks.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Workflows", "project": "Studio/src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj" },
     { "id": "Elsa.Studio.Attention", "project": "extensions/Attention/studio/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj" },
@@ -77,7 +78,9 @@
     { "id": "Elsa.Studio.Workflows.Dashboard", "project": "extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Elsa.Studio.Workflows.Dashboard.csproj" }
   ],
   "non_packable_projects": [
-    { "id": "Elsa.Studio.Web", "project": "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" },
+    { "id": "Elsa.Studio.Essentials.Host", "project": "Studio/src/apps/Elsa.Studio.Essentials.Host/Elsa.Studio.Essentials.Host.csproj", "introduced_after_consolidation": true },
+    { "id": "Elsa.Studio.Foundation.Host", "project": "Studio/src/apps/Elsa.Studio.Foundation.Host/Elsa.Studio.Foundation.Host.csproj", "introduced_after_consolidation": true },
+    { "id": "Elsa.Studio.Workbench.Host", "project": "Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj", "renamed_from": "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" },
     { "id": "Elsa.Studio.Tests", "project": "Studio/tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj" }
   ],
   "package_license_expression": "MIT",

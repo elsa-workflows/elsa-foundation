@@ -441,6 +441,11 @@ describe("Activity Definitions experience", () => {
     click(rendered.container.querySelector<HTMLButtonElement>(".ad-child-list button")!);
 
     await waitForText(rendered.container, "This draft is read-only or editing is unavailable for this account.");
+    const selectedRecord = rendered.container.querySelector<HTMLElement>(".ad-selected-record")!;
+    const selectedActions = selectedRecord.querySelector<HTMLElement>(".ad-header-actions")!;
+    expect(selectedRecord.querySelector(".ad-selected-record-note")?.textContent).toBe("This draft is read-only or editing is unavailable for this account.");
+    expect(selectedActions.textContent).not.toContain("This draft is read-only");
+    expect([...selectedActions.children].every(child => child.tagName === "BUTTON")).toBe(true);
     expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Review publication"))).toBe(false);
     expect(new URLSearchParams(window.location.search).get("section")).toBe("drafts");
     expect(new URLSearchParams(window.location.search).get("draft")).toBe("draft-1");
@@ -1035,7 +1040,7 @@ describe("Activity Definitions experience", () => {
     openHistorySection(rendered.container, "Details");
     await waitForText(rendered.container, "Build your activity");
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
-    expect(actionName).toBe("Edit draft");
+    expect(actionName).toBe("Edit");
     await rendered.unmount();
   });
 
@@ -1058,7 +1063,7 @@ describe("Activity Definitions experience", () => {
     const primaryAction = rendered.container.querySelector<HTMLButtonElement>('.studio-page-header [data-variant="primary"]')!;
     await waitFor(() => expect(primaryAction.disabled).toBe(false));
     expect(primaryAction.textContent?.trim()).toBe("Open drafts");
-    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Edit draft"))).toBe(false);
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.trim() === "Edit")).toBe(false);
     click(primaryAction);
     expect(new URLSearchParams(window.location.search).get("section")).toBe("drafts");
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
@@ -1080,13 +1085,13 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Earlier active draft");
     click(buttonByText(rendered.container, "Next"));
     await waitForText(rendered.container, "Final active draft");
-    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Edit draft")).toBe(false);
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.trim() === "Edit")).toBe(false);
     click(buttonByText(rendered.container, "Open drafts"));
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
     await rendered.unmount();
   });
 
-  it("starts editing the authorized latest published version when only historical draft records remain", async () => {
+  it("opens the authorized latest published version directly in the editor without eagerly creating a draft when only historical draft records remain", async () => {
     const postJson = vi.fn(async () => draftDetail());
     const rendered = renderOverview({
       drafts: page([draft({ status: "Published" })]),
@@ -1098,9 +1103,10 @@ describe("Activity Definitions experience", () => {
     const actionName = primaryAction.textContent?.trim();
     click(primaryAction);
     await waitFor(() => expect(new URLSearchParams(window.location.search).get("section")).toBe("editor"));
-    expect(postJson).toHaveBeenCalledTimes(1);
-    expect(postJson).toHaveBeenCalledWith("/design/activities/definitions/definition-1/drafts", { sourceVersionId: "version-1", presentationLabel: null });
-    expect(actionName).toBe("Create draft from current version");
+    expect(new URLSearchParams(window.location.search).get("version")).toBe("version-1");
+    expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
+    expect(postJson).not.toHaveBeenCalled();
+    expect(actionName).toBe("Edit");
     await rendered.unmount();
   });
 
@@ -1192,8 +1198,51 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
-  it("clones one authorized exact immutable version without rewriting the source", async () => {
+  it("opens an authorized exact immutable version directly in the editor without eagerly creating a draft", async () => {
     const navigateToStudioPath = vi.fn();
+    const postJson = vi.fn();
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities(true);
+      if (url === "/design/activities/definitions/definition-1") return definition({}, [{ action: "create-draft", allowed: true }]);
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return page([
+        version({ actions: [{ action: "clone-draft", allowed: true }] })
+      ]);
+      if (url === "/design/activities/versions/version-1") return versionDetail();
+      if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+      if (url === "/expressions/descriptors") return { items: [] };
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(
+      getJson,
+      undefined,
+      "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1",
+      postJson,
+      [graphContribution()],
+      undefined,
+      navigateToStudioPath
+    );
+
+    await waitForText(rendered.container, "Edit this version");
+    const breadcrumb = rendered.container.querySelector('nav[aria-label="Breadcrumb"]');
+    expect(breadcrumb?.querySelector("a")?.getAttribute("href")).toBe("/workflows/activity-definitions");
+    const selectedVersionRow = rendered.container.querySelector<HTMLButtonElement>(".ad-version-row > button[aria-expanded='true']");
+    expect(selectedVersionRow).not.toBeNull();
+    expect(selectedVersionRow?.parentElement?.querySelector('[aria-label="Selected exact version"]')).not.toBeNull();
+    click(buttonByText(rendered.container, "Plan broad upgrade from this exact version"));
+    expect(navigateToStudioPath).toHaveBeenCalledWith(
+      "/workflows/activity-definitions/upgrades?rootKind=ActivityVersion&rootId=version-1"
+    );
+    click(buttonByText(rendered.container, "Edit this version"));
+
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get("section")).toBe("editor"));
+    expect(new URLSearchParams(window.location.search).get("version")).toBe("version-1");
+    expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
+    expect(rendered.container.querySelector("[role='dialog']")).toBeNull();
+    expect(postJson).not.toHaveBeenCalled();
+    await rendered.unmount();
+  });
+
+  it("clones one authorized exact immutable version via createDraftFrom without rewriting the source", async () => {
     const postJson = vi.fn(async (_url: string, _body: unknown) => draftDetail({ draftId: "draft-clone", presentationLabel: "Review" }));
     const getJson = vi.fn(async (url: string) => {
       if (url === "/capabilities") return capabilities(true);
@@ -1209,24 +1258,11 @@ describe("Activity Definitions experience", () => {
     const rendered = renderPage(
       getJson,
       undefined,
-      "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1",
+      "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1&createDraftFrom=version-1",
       postJson,
-      [graphContribution()],
-      undefined,
-      navigateToStudioPath
+      [graphContribution()]
     );
 
-    await waitForText(rendered.container, "Create draft from this exact version");
-    const breadcrumb = rendered.container.querySelector('nav[aria-label="Breadcrumb"]');
-    expect(breadcrumb?.querySelector("a")?.getAttribute("href")).toBe("/workflows/activity-definitions");
-    const selectedVersionRow = rendered.container.querySelector<HTMLButtonElement>(".ad-version-row > button[aria-expanded='true']");
-    expect(selectedVersionRow).not.toBeNull();
-    expect(selectedVersionRow?.parentElement?.querySelector('[aria-label="Selected exact version"]')).not.toBeNull();
-    click(buttonByText(rendered.container, "Plan broad upgrade from this exact version"));
-    expect(navigateToStudioPath).toHaveBeenCalledWith(
-      "/workflows/activity-definitions/upgrades?rootKind=ActivityVersion&rootId=version-1"
-    );
-    click(buttonByText(rendered.container, "Create draft from this exact version"));
     await waitForText(rendered.container, "Clone exact version");
     change(controlByLabel<HTMLInputElement>(rendered.container, "Draft label"), "Review");
     click(buttonByText(rendered.container, "Clone exact version"));
@@ -1682,7 +1718,7 @@ describe("Activity Definitions experience", () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await waitForText(rendered.container, "Second evaluator");
-    await waitFor(() => expect(buttonByText(rendered.container, "Edit draft").disabled).toBe(false));
+    await waitFor(() => expect(buttonByText(rendered.container, "Edit").disabled).toBe(false));
 
     click(buttonByText(rendered.container, "Drafts"));
     await waitForText(rendered.container, "Second evaluator draft");

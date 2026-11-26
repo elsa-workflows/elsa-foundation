@@ -35,8 +35,12 @@ public interface IActivitySerializedShapeSource
     /// Describes a boundary/variable/owner-exposed item type only through actual activated design-time
     /// type-contract admission. Missing or ambiguous admission yields honest unknown facts; runtime
     /// alias registries, arbitrary type lookup and alias installation are not permitted substitutes.
-    /// A selectable CLR alias alone does not establish a boundary value's serialized profile. An
-    /// unbound profile returns Unknown, and a nonempty path cannot assert a selected member type.
+    /// A selectable CLR alias alone does not establish a boundary value's serialized profile, because
+    /// other writers can store the value. An admitted type whose members can be read, or a collection or map
+    /// of one, is described as <see cref="Models.ActivitySerializedShapeState.Declared"/>: advisory member
+    /// names (on the item or map value for a collection) for authoring help that validation must treat as
+    /// unknown. Every other case returns Unknown, and a nonempty path below a collection cannot assert a
+    /// selected member type.
     /// </summary>
     /// <param name="declaredType">The type resolved from the actual accepted source declaration, never a client expected-type claim.</param>
     /// <param name="ownerContractIdentity">Server-resolved identity of that declaration's exact document/contract revision.</param>

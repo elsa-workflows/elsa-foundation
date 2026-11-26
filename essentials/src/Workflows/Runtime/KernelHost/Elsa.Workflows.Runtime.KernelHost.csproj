@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Runs published Elsa workflow definitions on the clean-slate kernel: maps compiled executables onto the Native model.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj" />
+    <ProjectReference Include="../WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

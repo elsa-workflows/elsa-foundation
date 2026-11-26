@@ -24,7 +24,7 @@ Workbench, these equivalent command-line settings demonstrate the bundled creden
 
 ```sh
 ASPNETCORE_ENVIRONMENT=Development dotnet run --no-launch-profile \
-  --project Essentials/apps/Elsa.Workbench -- \
+  --project apps/Elsa.Workbench.Host -- \
   --urls http://127.0.0.1:7286 \
   --Identity:Login:ProductName='Northstar Studio' \
   --Identity:Login:Tagline='Make room for possibility.' \

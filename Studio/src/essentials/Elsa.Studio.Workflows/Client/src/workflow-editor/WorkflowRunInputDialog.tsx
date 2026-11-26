@@ -125,7 +125,7 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
   useStudioTimeZone();
   const fieldId = useId();
   const descriptionId = `${fieldId}-description`;
-  const errorId = `${fieldId}-error`;
+  const errorId = `${fieldId}-help`;
   const label = input.displayName || input.name;
   const describedBy = [input.description ? descriptionId : null, error ? errorId : null].filter(Boolean).join(" ") || undefined;
   const hasDefault = Object.prototype.hasOwnProperty.call(input, "defaultValue") && input.defaultValue !== undefined;
@@ -149,7 +149,14 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
   const fallback = renderInputControl(input, common, onChange);
 
   return (
-    <StudioField className="wf-form-field" controlId={fieldId} label={<>{label}{required ? " *" : ""}</>} meta={<small className="wf-run-input-type">{formatArgumentType(input.type)}</small>}>
+    <StudioField
+      className="wf-form-field"
+      controlId={fieldId}
+      label={<>{label}{required ? " *" : ""}</>}
+      meta={<small className="wf-run-input-type">{formatArgumentType(input.type)}</small>}
+      error={error}
+      errorRole="alert"
+    >
       {isNull ? <><input {...controlProps} value="null" readOnly disabled={disabled} /><small role="status">Sending null for {label}</small></> : EditorComponent ? (
         <WorkflowRunInputEditorBoundary
           editorId={editor.id}
@@ -176,7 +183,6 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
       {!input.isRequired && onOmit ? (
         <button type="button" aria-label={`${hasDefault ? "Use default" : "Omit"} for ${label}`} onClick={onOmit} disabled={disabled}>{hasDefault ? "Use default" : "Omit"}</button>
       ) : null}
-      {error ? <small id={errorId} role="alert">{error}</small> : null}
     </StudioField>
   );
 }

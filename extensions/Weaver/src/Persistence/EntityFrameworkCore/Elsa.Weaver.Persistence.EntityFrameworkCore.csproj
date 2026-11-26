@@ -10,7 +10,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <ProjectReference Include="../../Elsa.Weaver/Elsa.Weaver.csproj" />
     <ProjectReference Include="../../../../../essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
-    <ProjectReference Include="../../../../../essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="../../../../Secrets/src/Core/Elsa.Secrets.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Weaver.Persistence.Tests" />
     <InternalsVisibleTo Include="Elsa.Weaver.Persistence.ProviderTests" />
   </ItemGroup>

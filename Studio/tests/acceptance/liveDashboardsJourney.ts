@@ -1,7 +1,7 @@
 import * as keyboardUi from "./dashboardKeyboard";
 import { readFileSync, writeFileSync } from "node:fs";
 import { chromium, expect, request as playwrightRequest, type Browser, type BrowserContext, type Locator, type Page, type Request, type TestInfo } from "@playwright/test";
-import type { QuestionDefinition, QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
+import type { QuestionDefinition, QueryResult } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/types";
 import { attachDashboardJson, canonicalDashboardDefinition, dashboardBackend, signInDashboardReader, tag, type Backend, type Capture, type Resource } from "./dashboardJourneySupport";
 
 import { executeTrendRun, seedWorkflowTrend, workflowTrendOracle, type TrendSeed } from "./liveWorkflowTrendSupport";
@@ -49,7 +49,11 @@ export async function captureResultViews(page: Page, info: TestInfo, capture: Ca
     await element.evaluate(value => value.scrollIntoView({ block: "end", inline: "nearest", behavior: "instant" }));
     await expect(element).toBeInViewport(); await capture(page, info, `${name}-${suffix}`);
   };
-  await target("periods", result.locator(".named-result-provenance > p").last());
+  const details = result.locator(".named-result-details");
+  const compact = await details.count() > 0;
+  if (compact) await details.getByRole("button", { name: "Result details" }).click();
+  await target("periods", (compact ? result.locator(".named-result-details-content > p") : result.locator(".named-result-provenance > p")).last());
+  if (compact) await details.getByRole("button", { name: "Result details" }).click();
   const chart = result.locator(".named-chart-series");
   if (await chart.count()) await target("chart", chart.first());
   const values = result.getByRole("region", { name: "Exact result values", exact: true });

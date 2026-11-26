@@ -23,7 +23,7 @@ turn").
 
 ## Measure first
 
-What layer 3 can reach today, counted from the prototype on main (`src/Kernel.Workflows`, the `Kernel.Durable` and
+What layer 3 can reach today, counted from the prototype on main ([Kernel.Workflows](../../essentials/tests/ActorFoundation/Legacy/Workflows), the `Kernel.Durable` and
 `Kernel.Runtime` types its models and `WorkflowInstance` use), against the contract below. Public types and their
 public members, positional record fields and enum values included, static helpers and parameters excluded; `IActorType` has 12
 members on main, and the read-model records and command payloads are counted.
@@ -53,9 +53,10 @@ within a skew bound the foundation states; a reading may step back; a timer is d
 reaches its `dueAt`; and FC-4 checks the bound. A timer with a past due time is already eligible.
 The built-in in-memory store shares one clock source across its owners. Readings of that source at the
 same instant have zero skew. Its worker samples that source at admission and keeps the reading for the
-whole turn. FC-C1 still requires the read and end adapters to use this source. Workers on remote stores
-continue to read their elapsed-time estimate during the turn. K4 qualifies one captured reading and the
-provider's skew bound for those stores.
+whole turn. FC-C1 still requires the read and end adapters to use this source. On remote stores, the
+public Actor Foundation adapter captures one reading for `IActorTurn.Now` when the authored turn begins.
+The underlying Worker continues to use its estimate of database time based on elapsed time.
+Qualifying the provider's clock skew bound remains open at K4.
 
 ### Words
 
@@ -96,6 +97,7 @@ across its own versions; it never names a tenant; and its waits come back exactl
 | Member | Meaning and guarantee |
 |---|---|
 | `Header` | The actor's `ActorHeader` as committed, present on the first turn too |
+| `StartSettings` | On the creator turn, the foundation's admitted `Ephemeral` and `History` settings |
 | `Now` | The foundation clock, read once for the turn; the clock `dueAt` and `TimerSpec.Due` use |
 | `Inbox` | The messages this turn is given, in delivery order (FC-3) |
 | `State` get, set | The opaque state; what is set is what the commit writes |
@@ -109,7 +111,7 @@ across its own versions; it never names a tenant; and its waits come back exactl
 | `Hold(message)` | Handed to the next turn again, in its place in the order (FC-18) |
 | `Subscribe(key, wait, keep)`, `Unsubscribe(key, wait)` | A wait for events of the key from this commit on; `keep` also gives it the kept events (owner default: off) (FC-6, FC-7) |
 | `Publish(key, payload, keepFor)` → id | An event, durable with this commit, delivered to every subscription committed before it and kept for `keepFor` for waits that ask (FC-6) |
-| `Record(entry)` | A journal entry of this commit, at the actor's history level (FC-11) |
+| `Record(entry)` | A journal entry of this commit, at the actor's history level (FC-11). `Record(ActorLifecycle.Migrated)` records a successful migration when its command is consumed in that commit, at every history level. |
 | `End(status, output)` | The actor's status becomes final with this commit: the parent is notified, waits are removed, the foundation writes `EndedAt` and the end mark. Later turns still run for commands and for the type's own messages to an ended actor (a metadata query), and none of them changes the status (FC-15). The foundation sends the terminate cascade to the registered children and the idempotent job cancel when the actor's turn consumes a `Terminate`, whatever that turn does, and on `End(Cancelled)`; never on `End(Finished)` or `End(Faulted)` (FC-8) |
 | `SetHeader(typeData, labels)` | Replaces the actor type's bounded `TypeData` and `Labels` with this commit (a rebind, a suspend flag, a new state version). Exceeding either limit fails the turn |
 
@@ -277,15 +279,15 @@ An inventory on main; no code changes here. Lines are those of main at `9583f4da
 
 | File:line | What | Fix | Milestone |
 |---|---|---|---|
-| `src/Kernel.Workflows/Turn.cs:57,59,114` | `Instance.Ref.Partition`, `InstanceRef.Spread(name, Services.Partitions)`, `Id.StartsWith($"g{partition}/key/")`: placement and key detection by parsing the id | `Placement` hint; the key check goes with the identity-only family | K2 |
+| [Turn.cs:57,59,114](../../essentials/tests/ActorFoundation/Legacy/Workflows/Turn.cs) | `Instance.Ref.Partition`, `InstanceRef.Spread(name, Services.Partitions)`, `Id.StartsWith($"g{partition}/key/")`: placement and key detection by parsing the id | `Placement` hint; the key check goes with the identity-only family | K2 |
 | `Turn.cs:88-91,135-137` | Builds `InstanceRow` with `CreationProtocol.Fingerprint`, `StartIntent`, `Taken[From]`; edits `CommitTimes` through `WorkflowCommitClock.End` | The foundation builds its record from `End`, `SetHeader`, `State`; the end mark and time are its own | K2 |
-| `src/Kernel.Workflows/WorkflowInstance.cs:14-29` | `SingleMessage`, `SelectsAlone`, `RevisitsHeld`, `Withholds` read `InstanceRow`, `Delivery.IsDurableJobTicket`, `Flaw` | `Withholds(ActorHeader)`; batching rules move into the foundation | K2 |
+| [WorkflowInstance.cs:14-29](../../essentials/tests/ActorFoundation/Legacy/Workflows/WorkflowInstance.cs) | `SingleMessage`, `SelectsAlone`, `RevisitsHeld`, `Withholds` read `InstanceRow`, `Delivery.IsDurableJobTicket`, `Flaw` | `Withholds(ActorHeader)`; batching rules move into the foundation | K2 |
 | `WorkflowInstance.cs:43-47,50,61,211-212` | `CreationProtocol.HasTerminalNoticeId`, `Refuse`, `TerminalNoticeId`, `TargetCreation`, `SenderCreation` checks on the parent notice | The notice and its checks are the foundation's (`Kinds.ChildFinished`) | K2 |
 | `WorkflowInstance.cs:57-58,72-73,81-90,129,148,165-171,192-199` | Builds `TurnOutcome` with `Expected`, `Revision`, `Journal`, `Retire(row)`, `Delete`, `Unsubscribe`, composes terminate ids `{origin}#{revision}.{i}` and `InboxKey.Ticket` cancels (FINDINGS L9) | `End` and `Record`; the foundation's cascade and job cancel when a `Terminate` is consumed or on `End(Cancelled)`, its delete with `ProtectsDeletion` | K2 |
 | `WorkflowInstance.cs:138-143` | `RemainingJobs` matches tickets by `InboxKey.Ticket` and `IsWorkerJobCompletion` | The foundation keeps the job registry | K2 |
-| `src/Kernel.Workflows/EffectKey.cs:42` | `CreationProtocol.Origin(instance, creation)` | `Instance.Ref.Id` is the origin | K2 |
-| `src/Kernel.Workflows/Contracts.cs:8,62` | `InstanceInfo.Ref` is `InstanceRef` (plan K2 row); `TerminalIdentity.From(InstanceRow)` | `ActorRef`; the identity-only family goes | K2 |
-| `src/Kernel.Workflows/IdentityMetadataTurn.cs:7-8,28` | `TurnOutcome`, `DurableTurn`, `InboxKey` | Goes with the identity-only family | K2 |
+| [EffectKey.cs:42](../../essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs) | `CreationProtocol.Origin(instance, creation)` | `Instance.Ref.Id` is the origin | K2 |
+| [Contracts.cs:8,62](../../essentials/tests/ActorFoundation/Legacy/Workflows/Contracts.cs) | `InstanceInfo.Ref` is `InstanceRef` (plan K2 row); `TerminalIdentity.From(InstanceRow)` | `ActorRef`; the identity-only family goes | K2 |
+| [IdentityMetadataTurn.cs:7-8,28](../../essentials/tests/ActorFoundation/Legacy/Workflows/IdentityMetadataTurn.cs) | `TurnOutcome`, `DurableTurn`, `InboxKey` | Goes with the identity-only family | K2 |
 | `models/Native/Live.cs:61-65,87,91,100,103,108,110-111` | `RespondBeforeCommit` per route; `HttpHost` takes `IKernelStore` and `Worker`; `InstanceRef.In(local.Partition, …)`, `local.Post(…, ambient:)`, `store.FindSubscriptionsAsync` and a delivery to `waiting[0]`, `EventRoute`, `EventRow`, `store.AddEventAsync` | `RequestAsync` with `Target.Start` or `Target.Event` (fanned out to every waiter) with `AddOptions` and `RequestOptions(Ambient, Deadline, ReleaseBeforeCommit, Inline)` | K2 defines, K8 runs |
 | `models/Native/Incidents.cs:108` | `CreationProtocol.Origin` for the operation key | `turn.Instance.Ref.Id` | K6 |
 | `models/Native/InvocationLifetime.cs:69` | `CommitClockFacts.ModelPrefix` | Goes with the commit clock (owner decision 3); retention reads `Now` and `EndedAt` | K6 |

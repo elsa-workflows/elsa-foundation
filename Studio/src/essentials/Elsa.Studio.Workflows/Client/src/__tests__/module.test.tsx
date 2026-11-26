@@ -1,5 +1,6 @@
 import { getNotifications } from "../workflow-editor/notifications";
 import React from "react";
+import { Zap } from "lucide-react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
@@ -180,7 +181,7 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-templates", label: "Templates", path: "/workflows/templates", placement: "build", parentId: "library" }),
       expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", placement: "runtime", parentId: undefined }),
       expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability", placement: "authoring", parentId: undefined }),
-      expect.objectContaining({ id: "workflows-triggers", label: "Triggers", path: "/workflows/triggers", parentId: undefined, placement: "operate" })
+      expect.objectContaining({ id: "workflows-triggers", label: "Triggers", path: "/workflows/triggers", icon: Zap, parentId: undefined, placement: "operate" })
     ]);
     expect(api.routes.list()).toEqual([
       expect.objectContaining({ id: "workflows-triggers-list", path: "/workflows/triggers" }),
@@ -3966,7 +3967,15 @@ describe("workflows module", () => {
     rerender();
     await vi.waitFor(() => expect(container.querySelector('[aria-label="History event details"]')?.textContent).toContain("route-event-B"));
     expect(fetchMock).toHaveBeenCalledWith(`${runPath}/history/events/route-event-B`, expect.any(Object));
-    expect(container.querySelector<HTMLInputElement>('[aria-label="Search recorded events"]')?.value).toBe("second");
+    const filterTrigger = buttonByLabel(container, "Filter events")!;
+    expect(filterTrigger.closest("[hidden]")).toBeNull();
+    vi.spyOn(filterTrigger, "getBoundingClientRect").mockReturnValue(new DOMRect(16, 16, 28, 28));
+    await click(filterTrigger);
+    const filters = document.getElementById(filterTrigger.getAttribute("aria-controls")!);
+    await vi.waitFor(() => expect(filters?.getAttribute("aria-hidden")).toBe("false"));
+    expect(filters?.hasAttribute("inert")).toBe(false);
+    expect(filters?.querySelector<HTMLInputElement>('[aria-label="Search recorded events"]')?.value).toBe("second");
+    await click(filterTrigger);
     expect(new URLSearchParams(window.location.search).get("returnTo")).toBe("/workflows/instances?status=Completed");
     await click(buttonByText(container, "Details"));
     await click(buttonByText(container, "Diagram"));
@@ -3976,7 +3985,7 @@ describe("workflows module", () => {
     rerender();
     await vi.waitFor(() => expect(container.querySelector('[aria-label="Bookmark lifecycle"]')?.textContent).toContain("route-bookmark-C"));
     expect(fetchMock).toHaveBeenCalledWith(`${runPath}/history/bookmarks/route-bookmark-C`, expect.any(Object));
-    expect(buttonByText(container, "Diagram")?.getAttribute("aria-pressed")).toBe("true");
+    expect(buttonByText(container, "Diagram")?.getAttribute("aria-selected")).toBe("true");
     if (narrow) expect(container.querySelector(".narrow-inspector-view")).toBeTruthy();
     else expect(buttonByLabel(container, "Collapse run details panel")).toBeTruthy();
     expect(new URLSearchParams(window.location.search).get("returnTo")).toBe("/workflows/instances?status=Completed");
@@ -4096,18 +4105,24 @@ describe("workflows module", () => {
     expect(runInspector?.textContent).toContain("Workflow Instance ID");
     expect(runInspector?.querySelector("[aria-label='Copy Workflow Instance ID']")).toBeTruthy();
     await click(buttonByText(container, "Timeline"));
-    // Data belongs to the selected execution's Activity inspector.
+    // Execution metadata belongs to the selected execution's Activity inspector.
     await click(buttonByText(container, "Activity"));
     // Timeline is the primary workspace. Older hosts report unsupported history without fabricating an activity journal.
-    expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
+    await click(buttonByText(container, "Events"));
     await waitForText(container, "This host does not support durable run history");
-    await waitForText(container, "Data");
-    expect(container.querySelector('[role="tablist"][aria-label="Activity execution views"]')).not.toBeNull();
-    await click(buttonByText(container, "Data"));
-    await waitForText(container, "Activity Execution ID");
-    expect(container.textContent).toContain("activity-execution-1");
-    expect(container.textContent).toContain("Current bookmarksUnavailable");
-    expect(container.textContent).toContain("IncidentsUnavailable");
+    expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
+    await waitForText(container, "Overview");
+    const activityTabs = container.querySelector('[role="tablist"][aria-label="Activity execution details"]');
+    const overviewTab = activityTabs?.querySelector('[data-tab-id="overview"]');
+    expect(overviewTab?.getAttribute("aria-selected")).toBe("true");
+    const overview = document.getElementById(overviewTab!.getAttribute("aria-controls")!);
+    expect(overview?.closest("[hidden]")).toBeNull();
+    const disclosure = overview!.querySelector<HTMLDetailsElement>(".wf-activity-execution-details")!;
+    await click(disclosure.querySelector("summary"));
+    expect(disclosure.open).toBe(true);
+    expect(disclosure.textContent).toContain("Activity Execution IDactivity-execution-1");
+    expect(disclosure.textContent).toContain("Current bookmarksUnavailable");
+    expect(overview!.querySelector(".wf-activity-summary-grid")?.textContent).toContain("IncidentsUnavailable");
     await click(buttonByText(container, "Diagram"));
     expect(buttonByLabel(container, "Collapse run details panel")).toBeTruthy();
     expect(buttonByLabel(container, "Maximize run details panel")).toBeTruthy();
@@ -4300,8 +4315,9 @@ describe("workflows module", () => {
     expect(canvasText()).not.toContain("No workflow activities are available");
     const nodes = container.querySelectorAll(".wf-instance-canvas .react-flow__node");
     expect(nodes).toHaveLength(2);
-    expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
+    await click(buttonByText(container, "Events"));
     await waitForText(container, "This host does not support durable run history");
+    expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
       "https://server.example/runtime/workflows/executables/artifact-1?ref=reference-published"
     );
@@ -4452,7 +4468,10 @@ describe("workflows module", () => {
 
     await waitForRunWorkbench(container);
     expect(container.querySelector(".wf-detail-header h2")?.textContent).toBe("Run · definition-1");
+    expect(fetchMock).toHaveBeenCalledWith("https://server.example/runtime/workflows/executables/test-artifact-46792146fbed", expect.any(Object));
+    expect(container.querySelector(".wf-instance-canvas [data-id='send-email-1']")?.textContent).toContain("SendEmail");
     // Timeline reports the original host's history capability explicitly.
+    await click(buttonByText(container, "Events"));
     await waitForText(container, "This host does not support durable run history");
     expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
     expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes(encodeURIComponent(draftVersionId)))).toBe(false);

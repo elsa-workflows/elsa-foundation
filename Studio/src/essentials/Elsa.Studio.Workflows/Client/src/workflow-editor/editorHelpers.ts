@@ -367,6 +367,11 @@ export function readStoredNumber(key: string, fallback: number, min: number, max
   return Number.isFinite(value) ? clamp(value, min, max) : fallback;
 }
 
+export function readStoredString(key: string): string | null {
+  const storage = getLocalStorage();
+  return storage ? storage.getItem(key) : null;
+}
+
 export function readStoredBoolean(key: string, fallback: boolean) {
   const storage = getLocalStorage();
   if (!storage) return fallback;

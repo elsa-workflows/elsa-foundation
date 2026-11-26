@@ -16,7 +16,9 @@ The engine never pushes its spans into the ingestion domain. Engine telemetry is
 `ActivitySource` instrumentation: a host wires an OpenTelemetry SDK (or a bare listener) to the
 source name and exports wherever it likes. The ingestion domain is a *backend* — a place telemetry
 from external processes lands. They can be composed in the same app, but they are independent
-concerns and neither depends on the other.
+concerns and neither depends on the other. The `DiagnosticsOpenTelemetryEngineBridge` feature
+(`Elsa.Diagnostics.OpenTelemetry.Workflows`) is the bare listener for a host without an SDK: it
+forwards the engine's spans into the ingestion store, so Studio's timing view shows them.
 
 ## Enabling engine telemetry
 
@@ -71,7 +73,8 @@ the ingestion domain: nothing that could carry user payload or a security token 
 
 These names are a **stable contract**. Renaming a span or an attribute is a breaking change for
 anyone building dashboards or alerts on them. The constants live in
-`WorkflowEngineTelemetry` (`Elsa.Workflows.Runtime.Diagnostics`).
+`WorkflowEngineTelemetry` (`Elsa.Workflows.Runtime.Core.Diagnostics`), in the `Elsa.Workflows.Runtime.Core`
+contracts package, so a listener can read them without referencing the runtime implementation.
 
 ## Semantic-safety guarantees
 

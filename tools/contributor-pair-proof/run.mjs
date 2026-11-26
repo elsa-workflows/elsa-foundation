@@ -279,6 +279,13 @@ function inspectImage(image) {
   return { imageId, platform, source, revision, version };
 }
 
+// Images name the application by its assembly. The Workbench assembly is Elsa.Workbench.Host from #5675 on and the
+// Studio assembly is Elsa.Studio.Workbench.Host from #5768 on; images built before those publish the legacy names.
+function hostApplication(containerId, current, legacy) {
+  const published = commandOutput("docker", ["exec", containerId, "ls", "/app"]).split(/\s+/);
+  return published.includes(`${current}.deps.json`) ? current : legacy;
+}
+
 function inspectApplicationVersion(containerId, application) {
   const manifest = commandOutput("docker", ["exec", containerId, "cat", `/app/${application}.deps.json`]);
   const libraries = Object.keys(JSON.parse(manifest).libraries ?? {});
@@ -740,7 +747,9 @@ async function main() {
     if (name === "workbench") ownedWorkbenchContainerId = containerId;
     log(`${name}: image ID=${metadata.imageId}; running image ID=${runningImageId}; OCI source=${metadata.source}; revision=${metadata.revision}; version=${metadata.version}; platform=${metadata.platform}`);
     stage = "application-version-provenance";
-    const application = name === "workbench" ? "Elsa.Workbench" : "Elsa.Studio.Web";
+    const application = name === "workbench"
+      ? hostApplication(containerId, "Elsa.Workbench.Host", "Elsa.Workbench")
+      : hostApplication(containerId, "Elsa.Studio.Workbench.Host", "Elsa.Studio.Web");
     const artifact = inspectApplicationVersion(containerId, application);
     log(`${application}: dependency-manifest host version=${artifact.version}; trimmed manifest SHA256=${artifact.manifestHash}; this is distinct from the image tag and OCI base-image version`);
   }

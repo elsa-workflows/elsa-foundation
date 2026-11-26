@@ -23,12 +23,16 @@ flowchart LR
 
 ## Host and shell
 
-[`Elsa.Studio.Web`](../src/apps/Elsa.Studio.Web/Program.cs) is the distribution composition root. It selects
-modules and optional capabilities using the public APIs in [`Elsa.Studio.Hosting`](../src/essentials/Elsa.Studio.Hosting).
+Three Studio apps ship: [`Elsa.Studio.Workbench.Host`](../src/apps/Elsa.Studio.Workbench.Host/Program.cs) compiles in every
+Studio module, [`Elsa.Studio.Essentials.Host`](../src/apps/Elsa.Studio.Essentials.Host/README.md) compiles in the modules the
+Essentials server serves, and [`Elsa.Studio.Foundation.Host`](../src/apps/Elsa.Studio.Foundation.Host/README.md) is the bare
+shell whose modules arrive from a Nuplane feed. Each app's `Program.cs` names its in-box modules and calls
+[`Elsa.Studio.Hosting.Distribution`](../src/essentials/Elsa.Studio.Hosting.Distribution/README.md), which composes the public
+APIs of [`Elsa.Studio.Hosting`](../src/essentials/Elsa.Studio.Hosting), Backends, Nuplane administration and the Theme Store.
 Reusable Hosting code:
 
 - builds the ASP.NET Core host;
-- loads the selected shell from application-owned configuration, such as Web's [`shells.json`](../src/apps/Elsa.Studio.Web/shells.json);
+- loads the selected shell from application-owned configuration, such as the Workbench host's [`shells.json`](../src/apps/Elsa.Studio.Workbench.Host/shells.json);
 - registers CShells and discovers selected feature assemblies;
 - exposes browser runtime configuration at `/studio-runtime.js`;
 - maps core Studio APIs, active-shell APIs, CShell endpoints and static assets; and
@@ -106,13 +110,13 @@ A Dashboard Contribution should be admitted only when it:
 - satisfies the Slot Owner's shape and ordering rules; and
 - remains available after Module Policy and Host Policy are applied.
 
-Accepted Contributions are ordered by explicit `order` and stable fallback values, never by module load order. Modules may contribute zero, one, or multiple Dashboard widgets. Dashboard Contributions are optional, and there is no one-widget-per-module rule. The host renders a valid empty state when no Dashboard widgets are registered.
+Accepted Contributions are ordered by explicit `order` and stable fallback values, never by module load order. Modules may contribute zero, one, or multiple Home widgets. Widget Contributions are optional, and there is no one-widget-per-module rule. Home and its widget area belong to the shell (`Elsa.Studio.Hosting`), so every Studio flavor has them; the shell renders a valid empty state when no widgets are registered. The Dashboard module adds saved dashboards and questions and does not replace Home.
 
 See [ADR 0004](adr/0004-keep-dashboard-and-diagnostics-as-separate-slots.md) for the boundary between Dashboard summaries and Diagnostics signals.
 
 ## Where to go next
 
 - To build or extend a module, start with the [SDK contract](../src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts) and a representative module close to the required shape.
-- To change shell composition or package loading, start with [`Program.cs`](../src/apps/Elsa.Studio.Web/Program.cs), [`shells.json`](../src/apps/Elsa.Studio.Web/shells.json), and [`loader.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/loader.ts).
+- To change shell composition or package loading, start with [`DistributionHostingExtensions.cs`](../src/essentials/Elsa.Studio.Hosting.Distribution/DistributionHostingExtensions.cs), the Workbench [`Program.cs`](../src/apps/Elsa.Studio.Workbench.Host/Program.cs), [`shells.json`](../src/apps/Elsa.Studio.Workbench.Host/shells.json), and [`loader.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/loader.ts).
 - To change navigation or routes, start with [`registry.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry.ts) and [`App.tsx`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/App.tsx).
 - To change API transport or authentication, start with [`runtime.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/runtime.ts), [`studioAuth.tsx`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/auth/studioAuth.tsx), and [`StudioBridgeAuth.cs`](../src/essentials/Elsa.Studio.Hosting/StudioBridgeAuth.cs).

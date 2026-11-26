@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { StudioAlert, StudioButton, StudioField, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import { FlaskConical, Plus, Trash2 } from "lucide-react";
+import { StatusChip, StudioAlert, StudioButton, StudioField, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import { getWorkflowRunInputControlKind, parseWorkflowRunInputs } from "../workflowRunInputs";
 import { parseLiteralJson, serializeTriggerPayload } from "./json";
 import type { WorkflowInput } from "../workflowTypes";
 import type { TriggerClient } from "./api";
 import { ActionError, Findings, label, useTriggerCompletion } from "./shared";
 import { SourceFieldSelector, realizeSourcePath, type SourcePathDraft } from "./SourceFieldSelector";
+import { mappingPreviewFieldTone } from "./triggerTypePresentation";
 import type { DeclaredInput, InputBinding, InputMapping, JsonValue, MappingContext, MappingPreview, TargetSelector, TargetView } from "./types";
 
 export interface MappingDraft extends SourcePathDraft { kind: "Omit" | "Null" | InputBinding["kind"]; text: string; retainedLiteral?: { value: JsonValue }; language: string; source: string; template?: Extract<InputBinding, { kind: "Expression" }>["template"]; parameters: (SourcePathDraft & { name: string; kind: "SourceField" | "Literal"; text: string })[] }
@@ -92,34 +94,62 @@ export function MappingEditor({ client, triggerId, triggerRevision, target, cont
     } catch (error) { complete(() => { setPreviewError(error); setBusy(false); }); }
   }
   return <section ref={root} className="wf-trigger-mappings" aria-label="Workflow input mappings">
-    <h4>Declared inputs</h4><p>Mapping uses the current serving contract. Preview is advisory; actual admission rechecks the target and inputs.</p>
+    <div className="wf-trigger-mappings-header">
+      <h4>Declared inputs</h4>
+      <p className="wf-trigger-muted">Mapping uses the current serving contract. Preview is advisory; actual admission rechecks the target and inputs.</p>
+    </div>
     <Findings items={target.findings} /><Findings items={context.findings} />
-    {target.inputContract === null || target.inputContract === undefined ? <StudioAlert tone="warning">The serving input contract is unavailable. Save this association disabled and publish or select a compatible slot.</StudioAlert> : !inputs.length ? <p>This serving workflow declares no inputs.</p> : null}
+    {target.inputContract === null || target.inputContract === undefined ? <StudioAlert tone="warning">The serving input contract is unavailable. Save this association disabled and publish or select a compatible slot.</StudioAlert> : !inputs.length ? <p className="wf-trigger-muted">This serving workflow declares no inputs.</p> : null}
     {inputs.map(input => {
       const draft = ownDraft(drafts, input.name);
-      return <fieldset key={input.name} className="wf-trigger-mapping" disabled={disabled}>
-        <legend>{input.name}{input.isRequired ? " · Required" : ""}</legend><p className="wf-trigger-muted">{input.type.collectionKind === "Single" ? input.type.alias : `${input.type.collectionKind}<${input.type.alias}>`}{Object.hasOwn(input, "defaultValue") ? " · Workflow default available" : ""}</p>
-        <StudioField label="Value source"><select aria-label={`Value source for ${input.name}`} value={draft.kind} onChange={event => update(input.name, { kind: event.currentTarget.value as MappingDraft["kind"] })}><option value="Omit">Use workflow default / omit</option><option value="SourceField">Source field</option><option value="Literal">Configured value</option><option value="Null">Explicit null</option><option value="Expression">Expression</option></select></StudioField>
-        {draft.kind === "SourceField" ? <SourceFieldSelector fields={sourceFields} value={{ kind: "SourceField", path: draft.path, pathText: draft.pathText }} label={`Source field for ${input.name}`} pathLabel={`Source path for ${input.name}`} onChange={selection => update(input.name, selection)} /> : draft.kind === "Literal" ? <StudioField label="Configured value" description={input.type.alias.toLowerCase() === "string" ? "Enter the text to supply." : "Enter a value in the declared input's format. JSON null is distinct from omission."}><input aria-label={`Configured value for ${input.name}`} value={literalText(input, draft)} aria-invalid={!!ownError(errors, input.name)} onChange={event => update(input.name, { text: event.currentTarget.value, retainedLiteral: undefined })} /></StudioField> : draft.kind === "Expression" ? <>
-          <StudioField label="Expression language"><select aria-label={`Expression language for ${input.name}`} value={draft.language} onChange={event => update(input.name, { language: event.currentTarget.value })}><option value="">Choose a language…</option>{context.supportedExpressions.map(language => <option key={language.language} value={language.language} disabled={!language.available}>{language.displayName}{!language.available ? ` · ${language.reason || "Unavailable"}` : ""}</option>)}</select></StudioField>
-          <StudioField label="Expression" description="Only the named parameters below are available. Workflow variables and activity outputs do not exist at this point."><textarea aria-label={`Expression for ${input.name}`} value={draft.source} onChange={event => update(input.name, { source: event.currentTarget.value })} /></StudioField>
-          {draft.parameters.map((parameter, index) => <div key={index} className="wf-trigger-parameter">
-            <StudioField label="Parameter name"><input aria-label={`Parameter ${index + 1} name for ${input.name}`} value={parameter.name} onChange={event => { const name = event.currentTarget.value; update(input.name, { parameters: draft.parameters.map((item, position) => position === index ? { ...item, name } : item) }); }} /></StudioField>
-            <SourceFieldSelector fields={sourceFields} value={parameter} label={`Parameter ${index + 1} source for ${input.name}`} pathLabel={`Parameter ${index + 1} source path for ${input.name}`} allowLiteral onChange={selection => update(input.name, { parameters: draft.parameters.map((item, position) => position === index ? { ...item, ...selection } : item) })} />
-            {parameter.kind === "Literal" ? <StudioField label="JSON value"><input aria-label={`Parameter ${index + 1} value for ${input.name}`} value={parameter.text} onChange={event => { const text = event.currentTarget.value; update(input.name, { parameters: draft.parameters.map((item, position) => position === index ? { ...item, text } : item) }); }} /></StudioField> : null}
-            <StudioButton type="button" onClick={() => update(input.name, { parameters: draft.parameters.filter((_, position) => position !== index) })}>Remove parameter {index + 1}</StudioButton>
-          </div>)}
-          <StudioButton type="button" onClick={() => update(input.name, { parameters: [...draft.parameters, { name: "", kind: "SourceField", path: [], text: "" }] })}>Add parameter for {input.name}</StudioButton>
-        </> : null}
-        {ownError(errors, input.name) ? <p role="alert" tabIndex={-1} data-mapping-error>{ownError(errors, input.name)}</p> : null}
+      const declaredType = input.type.collectionKind === "Single" ? input.type.alias : `${input.type.collectionKind}<${input.type.alias}>`;
+      const fieldError = ownError(errors, input.name);
+      return <fieldset key={input.name} className="wf-trigger-mapping" data-has-error={fieldError ? true : undefined} disabled={disabled}>
+        <legend className="wf-trigger-mapping-legend">
+          <span className="wf-trigger-mapping-name">{input.name}</span>
+          {input.isRequired ? <StatusChip tone="accent">Required</StatusChip> : null}
+        </legend>
+        <p className="wf-trigger-mapping-meta">
+          <span className="wf-trigger-type-pill">{declaredType}</span>
+          {Object.hasOwn(input, "defaultValue") ? <span className="wf-trigger-muted-inline"> · Workflow default available</span> : null}
+        </p>
+        <div className="wf-trigger-mapping-controls">
+          <StudioField label="Value source"><select aria-label={`Value source for ${input.name}`} value={draft.kind} onChange={event => update(input.name, { kind: event.currentTarget.value as MappingDraft["kind"] })}><option value="Omit">Use workflow default / omit</option><option value="SourceField">Source field</option><option value="Literal">Configured value</option><option value="Null">Explicit null</option><option value="Expression">Expression</option></select></StudioField>
+          {draft.kind === "SourceField" ? <SourceFieldSelector fields={sourceFields} value={{ kind: "SourceField", path: draft.path, pathText: draft.pathText }} label={`Source field for ${input.name}`} pathLabel={`Source path for ${input.name}`} onChange={selection => update(input.name, selection)} /> : draft.kind === "Literal" ? <StudioField label="Configured value" description={input.type.alias.toLowerCase() === "string" ? "Enter the text to supply." : "Enter a value in the declared input's format. JSON null is distinct from omission."}><input aria-label={`Configured value for ${input.name}`} value={literalText(input, draft)} aria-invalid={!!fieldError} onChange={event => update(input.name, { text: event.currentTarget.value, retainedLiteral: undefined })} /></StudioField> : draft.kind === "Expression" ? <div className="wf-trigger-expression-fields">
+            <StudioField label="Expression language"><select aria-label={`Expression language for ${input.name}`} value={draft.language} onChange={event => update(input.name, { language: event.currentTarget.value })}><option value="">Choose a language…</option>{context.supportedExpressions.map(language => <option key={language.language} value={language.language} disabled={!language.available}>{language.displayName}{!language.available ? ` · ${language.reason || "Unavailable"}` : ""}</option>)}</select></StudioField>
+            <StudioField label="Expression" description="Only the named parameters below are available. Workflow variables and activity outputs do not exist at this point."><textarea aria-label={`Expression for ${input.name}`} value={draft.source} onChange={event => update(input.name, { source: event.currentTarget.value })} /></StudioField>
+            {draft.parameters.map((parameter, index) => <div key={index} className="wf-trigger-parameter">
+              <div className="wf-trigger-parameter-header">
+                <span className="wf-trigger-parameter-title">Parameter {index + 1}</span>
+                <StudioButton type="button" size="sm" onClick={() => update(input.name, { parameters: draft.parameters.filter((_, position) => position !== index) })}><Trash2 size={13} aria-hidden /> Remove parameter {index + 1}</StudioButton>
+              </div>
+              <StudioField label="Parameter name"><input aria-label={`Parameter ${index + 1} name for ${input.name}`} value={parameter.name} onChange={event => { const name = event.currentTarget.value; update(input.name, { parameters: draft.parameters.map((item, position) => position === index ? { ...item, name } : item) }); }} /></StudioField>
+              <SourceFieldSelector fields={sourceFields} value={parameter} label={`Parameter ${index + 1} source for ${input.name}`} pathLabel={`Parameter ${index + 1} source path for ${input.name}`} allowLiteral onChange={selection => update(input.name, { parameters: draft.parameters.map((item, position) => position === index ? { ...item, ...selection } : item) })} />
+              {parameter.kind === "Literal" ? <StudioField label="JSON value"><input aria-label={`Parameter ${index + 1} value for ${input.name}`} value={parameter.text} onChange={event => { const text = event.currentTarget.value; update(input.name, { parameters: draft.parameters.map((item, position) => position === index ? { ...item, text } : item) }); }} /></StudioField> : null}
+            </div>)}
+            <div>
+              <StudioButton type="button" size="sm" onClick={() => update(input.name, { parameters: [...draft.parameters, { name: "", kind: "SourceField", path: [], text: "" }] })}><Plus size={14} aria-hidden /> Add parameter for {input.name}</StudioButton>
+            </div>
+          </div> : null}
+        </div>
+        {fieldError ? <p role="alert" tabIndex={-1} data-mapping-error className="wf-trigger-mapping-error">{fieldError}</p> : null}
       </fieldset>;
     })}
-    {Object.keys(drafts).filter(name => !inputs.some(input => input.name === name) && drafts[name].kind !== "Omit").map(name => <StudioAlert key={name} tone="warning"><p>{name} is absent from the current serving contract.</p><StudioButton type="button" disabled={disabled} onClick={() => onChange(Object.fromEntries(Object.entries(drafts).filter(([key]) => key !== name)))}>Remove mapping for {name}</StudioButton></StudioAlert>)}
-    <details><summary>Preview with sample data</summary>
-      <StudioField label="Sample source envelope" description="Synthetic sample payload and source fields; this does not send an event, accept work or start a workflow."><textarea aria-label="Sample source envelope" value={sample} disabled={disabled || busy} onChange={event => setSample(event.currentTarget.value)} /></StudioField>
-      <StudioButton type="button" disabled={disabled || busy || !target.inputContract} onClick={() => void runPreview()}>{busy ? "Evaluating sample…" : "Preview mapped inputs"}</StudioButton>
-      {previewError ? <ActionError error={previewError} /> : null}
-      {preview && previewSignature === signature ? <><p>Sample preview · advisory</p><Findings items={preview.findings} /><StudioTableContainer role="region" aria-label="Mapped sample inputs" tabIndex={0}><table className="studio-table wf-trigger-table"><thead><tr><th scope="col">Input</th><th scope="col">Result</th><th scope="col">Value</th></tr></thead><tbody>{preview.fields.map(field => <tr key={field.inputName}><th scope="row">{field.inputName}</th><td>{label(field.state)}</td><td>{field.state === "Redacted" ? "Protected" : Object.hasOwn(field, "value") ? serializeTriggerPayload(field.value) : "—"}</td></tr>)}</tbody></table></StudioTableContainer></> : preview ? <p role="status">The sample or mappings changed. Run preview again for the current values.</p> : null}
+    {Object.keys(drafts).filter(name => !inputs.some(input => input.name === name) && drafts[name].kind !== "Omit").map(name => <StudioAlert key={name} tone="warning"><p>{name} is absent from the current serving contract.</p><StudioButton type="button" size="sm" disabled={disabled} onClick={() => onChange(Object.fromEntries(Object.entries(drafts).filter(([key]) => key !== name)))}>Remove mapping for {name}</StudioButton></StudioAlert>)}
+    <details className="wf-trigger-sample-preview">
+      <summary><FlaskConical size={15} aria-hidden /><span>Preview with sample data</span></summary>
+      <div className="wf-trigger-sample-preview-body">
+        <StudioField label="Sample source envelope" description="Synthetic sample payload and source fields; this does not send an event, accept work or start a workflow."><textarea aria-label="Sample source envelope" value={sample} disabled={disabled || busy} onChange={event => setSample(event.currentTarget.value)} /></StudioField>
+        <div>
+          <StudioButton type="button" size="sm" disabled={disabled || busy || !target.inputContract} onClick={() => void runPreview()}>{busy ? "Evaluating sample…" : "Preview mapped inputs"}</StudioButton>
+        </div>
+        {previewError ? <ActionError error={previewError} /> : null}
+        {preview && previewSignature === signature ? <div className="wf-trigger-sample-results">
+          <p className="wf-trigger-muted">Sample preview · advisory</p>
+          <Findings items={preview.findings} />
+          <StudioTableContainer role="region" aria-label="Mapped sample inputs" tabIndex={0}><table className="studio-table wf-trigger-table wf-trigger-sample-table"><thead><tr><th scope="col">Input</th><th scope="col">Result</th><th scope="col">Value</th></tr></thead><tbody>{preview.fields.map(field => <tr key={field.inputName}><th scope="row">{field.inputName}</th><td><StatusChip tone={mappingPreviewFieldTone(field.state)}>{label(field.state)}</StatusChip></td><td className="wf-trigger-mono">{field.state === "Redacted" ? "Protected" : Object.hasOwn(field, "value") ? serializeTriggerPayload(field.value) : "—"}</td></tr>)}</tbody></table></StudioTableContainer>
+        </div> : preview ? <p role="status" className="wf-trigger-muted">The sample or mappings changed. Run preview again for the current values.</p> : null}
+      </div>
     </details>
   </section>;
 }

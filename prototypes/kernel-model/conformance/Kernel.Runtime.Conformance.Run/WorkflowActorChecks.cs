@@ -111,6 +111,7 @@ internal static class WorkflowActorChecks
     private sealed class RecordingTurn(ActorHeader header, string? state, IReadOnlyList<Message> inbox) : IActorTurn
     {
         public ActorHeader Header { get; private set; } = header;
+        public ActorStartSettings? StartSettings => null;
         public long Now => WorkflowActorChecks.Now;
         public IReadOnlyList<Message> Inbox { get; } = inbox;
         public string? State { get; set; } = state;

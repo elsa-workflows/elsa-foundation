@@ -19,13 +19,16 @@ extensions/
     tests/   the module's test projects
 ```
 
-`<Name>` is the capability bucket, not a project name. Agent, Elsa3, ExtensionBuilder and Integrations retain their
-existing backend classification. Studio components occupy their named capability buckets; the two
-Weaver projects share `Weaver/studio/`. This consolidation does not reclassify all optional backend
-features or move backend essentials merely because a Studio component has a matching name.
+`<Name>` is the capability bucket. Connections, managed external authentication, OpenTelemetry,
+structured logs, and console streaming keep their backend and Studio projects in the same bucket.
+The shared diagnostics persistence library lives under `Diagnostics/`. BPMN lives under `Bpmn/`,
+and saved Dashboards and Questions live under `Dashboard/` with their Studio module.
+`Git/` contains the shared Git client and workflow design reconciliation. `Http/` contains
+the HTTP services, workflow activities and runtime endpoint integration. The Secrets backend
+and Studio module live together under `Secrets/`.
 
-The five backend extension test projects stay beside their capabilities under `tests/`. This is the
-final placement for #2579 and supersedes the intermediate `tests/extensions/` move in closed PR #2620.
+Capability-specific backend tests live alongside their modules under `tests/`. Cross-capability
+tests can remain in a shared suite, such as managed external sign-in coverage in the Identity suite.
 
 ## Extensions a host composes at its root
 
@@ -62,7 +65,7 @@ site already covers `extensions/`, and this is the complete list:
 |---|---|---|
 | `.github/workflows/packages.yml` | nothing itself: it packs the dependency map's packable projects, which `RepoLayout.cs` below enumerates | the version calculator refuses a map that misses a project, so packing fails |
 | `.github/workflows/ci.yml` | container-free test projects | the module's tests stop running, job still green |
-| `apps/Elsa.Workbench/Dockerfile` | restore inputs and the source copy | image build fails (the one that fails loudly) |
+| `apps/Elsa.Workbench.Host/Dockerfile` | restore inputs and the source copy | image build fails (the one that fails loudly) |
 | `.dockerignore` | what reaches the build context | extension tests bloat the context |
 | `tools/ef/generate-module-migrations.sh` | EF modules and model snapshots | finds no module, generates nothing |
 | `tools/maps/Elsa.Maps.Generator/RepoLayout.cs` | projects, sources and catalogs for every map | the module vanishes from every map |

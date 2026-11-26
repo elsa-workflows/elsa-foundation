@@ -1139,6 +1139,7 @@ Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.MaximumDepth.in
 Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.MaximumMembers.get -> int
 Elsa.Activities.Design.Core.Models.ActivitySerializedShapeLimits.MaximumMembers.init -> void
 Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState
+Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState.Declared = 4 -> Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState
 Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState.Known = 0 -> Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState
 Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState.Truncated = 2 -> Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState
 Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState.Unavailable = 3 -> Elsa.Activities.Design.Core.Models.ActivitySerializedShapeState

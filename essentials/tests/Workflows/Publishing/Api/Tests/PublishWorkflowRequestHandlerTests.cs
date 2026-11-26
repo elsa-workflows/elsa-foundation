@@ -1404,6 +1404,52 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
+    public async Task RepublishingSameArtifactToSameSlotWithUpdatedActivityPresentationReplacesActiveReference()
+    {
+        var firstVersion = WorkflowVersion(Node("write-one", Text("one")), definitionId: "definition-1", versionId: "version-1", version: "1.0.0");
+        var secondVersion = WorkflowVersion(Node("write-one", Text("one")), definitionId: "definition-1", versionId: "version-2", version: "2.0.0");
+        var initialLayout = new WorkflowDefinitionVersionLayout
+        {
+            WorkflowDefinitionVersionId = firstVersion.Id,
+            ActivityPresentation = []
+        };
+        var renamedLayout = new WorkflowDefinitionVersionLayout
+        {
+            WorkflowDefinitionVersionId = secondVersion.Id,
+            ActivityPresentation =
+            [
+                new ActivityPresentationRecord("write-one", "Crony", "Custom cron step.")
+            ]
+        };
+
+        var first = await Handler(firstVersion, initialLayout, _writeLineActivity)
+            .Handle(new PublishWorkflow(firstVersion.Id), CancellationToken.None);
+        var second = await Handler(secondVersion, renamedLayout, _writeLineActivity)
+            .Handle(new PublishWorkflow(secondVersion.Id), CancellationToken.None);
+        var third = await Handler(secondVersion, renamedLayout, _writeLineActivity)
+            .Handle(new PublishWorkflow(secondVersion.Id), CancellationToken.None);
+
+        Assert.True(first.WasCreated);
+        Assert.True(second.WasCreated);
+        Assert.False(third.WasCreated);
+        Assert.Equal(first.ArtifactId, second.ArtifactId);
+        Assert.NotEqual(first.PublicationId, second.PublicationId);
+        Assert.NotEqual(first.SourceReferenceId, second.SourceReferenceId);
+        Assert.Equal(second.PublicationId, third.PublicationId);
+        Assert.Equal(second.SourceReferenceId, third.SourceReferenceId);
+
+        var liveReference = Assert.Single(await _referenceStore.ListAllAsync(
+            WorkflowExecutableReferenceScope.Published,
+            liveOnly: true,
+            now: ReferenceEvaluationTime));
+        Assert.Equal(second.SourceReferenceId, liveReference.SourceReferenceId);
+        var presentation = Assert.Single(liveReference.ActivityPresentation);
+        Assert.Equal(("write-one", "Crony", "Custom cron step."), (presentation.ExecutableNodeId, presentation.DisplayName, presentation.Description));
+        var retiredReference = await _referenceStore.FindAsync(first.SourceReferenceId);
+        Assert.NotNull(retiredReference?.DeletedAt);
+    }
+
+    [Fact]
     public async Task CompiledInputBindingCarriesStableInputKeyAndSensitivity()
     {
         var input = new WorkflowArgumentState(

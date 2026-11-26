@@ -1,3 +1,4 @@
+import { releaseInventory } from "../../../../vite.release-inventory";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -25,7 +26,7 @@ import dts from "vite-plugin-dts";
  * climb OUT of `dist/` and point at source that is not shipped. `rollupTypes: true` runs
  * the API Extractor pass that FLATTENS every referenced declaration into one
  * `dist/index.d.ts`, so the published types are self-contained. `entryRoot` is set to the
- * common ancestor of both source trees (`Elsa.Studio.Web`) so the intermediate emit is
+ * common ancestor of both source trees (`Elsa.Studio.Hosting`) so the intermediate emit is
  * valid before it is rolled up.
  *
  * DO NOT REMOVE `publishConfig.types` FROM package.json — it is load-bearing here. With
@@ -39,7 +40,7 @@ import dts from "vite-plugin-dts";
  * `rollupConfig` option cannot override this (mainEntryPointFilePath is spread after it).
  */
 export default defineConfig({
-  plugins: [
+  plugins: [releaseInventory("npm"),
     react(),
     dts({
       // Flatten the two-directory type surface into a single self-contained declaration.
