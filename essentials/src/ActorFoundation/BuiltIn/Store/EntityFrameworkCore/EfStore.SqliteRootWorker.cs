@@ -20,7 +20,8 @@ public sealed partial class EfStore
         using var db = create();
         if (!db.UsesSqliteRootRuntime || postgres || Engine is not null || !OwnedSetsAvailable)
             throw new NotSupportedException("A SQLite root node requires the shipped context and owned commits.");
-        return InstallWorkerScope(new(null, [], discover: true) { AuthoredWithholds = withholds });
+        // Ended roots settle their physical FIFO without a model, including actors that withhold by header alone.
+        return InstallWorkerScope(new(null, [], discover: true) { AuthoredWithholds = withholds, SettlesEndedMailbox = true });
     }
 
     // The discovered birth join already limits creators to their exact tenant/reference envelope.

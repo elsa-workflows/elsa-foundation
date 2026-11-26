@@ -69,12 +69,21 @@ internal static partial class SqliteHostLifetimeChecks
                 await WaitForRootAsync(store, scope.Tenant, withheld, 1, token);
                 var earlier = await ingress.SendAsync(scope, new Contract.Target.Ref(withheld), "withheld", "record", cancellationToken: token);
                 var withheldSelection = PostgresRootSelection.SealRunning(cursor, scope.Tenant, withheld.Id);
+                var commandDue = await db.Database.SqlQueryRaw<long>(
+                    "SELECT " + SqliteCommitDialect.MillisecondClock + """ AS "Value" """).SingleAsync(token) + 3_000;
                 Require(earlier.Outcome == Contract.AdmissionOutcome.Accepted &&
-                    await SendTerminateAsync(ingress, scope, withheld, "terminate-withheld", withheldSelection) is
-                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the withheld actor admits ordinary work and a kernel control");
+                    await SendTerminateAsync(ingress, scope, withheld, "terminate-withheld", withheldSelection, commandDue) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                    await SendTerminateAsync(ingress, scope, withheld, "terminate-withheld-again", withheldSelection, commandDue) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "both controls are admitted while the actor withholds earlier ordinary work");
                 await WaitForRootAsync(store, scope.Tenant, withheld, 2, token);
-                Require(await store.ReadFirstRootAsync(scope.Tenant, withheld.Id, token) is { Status: InstanceStatus.Cancelled, State: "\"ready\"" } &&
-                    actor.WithheldModelTurns == 0, "the kernel control passes the earlier input that the running actor withholds");
+                var withheldEnd = (await store.ReadFirstRootAsync(scope.Tenant, withheld.Id, token))!;
+                Require(withheldEnd is { Status: InstanceStatus.Cancelled, State: "\"ready\"" } &&
+                    actor.WithheldModelTurns == 0, "the first control passes the earlier input that the running actor withholds");
+                while (await db.Messages.AnyAsync(row => row.Target == withheldEnd.Actor.Id && !row.Done, token))
+                    await Task.Delay(25, token);
+                Require(await store.ReadFirstRootAsync(scope.Tenant, withheld.Id, token) is { Status: InstanceStatus.Cancelled, Revision: 2 } &&
+                    actor.WithheldModelTurns == 0, "the ended mailbox settles both remaining inputs without another actor turn");
                 await owner.StopAsync(token);
                 Require(owner.LastError is null, "the first owner stops cleanly");
             }
@@ -161,7 +170,7 @@ internal static partial class SqliteHostLifetimeChecks
         internal TaskCompletionSource JobCancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal int WithheldModelTurns { get; private set; }
         public string Type => OperatorKind;
-        public bool Withholds(Contract.ActorHeader header) => header is { TypeData: "withheld", Status: Contract.ActorStatus.Running };
+        public bool Withholds(Contract.ActorHeader header) => header.TypeData == "withheld";
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => throw new NotSupportedException();

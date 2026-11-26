@@ -33,6 +33,7 @@ public sealed partial class EfStore
         internal bool KeepsParkArrivals { get; set; }
         internal bool RecoversPark { get; set; }
         internal bool RefusesParkedOperators { get; set; }
+        internal bool SettlesEndedMailbox { get; init; }
         internal Func<Contract.ActorHeader, bool>? AuthoredWithholds { get; init; }
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
         private readonly Dictionary<string, WorkerRoot> _actors = roots.ToDictionary(r => r.Actor, StringComparer.Ordinal);
@@ -66,6 +67,7 @@ public sealed partial class EfStore
         public bool KeepsParkArrivals => roots.KeepsParkArrivals;
         public bool RecoversPark => roots.RecoversPark;
         public bool RefusesParkedOperators => roots.RefusesParkedOperators;
+        public bool SettlesEndedMailbox => roots.SettlesEndedMailbox;
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
             throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
