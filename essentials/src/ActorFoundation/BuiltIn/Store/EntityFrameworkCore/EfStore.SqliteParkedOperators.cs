@@ -23,17 +23,22 @@ public sealed partial class EfStore
             FROM "Instances" i WHERE i."Id" = {actor} AND i."Partition" = {partition} AND NOT i."Retired"
             """).SingleOrDefaultAsync(token);
 
-    private static async Task<List<SqliteKeptRow>> ReadSqliteKeptAsync(KernelDb db, string actor, int partition, CancellationToken token)
+    private static async Task<List<SqliteKeptRow>> ReadSqliteKeptAsync(KernelDb db, string actor, int partition, bool opening, CancellationToken token)
     {
         var kept = new List<SqliteKeptRow>();
         // Quote up to one full page and a sentinel using stored lengths. The join opens only the quoted envelopes, including a
-        // singleton larger than the byte allowance so it can make progress. The total binds growth past the sentinel.
+        // singleton larger than the byte allowance so it can make progress. Count all retained identities at Open.
+        // Materialize scalar lengths before the window runs, so it does not buffer the original envelope columns.
         var envelopes = db.Database.SqlQuery<SqliteKeptEnvelope>($"""
-            WITH kept AS MATERIALIZED (
+            WITH total AS (
+                SELECT CASE WHEN {opening} THEN (SELECT count(*) FROM "Messages" m
+                    WHERE m."Target" = {actor} AND m."Partition" = {partition} AND m."EventMatch" IS NULL
+                        AND m."Done" AND m."FoundationKeptBy" IS NOT NULL
+                        AND m."InboxScope" IN (0, {InboxKey.FoundationOccurrenceScope}, {RootTimedJobScope})) ELSE 0 END AS "TotalRows"
+            ), kept AS MATERIALIZED (
                 SELECT m."Id", m."InboxScope", m."Seq", m."FoundationKeptBy" AS "KeptBy",
                     (octet_length(m."Id") + octet_length(m."Kind") + coalesce(octet_length(m."Start"), 0)
-                        + coalesce(octet_length(m."Payload"), 0) + coalesce(octet_length(m."ReplyTo"), 0)) AS "Bytes",
-                    count(*) OVER () AS "TotalRows"
+                        + coalesce(octet_length(m."Payload"), 0) + coalesce(octet_length(m."ReplyTo"), 0)) AS "Bytes"
                 FROM "Messages" m WHERE m."Target" = {actor} AND m."Partition" = {partition} AND m."EventMatch" IS NULL
                     AND m."Done" AND m."FoundationKeptBy" IS NOT NULL
                     AND m."InboxScope" IN (0, {InboxKey.FoundationOccurrenceScope}, {RootTimedJobScope})
@@ -42,9 +47,9 @@ public sealed partial class EfStore
                 SELECT kept.*, row_number() OVER step AS "Ordinal", sum("Bytes") OVER step AS "QuoteBytes"
                 FROM kept WINDOW step AS (ORDER BY "Seq", "Id", "InboxScope" ROWS UNBOUNDED PRECEDING)
             )
-            SELECT q."Id", q."InboxScope", q."Seq", q."KeptBy", q."Bytes", q."TotalRows",
+            SELECT q."Id", q."InboxScope", q."Seq", q."KeptBy", q."Bytes", total."TotalRows",
                 m."Kind", m."Start" AS "Header", m."Payload", m."Due", m."ReplyTo", m."KeepUntil", m."JobGeneration", m."Sender"
-            FROM quote q LEFT JOIN "Messages" m ON m."Id" = q."Id" AND m."InboxScope" = q."InboxScope" AND
+            FROM quote q CROSS JOIN total LEFT JOIN "Messages" m ON m."Id" = q."Id" AND m."InboxScope" = q."InboxScope" AND
                 (q."Ordinal" = 1 OR (q."Ordinal" <= {InMemoryStore.ParkPageLimit} AND q."QuoteBytes" <= {ParkRecoveryCredit.LimitBytes}))
             ORDER BY q."Ordinal" /* bounded-park-page */
             """);
@@ -68,12 +73,13 @@ public sealed partial class EfStore
                     AND i."Status" = {(int)InstanceStatus.Faulted} AND NOT i."Retired" AND i."Suspended" = {suspended}
                     AND i."FoundationParkAt" = {mark.At} AND i."FoundationParkRevision" = {mark.Revision}
                     AND i."FoundationParkClearing" IS NOT DISTINCT FROM {clearing} AND coalesce(i."FoundationParkCleared", 0) = {cleared}
+                    AND ({clearing} IS NULL OR i."FoundationParkClearingKind" = {command.Kind})
                     AND i."FoundationTerminalAt" IS NULL AND i."FoundationTerminalRevision" IS NULL AND i."Fault" IS NOT NULL
                     AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."CustomHandles" IS NULL
                     AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = i."Id" AND "Partition" = i."Partition")) AS "Value"
             """).SingleAsync(token)) return null;
 
-        var kept = await ReadSqliteKeptAsync(db, root.Actor, root.Partition, token);
+        var kept = await ReadSqliteKeptAsync(db, root.Actor, root.Partition, clearing is null, token);
         var facts = kept.Select(row => row.Facts).ToArray();
         if (KeptSetDigest(facts) != digest || PageLength(facts) != count || ends != (count == facts.Length) ||
             !await SettleSqliteRootInputsAsync(db, root.Reference, new(root.Actor, 1), [command.InboxKey], [command], suspended: true, token))
@@ -121,12 +127,12 @@ public sealed partial class EfStore
         var changed = turn.Ends ? await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock($"""
             UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision},
                 "Status" = {(int)status}, "Suspended" = {discard && turn.Suspended}, "FoundationParkAt" = NULL,
-                "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL,
+                "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL,
                 "FoundationTerminalRevision" = {revision}, "FoundationTerminalAt" = /*sqlite-root-clock*/
             WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" = {turn.Expected}
             """), token) : await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision},
-                "FoundationParkClearing" = {turn.Command.Id}, "FoundationParkCleared" = {total}
+                "FoundationParkClearing" = {turn.Command.Id}, "FoundationParkClearingKind" = {turn.Command.Kind}, "FoundationParkCleared" = {total}
             WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" = {turn.Expected}
             """, token);
         if (changed != 1) return false;
@@ -155,7 +161,7 @@ public sealed partial class EfStore
                 AND "FoundationParkAt" > 0 AND "FoundationParkRevision" > 0 AND "Fault" IS NOT NULL
                 AND "FoundationTerminalAt" IS NULL AND "FoundationTerminalRevision" IS NULL
                 AND "FoundationTenant" = {root.Tenant} AND "FoundationReference" = {root.Reference}
-                AND (NOT {refusal.Retries} OR "FoundationParkClearing" = {command.Id}
+                AND (NOT {refusal.Retries} OR "FoundationParkClearing" = {command.Id} AND "FoundationParkClearingKind" = {command.Kind}
                     AND "FoundationParkAt" = {mark?.At} AND "FoundationParkRevision" = {mark?.Revision})
             """, token) != 1) return false;
         if (!refusal.Retries) return true;

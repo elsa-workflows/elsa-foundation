@@ -73,6 +73,19 @@ internal static partial class SqliteHostLifetimeChecks
             var largeReply = CallAsync(large, "large", Contract.Kinds.Terminate, (await ReadAsync(large)).Selection!);
             var largeDeleteReply = CallAsync(largeDelete, "large-delete", Contract.Kinds.Delete, (await ReadAsync(largeDelete)).Selection!);
             var outstanding = CallAsync(withJob, "outstanding", Contract.Kinds.Terminate, (await ReadAsync(withJob)).Selection!);
+            while (!await db.Messages.AnyAsync(row => row.Target == largeDeleteActor && row.Kind == Kinds.Delete && !row.Done, token))
+                await Task.Delay(25, token);
+            var observation = new ParkReadObservation("bounded-park-page");
+            var probe = new EfStore(() => OpenFoundationDb(file, definitions, observation), postgres: false, fenceInBatch) { CommitSql = CommitSql.Owned };
+            await probe.EnableRootJobsAsync(token);
+            probe.BindSqliteWorkerNode();
+            var probeFence = (await probe.TakeAsync(0, "park-page-plan", Defaults.Lease, token))!;
+            var polled = await probe.PollAsync(0, probeFence.Epoch, TimeSpan.Zero, 20, token);
+            Require(polled.Messages.Any(item => item.Message is { Id: "large-delete", Operator.RootParkFacts: { Page: 2, FitsPage: false } }) &&
+                observation.Plan.Any(step => step.Contains("IX_FoundationRootInbox_Kept", StringComparison.Ordinal) &&
+                    step.Contains("Target=?", StringComparison.Ordinal)),
+                "SQLite quotes the byte-limited page through its actor-scoped kept-row index");
+            await probe.ReleaseAsync(0, probeFence.Epoch, token);
             await using var owner = Host();
             await owner.StartAsync(token);
             Require(await terminateReply is { Channel: Request.Response, Item: "terminated" } &&
@@ -95,6 +108,8 @@ internal static partial class SqliteHostLifetimeChecks
                 "held Terminate opens a larger Park and its next durable control completes it");
             Require(await largeDeleteReply is { Channel: Request.Response, Item: "started" }, "the byte-limited Park returns a clearing receipt");
             await WaitAsync(owner, largeDelete, 4);
+            Require(await ReadAsync(largeDelete) is { Park.OpenResolution: "deleting", Header.EndedAt: null },
+                "inspection reports the committed Delete clearing while its retry waits");
             Require(await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {largeDeleteActor} AND "FoundationParkClearing" = 'large-delete'
                     AND "FoundationParkCleared" = 2 AND "FoundationParkAt" IS NOT NULL)

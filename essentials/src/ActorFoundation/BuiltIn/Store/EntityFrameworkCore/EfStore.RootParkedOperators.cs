@@ -204,7 +204,8 @@ public sealed partial class EfStore
         string Row(string side) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
             .Replace("/*park-revision*/", db.RecordsRootParkRevision ? $""", {side}."FoundationParkRevision" """ : "", StringComparison.Ordinal)
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal)
-            .Replace("/*clearing*/", $""", {side}."FoundationParkClearing", {side}."FoundationParkCleared" """, StringComparison.Ordinal);
+            .Replace("/*clearing*/", $""", {side}."FoundationParkClearing", {side}."FoundationParkCleared" """ +
+                (db.UsesSqliteShippedInstall ? $""", {side}."FoundationParkClearingKind" """ : ""), StringComparison.Ordinal);
         // The raw command is formatted, so the literal brace is doubled.
         return $$$"""
             AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"

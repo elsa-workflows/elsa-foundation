@@ -308,7 +308,7 @@ internal static class SqliteShippedInstallChecks
             await JournalAsync("projected", revision: 3, clearing);
             await db.Database.ExecuteSqlRawAsync("""
                 UPDATE "Instances" SET "Revision" = 3, "FoundationWriteRevision" = 3,
-                    "FoundationParkClearing" = 'operator/test', "FoundationParkCleared" = 1
+                    "FoundationParkClearing" = 'operator/test', "FoundationParkClearingKind" = 'kernel.terminate', "FoundationParkCleared" = 1
                 WHERE "Id" = 'projected'
                 """, token);
             await write.CommitAsync(token);
@@ -369,7 +369,7 @@ internal static class SqliteShippedInstallChecks
         Task<int> EndParkAsync(string id, long revision, InstanceStatus status) => db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Instances" SET "Status" = {(int)status}, "Revision" = {revision}, "FoundationWriteRevision" = {revision},
                 "FoundationTerminalRevision" = {revision}, "FoundationTerminalAt" = 300, "FoundationParkAt" = NULL,
-                "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL
+                "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL
             WHERE "Id" = {id}
             """, token);
 

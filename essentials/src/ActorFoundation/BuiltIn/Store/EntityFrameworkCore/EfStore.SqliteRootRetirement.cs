@@ -88,7 +88,7 @@ public sealed partial class EfStore
                 "Model" = '', "Definition" = '', "Fault" = NULL, "StateVersion" = 1, "History" = {(int)History.Minimal},
                 "NextJobGeneration" = NULL, "Suspended" = false, "Retired" = true, "Revision" = {revision},
                 "FoundationWriteRevision" = {revision}, "Status" = {(int)status},
-                "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL,
+                "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL,
                 "FoundationTerminalRevision" = {terminalRevision}, "FoundationTerminalAt" = {terminalAt}
             WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" = {current.Revision}
             """, token) != 1) return false;
