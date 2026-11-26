@@ -8,7 +8,7 @@ namespace Kernel.EntityFramework;
 
 internal sealed partial class PostgresRootAdmission
 {
-    private const string OperatorPrefix = "!kernel-operator/1:";
+    internal const string OperatorPrefix = "!kernel-operator/1:";
     private const string HeldOperatorPrefix = "!kernel-held-operator/1:";
     private const string TerminateThenDeletePrefix = "!kernel-operator/2:";
     private const string RetentionDeletePrefix = "!kernel-operator/3:";
@@ -205,14 +205,9 @@ internal sealed partial class PostgresRootAdmission
                 return selected && prior != reference ? null : new(prior, true);
             }
             var actor = new InstanceRef(address.Id);
-            var id = $"{OperatorOccurrencePrefix}{reference}/{digest}/{Guid.NewGuid():N}";
-            var prefix = retentionDelete ? RetentionDeletePrefix : thenDelete ? TerminateThenDeletePrefix : OperatorPrefix;
             var replyAddress = reply?.Address;
-            var header = (replyAddress is null ? "" : HeldOperatorPrefix) + prefix +
-                DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0)
-                {
-                    Terminal = terminal, Park = park, Window = park is not null ? (long)deduplicationWindow.TotalMilliseconds : null
-                });
+            var (id, header) = EncodeOperator(reference, operation, digest, address.Creation, kind, due, terminal, park,
+                park is not null ? (long)deduplicationWindow.TotalMilliseconds : null, thenDelete, retentionDelete, replyAddress);
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial", "ReplyTo")
                 VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0, {replyAddress})
@@ -224,6 +219,20 @@ internal sealed partial class PostgresRootAdmission
         {
             throw new StoreFormatException("The qualified root store schema is unreadable.", error);
         }
+    }
+
+    internal static (string Id, string Header) EncodeOperator(string reference, string operation, string digest, long creation,
+        string kind, long? due, FoundationTerminalStamp? terminal = null, FoundationParkMark? park = null, long? window = null,
+        bool thenDelete = false, bool retentionDelete = false, string? replyAddress = null)
+    {
+        var occurrence = $"{OperatorOccurrencePrefix}{reference}/{digest}/{Guid.NewGuid():N}";
+        var prefix = retentionDelete ? RetentionDeletePrefix : thenDelete ? TerminateThenDeletePrefix : OperatorPrefix;
+        var header = (replyAddress is null ? "" : HeldOperatorPrefix) + prefix +
+            DurableKeyJson.Write(new StoredOperator(reference, operation, creation, kind, due == 0)
+            {
+                Terminal = terminal, Park = park, Window = window
+            });
+        return (occurrence, header);
     }
 
     private static async Task<bool> LocksRootDeleteSelectionAsync(KernelDb db, CreationAddress address, string tenant,
