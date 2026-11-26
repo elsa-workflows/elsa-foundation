@@ -140,6 +140,7 @@ public class KernelDb : DbContext
                 ? throw new ArgumentException($"The capability set lacks the prerequisites {missing}.", nameof(capabilities))
                 : new(options, format, capabilities);
 
+    internal bool UsesSqliteShippedInstall => RequiredFormat == StoreFormat.RootShipped && Database.IsSqlite();
     internal StoreFormat RequiredFormat { get; }
     internal RootCapabilities Capabilities { get; }
     // The one state family this set writes and reads, with its terminal statuses.
@@ -168,6 +169,7 @@ public class KernelDb : DbContext
     internal bool ProjectsRootParkRevision => UsesRootParkInspection && (UsesRootParkRecovery || UsesRootParkedOperators);
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
+    internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
@@ -237,17 +239,18 @@ public class KernelDb : DbContext
 
     protected override void OnModelCreating(ModelBuilder model)
     {
+        var sqliteShippedInstall = UsesSqliteShippedInstall;
         if (UsesRootSelfProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The continuation profile requires PostgreSQL.");
-        if (UsesRootJobProtocol && !Database.IsNpgsql())
+        if (UsesRootJobProtocol && !Database.IsNpgsql() && !sqliteShippedInstall)
             throw new NotSupportedException("The generated-root job profile requires PostgreSQL.");
-        if (UsesRootReplyProtocol && !Database.IsNpgsql())
+        if (UsesRootReplyProtocol && !Database.IsNpgsql() && !sqliteShippedInstall)
             throw new NotSupportedException("The generated-root held reply profile requires PostgreSQL.");
         if (UsesRootValueProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The generated-root value qualification requires PostgreSQL.");
-        if (UsesRootParkOpening && !Database.IsNpgsql())
+        if (UsesRootParkOpening && !Database.IsNpgsql() && !sqliteShippedInstall)
             throw new NotSupportedException("The Park opening qualification requires PostgreSQL.");
-        if (UsesRootOperatorProtocol && !Database.IsNpgsql())
+        if (UsesRootOperatorProtocol && !Database.IsNpgsql() && !sqliteShippedInstall)
             throw new NotSupportedException("The operator command profile requires PostgreSQL.");
         model.Entity<StoreVersionEntity>(entity =>
         {
@@ -260,6 +263,7 @@ public class KernelDb : DbContext
                 MessageProtocol = RequiredFormat.MessageProtocol,
                 JournalCodec = StoreVersionEntity.JournalCodecVersion
             });
+            if (StoreDefinitionsRevision.Seed(this) is { } definitions) entity.HasData(definitions);
         });
         model.Entity<PartitionEntity>(e =>
         {
@@ -443,6 +447,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         var count = partitions ?? (postgres ? Defaults.ServerPartitions : Defaults.SqlitePartitions);
         await using var db = create();
+        RefuseSqliteShippedRuntime(db);
         await db.Database.EnsureCreatedAsync();
         await RequireStoreVersionsAsync(db, CancellationToken.None);
         await PhysicalRetirement.InstallAsync(db, Engine, postgres);
@@ -956,6 +961,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         CreationProtocol.RejectUnsupported(delivery.Message);
         await using var db = create();
+        RefuseSqliteShippedRuntime(db);
         return await EventInsert.Run(db, Engine, postgres, ToEntity(delivery.Message, 0, 0), cancellationToken);
     }
 
@@ -963,6 +969,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         CreationProtocol.RejectUnsupported(message);
         await using var db = create();
+        RefuseSqliteShippedRuntime(db);
         var m = ToEntity(message, 0, 0);
         if (Engine is not null) return await Engine.AddAsync(db, m, cancellationToken);
         var seq = postgres ? ("", "") : (""", "Seq" """, """, (SELECT COALESCE(MAX("Seq"), 0) + 1 FROM "Messages")""");

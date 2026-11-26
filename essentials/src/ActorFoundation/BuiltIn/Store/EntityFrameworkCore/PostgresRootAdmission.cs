@@ -326,10 +326,10 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         {
             // PostgreSQL executes the first statement before it parses or binds the second. The batch holds
             // the marker before touching either source table, matching the lock order of schema migration.
-            var marker = new NpgsqlBatchCommand("""
-                SELECT "StoreSchema", "MessageProtocol", "JournalCodec" FROM "KernelStoreVersions"
-                WHERE "Id" = $1 FOR SHARE
-                """);
+            var marker = new NpgsqlBatchCommand(StoreDefinitionsRevision.AddPostgresStampSql("""
+                SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", /*definitions-stamp*/
+                FROM "KernelStoreVersions" v WHERE v."Id" = $1 FOR SHARE OF v
+                """));
             marker.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
             var transaction = (NpgsqlTransaction)current.GetDbTransaction();
             await using var batch = new NpgsqlBatch(transaction.Connection, transaction) { BatchCommands = { marker, lookup } };
@@ -338,7 +338,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             await using var reader = await batch.ExecuteReaderAsync(token);
             if (!await reader.ReadAsync(token))
                 throw new StoreFormatException("The kernel store version marker is missing.");
-            EfStore.RequireSnapshotFormat(db.RequiredFormat, reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2));
+            EfStore.RequireSnapshotFormat(db, reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3));
             if (!await reader.NextResultAsync(token))
                 throw new InvalidOperationException("The guarded root lookup did not return a result.");
             return await reader.ReadAsync(token) ? read(reader) : null;

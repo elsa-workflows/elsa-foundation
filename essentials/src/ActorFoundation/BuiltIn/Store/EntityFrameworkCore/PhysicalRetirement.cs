@@ -45,7 +45,18 @@ internal static class PhysicalRetirement
                 """
         };
         if (postgres && engine is null)
-            sql = sql.Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? FormattableString.Invariant($"""
+            sql = sql.Replace("/*root-atomic-retirement*/", RootExceptions(db), StringComparison.Ordinal);
+        return db.Database.ExecuteSqlRawAsync(sql);
+    }
+
+    internal static string SqliteRootGuard(KernelDb db) =>
+        """
+        CREATE TRIGGER kernel_physical_retirement BEFORE UPDATE ON Instances
+        WHEN OLD.Retired = 1 OR NEW.Retired = 1 AND (OLD.Status = 0 OR NEW.Status <> OLD.Status) /*root-atomic-retirement*/
+        BEGIN SELECT RAISE(ABORT, 'Physical retirement is irreversible and requires an ended run.'); END
+        """.Replace("/*root-atomic-retirement*/", RootExceptions(db), StringComparison.Ordinal);
+
+    private static string RootExceptions(KernelDb db) => db.UsesRootTerminateThenDelete ? FormattableString.Invariant($"""
                 AND NOT ((OLD."Status" = 0 AND NEW."Status" = {(int)InstanceStatus.Cancelled}
                     AND OLD."FoundationReference" IS NOT NULL AND NEW."FoundationReference" = OLD."FoundationReference"
                     AND NEW."FoundationWriteRevision" = OLD."Revision" + 1 AND NEW."Revision" = NEW."FoundationWriteRevision"
@@ -56,7 +67,5 @@ internal static class PhysicalRetirement
                     AND OLD."FoundationReference" IS NOT NULL AND NEW."FoundationReference" = OLD."FoundationReference"
                     AND NEW."FoundationWriteRevision" = OLD."Revision" + 1 AND NEW."Revision" = NEW."FoundationWriteRevision"
                     AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL) IS TRUE)
-                """) : "") : "", StringComparison.Ordinal);
-        return db.Database.ExecuteSqlRawAsync(sql);
-    }
+                """) : "") : "";
 }

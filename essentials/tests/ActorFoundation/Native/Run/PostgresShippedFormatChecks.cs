@@ -57,6 +57,7 @@ internal static class PostgresShippedFormatChecks
         await store.InstallPreviewRootSchemaAsync(stop);
         await store.InstallPreviewRootSchemaAsync(stop);
         Require(true, "the shipped schema and its workflow history install, and install again over themselves");
+        await CheckDefinitionRevisionAsync(Open, store, stop);
         await RefusalsAsync(connection, options, stop);
 
         var registry = new WorkflowRegistry()
@@ -219,6 +220,42 @@ internal static class PostgresShippedFormatChecks
             return await db.Database.SqlQuery<int>($"""
                 SELECT count(*)::integer AS "Value" FROM "FoundationWorkflowHistory" WHERE "Tenant" = {scope.Tenant} AND "Reference" = {root.Id}
                 """).SingleAsync(stop);
+        }
+    }
+
+    private static async Task CheckDefinitionRevisionAsync(Func<KernelDb> open, EfStore store, CancellationToken token)
+    {
+        await using var db = open();
+        var expected = StoreDefinitionsRevision.Seed(db)!;
+        var marker = db.StoreVersions.Where(row => row.Id == expected.Id);
+        Require(await marker.ExecuteDeleteAsync(token) == 1, "new PostgreSQL installs have a definitions marker");
+        await EfStore.RequireStoreVersionsAsync(db, token);
+        Require(await store.PartitionCountAsync(token) == 1,
+            "PostgreSQL reads a pre-revision marker as its legacy definitions revision");
+        db.StoreVersions.Add(expected);
+        await db.SaveChangesAsync(token);
+        await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol + 1), token);
+        try
+        {
+            await RequireMarkerRefusedAsync(db, "PostgreSQL refuses an unsupported definitions revision", token);
+            await RefusesRevisionAsync(() => store.PartitionCountAsync(token).AsTask());
+            await RefusesRevisionAsync(() => store.ReadRootActorAsync("tenant", "missing", token));
+            await RefusesRevisionAsync(() => store.ReadRootActorListAsync("tenant", "", null, null, [], null, null, 1, token));
+            await RefusesRevisionAsync(() => store.ReadRootJournalAsync("tenant", "missing", 1, 1, token));
+            await RefusesRevisionAsync(() => store.ReadRootInboxAsync("tenant", "missing", 0, "", 1, token));
+            await RefusesRevisionAsync(() => store.ReadRootWorkflowHistoryAsync("tenant", "type", null, null, null, null, null, null, 1, token));
+            Require(true, "the owner and all shipped snapshot readers reject a mismatched definitions revision");
+        }
+        finally
+        {
+            await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol), token);
+        }
+
+        static async Task RefusesRevisionAsync(Func<Task> query)
+        {
+            try { await query(); }
+            catch (StoreFormatException) { return; }
+            throw new InvalidOperationException("The shipped query accepted a mismatched definitions revision.");
         }
     }
 

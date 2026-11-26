@@ -281,7 +281,7 @@ internal sealed partial class PostgresRootAdmission
         error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn
             or PostgresErrorCodes.InvalidSchemaName or PostgresErrorCodes.WrongObjectType;
 
-    private sealed record SelectedOperatorStore(int StoreSchema, int MessageProtocol, int JournalCodec, string Namespace);
+    private sealed record SelectedOperatorStore(int StoreSchema, int MessageProtocol, int JournalCodec, string Namespace, string? DefinitionStamp);
 
     private const string ParkSources = """
         LOCK TABLE "FoundationRootIssuer", "FoundationRootBirths", "Instances", "Messages", "Partitions", "Nodes",
@@ -297,6 +297,7 @@ internal sealed partial class PostgresRootAdmission
 
     internal static async Task PinRootNamespaceAsync(KernelDb db, CancellationToken token)
     {
+        EfStore.RefuseSqliteShippedRuntime(db);
         try { await PinRootSourceAsync(db, token); }
         catch (PostgresException error) when (IsUnavailableSelectedSchema(error))
         {
@@ -306,15 +307,15 @@ internal sealed partial class PostgresRootAdmission
 
     private static async Task PinRootSourceAsync(KernelDb db, CancellationToken token)
     {
-        var marker = await db.Database.SqlQuery<SelectedOperatorStore>($"""
-            SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", ns.nspname AS "Namespace"
+        var marker = await db.Database.SqlQuery<SelectedOperatorStore>(StoreDefinitionsRevision.AddPostgresStamp($"""
+            SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", ns.nspname AS "Namespace", /*definitions-stamp*/ AS "DefinitionStamp"
             FROM "KernelStoreVersions" v
             JOIN pg_catalog.pg_class c ON c.oid = v.tableoid
             JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace
             WHERE v."Id" = {StoreVersionEntity.MarkerId}
             FOR SHARE OF v
-            """).SingleOrDefaultAsync(token);
-        EfStore.RequireSnapshotFormat(db.RequiredFormat, marker?.StoreSchema, marker?.MessageProtocol, marker?.JournalCodec);
+            """)).SingleOrDefaultAsync(token);
+        EfStore.RequireSnapshotFormat(db, marker?.StoreSchema, marker?.MessageProtocol, marker?.JournalCodec, marker?.DefinitionStamp);
         var source = marker!.Namespace;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             SELECT pg_catalog.set_config('search_path', 'pg_catalog,' || pg_catalog.quote_ident({source}) || ',pg_temp', true)

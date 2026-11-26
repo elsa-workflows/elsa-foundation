@@ -15,9 +15,9 @@ public sealed partial class EfStore
     internal sealed record RootListPage(IReadOnlyList<RootListItem> Items, long AsOf);
 
     private sealed record RootListRow(string? Reference, int? Status, long? EndedAt, long? TerminalRevision, string? Header, long? ParkAt, string? ParkFault, long AsOf, bool SourceReady,
-        int? StoreSchema, int? MessageProtocol, int? JournalCodec, long? ParkRevision);
+        int? StoreSchema, int? MessageProtocol, int? JournalCodec, long? ParkRevision, string? DefinitionStamp);
     private sealed record RootPointRow(string? Reference, int? Status, long? EndedAt, long? TerminalRevision, string? Header, long? ParkAt, string? ParkFault, long AsOf, bool SourceReady,
-        int? StoreSchema, int? MessageProtocol, int? JournalCodec, long? ParkRevision);
+        int? StoreSchema, int? MessageProtocol, int? JournalCodec, long? ParkRevision, string? DefinitionStamp);
 
     internal static async Task RequirePreviewInstallSchemaAsync(KernelDb db, CancellationToken token)
     {
@@ -226,7 +226,7 @@ public sealed partial class EfStore
             .Replace("/*park-revision*/", projection.ParkRevisionColumn, StringComparison.Ordinal)
             .Replace("/*filter*/", projection.SchemaBound ? "" : "kernel_actor_list_filter", StringComparison.Ordinal)
             .Replace("/*filter-cast*/", projection.SchemaBound ? "::jsonb" : "", StringComparison.Ordinal);
-        return FormattableStringFactory.Create(sql, query.GetArguments());
+        return FormattableStringFactory.Create(StoreDefinitionsRevision.AddPostgresStampSql(sql), query.GetArguments());
     }
 
     // Apply the same complete-escape transform as the projector. List parameters can then be
@@ -251,7 +251,7 @@ public sealed partial class EfStore
         {
             row = await db.Database.SqlQuery<RootPointRow>(ActorListQuery(projection, $"""
                 SELECT l."Reference", l."Status", l."EndedAt", /*terminal-mark*/ AS "TerminalRevision", l."Header", /*park-at*/ AS "ParkAt", /*park-fault*/ AS "ParkFault",
-                    /*park-revision*/ AS "ParkRevision", kernel."StoreSchema", kernel."MessageProtocol", kernel."JournalCodec",
+                    /*park-revision*/ AS "ParkRevision", kernel."StoreSchema", kernel."MessageProtocol", kernel."JournalCodec", /*definitions-stamp*/ AS "DefinitionStamp",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
                     EXISTS (
                         SELECT 1 FROM pg_catalog.pg_trigger source
@@ -284,7 +284,7 @@ public sealed partial class EfStore
             await RequireStoreVersionsAsync(db, cancellationToken);
             throw;
         }
-        RequireSnapshotFormat(expected, row.StoreSchema, row.MessageProtocol, row.JournalCodec);
+        RequireSnapshotFormat(db, row.StoreSchema, row.MessageProtocol, row.JournalCodec, row.DefinitionStamp);
         RequireRootActorListSource(row.SourceReady);
         return row.Reference is null ? null : (ToRootListItem(row.Reference, row.Status!.Value, row.EndedAt, row.TerminalRevision, row.Header!, projection.TerminalMarks, row.ParkAt, row.ParkFault, row.ParkRevision), row.AsOf);
     }
@@ -342,7 +342,7 @@ public sealed partial class EfStore
                     ORDER BY l."Reference" LIMIT {limit}
                 )
                 SELECT page."Reference", page."Status", page."EndedAt", page."TerminalRevision", page."Header", page."ParkAt", page."ParkFault", page."ParkRevision",
-                    marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec",
+                    marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec", /*definitions-stamp*/ AS "DefinitionStamp",
                     (SELECT "SourceReady" FROM readiness) AS "SourceReady",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
                 FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN marker ON true
@@ -360,7 +360,7 @@ public sealed partial class EfStore
             throw;
         }
         var first = rows[0];
-        RequireSnapshotFormat(expected, first.StoreSchema, first.MessageProtocol, first.JournalCodec);
+        RequireSnapshotFormat(db, first.StoreSchema, first.MessageProtocol, first.JournalCodec, first.DefinitionStamp);
         RequireRootActorListSource(first.SourceReady);
         var items = rows.Where(row => row.Reference is not null).Select(row => ToRootListItem(row.Reference!, row.Status!.Value, row.EndedAt, row.TerminalRevision, row.Header!, projection.TerminalMarks, row.ParkAt, row.ParkFault, row.ParkRevision)).ToArray();
         return new(items, first.AsOf);
