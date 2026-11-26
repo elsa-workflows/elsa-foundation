@@ -89,7 +89,7 @@ def read_catalog(catalog: Path, errors: list[str]) -> dict[str, str]:
             current = heading.group(1)
             headings.append(current)
         verdict = VERDICT.match(line)
-        if verdict and current is not None and re.match(r"port\b", verdict.group(1)):
+        if verdict and current is not None and re.search(r"(?:^|;\s*)port\b", verdict.group(1)):
             ports.add(current)
         marker = BLOCK_MARKER.search(line)
         if marker:
@@ -244,6 +244,11 @@ class CheckMigrationSkillTests(unittest.TestCase):
     def test_port_part_of_a_two_part_verdict_needs_a_block(self):
         text = self.catalog({}).replace("## Case 08: Title 8\n\n**Verdict**: redesign",
                                         "## Case 08: Title 8\n\n**Verdict**: port (bookmarks); redesign (signals)")
+        self.assertTrue(any("case 08 has a port verdict but no block" in error for error in check(self.tree(text, self.sample({})))))
+
+    def test_port_part_after_a_redesign_part_needs_a_block(self):
+        text = self.catalog({}).replace("## Case 08: Title 8\n\n**Verdict**: redesign",
+                                        "## Case 08: Title 8\n\n**Verdict**: redesign (signals); port (bookmarks)")
         self.assertTrue(any("case 08 has a port verdict but no block" in error for error in check(self.tree(text, self.sample({})))))
 
     def test_redesign_and_interview_cases_need_no_block(self):

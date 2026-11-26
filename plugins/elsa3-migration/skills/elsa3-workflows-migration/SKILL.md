@@ -24,7 +24,7 @@ When an AI assistant runs this guide, what it reads is sent to its provider. An 
 session is this statement, before it reads any file, the plan included:
 
 - **Read without asking**: the migration report (`report.json`, which the tool always redacts: it holds no literal
-  values, scripts or secrets), the migration plan, and the files in this folder. The plan holds only what you write
+  values, scripts or secrets; a report whose `redacted` marker is not `true` is not read further without asking), the migration plan, and the files in this folder. The plan holds only what you write
   into it: paths, names, decisions and notes.
 - **Read only after you agree**:
   - each Elsa 3 source folder or repository: asked once per folder, before searching it (the search shows file names
@@ -32,8 +32,6 @@ session is this statement, before it reads any file, the plan included:
   - each Elsa 3 source file: asked before opening it, naming the file;
   - each raw workflow definition: asked each time, naming the file and the JSON path it wants to look at;
   - each other file: asked each time, naming the file.
-
-If a report's `redacted` marker is not `true`, the assistant stops before reading the rest of it and asks the user.
 - **Never read without asking, with a warning**: the migration host's local settings (`shells.Local.json`, user
   secrets, environment variables). They can hold connection strings and secrets.
 
@@ -188,8 +186,9 @@ When every component is `ported`, `redesign`, `dropped` or `interviewed`, set `S
 
 ## Stage 3: test migration
 
-1. **Load the features.** For each feature project in the plan, the migration host must reference the project and list
-   the feature:
+1. **Load the features.** For each feature project in the plan, the migration host in the clone must reference the
+   project and list the feature. The user makes these two changes to the clone, or lets the assistant make them after
+   asking:
    - reference: `dotnet add <clone>/apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj reference <feature project>`;
    - list: in a local settings source of the host, such as `<clone>/apps/Elsa.Migration.Host/shells.Local.json`
      (git-ignored), under `CShells:Shells:default:Features`, add `"<FeatureName>": {}`.
