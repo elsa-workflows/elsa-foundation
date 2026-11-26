@@ -1,0 +1,102 @@
+{
+  "id": "reusable-for-loop-value-script-v1",
+  "definitionId": "reusable-for-loop-value-script",
+  "name": "reusable-for-loop-value-script",
+  "description": "Test-owned reusable activity holding a For loop whose body reads the captured loop value through a JavaScript conversion (#5849).",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    {
+      "id": "loop-value",
+      "name": "LoopValue",
+      "typeName": "Object",
+      "value": "0"
+    }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": true
+  },
+  "root": {
+    "id": "root",
+    "nodeId": "Reusable1:root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "variables": [],
+    "connections": [],
+    "activities": [
+      {
+        "id": "loop",
+        "nodeId": "Reusable1:root:loop",
+        "type": "Elsa.For",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": true
+        },
+        "start": {
+          "typeName": "Int32",
+          "expression": {
+            "type": "Literal",
+            "value": "1"
+          }
+        },
+        "end": {
+          "typeName": "Int32",
+          "expression": {
+            "type": "Literal",
+            "value": "3"
+          }
+        },
+        "step": {
+          "typeName": "Int32",
+          "expression": {
+            "type": "Literal",
+            "value": "1"
+          }
+        },
+        "outerBoundInclusive": {
+          "typeName": "Boolean",
+          "expression": {
+            "type": "Literal",
+            "value": true
+          }
+        },
+        "currentValue": {
+          "typeName": "Object",
+          "memoryReference": {
+            "id": "loop-value"
+          }
+        },
+        "body": {
+          "id": "body",
+          "nodeId": "Reusable1:root:loop:body",
+          "type": "Elsa.Flowchart",
+          "version": 1,
+          "variables": [],
+          "activities": [
+            {
+              "id": "write",
+              "nodeId": "Reusable1:root:loop:body:write",
+              "type": "Elsa.WriteLine",
+              "version": 1,
+              "text": {
+                "typeName": "String",
+                "expression": {
+                  "type": "JavaScript",
+                  "value": "return String(getLoopValue());"
+                }
+              }
+            }
+          ],
+          "connections": []
+        }
+      }
+    ]
+  }
+}
