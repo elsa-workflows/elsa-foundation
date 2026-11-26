@@ -59,7 +59,7 @@ public sealed partial class EfStore
             AND m."FoundationReleasedBy" IS DISTINCT FROM i."FoundationParkGeneration")
         """;
 
-    private bool SamplesAuthoredCohortWithholding(KernelDb db) => db.UsesRootComposedParkRecovery && !db.UsesSqliteRootRuntime &&
+    private bool SamplesAuthoredCohortWithholding(KernelDb db) => db.UsesRootComposedParkRecovery &&
         _ordinaryRoots is { Discover: true, AuthoredWithholds: not null };
 
     private string RootPollCohortFilter(KernelDb db)
@@ -114,7 +114,9 @@ public sealed partial class EfStore
             sampled.Add(fence.Partition, (fence.Epoch, sample));
         }
         if (partitions.Count == 0) return ([], []);
-        var candidates = await db.Database.SqlQuery<CohortCandidate>(System.Runtime.CompilerServices.FormattableStringFactory.Create(
+        var sql = db.UsesSqliteRootRuntime
+            ? SqliteCohortCandidates(partitions.ToArray(), epochs.ToArray(), afterDue.ToArray(), afterSeq.ToArray(), through.ToArray(), limit / width)
+            : System.Runtime.CompilerServices.FormattableStringFactory.Create(
             $"""
             WITH fences AS MATERIALIZED (
                 SELECT * FROM unnest({"{0}"}::integer[], {"{1}"}::bigint[], {"{2}"}::bigint[], {"{3}"}::bigint[], {"{4}"}::bigint[])
@@ -151,7 +153,8 @@ public sealed partial class EfStore
             FROM bounds b LEFT JOIN tail t ON t."Partition" = b."Partition"
             LEFT JOIN eligible e ON e."Partition" = b."Partition"
             /* root-cohort-waiting */
-            """, partitions.ToArray(), epochs.ToArray(), afterDue.ToArray(), afterSeq.ToArray(), through.ToArray(), limit / width)).ToArrayAsync(token);
+            """, partitions.ToArray(), epochs.ToArray(), afterDue.ToArray(), afterSeq.ToArray(), through.ToArray(), limit / width);
+        var candidates = await db.Database.SqlQuery<CohortCandidate>(sql).ToArrayAsync(token);
         foreach (var page in candidates.GroupBy(candidate => candidate.Partition))
         {
             var (epoch, previous) = sampled[page.Key];

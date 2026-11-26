@@ -318,10 +318,15 @@ public sealed partial class EfStore
             ("Partition", "Target", "Seq", "Id", "InboxScope") WHERE "FoundationKeptBy" IS NOT NULL
             """);
         if (db.UsesRootParkRecovery)
+        {
             yield return Index("IX_FoundationRootInbox_Released", "Messages", $"""
                 ("Partition", "Target", "FoundationReleasedBy", "Seq")
                 WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationReleasedBy" IS NOT NULL
                 """);
+            yield return Index("IX_FoundationRootInbox_CohortWaiting", "Messages", $"""
+                ("Partition", "Due", "Seq") WHERE {SqliteCohortWaitingWork}
+                """);
+        }
         yield return Index("IX_FoundationRootOperators_Pending", "Messages", """
             ("Partition", "Target", "Seq", "Due")
             WHERE "InboxScope" = -4 AND "Id" GLOB 'operator/*' AND NOT "Done"

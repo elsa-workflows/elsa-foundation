@@ -60,6 +60,8 @@ if (args is ["sqlite-root-park-arrivals", var sqliteParkArrivalFence and ("check
     return await SqliteHostLifetimeChecks.RunParkArrivalsAsync(sqliteParkArrivalFence == "in-batch");
 if (args is ["sqlite-root-park-recovery", var sqliteParkRecoverFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunParkArrivalsAsync(sqliteParkRecoverFence == "in-batch", recovery: true);
+if (args is ["sqlite-root-park-cohort", var sqliteParkCohortFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunParkArrivalsAsync(sqliteParkCohortFence == "in-batch", recovery: true, authored: true);
 if (args is ["sqlite-root-park-inspection", var sqliteInspectFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunParkInspectionAsync(sqliteInspectFence == "in-batch");
 if (args is ["sqlite-root-parked-operators", var sqliteParkedOperatorFence and ("checked" or "in-batch")])

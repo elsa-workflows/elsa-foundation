@@ -418,7 +418,7 @@ public sealed partial class EfStore
         if (SamplesAuthoredCohortWithholding(db))
         {
             var (actors, revisions) = await ReadWithheldCohortsAsync(db, owned, limit, cancellationToken);
-            args = [actors, revisions];
+            args = db.UsesSqliteRootRuntime ? [Json.Write(actors), Json.Write(revisions)] : [actors, revisions];
         }
         var sql = string.Format(System.Globalization.CultureInfo.InvariantCulture, poll.Replace(single, set, StringComparison.Ordinal),
             0, 0, (long)horizon.TotalMilliseconds, limit, "{0}", "{1}");
