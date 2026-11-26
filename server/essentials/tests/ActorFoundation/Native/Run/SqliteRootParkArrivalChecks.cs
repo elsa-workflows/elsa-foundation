@@ -274,6 +274,50 @@ internal static partial class SqliteHostLifetimeChecks
                 Require(cohortPlan.Plan.Any(step => step.Contains("IX_FoundationRootInbox_CohortGroups", StringComparison.Ordinal) &&
                     step.Contains("Partition=? AND Seen=? AND Due=? AND Seq>? AND Seq<?", StringComparison.Ordinal)),
                     "the SQLite cohort sampler seeks waiting controls inside the sequence ceiling");
+                await CheckReusedSequencesAsync();
+
+                async Task CheckReusedSequencesAsync()
+                {
+                    var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                    const string operation = "control-after-recover";
+                    Require(epoch > 1 && await admission.OperateAsync(scope.Tenant, root, operation, Kinds.Terminate,
+                            selection, 0, null, token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                        "the replacement admits a fresh control on the authored-withheld root");
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "Messages" SET "Seen" = {epoch - 1}
+                        WHERE "Target" = {settled.Actor.Id} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                        """, token);
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "Messages" SET "Seen" = {epoch}
+                        WHERE "Target" = {settled.Actor.Id} AND "Kind" = 'cohort-arrival' AND NOT "Done"
+                        """, token);
+                    await AddControlAsync(0);
+                    await AddControlAsync(1);
+                    var ceiling = await db.Messages.Where(row => row.Partition == partition).MaxAsync(row => row.Seq, token) + 128;
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Seq", "Due", "Seen", "Attempts", "Trial", "Done")
+                        VALUES ('old-settled-high', 0, {partition}, 'other-source', 'ordinary', {ceiling}, 0, 0, 0, 0, 1)
+                        """, token);
+
+                    var sampler = new EfStore(Open, postgres: false, fenceInBatch) { CommitSql = CommitSql.Owned };
+                    await sampler.EnableRootJobsAsync(token);
+                    sampler.BindSqliteWorkerNode(executor.Withholds);
+                    Require((await sampler.PollAsync(partition, epoch, TimeSpan.Zero, 1, token)).Messages.Count == 0,
+                        "an earlier group fills the only header slot when the SQLite sampler freezes its ceiling");
+                    await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" = 'old-settled-high'""", token);
+                    await AddControlAsync(2);
+                    Require(await db.Messages.Where(row => row.Partition == partition).MaxAsync(row => row.Seq, token) < ceiling,
+                        "a later SQLite admission reuses sequence space below the old ceiling");
+                    var next = await sampler.PollAsync(partition, epoch, TimeSpan.Zero, 1, token);
+                    Require(next.Messages is [{ Message: { Kind: Kinds.Terminate, Id: operation } }],
+                        "the next sequence pass offers the older control while recycled groups still fill the grouped path");
+
+                    Task<int> AddControlAsync(int index) => db.Database.ExecuteSqlInterpolatedAsync($"""
+                        INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Seq", "Due", "Seen", "Attempts", "Trial", "Done")
+                        SELECT {"operator/recycled-" + index}, {InboxKey.FoundationOccurrenceScope}, {partition}, 'other-source',
+                            {Kinds.Terminate}, coalesce(max("Seq"), 0) + 1, -2, 0, 0, 0, 0 FROM "Messages"
+                        """, token);
+                }
 
                 async Task<(Contract.ActorRef Root, EfStore.RootImage Image)> StartInPartitionAsync(Worker owner, int home)
                 {

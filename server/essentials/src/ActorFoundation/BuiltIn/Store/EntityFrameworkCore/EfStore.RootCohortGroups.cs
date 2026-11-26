@@ -30,7 +30,7 @@ public sealed partial class EfStore
 
     private static string CohortSequenceRange(string source, string waiting) => $"""
         SELECT "Target", "Seq" FROM {source}
-        WHERE "Partition" = d."Partition" AND d."SeenGroup" IS NOT NULL AND d."DueGroup" IS NOT NULL
+        WHERE "Partition" = d."Partition" AND d."SeenGroup" IS NOT NULL AND d."DueGroup" IS NOT NULL AND NOT d."ScanFirst"
             AND "Seen" = d."SeenGroup" AND "Due" = d."DueGroup"
             AND "Seq" > CASE WHEN d."Seen" = d."SeenGroup" AND d."Due" = d."DueGroup" THEN d."Seq" ELSE 0 END
             AND "Seq" <= d."Ceiling" AND {waiting}
@@ -87,22 +87,22 @@ public sealed partial class EfStore
         $"""
         WITH fences AS MATERIALIZED (
             SELECT * FROM unnest({"{0}"}::integer[], {"{1}"}::bigint[], {"{2}"}::bigint[], {"{3}"}::bigint[],
-                {"{4}"}::bigint[], {"{5}"}::bigint[], {"{6}"}::bigint[], {"{7}"}::bigint[])
-                AS f("Partition", "Epoch", "Through", "ReadyThrough", "Seen", "Due", "Seq", "ScanSeq")
+                {"{4}"}::bigint[], {"{5}"}::bigint[], {"{6}"}::bigint[], {"{7}"}::bigint[], {"{8}"}::boolean[])
+                AS f("Partition", "Epoch", "Through", "ReadyThrough", "Seen", "Due", "Seq", "ScanSeq", "ScanFirst")
         ), {CohortGroupBounds("\"Messages\"", CohortWaitingWork, "floor(extract(epoch from statement_timestamp()) * 1000)::bigint")},
         picked AS MATERIALIZED (
             SELECT d."Partition", p."Target", p."Seq" FROM by_due d CROSS JOIN LATERAL (
-                {CohortSequenceRange("\"Messages\"", CohortWaitingWork)} LIMIT ({"{8}"} + 1)
+                {CohortSequenceRange("\"Messages\"", CohortWaitingWork)} LIMIT ({"{9}"} + 1)
             ) p
-        ), {CohortPage("{8}")}, scanned AS MATERIALIZED (
+        ), {CohortPage("{9}")}, scanned AS MATERIALIZED (
             SELECT s."Partition", s."Spare", s."Epoch", s."ScanReadyAt", p."Target", p."Seq", p."Due", p."Seen", p."Waiting"
             FROM spare s CROSS JOIN LATERAL (
-                {CohortSpareRange("\"Messages\"", CohortWaitingWork)} LIMIT ({"{8}"} + {CohortSpareReadAhead})
+                {CohortSpareRange("\"Messages\"", CohortWaitingWork)} LIMIT ({"{9}"} + {CohortSpareReadAhead})
             ) p
-        ), {CohortOutput("{8}")}
+        ), {CohortOutput("{9}")}
         /* root-cohort-waiting */
         """, windows.Select(fence => fence.Partition).ToArray(), windows.Select(fence => fence.Epoch).ToArray(),
         windows.Select(fence => fence.Through).ToArray(), windows.Select(fence => fence.ReadyThrough).ToArray(),
         windows.Select(fence => fence.Seen).ToArray(), windows.Select(fence => fence.Due).ToArray(), windows.Select(fence => fence.Seq).ToArray(),
-        windows.Select(fence => fence.ScanSeq).ToArray(), limit);
+        windows.Select(fence => fence.ScanSeq).ToArray(), windows.Select(fence => fence.ScanFirst).ToArray(), limit);
 }

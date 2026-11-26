@@ -3236,7 +3236,7 @@ internal static class PostgresRootParkedOperatorChecks
                 cohort.CommandText.Contains("/* root-cohort-waiting */", StringComparison.Ordinal))
             {
                 var partitions = (int[])cohort.Parameters[0].Value!;
-                CohortWindows.Add((partitions, (int)cohort.Parameters[8].Value!));
+                CohortWindows.Add((partitions, (int)cohort.Parameters[9].Value!));
                 if (!ObserveCohortPlan || CohortPlanPartition is int partition && !partitions.Contains(partition)) return result;
                 ObserveCohortPlan = false;
                 var planOptions = new NpgsqlConnectionStringBuilder(connection) { Options = "-c enable_seqscan=off" };

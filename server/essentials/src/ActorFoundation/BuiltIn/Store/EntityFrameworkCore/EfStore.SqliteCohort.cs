@@ -24,7 +24,7 @@ public sealed partial class EfStore
             SELECT f.value ->> 'Partition' AS "Partition", f.value ->> 'Epoch' AS "Epoch",
                 f.value ->> 'Through' AS "Through", f.value ->> 'ReadyThrough' AS "ReadyThrough",
                 f.value ->> 'Seen' AS "Seen", f.value ->> 'Due' AS "Due", f.value ->> 'Seq' AS "Seq",
-                f.value ->> 'ScanSeq' AS "ScanSeq"
+                f.value ->> 'ScanSeq' AS "ScanSeq", f.value ->> 'ScanFirst' AS "ScanFirst"
             FROM json_each({"{0}"}) f
         ), {CohortGroupBounds(SqliteCohortSource, SqliteCohortWaitingWork, SqliteCommitDialect.MillisecondClock)},
         picked AS MATERIALIZED (

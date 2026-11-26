@@ -76,8 +76,9 @@ public sealed partial class EfStore
     }
 
     private sealed record CohortSample(long Epoch, long Through = -1, long ReadyThrough = 0, long Seen = 0,
-        long Due = long.MinValue, long Seq = 0, long ScanSeq = 0);
-    private sealed record CohortFence(int Partition, long Epoch, long Through, long ReadyThrough, long Seen, long Due, long Seq, long ScanSeq);
+        long Due = long.MinValue, long Seq = 0, long ScanSeq = 0, bool ScanFirst = false);
+    private sealed record CohortFence(int Partition, long Epoch, long Through, long ReadyThrough, long Seen, long Due, long Seq, long ScanSeq,
+        bool ScanFirst);
     private sealed record CohortCandidate(int Partition, long Through, long ReadyThrough, long? SeenGroup, long? DueGroup,
         long? Seq, bool More, int Spare, long? ScanTail, string? Actor, long? Revision, string? Tenant, string? Reference, string? Header);
     private readonly ConcurrentDictionary<int, CohortSample> _cohortSamples = new();
@@ -118,7 +119,8 @@ public sealed partial class EfStore
             var sample = _cohortSamples.GetOrAdd(fence.Partition, _ => new(fence.Epoch));
             if (sample.Epoch > fence.Epoch) continue;
             var cursor = sample.Epoch == fence.Epoch ? sample : new(fence.Epoch);
-            windows.Add(new(fence.Partition, fence.Epoch, cursor.Through, cursor.ReadyThrough, cursor.Seen, cursor.Due, cursor.Seq, cursor.ScanSeq));
+            windows.Add(new(fence.Partition, fence.Epoch, cursor.Through, cursor.ReadyThrough, cursor.Seen, cursor.Due, cursor.Seq,
+                cursor.ScanSeq, cursor.ScanFirst));
             sampled.Add(fence.Partition, (fence.Epoch, sample));
         }
         if (windows.Count == 0) return ([], []);
@@ -130,17 +132,23 @@ public sealed partial class EfStore
         {
             var (epoch, previous) = sampled[page.Key];
             var row = page.First();
+            var cursor = previous.Epoch == epoch ? previous : new(epoch);
             var scanned = row is { DueGroup: not null, Spare: > 0 };
-            var scan = scanned ? row.ScanTail ?? 0 : previous.Epoch == epoch ? previous.ScanSeq : 0;
+            var scan = scanned ? row.ScanTail ?? 0 : cursor.ScanSeq;
+            // SQLite can reuse a swept high sequence. A full grouped page yields its next turn to the
+            // sequence scan, where newer admissions cannot overtake a still-pending lower sequence.
+            var useScanNext = row.Spare == 0;
             // The sequence scan can finish even while later admissions keep creating empty due groups.
             // Refresh the ceiling and clock once either scan has covered the old range.
             var next = row switch
             {
                 _ when row.SeenGroup is null || scanned && row.ScanTail is null => new CohortSample(epoch),
                 { SeenGroup: { } seen, DueGroup: null } => new(epoch, row.Through, row.ReadyThrough, checked(seen + 1), ScanSeq: scan),
+                _ when cursor.ScanFirst => cursor with { ScanSeq = scan, ScanFirst = false },
                 { SeenGroup: { } seen, DueGroup: { } due, Seq: { } last, More: true } =>
-                    new(epoch, row.Through, row.ReadyThrough, seen, due, last, scan),
-                _ => new(epoch, row.Through, row.ReadyThrough, row.SeenGroup!.Value, checked(row.DueGroup!.Value + 1), ScanSeq: scan)
+                    new(epoch, row.Through, row.ReadyThrough, seen, due, last, scan, useScanNext),
+                _ => new(epoch, row.Through, row.ReadyThrough, row.SeenGroup!.Value, checked(row.DueGroup!.Value + 1),
+                    ScanSeq: scan, ScanFirst: useScanNext)
             };
             _cohortSamples.AddOrUpdate(page.Key, next, (_, current) => current.Epoch < epoch || ReferenceEquals(current, previous) ? next : current);
         }
