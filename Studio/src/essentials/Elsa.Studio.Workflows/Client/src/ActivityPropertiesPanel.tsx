@@ -1024,9 +1024,12 @@ function PropertyRow({
   useEffect(() => {
     if (!focusAfterClear.current || syntax === activityResultSyntax) return;
     focusAfterClear.current = false;
-    const frame = requestAnimationFrame(() => rowRef.current?.querySelector<HTMLButtonElement>(
-      ".wf-choose-data-trigger, .wf-syntax-picker-trigger"
-    )?.focus());
+    const frame = requestAnimationFrame(() => {
+      const row = rowRef.current;
+      const chooseData = row?.querySelector<HTMLButtonElement>(".studio-field-caption-actions > .wf-choose-data-trigger");
+      const focusTarget = chooseData ?? row?.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger");
+      focusTarget?.focus();
+    });
     return () => cancelAnimationFrame(frame);
   }, [syntax]);
 

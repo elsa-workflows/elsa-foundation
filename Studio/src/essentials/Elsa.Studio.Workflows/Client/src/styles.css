@@ -962,35 +962,9 @@
 }
 
 .wf-executable-workflow-name {
-  display: block;
-  width: fit-content;
-  min-width: 0;
-  min-height: var(--studio-control-height);
-  max-width: 100%;
   overflow: hidden;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--studio-text);
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  font-size: var(--studio-body-size);
-  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.wf-executable-workflow-name:hover {
-  color: var(--studio-accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.wf-executable-workflow-name:focus-visible {
-  border-radius: var(--studio-radius-sm);
-  outline: 2px solid var(--studio-accent);
-  outline-offset: 2px;
 }
 
 .wf-executable-grid > .wf-grid-row > .wf-executable-identifiers {

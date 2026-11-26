@@ -6,9 +6,10 @@ for (const theme of ["light", "dark"]) for (const scheme of ["classic", "linen"]
     await expect(page.locator("html")).toHaveAttribute("data-theme", scheme);
     const table = page.getByRole("table", { name: "Workflow executables", exact: true });
     const row = table.getByRole("row", { name: "Inspect executable hello-artifact", exact: true });
-    const source = row.getByRole("button", { name: "Open source definition hello: Hello World", exact: true });
+    const source = row.getByRole("link", { name: "Open source definition hello: Hello World", exact: true });
     const background = () => row.evaluate(element => getComputedStyle(element).backgroundColor);
     await expect(source).toBeVisible();
+    await expect(source).toHaveAttribute("href", "/workflows/definitions?definition=hello");
     await expect(source).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     const resting = await background();
 
