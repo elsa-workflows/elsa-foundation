@@ -32,12 +32,14 @@ public static partial class SqliteEmbeddedHosting
     /// <summary>Starts an Embedded node on the shipped format with root turns, timed jobs and optional held replies.</summary>
     internal static Task<RuntimeNode> StartFoundationAsync(string databasePath, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
-        CancellationToken cancellationToken = default, Action<Exception>? onFault = null, SqliteDirectRequests? requests = null)
+        CancellationToken cancellationToken = default, Action<Exception>? onFault = null, SqliteDirectRequests? requests = null,
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         RequireFoundationActorType(actor.Type);
         return StartCoreAsync(databasePath, node, store => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode(actor.Withholds)), actor,
-                rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true),
+                rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true,
+                retentionWindow: retentionWindow),
             actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests);
     }
 
