@@ -3,7 +3,7 @@ name: Docker Images
 # Builds and pushes three Elsa 4 host images to Docker Hub:
 #   - elsaworkflows/elsa-workbench       — development and demo host
 #   - elsaworkflows/elsa-foundation-host — minimal Nuplane + CShells server host
-#   - elsaworkflows/elsa-essentials-host — Nuplane + CShells host with the curated workflow essentials compiled in
+#   - elsaworkflows/elsa-essentials-host — curated workflow profile built from Elsa Foundation
 # A manual profile build produces the matching Foundation host, SDK builder and four package-based
 # server profiles. See docker/profiles/README.md for artifact and publication options.
 # The workbench is a development and demo host, not the shipped product; the
@@ -127,6 +127,8 @@ jobs:
     timeout-minutes: 15
     outputs:
       package-versions: ${{ steps.encode.outputs.package-versions }}
+      profiles: ${{ steps.profile-mode.outputs.profiles }}
+      profile-stage: ${{ steps.profile-mode.outputs.stage }}
       # Retain this release identity when only failed downstream jobs are re-run.
       profile-version: 4.0.0-preview.${{ github.run_number }}.${{ github.run_attempt }}
     steps:
@@ -195,6 +197,27 @@ jobs:
       - name: Encode
         id: encode
         run: echo "package-versions=$(gzip -9n < "$RUNNER_TEMP/versions/package-versions.props" | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+      - name: Select the server profile build and publication matrix
+        id: profile-mode
+        env:
+          RELEASE_ALL_PROFILES: ${{ inputs.build_profiles || inputs.publish_profiles }}
+        run: |
+          curated='{"image":"elsa-server-essentials-curated","destination":"elsaworkflows/elsa-essentials-host:profile-"}'
+          profiles='["essentials-curated"]'
+          stage=$(jq -cn --argjson curated "$curated" '[$curated]')
+          if [ "$RELEASE_ALL_PROFILES" = true ]; then
+            profiles='["essentials","elsa3-import","full","essentials-curated"]'
+            stage=$(jq -cn --argjson curated "$curated" '[
+              {"image":"elsa-profile-builder","destination":"elsaworkflows/elsa-foundation-host:builder-"},
+              {"image":"elsa-server-essentials","destination":"elsaworkflows/elsa-foundation-host:essentials-"},
+              {"image":"elsa-server-elsa3-import","destination":"elsaworkflows/elsa-foundation-host:elsa3-import-"},
+              {"image":"elsa-server-full","destination":"elsaworkflows/elsa-foundation-host:full-"},
+              $curated
+            ]')
+          fi
+          echo "profiles=$profiles" >> "$GITHUB_OUTPUT"
+          echo "stage=$stage" >> "$GITHUB_OUTPUT"
 
   build-and-push:
     name: Build & push elsa-workbench
@@ -272,46 +295,8 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-  build-and-push-essentials-host:
-    name: Build & push elsa-essentials-host
-    if: github.event_name != 'workflow_dispatch' || !(inputs.build_profiles || inputs.publish_profiles)
-    needs: versions
-    # Same pinned reusable builder as the workbench job above (see the pinning note there):
-    # the BuildKit/Buildx versions must match the `# syntax=` pin in
-    # apps/Elsa.Essentials.Host/Dockerfile.
-    uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
-    permissions:
-      contents: read
-      id-token: write
-    with:
-      output: image
-      push: true
-      context: .
-      file: apps/Elsa.Essentials.Host/Dockerfile
-      # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
-      build-args: |
-        ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}
-      platforms: linux/amd64,linux/arm64
-      cache: true
-      cache-mode: max
-      cache-scope: elsa-essentials-host
-      meta-images: elsaworkflows/elsa-essentials-host
-      meta-tags: |
-        type=sha
-        type=raw,value=latest
-        type=raw,value=4.0.0-preview.${{ github.run_number }}
-      labels: |
-        org.opencontainers.image.title=Elsa Essentials Host
-        org.opencontainers.image.description=Elsa 4 server host with the curated workflow essentials compiled in
-    secrets:
-      registry-auths: |
-        - registry: docker.io
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
   profile-builder:
     name: Build profile tooling (${{ matrix.arch }})
-    if: github.event_name == 'workflow_dispatch' && (inputs.build_profiles || inputs.publish_profiles)
     needs: [versions, build-and-push-foundation-host]
     strategy:
       matrix:
@@ -341,8 +326,10 @@ jobs:
       - name: Resolve one pair of release locks per profile
         if: matrix.arch == 'amd64'
         shell: bash
+        env:
+          SERVER_PROFILES: ${{ needs.versions.outputs.profiles }}
         run: |
-          for profile in essentials elsa3-import full essentials-curated; do
+          for profile in $(jq -r '.[]' <<< "$SERVER_PROFILES"); do
             docker build --platform "$PLATFORM" --build-arg FOUNDATION_IMAGE --build-arg PROFILE_BUILDER_IMAGE \
               --target locks --output "type=local,dest=$RUNNER_TEMP/locks/$profile" "docker/profiles/$profile"
           done
@@ -372,7 +359,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profile: [essentials, elsa3-import, full, essentials-curated]
+        profile: ${{ fromJSON(needs.versions.outputs.profiles) }}
         arch: [amd64, arm64]
         include:
           - arch: amd64
@@ -441,22 +428,12 @@ jobs:
   stage-profile-images:
     name: Stage tested ${{ matrix.image }} images
     needs: [versions, package-profiles, build-and-push-foundation-host]
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_profiles
+    if: github.ref == 'refs/heads/main' && (inputs.publish_profiles || !inputs.build_profiles)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       matrix:
-        include:
-          - image: elsa-profile-builder
-            destination: elsaworkflows/elsa-foundation-host:builder-
-          - image: elsa-server-essentials
-            destination: elsaworkflows/elsa-foundation-host:essentials-
-          - image: elsa-server-elsa3-import
-            destination: elsaworkflows/elsa-foundation-host:elsa3-import-
-          - image: elsa-server-full
-            destination: elsaworkflows/elsa-foundation-host:full-
-          - image: elsa-server-essentials-curated
-            destination: elsaworkflows/elsa-essentials-host:profile-
+        include: ${{ fromJSON(needs.versions.outputs.profile-stage) }}
     env:
       ARTIFACT: ${{ matrix.image }}
       IMAGE: ${{ matrix.image }}:4.0.0-preview.${{ github.run_number }}
@@ -508,6 +485,7 @@ jobs:
 
   publish-profile-release:
     name: Publish the matched profile release
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_profiles
     needs: [versions, stage-profile-images, build-and-push-foundation-host]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -534,3 +512,43 @@ jobs:
             jq -e '([.manifests[].platform | select(.os=="linux") | .architecture] | sort) == ["amd64","arm64"]' <<< "$manifest"
             printf '%s@%s\n' "$target" "$(jq -r .digest <<< "$manifest")" >> "$GITHUB_STEP_SUMMARY"
           done
+
+
+  build-and-push-essentials-host:
+    name: Publish the qualified Elsa Essentials profile to the existing tags
+    if: github.ref == 'refs/heads/main' && !(inputs.build_profiles || inputs.publish_profiles)
+    needs: [versions, stage-profile-images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: elsaworkflows/elsa-essentials-host
+      VERSION: ${{ needs.versions.outputs.profile-version }}
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Verify the native image pair and publish the existing release tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          staged="$REPOSITORY:profile-$VERSION"
+          docker buildx imagetools create -t "$staged" "$staged-amd64" "$staged-arm64"
+          manifest=$(docker buildx imagetools inspect "$staged" --format '{{json .Manifest}}')
+          jq -e '([.manifests[] | select(.annotations["vnd.docker.reference.type"] != "attestation-manifest") | (.platform.os + "/" + .platform.architecture)] | sort) == ["linux/amd64","linux/arm64"]' <<< "$manifest"
+          digest=$(jq -er .digest <<< "$manifest")
+          source="$REPOSITORY@$digest"
+          docker buildx imagetools create \
+            -t "$REPOSITORY:4.0.0-preview.$GITHUB_RUN_NUMBER" \
+            -t "$REPOSITORY:sha-${GITHUB_SHA:0:7}" "$source"
+          previous=$(docker buildx imagetools inspect "$REPOSITORY:latest" --format '{{json .Manifest}}' | jq -er .digest)
+          current=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')
+          if [ "$current" != "$GITHUB_SHA" ]; then
+            printf 'Versioned Essentials image retained for %s. Main is %s.\n' "$GITHUB_SHA" "$current" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          docker buildx imagetools create -t "$REPOSITORY:latest" "$source"
+          actual=$(docker buildx imagetools inspect "$REPOSITORY:latest" --format '{{json .Manifest}}' | jq -er .digest)
+          test "$actual" = "$digest"
+          printf 'Published %s from %s\nPrevious latest %s@%s\n' "$source" "$GITHUB_SHA" "$REPOSITORY" "$previous" >> "$GITHUB_STEP_SUMMARY"

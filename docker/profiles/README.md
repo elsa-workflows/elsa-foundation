@@ -103,8 +103,12 @@ This example expects a TLS certificate in `elsa.pfx` readable by the container u
 
 ## Build in GitHub Actions
 
-Use **build_profiles** on a manual **Docker Images** dispatch to build only the profile builder and profiles. The workflow publishes a run-specific Foundation base tag for the build. It leaves `latest` and the existing Workbench and compiled Essentials publication paths alone. It generates one lock set per profile for the native Linux AMD64 and ARM64 builds. Each image runs the profile smoke with networking disabled and an empty Nuplane cache before export. Essentials also runs with mounted shells that enable HTTP and scheduling separately.
+Use **build_profiles** on a manual **Docker Images** dispatch to build only the profile builder and profiles. The workflow publishes a run-specific Foundation base tag for the build. That mode uses release-specific Foundation tags. It generates one lock set per profile for the native Linux AMD64 and ARM64 builds. Each image runs the profile smoke with networking disabled and an empty Nuplane cache before export. Essentials also runs with mounted shells that enable HTTP and scheduling separately.
 
-Artifacts are retained for seven days. Download the artifact for your architecture and run `docker load -i image.tar.gz` to import the tested runtime image. The profile files and both locks are the build context for replay. To replay a build-only run, load the native builder artifact's `image.tar.gz` too. Use the `builderImage`, `foundationImage` and `platform` values in the profile artifact's `build.json` as the `PROFILE_BUILDER_IMAGE` and `FOUNDATION_IMAGE` build arguments and the `--platform` option.
+Artifacts are retained for seven days. Download the artifact for your architecture and run `docker load -i image.tar.gz` to import the tested runtime image. The profile files and both locks are the build context for replay. To replay using the artifact references, load the native builder artifact's `image.tar.gz` too. Use the `builderImage`, `foundationImage` and `platform` values in the profile artifact's `build.json` as the `PROFILE_BUILDER_IMAGE` and `FOUNDATION_IMAGE` build arguments and the `--platform` option.
 
 To publish the tested images, a maintainer can select **publish_profiles** on `main`. After all eight native builds and smoke tests pass, the workflow stages the tested archives by architecture. It publishes the matching Foundation and builder tags before exposing multi-platform profile tags such as `essentials-4.0.0-preview.<run>.<attempt>`. Foundation maintainers own the packaged profile definitions and their release inputs here.
+
+An ordinary `Docker Images` run builds and qualifies the curated Essentials server profile on both native
+architectures. The writer publishes those tested manifests under the existing preview and short SHA tags.
+It then confirms that main still matches the build commit before moving `elsaworkflows/elsa-essentials-host:latest`.

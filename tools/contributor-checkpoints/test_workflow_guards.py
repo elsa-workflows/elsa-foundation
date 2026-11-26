@@ -164,11 +164,17 @@ class WorkflowGuardTests(unittest.TestCase):
         contract = lambda text: (
             "needs: admission" in text
             and "if: needs.admission.outputs.allowed == 'true'" in text
-            and len(re.findall(r"(?m)^    needs: versions$", text)) == 3
+            and len(re.findall(r"(?m)^    needs: versions$", text)) == 2
+            and "needs: [versions, build-and-push-foundation-host]" in text
+            and "needs: [versions, stage-profile-images]" in text
+            and 'current=$(gh api "repos/$GITHUB_REPOSITORY/branches/main"' in text
+            and '[ "$current" != "$GITHUB_SHA" ]' in text
         )
         self.assertTrue(contract(docker))
         self.assertFalse(contract(docker.replace("if: needs.admission.outputs.allowed == 'true'", "if: true", 1)))
         self.assertFalse(contract(docker.replace("    needs: versions\n", "    needs: admission\n", 1)))
+        self.assertFalse(contract(docker.replace("needs: [versions, stage-profile-images]", "needs: versions", 1)))
+        self.assertFalse(contract(docker.replace('[ "$current" != "$GITHUB_SHA" ]', "false", 1)))
 
 
 class ServerProfileArchiveTests(unittest.TestCase):
