@@ -84,7 +84,8 @@ Excluded:
   behaviour over; it is a deliberate Elsa 4 behaviour, not a gap. Publish keeps refusing it, and the import refuses it
   with its own code and guidance that explains why and what to do instead (FR-013). *(Decision Q2.)*
 - Merge and Reduce intrinsics in a body (Elsa 3 has no equivalent; no case needs them).
-- Variables that need encryption or external storage: still refused, as for a step write (spec 1241).
+- Body Set targets that need encryption or external storage: refused at publish (FR-015), as spec 1241 refuses them for
+  a step write (there at run time).
 - Background placement of a body intrinsic (ADR 0093 C9 unchanged).
 
 ## User Scenarios & Testing *(mandatory)*
@@ -162,8 +163,9 @@ that call them.
    synthesized Set converts and the body variable holds the projection.
 4. **Given** a reusable body with Finish, **then** conversion refuses it with `ELS3-ACTIVITY-REUSABLE-FINISH-UNSUPPORTED`, and the
    guidance explains why Elsa 4 does not support it and how to restructure (FR-013).
-5. **Given** the two S-15 definitions above, **then** they and their two root workflows publish (the JTest ledger
-   records the run result; spec 1235 owns the acceptance count).
+5. **Given** the two S-15 definitions above, **then** they and their two root workflows no longer stop on
+   `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED` or `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY` (SC-002; the JTest ledger
+   records the result, spec 1235 owns the acceptance count).
 
 ---
 
@@ -192,7 +194,7 @@ Correlate; publish.
 - A reusable activity used inside another reusable activity: each Set reaches its own nearest body only; Correlate and
   Set Name still act on the running workflow.
 - A graph published with an older graph compiler: unchanged; pre-stable, it is republished, not migrated.
-- A body Set to a variable with external storage or encryption: refused at publish, as for a step write.
+- A body Set to a variable with external storage or encryption: refused at publish (FR-015).
 
 ## Requirements *(mandatory)*
 
@@ -202,7 +204,7 @@ Correlate; publish.
   graph, addressed inside the body as scope `workflow` (or Studio's legacy `activity-graph`), in addition to today's
   native-container targets inside the body. The converter emits `workflow` for every Set it makes.
 - **FR-002**: Graph draft validation MUST keep refusing a Set whose target is outside the nearest body, undeclared,
-  declared more than once, or stored externally/encrypted. The `activity.graph.set-local-target-invalid` message and its
+  or declared more than once. The `activity.graph.set-local-target-invalid` message and its
   reference-doc descriptor MUST name the graph's own variables as valid targets.
 - **FR-003**: At run time a Set in a body MUST write the variable of its nearest closed boundary (the boundary's variable
   row) when that is the declaring scope, and MUST NOT write any frame above the boundary.
@@ -230,7 +232,8 @@ Correlate; publish.
 - **FR-011**: Studio's graph designer MUST offer Set Variable (with body targets only), Correlate and Set Name, and MUST
   focus their publish diagnostics on the node.
 - **FR-012**: The readiness guide, the Elsa 3 mapping README, the converter's guidance strings (`Elsa3ReusableGuidance`,
-  and the `Elsa3ExpressionRewriter` texts that cite the retired code), the graph authoring reference
+  and every `Elsa3ExpressionRewriter` text that cites the retired code or #3023, including the script-state guidance that
+  says closed reusable bodies cannot change running-workflow state), the graph authoring reference
   (`docs/reference/activity-definition-authoring-composition.md`) and the extension-point catalogs MUST describe the new support and drop the #3023 workarounds.
 - **FR-013**: The converter MUST refuse a reusable-body Finish with `ELS3-ACTIVITY-REUSABLE-FINISH-UNSUPPORTED`, listed in the
   readiness guide as an Elsa 4 behaviour (not a gap). Its guidance and the readiness guide MUST say: what Elsa 3 did (the
@@ -245,6 +248,9 @@ Correlate; publish.
   `EXTENSION_POINTS.md` rows that name the fingerprint updated. Graphs compiled before are republished, not migrated
   (pre-stable).
 
+- **FR-015**: Graph draft validation MUST refuse a body Set whose target variable declares external storage or requires
+  encryption, with `activity.graph.set-local-target-invalid` (a new check: no such publish check exists today). A workflow
+  Set may write external storage; a body Set does not, matching spec 1241's closed-scope rows.
 ### Key Entities
 
 - **Body intrinsic node**: a Set, Set Output, Correlate or Set Name node inside a graph body, compiled as a local
