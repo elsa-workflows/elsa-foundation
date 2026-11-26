@@ -31,9 +31,15 @@ internal static partial class SqliteHostLifetimeChecks
             var pair = await AdmitAsync("pair", "plain");
             var protectedActor = await AdmitAsync("protected", "protected");
             var large = await AdmitAsync("large", "plain");
-            var largeDelete = await AdmitAsync("large-delete", "plain");
+            var largeDelete = await AdmitAsync("large-delete", "large-delete");
             var withJob = await AdmitAsync("outstanding", "running");
-            var executor = new ParkOpeningActor(protectDeletion: true);
+            var protectionReads = 0;
+            var executor = new ParkOpeningActor(protection: header =>
+            {
+                if (header.TypeData == "large-delete" && Interlocked.Increment(ref protectionReads) > 1)
+                    throw new InvalidOperationException("The fixture temporarily cannot read deletion protection.");
+                return header.TypeData == "protected";
+            });
             executor.ReleaseFault.TrySetResult();
 
             await using (var first = Host())
@@ -53,8 +59,8 @@ internal static partial class SqliteHostLifetimeChecks
 
             var largeActor = (await store.ReadFirstRootAsync(scope.Tenant, large.Id, token))!.Actor.Id;
             var largeDeleteActor = (await store.ReadFirstRootAsync(scope.Tenant, largeDelete.Id, token))!.Actor.Id;
-            await SeedKeptPageAsync(largeActor);
-            await SeedKeptPageAsync(largeDeleteActor);
+            await SeedKeptPageAsync(largeActor, InMemoryStore.ParkPageLimit, 8);
+            await SeedKeptPageAsync(largeDeleteActor, 2, ParkRecoveryCredit.LimitBytes / 2 + 1_024);
             var park = await ReadAsync(plain);
             var otherPark = await ReadAsync(delete);
             Require(await ingress.SendAsync(scope, new Contract.Target.Ref(plain), "wrong", Contract.Kinds.Terminate, Command(plain, otherPark.Selection!),
@@ -87,8 +93,25 @@ internal static partial class SqliteHostLifetimeChecks
             Require(await largeReply is { Channel: Request.Response, Item: "started" } &&
                 await WaitAsync(owner, large, 4) is { Status: InstanceStatus.Cancelled, TerminalRevision: 4, ParkAt: null },
                 "held Terminate opens a larger Park and its next durable control completes it");
-            Require(await largeDeleteReply is { Channel: Request.Response, Item: "started" }, "held Delete opens a larger Park");
+            Require(await largeDeleteReply is { Channel: Request.Response, Item: "started" }, "the byte-limited Park returns a clearing receipt");
+            await WaitAsync(owner, largeDelete, 4);
+            Require(await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {largeDeleteActor} AND "FoundationParkClearing" = 'large-delete'
+                    AND "FoundationParkCleared" = 2 AND "FoundationParkAt" IS NOT NULL)
+                    AND (SELECT count(*) FROM "Messages" WHERE "Target" = {largeDeleteActor} AND "FoundationKeptBy" IS NOT NULL) = 1
+                    AND EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {largeDeleteActor} AND "Revision" = 4 AND "Entries" =
+                        {Json.Write(new { Outcome = "refused", Operation = "large-delete", Reason = "unavailable" })}) AS "Value"
+                """).SingleAsync(token), "the byte cut keeps the second large row and persists a retry when final-page protection is unavailable");
+            var originalEpoch = (await FenceAsync(file, token)).Epoch;
+            await owner.StopAsync(token);
+            Require(owner.LastError is null, "the first page owner stops with the clearing and its continuation committed");
+
+            await using var successor = SqliteEmbeddedHostedService.ForFoundation(file, "park-control-successor", new ParkOpeningActor(),
+                reason => throw new InvalidOperationException(reason), Loops, fenceInBatch);
+            await successor.StartAsync(token);
             while (await reads.GetAsync(scope, largeDelete, token) is not null) await Task.Delay(25, token);
+            Require((await FenceAsync(file, token)).Epoch > originalEpoch,
+                "replacement ownership completes the same byte-limited Delete after protection returns");
             Require(await db.Database.SqlQuery<bool>($"""
                 SELECT NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" IN ({largeActor}, {largeDeleteActor}) AND "FoundationKeptBy" IS NOT NULL)
                     AND EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {largeActor} AND "Revision" = 4 AND "Entries" =
@@ -97,8 +120,8 @@ internal static partial class SqliteHostLifetimeChecks
                     AND EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {largeDeleteActor} AND "Revision" = -1 AND "Entries" = '["delete"]')
                     AS "Value"
                 """).SingleAsync(token), "both larger Parks clear every kept row and persist their exact end or deletion journal");
-            await owner.StopAsync(token);
-            Require(owner.LastError is null, "the parked-operator owner stops cleanly");
+            await successor.StopAsync(token);
+            Require(successor.LastError is null, "the replacement parked-operator owner stops cleanly");
             return 0;
 
             SqliteEmbeddedHostedService Host() => SqliteEmbeddedHostedService.ForFoundation(file, "park-control-node", executor,
@@ -127,16 +150,16 @@ internal static partial class SqliteHostLifetimeChecks
                 }
             }
 
-            async Task SeedKeptPageAsync(string actor)
+            async Task SeedKeptPageAsync(string actor, int count, int bytes)
             {
                 Require(await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    WITH RECURSIVE ids(n) AS (VALUES (1) UNION ALL SELECT n + 1 FROM ids WHERE n < {InMemoryStore.ParkPageLimit}),
+                    WITH RECURSIVE ids(n) AS (VALUES (1) UNION ALL SELECT n + 1 FROM ids WHERE n < {count}),
                         base(seq) AS MATERIALIZED (SELECT coalesce(max("Seq"), 0) FROM "Messages")
                     INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Seq", "Kind", "Due", "Payload", "KeepUntil",
                         "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
-                    SELECT {actor} || '/retained-test-' || n, {InboxKey.FoundationOccurrenceScope}, {actor}, 0, base.seq + n, 'fail', 0, '"fault"', 0,
+                    SELECT {actor} || '/retained-test-' || n, {InboxKey.FoundationOccurrenceScope}, {actor}, 0, base.seq + n, 'fail', 0, printf('%.*c', {bytes}, 'x'), 0,
                         1, 0, 0, 0, 0, {(short)ParkKeepReason.Consumed} FROM ids CROSS JOIN base
-                    """, token) == InMemoryStore.ParkPageLimit, "the large Park fixture adds one page of retained inputs");
+                    """, token) == count, "the fixture adds retained inputs for a row- or byte-limited Park");
             }
         }
         finally { directory.Delete(recursive: true); }

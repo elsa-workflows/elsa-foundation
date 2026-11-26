@@ -136,7 +136,7 @@ public sealed partial class EfStore
             // A clearing's control reads only the next page and one more row: nothing is kept while a clearing is open.
             var limit = command.RootParkClear ? InMemoryStore.ParkPageLimit + 1 : int.MaxValue;
             var kept = db.UsesSqliteRootRuntime
-                ? (await ReadSqliteKeptAsync(db, message.Target.Id, message.Target.Partition, limit, token)).Select(row => row.Facts).ToList()
+                ? (await ReadSqliteKeptAsync(db, message.Target.Id, message.Target.Partition, token)).Select(row => row.Facts).ToList()
                 : await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token, limit);
             // A page restores at most 170 rows and 4 MiB of stored rows, and always has room for its first restored row.
             // A recover charges only restored (Arrived) rows, since the cleared fault input is never restored. A Terminate

@@ -186,7 +186,7 @@ internal static partial class SqliteHostLifetimeChecks
         finally { directory.Delete(recursive: true); }
     }
 
-    private sealed class ParkOpeningActor(bool protectDeletion = false) : Contract.IActorType
+    private sealed class ParkOpeningActor(bool protectDeletion = false, Func<Contract.ActorHeader, bool>? protection = null) : Contract.IActorType
     {
         public string Type => ParkKind;
         public TaskCompletionSource JobEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -197,7 +197,8 @@ internal static partial class SqliteHostLifetimeChecks
         public int JobResultFaults { get; private set; }
         public bool Withholds(Contract.ActorHeader header) => false;
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
-        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => protectDeletion && header.TypeData == "protected";
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) =>
+            protection?.Invoke(header) ?? (protectDeletion && header.TypeData == "protected");
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
         public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
         {

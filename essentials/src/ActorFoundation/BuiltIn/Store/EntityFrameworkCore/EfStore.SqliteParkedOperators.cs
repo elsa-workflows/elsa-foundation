@@ -6,8 +6,8 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    private sealed record SqliteKeptEnvelope(string Id, long InboxScope, long Seq, string Kind, string? Header, string? Payload,
-        long Due, string? ReplyTo, long? KeepUntil, short KeptBy, long JobGeneration, string? Sender, long Bytes);
+    private sealed record SqliteKeptEnvelope(string Id, long InboxScope, long Seq, short KeptBy, long Bytes, long TotalRows,
+        string? Kind, string? Header, string? Payload, long? Due, string? ReplyTo, long? KeepUntil, long? JobGeneration, string? Sender);
 
     private sealed record SqliteKeptRow(string Id, long Scope, KeptRow Facts);
 
@@ -23,19 +23,30 @@ public sealed partial class EfStore
             FROM "Instances" i WHERE i."Id" = {actor} AND i."Partition" = {partition} AND NOT i."Retired"
             """).SingleOrDefaultAsync(token);
 
-    private static async Task<List<SqliteKeptRow>> ReadSqliteKeptAsync(KernelDb db, string actor, int partition, int limit, CancellationToken token)
+    private static async Task<List<SqliteKeptRow>> ReadSqliteKeptAsync(KernelDb db, string actor, int partition, CancellationToken token)
     {
         var kept = new List<SqliteKeptRow>();
-        // SQLite has no built-in hash function. Hash each exact envelope in the reader and retain only its digest and count metadata.
+        // Quote up to one full page and a sentinel using stored lengths. The join opens only the quoted envelopes, including a
+        // singleton larger than the byte allowance so it can make progress. The total binds growth past the sentinel.
         var envelopes = db.Database.SqlQuery<SqliteKeptEnvelope>($"""
-            SELECT m."Id", m."InboxScope", m."Seq", m."Kind", m."Start" AS "Header", m."Payload", m."Due", m."ReplyTo",
-                m."KeepUntil", m."FoundationKeptBy" AS "KeptBy", m."JobGeneration", m."Sender",
-                (octet_length(m."Id") + octet_length(m."Kind") + coalesce(octet_length(m."Start"), 0)
-                    + coalesce(octet_length(m."Payload"), 0)) AS "Bytes"
-            FROM "Messages" m WHERE m."Target" = {actor} AND m."Partition" = {partition} AND m."EventMatch" IS NULL
-                AND m."Done" AND m."FoundationKeptBy" IS NOT NULL
-                AND m."InboxScope" IN (0, {InboxKey.FoundationOccurrenceScope}, {RootTimedJobScope})
-            ORDER BY m."Seq", m."Id" LIMIT {limit}
+            WITH kept AS MATERIALIZED (
+                SELECT m."Id", m."InboxScope", m."Seq", m."FoundationKeptBy" AS "KeptBy",
+                    (octet_length(m."Id") + octet_length(m."Kind") + coalesce(octet_length(m."Start"), 0)
+                        + coalesce(octet_length(m."Payload"), 0) + coalesce(octet_length(m."ReplyTo"), 0)) AS "Bytes",
+                    count(*) OVER () AS "TotalRows"
+                FROM "Messages" m WHERE m."Target" = {actor} AND m."Partition" = {partition} AND m."EventMatch" IS NULL
+                    AND m."Done" AND m."FoundationKeptBy" IS NOT NULL
+                    AND m."InboxScope" IN (0, {InboxKey.FoundationOccurrenceScope}, {RootTimedJobScope})
+                ORDER BY m."Seq", m."Id", m."InboxScope" LIMIT {InMemoryStore.ParkPageLimit + 1}
+            ), quote AS (
+                SELECT kept.*, row_number() OVER step AS "Ordinal", sum("Bytes") OVER step AS "QuoteBytes"
+                FROM kept WINDOW step AS (ORDER BY "Seq", "Id", "InboxScope" ROWS UNBOUNDED PRECEDING)
+            )
+            SELECT q."Id", q."InboxScope", q."Seq", q."KeptBy", q."Bytes", q."TotalRows",
+                m."Kind", m."Start" AS "Header", m."Payload", m."Due", m."ReplyTo", m."KeepUntil", m."JobGeneration", m."Sender"
+            FROM quote q LEFT JOIN "Messages" m ON m."Id" = q."Id" AND m."InboxScope" = q."InboxScope" AND
+                (q."Ordinal" = 1 OR (q."Ordinal" <= {InMemoryStore.ParkPageLimit} AND q."QuoteBytes" <= {ParkRecoveryCredit.LimitBytes}))
+            ORDER BY q."Ordinal" /* bounded-park-page */
             """);
         await foreach (var row in envelopes.AsAsyncEnumerable().WithCancellation(token))
         {
@@ -62,8 +73,7 @@ public sealed partial class EfStore
                     AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = i."Id" AND "Partition" = i."Partition")) AS "Value"
             """).SingleAsync(token)) return null;
 
-        var limit = clearing is null ? int.MaxValue : InMemoryStore.ParkPageLimit + 1;
-        var kept = await ReadSqliteKeptAsync(db, root.Actor, root.Partition, limit, token);
+        var kept = await ReadSqliteKeptAsync(db, root.Actor, root.Partition, token);
         var facts = kept.Select(row => row.Facts).ToArray();
         if (KeptSetDigest(facts) != digest || PageLength(facts) != count || ends != (count == facts.Length) ||
             !await SettleSqliteRootInputsAsync(db, root.Reference, new(root.Actor, 1), [command.InboxKey], [command], suspended: true, token))
