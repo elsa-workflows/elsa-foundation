@@ -1,4 +1,4 @@
-import { acceptCompletion, completionStatus, startCompletion } from "@codemirror/autocomplete";
+import { acceptCompletion, completionStatus, currentCompletions, startCompletion } from "@codemirror/autocomplete";
 import { EditorView } from "@codemirror/view";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -8,7 +8,7 @@ import { CodeMirrorStudioCodeEditor } from "../engines/CodeMirrorStudioCodeEdito
 import { FallbackCodeEditor } from "../engines/FallbackCodeEditor";
 import { javaScriptLanguageAdapter } from "../languages/javascript";
 import { createStudioCodeToolingProjection } from "../toolingProjection";
-import type { StudioCodeDocument, StudioCodeEditorController, StudioCodeEditorEngineProps, StudioCodeEditorProps } from "../types";
+import type { StudioCodeCompletionRequest, StudioCodeDocument, StudioCodeEditorController, StudioCodeEditorEngineProps, StudioCodeEditorProps } from "../types";
 
 beforeEach(() => {
   window.dispatchEvent(new Event("elsa:auth-session-started"));
@@ -480,6 +480,91 @@ describe("StudioCodeEditor", () => {
     expect(onChange.mock.lastCall?.[0]).toMatchObject({ value: "variables.customer.home.street + 1" });
     expect(getCompletions).toHaveBeenCalledWith(expect.anything(), expect.anything(), { line: 0, column: cursor }, expect.anything());
     unmount();
+  }, 20000);
+
+  it.each(["debouncing", "pending", "active"] as const)("refreshes %s keyboard completion after the provider changes", async status => {
+    const source = "variables.customer.";
+    const props = { document: codeDocument({ value: source }), languageAdapter: javaScriptLanguageAdapter };
+    const originalProvider = vi.fn(({ signal }: StudioCodeCompletionRequest) => status === "pending"
+      ? new Promise<never>((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }))
+      : [{ label: "oldMember" }]);
+    const refreshedProvider = vi.fn(() => [{ label: "newMember" }]);
+    const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: originalProvider });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const view = EditorView.findFromDOM(content)!;
+      view.dispatch({ selection: { anchor: source.length } });
+      key(content, " ", { code: "Space", ctrlKey: true });
+      if (status === "debouncing") {
+        expect(completionStatus(view.state)).toBe("pending");
+        expect(originalProvider).not.toHaveBeenCalled();
+      } else {
+        await vi.waitFor(() => {
+          expect(originalProvider).toHaveBeenCalledOnce();
+          expect(completionStatus(view.state)).toBe(status);
+        });
+      }
+
+      rerender({ ...props, completionProvider: refreshedProvider });
+
+      await vi.waitFor(() => expect(currentCompletions(view.state).map(item => item.label)).toEqual(["newMember"]));
+      expect(refreshedProvider).toHaveBeenCalledOnce();
+      expect(refreshedProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: true, position: source.length }));
+      if (status === "pending") expect(originalProvider.mock.calls[0]![0].signal.aborted).toBe(true);
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
+  it("keeps typing-triggered completion separate from keyboard requests on provider refresh", async () => {
+    const props = { document: codeDocument({ value: "" }), languageAdapter: javaScriptLanguageAdapter };
+    const originalProvider = vi.fn(() => null);
+    const refreshedProvider = (request: StudioCodeCompletionRequest) => request.explicit ? [{ label: "shortcutOnly" }] : null;
+    const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: originalProvider });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-content")!)!;
+      view.dispatch({ changes: { from: 0, insert: "s" }, selection: { anchor: 1 }, userEvent: "input.type" });
+      expect(completionStatus(view.state)).toBe("pending");
+
+      rerender({ ...props, document: { ...props.document, value: "s" }, completionProvider: refreshedProvider });
+
+      expect(completionStatus(view.state)).toBeNull();
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
+  it("clears pending completion when a provider refresh follows blur", async () => {
+    const source = "variables.customer.";
+    const props = { document: codeDocument({ value: source }), languageAdapter: javaScriptLanguageAdapter };
+    const originalProvider = vi.fn(() => null);
+    const refreshedProvider = vi.fn(() => [{ label: "newMember" }]);
+    const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: originalProvider });
+    const nextControl = document.createElement("button");
+    document.body.append(nextControl);
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const view = EditorView.findFromDOM(content)!;
+      view.dispatch({ selection: { anchor: source.length } });
+      content.focus();
+      key(content, " ", { code: "Space", ctrlKey: true });
+      nextControl.focus();
+      expect(document.activeElement).toBe(nextControl);
+      expect(completionStatus(view.state)).toBe("pending");
+
+      rerender({ ...props, completionProvider: refreshedProvider });
+
+      expect(completionStatus(view.state)).toBeNull();
+    } finally {
+      nextControl.remove();
+      unmount();
+    }
   }, 20000);
 
   it("cancels in-flight completion when authorization is revoked", async () => {
