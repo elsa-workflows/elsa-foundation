@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "a67799e284ae8ebc9fc20d57ee9a4d1d84f26183",
+  "last_publish_commit": "7329c0d11fe71c7a5a87635366f0c45abe6b338a",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -144,8 +144,8 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Durable",
-      "version": "4.0.26-preview",
-      "commit": "fbac64815d6c7fc25e9576ed6ba40bcba56af3ba"
+      "version": "4.0.27-preview",
+      "commit": "7329c0d11fe71c7a5a87635366f0c45abe6b338a"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Hosting",
@@ -164,13 +164,13 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Sqlite",
-      "version": "4.0.5-preview",
-      "commit": "a67799e284ae8ebc9fc20d57ee9a4d1d84f26183"
+      "version": "4.0.6-preview",
+      "commit": "7329c0d11fe71c7a5a87635366f0c45abe6b338a"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
-      "version": "4.0.38-preview",
-      "commit": "a67799e284ae8ebc9fc20d57ee9a4d1d84f26183"
+      "version": "4.0.39-preview",
+      "commit": "7329c0d11fe71c7a5a87635366f0c45abe6b338a"
     },
     {
       "package_id": "Elsa.ActorFoundation.Contracts",
