@@ -269,7 +269,10 @@ public sealed class ExpressionToolingProviderContractTests
     [Theory]
     [InlineData("variables.orders.map(item => [\"item.city\"].length)")]
     [InlineData("variables.orders.map(item => ({ data: 1 })./* item.city */data)")]
-    public async Task Callback_item_hover_ignores_member_text_in_literals_and_comments(string source)
+    [InlineData("variables.orders.reduce((total = item.city, item) => total, undefined)")]
+    [InlineData("variables.orders.map(item => class item { static property = item.city; })")]
+    [InlineData("variables.orders.map(item => { { return item.city; const item = {}; } }); const broken =")]
+    public async Task Callback_item_hover_requires_member_syntax_and_a_bound_item_at_the_cursor(string source)
     {
         var provider = new JavaScriptExpressionToolingProvider();
         var member = source.IndexOf("city", StringComparison.Ordinal);

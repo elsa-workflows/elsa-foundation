@@ -28,7 +28,8 @@ internal static class JavaScriptCallbackItems
             var node = path[index];
             if (node is IFunction function)
             {
-                var call = index > 0 ? path[index - 1] as CallExpression : null;
+                var inBody = ContainsOffset(function.Body, offset - 1);
+                var call = inBody && index > 0 ? path[index - 1] as CallExpression : null;
                 var method = call is { Callee: MemberExpression member } && call.Arguments.Count > 0 &&
                              ReferenceEquals(call.Arguments[0], node) &&
                              ResolveShape(member.Object, context, locals) is { Kind: ExpressionValueKind.Array, Item: { } item }
@@ -51,7 +52,8 @@ internal static class JavaScriptCallbackItems
                         MaskBindings(parameter, locals);
                     }
                 }
-                MaskHoistedVariables(function.Body, locals, itemParameters, cancellationToken);
+                if (inBody)
+                    MaskHoistedVariables(function.Body, locals, itemParameters, cancellationToken);
             }
             else if (node is Script)
             {
@@ -71,6 +73,10 @@ internal static class JavaScriptCallbackItems
             {
                 MaskBindings(parameter, locals);
             }
+            else if (node is ClassExpression { Id: { } className })
+            {
+                locals[className.Name] = null;
+            }
         }
 
         if (!foundCallback)
@@ -87,6 +93,8 @@ internal static class JavaScriptCallbackItems
         member is { Computed: false, Property: Identifier } &&
         (member.Property.Start < offset && offset <= member.Property.End ||
          member.Property.Start == offset && source[offset - 1] == '.');
+
+    private static bool ContainsOffset(Node node, int offset) => offset >= node.Start && offset < node.End;
 
     private static void MaskHoistedVariables(Node scope, Dictionary<string, ExpressionValueShape?> locals,
         HashSet<string>? itemParameters, CancellationToken cancellationToken)
@@ -121,7 +129,7 @@ internal static class JavaScriptCallbackItems
     {
         var path = new List<Node>();
         Node? current = root;
-        while (current is not null && offset >= current.Start && offset < current.End)
+        while (current is not null && ContainsOffset(current, offset))
         {
             cancellationToken.ThrowIfCancellationRequested();
             path.Add(current);
@@ -129,7 +137,7 @@ internal static class JavaScriptCallbackItems
             current = null;
             foreach (var child in parent.ChildNodes)
             {
-                if (offset < child.Start || offset >= child.End)
+                if (!ContainsOffset(child, offset))
                     continue;
                 current = child;
                 break;
@@ -244,12 +252,16 @@ internal static class JavaScriptCallbackItems
             return complete;
 
         var prefix = source[..offset];
+        var suffix = source[offset..];
         if (prefix.EndsWith('.'))
         {
             prefix += "__elsaMember";
-            if (Parse(prefix + source[offset..], cancellationToken) is { } withMember)
+            if (suffix.Length > 0 && Parse(prefix + suffix, cancellationToken) is { } withMember)
                 return withMember;
         }
+        // Only close an incomplete tail. A suffix we cannot parse may declare a shadowing binding.
+        if (!string.IsNullOrWhiteSpace(suffix))
+            return null;
 
         // The parser's tokens keep delimiters in strings and regular expressions out of the balance.
         var tokens = new List<Token>();
