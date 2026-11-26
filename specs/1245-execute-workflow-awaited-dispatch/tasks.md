@@ -33,7 +33,8 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
 - [ ] T003 Policy-free read of a child's committed workflow outputs (plan D-2): `IWorkflowOutputSource.ReadValuesAsync`,
   returning `WorkflowOutputValues`, implemented in `WorkflowOutputSource`. Update both `EXTENSION_POINTS.md` entries and
   `PublicAPI.Unshipped.txt` (the member and the record), and
-  give the test stubs (`WorkflowControlBoundaryTests.NoOutputs`, `DispatchWorkflowRuntimeTestFixture`) the member. It selects the same outputs as
+  give the test stubs (`WorkflowControlBoundaryTests.NoOutputs`, `WorkflowDispatchCompletionEnricherTests.StubOutputSource` and
+  `ThrowingOutputSource`, which must throw from `ReadValuesAsync` too) the member. It selects the same outputs as
   `RuntimeWorkflowOutputStateProjection`, without `IRuntimePayloadCapturePolicy`. It leaves out values whose
   `DurableValuePolicies.Read` is protected (sensitive, encryption, redaction mode, retention) and values not stored
   inline (`!InlineValue.HasValue || DurableValuePolicies.Read(row).Storage != Inline`). It returns the left-out names.

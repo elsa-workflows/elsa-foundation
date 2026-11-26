@@ -128,7 +128,8 @@ compatibility shims.
    - the dispatch tests that build or read `Result`: Contract, EndToEnd, Checkpoint, ParentResumeExecutor, the
      completion enricher, ChildControl and the WorkflowControl tests;
    - the test stubs that replace `IWorkflowOutputSource`, which need the new member: `WorkflowControlBoundaryTests`
-     (`NoOutputs`) and `DispatchWorkflowRuntimeTestFixture`;
+     (`NoOutputs`) and `WorkflowDispatchCompletionEnricherTests` (`StubOutputSource`, and `ThrowingOutputSource`, whose
+     `ReadValuesAsync` must throw so the fail-closed test still covers the new read);
    - the stale "two declared outputs" comment in `DispatchWorkflowDrive`;
    - the parity evidence report `docs/reports/evidence/activity-contract-parity/elsa4-surface.json`, regenerated with
      `tools/parity/diff-activity-surfaces.py`.
