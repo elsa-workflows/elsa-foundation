@@ -249,7 +249,7 @@ describe("executable artifact download", () => {
 
   it("mirrors the server's safe-name rules for hostile identity segments", () => {
     expect(buildExecutableArtifactFileName({
-      definitionId: "..\orders\"\r\n/evil",
+      definitionId: "../orders\"\r\n/evil",
       artifactVersion: "1.4.0-rc 1"
     })).toBe("orders-evil-1.4.0-rc-1-closure.json");
   });
