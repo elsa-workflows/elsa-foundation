@@ -46,7 +46,7 @@ compatibility shims.
       dependents" line says DispatchWorkflow reads policy-safe outputs) and in `Resumption/EXTENSION_POINTS.md`.
     - Add the member and `WorkflowOutputValues` to `Workflows/Runtime/Core/PublicAPI.Unshipped.txt`.
   - Public members that change in `Elsa.Activities.DispatchWorkflow.Runtime`, which has no PublicAPI file:
-    - `DispatchWorkflowActivityResult.Result` becomes `Terminal` (not an output), and `Output` is new;
+    - `DispatchWorkflowActivityResult.Result` becomes `Terminal` (not an output), and `Output` and `Status` are new;
     - the `WorkflowDispatchParentResumePayload` constructor gains `Output` and `WithheldOutputs`;
     - `DispatchWorkflowResult.Outputs` is removed;
     - `DispatchWorkflowOutput` is deleted.
@@ -175,6 +175,9 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
      - **Availability is left to publish.** A read whose producer is not definite is refused at publish
        (`ValueFlow/UnavailableProducer`), so the converter computes no availability.
      - **A declared initial value on `V` counts as another writer.**
+     - **Computed reads.** A script whose rewrite sets `HasComputedVariableRead`, and that can see a wrapped-result
+       variable, is refused with the FR-010 guidance. This is the same way `Elsa3ValueFlowLowerer` refuses a computed
+       read that can reach a loop-held variable.
    - `WaitForCompletion` becomes `Structure("WaitForCompletion", Elsa3MemberKind.Input)`. Implement the existing
      `ExecuteWorkflowAsDispatch` rewrite kind, which is declared but has no `IElsa3NodeRewrite` today, beside the other
      rewrites in `ActivityMap/Rewrites/`. Register it in `Elsa3MappingFeature` like the others. The rewrite must emit

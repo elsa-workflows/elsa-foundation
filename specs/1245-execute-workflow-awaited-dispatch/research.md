@@ -82,8 +82,8 @@ Converter (`extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Ent
   it. The warning comes from the generic entry-warning path.
 - Elsa 3 Execute Workflow and Dispatch Workflow declare no outcome but `Done`: both end with a plain
   `CompleteActivityAsync()`.
-- Lost-output text is generic today. `SemanticsChanged` was considered for Execute Workflow `Result` while Elsa 4 still
-  had a `Result` output. With that output removed, `Lost` with per-rule text is the right rule.
+- Lost-output text is generic today. The capture itself carries (`CarryOutput("Result", "Output")` with the
+  wrapped-result marker, R-4 option C), so per-rule text is needed only for the FR-010 refusals.
 - Execute Workflow takes `WaitForCompletion` as a `DefaultFlip`, so a bound expression or a literal false is carried
   over. Elsa 3's inline-run semantics are then lost: a false makes the Elsa 4 dispatch fire-and-forget.
 - The outcome maps are `Done → Dispatched, Completed` (Dispatch Workflow) and `Done → Completed` (Execute Workflow). A

@@ -363,13 +363,17 @@ faults.
 
   - JavaScript reads convert in every row. In Liquid only `.Output` and `.Output.X` convert: the Liquid rewrite edits
     one member, and it has no inline form for the other rows.
-  - Three cases are refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`. The lost-output rule takes per-rule text for
+  - Four cases are refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`. The lost-output rule takes per-rule text for
     them, and the guidance names the read and the reason:
     - `V` has another writer, so its reads would see two shapes. A declared initial value counts as a writer: Elsa 3
       read `init.Output.X`, and Elsa 4 would read `init.X`;
     - a read of any other member `X` of `V`. Elsa 3 had that only in its bare-dictionary shape, after a child that
       suspended, so the intent is ambiguous;
-    - a Liquid read of `V` other than `.Output` or `.Output.X`.
+    - a Liquid read of `V` other than `.Output` or `.Output.X`;
+    - a script that reads a variable by a computed name (`getVariable(expr)`, `variables[expr]`), when `V` is in its
+      scope. Elsa 4 keeps such a read as a run-time lookup (spec 1222 FR-027), so it would get `Output`'s shape. The
+      guidance says to read `V` by its literal name. The converter already refuses computed reads that can reach a
+      loop-held variable in the same way.
   - The rows that read the node's outputs (`.WorkflowInstanceId`, `.SubStatus`, and the whole value) bind to the node
     that captured `V`, which the converter knows from the capture. It never looks the producer up by an output name.
     Other nodes that capture `Result` therefore cannot make the read ambiguous. These reads keep the converter's two
