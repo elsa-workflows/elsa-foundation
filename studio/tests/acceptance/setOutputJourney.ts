@@ -1,5 +1,6 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { writeFileSync } from "node:fs";
+import { studioBackendLink } from "./studioBackendLink";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 type Node = { nodeId: string; activityVersionId: string; inputs: unknown[]; outputs: unknown[]; intrinsic?: unknown; structure?: { kind: string; schemaVersion: string; payload: { activities: Node[]; variables: unknown[] } } };
@@ -34,7 +35,7 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
     contract: { contractSchemaVersion: "1", inputs: ["A", "B"].map(name => ({ referenceKey: name.toLowerCase(), name, type, storageDriverKey: "elsa.json", isRequired: true, isNullable: false })), outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }] },
     provider: { providerKey: "elsa.activity-graph", schemaVersion: "2", payload: { rootActivity: root([set]), variables: [], outputMappings: [], outcomeMappings: [{ sourceOutcomeReferenceKey: done.referenceKey, boundaryOutcomeReferenceKey: "done" }] } }, layout: [], activityPresentation: []
   });
-  const route = `/workflows/activity-definitions?backend=legacy&definition=${created.definition.definitionId}&section=editor&draft=${created.draft.draftId}`;
+  const route = studioBackendLink(page, `/workflows/activity-definitions?definition=${created.definition.definitionId}&section=editor&draft=${created.draft.draftId}`);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(route);
   const views = page.getByRole("tablist", { name: "Activity Definition authoring views" });
@@ -178,7 +179,7 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
     const path = info.outputPath("set-output-proof.json"); writeFileSync(path, JSON.stringify(proof, null, 2));
     await info.attach("set-output-proof.json", { path, contentType: "application/json" });
   }
-  await page.goto(`/workflows/instances/${started.workflowExecutionId}`);
+  await page.goto(studioBackendLink(page, `/workflows/instances/${started.workflowExecutionId}`));
   await expect(page.getByRole("region", { name: "Workflow run canvas", exact: true })).toBeVisible();
   await page.locator('.wf-sequence-step[data-id="call"], .react-flow__node[data-id="call"]').first().press("Enter");
   await page.getByRole("tab", { name: "Details", exact: true }).click();

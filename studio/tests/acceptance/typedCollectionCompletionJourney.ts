@@ -31,7 +31,7 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   const orders = { referenceKey: "orders", name: "orders", type: { alias: customerAlias, collectionKind: "List" }, storageDriverType: null };
   const consumer = s.line(); consumer.inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: "" } }];
   const created = await s.seed("typed collection completion", s.root([consumer]), [], [orders]);
-  // Open on the backend this session is signed in to (activityDataSupport.open links a retired profile id, #5759).
+  // Open on the backend this session is signed in to.
   const backend = new URL(page.url()).searchParams.get("backend");
   await page.goto(`/workflows/definitions?definition=${created.definition.id}${backend ? `&backend=${encodeURIComponent(backend)}` : ""}`);
   await expect(page.locator('.wf-sequence-step[data-id="consumer"]')).toBeAttached();
