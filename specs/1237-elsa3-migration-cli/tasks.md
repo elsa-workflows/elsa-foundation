@@ -154,7 +154,7 @@
   path, the output path, `--all-versions`, the tool version, and from the CLI
   a `HostWiring` record (the host assembly, the host project folder, the CLI project folder, and the two T004a methods as delegates: `AddConfiguration(IConfigurationBuilder, string hostFolder, string environment, bool includeLocalSources)`, which supplies the host assembly and an empty `args`, and `AddServices(IHostApplicationBuilder)`) (the internal test seam supplies its own), and returns the exit code, the output path and, on
   exit 2, the refusal reason and sentence of [contracts/cli.md](contracts/cli.md). Test the request validation.
-- [ ] T009a Add a startup-only member to `ITaskManager` (`essentials/src/Tasks/Core/ITaskManager.cs`), implemented in
+- [x] T009a Add a startup-only member to `ITaskManager` (`essentials/src/Tasks/Core/ITaskManager.cs`), implemented in
   `essentials/src/Tasks/Elsa.Tasks/Services/TaskManager.cs`. It runs the registered
   startup tasks in their dependency order (`TopologicalTaskSorter`) and starts no background or recurring task. Add a
   supported `StartupTasksOnly` setting to the `Tasks` feature (default `false`), which `RunShellTasksInitializer`
