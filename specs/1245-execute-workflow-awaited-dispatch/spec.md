@@ -370,9 +370,10 @@ faults.
     - a read of any other member `X` of `V`. Elsa 3 had that only in its bare-dictionary shape, after a child that
       suspended, so the intent is ambiguous;
     - a Liquid read of `V` other than `.Output` or `.Output.X`.
-  - The rows that read the node's outputs (`.WorkflowInstanceId`, `.SubStatus`, and the whole value) resolve through
-    the converter's existing activity-result path. That path keeps its two refusals, and each gets the FR-010
-    guidance:
+  - The rows that read the node's outputs (`.WorkflowInstanceId`, `.SubStatus`, and the whole value) bind to the node
+    that captured `V`, which the converter knows from the capture. It never looks the producer up by an output name.
+    Other nodes that capture `Result` therefore cannot make the read ambiguous. These reads keep the converter's two
+    activity-result checks, and each gets the FR-010 guidance:
     - the read and the node sit in different structural frames, for example a read inside a ForEach body after a
       top-level Execute Workflow (`CrossFrameReference`);
     - the node does not come before the read in node order (`UnresolvableReferenceShape`).

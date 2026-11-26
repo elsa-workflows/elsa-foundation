@@ -165,8 +165,13 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
        object literal.
      - **Refused reads** get the FR-010 per-read text, through an optional per-rule message and guidance on
        `Elsa3MemberRule` that defaults to today's text. That covers any other member of `V`, and the other Liquid reads.
-     - **The activity-output rows resolve through `Elsa3ValueFlowLowerer.ResolveAmbient`.** It keeps its
-       `CrossFrameReference` and `UnresolvableReferenceShape` refusals, which now carry the FR-010 guidance.
+     - **The activity-output rows bind to the capturing node, which the wrapped-result marker identifies.** They do
+       not use `ResolveAmbient`'s name lookup over Elsa 3 output occurrences. That lookup would miss the Elsa 4 names
+       (`ChildWorkflowExecutionId`, `Status`), and it would make `Result` ambiguous when another node also captures
+       it.
+       - Factor the branch's frame check (`CrossFrameReference`) and node-order check (`UnresolvableReferenceShape`)
+         out of `ResolveAmbient`, and apply them to that node with the FR-010 guidance.
+       - Bind with `ActivityResultExpressionParameterBinding(node, "ChildWorkflowExecutionId" | "Status")`.
      - **Availability is left to publish.** A read whose producer is not definite is refused at publish
        (`ValueFlow/UnavailableProducer`), so the converter computes no availability.
      - **A declared initial value on `V` counts as another writer.**

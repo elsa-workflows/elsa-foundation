@@ -89,7 +89,8 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
     `getV()`, and a direct binding of `V`.
   - Converter tests: one per FR-010 table row in JavaScript, Liquid `.Output` and `.Output.X`, and one per refusal
     (another writer, an initial value, an unknown member, another Liquid read, a cross-frame read, an out-of-order
-    read).
+    read). Add one test with an Execute Workflow and a Dispatch Workflow that both capture `Result`: each variable's
+    reads bind to its own node.
   - One publish test: a `.SubStatus` read on a path where the dispatch may not have run is refused with
     `ValueFlow/UnavailableProducer`.
   - Run-time tests: US3 scenario 4 with a child that completes and with one that faults. The whole-value read is
