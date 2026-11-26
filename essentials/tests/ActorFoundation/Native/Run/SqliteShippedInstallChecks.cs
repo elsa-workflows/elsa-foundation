@@ -154,12 +154,16 @@ internal static class SqliteShippedInstallChecks
                 UPDATE "Instances" SET "Retired" = 1, "Status" = {(int)InstanceStatus.Cancelled}, "Revision" = 2,
                     "FoundationWriteRevision" = 2 WHERE "Id" = {id}
                 """, token), "an atomic retirement requires its terminal mark");
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Instances" SET "Retired" = 1, "Status" = {(int)InstanceStatus.Cancelled}, "Revision" = 2,
-                    "FoundationWriteRevision" = 2, "FoundationTerminalRevision" = 2, "FoundationTerminalAt" = 100,
-                    "FoundationHeader" = NULL, "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL
-                WHERE "Id" = {id}
-                """, token);
+            if (id == "parked")
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ('key', 'parked', 'wait', 0)
+                    """, token);
+                await RefusedAsync<SqliteException>(() => RetireAsync(id),
+                    "a marked parked retirement refuses a checkpoint with an outstanding subscription");
+                await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Subscriptions" WHERE "Instance" = 'parked'""", token);
+            }
+            await RetireAsync(id);
             await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "Retired" = 0 WHERE "Id" = {id}
                 """, token), "the retirement trigger refuses a reversal");
@@ -198,11 +202,18 @@ internal static class SqliteShippedInstallChecks
             "the journal guard compares outcome prefixes using ordinal case");
         await JournalAsync("refusal", revision: 2, """{"Outcome":"refused","Reason":"parked"}""");
         await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
-            UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2, "Model" = 'different' WHERE "Id" = 'refusal'
-            """, token), "a parked refusal keeps the checkpoint columns beside its new revision");
+            UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2, "Children" = '[]' WHERE "Id" = 'refusal'
+            """, token), "a parked refusal preserves a null checkpoint field beside its new revision");
         Require(await db.Database.ExecuteSqlRawAsync("""
             UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2 WHERE "Id" = 'refusal'
             """, token) == 1, "the checkpoint guard accepts a journalled refusal on the unchanged parked root");
+
+        Task<int> RetireAsync(string id) => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Instances" SET "Retired" = 1, "Status" = {(int)InstanceStatus.Cancelled}, "Revision" = 2,
+                "FoundationWriteRevision" = 2, "FoundationTerminalRevision" = 2, "FoundationTerminalAt" = 100,
+                "FoundationHeader" = NULL, "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL
+            WHERE "Id" = {id}
+            """, token);
 
         Task<int> JournalAsync(string id, long revision, string entries) =>
             db.Database.ExecuteSqlInterpolatedAsync($"""
