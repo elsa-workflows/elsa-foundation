@@ -844,7 +844,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
     private string RootInputScopes => $"{InboxKey.FoundationOccurrenceScope}, {RootSelfScope}" +
         (RootTimedJobSettlementEnabled ? $", {RootTimedJobScope}" : RootJobsEnabled ? $", {RootJobScope}" : "");
-    private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" : db.UsesSqliteRootRuntime ? SqliteOrdinaryRootPollFilter :
+    private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" : db.UsesSqliteRootRuntime ? SqliteRootPollFilter :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
              {(db.UsesRootOperatorProtocol ? db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter

@@ -129,6 +129,9 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
             """).SingleOrDefaultAsync(token) ??
         throw new StoreFormatException("The SQLite root issuer is missing or invalid.");
 
+    internal static async Task<byte[]> ReadRootIssuerKeyAsync(KernelDb db, CancellationToken token) =>
+        (await ReadIssuerAsync(db, token)).Key;
+
     private static Task<Target?> ReadTargetAsync(KernelDb db, string tenant, string reference, CancellationToken token)
     {
         var family = db.RootStateFamily;
