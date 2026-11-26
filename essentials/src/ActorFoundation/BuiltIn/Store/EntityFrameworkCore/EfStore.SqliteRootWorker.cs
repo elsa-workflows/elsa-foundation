@@ -23,9 +23,10 @@ public sealed partial class EfStore
     }
 
     // The discovered birth join already limits creators to their exact tenant/reference envelope.
-    private static readonly string SqliteOrdinaryRootPollFilter = $"""
+    private static readonly string SqliteRootPollFilter = $"""
         AND m."EventMatch" IS NULL AND m."ReplyTo" IS NULL AND (m."InboxScope" = 0 OR (
-            m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" NOT GLOB 'operator/*' AND EXISTS (
+            (m."InboxScope" = {RootTimedJobScope} OR
+                m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" NOT GLOB 'operator/*') AND EXISTS (
                 SELECT 1 FROM "Instances" i
                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition"
                     AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
@@ -77,34 +78,37 @@ public sealed partial class EfStore
                 AND "Target" = {pending.Target} AND "Partition" = {pending.Partition} AND NOT "Done"
             """, token) != 1) return false;
 
-        var finished = checkpoint.Row.Status == InstanceStatus.Finished;
+        var ended = checkpoint.Row.Status == InstanceStatus.Finished || db.RootStateFamily.Ends(checkpoint.Row.Status);
         var family = RootStatePrefix(db);
         var revision = checkpoint.JournalRevision;
         FormattableString update = $"""
             UPDATE "Instances" SET "FoundationReference" = {checkpoint.Reference}, "FoundationTenant" = {checkpoint.Tenant},
                 "FoundationHeader" = {checkpoint.Header}, "FoundationStateWire" = {checkpoint.Wire}, "State" = {family} || "State",
-                "FoundationTerminalRevision" = CASE WHEN {finished} THEN {revision} END,
-                "FoundationTerminalAt" = CASE WHEN {finished} THEN /*sqlite-root-clock*/ END
+                "FoundationTerminalRevision" = CASE WHEN {ended} THEN {revision} END,
+                "FoundationTerminalAt" = CASE WHEN {ended} THEN /*sqlite-root-clock*/ END
             WHERE "Id" = {pending.Target} AND "Partition" = {pending.Partition} AND "Revision" = {revision}
                 AND "Status" = {(int)checkpoint.Row.Status} AND "FoundationReference" IS NULL
-                AND (NOT {finished} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {pending.Target}))
+                AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {pending.Target}))
             """;
         return await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock(update), token) == 1;
     }
 
     private static async Task<bool> BindSqliteRootTurnAsync(KernelDb db, RootTurnCheckpoint turn, CancellationToken token)
     {
-        if (turn.Status is not (InstanceStatus.Running or InstanceStatus.Finished) || turn.Current.Suspended ||
-            turn.OperatorSuspension is not null || turn.OperatorTermination || turn.JobState is not null ||
-            turn.JobCompletion is not null || turn.TimedJob || turn.Values is not null || turn.SettledJobs is not null ||
+        var timedFault = turn.Status == InstanceStatus.Faulted && db.RootStateFamily.Ends(turn.Status);
+        if (turn.Status is not (InstanceStatus.Running or InstanceStatus.Finished) && !timedFault || turn.Current.Suspended ||
+            turn.OperatorSuspension is not null || turn.OperatorTermination ||
+            !turn.TimedJob && turn.JobCompletion is not null || turn.Values is not null ||
             turn.Issue is not null || turn.Recalls is not null)
-            throw new NotSupportedException("The staged SQLite root worker supports ordinary checkpoints.");
+            throw new NotSupportedException("The staged SQLite root worker supports ordinary and timed job checkpoints.");
 
         var family = RootStatePrefix(db);
-        var finished = turn.Status == InstanceStatus.Finished;
-        var terminalHeader = finished ? 0 : RootTerminalHeaderBytes(turn.Current.Model, turn.Current.Definition);
+        var ended = turn.Status != InstanceStatus.Running;
+        var terminalHeader = ended ? 0 : RootTerminalHeaderBytes(turn.Current.Model, turn.Current.Definition);
         var reserve = Math.Max(0, terminalHeader - Encoding.UTF8.GetByteCount(turn.Header));
-        if (StableContentBytes(family, turn.State, turn.Header, turn.Wire, null, reserve, finished ? 0 : turn.Growth) > RootContentBytes)
+        var jobs = turn.JobState is null ? turn.Current.Jobs : turn.JobState.Jobs;
+        var nextGeneration = turn.JobState is null ? turn.Current.NextJobGeneration : turn.JobState.NextGeneration;
+        if (StableContentBytes(family, turn.State, turn.Header, turn.Wire, jobs, reserve, ended ? 0 : turn.Growth) > RootContentBytes)
             throw new StoreException(Failure.Definite, "The encoded SQLite root checkpoint exceeds its storage budget.");
 
         var actor = turn.Current.Actor;
@@ -117,25 +121,32 @@ public sealed partial class EfStore
                 AND i."Id" = {actor.Id} AND i."Partition" = {home} AND i."Revision" = {turn.Current.Revision}
                 AND i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired" AND NOT i."Suspended"
                 AND i."FoundationParkAt" IS NULL AND i."FoundationTerminalAt" IS NULL AND i."FoundationTerminalRevision" IS NULL
-                AND i."Jobs" IS NULL AND i."NextJobGeneration" IS NOT DISTINCT FROM {turn.Current.NextJobGeneration}
+                AND i."Jobs" IS NOT DISTINCT FROM {turn.Current.Jobs}
+                AND i."NextJobGeneration" IS NOT DISTINCT FROM {turn.Current.NextJobGeneration}
             """).SingleOrDefaultAsync(token);
         if (prior is null) return false;
         var header = DurableKeyJson.Read<RootHeader>(prior);
         if (header.Model != turn.Current.Model || header.Definition != turn.Current.Definition) return false;
 
-        if (!await SettleSqliteRootInputsAsync(db, turn.Reference, actor,
-            turn.Inputs.Select(input => input.InboxKey).ToArray(), turn.Inputs, token)) return false;
+        var settled = turn.TimedJob
+            ? await ConsumeRootTimedInputsAsync(db, actor, turn.Inputs, turn.JobCompletion, token)
+            : await SettleSqliteRootInputsAsync(db, turn.Reference, actor,
+                turn.Inputs.Select(input => input.InboxKey).ToArray(), turn.Inputs, token);
+        if (!settled) return false;
+        if (turn.SettledJobs is { Length: > 0 } jobIds &&
+            await SqlitePendingRootTimedInputs(db, actor, jobIds).ExecuteDeleteAsync(token) != jobIds.Length) return false;
 
         var revision = turn.JournalRevision;
         FormattableString update = $"""
             UPDATE "Instances" SET "State" = {family + turn.State}, "FoundationHeader" = {turn.Header},
                 "FoundationStateWire" = {turn.Wire}, "StateVersion" = {turn.StateVersion}, "Status" = {(int)turn.Status},
                 "Revision" = {revision}, "FoundationWriteRevision" = {revision},
-                "FoundationTerminalRevision" = CASE WHEN {finished} THEN {revision} END,
-                "FoundationTerminalAt" = CASE WHEN {finished} THEN /*sqlite-root-clock*/ END
+                "Jobs" = {jobs}, "NextJobGeneration" = {nextGeneration},
+                "FoundationTerminalRevision" = CASE WHEN {ended} THEN {revision} END,
+                "FoundationTerminalAt" = CASE WHEN {ended} THEN /*sqlite-root-clock*/ END
             WHERE "Id" = {actor.Id} AND "Partition" = {home} AND "Revision" = {turn.Current.Revision}
                 AND "FoundationTenant" = {turn.Tenant} AND "FoundationReference" = {turn.Reference}
-                AND (NOT {finished} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {actor.Id}))
+                AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {actor.Id}))
             """;
         return await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock(update), token) == 1;
     }
@@ -166,14 +177,17 @@ public sealed partial class EfStore
             """, token) == expected.Count;
     }
 
-    private static Task<List<long>> ReadSqliteFinishedRevisionAsync(KernelDb db, WorkerRoot root, CancellationToken token) =>
+    private static Task<List<long>> ReadSqliteTerminalRevisionAsync(KernelDb db, WorkerRoot root, CancellationToken token) =>
         db.Database.SqlQuery<long>($"""
             SELECT i."Revision" AS "Value" FROM "Instances" i JOIN "FoundationRootBirths" b
                 ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
                 AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
             WHERE b."Tenant" = {root.Tenant} AND b."Reference" = {root.Reference} AND b."Actor" = {root.Actor}
                 AND b."Creation" = 1 AND i."Partition" = {root.Partition} AND NOT i."Retired"
-                AND i."Status" = {(int)InstanceStatus.Finished} AND i."FoundationTerminalAt" IS NOT NULL
+                AND (i."Status" = {(int)InstanceStatus.Finished} OR
+                    ({db.RootStateFamily.EndsFaulted} AND i."Status" = {(int)InstanceStatus.Faulted}
+                        AND instr(i."State", {db.RootStateFamily.Prefix}) = 1 AND i."FoundationParkAt" IS NULL))
+                AND i."FoundationTerminalAt" IS NOT NULL
                 AND i."FoundationTerminalRevision" = i."Revision"
             """).ToListAsync(token);
 

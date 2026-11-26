@@ -36,6 +36,7 @@ internal static partial class SqliteHostLifetimeChecks
             var sibling = await AdmitFoundationStartAsync(ingress, scope, "sibling", token);
             var definitions = new SqliteAdmissionDefinitions();
             var store = new EfStore(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
+            await store.EnableRootJobsAsync(token);
             store.BindSqliteWorkerNode();
             var polled = await store.PollAsync([new PartitionFence(0, 1, 0)], TimeSpan.Zero, 8, token);
             Require(polled.Messages.Count == 2 && polled.Messages.All(message => message.Message.FoundationRootBinding is not null),
@@ -148,6 +149,7 @@ internal static partial class SqliteHostLifetimeChecks
 
         var definitions = new SqliteAdmissionDefinitions();
         var store = new EfStore(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
+        await store.EnableRootJobsAsync(token);
         store.BindSqliteWorkerNode();
         var take = await store.TakeAsync(Enumerable.Range(0, partitions).ToArray(), "wide-worker", Defaults.Lease, token);
         var fences = take.Taken.Select(lease => new PartitionFence(lease.Partition, lease.Epoch, lease.Position)).ToArray();
@@ -190,6 +192,7 @@ internal static partial class SqliteHostLifetimeChecks
         var definitions = new SqliteAdmissionDefinitions();
         var drift = new DefinitionDrift();
         var store = new EfStore(() => OpenFoundationDb(path, definitions, drift), postgres: false, fenceInBatch);
+        await store.EnableRootJobsAsync(token);
         store.BindSqliteWorkerNode();
         var lease = (await store.TakeAsync(0, "drift", Defaults.Lease, token))!;
         var polled = await store.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, token);
@@ -199,6 +202,7 @@ internal static partial class SqliteHostLifetimeChecks
         var row = new InstanceRow(creator.Target.Id, start.Model, start.Definition, InstanceStatus.Running, WaitingState, 1, null,
             History: start.History, StateVersion: 1, Creation: 1, StartIntent: CreationProtocol.Fingerprint(start, creator.Kind, creator.Payload))
         {
+            NextJobGeneration = 0,
             FoundationDispatchHeader = new(scope.Tenant, root.Id, header)
         };
         var turn = new TurnCommit(row.Id, row, null, [creator.InboxKey], [], [], [], [], "[]") { FoundationHeader = header };

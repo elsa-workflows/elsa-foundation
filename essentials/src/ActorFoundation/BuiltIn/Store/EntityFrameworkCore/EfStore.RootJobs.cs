@@ -20,14 +20,23 @@ public sealed partial class EfStore
     internal async Task EnableRootJobsAsync(CancellationToken token)
     {
         await using var db = create();
-        if (!db.UsesRootJobProtocol || !db.Database.IsNpgsql())
-            throw new StoreFormatException("Generated-root jobs require the PostgreSQL job protocol.");
-        await RequireStoreVersionsAsync(db, token);
-        var key = await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token);
+        if (!db.UsesRootJobProtocol || !(db.Database.IsNpgsql() || db.UsesSqliteRootRuntime))
+            throw new StoreFormatException("Generated-root jobs require a qualified root runtime and job protocol.");
+        byte[] key;
+        if (db.UsesSqliteRootRuntime)
+        {
+            await RequireSqliteOperationalFormatAsync(db, token);
+            key = await SqliteRootAdmission.ReadRootIssuerKeyAsync(db, token);
+        }
+        else
+        {
+            await RequireStoreVersionsAsync(db, token);
+            key = await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token);
+        }
         lock (_workerBinding)
         {
             if (_ordinaryRoots is not null)
-                throw new InvalidOperationException("The PostgreSQL owner is already bound.");
+                throw new InvalidOperationException("The root owner is already bound.");
             RootTimedJobIssuanceEnabled = db.UsesRootTimedJobIssuance;
             RootTimedJobSettlementEnabled = db.UsesRootTimedJobSettlement;
             RootTimedJobPreviewEnabled = db.UsesRootTimedJobPreview;
