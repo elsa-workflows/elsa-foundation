@@ -828,7 +828,8 @@ internal static class PostgresRootParkedOperatorChecks
             var owner = await set.OwnAsync();
             recovering = await set.StartAsync("cohort");
             Check(await set.SendAsync(recovering, "cohort-fault", "fail"), "the joint profile admits input that opens a Park");
-            Check(await set.HeldSendAsync(recovering, "held-before-park", null, "held-before-park") is not null,
+            var heldRequest = await set.HeldSendAsync(recovering, "held-before-park", null, "held-before-park");
+            Check(heldRequest is not null,
                 "a held direct call is admitted behind the fault before the Park opens");
             parked = await set.DriveAsync(recovering, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
             Check(await set.HeldSendAsync(recovering, "held-during-park", null, "held-during-park") is null &&
@@ -853,6 +854,8 @@ internal static class PostgresRootParkedOperatorChecks
             await set.PassUntilAsync(() => set.AnsweredAny("old-park-terminate"));
             await set.SettledInputsAsync(recovering);
             var recovered = await set.ImageAsync(recovering);
+            await set.AnsweredOnceAsync(heldRequest!, recovered.AsOf,
+                reply => reply is { Channel: "response", Error: null, Item: "released" }, "the resumed direct reply");
             set.Answered("old-park-terminate", "StaleSelection");
             Check(admittedAfterRecover && releasedBeforeControl && recovered is { Status: InstanceStatus.Running, ParkAt: null } &&
                 recovered.Revision > arrivalsKept.Revision && set.Probe.InputKinds(recovering) is
@@ -2994,6 +2997,8 @@ internal static class PostgresRootParkedOperatorChecks
             }
             if (turn.Inbox is [{ Kind: "issue-faulting-result" }])
                 turn.StartJob(FaultingJob, timeout: TimeSpan.FromSeconds(30));
+            if (turn.Inbox is [{ Kind: "held-before-park" } held])
+                turn.Reply(held, "response", "released");
             return default;
         }
     }
