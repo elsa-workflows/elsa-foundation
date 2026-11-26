@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { authSessionEndedEvent } from "@elsa-workflows/studio-sdk";
+import { StudioField } from "@elsa-workflows/studio-ui";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputDescriptor,
@@ -28,9 +29,20 @@ const descriptors: StudioExpressionDescriptor[] = [
 const textEditor: StudioActivityPropertyEditorContribution = {
   // The host's general single-line editor identity: an input it edits offers Choose data.
   id: "studio.property.singleline",
-  supports: descriptor => !descriptor.uiHint?.startsWith("module-"),
+  supports: descriptor => descriptor.uiHint !== "multiline" && !descriptor.uiHint?.startsWith("module-"),
   component: ({ descriptor, value, disabled, onChange }) => (
     <input aria-label={descriptor.name} value={String(value ?? "")} disabled={disabled} onChange={event => onChange(event.target.value)} />
+  )
+};
+
+const multilineEditor: StudioActivityPropertyEditorContribution = {
+  id: "studio.property.multiline",
+  presentsField: true,
+  supports: descriptor => descriptor.uiHint === "multiline",
+  component: ({ descriptor, value, disabled, onChange }) => (
+    <StudioField label={descriptor.displayName || descriptor.name}>
+      <textarea value={String(value ?? "")} disabled={disabled} onChange={event => onChange(event.target.value)} />
+    </StudioField>
   )
 };
 
@@ -137,7 +149,7 @@ function render(options: {
       <ActivityPropertiesPanel
         activity={current}
         descriptor={descriptor}
-        editors={[textEditor, moduleEditor]}
+        editors={[textEditor, multilineEditor, moduleEditor]}
         expressionEditors={[activityResultReferenceContribution, activityDataMemberReferenceContribution]}
         expressionDescriptors={descriptors}
         expressionDescriptorStatus="ready"
@@ -193,6 +205,9 @@ describe("Choose data for an activity input", () => {
     const container = render({ dataHost, onChange: next => changes.push(next) });
 
     expect(trigger(container)?.getAttribute("aria-label")).toBe("Choose data for Customer ID");
+    const conversion = container.querySelector(".wf-conversion-toggle");
+    expect(conversion).not.toBeNull();
+    expect(trigger(container)?.previousElementSibling).toBe(conversion);
     await openChooser(container);
     await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
     expect(dataHost.requests).toEqual([{ nodeId: "node-1", inputKey: "customerId" }]);
@@ -671,11 +686,16 @@ describe("a stored activity output", () => {
     expect(document.activeElement).toBe(container.querySelector(".wf-data-reference-replace"));
   });
 
-  it("clears it in one edit, leaving the input untouched", async () => {
+  it.each([undefined, "multiline"])("clears the %s input in one edit and returns focus to Choose data", async uiHint => {
     const changes: ActivityNode[] = [];
-    const container = render({ activity: storedActivity(legacyValue), onChange: next => changes.push(next) });
+    const container = render({
+      activity: storedActivity(legacyValue),
+      inputs: [input("CustomerId", { displayName: "Customer ID", uiHint })],
+      onChange: next => changes.push(next)
+    });
     await settle();
     const clear = [...container.querySelectorAll<HTMLButtonElement>(".wf-data-reference-actions button")].find(button => button.textContent === "Clear")!;
+    clear.focus();
     flushSync(() => clear.click());
 
     expect(changes).toHaveLength(1);

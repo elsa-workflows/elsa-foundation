@@ -1,0 +1,26 @@
+[
+  {
+    "definitionId": "wfdef-migrated-files-example",
+    "name": "Migrated files example",
+    "version": "1.0.0",
+    "state": {
+      "variables": [],
+      "inputs": [],
+      "outputs": [],
+      "rootActivity": {
+        "nodeId": "mounted-activity",
+        "activityVersionId": "actver_s4-TWrYbYGQfiJ9KgF33DfW8wH33xkcy8CisqYyWG3I",
+        "inputs": [
+          {
+            "referenceKey": "text",
+            "value": {
+              "value": "Hello from the mounted Elsa 4 catalog",
+              "expressionType": "Literal"
+            }
+          }
+        ],
+        "outputs": []
+      }
+    }
+  }
+]

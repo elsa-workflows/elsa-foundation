@@ -1,0 +1,7 @@
+# Engine and Elsa 3 compatibility packages for shells.json.
+@engine
+@http-trigger
+@schedule-trigger
+@sqlite
+@elsa3-import
+@migrated-files

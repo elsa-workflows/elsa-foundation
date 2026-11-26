@@ -6,6 +6,8 @@
 > build)? See the [Docker Hub quickstart](docker-hub-quickstart.md), which also covers supplying a
 > custom `shells.json` and how Studio feature toggles are persisted.
 
+For a server composed from NuGet packages, see [Foundation server image profiles](../docker/profiles/README.md) for Essentials, Elsa 3 import, Full and custom image builds.
+
 | File | What it is |
 |---|---|
 | `apps/Elsa.Workbench.Host/Dockerfile` | The image: multi-stage, `net10.0`, non-root, port 8080 |

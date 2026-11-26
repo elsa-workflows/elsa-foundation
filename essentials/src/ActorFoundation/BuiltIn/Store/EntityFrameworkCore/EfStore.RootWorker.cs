@@ -105,18 +105,18 @@ public sealed partial class EfStore
         {
             if (_ordinaryRoots is not null)
                 throw new InvalidOperationException("The PostgreSQL owner is already bound.");
-            if (db.UsesRootJobProtocol != RootJobsEnabled || db.UsesRootTimedJobIssuance != RootTimedJobIssuanceEnabled ||
-                db.UsesRootTimedJobSettlement != RootTimedJobSettlementEnabled || db.UsesRootTimedJobPreview != RootTimedJobPreviewEnabled)
+            if (!db.UsesSqliteRootRuntime && (db.UsesRootJobProtocol != RootJobsEnabled || db.UsesRootTimedJobIssuance != RootTimedJobIssuanceEnabled ||
+                db.UsesRootTimedJobSettlement != RootTimedJobSettlementEnabled || db.UsesRootTimedJobPreview != RootTimedJobPreviewEnabled))
                 throw new StoreFormatException("The PostgreSQL owner must initialize its job capability before binding to the job profile.");
             if (RootTimedJobs && !RootTimedJobPreviewEnabled && (scope.Discover || scope.Actors.Length != 1))
                 throw new NotSupportedException("The timed job fixture binds exactly one generated root.");
             if (db.UsesRootValueProtocol != RootValuesEnabled)
                 throw new StoreFormatException("The PostgreSQL owner must initialize its value capability before binding to the value qualification profile.");
             scope.RequiresCommittedTerminal = db.UsesRootRetirement;
-            scope.KeepsParkInputs = db.UsesRootParkOpening;
-            scope.KeepsParkArrivals = db.UsesRootParkArrivals;
-            scope.RecoversPark = db.UsesRootParkRecovery;
-            scope.RefusesParkedOperators = db.UsesRootParkedOperators;
+            scope.KeepsParkInputs = db.UsesRootParkOpening && !db.UsesSqliteRootRuntime;
+            scope.KeepsParkArrivals = db.UsesRootParkArrivals && !db.UsesSqliteRootRuntime;
+            scope.RecoversPark = db.UsesRootParkRecovery && !db.UsesSqliteRootRuntime;
+            scope.RefusesParkedOperators = db.UsesRootParkedOperators && !db.UsesSqliteRootRuntime;
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
         }
@@ -138,10 +138,12 @@ public sealed partial class EfStore
         var refs = references.ToArray();
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, token);
-        var found = await db.Database.SqlQuery<WorkerRoot>($"""
-            SELECT "Tenant", "Reference", "Actor", "Partition", "Fingerprint" FROM "FoundationRootBirths"
-            WHERE ({scope.FixedPartition}::integer IS NULL OR "Partition" = {scope.FixedPartition}) AND "Creation" = 1 AND ("Actor" = ANY({ids}) OR "Reference" = ANY({refs}))
-            """).ToListAsync(token);
+        var found = db.UsesSqliteRootRuntime
+            ? await ResolveSqliteWorkerRootsAsync(db, scope.FixedPartition, ids, refs, token)
+            : await db.Database.SqlQuery<WorkerRoot>($"""
+                SELECT "Tenant", "Reference", "Actor", "Partition", "Fingerprint" FROM "FoundationRootBirths"
+                WHERE ({scope.FixedPartition}::integer IS NULL OR "Partition" = {scope.FixedPartition}) AND "Creation" = 1 AND ("Actor" = ANY({ids}) OR "Reference" = ANY({refs}))
+                """).ToListAsync(token);
         if (found.Any(root => !scope.Includes(root.Partition) || new InstanceRef(root.Actor).Partition != root.Partition)) throw RootShape();
         return new(scope.FixedPartition, found);
     }
@@ -213,11 +215,13 @@ public sealed partial class EfStore
                         _ => group.Key
                     };
                     var ids = group.Select(key => scope is RootJobScope or RootTimedJobScope ? StoredJobId(key) : key.Id).ToArray();
-                    var count = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                        UPDATE "Messages" SET "Seen" = {Epoch}, "Trial" = CASE WHEN {trial} THEN {Epoch} ELSE "Trial" END
-                        WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {scope}
-                            AND "Id" = ANY({ids}) AND "EventMatch" IS NULL AND NOT "Done"
-                        """, cancellationToken);
+                    var count = db.UsesSqliteRootRuntime
+                        ? await MarkSqliteRootAsync(db, Root, Epoch, trial, scope, ids, cancellationToken)
+                        : await db.Database.ExecuteSqlInterpolatedAsync($"""
+                            UPDATE "Messages" SET "Seen" = {Epoch}, "Trial" = CASE WHEN {trial} THEN {Epoch} ELSE "Trial" END
+                            WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {scope}
+                                AND "Id" = ANY({ids}) AND "EventMatch" IS NULL AND NOT "Done"
+                            """, cancellationToken);
                     if (count != ids.Length) return false;
                 }
                 return true;
@@ -230,7 +234,9 @@ public sealed partial class EfStore
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
-            var terminal = await LockQualifiedTerminalAsync(db, Root, cancellationToken);
+            var terminal = db.UsesSqliteRootRuntime
+                ? await ReadSqliteFinishedRevisionAsync(db, Root, cancellationToken)
+                : await LockQualifiedTerminalAsync(db, Root, cancellationToken);
             if (terminal.Count != 1) return false;
             if (SettledJobs.Length > 0 && await db.Messages.AnyAsync(m => m.Target == Root.Actor && m.Partition == Root.Partition &&
                     m.InboxScope == RootTimedJobScope && SettledJobs.Contains(m.Id) && !m.Done, cancellationToken)) return false;
@@ -279,7 +285,8 @@ public sealed partial class EfStore
     }
 
     private sealed record RootCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> Commands, IReadOnlyDictionary<string, long> Revisions,
-        bool JobProfile, bool TimedJobIssuance, bool TimedJobSettlement, bool TimedJobPreview, bool ValueProfile, IReadOnlySet<string> DeferredJournal)
+        bool JobProfile, bool TimedJobIssuance, bool TimedJobSettlement, bool TimedJobPreview, bool ValueProfile, IReadOnlySet<string> DeferredJournal,
+        bool SqliteRuntime)
         : QualifiedRootCheckpoint(0)
     {
         internal override long RevisionFor(string actor) => Revisions[actor];
@@ -291,9 +298,13 @@ public sealed partial class EfStore
 
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
-            if (db.UsesRootJobProtocol != JobProfile || db.UsesRootTimedJobIssuance != TimedJobIssuance ||
-                db.UsesRootTimedJobSettlement != TimedJobSettlement || db.UsesRootTimedJobPreview != TimedJobPreview ||
-                db.UsesRootValueProtocol != ValueProfile) return false;
+            if (db.UsesSqliteRootRuntime != SqliteRuntime) return false;
+            // The SQLite worker executes ordinary turns while its shipped definitions already describe the later job slices.
+            if ((!SqliteRuntime && db.UsesRootJobProtocol) != JobProfile ||
+                (!SqliteRuntime && db.UsesRootTimedJobIssuance) != TimedJobIssuance ||
+                (!SqliteRuntime && db.UsesRootTimedJobSettlement) != TimedJobSettlement ||
+                (!SqliteRuntime && db.UsesRootTimedJobPreview) != TimedJobPreview || db.UsesRootValueProtocol != ValueProfile)
+                return false;
             foreach (var command in Commands)
                 if (!await command.BindCheckpointAsync(db, cancellationToken)) return false;
             return true;
@@ -366,7 +377,8 @@ public sealed partial class EfStore
             commands.Add(checkpoint);
         }
         return (batch with { Turns = turns, Seen = [], Trial = [] },
-            new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled, RootTimedJobSettlementEnabled, RootTimedJobPreviewEnabled, RootValuesEnabled, deferred));
+            new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled, RootTimedJobSettlementEnabled,
+                RootTimedJobPreviewEnabled, RootValuesEnabled, deferred, SqliteRuntime: !postgres));
     }
 
     private static bool InputsMatch(WorkerRoot root, TurnCommit turn, bool jobs = false) =>
@@ -382,6 +394,8 @@ public sealed partial class EfStore
 
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
+        if (!postgres && (turn.OpensPark || turn.FoundationKept is not null || turn.FoundationRootOperator is not null || turn.Delete))
+            throw new NotSupportedException("The staged SQLite root worker supports ordinary checkpoints.");
         if (turn.FoundationRootOperator is { Kind: Kinds.Recover }) return await PrepareRootParkRecoverAsync(root, turn, cancellationToken);
         // A delete, or a retired marker, of an ended Faulted root goes on to retirement below.
         if (turn is { FoundationRootOperator: not null, Row: { Status: InstanceStatus.Faulted or InstanceStatus.Cancelled, Retired: false },
@@ -476,7 +490,9 @@ public sealed partial class EfStore
             if (turn.Journal is null || turn.Consumed is not [var key] || key != new InboxKey("root:" + root.Actor) ||
                 turn.Done.Count != 0 || row.Suspended || change is null ||
                 row.Status is InstanceStatus.Finished or InstanceStatus.Faulted && (turn.Sent.Count != 0 || row.Jobs is not null)) throw RootShape();
-            var creator = await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
+            var creator = postgres
+                ? await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken)
+                : await ReadSqlitePendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;
             if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History) throw RootShape();
             if (RootTimedJobPreviewEnabled) RequireRootTimedIssuance(turn, row);

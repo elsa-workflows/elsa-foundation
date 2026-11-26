@@ -1,0 +1,61 @@
+# Engine and extension packages for shells.json.
+@engine
+@http-trigger
+@schedule-trigger
+@sqlite
+@elsa3-import
+@migrated-files
+
+# BPMN and workflow extensions.
+Elsa.Activities.Bpmn
+Elsa.Activities.Bpmn.Design
+Elsa.Activities.Bpmn.Interchange
+Elsa.Activities.Compensation
+Elsa.Workflows.ExecutionEvidence
+Elsa.Workflows.Runtime
+
+# Agents and review.
+Elsa.Agent
+Elsa.Agent.Anthropic
+Elsa.Agent.Api
+Elsa.Agent.AzureOpenAI
+Elsa.Agent.Design
+Elsa.Agent.Inspection.Api
+Elsa.Agent.OpenAI
+Elsa.Agent.Persistence.EntityFrameworkCore
+Elsa.Agent.Review
+Elsa.Agent.Review.Api
+
+# Connections, decisions, and secrets.
+Elsa.Connections
+Elsa.Connections.Api
+Elsa.Connections.Design
+Elsa.Connections.Persistence.EntityFrameworkCore
+Elsa.Connections.Workflows
+Elsa.Decisions
+Elsa.Decisions.Api
+Elsa.Decisions.Design
+Elsa.Decisions.Persistence.EntityFrameworkCore
+Elsa.Decisions.Workflows.Api
+Elsa.Decisions.Workflows.Design
+Elsa.Decisions.Workflows.Runtime
+Elsa.Secrets
+Elsa.Secrets.Api
+Elsa.Secrets.Persistence.EntityFrameworkCore
+Elsa.Secrets.Workflows
+
+# Diagnostics and Studio backend services.
+Elsa.Attention.Api
+Elsa.Diagnostics.OpenTelemetry
+Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore
+Elsa.Diagnostics.OpenTelemetry.Workflows
+Elsa.Diagnostics.StructuredLogs
+Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore
+Elsa.Modularity.Api
+Elsa.Studio.Dashboard.Api
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore
+Elsa.Studio.Preferences.Api
+Elsa.Studio.Preferences.Persistence.EntityFrameworkCore
+Elsa.Workflows.Dashboard
+Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore
+Elsa.Workflows.Dashboard.Queries
