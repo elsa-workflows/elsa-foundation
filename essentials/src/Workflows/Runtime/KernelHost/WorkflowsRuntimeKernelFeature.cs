@@ -47,6 +47,19 @@ public class WorkflowsRuntimeKernelFeature : IShellFeature, IPostConfigureShellS
     /// <summary>The old core's HTTP route-table observer, which this feature leaves out.</summary>
     public const string RouteTableObserverTypeName = "Elsa.Workflows.Runtime.Http.Services.RouteTableTriggerIndexObserver";
 
+    /// <summary>
+    /// The old core's HTTP endpoint middleware, which serves workflow HTTP endpoints at its base path (<c>/workflows/http</c>).
+    /// On a kernel shell the host's kernel edge serves that path, so the feature mounts this middleware with no base path,
+    /// which passes every request on. Its other middleware (test runs, standalone triggers) and its options stay.
+    /// </summary>
+    public const string HttpEndpointMiddlewareTypeName = "Elsa.Activities.Http.Middleware.HttpEndpointMiddleware";
+
+    /// <summary>The middleware the old core's HTTP activities feature registers beside its endpoint middleware: present, the endpoint middleware must be found.</summary>
+    public const string HttpTestRunMiddlewareTypeName = "Elsa.Activities.Http.Middleware.HttpTestRunIngressMiddleware";
+
+    /// <summary>The options the endpoint middleware reads its base path from.</summary>
+    public const string HttpEndpointOptionsTypeName = "Elsa.Activities.Http.Options.HttpEndpointOptions";
+
     /// <summary>The contract the old core's HTTP feature registers beside its route-table observer: present, the observer must be found.</summary>
     public const string RouteTableSynchronizerTypeName = "Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRouteTableSynchronizer";
 
@@ -62,6 +75,7 @@ public class WorkflowsRuntimeKernelFeature : IShellFeature, IPostConfigureShellS
         services.AddSingleton<IWorkflowTriggerBindingExtractor, KernelTriggerBindingExtractor>();
 
         DropRouteTableObserver(services);
+        UnmountHttpEndpointMiddleware(services);
 
         ReplaceDefault<IWorkflowActivationCoordinator>(services, DefaultCoordinatorTypeName);
         services.AddScoped<IWorkflowActivationCoordinator>(provider => new KernelActivationCoordinator(
@@ -102,6 +116,34 @@ public class WorkflowsRuntimeKernelFeature : IShellFeature, IPostConfigureShellS
                 $"{Describe(descriptor)} for it, which is not the default it replaces ({defaultTypeName}). One implementation serves per shell: " +
                 $"remove that registration, or leave the {FeatureName} feature out of the shell.");
         }
+    }
+
+    /// <summary>
+    /// Re-registers the old core's HTTP endpoint middleware with options of its own: a new instance at its defaults whose
+    /// base path is empty, so that it passes every request on and the kernel edge serves <c>/workflows/http</c>. The
+    /// shell's other HTTP endpoint settings don't reach it, and a middleware that serves no request has no use for them. A shell that registers the HTTP
+    /// activities' test-run middleware without an endpoint middleware of that name is refused: its type was renamed.
+    /// </summary>
+    private static void UnmountHttpEndpointMiddleware(IServiceCollection services)
+    {
+        var endpoint = services.SingleOrDefault(descriptor => !descriptor.IsKeyedService && descriptor.ServiceType.FullName == HttpEndpointMiddlewareTypeName);
+        if (endpoint is null)
+        {
+            if (services.Any(descriptor => descriptor.ServiceType.FullName == HttpTestRunMiddlewareTypeName))
+                throw new InvalidOperationException(
+                    $"The {FeatureName} feature unmounts the old core's HTTP endpoint middleware ({HttpEndpointMiddlewareTypeName}) from the shell, " +
+                    "and this shell composes the HTTP activities without a middleware of that name. If its type was renamed, update the name this feature looks for.");
+            return;
+        }
+        var middleware = endpoint.ServiceType;
+        var optionsType = middleware.Assembly.GetType(HttpEndpointOptionsTypeName) is { } found && found.GetProperty("BasePath") is { CanWrite: true } basePath
+            ? (found, basePath) : throw new InvalidOperationException(
+                $"The {FeatureName} feature unmounts {HttpEndpointMiddlewareTypeName} through its options' BasePath ({HttpEndpointOptionsTypeName}), which it cannot find.");
+        var unmounted = Activator.CreateInstance(optionsType.found)!;
+        optionsType.basePath.SetValue(unmounted, "");
+        var wrapped = typeof(Options).GetMethod(nameof(Options.Create))!.MakeGenericMethod(optionsType.found).Invoke(null, [unmounted])!;
+        services.Remove(endpoint);
+        services.Add(ServiceDescriptor.Describe(middleware, provider => ActivatorUtilities.CreateInstance(provider, middleware, wrapped), endpoint.Lifetime));
     }
 
     private static void DropRouteTableObserver(IServiceCollection services)

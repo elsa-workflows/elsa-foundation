@@ -470,8 +470,8 @@ The runtime checks current user and selected-session eligibility before refresh 
 sessions bind the exact admitted link revision; historical content lacking that authority fails closed.
 These are prepared source behaviors, not current-source execution results.
 
-The [managed runtime](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/README.md)
-and [HTTP API](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md) own composition,
+The [managed runtime](../../extensions/Identity/src/Elsa.Foundation.Identity.ExternalAuthentication/README.md)
+and [HTTP API](../../extensions/Identity/src/Api/README.md) own composition,
 full deployment overrides, callbacks, preview and guarded link/session administration. The optional API connects
 admission to the canonical cookie/token pipeline; upstream role names grant no Elsa permissions automatically.
 The [owned qualification sources](../../tools/identity/ExternalAuthentication.Probe/README.md) cover controlled

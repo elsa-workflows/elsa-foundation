@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import type { QuestionDefinition, QueryPredicate, QueryResult, QueryValue } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
+import type { QuestionDefinition, QueryPredicate, QueryResult, QueryValue } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/types";
 import type { Backend } from "./dashboardJourneySupport";
 
 export type TrendFact = { id: string; definitionId: string; status: string; runKind: string; startedAt: string };

@@ -3056,6 +3056,14 @@
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
+      "elsa.workflows.runtime.kernelapi": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Runtime.Api": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime.kernelhost": {
         "type": "Project",
         "dependencies": {

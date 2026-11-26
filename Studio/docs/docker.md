@@ -1,13 +1,20 @@
-# Running Elsa.Studio.Workbench.Host in Docker
+# Running the Studio apps in Docker
 
-`Studio/src/apps/Elsa.Studio.Workbench.Host` ships with a production `Dockerfile` that produces a self-contained
-container image of the Studio host. Point it at an Elsa Server backend at runtime via
-environment variables and, optionally, a mounted `shells.json`.
+Each Studio app in `Studio/src/apps` ships a production `Dockerfile` that produces a self-contained container image of that
+app. Point it at an Elsa server backend at runtime via environment variables and, optionally, a mounted `shells.json`.
 
-The Dockerfile lives at `Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile`, but the **build context must be
-the repository root** because the build depends on repo-root configuration
-(`Studio/Directory.Build.props`, `Studio/Directory.Packages.props`, `Studio/NuGet.config`),
-and the optional Studio modules beside their Foundation capabilities.
+| Studio app | Dockerfile | Published image | Pairs with |
+| --- | --- | --- | --- |
+| [`Elsa.Studio.Essentials.Host`](../src/apps/Elsa.Studio.Essentials.Host/README.md) | `Studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile` | `elsaworkflows/elsa-studio` | `elsaworkflows/elsa-essentials-host` |
+| `Elsa.Studio.Workbench.Host` | `Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile` | `elsaworkflows/elsa-studio-workbench` | `elsaworkflows/elsa-workbench` |
+| [`Elsa.Studio.Foundation.Host`](../src/apps/Elsa.Studio.Foundation.Host/README.md) | `Studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile` | `elsaworkflows/elsa-studio-foundation` | The bare `Elsa.Foundation.Host` |
+
+Until [#5768](https://github.com/elsa-workflows/elsa-foundation/issues/5768), `elsaworkflows/elsa-studio` published the Workbench app (then `Elsa.Studio.Web`). It now publishes Studio
+Essentials; the Workbench app has its own image.
+
+The **build context must be the repository root** for every Dockerfile, because the build depends on repo-root configuration
+(`Studio/Directory.Build.props`, `Studio/Directory.Packages.props`, `Studio/NuGet.config`) and the optional Studio modules
+beside their Foundation capabilities. Each Dockerfile copies only its app's project closure.
 
 > The React/Vite frontend assets are generated into each project's `wwwroot` by
 > `pnpm build` before the Docker build. No MSBuild target invokes pnpm/vite, so the
@@ -15,10 +22,17 @@ and the optional Studio modules beside their Foundation capabilities.
 > build and the Dockerfile fails if the host shell asset is missing. All three NuGet
 > feeds used by the build are public, so no NuGet credentials are required.
 
+> **Add-on browser files answer 503 in the images** until
+> [valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands. Nuplane serves an installed
+> package's files only from an enrolled extracted store, and that store does not qualify a container's filesystem. A module
+> installed from the feed loads and its feature enables, but its screens do not load. Compiled-in modules are unaffected.
+
 ## Quick start — prebuilt image (no clone or build)
 
-CI publishes a prebuilt image to Docker Hub as **`elsaworkflows/elsa-studio`**, tagged with the
-Elsa major version (`4`, `4.0`, `4.0.0`), plus `latest` and `4.0.0-preview.<n>` from `main`.
+`.github/workflows/studio-docker.yml` publishes the three images above to Docker Hub. Each gets `latest`,
+`4.0.0-preview.<n>` and `sha-<commit>` tags from `main`, and the version tags (`4`, `4.0`, `4.0.0`) from a release tag. The
+flavors build in parallel and publish independently: one image failing to push does not stop the others. The examples below
+use `elsaworkflows/elsa-studio`; the other two images take the same settings.
 
 ### With Docker Compose
 
@@ -91,7 +105,11 @@ From the repository root:
 pnpm --dir Studio install --frozen-lockfile
 pnpm --dir Studio build
 docker build -f Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local .
+docker build -f Studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile -t elsa-studio-essentials:local .
+docker build -f Studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile -t elsa-studio-foundation:local .
 ```
+
+The examples below use the Workbench image, `elsa-studio-web:local`; the other two take the same settings.
 
 The image is a two-stage build: `mcr.microsoft.com/dotnet/sdk:10.0` publishes the app and
 `mcr.microsoft.com/dotnet/aspnet:10.0` runs it as the base image's non-root user.
@@ -117,7 +135,7 @@ double-underscore (`__`) separator.
 
 | Environment variable | Default (in image) | Purpose |
 | --- | --- | --- |
-| `Studio__BackendBaseUrl` | `https://localhost:7243` | Base URL of the Elsa Server backend. Surfaced to the browser via `/studio-runtime.js`. |
+| `Studio__BackendBaseUrl` | Workbench `https://localhost:7243`, Essentials `https://localhost:7262`, Foundation `https://localhost:7250` | Base URL of the Elsa Server backend. Surfaced to the browser via `/studio-runtime.js`. |
 | `Studio__BackendServerBaseUrl` | *(falls back to `Studio__BackendBaseUrl`)* | URL used by Studio's server-side authentication, management bridge, and relays. Use a Docker-internal URL here when it differs from the browser URL. |
 | `Studio__BackendModuleManagementApiKey` | `local-dev-module-management-key` | **Server-side-only** key the Studio management bridge uses for Studio→backend host-control calls. It is **never emitted to the browser** (ADR 0037); the SPA carries no host management key. **Override in any real deployment.** |
 | `Studio__Workflows__AutosaveEnabledByDefault` | `true` | Whether the workflow editor opens with Autosave enabled. Users can still toggle it per editing session. |

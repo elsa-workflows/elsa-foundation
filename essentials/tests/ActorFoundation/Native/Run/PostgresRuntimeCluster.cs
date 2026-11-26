@@ -237,11 +237,12 @@ internal static class PostgresRuntimeCluster
             return active.Select(scope => new ObservedActivation(scope, forwarded)).ToArray();
         }
 
-        public async ValueTask ReleaseAsync(IReadOnlyList<IScopeActivation> scopes, CancellationToken token)
+        public async ValueTask<IReadOnlyList<int>> ReleaseAsync(IReadOnlyList<IScopeActivation> scopes, CancellationToken token)
         {
             var active = scopes.Cast<ObservedActivation>().Select(scope => scope.Inner).ToArray();
-            await ((IScopeSetRelease)host).ReleaseAsync(active, token);
+            var freed = await ((IScopeSetRelease)host).ReleaseAsync(active, token);
             releases.Enqueue(active.Select(scope => scope.Scope).Order().ToArray());
+            return freed;
         }
 
         public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken token)

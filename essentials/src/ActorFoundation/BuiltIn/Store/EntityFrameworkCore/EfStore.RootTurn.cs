@@ -9,7 +9,7 @@ public sealed partial class EfStore
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
         string State, string Header, byte[]? Wire, long Growth, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
         bool? OperatorSuspension, bool OperatorTermination, RootJobState? JobState, RootJobCompletion? JobCompletion, bool TimedJob,
-        IReadOnlyList<FoundationValue>? Values) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
+        IReadOnlyList<FoundationValue>? Values, string[]? SettledJobs = null) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -72,6 +72,15 @@ public sealed partial class EfStore
                         AND "Target" = {Current.Actor.Id} AND "Sender" = {Current.Actor.Id} AND "Partition" = {home}
                         AND "Kind" = {RootSelfWire} AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
                     """, cancellationToken);
+            }
+            if (SettledJobs is { Length: > 0 })
+            {
+                // A Terminate settles the root's outstanding timed jobs: their ticket and deadline rows go in its commit.
+                var removed = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    DELETE FROM "Messages" WHERE "Target" = {Current.Actor.Id} AND "Partition" = {home}
+                        AND "InboxScope" = {RootTimedJobScope} AND "Id" = ANY({SettledJobs}) AND NOT "Done"
+                    """, cancellationToken);
+                if (removed != SettledJobs.Length) return false;
             }
             var ended = Status is InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled;
             var nextJobGeneration = JobState is null ? Current.NextJobGeneration : JobState.NextGeneration;
@@ -151,12 +160,13 @@ public sealed partial class EfStore
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,
         string typeData, IReadOnlyDictionary<string, string> labels, string? journal, string[]? recalls = null, bool? operatorSuspension = null,
         RootJobState? jobState = null, RootJobCompletion? jobCompletion = null, bool timedJob = false,
-        IReadOnlyList<FoundationValue>? values = null, bool operatorTermination = false, long terminalGrowth = 0)
+        IReadOnlyList<FoundationValue>? values = null, bool operatorTermination = false, long terminalGrowth = 0, string[]? settledJobs = null)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
             new InstanceRef(current.Actor.Id).Partition != fence.Partition ||
-            status is not (InstanceStatus.Running or InstanceStatus.Finished) && !(timedJob && status == InstanceStatus.Faulted) && !(operatorTermination && status == InstanceStatus.Cancelled))
+            status is not (InstanceStatus.Running or InstanceStatus.Finished) &&
+                !((timedJob || RootTimedJobSettlementEnabled) && status == InstanceStatus.Faulted) && !(operatorTermination && status == InstanceStatus.Cancelled))
             throw new ArgumentException("Invalid running root or target disposition.", nameof(current));
         if (status != InstanceStatus.Running && journal is null)
             throw new ArgumentException("A terminal public root requires its journal entry.", nameof(journal));
@@ -173,7 +183,8 @@ public sealed partial class EfStore
         var image = new InstanceRow(current.Actor.Id, "", "", status, "null", checked(current.Revision + 1), null)
             .WithFoundationState(stored);
         var root = new RootTurnCheckpoint(tenant, reference, current, status, StoredState.Encode(image),
-            header, wire, terminalGrowth, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, operatorTermination, jobState, jobCompletion, timedJob, values);
+            header, wire, terminalGrowth, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, operatorTermination, jobState, jobCompletion, timedJob, values,
+            settledJobs);
         var turn = new TurnCommit(image.Id, null, null, [], [], [], [], [], journal);
         return new(turn, root);
 

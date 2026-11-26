@@ -14,9 +14,13 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../../src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj" />
+    <ProjectReference Include="../../../../../src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
     <!-- The in-memory slot authority, switch, projection stores and executable store the coordinator checks run on. -->
     <ProjectReference Include="../../../../../src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
     <!-- The old core's HTTP route-table observer, which the kernel feature leaves out of a shell. -->
     <ProjectReference Include="../../../../../src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj" />
+    <!-- The old core's HTTP endpoint middleware, which the kernel feature unmounts from a shell. -->
+    <ProjectReference Include="../../../../../src/Activities/Http/Elsa.Activities.Http.csproj" />
   </ItemGroup>
 </Project>

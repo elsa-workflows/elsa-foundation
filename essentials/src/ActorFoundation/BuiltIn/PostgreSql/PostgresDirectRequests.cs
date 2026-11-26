@@ -38,6 +38,12 @@ public sealed class PostgresDirectRequests : IReplyTransport
     /// <summary>The node whose callers these are: a reply addressed to another node is not this edge's.</summary>
     public string Node => node;
 
+    /// <summary>How long a start or input operation is deduplicated, for the Foundation opened with these requests.</summary>
+    public TimeSpan DeduplicationWindow { get; internal init; } = TimeSpan.FromHours(1);
+
+    /// <summary>The database time, in milliseconds, that a request's deadline is measured against.</summary>
+    public ValueTask<long> ReadClockAsync(CancellationToken cancellationToken = default) => admission.ReadReplyTimeAsync(cancellationToken);
+
     /// <summary>The open callers, for checks.</summary>
     internal Requests Pending => requests;
 

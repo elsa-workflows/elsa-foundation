@@ -19,7 +19,8 @@ namespace Kernel.Native.Run;
 // recovery refuses Suspend. S5b-1: the parked root's view seals its Park selection (revision and time), which admission
 // requires for a Terminate, held or not, on a parked root. The owner ends the root in one commit when its kept rows fit
 // one page: Cancelled and unsuspended with its terminal mark, every kept row cleared and its Park mark gone, journalled
-// "terminated". A stale Park is refused as "selection" and a larger one as "page". Shipped formats carry none of these paths.
+// "terminated". A stale Park is refused as "selection" and a larger one as "page". Of the shipped formats only RootShipped
+// (format 25) takes these paths, the S5b-3b Delete of a parked root among them; the qualification profiles carry none.
 internal static class PostgresRootParkedOperatorChecks
 {
     private static readonly StoreFormat Composed = StoreFormat.Current with { MessageProtocol = 95 };
@@ -32,6 +33,12 @@ internal static class PostgresRootParkedOperatorChecks
     private const string RecoverySchema = "parked_recovery";
     private const string ClearingSchema = "parked_clearing";
     private static readonly StoreFormat ComposedClearing = StoreFormat.Current with { MessageProtocol = 90 };
+    private const string ThenDeleteSchema = "parked_then_delete";
+    private static readonly StoreFormat ComposedThenDelete = StoreFormat.Current with { MessageProtocol = 89 };
+    private const string DeleteSchema = "parked_delete";
+    private static readonly StoreFormat ComposedDelete = StoreFormat.Current with { MessageProtocol = 88 };
+    private const string ProbeDiscarded = """{"Outcome":"protected","Disposition":"discarded","Operation":"probe","Cleared":0}""";
+    private const string ProbeProtected = """{"Outcome":"protected","Disposition":"terminated","Operation":"probe","Cleared":0}""";
     private const string Fault = "deliberate actor failure";
     private const string ProbeRefusal = """{"Outcome":"refused","Operation":"probe","Reason":"parked"}""";
     private const string ProbeTerminated = """{"Outcome":"terminated","Operation":"probe","Cleared":0}""";
@@ -50,13 +57,15 @@ internal static class PostgresRootParkedOperatorChecks
     ];
 
     private sealed record InputRow(long Seq, string Id, string Kind, bool Done, short? KeptBy, bool Content);
+    private sealed record ControlRow(long Due, long KeepUntil, string Start);
 
-    internal static async Task<int> RunAsync(bool owned, bool inBatch)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool shippedSet = false)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        var capabilities = RootProfiles.Formats[StoreFormat.RootOperatorReplies] | RootProfiles.Formats[StoreFormat.RootParkInspection];
+        var capabilities = shippedSet ? RootProfiles.Shipped
+            : RootProfiles.Formats[StoreFormat.RootOperatorReplies] | RootProfiles.Formats[StoreFormat.RootParkInspection];
         KernelDb Open() => KernelDb.ForUnshippedComposition(options, Composed, capabilities);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(240));
         var stop = timeout.Token;
@@ -88,6 +97,11 @@ internal static class PostgresRootParkedOperatorChecks
         var suspendedResume = await main.StartAsync("suspended-resume");
         var running = await main.StartAsync("running");
         var planned = await main.StartAsync("planned");
+        var deleted = await main.StartAsync("deleted");
+        var withheldDelete = await main.StartAsync("withheld-delete");
+        var heldRunning = await main.StartAsync("held-running");
+        var heldThenDelete = await main.StartAsync("held-then-delete");
+        var heldDelete = await main.StartAsync("held-delete");
         probe.FailsOn.Add((lone.Id, Contract.Kinds.Terminate));
         probe.FailsOn.Add((suspendedTerminate.Id, Contract.Kinds.Terminate));
         probe.FailsOn.Add((suspendedResume.Id, Contract.Kinds.Resume));
@@ -116,8 +130,9 @@ internal static class PostgresRootParkedOperatorChecks
         Check(!await main.TerminateAsync(late, "running-late") &&
                 !await main.TerminateAsync(early, "terminate-other", parkLate) &&
                 !await main.TerminateAsync(late, "terminate-stale", main.SealPark(late, before.Revision + 1, (await main.ParkAtAsync(before))!.Value)) &&
-                !await main.OperateAsync(late, "then-delete-parked", Contract.Kinds.Terminate, parkLate, thenDelete: true),
-            "admission refuses a parked root's running selection, another root's Park, a stale Park and Terminate and delete");
+                !await main.OperateAsync(early, "delete-other", Contract.Kinds.Delete, parkLate) &&
+                !await main.OperateAsync(late, "delete-stale", Contract.Kinds.Delete, main.SealPark(late, before.Revision + 1, (await main.ParkAtAsync(before))!.Value)),
+            "admission refuses a parked root's running selection, another root's Park and a stale Park, for a Terminate and a Delete");
         Check(await main.TerminateAsync(late, "terminate-late", parkLate), "a Terminate with the root's Park selection is admitted");
         var inbox = (await main.Cold.ReadRootInboxAsync(tenant.Tenant, late.Id, 0, "", 10, stop)).Rows;
         Check(inbox is [{ Id: "withheld", KeptBy: null }, { Id: "fail-late", KeptBy: ParkKeepReason.Consumed }, { Id: "terminate-late", KeptBy: null }],
@@ -191,13 +206,83 @@ internal static class PostgresRootParkedOperatorChecks
         await main.TerminatedAsync(held, "after-held", cleared: 1);
         main.Answered("held-terminate", "Parked");
 
+        // S5b-3b: a plain Delete with the Park selection retires the parked root, still Faulted, in one commit where the parked
+        // root withholds its ordinary inputs, and answers its held caller "deleted" once.
+        Check(await main.SendAsync(deleted, "fail-deleted", "fail"), "a failing input is admitted for the root to delete");
+        var deletedPark = await main.DriveAsync(deleted, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+        Check(await main.OperateAsync(deleted, "delete-parked", Contract.Kinds.Delete, await main.ParkSelectionAsync(deleted, 2), reply: true),
+            "a held Delete with the Park selection is admitted for the parked root");
+        await main.RetiredAsync(deleted);
+        Check((await main.Cold.ReadJournalOfAsync(0, deletedPark.Actor.Id, 0, stop)) is [{ Revision: -1, Entries: """["delete"]""" }] &&
+                (await main.InputsOfAsync(deletedPark.Actor.Id)).All(row => row.Done && row.KeptBy is null && !row.Content) &&
+                !probe.Saw(deleted, Contract.Kinds.Delete),
+            "the Delete retired the parked root with the deletion marker as its only journal row and its kept input cleared");
+        main.Answered("delete-parked", "deleted");
+
+        // Without Park arrivals the parked root withholds its inputs: one read ahead in the failing input's poll, due just
+        // after it, stays in the owner's slot. The Delete's retirement settles it, and the owner forgets it with the retired root.
+        var behindDue = (await main.ImageAsync(withheldDelete)).AsOf + 1_500;
+        Check(await main.SendAsync(withheldDelete, "withheld-behind", "ordinary", behindDue) && await main.SendAsync(withheldDelete, "fail-withheld-delete", "fail"),
+            "an input due shortly and a failing one are admitted together");
+        var withheldPark = await main.DriveAsync(withheldDelete, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+        while ((await main.ImageAsync(withheldDelete)).AsOf <= behindDue) await Task.Delay(100, stop);
+        var worker = (Worker)main.Owner;
+        Check(worker.InboxCountOf(withheldPark.Actor.Id) == 1, "the input polled with the failing one stays withheld in the owner's slot");
+        Check(await main.OperateAsync(withheldDelete, "delete-withheld", Contract.Kinds.Delete, await main.ParkSelectionAsync(withheldDelete, 2)),
+            "a Delete with the Park selection is admitted for the root with a withheld input");
+        await main.RetiredAsync(withheldDelete);
+        Check(worker.InboxCountOf(withheldPark.Actor.Id) == 0 && ReferenceEquals(main.Owner, worker) && !main.StoodDown &&
+                (await main.InputsOfAsync(withheldPark.Actor.Id)).All(row => row.Done && !row.Content) && !probe.Saw(withheldDelete, "ordinary"),
+            "the retirement settled the withheld input and no row stays in the retired root's slot");
+
+        // #5756: retirement answers each held direct input still pending on the root once, with "missing", as the in-memory
+        // reference answers an input that reaches a retired row; an unheld input settles with no answer. In a set without
+        // direct held replies a held input is refused at admission and nothing else changes. The inputs are due shortly
+        // after the command that retires the root, so they are still pending when it runs, or withheld by the Park.
+        var heldReplies = db.UsesRootReplyProtocol;
+        // A running root retired by its Terminate-then-delete.
+        var runningDue = (await main.ImageAsync(heldRunning)).AsOf + 1_500;
+        var runningRequest = await main.HeldSendAsync(heldRunning, "held-running-input", runningDue);
+        Check(runningRequest is not null == heldReplies &&
+                await main.SendAsync(heldRunning, "unheld-running-input", "ordinary", runningDue) &&
+                await main.OperateAsync(heldRunning, "held-running-delete", Contract.Kinds.Terminate, main.Selections[heldRunning], thenDelete: true) &&
+                await main.OperateAsync(heldRunning, "held-running-terminate", Contract.Kinds.Terminate, main.Selections[heldRunning], reply: true),
+            heldReplies ? "a held and an unheld input due shortly, a Terminate-then-delete and a held Terminate are admitted for the running root"
+                : "without held replies a held input is refused at admission; an unheld input, a Terminate-then-delete and a held Terminate are admitted");
+        var runningActor = (await main.ImageAsync(heldRunning)).Actor.Id;
+        await main.RetiredAsync(heldRunning);
+        await HeldInputsAnsweredAsync(runningActor, "held-running-input", runningRequest, "unheld-running-input", runningDue);
+        // A held command on the same root is answered once too, through the same retirement.
+        await main.AnsweredErrorEventuallyAsync("held-running-terminate", "missing", runningDue);
+        // A parked root retired by its Terminate-then-delete, and one retired by a Delete, both with the Park selection.
+        foreach (var (root, label, thenDelete) in new[] { (heldThenDelete, "held-then-delete", true), (heldDelete, "held-delete", false) })
+        {
+            var heldDue = (await main.ImageAsync(root)).AsOf + 1_500;
+            var heldRequest = await main.HeldSendAsync(root, label + "-input", heldDue);
+            // The faulting input is held too where held replies exist: its caller is answered with the Faulted end when the Park
+            // opens (Worker.Release answers a consumed input's route at a non-Running end), and the Park keeps the row Done.
+            var faultRequest = heldReplies ? await main.HeldSendAsync(root, label + "-fail", null, "fail") : null;
+            Check(heldRequest is not null == heldReplies && await main.SendAsync(root, "un" + label + "-input", "ordinary", heldDue) &&
+                    (heldReplies ? faultRequest is not null : await main.SendAsync(root, label + "-fail", "fail")),
+                $"held and unheld inputs due shortly, and a failing one, are admitted for the {label} root");
+            var retiredPark = await main.DriveAsync(root, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            while ((await main.ImageAsync(root)).AsOf <= heldDue) await Task.Delay(100, stop);
+            Check(await main.OperateAsync(root, label, thenDelete ? Contract.Kinds.Terminate : Contract.Kinds.Delete,
+                    await main.ParkSelectionAsync(root, 2), thenDelete: thenDelete),
+                $"a {(thenDelete ? "Terminate-then-delete" : "Delete")} with the Park selection is admitted for the {label} root");
+            await main.RetiredAsync(root);
+            await HeldInputsAnsweredAsync(retiredPark.Actor.Id, label + "-input", heldRequest, "un" + label + "-input", heldDue);
+            if (faultRequest is not null)
+                await main.AnsweredOnceAsync(faultRequest, heldDue, reply => reply is { Status: InstanceStatus.Faulted, Error: null },
+                    "the Faulted end at Park open and nothing from the retirement");
+        }
+
         // Admission on a parked root: a Suspend, a Resume, a held running selection and a held Terminate and delete are refused.
         var parkEarly = await main.ParkSelectionAsync(early, 2);
         Check(!await main.OperateAsync(early, "suspend-parked", Contract.Kinds.Suspend) &&
                 !await main.OperateAsync(early, "resume-parked", Contract.Kinds.Resume) &&
-                !await main.OperateAsync(early, "held-parked", Contract.Kinds.Terminate, main.Selections[early], reply: true) &&
-                !await main.OperateAsync(early, "held-then-delete-parked", Contract.Kinds.Terminate, parkEarly, reply: true, thenDelete: true),
-            "admission refuses a Suspend, a Resume, a held running selection and a held Terminate and delete for a parked root");
+                !await main.OperateAsync(early, "held-parked", Contract.Kinds.Terminate, main.Selections[early], reply: true),
+            "admission refuses a Suspend, a Resume and a held running selection for a parked root");
 
         // A Park selection the owner finds stale is refused there with a recorded reason, the Park stays and a held caller
         // is answered with the stale selection.
@@ -251,6 +336,17 @@ internal static class PostgresRootParkedOperatorChecks
         main.Answered("terminate-suspended-park", "terminated");
 
         await RefusalTriggers();
+
+        // The retired root's inputs all settled; a held one was answered "missing" once, and an unheld one not at all.
+        async Task HeldInputsAnsweredAsync(string actor, string held, string? request, string unheld, long due)
+        {
+            var inputs = await main.InputsOfAsync(actor);
+            Check(inputs.All(row => row.Done && !row.Content) && !main.AnsweredAny(unheld) &&
+                    inputs.Count(row => row.Id.Contains("/" + FoundationRootCreator.OperationDigest(unheld) + "/")) == 1 &&
+                    (request is null || inputs.Count(row => row.Id.Contains("/" + FoundationRootCreator.OperationDigest(held) + "/")) == 1),
+                $"the retirement settled the inputs of {actor}, and the unheld one got no answer");
+            if (request is not null) await main.AnsweredErrorEventuallyAsync(request, "missing", due);
+        }
         await ParkedRootPredicates();
 
         // Format 22 still refuses Terminate at admission and at decode.
@@ -271,6 +367,8 @@ internal static class PostgresRootParkedOperatorChecks
         await ArrivalsSet();
         await RereadAcrossFormats();
         await ClearingSet();
+        await ThenDeleteSet();
+        await DeleteSet();
         await JobsInspection();
         return 0;
 
@@ -299,8 +397,11 @@ internal static class PostgresRootParkedOperatorChecks
 
         void ShippedFormatsUnchanged()
         {
-            Check(RootProfiles.Formats.Values.All(set => (set & RootCapabilities.ParkOpening) == 0 || (set & RootCapabilities.Termination) == 0),
-                "no shipped format carries Park with termination, so formats 19-22 and 5, 11-17 keep their paths");
+            // S7: of the shipped formats only format 25 carries Park with termination, and it takes the parked-operator paths.
+            Check(RootProfiles.Formats.Where(entry => entry.Key != StoreFormat.RootShipped)
+                    .All(entry => (entry.Value & RootCapabilities.ParkOpening) == 0 || (entry.Value & RootCapabilities.Termination) == 0) &&
+                KernelDb.ForPostgresRootShipped(options).UsesRootParkedOperators,
+                "only format 25 carries Park with termination, on the parked-operator paths, so formats 19-22 and 5, 11-17 keep theirs");
             foreach (var shipped in new Func<DbContextOptions<KernelDb>, KernelDb>[] { KernelDb.ForPostgresRootParkOpening,
                 KernelDb.ForPostgresRootParkInspection, KernelDb.ForPostgresRootParkArrivals, KernelDb.ForPostgresRootParkRecovery,
                 KernelDb.ForPostgresRootOperators, KernelDb.ForPostgresRootTerminations, KernelDb.ForPostgresRootOperatorReplies })
@@ -521,6 +622,18 @@ internal static class PostgresRootParkedOperatorChecks
             Check(!await set.TriggerProbeEntriesAsync(parkedProbe, [ProbeRefusal, ProbeClearing],
                     Raw(parkedProbe, """ "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1 """)),
                 "an Open beside a refused entry at the same revision is refused: a refusal pins the clearing's columns");
+            // A set without Terminate-then-delete takes no protected entry, even where a terminated one would end the root.
+            await set.ExecuteAsync($"""UPDATE "Messages" SET "FoundationKeptBy" = NULL WHERE "Target" = {parkedProbe.Actor.Id} AND "FoundationKeptBy" IS NOT NULL""");
+            try
+            {
+                Check(await set.TriggerProbeAsync(parkedProbe, ProbeTerminated, End(parkedProbe)) &&
+                        !await set.TriggerProbeAsync(parkedProbe, ProbeProtected, End(parkedProbe)),
+                    "a set without Terminate-then-delete ends a parked root beside a terminated entry and refuses a protected one");
+            }
+            finally
+            {
+                await set.ExecuteAsync($"""UPDATE "Messages" SET "FoundationKeptBy" = 0 WHERE "Target" = {parkedProbe.Actor.Id} AND "Kind" = 'fail'""");
+            }
 
             // A new owner continues from the durable state and ends the root.
             await set.RetakeAsync();
@@ -662,6 +775,577 @@ internal static class PostgresRootParkedOperatorChecks
                     Check(!(await store.CommitAsync(batch, token)).Landed && await set.ClearingAsync(large) == before,
                         "the page replayed after it committed is refused and changes nothing");
                     // After this page the owner dies: none of its commits lands, and the next control waits in the inbox.
+                    frozen = store;
+                }
+                return committed;
+            }
+        }
+
+        // S5b-3a: a Terminate-then-delete of a parked root clears the Park as a Terminate does and, in the commit that ends the
+        // root, retires it with the deletion marker unless the row is protected then, when it is terminated and kept.
+        async Task ThenDeleteSet()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + ThenDeleteSchema, stop);
+            var options = new DbContextOptionsBuilder<KernelDb>()
+                .UseNpgsql(new NpgsqlConnectionStringBuilder(connection) { SearchPath = ThenDeleteSchema }.ConnectionString).Options;
+            var capabilities = RootProfiles.Formats[StoreFormat.RootOperatorReplies] | RootProfiles.Formats[StoreFormat.RootParkArrivals];
+            KernelDb OpenThenDelete() => KernelDb.ForUnshippedComposition(options, ComposedThenDelete, capabilities);
+            EfStore? frozen = null;
+            var pageSeen = false;
+            var arrivals = new[] { "td-during-1", "td-during-2" };
+            Contract.ActorRef large = default;
+            await using var set = new Set("parked-then-delete", OpenThenDelete, owned, inBatch, tenant, stop);
+            set.Write = Write;
+            await set.InstallAsync(createTables: true);
+            await set.Cold.InstallRootWorkflowHistoryAsync(stop);
+            await set.OwnAsync();
+            var one = await set.StartAsync("td-one");
+            large = await set.StartAsync("td-large");
+            var kept = await set.StartAsync("td-kept");
+            var probed = await set.StartAsync("td-probe");
+            var pair = await set.StartAsync("td-pair");
+            var reverse = await set.StartAsync("td-reverse");
+            var residue = await set.StartAsync("td-residue");
+            var keptLarge = await set.StartAsync("td-kept-large");
+            set.Probe.FailsOn.Add((probed.Id, Contract.Kinds.Terminate));
+
+            // One page: the end commit retires the root, answers the held caller "deleted" once and removes its history row.
+            Check(await set.SendAsync(one, "td-one-fail", "fail"), "the Terminate-then-delete set admits a failing input");
+            var onePark = await set.DriveAsync(one, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            var parkOne = await set.ParkSelectionAsync(one, 2);
+            Check(await set.HistoryRowsAsync(one) == 1, "the parked root has its history row");
+            Check(await set.OperateAsync(one, "td-one", Contract.Kinds.Terminate, parkOne, reply: true, thenDelete: true),
+                "a held Terminate-then-delete with the Park selection is admitted");
+            await set.RetiredAsync(one);
+            Check((await set.Cold.ReadJournalOfAsync(0, onePark.Actor.Id, 0, stop)) is [{ Revision: -1, Entries: """["delete"]""" }] &&
+                    await set.HistoryRowsAsync(one) == 0 && (await set.InputsOfAsync(onePark.Actor.Id)).All(row => row.Done && row.KeptBy is null && !row.Content),
+                "the root is retired with the deletion marker as its only journal row, its history row and kept rows gone");
+            set.Answered("td-one", "deleted");
+
+            // Paged: 402 kept rows, arrivals during the clearing, and a takeover after the first page.
+            Check(await set.SendAsync(large, "td-large-fail", "fail"), "the Terminate-then-delete set admits a failing input for the large Park");
+            var largePark = await set.DriveAsync(large, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await set.SendAsync(large, "d1", "ordinary"), "the Terminate-then-delete set admits an arrival to copy");
+            await set.SettledInputsAsync(large);
+            var copies = Enumerable.Range(1, 400).Select(n => $"{large.Id}/{FoundationRootCreator.OperationDigest($"d{n:D3}")}/{Guid.NewGuid():N}").ToArray();
+            await using (var write = OpenThenDelete())
+                Check(await write.Database.ExecuteSqlInterpolatedAsync($$"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Payload", "Due", "KeepUntil",
+                        "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
+                    SELECT m."InboxScope", d.id, m."Partition", m."Target", m."Kind", m."Start", '{}', m."Due", m."KeepUntil", true, 0, 0, 0, 0, 1
+                    FROM "Messages" m, unnest({{copies}}::text[]) WITH ORDINALITY d(id, n)
+                    WHERE m."Target" = {{largePark.Actor.Id}} AND m."FoundationKeptBy" = 1 ORDER BY d.n
+                    """, stop) == 400, "raw SQL keeps 400 more arrivals for the large Terminate-then-delete");
+            Check(await set.OperateAsync(large, "td-large", Contract.Kinds.Terminate, await set.ParkSelectionAsync(large, 2), reply: true, thenDelete: true),
+                "a held Terminate-then-delete is admitted for the Park of 402 kept rows");
+            await set.PassUntilAsync(() => set.StoodDown);
+            Check(pageSeen && await set.ImageAsync(large) is { Status: InstanceStatus.Faulted } && (await set.ClearingAsync(large)).Cleared == 340 &&
+                    (await set.InputsAsync(large)).Count(row => arrivals.Any(op => row.Id.Contains("/" + FoundationRootCreator.OperationDigest(op) + "/")) &&
+                        !row.Done && row.KeptBy is null) == 2,
+                "the first owner opened the clearing and cleared one page before it stopped; the arrivals are pending and unkept");
+            await set.RetakeAsync();
+            await set.RetiredAsync(large);
+            var largeInputs = await set.InputsOfAsync(largePark.Actor.Id);
+            Check((await set.Cold.ReadJournalOfAsync(0, largePark.Actor.Id, 0, stop)) is [{ Revision: -1, Entries: """["delete"]""" }] &&
+                    await set.HistoryRowsAsync(large) == 0 && largeInputs.All(row => row.Done && row.KeptBy is null && !row.Content) &&
+                    !set.Probe.Saw(large, "ordinary"),
+                "the next owner cleared the rest and retired the root; the arrivals were settled by the retirement, unseen by the actor");
+            set.Answered("td-large", "started");
+
+            // Protected at the end: terminated and kept, Cancelled with its terminal mark, then deleted through ordinary retirement.
+            set.Probe.Protects.Add(kept.Id);
+            Check(await set.SendAsync(kept, "td-kept-fail", "fail"), "the Terminate-then-delete set admits a failing input for the protected root");
+            var keptPark = await set.DriveAsync(kept, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await set.OperateAsync(kept, "td-kept", Contract.Kinds.Terminate, await set.ParkSelectionAsync(kept, 2), reply: true, thenDelete: true),
+                "a held Terminate-then-delete is admitted for the protected root");
+            var keptEnd = await set.DriveAsync(kept, image => image is { Status: InstanceStatus.Cancelled });
+            Check(keptEnd.TerminalRevision == keptEnd.Revision && keptEnd.TerminalAt is > 0 &&
+                    Outcomes(await set.Cold.ReadJournalOfAsync(0, keptPark.Actor.Id, 0, stop)) is [.., """{"Outcome":"protected","Disposition":"terminated","Operation":"td-kept","Cleared":1}"""],
+                "the protected root is terminated and kept: Cancelled with its terminal mark, journalled as protected");
+            set.Answered("td-kept", "terminated and kept");
+            set.Probe.Protects.Remove(kept.Id);
+            Check(await set.OperateAsync(kept, "td-kept-delete", Contract.Kinds.Delete, await set.SelectionAsync(kept)),
+                "a Delete with its terminal selection is admitted once protection ends");
+            await set.RetiredAsync(kept);
+
+            // A Terminate then a held Terminate-then-delete on one Park: the first ends the root, and the second names a Park the
+            // root no longer has, so it is refused as a stale selection and answered once; it never throws.
+            Check(await set.SendAsync(pair, "td-pair-fail", "fail"), "the Terminate-then-delete set admits a failing input for the pair root");
+            await set.DriveAsync(pair, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            var parkPair = await set.ParkSelectionAsync(pair, 2);
+            Check(await set.TerminateAsync(pair, "td-pair-terminate", parkPair) &&
+                    await set.OperateAsync(pair, "td-pair-delete", Contract.Kinds.Terminate, parkPair, reply: true, thenDelete: true),
+                "a Terminate and a held Terminate-then-delete with one Park selection are admitted");
+            var pairEnd = await set.DriveAsync(pair, image => image is { Status: InstanceStatus.Cancelled });
+            await set.SettledInputsAsync(pair);
+            Check(await set.ImageAsync(pair) is { Status: InstanceStatus.Cancelled } ended && ended.Revision == pairEnd.Revision,
+                "the second command settled on the ended root and left it Cancelled, unjournalled");
+            set.Answered("td-pair-delete", "StaleSelection");
+            // The reverse order: the Terminate-then-delete retires the root, and the held Terminate behind it is answered once.
+            Check(await set.SendAsync(reverse, "td-reverse-fail", "fail"), "the Terminate-then-delete set admits a failing input for the reverse root");
+            await set.DriveAsync(reverse, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            var parkReverse = await set.ParkSelectionAsync(reverse, 2);
+            Check(await set.OperateAsync(reverse, "td-reverse-delete", Contract.Kinds.Terminate, parkReverse, thenDelete: true) &&
+                    await set.OperateAsync(reverse, "td-reverse-terminate", Contract.Kinds.Terminate, parkReverse, reply: true),
+                "a Terminate-then-delete and a held Terminate with one Park selection are admitted");
+            await set.RetiredAsync(reverse);
+            set.AnsweredError("td-reverse-terminate", "missing");
+
+            // A pending row the retirement refuses (here one without a keep window) makes a Terminate-then-delete outstanding.
+            Check(await set.SendAsync(residue, "td-residue-fail", "fail"), "the Terminate-then-delete set admits a failing input for the residue root");
+            var residuePark = await set.DriveAsync(residue, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            await set.ExecuteAsync($"""
+                INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
+                VALUES (-4, 'td-residue-pending', 0, {residuePark.Actor.Id}, 'ordinary', 4102444800000, 0, 0, 0, false)
+                """);
+            try
+            {
+                Check(await set.OperateAsync(residue, "td-residue-delete", Contract.Kinds.Terminate, await set.ParkSelectionAsync(residue, 2),
+                        reply: true, thenDelete: true), "a held Terminate-then-delete is admitted for the root with a pending residue");
+                await set.DriveAsync(residue, image => image is { Revision: 3 });
+            }
+            finally { await set.ExecuteAsync($"""DELETE FROM "Messages" WHERE "Id" = 'td-residue-pending'"""); }
+            await set.SettledAsync(residue, "td-residue-delete", reason: "outstanding");
+            set.Answered("td-residue-delete", "ParkOutstanding");
+
+            // Protected at the last page of a clearing: terminated and kept, the held caller answered "started" at Open only.
+            set.Probe.Protects.Add(keptLarge.Id);
+            Check(await set.SendAsync(keptLarge, "td-kept-large-fail", "fail"), "the Terminate-then-delete set admits a failing input for the protected large root");
+            var keptLargePark = await set.DriveAsync(keptLarge, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await set.SendAsync(keptLarge, "k1", "ordinary"), "the Terminate-then-delete set admits an arrival to copy for the protected large root");
+            await set.SettledInputsAsync(keptLarge);
+            var keptCopies = Enumerable.Range(1, 400).Select(n => $"{keptLarge.Id}/{FoundationRootCreator.OperationDigest($"k{n:D3}")}/{Guid.NewGuid():N}").ToArray();
+            await using (var write = OpenThenDelete())
+                Check(await write.Database.ExecuteSqlInterpolatedAsync($$"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Payload", "Due", "KeepUntil",
+                        "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
+                    SELECT m."InboxScope", d.id, m."Partition", m."Target", m."Kind", m."Start", '{}', m."Due", m."KeepUntil", true, 0, 0, 0, 0, 1
+                    FROM "Messages" m, unnest({{keptCopies}}::text[]) WITH ORDINALITY d(id, n)
+                    WHERE m."Target" = {{keptLargePark.Actor.Id}} AND m."FoundationKeptBy" = 1 ORDER BY d.n
+                    """, stop) == 400, "raw SQL keeps 400 more arrivals for the protected large root");
+            Check(await set.OperateAsync(keptLarge, "td-kept-large", Contract.Kinds.Terminate, await set.ParkSelectionAsync(keptLarge, 2), reply: true, thenDelete: true),
+                "a held Terminate-then-delete is admitted for the protected Park of 402 kept rows");
+            var keptLargeEnd = await set.DriveAsync(keptLarge, image => image is { Status: InstanceStatus.Cancelled });
+            Check(keptLargeEnd.TerminalRevision == keptLargeEnd.Revision &&
+                    Outcomes(await set.Cold.ReadJournalOfAsync(0, keptLargePark.Actor.Id, 0, stop)) is
+                        ["""{"Outcome":"clearing","Operation":"td-kept-large","Cleared":170}""",
+                         """{"Outcome":"protected","Disposition":"terminated","Operation":"td-kept-large","Cleared":402}"""],
+                "the clearing protected at its last page ends Cancelled and kept, journalled as protected with the total");
+            set.Answered("td-kept-large", "started");
+            set.Probe.Protects.Remove(keptLarge.Id);
+
+            // The parked retirement branch: a raw retirement passes on a parked root with nothing kept (rolled back), and each
+            // condition of the C# retirement lock refuses it.
+            Check(await set.TerminateAsync(probed, "td-probe-terminate"), "a Terminate whose own turn fails is admitted for the probe root");
+            await set.DriveAsync(probed, image => image is { Revision: 3, Status: InstanceStatus.Faulted });
+            var parkedProbe = await set.ImageAsync(probed);
+            Check(await set.TriggerProbeAsync(parkedProbe, null, Retire(parkedProbe)), "a parked root with nothing kept passes the parked retirement (rolled back)");
+            Check(await set.TriggerProbeAsync(parkedProbe, ProbeProtected, End(parkedProbe)),
+                "a parked root with nothing kept ends Cancelled beside a protected entry (rolled back)");
+            foreach (var (label, planted, cleared) in new[]
+            {
+                ("jobs", """ "Jobs" = 'fixture' """, """ "Jobs" = NULL """),
+                ("children", """ "Children" = 'fixture' """, """ "Children" = NULL """),
+                ("a parent", """ "Parent" = 'fixture' """, """ "Parent" = NULL """),
+                ("custom handles", """ "CustomHandles" = 'fixture' """, """ "CustomHandles" = NULL """)
+            })
+            {
+                await set.BypassAsync(parkedProbe, planted);
+                bool retired;
+                try { retired = await set.TriggerProbeAsync(parkedProbe, null, Retire(parkedProbe)); }
+                finally { await set.BypassAsync(parkedProbe, cleared); }
+                Check(!retired, $"the parked retirement is refused for a root with {label}");
+            }
+            foreach (var (label, plant, remove) in new (string, FormattableString, FormattableString)[]
+            {
+                ("a subscription", $"""INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ('probe', {parkedProbe.Actor.Id}, 'probe', 0)""",
+                    $"""DELETE FROM "Subscriptions" WHERE "Key" = 'probe'"""),
+                ("a pending row that is not a direct input", $"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
+                    VALUES (-4, 'probe-pending', 0, {parkedProbe.Actor.Id}, 'ordinary', 4102444800000, 0, 0, 0, false)
+                    """, $"""DELETE FROM "Messages" WHERE "Id" = 'probe-pending'"""),
+                ("a kept row", $"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Due", "KeepUntil", "Seen", "Attempts", "Trial", "Done", "FoundationKeptBy")
+                    VALUES (-4, 'probe-kept', 0, {parkedProbe.Actor.Id}, 'ordinary', 0, 1, 0, 0, 0, true, 1)
+                    """, $"""DELETE FROM "Messages" WHERE "Id" = 'probe-kept'""")
+            })
+            {
+                await set.ExecuteAsync(plant);
+                bool retired;
+                try { retired = await set.TriggerProbeAsync(parkedProbe, null, Retire(parkedProbe)); }
+                finally { await set.ExecuteAsync(remove); }
+                Check(!retired, $"the parked retirement is refused for a root with {label}");
+            }
+            Check(!await set.LoneEntryCommitsAsync(parkedProbe, ProbeProtected), "a lone protected entry with no checkpoint write is refused at commit");
+            Check(!await set.TriggerProbeAsync(parkedProbe, ProbeProtected, Continue(parkedProbe)),
+                "a protected entry beside a write that leaves the root parked is refused: it needs the root ended Cancelled");
+            return;
+
+            async ValueTask<Committed> Write(EfStore store, CommitBatch batch, CancellationToken token)
+            {
+                if (ReferenceEquals(store, frozen)) return new Committed(false, 0, []);
+                var clear = batch.Turns.SingleOrDefault(turn => turn.FoundationRootOperator?.Id == "td-large");
+                var committed = await store.CommitAsync(batch, token);
+                if (!committed.Landed) return committed;
+                if (clear is { Journal: { } entry } && entry.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal))
+                    foreach (var arrival in arrivals) Check(await set.SendAsync(large, arrival, "ordinary"), $"the clearing root admits {arrival} after Open");
+                if (clear is { Journal: null } && clear.FoundationRootOperator!.Operator!.RootParkClear && !pageSeen)
+                {
+                    // After the first page this owner dies: none of its commits lands, and the next control waits in the inbox.
+                    pageSeen = true;
+                    frozen = store;
+                }
+                return committed;
+            }
+        }
+
+        // S5b-3b: a plain Delete that names a parked root's Park, in a set with retirement and without Terminate-then-delete.
+        // It clears the Park as a Terminate does, and the commit that leaves nothing kept retires the root still Faulted, unless
+        // the row is protected then: the Park resolves as a discard, Faulted under a new terminal mark (DT-4, end state only).
+        async Task DeleteSet()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + DeleteSchema, stop);
+            var options = new DbContextOptionsBuilder<KernelDb>()
+                .UseNpgsql(new NpgsqlConnectionStringBuilder(connection) { SearchPath = DeleteSchema }.ConnectionString).Options;
+            var capabilities = RootProfiles.Formats[StoreFormat.RootRetirement] | RootCapabilities.OperatorReplies |
+                RootProfiles.Formats[StoreFormat.RootParkArrivals];
+            KernelDb OpenDelete() => KernelDb.ForUnshippedComposition(options, ComposedDelete, capabilities);
+            await using (var check = OpenDelete())
+                Check(RootProfiles.MissingPrerequisites(capabilities) == RootCapabilities.None && check.UsesRootParkedOperators &&
+                        check.UsesRootRetirement && !check.UsesRootTerminateThenDelete && check.UsesRootParkArrivals && check.UsesRootOperatorReplies,
+                    "the Delete set carries Park arrivals with retirement and held replies, without Terminate-then-delete");
+            EfStore? frozen = null;
+            var pageSeen = false;
+            var during = new Dictionary<string, (Contract.ActorRef Root, string Park, string[] Arrivals)>();
+            Contract.ActorRef large = default, keptLarge = default;
+            var opened = new Dictionary<string, Action>();
+            var retries = new List<(string Entry, Set.ClearingRow Clearing, int Kept, long Delay, bool Admitted)>();
+            string? parkUnreadableShared = null;
+            await using var set = new Set("parked-delete", OpenDelete, owned, inBatch, tenant, stop);
+            set.Write = Write;
+            await set.InstallAsync(createTables: true);
+            await set.Cold.InstallRootWorkflowHistoryAsync(stop);
+            await set.OwnAsync();
+            var one = await set.StartAsync("del-one");
+            large = await set.StartAsync("del-large");
+            var kept = await set.StartAsync("del-kept");
+            keptLarge = await set.StartAsync("del-kept-large");
+            var mid = await set.StartAsync("del-mid");
+            var stale = await set.StartAsync("del-stale");
+            var residue = await set.StartAsync("del-residue");
+            var probed = await set.StartAsync("del-probe");
+            set.Probe.FailsOn.Add((kept.Id, Contract.Kinds.Resume));
+            set.Probe.FailsOn.Add((probed.Id, Contract.Kinds.Terminate));
+
+            // One page: the Delete retires the root still Faulted, answers its held caller "deleted" once and removes its history row.
+            Check(await set.SendAsync(one, "del-one-fail", "fail"), "the Delete set admits a failing input");
+            var onePark = await set.DriveAsync(one, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            var parkOne = await set.ParkSelectionAsync(one, 2);
+            Check(!await set.OperateAsync(one, "del-one-then-delete", Contract.Kinds.Terminate, parkOne, thenDelete: true) &&
+                    !await set.OperateAsync(large, "del-one-other", Contract.Kinds.Delete, parkOne) &&
+                    !await set.OperateAsync(one, "del-one-stale", Contract.Kinds.Delete, set.SealPark(one, 3, (await set.ParkAtAsync(onePark))!.Value)) &&
+                    await set.HistoryRowsAsync(one) == 1,
+                "the Delete set refuses a Terminate-then-delete, and a Delete with another root's Park or a stale Park; the parked root has its history row");
+            Check(await set.OperateAsync(one, "del-one", Contract.Kinds.Delete, parkOne, reply: true), "a held Delete with the Park selection is admitted");
+            await set.RetiredAsync(one);
+            Check((await set.Cold.ReadJournalOfAsync(0, onePark.Actor.Id, 0, stop)) is [{ Revision: -1, Entries: """["delete"]""" }] &&
+                    await RetiredFaultedAsync(onePark.Actor.Id) && await set.HistoryRowsAsync(one) == 0 &&
+                    (await set.InputsOfAsync(onePark.Actor.Id)).All(row => row.Done && row.KeptBy is null && !row.Content) &&
+                    !set.Probe.Saw(one, Contract.Kinds.Delete),
+                "the root is retired still Faulted under its terminal mark, with the deletion marker as its only journal row and its history row and kept rows gone");
+            set.Answered("del-one", "deleted");
+
+            // Paged: 402 kept rows, a second held Delete and a held Terminate behind the first, arrivals during the clearing, and
+            // a takeover after the first page.
+            var largePark = await ParkLargeAsync(large, "e");
+            var parkLarge = await set.ParkSelectionAsync(large, 2);
+            during["del-large"] = (large, parkLarge, ["del-during-1", "del-during-2"]);
+            Check(await set.OperateAsync(large, "del-large", Contract.Kinds.Delete, parkLarge, reply: true) &&
+                    await set.OperateAsync(large, "del-large-second", Contract.Kinds.Delete, parkLarge, reply: true) &&
+                    await set.OperateAsync(large, "del-large-terminate", Contract.Kinds.Terminate, parkLarge, reply: true),
+                "a held Delete for the Park of 402 kept rows, and a held Delete and a held Terminate behind it, are admitted");
+            await set.PassUntilAsync(() => set.StoodDown);
+            Check(pageSeen && await set.ImageAsync(large) is { Status: InstanceStatus.Faulted, TerminalRevision: null } &&
+                    (await set.ClearingAsync(large)).Cleared == 340 &&
+                    (await set.InputsAsync(large)).Count(row => during["del-large"].Arrivals.Any(op => row.Id.Contains("/" + FoundationRootCreator.OperationDigest(op) + "/")) &&
+                        !row.Done && row.KeptBy is null) == 2,
+                "the first owner opened the clearing, refused the two commands behind it and cleared one page before it stopped; the arrivals are pending and unkept");
+            set.Answered("del-large-second", "ResolutionOpen");
+            set.Answered("del-large-terminate", "ResolutionOpen");
+            await set.RetakeAsync();
+            await set.RetiredAsync(large);
+            Check((await set.Cold.ReadJournalOfAsync(0, largePark.Actor.Id, 0, stop)) is [{ Revision: -1, Entries: """["delete"]""" }] &&
+                    await RetiredFaultedAsync(largePark.Actor.Id) && await set.HistoryRowsAsync(large) == 0 &&
+                    (await set.InputsOfAsync(largePark.Actor.Id)).All(row => row.Done && row.KeptBy is null && !row.Content) &&
+                    !set.Probe.Saw(large, "ordinary") && !set.Probe.Saw(large, Contract.Kinds.Delete),
+                "the next owner cleared the rest and retired the root still Faulted; the arrivals were settled by the retirement, unseen by the actor");
+            set.Answered("del-large", "started");
+
+            // Protected at Open, on a Park that kept the root suspended: a Delete runs ProtectsDeletion at its Open, as the
+            // in-memory OpenParkDelete does. One page and paged, a protected root is refused as "protected" and one whose
+            // protection cannot be read as "unavailable"; the Park, its kept rows and the root stay as they were.
+            Check(await set.OperateAsync(kept, "del-kept-suspend", Contract.Kinds.Suspend), "the Delete set admits a Suspend");
+            var suspended = await set.DriveAsync(kept, image => image is { Revision: 2, Status: InstanceStatus.Running, Suspended: true });
+            Check(await set.OperateAsync(kept, "del-kept-resume", Contract.Kinds.Resume), "the Delete set admits a Resume that fails");
+            var keptPark = await set.DriveAsync(kept, image => image is { Revision: 4, Status: InstanceStatus.Faulted, Suspended: true });
+            var parkKept = await set.ParkSelectionAsync(kept, 3);
+            set.Probe.Protects.Add(kept.Id);
+            Check(await set.OperateAsync(kept, "del-kept", Contract.Kinds.Delete, parkKept, reply: true),
+                "a held Delete with the Park selection is admitted for the protected suspended root");
+            await set.DriveAsync(kept, image => image is { Revision: 5 });
+            await set.SettledAsync(kept, "del-kept", suspended.State, suspended: true, reason: "protected");
+            set.Answered("del-kept", "Protected");
+            set.Probe.Protects.Remove(kept.Id);
+            set.Probe.Unreadable.Add(kept.Id);
+            Check(await set.OperateAsync(kept, "del-kept-unreadable", Contract.Kinds.Delete, parkKept, reply: true),
+                "a held Delete is admitted for the root whose protection cannot be read");
+            await set.DriveAsync(kept, image => image is { Revision: 6 });
+            await set.SettledAsync(kept, "del-kept-unreadable", suspended.State, suspended: true, reason: "unavailable");
+            set.Answered("del-kept-unreadable", "ProtectionUnavailable");
+            set.Probe.Unreadable.Remove(kept.Id);
+            // The same Park made larger than a page: 171 kept rows.
+            await KeepCopiesAsync(kept, keptPark, "g", 171);
+            set.Probe.Protects.Add(kept.Id);
+            Check(await set.OperateAsync(kept, "del-kept-paged", Contract.Kinds.Delete, parkKept, reply: true),
+                "a held Delete is admitted for the protected Park of 171 kept rows");
+            await set.DriveAsync(kept, image => image is { Revision: 7 });
+            await set.SettledAsync(kept, "del-kept-paged", suspended.State, suspended: true, reason: "protected");
+            set.Answered("del-kept-paged", "Protected");
+            set.Probe.Protects.Remove(kept.Id);
+            set.Probe.Unreadable.Add(kept.Id);
+            Check(await set.OperateAsync(kept, "del-kept-paged-unreadable", Contract.Kinds.Delete, parkKept, reply: true),
+                "a held Delete is admitted for the large Park whose protection cannot be read");
+            await set.DriveAsync(kept, image => image is { Revision: 8 });
+            await set.SettledAsync(kept, "del-kept-paged-unreadable", suspended.State, suspended: true, reason: "unavailable");
+            set.Answered("del-kept-paged-unreadable", "ProtectionUnavailable");
+            set.Probe.Unreadable.Remove(kept.Id);
+            Check((await set.InputsAsync(kept)).Count(row => row.KeptBy == (short)ParkKeepReason.Arrived && row.Content) == 171 &&
+                    await set.ClearingAsync(kept) == new Set.ClearingRow(null, null),
+                "the refused Deletes left the 171 kept rows with their content and opened no clearing");
+
+            // Protection that appears during the clearing resolves the Park as a discard at its last page: the root stays
+            // Faulted and suspended under a new terminal mark, the held caller was answered "started" at Open only, the ended
+            // root refuses later inputs and its spent Park selection, and once protection ends a Delete with its terminal
+            // selection retires it.
+            opened["del-kept-mid"] = () => set.Probe.Protects.Add(kept.Id);
+            Check(await set.OperateAsync(kept, "del-kept-mid", Contract.Kinds.Delete, parkKept, reply: true),
+                "a held Delete is admitted for the suspended Park while it is not protected");
+            await set.DriveAsync(kept, image => image is { TerminalRevision: not null });
+            await set.DiscardedAsync(kept, "del-kept-mid", cleared: 171, suspended: true, suspended.State);
+            Check(Outcomes(await set.Cold.ReadJournalOfAsync(0, keptPark.Actor.Id, 0, stop))[^2..] is
+                    ["""{"Outcome":"clearing","Operation":"del-kept-mid","Cleared":170}""",
+                     """{"Outcome":"protected","Disposition":"discarded","Operation":"del-kept-mid","Cleared":171}"""],
+                "the clearing opened unprotected and its last page, protected by then, discarded the Park");
+            set.Answered("del-kept-mid", "started");
+            Check(!await set.SendAsync(kept, "del-kept-late", "ordinary") && !await set.OperateAsync(kept, "del-kept-again", Contract.Kinds.Delete, parkKept) &&
+                    !set.OpensPark(kept, await set.SelectionAsync(kept)),
+                "the discarded root refuses a later input and its spent Park selection, and its view no longer seals a Park");
+            set.Probe.Protects.Remove(kept.Id);
+            Check(await set.OperateAsync(kept, "del-kept-delete", Contract.Kinds.Delete, await set.SelectionAsync(kept)),
+                "a Delete with its terminal selection is admitted for the discarded root once protection ends");
+            await set.RetiredAsync(kept);
+
+            // The same with arrivals admitted during the clearing: they settle as Ended after the discard, with no stand-down.
+            var midPark = await ParkLargeAsync(mid, "h", copied: 169);
+            var parkMid = await set.ParkSelectionAsync(mid, 2);
+            during["del-mid"] = (mid, parkMid, ["del-mid-during-1", "del-mid-during-2"]);
+            opened["del-mid"] = () => set.Probe.Protects.Add(mid.Id);
+            Check(await set.OperateAsync(mid, "del-mid", Contract.Kinds.Delete, parkMid, reply: true),
+                "a held Delete is admitted for the Park of 171 kept rows while it is not protected");
+            var midOwner = set.Owner;
+            await set.DriveAsync(mid, image => image is { TerminalRevision: not null });
+            await set.SettledInputsAsync(mid);
+            await set.DiscardedAsync(mid, "del-mid", cleared: 171);
+            var midInputs = await set.InputsAsync(mid);
+            Check(Outcomes(await set.Cold.ReadJournalOfAsync(0, midPark.Actor.Id, 0, stop)) is
+                        ["""{"Outcome":"clearing","Operation":"del-mid","Cleared":170}""",
+                         """{"Outcome":"protected","Disposition":"discarded","Operation":"del-mid","Cleared":171}"""] &&
+                    ReferenceEquals(set.Owner, midOwner) && !set.StoodDown && midInputs.All(row => row.Done && row.KeptBy is null) &&
+                    midInputs.Count(row => during["del-mid"].Arrivals.Any(op => row.Id.Contains("/" + FoundationRootCreator.OperationDigest(op) + "/"))) == 2 &&
+                    !set.Probe.Saw(mid, "ordinary"),
+                "the discard counts the 171 rows, and the arrivals settle as Ended on the root that ended Faulted");
+            set.Answered("del-mid", "started");
+            set.Probe.Protects.Remove(mid.Id);
+
+            // Protection that cannot be read at the last page neither deletes nor discards. The control is refused as
+            // "unavailable" with the clearing open, and the same commit inserts the next control after a backoff of one second,
+            // then two. The owner does not stand down, a Delete is still refused as "clearing" at admission, and once the
+            // protection can be read again the last page retires the root.
+            var unreadablePark = await ParkLargeAsync(keptLarge, "f", copied: 169);
+            var parkUnreadable = await set.ParkSelectionAsync(keptLarge, 2);
+            parkUnreadableShared = parkUnreadable;
+            during["del-kept-large"] = (keptLarge, parkUnreadable, ["del-kept-during-1", "del-kept-during-2"]);
+            opened["del-kept-large"] = () => set.Probe.Unreadable.Add(keptLarge.Id);
+            Check(await set.OperateAsync(keptLarge, "del-kept-large", Contract.Kinds.Delete, parkUnreadable, reply: true),
+                "a held Delete is admitted for the Park of 171 kept rows while its protection can be read");
+            var unreadableOwner = set.Owner;
+            await set.PassUntilAsync(() => retries.Count == 2);
+            set.Probe.Unreadable.Remove(keptLarge.Id);
+            await set.RetiredAsync(keptLarge);
+            Check(ReferenceEquals(set.Owner, unreadableOwner) && !set.StoodDown &&
+                    retries.Select(retry => retry.Entry).SequenceEqual(Enumerable.Repeat(
+                        """{"Outcome":"refused","Operation":"del-kept-large","Reason":"unavailable"}""", 2)) &&
+                    retries.All(retry => retry.Clearing == new Set.ClearingRow("del-kept-large", 170) && retry.Kept == 1 && !retry.Admitted) &&
+                    retries[0].Delay == 1_000 && retries[1].Delay == 2_000,
+                "each unreadable answer was journalled with the clearing open and one row kept, the next control came due after 1 s, " +
+                    "then 2 s, admission still refused a Delete, and the same owner ran throughout");
+            Check(await RetiredFaultedAsync(unreadablePark.Actor.Id) &&
+                    (await set.InputsOfAsync(unreadablePark.Actor.Id)).All(row => row.Done && row.KeptBy is null && !row.Content) &&
+                    !set.Probe.Saw(keptLarge, "ordinary"),
+                "once the protection could be read the last page retired the root, and the arrivals were settled by the retirement");
+            set.Answered("del-kept-large", "started");
+
+            // A Park selection the owner finds stale is refused there as "selection", and the held caller answered once.
+            Check(await set.SendAsync(stale, "del-stale-fail", "fail"), "the Delete set admits a failing input for the stale root");
+            var staleImage = await set.DriveAsync(stale, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await set.OperateAsync(stale, "del-stale", Contract.Kinds.Delete, await set.ParkSelectionAsync(stale, 2), reply: true),
+                "a held Delete with the Park selection is admitted for the stale root");
+            var staleAt = await set.ParkAtAsync(staleImage);
+            await set.BypassAsync(staleImage, $""" "FoundationParkAt" = {staleAt + 1} """);
+            try { await set.DriveAsync(stale, image => image is { Revision: 3 }); }
+            finally { await set.BypassAsync(staleImage, $""" "FoundationParkAt" = {staleAt} """); }
+            await set.SettledAsync(stale, "del-stale", reason: "selection");
+            set.Answered("del-stale", "StaleSelection");
+
+            // A pending row the retirement refuses (one without a keep window) makes a Delete outstanding.
+            Check(await set.SendAsync(residue, "del-residue-fail", "fail"), "the Delete set admits a failing input for the residue root");
+            var residuePark = await set.DriveAsync(residue, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            await set.ExecuteAsync($"""
+                INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
+                VALUES (-4, 'del-residue-pending', 0, {residuePark.Actor.Id}, 'ordinary', 4102444800000, 0, 0, 0, false)
+                """);
+            try
+            {
+                Check(await set.OperateAsync(residue, "del-residue", Contract.Kinds.Delete, await set.ParkSelectionAsync(residue, 2), reply: true),
+                    "a held Delete is admitted for the root with a pending residue");
+                await set.DriveAsync(residue, image => image is { Revision: 3 });
+            }
+            finally { await set.ExecuteAsync($"""DELETE FROM "Messages" WHERE "Id" = 'del-residue-pending'"""); }
+            await set.SettledAsync(residue, "del-residue", reason: "outstanding");
+            set.Answered("del-residue", "ParkOutstanding");
+
+            // The discard end and the parked retirement that keeps the status, as raw writes on a parked root with nothing kept
+            // (rolled back). The discard needs its entry, its terminal mark and the Suspended flag kept; its entry needs the
+            // root Faulted with the Park cleared; a retirement needs its terminal mark and nothing kept.
+            Check(await set.TerminateAsync(probed, "del-probe-terminate"), "a Terminate whose own turn fails is admitted for the probe root");
+            await set.DriveAsync(probed, image => image is { Revision: 3, Status: InstanceStatus.Faulted });
+            var parkedProbe = await set.ImageAsync(probed);
+            // A discard is the last page of a clearing: without an open clearing it is refused, so a single page never discards.
+            Check(!await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe)),
+                "a discard of a parked root with no open clearing is refused");
+            await set.BypassAsync(parkedProbe, """ "FoundationParkClearing" = 'del-probe-clearing', "FoundationParkCleared" = 1 """);
+            bool[] clearingProbes;
+            try
+            {
+                clearingProbes =
+                [
+                    await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe)),
+                    !await set.TriggerProbeAsync(parkedProbe, null, Discard(parkedProbe)),
+                    !await set.TriggerProbeAsync(parkedProbe, ProbeTerminated, Discard(parkedProbe)),
+                    !await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe, """, "Suspended" = NOT "Suspended" """)),
+                    !await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe, terminal: false))
+                ];
+            }
+            finally { await set.BypassAsync(parkedProbe, """ "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL """); }
+            Check(clearingProbes.All(passed => passed),
+                "with an open clearing, a discarded entry passes beside the discard end only: its entry, Suspended kept and a new terminal mark");
+            Check(!await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, End(parkedProbe)) &&
+                    !await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Continue(parkedProbe)) &&
+                    !await set.LoneEntryCommitsAsync(parkedProbe, ProbeDiscarded),
+                "a discarded entry passes only beside the discard end: Faulted, Suspended kept, a new terminal mark and the Park cleared");
+            Check(await set.TriggerProbeAsync(parkedProbe, null, RetireFaulted(parkedProbe)) &&
+                    !await set.TriggerProbeAsync(parkedProbe, null, RetireFaulted(parkedProbe, terminal: false)),
+                "a parked root with nothing kept passes the parked retirement still Faulted (rolled back), and only with its terminal mark");
+            await set.ExecuteAsync($"""
+                INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Due", "KeepUntil", "Seen", "Attempts", "Trial", "Done", "FoundationKeptBy")
+                VALUES (-4, 'del-probe-kept', 0, {parkedProbe.Actor.Id}, 'ordinary', 0, 1, 0, 0, 0, true, 1)
+                """);
+            bool keptRetired;
+            try { keptRetired = await set.TriggerProbeAsync(parkedProbe, null, RetireFaulted(parkedProbe)); }
+            finally { await set.ExecuteAsync($"""DELETE FROM "Messages" WHERE "Id" = 'del-probe-kept'"""); }
+            Check(!keptRetired, "the parked retirement still Faulted is refused for a root with a kept row");
+            return;
+
+            // Parks the root on a failing input and keeps arrivals beside it: one, then the given number of raw copies.
+            async Task<EfStore.RootImage> ParkLargeAsync(Contract.ActorRef root, string prefix, int copied = 400)
+            {
+                Check(await set.SendAsync(root, prefix + "-fail", "fail"), $"the Delete set admits a failing input for the {prefix} Park");
+                var park = await set.DriveAsync(root, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+                Check(await set.SendAsync(root, prefix + "-copy", "ordinary"), $"the Delete set admits an arrival to copy for the {prefix} Park");
+                await set.SettledInputsAsync(root);
+                await KeepCopiesAsync(root, park, prefix, copied);
+                return park;
+            }
+
+            // Raw SQL keeps the given number of arrivals on a parked root, copied from its own kept arrival, or from another
+            // root's direct input when it has none (a Park that kept the root suspended was opened by an operator command).
+            async Task KeepCopiesAsync(Contract.ActorRef root, EfStore.RootImage park, string prefix, int copied)
+            {
+                var copies = Enumerable.Range(1, copied).Select(n => $"{root.Id}/{FoundationRootCreator.OperationDigest($"{prefix}{n:D3}")}/{Guid.NewGuid():N}").ToArray();
+                await using var write = OpenDelete();
+                Check(await write.Database.ExecuteSqlInterpolatedAsync($$"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Payload", "Due", "KeepUntil",
+                        "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
+                    SELECT m."InboxScope", d.id, {{new InstanceRef(park.Actor.Id).Partition}}, {{park.Actor.Id}}, m."Kind", m."Start", '{}', m."Due", m."KeepUntil", true, 0, 0, 0, 0, 1
+                    FROM (SELECT * FROM "Messages" WHERE "InboxScope" = -4 AND "Kind" = 'ordinary'
+                        ORDER BY ("Target" = {{park.Actor.Id}} AND "FoundationKeptBy" = 1) DESC, "Seq" LIMIT 1) m, unnest({{copies}}::text[]) WITH ORDINALITY d(id, n)
+                    ORDER BY d.n
+                    """, stop) == copied, $"raw SQL keeps {copied} more arrivals for the {prefix} Park");
+            }
+
+            // The retired row kept the Faulted status, under a terminal mark at its revision, with its Park cleared.
+            async Task<bool> RetiredFaultedAsync(string actor)
+            {
+                await using var read = OpenDelete();
+                return await read.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {actor} AND "Retired" AND "Status" = {(int)InstanceStatus.Faulted}
+                        AND "FoundationTerminalRevision" = "Revision" AND "FoundationTerminalAt" IS NOT NULL AND "FoundationParkAt" IS NULL) AS "Value"
+                    """).SingleAsync(stop);
+            }
+
+            async ValueTask<Committed> Write(EfStore store, CommitBatch batch, CancellationToken token)
+            {
+                if (ReferenceEquals(store, frozen)) return new Committed(false, 0, []);
+                var turn = batch.Turns.SingleOrDefault(turn => turn.FoundationRootOperator?.Id is { } id && during.ContainsKey(id));
+                var committed = await store.CommitAsync(batch, token);
+                if (!committed.Landed) return committed;
+                if (batch.Turns.FirstOrDefault(turn => turn.FoundationRootOperator?.Id == "del-kept-large" &&
+                        turn.Journal?.Contains("\"Reason\":\"unavailable\"", StringComparison.Ordinal) == true) is { Journal: { } refused })
+                {
+                    // The refusal's commit: the clearing, the kept rows, the next control's delay, and admission while it waits.
+                    await using var read = OpenDelete();
+                    var actor = (await set.ImageAsync(keptLarge)).Actor.Id;
+                    // Due and KeepUntil share the commit's time: the delay is Due less KeepUntil's start, its window apart.
+                    var control = await read.Database.SqlQuery<ControlRow>($"""
+                        SELECT "Due", "KeepUntil", "Start" FROM "Messages"
+                        WHERE "Target" = {actor} AND "Kind" = {Contract.Kinds.Delete} AND NOT "Done"
+                        """).SingleAsync(token);
+                    using var header = JsonDocument.Parse(control.Start[control.Start.IndexOf('{')..]);
+                    var delay = control.Due - (control.KeepUntil - header.RootElement.GetProperty("Window").GetInt64());
+                    retries.Add((refused, await set.ClearingAsync(keptLarge), (await set.InputsAsync(keptLarge)).Count(row => row.KeptBy is not null),
+                        delay, await set.OperateAsync(keptLarge, $"del-kept-retry-{retries.Count}", Contract.Kinds.Delete, parkUnreadableShared!)));
+                }
+                if (batch.Turns.FirstOrDefault(turn => turn.FoundationRootOperator?.Id is { } id && opened.ContainsKey(id) &&
+                        turn.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true) is { } open)
+                {
+                    // The protection changes after the Open, before the next page.
+                    opened[open.FoundationRootOperator!.Id]();
+                    opened.Remove(open.FoundationRootOperator.Id);
+                }
+                if (turn is null) return committed;
+                var operation = turn.FoundationRootOperator!.Id;
+                var (root, park, arrivals) = during[operation];
+                if (turn.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true)
+                {
+                    foreach (var arrival in arrivals) Check(await set.SendAsync(root, arrival, "ordinary"), $"the clearing root admits {arrival} after Open");
+                    Check(!await set.OperateAsync(root, operation + "-during", Contract.Kinds.Delete, park) &&
+                            !await set.TerminateAsync(root, operation + "-during-terminate", park),
+                        "admission refuses a Delete and a Terminate with the Park selection while the Park is being cleared");
+                }
+                if (root.Id == large.Id && turn is { Journal: null } && turn.FoundationRootOperator.Operator!.RootParkClear && !pageSeen)
+                {
+                    // After the first page this owner dies: none of its commits lands, and the next control waits in the inbox.
+                    pageSeen = true;
                     frozen = store;
                 }
                 return committed;
@@ -939,6 +1623,26 @@ internal static class PostgresRootParkedOperatorChecks
 
     private static FormattableString Raw(EfStore.RootImage root, string change) => Change(root, change);
 
+    // A parked root's retirement as the Terminate-then-delete commit writes it.
+    private static FormattableString Retire(EfStore.RootImage root) => Change(root, """
+        "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL, "Model" = '', "Definition" = '', "Fault" = NULL,
+        "StateVersion" = 1, "History" = 2, "NextJobGeneration" = NULL, "Suspended" = false, "Retired" = true, "Status" = 3,
+        "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL,
+        "FoundationTerminalRevision" = "Revision" + 1, "FoundationTerminalAt" = 1
+        """);
+
+    // S5b-3b: a protected Delete's end: the Park and its mark cleared, a new terminal mark, the row otherwise as it was.
+    private static FormattableString Discard(EfStore.RootImage root, string extra = "", bool terminal = true) => Change(root, """
+        "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL
+        """ + (terminal ? """, "FoundationTerminalRevision" = "Revision" + 1, "FoundationTerminalAt" = 1""" : "") + extra);
+
+    // A parked root's retirement as a Delete writes it: still Faulted, with or without its terminal mark.
+    private static FormattableString RetireFaulted(EfStore.RootImage root, bool terminal = true) => Change(root, """
+        "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL, "Model" = '', "Definition" = '', "Fault" = NULL,
+        "StateVersion" = 1, "History" = 2, "NextJobGeneration" = NULL, "Suspended" = false, "Retired" = true,
+        "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL
+        """ + (terminal ? """, "FoundationTerminalRevision" = "Revision" + 1, "FoundationTerminalAt" = 1""" : ""));
+
     private static FormattableString Change(EfStore.RootImage root, string change) => FormattableStringFactory.Create(
         "UPDATE \"Instances\" SET \"Revision\" = \"Revision\" + 1, \"FoundationWriteRevision\" = \"Revision\" + 1, " + change +
         " WHERE \"Id\" = {0}", root.Actor.Id);
@@ -1023,8 +1727,11 @@ internal static class PostgresRootParkedOperatorChecks
         internal async Task<IScopeActivation> OwnAsync()
         {
             var store = Store();
-            var scope = (await store.BindWorkerPartitionAsync(0, stop)).Scope;
-            var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), Probe);
+            var scope = (await ShippedComposition.BindWorkerPartitionAsync(store, open, 0, stop)).Scope;
+            // A set with direct held replies dispatches held inputs, as PostgresPreviewHosting wires its owner.
+            bool heldReplies;
+            await using (var profile = open()) heldReplies = profile.UsesRootReplyProtocol;
+            var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), Probe, rootHeldReplies: heldReplies);
             IKernelStore kernel = store;
             if (Write is { } write)
             {
@@ -1083,6 +1790,47 @@ internal static class PostgresRootParkedOperatorChecks
                 JsonSerializer.Serialize(new Contract.OperatorCommand(selection ?? Selections[root])), cancellationToken: stop) is
                 { Outcome: Contract.AdmissionOutcome.Accepted };
 
+        // #5756: a held direct input, admitted as an edge admits it, whose caller is this fixture's held caller. When admitted,
+        // the request its answer names (from its reply address); else null.
+        internal async Task<string?> HeldSendAsync(Contract.ActorRef root, string id, long? dueAt, string kind = "ordinary")
+        {
+            var deadline = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 600_000;
+            var request = new Requests().OpenBound(id, deadline, tenant.Tenant, null);
+            return await Admission.AdmitDirectRequestAsync(tenant.Tenant, root.Id, kind, "{}", HeldCaller, request, false, stop, dueAt: dueAt)
+                == PostgresRootAdmission.DirectResult.Accepted ? ReplyTo.Parse(request.ReplyAddress(HeldCaller, false)).Request : null;
+        }
+
+        internal bool AnsweredAny(string request) => _replies.Sent.Any(sent => sent.Reply.Request == request);
+
+        // A retirement answers its held callers after its commit lands, off the pass that drove it. Wait for the answer, then
+        // drive the owner until the database clock has passed the input's due time, so a late second answer fails too; then
+        // require exactly one, bound to the root's tenant (the caller's side accepts no other).
+        internal async Task AnsweredOnceAsync(string request, long settledAfter, Func<Reply, bool> expected, string what)
+        {
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            while (!AnsweredAny(request) && deadline.Elapsed < TimeSpan.FromSeconds(10)) await Task.Delay(20, stop);
+            while (await DatabaseNowAsync() <= settledAfter + 500 && deadline.Elapsed < TimeSpan.FromSeconds(30))
+            {
+                await _owner.WokenAsync(null, stop);
+                await _owner.RunAsync(stop);
+                await Task.Delay(50, stop);
+            }
+            Check(_replies.Sent.Where(sent => sent.Reply.Request == request && sent.Node == HeldCaller).ToArray() is [var only] &&
+                    expected(only.Reply) && only.Reply.Tenant == tenant.Tenant,
+                $"the owner answers the held caller of {request} once, past its due time, with {what}, bound to the root's tenant");
+        }
+
+        internal Task AnsweredErrorEventuallyAsync(string request, string error, long settledAfter) =>
+            AnsweredOnceAsync(request, settledAfter, reply => reply.Error == error, $"the error {error}");
+
+        private async Task<long> DatabaseNowAsync()
+        {
+            await using var read = open();
+            return await read.Database.SqlQueryRaw<long>("""
+                SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value"
+                """).SingleAsync(stop);
+        }
+
         // Admission without the ingress: Suspend and Resume, held commands and Terminate and delete.
         internal async Task<bool> OperateAsync(Contract.ActorRef root, string id, string kind, string? selection = null, bool reply = false,
             bool thenDelete = false)
@@ -1137,6 +1885,38 @@ internal static class PostgresRootParkedOperatorChecks
                     listed.EndedAt == image.TerminalAt && listed.TerminalRevision == image.Revision &&
                     PostgresRootSelection.OpenTerminal(_cursor, selection, tenant.Tenant, root.Id) == new FoundationTerminalStamp(image.Revision, image.TerminalAt.Value),
                 $"{operation} ends the parked root Cancelled with its terminal mark, clears {cleared} kept rows and its Park mark");
+        }
+
+        // S5b-3b: a protected Delete resolved the Park as a discard: the root stays Faulted with its Suspended flag and state,
+        // under a new terminal mark with its Park mark cleared, journalled with the rows it cleared; the view seals the mark.
+        internal async Task DiscardedAsync(Contract.ActorRef root, string operation, int cleared, bool suspended = false, string? state = null)
+        {
+            var image = await ImageAsync(root);
+            var journal = await Cold.ReadJournalOfAsync(0, image.Actor.Id, 0, stop);
+            var listed = (await Cold.ReadRootActorAsync(tenant.Tenant, root.Id, stop))!.Value.Item;
+            var selection = (await _reads.GetAsync(tenant, root, stop))?.Selection;
+            Check(journal is [.., { Entries: var entry } last] && last.Revision == image.Revision &&
+                    entry == Json.Write(new { Outcome = "protected", Disposition = "discarded", Operation = operation, Cleared = cleared }) &&
+                    image is { Status: InstanceStatus.Faulted } && image.Suspended == suspended && image.TerminalRevision == image.Revision &&
+                    image.State == (state ?? _running[root].State) && await ParkAtAsync(image) is null && image.TerminalAt is > 0 &&
+                    listed is { Status: InstanceStatus.Faulted, ParkAt: null, ParkFault: null } &&
+                    listed.EndedAt == image.TerminalAt && listed.TerminalRevision == image.Revision &&
+                    PostgresRootSelection.OpenTerminal(_cursor, selection, tenant.Tenant, root.Id) == new FoundationTerminalStamp(image.Revision, image.TerminalAt.Value),
+                $"{operation} resolves the protected Park as a discard: Faulted{(suspended ? " and suspended" : "")} under a new terminal mark, {cleared} kept rows cleared");
+        }
+
+        internal async Task ExecuteAsync(FormattableString sql)
+        {
+            await using var write = open();
+            await write.Database.ExecuteSqlInterpolatedAsync(sql, stop);
+        }
+
+        internal async Task<int> HistoryRowsAsync(Contract.ActorRef root)
+        {
+            await using var read = open();
+            return await read.Database.SqlQuery<int>($"""
+                SELECT count(*)::integer AS "Value" FROM "FoundationWorkflowHistory" WHERE "Tenant" = {tenant.Tenant} AND "Reference" = {root.Id}
+                """).SingleAsync(stop);
         }
 
         internal async Task<string> SelectionAsync(Contract.ActorRef root) => (await _reads.GetAsync(tenant, root, stop))!.Selection!;
@@ -1199,10 +1979,12 @@ internal static class PostgresRootParkedOperatorChecks
                     (suspended ? " suspended" : ""));
         }
 
-        internal async Task<InputRow[]> InputsAsync(Contract.ActorRef root)
+        internal async Task<InputRow[]> InputsAsync(Contract.ActorRef root) => await InputsOfAsync((await ImageAsync(root)).Actor.Id);
+
+        // The direct inputs of an actor by its id, which stay readable after the root is retired.
+        internal async Task<InputRow[]> InputsOfAsync(string actor)
         {
             await using var read = open();
-            var actor = (await ImageAsync(root)).Actor.Id;
             return await read.Database.SqlQuery<InputRow>($"""
                 SELECT "Seq", "Id", "Kind", "Done", "FoundationKeptBy" AS "KeptBy", "Payload" IS NOT NULL OR "Start" IS NOT NULL AS "Content" FROM "Messages"
                 WHERE "Target" = {actor} AND "InboxScope" = -4 ORDER BY "Seq"
@@ -1233,6 +2015,10 @@ internal static class PostgresRootParkedOperatorChecks
         }
 
         // The owner answered the held caller of this request once, with this result or refusal.
+        internal void AnsweredError(string request, string error) =>
+            Check(_replies.Sent.Where(sent => sent.Reply.Request == request && sent.Node == HeldCaller).ToArray() is [var only] &&
+                    only.Reply.Error == error, $"the owner answers the held caller of {request} once, with the error {error}");
+
         internal void Answered(string request, string result) =>
             Check(_replies.Sent.Where(sent => sent.Reply.Request == request && sent.Node == HeldCaller).ToArray() is [var only] &&
                     (only.Reply.Item is CreationResult { Result: var refusal } ? refusal == result : Equals(only.Reply.Item, result)),
@@ -1370,7 +2156,11 @@ internal static class PostgresRootParkedOperatorChecks
         string Contract.IActorType.Type => Type;
         public bool Withholds(Contract.ActorHeader header) => false;
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
-        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+        public HashSet<string> Protects { get; } = [];
+        // A root whose protection cannot be read: ProtectsDeletion throws, which the adapter answers as ProtectionUnavailable.
+        public HashSet<string> Unreadable { get; } = [];
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) =>
+            Unreadable.Contains(header.Ref.Id) ? throw new InvalidOperationException("The fixture's protection cannot be read.") : Protects.Contains(header.Ref.Id);
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
 

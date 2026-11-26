@@ -83,13 +83,13 @@ See the [domain-owned API specification](specs/220-domain-owned-apis/spec.md),
 [OpenAPI contract](specs/220-domain-owned-apis/contracts/management-api.openapi.yaml), and
 [validation quickstart](specs/220-domain-owned-apis/quickstart.md) for composition and compatibility details.
 
-Opt-in [direct BPMN hosting](Essentials/src/Activities/Bpmn/Api/README.md) adds model publication,
+Opt-in [direct BPMN hosting](extensions/Bpmn/src/Api/README.md) adds model publication,
 execution, human completion, cancellation and service-incident retry APIs. Native workflows can embed a
-published model with `RunBpmn`; the [host adapter](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/README.md)
+published model with `RunBpmn`; the [host adapter](extensions/Bpmn/src/Elsa.Activities.Bpmn/README.md)
 describes its binding profiles, compatibility and recovery evidence. Existing Studio BPMN authoring is
 preserved; first-class direct-model Studio support remains tracked by the execution-model program.
 
-Optional [managed external sign-in](Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md)
+Optional [managed external sign-in](extensions/Identity/src/Api/README.md)
 adds OIDC connections, explicit deployment overrides, prospective preview and guarded link/session administration.
 The [Studio module](Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/README.md) consumes its
 capability and public SDK. Integrator provisioning policies assign existing saved Elsa roles to new users;
@@ -102,7 +102,8 @@ without cloning or building the repositories. That guide includes macOS/Linux an
 
 This starts **Elsa.Workbench** (`http://localhost:13000`) and **Elsa Studio**
 (`http://localhost:14000`) from the Docker Hub images `elsaworkflows/elsa-workbench` and
-`elsaworkflows/elsa-studio` (SQLite, ephemeral). The [Docker quickstart](docker/compose/README.md)
+`elsaworkflows/elsa-studio` (SQLite, ephemeral). `elsa-studio` is the Studio Essentials app; the Studio app with every module
+compiled in publishes as `elsaworkflows/elsa-studio-workbench` (see [Studio Docker](Studio/docs/docker.md)). The [Docker quickstart](docker/compose/README.md)
 covers this plus the build-from-source path with PostgreSQL, and explains the settings that wire
 Studio to the server backend (`Studio__BackendBaseUrl`, the Elsa host management key, CORS). For the
 full container/image reference (environment variables, mounts, persistence composition,

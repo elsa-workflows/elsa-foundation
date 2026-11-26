@@ -78,9 +78,14 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             message.Sender == row.Parent && message.SenderCreation == row.ParentCreation;
     }
 
+    // A qualified root's Park holds while it is Faulted without a terminal mark. S5b-3b: a protected Delete ends a parked root
+    // Faulted under its terminal mark; that root has ended, so it neither withholds nor keeps an input.
+    private static bool IsRootParked(Durable.InstanceRow row) =>
+        row is { Status: Durable.InstanceStatus.Faulted, Retired: false } && row.FoundationDispatchHeader?.Terminal is null;
+
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
-        if (roots is not null) return roots.KeepsParkInputs && row.Status == Durable.InstanceStatus.Faulted || actor.Withholds(RootHeader(row));
+        if (roots is not null) return roots.KeepsParkInputs && IsRootParked(row) || actor.Withholds(RootHeader(row));
         if (row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate) return true;
         var checkpoint = store.FoundationTurnHeader(row);
         if (row.ParkRecovery is not null)
@@ -101,7 +106,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             { EndedDuringParkRecovery: true, Status: not Durable.InstanceStatus.Running, ParkRecovery: null, ParkDiscarded: false };
 
     private bool CanKeepRootParkArrival(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        roots?.KeepsParkArrivals == true && row.Status == Durable.InstanceStatus.Faulted && delivery.Durable &&
+        roots?.KeepsParkArrivals == true && IsRootParked(row) && delivery.Durable &&
         delivery.Message.Target.Id == row.Id && CapturesParkArrival(delivery) && delivery.Message is
         { InboxScope: Durable.InboxKey.FoundationOccurrenceScope, TargetCreation: 1, EventMatch: null, ActorAuthored: false,
             Sender: null, Operator: null, StorageId: not null, ReplyTo: null };
@@ -130,7 +135,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         if (roots is not null && input.Row is { Status: Durable.InstanceStatus.Running or Durable.InstanceStatus.Faulted, Suspended: false } recoverTarget &&
             input.Taken is [{ Durable: true } recover] && IsRootRecover(recover.Message))
             return RecoverRootPark(input, recoverTarget, recover);
-        if (RefuseOnParkedRoot(input) is { } parkedRefusal) return parkedRefusal;
+        if ((RefuseOnParkedRoot(input) ?? RefuseStaleParkCommand(input)) is { } parkedRefusal) return parkedRefusal;
         if (roots is not null && input.Row is { } qualifiedPark && input.Taken.All(item => CanKeepRootParkArrival(qualifiedPark, item)))
         {
             if (input.Taken.Any(item => item.Attempts >= input.MaxAttempts))

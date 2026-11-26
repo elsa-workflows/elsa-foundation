@@ -83,7 +83,7 @@ public sealed class KernelActivationCoordinator(
         Workflow workflow;
         try
         {
-            workflow = NativeExecutableMapper.Map(command.Executable);
+            workflow = NativeExecutableMapper.Map(command.Executable, serving.Capabilities);
         }
         catch (NativeMappingRefusedException refused)
         {
@@ -433,7 +433,8 @@ public sealed class KernelActivationCoordinator(
         }
         try
         {
-            return new(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activationId, NativeExecutableMapper.Map(executable), slot.Revision);
+            return new(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activationId,
+                NativeExecutableMapper.Map(executable, serving.Capabilities), slot.Revision);
         }
         catch (NativeMappingRefusedException) { return null; }
     }
@@ -538,7 +539,10 @@ public sealed class KernelActivationCoordinator(
             var executable = await executableStore.FindAsync(reference.ArtifactId, cancellationToken)
                              ?? throw new InvalidOperationException($"Artifact '{reference.ArtifactId}' of activation '{activationId}' is not in the executable store.");
             Workflow workflow;
-            try { workflow = NativeExecutableMapper.Map(executable); }
+            try
+            {
+                workflow = NativeExecutableMapper.Map(executable, serving.Capabilities);
+            }
             catch (NativeMappingRefusedException refused)
             {
                 return (slot, NotServingFailure(slot, $"{refused.Code}: {refused.Message}", WorkflowActivationStep.Mapping));

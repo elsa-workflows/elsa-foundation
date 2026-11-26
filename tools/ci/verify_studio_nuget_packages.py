@@ -75,7 +75,7 @@ def _verify_pinned_layout(root: Path, inventory: dict) -> None:
         for item in manifest["projects"]
         if item.get("product") == "studio"
     ]
-    # A project renamed after consolidation keeps its frozen manifest row under the old path and identity.
+    # A project moved or renamed after consolidation keeps its frozen manifest row under the original path and identity.
     renamed = {item["renamed_from"]: item for item in inventory["packable_projects"] + inventory["non_packable_projects"]
                if "renamed_from" in item}
     stale = sorted(set(renamed) - {path for path, _ in projected})
@@ -116,6 +116,13 @@ def verify_project_inventory(root: Path) -> dict:
     _verify_pinned_layout(root, inventory)
     packable = inventory["packable_projects"]
     non_packable = inventory["non_packable_projects"]
+    # Manual image qualification checks the exact producer checkout. A path-only move keeps the
+    # prior source location valid for older artifacts with the same pinned package identity.
+    for item in packable + non_packable:
+        previous = item.get("renamed_from")
+        if previous and Path(previous).stem == item["id"] and not (root / item["project"]).is_file() and (root / previous).is_file():
+            item["project"] = previous
+
     expected_paths = {item["project"] for item in packable + non_packable}
     actual_paths = _studio_projects(root)
     if actual_paths != expected_paths:

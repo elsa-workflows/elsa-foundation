@@ -92,9 +92,9 @@ Phase 1 landed as eight merged PRs in one day:
 | elsa-foundation-studio #447 | ui | BPMN create-workflow root + flow-condition editing |
 | elsa-foundation-studio #448 | ui | Import/Export BPMN toolbar actions, DI↔layout bridges |
 
-Key modules: `Essentials/src/Activities/Bpmn/` (runtime; `Interchange/` nested under it per the
+Key modules: `extensions/Bpmn/src/` (runtime; `Interchange/` nested under it per the
 domain-tree guard, parent csproj excludes it via the `Compile Remove` pattern),
-`Essentials/tests/Activities/Bpmn/{Tests,Interchange/Tests}`, studio
+`extensions/Bpmn/tests/{Tests,Interchange/Tests}`, studio
 `src/Elsa.Studio.Workflows/Client/src/bpmn/`.
 
 ## Phase 2 scope (approved by the program owner)

@@ -226,21 +226,26 @@ public sealed partial class EfStore
     }
 
     private sealed record TerminalRootInputs(WorkerRoot Root, IReadOnlyList<InboxKey> Keys, FoundationSelfIssuer? Issue,
-        Message? HeldOperator) : QualifiedRootCheckpoint(0)
+        Message? HeldOperator, string[] SettledJobs) : QualifiedRootCheckpoint(0)
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             var terminal = await LockQualifiedTerminalAsync(db, Root, cancellationToken);
-            return terminal.Count == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys,
+            if (terminal.Count != 1) return false;
+            if (SettledJobs.Length > 0 && await db.Messages.AnyAsync(m => m.Target == Root.Actor && m.Partition == Root.Partition &&
+                    m.InboxScope == RootTimedJobScope && SettledJobs.Contains(m.Id) && !m.Done, cancellationToken)) return false;
+            return await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys,
                 HeldOperator is null ? null : [HeldOperator], Issue, false, cancellationToken);
         }
     }
 
     // The terminal revision of the exact unretired root, share-locked until the transaction ends: Finished, or a status
-    // that its state family ends under the family's prefix.
+    // that its state family ends under the family's prefix. S5b-3b: in a parked-operator set a protected Delete ends a
+    // parked root Faulted under a terminal mark, so a Faulted root with its terminal mark has ended there too.
     internal static Task<List<long>> LockQualifiedTerminalAsync(KernelDb db, WorkerRoot root, CancellationToken cancellationToken)
     {
         var family = db.RootStateFamily;
+        var endsFaulted = family.EndsFaulted || db.UsesRootParkedOperators && db.UsesRootRetirement;
         return db.Database.SqlQuery<long>($"""
             SELECT i."FoundationTerminalRevision" AS "Value" FROM "Instances" i
             JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
@@ -250,7 +255,7 @@ public sealed partial class EfStore
                 AND (i."Status" = {(int)InstanceStatus.Finished} OR
                     ({family.EndsCancelled} AND i."Status" = {(int)InstanceStatus.Cancelled}
                         AND starts_with(i."State", {family.Prefix})) OR
-                    ({family.EndsFaulted} AND i."Status" = {(int)InstanceStatus.Faulted}
+                    ({endsFaulted} AND i."Status" = {(int)InstanceStatus.Faulted}
                         AND starts_with(i."State", {family.Prefix})))
                 AND i."FoundationTerminalAt" IS NOT NULL AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
             """).ToListAsync(cancellationToken);
@@ -385,9 +390,11 @@ public sealed partial class EfStore
         {
             await using var profile = create();
             // S5b-2: an Open ("clearing" entry) or a page (no entry) of a clearing, or the end of the Park, clears kept rows.
+            // S5b-3b: so does the protected end of a Delete, which discards the Park and keeps the row Faulted.
             if (profile.UsesRootParkedOperators)
                 return turn.Row.Status == InstanceStatus.Cancelled || turn.FoundationRootOperator.Operator?.RootParkFacts is not null &&
-                    (turn.Journal is null || turn.Journal.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal))
+                    (turn.Journal is null || turn.Journal.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) ||
+                        turn.Journal.StartsWith("""{"Outcome":"protected","Disposition":"discarded",""", StringComparison.Ordinal))
                     ? await PrepareRootParkedTerminateAsync(root, turn, cancellationToken)
                     : await PrepareRootParkedRefusalAsync(root, turn, cancellationToken);
         }
@@ -408,8 +415,12 @@ public sealed partial class EfStore
                 turn.Unsubscribed, null, Held: turn.Held) { FoundationRootOperator = held };
             if (turn != ended || turn.Done.Count + turn.Consumed.Count == 0 || turn.Sent.Count != 0 ||
                 turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
-                !InputsMatch(root, turn)) throw RootShape();
-            return new(null, new TerminalRootInputs(root, [.. turn.Done, .. turn.Consumed], RootSelfIssuer, WithoutParkFacts(held)));
+                !InputsMatch(root, turn, jobs: RootTimedJobSettlementEnabled)) throw RootShape();
+            // A job that was running when its root ended (a Terminate or a Faulted end settled it) finishes where nothing waits
+            // for it: its ticket and deadline rows left with the end, so the job's own input settles nothing.
+            var settled = turn.Consumed.Where(key => key.Scope > 0).Select(StoredJobId).ToArray();
+            return new(null, new TerminalRootInputs(root, [.. turn.Done, .. turn.Consumed.Where(key => key.Scope <= 0)], RootSelfIssuer,
+                WithoutParkFacts(held), settled));
         }
         var row = turn.Row;
         var recalls = turn.FoundationSelfRecalls;
@@ -419,7 +430,8 @@ public sealed partial class EfStore
         if (recalls is not null && (RootSelfIssuer is null || turn.Expected is null ||
             recalls.Any(key => key.Scope != -1 || !root.Owns(key)) ||
             turn.Consumed.Any(recalls.Contains) || turn.Sent.Any(m => recalls.Contains(m.InboxKey)))) throw RootShape();
-        var timedFault = RootTimedJobSettlementEnabled && turn.Expected is not null && row.Status == InstanceStatus.Faulted;
+        // A family that ends Faulted roots (timed-job settlement) commits a Faulted end from any turn, the first included.
+        var timedFault = RootTimedJobSettlementEnabled && row.Status == InstanceStatus.Faulted;
         var terminated = turn.FoundationRootOperator is { Kind: Kinds.Terminate } && row.Status == InstanceStatus.Cancelled;
         if (row.Id != root.Actor ||
             row.Creation != 1 || !RootJobsEnabled && row.NextJobGeneration is not (null or 0) || row.StartIntent != root.Fingerprint || row.Revision != checked((turn.Expected ?? 0) + 1) ||
@@ -434,6 +446,10 @@ public sealed partial class EfStore
             turn.Subscribed, turn.Unsubscribed, turn.Journal, turn.Unsubscribe, turn.Held)
         {
             FoundationHeader = turn.FoundationHeader, FoundationRootOperator = turn.FoundationRootOperator, FoundationSelfRecalls = recalls,
+            // A Terminate's, or a Faulted or Finished end's, cascade of outstanding timed jobs alone, which its terminal commit settles.
+            FoundationCascade = turn is { FoundationCascade: { Entries.Children.IsEmpty: true, Input: null } jobs } &&
+                (terminated || (timedFault || row.Status == InstanceStatus.Finished) && turn.FoundationRootOperator is null) &&
+                RootTimedJobSettlementEnabled ? jobs : null,
             FoundationRootJobCompletion = RootJobsEnabled ? turn.FoundationRootJobCompletion : null,
             FoundationValues = values
         };
@@ -459,7 +475,7 @@ public sealed partial class EfStore
         {
             if (turn.Journal is null || turn.Consumed is not [var key] || key != new InboxKey("root:" + root.Actor) ||
                 turn.Done.Count != 0 || row.Suspended || change is null ||
-                row.Status == InstanceStatus.Finished && (turn.Sent.Count != 0 || row.Jobs is not null)) throw RootShape();
+                row.Status is InstanceStatus.Finished or InstanceStatus.Faulted && (turn.Sent.Count != 0 || row.Jobs is not null)) throw RootShape();
             var creator = await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;
             if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History) throw RootShape();
@@ -473,29 +489,42 @@ public sealed partial class EfStore
             throw RootShape();
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, cancellationToken);
         if (current?.Revision != turn.Expected) return null;
+        // A Terminate, or a Faulted or Finished end, of a root with outstanding timed jobs settles them: its cascade names exactly the root's
+        // jobs, and their ticket and deadline rows leave in its terminal commit.
+        IReadOnlyList<InboxKey> inputKeys = turn.Consumed;
+        string[]? settledJobs = null;
+        if (supported.FoundationCascade is { } cascade)
+        {
+            if (current.Jobs is null || !JobRegistry.Read(current.Jobs).SequenceEqual(cascade.Entries.Jobs)) throw RootShape();
+            await using var jobsDb = create();
+            settledJobs = [.. await jobsDb.Messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
+                m.InboxScope == RootTimedJobScope && !m.Done).Select(m => m.Id).ToListAsync(cancellationToken)];
+            if (settledJobs.Length == 0) throw RootShape();
+        }
         if (row.Model != current.Model || row.Definition != current.Definition || row.History != current.History ||
             change is null && (header.Header.TypeData != current.TypeData || header.Header.Labels.Count != current.Labels.Count ||
                 current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))) throw RootShape();
-        if (RootTimedJobSettlementEnabled && (!RootTimedJobPreviewEnabled || turn.Consumed.Any(key => key.Scope == -1 || key.Scope > 0)))
+        if (settledJobs is null && RootTimedJobSettlementEnabled && (!RootTimedJobPreviewEnabled || turn.Consumed.Any(key => key.Scope == -1 || key.Scope > 0)))
             return await PrepareRootTimedTurnAsync(root, turn, row, state, current, fence, wires, cancellationToken);
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
-        var ids = turn.Done.Concat(turn.Consumed).Select(key => key.Scope > 0 ? StoredJobId(key) : key.Id).ToArray();
+        var ids = turn.Done.Concat(inputKeys).Select(key => key.Scope > 0 ? StoredJobId(key) : key.Id).ToArray();
         var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
         var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
             (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == RootSelfScope || RootJobsEnabled && !RootTimedJobPreviewEnabled && m.InboxScope == RootJobScope) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
         var inputs = records.Select(record => DecodeRootInput(db, record, root.Reference, RootSelfIssuer, RootJobsEnabled)).ToArray();
-        if (!SameInputs(inputs, turn.Done.Concat(turn.Consumed))) return null;
+        if (!SameInputs(inputs, turn.Done.Concat(inputKeys))) return null;
         if (turn.FoundationRootOperator is { } command)
         {
             if (inputs is not [var persisted] || persisted != command) return null;
             if (command.Kind == Kinds.Terminate)
             {
                 if (!db.UsesRootTermination || !terminated || row.Suspended != current.Suspended ||
-                    turn.Sent.Count != 0 || recalls is not null || current.Jobs is not null || row.Jobs is not null ||
+                    turn.Sent.Count != 0 || recalls is not null || (current.Jobs is not null) != (settledJobs is not null) || row.Jobs is not null ||
                     row.StateVersion != current.StateVersion || turn.Journal is null) throw RootShape();
                 return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
-                    row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, operatorTermination: true);
+                    row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, operatorTermination: true,
+                    jobState: settledJobs is null ? null : new(null, current.NextJobGeneration), settledJobs: settledJobs);
             }
             if (!db.UsesRootOperatorProtocol || row.Status != InstanceStatus.Running ||
                 row.Suspended != (command.Kind == Kinds.Suspend) || row.StateVersion != current.StateVersion || state != current.State ||
@@ -504,6 +533,14 @@ public sealed partial class EfStore
                 row.StateVersion, header.Header.TypeData, header.Header.Labels, null, operatorSuspension: row.Suspended, terminalGrowth: header.TerminalGrowth);
         }
         if (row.Suspended != current.Suspended || inputs.Any(input => input.Operator is not null)) throw RootShape();
+        if (settledJobs is not null)
+        {
+            if (!(timedFault || row.Status == InstanceStatus.Finished) || turn.Sent.Count != 0 || recalls is not null || row.Jobs is not null || turn.FoundationRootJobCompletion is not null ||
+                values is not null || inputs.Any(input => input.Kind == Kinds.Job)) throw RootShape();
+            return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
+                row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal,
+                jobState: new(null, current.NextJobGeneration), terminalGrowth: header.TerminalGrowth, settledJobs: settledJobs);
+        }
         if (RootTimedJobPreviewEnabled)
             RequireRootTimedIssuance(turn, row);
         if (RootJobsEnabled) ValidateRootJobChange(current, row, inputs, turn.Sent, turn.FoundationRootJobCompletion, RootTimedJobs);

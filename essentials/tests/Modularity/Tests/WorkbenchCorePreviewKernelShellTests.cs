@@ -62,9 +62,11 @@ public sealed class WorkbenchCorePreviewKernelShellTests
         var shell = WorkbenchCorePreview.ComposeKernelShell(configuration);
 
         Assert.Equal("default", shell);
-        var feature = Assert.Single(configuration.GetSection("CShells:Shells:default:Features").GetChildren());
-        Assert.Equal((WorkflowsRuntimeKernelFeature.FeatureName, null), (feature.Key, feature.Value));
-        Assert.Empty(feature.GetChildren());
+        // The kernel serves the shell's publications, and the kernel's run list serves its runtime API's Runs list.
+        var features = configuration.GetSection("CShells:Shells:default:Features").GetChildren().ToArray();
+        Assert.Equal([WorkflowsRuntimeKernelFeature.FeatureName, Elsa.Workflows.Runtime.KernelApi.WorkflowsRuntimeKernelApiFeature.FeatureName],
+            features.Select(feature => feature.Key).Order(StringComparer.Ordinal));
+        Assert.All(features, feature => Assert.True(feature.Value is null && !feature.GetChildren().Any()));
     }
 
     [Fact]
@@ -75,5 +77,32 @@ public sealed class WorkbenchCorePreviewKernelShellTests
 
         Assert.Null(WorkbenchCorePreview.ComposeKernelShell(configuration));
         Assert.False(configuration.GetSection("CShells:Shells").Exists());
+    }
+
+    [Theory]
+    [InlineData(null, "/workflows/http")]
+    [InlineData("", "/workflows/http")]
+    [InlineData("/kernel/", "/kernel")]
+    [InlineData("hooks/in", "/hooks/in")]
+    public void The_http_edge_base_path_defaults_to_the_address_studio_shows(string? configured, string expected) =>
+        Assert.Equal(expected, KernelHttpEdgeHost.NormalizeBasePath(configured));
+
+    [Fact]
+    public void The_http_edge_base_path_is_never_the_root() =>
+        Assert.Throws<InvalidOperationException>(() => KernelHttpEdgeHost.NormalizeBasePath("/"));
+
+    [Theory]
+    [InlineData(null, null, "default", null)]
+    [InlineData("acme", null, "acme", "acme")]
+    [InlineData(null, "acme", "acme", "acme")]
+    [InlineData("acme", "acme", "acme", "acme")]
+    public void The_core_preview_binds_one_tenant_for_its_edge_and_reads(string? tenant, string? reads, string edge, string? expectedReads) =>
+        Assert.Equal((edge, expectedReads), WorkbenchCorePreview.Tenants(tenant, reads));
+
+    [Fact]
+    public void The_core_preview_refuses_two_different_tenants()
+    {
+        var refused = Assert.Throws<InvalidOperationException>(() => WorkbenchCorePreview.Tenants("acme", "globex"));
+        Assert.Contains("one tenant per process", refused.Message, StringComparison.Ordinal);
     }
 }

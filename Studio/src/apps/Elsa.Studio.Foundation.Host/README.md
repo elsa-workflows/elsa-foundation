@@ -65,3 +65,21 @@ the module admin API needs a signed-in backend session; the server provides sign
 
 The boot test, `FoundationStudioHostBootTests` in `Studio/tests/Elsa.Studio.Tests`, starts the built app as a child process and
 checks the index page, Home served from the shell's own assets, the module admin routes and the compiled-in module list.
+
+## Docker image
+
+This app publishes as **`elsaworkflows/elsa-studio-foundation`**. Build it from the repository root after `pnpm build` in
+`Studio`:
+
+```bash
+docker build -f Studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile -t elsa-studio-foundation:local .
+docker run --rm -p 8080:8080 -e Studio__BackendBaseUrl=http://localhost:13000 elsa-studio-foundation:local
+```
+
+The Dockerfile copies only this app's project closure: the shared Studio projects and FeatureManagement.
+`.github/workflows/studio-docker.yml` publishes it with the other two flavors; [Studio Docker](../../../docs/docker.md) covers
+the runtime settings.
+
+In the image, an add-on's browser files answer 503 until [valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands. Nuplane serves an installed package's files only
+from an enrolled extracted store, and that store does not qualify a container's filesystem. Every module of this app is an add-on, so
+until then the image serves the shell, backend profiles, themes and module administration only.

@@ -546,8 +546,8 @@ test("standalone genuine BPMN inputs", async ({ page }) => {
     reason: "foundation-inputs-v1 supports literal null VALUES, which this journey must consume. It refuses explicit-null model/worker DEFAULTS while presence is observable, before envelope serialization or publication. A nullable Design JSON path may erase presence before that guard; this journey does not qualify null-default authoring or consumption.",
     qualificationScope: "Owning publication/model guard tests qualified separately in #4504; this browser journey does not claim an actual null-default refusal through Design JSON.",
     evidence: ["specs/1217-standalone-triggers/contracts/targets.md",
-      "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnAuthoredDirectPublisherTests.cs: Authored_explicit_null_defaults_are_refused_before_lossy_projection_or_publication / Authored_null_default_case_aliases_are_refused_before_nullable_deserialization",
-      "Essentials/tests/Activities/Bpmn/Tests/BpmnDirectExecutionTests.Inputs.cs: Input_profile_refuses_an_explicit_null_model_default_before_persistence / Input_profile_refuses_an_explicit_null_pinned_worker_default_before_serializing_its_envelope"] });
+      "extensions/Bpmn/tests/Interchange/Tests/BpmnAuthoredDirectPublisherTests.cs: Authored_explicit_null_defaults_are_refused_before_lossy_projection_or_publication / Authored_null_default_case_aliases_are_refused_before_nullable_deserialization",
+      "extensions/Bpmn/tests/Tests/BpmnDirectExecutionTests.Inputs.cs: Input_profile_refuses_an_explicit_null_model_default_before_persistence / Input_profile_refuses_an_explicit_null_pinned_worker_default_before_serializing_its_envelope"] });
   const worker = await j.echo("Actual declared-input service");
   const process = await j.submit("Genuine authored process", { inputs: [input("processMessage")], outputs: [], variables: [], rootActivity: {
     nodeId: "process", activityVersionId: await j.version("Elsa.Activities.Bpmn.Activities.BpmnProcess"), inputs: [], outputs: [], structure: { kind: "elsa.bpmn.structure", schemaVersion: "1.0.0", payload: {

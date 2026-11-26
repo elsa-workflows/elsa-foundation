@@ -519,6 +519,8 @@ app.MapShells();
 app.UseAuthentication();
 app.UseAuthorization();
 WorkbenchCorePreviewReads.Map(app);
+// The Core Preview's HTTP route host: published HTTP workflows on the kernel, at Elsa:CorePreview:HttpBasePath.
+KernelHttpEdgeHost.Map(app);
 #if ELSA_DASHBOARD_QUALIFICATION
 QualificationPrincipals.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>(), "default", configuration);
 HistoryQualificationControls.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>());

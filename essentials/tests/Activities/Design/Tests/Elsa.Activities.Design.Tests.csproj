@@ -30,7 +30,7 @@
     <ProjectReference Include="..\..\..\..\src\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Design\Reconciliation\Json\Elsa.Activities.Design.Reconciliation.Json.csproj" />
     <!-- Every shipped activity module: the contract-surface snapshot guard (Contracts/) scans all of them. -->
-    <ProjectReference Include="..\..\..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
+    <ProjectReference Include="..\..\..\..\..\extensions\Bpmn\src\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />

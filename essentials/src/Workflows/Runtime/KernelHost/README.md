@@ -18,6 +18,8 @@ the Native model's definitions.
   - the `HttpRoutes` and `NativeSchedules` built over the serving set;
   - `ServedWorkflow`, which a host passes as `NativeExecutionOptions.ServedWorkflow` so that a Dispatch reaches the
     version its definition serves.
+- `KernelRuns` is the host-shared run reads: the foundation's reads and the tenant the host binds them to. The
+  `WorkflowsRuntimeKernelApi` feature (`Elsa.Workflows.Runtime.KernelApi`) lists a kernel shell's runs from it.
 - `IScheduleActors` is how the coordinator reaches the schedule actors. `IngressScheduleActors` implements it on the
   host's ingress.
 - `KernelTriggerBindingExtractor` reports no old-core triggers, so the publication preflight checks only the slot.
@@ -29,9 +31,44 @@ the Native model's definitions.
   and `IScheduleActors` by instance. `IsComposedIn` tells a host whether a shell composes it: the Workbench hides the
   activities the kernel does not run from that shell's toolbox, since the toolbox's options are a design contract that
   a runtime project does not reference.
-- `UnavailableScheduleActors` is for a host that runs no schedule actor. Such a host gives its `KernelServing` the same
-  reason, so a Timer or Cron publish is refused at the serving check, before anything is minted. Setting a schedule
-  throws the reason; stopping one and unregistering a run do nothing, so unpublishing never fails on them.
+- A host says what its foundation runs with `KernelHostCapabilities` (`Schedules`, `Timers`, `Children`, `SelfSends`),
+  which it gives its `KernelServing`. A workflow that needs what the host lacks is refused where it is mapped, before
+  anything is minted, so publishing reports `definition_unsupported` naming the node by its display name:
+  - without schedule actors, a Timer or Cron: "Timer and Cron triggers don't run on this host yet. Remove the Timer or
+    Cron, or start the workflow from an HTTP endpoint, an event or a Dispatch."
+  - without timers, a Delay: "Delay doesn't run on this host yet. Remove it, or wait for an event or an HTTP request
+    instead."
+  - without child workflows, a Dispatch Workflow, waited or not: "Dispatch Workflow doesn't run on this host yet. Remove
+    it, or start the other workflow from an HTTP endpoint or an event."
+  - with an edge that serves no wait routes (`HttpWaits: false`), an HTTP Endpoint that waits: one anywhere but where
+    the workflow begins, or one there whose start-a-workflow option (`CanStartWorkflow`) is off, as it is by default on
+    the old core: "An HTTP Endpoint that waits for a request doesn't run on this host yet: only one that starts the
+    workflow does. Turn on its start-a-workflow option and put it where the workflow begins, or wait for an event
+    instead."
+  - without self-sends, nothing is refused: a turn that reaches the activity cap cannot continue in a self-send, so the
+    host sets `NativeExecutionOptions.SelfSends` to false and the Native model runs a burst on to its next wait. The
+    state and history size limits still bound the turn, and so does `MaxActivitiesPerBurst` (10,000 activities, the
+    same however loaded the host is). `MaxBurstDuration` (30 s) is a backstop that keeps one turn from holding its node,
+    not a correctness bound. Past either the workflow faults with `native.burst.limit`, saying what it ran and what to
+    change. The 1,000-item ForEach cap stands. A PostgreSQL host reads whether its store format takes self-sends from
+    `PostgresPreviewHosting.TakesSelfSends`.
+- `KernelHttpEdge` is the framework-free half of a host's HTTP edge. `Route` matches a request's method and path,
+  relative to the edge's base path, against the start routes of what serves now; a wait route or no route is not served,
+  and an edge reads no body for it. `Start` then makes the start of the route's workflow, with the request (and its route
+  values) as the trigger. `Match` does both. `Answer` maps a held start's
+  reply to the HTTP answer: the designed response, 204, 404, 500, 503 or 504.
+- `KernelServing.ServeHostWorkflowAsync` serves a workflow the host defines itself beside the publications, its routes
+  checked against the serving set (the Workbench's opt-in HTTP probe is one).
+- On a kernel shell the feature also unmounts the old core's HTTP endpoint middleware (`HttpEndpointMiddleware`): it is
+  re-registered with options of its own, a new instance at its defaults with an empty base path, so it passes every
+  request on and the host's kernel edge serves `/workflows/http`. The old core's standalone HTTP triggers still serve
+  under that base path, in the shell's pipeline ahead of the edge: a request whose method and template a standalone
+  trigger and a kernel route both match goes to the trigger. The HTTP activities' test runs (`/workflows/test-runs`), standalone HTTP triggers and
+  options stay as they are; a shell with the test-run middleware and no endpoint middleware of the expected name is
+  refused. Studio's HTTP test run therefore still runs on the old core (slice 8).
+- `UnavailableScheduleActors` is for a host that runs no schedule actor. Such a host also says `Schedules: false`, so a
+  Timer or Cron never reaches it. Setting a schedule throws the reason; stopping one and unregistering a run do nothing,
+  so unpublishing never fails on them.
 
 The contracts this project implements and the seams it adds are in [EXTENSION_POINTS.md](EXTENSION_POINTS.md).
 
