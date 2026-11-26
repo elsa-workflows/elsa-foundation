@@ -447,6 +447,59 @@ describe("StudioCodeEditor", () => {
     unmount();
   }, 20000);
 
+  it("completes JavaScript members after typing a period during a provider refresh", async () => {
+    const source = "variables.customer";
+    const props = { document: codeDocument({ value: source }), languageAdapter: javaScriptLanguageAdapter };
+    const originalProvider = vi.fn(() => new Promise<never>(() => {}));
+    const refreshedProvider = vi.fn(() => [{ label: "street" }]);
+    const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: originalProvider });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-editor"));
+      const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+      view.dispatch({ changes: { from: source.length, insert: "." }, selection: { anchor: source.length + 1 }, userEvent: "input.type" });
+      await vi.waitFor(() => {
+        expect(originalProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false }));
+        expect(completionStatus(view.state)).toBe("pending");
+      });
+
+      rerender({ ...props, document: { ...props.document, value: source + "." }, completionProvider: refreshedProvider });
+
+      await vi.waitFor(() => {
+        expect(refreshedProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false, position: source.length + 1 }));
+        expect(container.querySelector(".cm-completionLabel")?.textContent).toBe("street");
+      });
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
+  it("formats an inline type alias in the completion note", async () => {
+    const text = "From the declared type `shop.customer`; the stored value may differ.";
+    const source = "variables.customer.";
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: source }),
+      languageAdapter: javaScriptLanguageAdapter,
+      completionProvider: () => [{ label: "street", documentation: { markdown: text + " <img src=x>" } }]
+    });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-editor"));
+      const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+      view.dispatch({ selection: { anchor: source.length } });
+      startCompletion(view);
+
+      await vi.waitFor(() => {
+        const note = container.querySelector(".cm-completionInfo");
+        expect(note?.querySelector("code")?.textContent).toBe("shop.customer");
+        expect(note?.textContent).toBe(text.replaceAll("`", ""));
+        expect(note?.querySelector("img")).toBeNull();
+      });
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
   it("applies a typed variable's nested member mid-path and replaces only the typed prefix", async () => {
     const note = "From the declared type `shop.customer`; the stored value may differ.";
     const getCompletions = vi.fn().mockResolvedValue({

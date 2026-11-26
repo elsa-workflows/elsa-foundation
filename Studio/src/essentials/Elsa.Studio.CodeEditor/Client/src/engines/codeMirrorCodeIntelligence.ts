@@ -327,13 +327,22 @@ function toCodeMirrorCompletion(completion: StudioCodeCompletion) {
     type: completion.kind,
     apply: completion.apply,
     boost: completion.boost,
-    info: completion.documentation
-      ? () => {
-          const dom = document.createElement("div");
-          dom.className = "studio-code-editor-completion-documentation";
-          dom.textContent = sanitizeStudioCodeMarkdown(completion.documentation!.markdown);
-          return dom;
-        }
-      : undefined
+    info: completion.documentation ? () => renderCompletionDocumentation(completion.documentation!.markdown) : undefined
   };
+}
+
+function renderCompletionDocumentation(markdown: string) {
+  const dom = document.createElement("div");
+  dom.className = "studio-code-editor-completion-documentation";
+  const text = sanitizeStudioCodeMarkdown(markdown);
+  let from = 0;
+  for (const match of text.matchAll(/(?<![\\`])(`+)([^\n]+?)\1(?!`)/g)) {
+    dom.append(text.slice(from, match.index));
+    const code = document.createElement("code");
+    code.textContent = match[2]!;
+    dom.append(code);
+    from = match.index + match[0].length;
+  }
+  dom.append(text.slice(from));
+  return dom;
 }
