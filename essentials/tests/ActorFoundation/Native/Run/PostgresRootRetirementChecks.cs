@@ -76,6 +76,9 @@ internal static class PostgresRootRetirementChecks
             staleEpoch = ((Worker)owner).Epoch;
         }
 
+        await using (var guard = Open())
+            await CheckRetirementFootprintAsync(guard, before.Actor.Id, stop);
+
         var chosenTarget = (await reads.GetAsync(tenant, target, stop))!;
         var chosenProtected = (await reads.GetAsync(tenant, protectedActor, stop))!;
         var stale = chosenTarget with
@@ -380,6 +383,77 @@ internal static class PostgresRootRetirementChecks
             return await db.Messages.AsNoTracking().SingleAsync(row => row.InboxScope == message.InboxKey.Scope &&
                 row.Id == message.InboxKey.Id, stop);
         }
+    }
+
+    internal static async Task CheckRetirementFootprintAsync(KernelDb db, string exemplar, CancellationToken token)
+    {
+        const string probe = "0/retirement-guard-probe";
+        const string reference = "retirement-guard-probe";
+        string?[] cases = [null, "jobs", "children", "parent", "handles", "subscriptions", "pending messages"];
+        var unexpectedlyWritten = new List<string>();
+        foreach (var residue in cases)
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(token);
+            string? jobs = residue == "jobs" ? "[]" : null;
+            string? children = residue == "children" ? "[]" : null;
+            string? parent = residue == "parent" ? "0/parent" : null;
+            string? handles = residue == "handles" ? "[]" : null;
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "FoundationRootBirths" ("Reference", "Tenant", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
+                    SELECT {reference}, "Tenant", {probe}, "Partition", "Creation", "Creator", "Fingerprint"
+                    FROM "FoundationRootBirths" WHERE "Actor" = {exemplar};
+                INSERT INTO "Instances" ("Id", "Partition", "Model", "Definition", "Status", "State", "Revision",
+                    "History", "Suspended", "StateVersion", "Jobs", "Children", "Parent", "CustomHandles",
+                    "FoundationReference", "FoundationTenant", "FoundationHeader",
+                    "FoundationTerminalRevision", "FoundationTerminalAt", "Retired")
+                    SELECT {probe}, "Partition", "Model", "Definition", "Status", "State", "Revision",
+                        "History", "Suspended", "StateVersion", {jobs}, {children}, {parent}, {handles},
+                        {reference}, "FoundationTenant", "FoundationHeader", "FoundationTerminalRevision", "FoundationTerminalAt", false
+                    FROM "Instances" WHERE "Id" = {exemplar};
+                INSERT INTO "FoundationActorList" ("Tenant", "Reference", "Status", "EndedAt", "Header", "Type", "Labels", "TerminalRevision")
+                    SELECT l."Tenant", {reference}, l."Status", l."EndedAt", l."Header", l."Type", l."Labels", l."TerminalRevision"
+                    FROM "FoundationActorList" l JOIN "Instances" i
+                        ON i."FoundationReference" = l."Reference" AND i."FoundationTenant" = l."Tenant"
+                    WHERE i."Id" = {exemplar}
+                """, token);
+            if (residue == "subscriptions")
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition")
+                        SELECT 'retirement-probe', "Id", 'wait', "Partition" FROM "Instances" WHERE "Id" = {probe}
+                    """, token);
+            if (residue == "pending messages")
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
+                        SELECT 0, 'retirement-probe', "Partition", "Id", 'advance', 0, 0, 0, 0, false
+                        FROM "Instances" WHERE "Id" = {probe}
+                    """, token);
+
+            try
+            {
+                var written = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Instances" SET "Retired" = true, "Revision" = "Revision" + 1,
+                        "FoundationWriteRevision" = "Revision" + 1, "State" = 'null', "FoundationHeader" = NULL,
+                        "Jobs" = NULL, "Children" = NULL, "Parent" = NULL, "CustomHandles" = NULL
+                    WHERE "Id" = {probe}
+                    """, token);
+                if (residue is null)
+                    Check(written == 1, "the checkpoint guard accepts a clean terminal retirement");
+                else
+                {
+                    Check(written == 1, "the fixture wrote the terminal retirement under test");
+                    unexpectedlyWritten.Add(residue);
+                }
+            }
+            catch (PostgresException error) when (residue is not null && error.SqlState == PostgresErrorCodes.CheckViolation &&
+                error.ConstraintName == "kernel_require_root_checkpoint_writer")
+            {
+                Check(true, $"the retirement checkpoint guard refuses {residue}");
+            }
+            finally { await transaction.RollbackAsync(token); }
+        }
+        if (unexpectedlyWritten.Count != 0)
+            throw new InvalidOperationException("The terminal retirement guard allowed " + string.Join(", ", unexpectedlyWritten) + ".");
+        Check(true, "the retirement checkpoint guard refused every residual resource");
     }
 
     private enum RetirementRejection { MarkerError, MarkerSuppressed, ProjectionSuppressed }

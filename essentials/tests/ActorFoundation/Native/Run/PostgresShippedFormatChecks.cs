@@ -99,6 +99,8 @@ internal static class PostgresShippedFormatChecks
             var fetched = await SettledAsync(answered);
             Require(fetched is { Status: InstanceStatus.Finished } && Variable(fetched, "outcome") == "200" && partner.Calls("/ok") == 1,
                 "its SendHttpRequest job runs after the answer, settles, and the root commits Finished");
+            await using (var guard = Open())
+                await PostgresRootRetirementChecks.CheckRetirementFootprintAsync(guard, fetched!.Actor.Id, stop);
 
             // A timed job that passes its deadline settles on the Timeout outcome.
             var stuck = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("stuck")), "stuck-1", Contract.Kinds.Start,
@@ -225,14 +227,14 @@ internal static class PostgresShippedFormatChecks
         }
     }
 
-    // PostgreSQL 16 and 17 reported these same function-body bytes before the renderer was shared with SQLite.
+    // These fingerprints pin the PostgreSQL definitions revision. A deliberate definition change advances its revision.
     private static async Task CheckGuardBodyParityAsync(Func<KernelDb> open, CancellationToken token)
     {
         await using var db = open();
         var sql = EfStore.RenderPostgresFirstRootGuards(db).ReplaceLineEndings("\n");
         var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
-        Require(fingerprint == "73a8c69e2daa2e7417ddc7fb4c5f54f3894a30256ae8f0c72a8f254443d1e5cf",
-            "the complete emitted PostgreSQL guard installation batch retains its published bytes");
+        Require(fingerprint == "01952f871066ceecbfef28c303000a5651b13157c0f02323ed767c06a522b634",
+            $"the complete emitted PostgreSQL guard installation batch matches its revision ({fingerprint})");
         var bodies = await db.Database.SqlQueryRaw<string>("""
             SELECT md5(p.prosrc) AS "Value"
             FROM pg_catalog.pg_proc p
@@ -240,8 +242,8 @@ internal static class PostgresShippedFormatChecks
                 AND p.proname IN ('kernel_require_root_checkpoint_writer', 'kernel_require_root_journal_revision')
             ORDER BY p.proname
             """).ToListAsync(token);
-        Require(bodies is ["75c81a5014d62f9c35319e65b9e0c975", "b8adb6d016ff58efc1a496a316309a74"],
-            "the shipped PostgreSQL checkpoint and journal function bodies retain their published bytes");
+        Require(bodies is ["c1c1b59c33a6d7089ec69286de2bbde8", "b8adb6d016ff58efc1a496a316309a74"],
+            "the installed PostgreSQL checkpoint and journal function bodies match their revision");
     }
 
     private static async Task CheckDefinitionRevisionAsync(Func<KernelDb> open, EfStore store, CancellationToken token)
@@ -250,9 +252,7 @@ internal static class PostgresShippedFormatChecks
         var expected = StoreDefinitionsRevision.Seed(db)!;
         var marker = db.StoreVersions.Where(row => row.Id == expected.Id);
         Require(await marker.ExecuteDeleteAsync(token) == 1, "new PostgreSQL installs have a definitions marker");
-        await EfStore.RequireStoreVersionsAsync(db, token);
-        Require(await store.PartitionCountAsync(token) == 1,
-            "PostgreSQL reads a pre-revision marker as its legacy definitions revision");
+        await RequireMarkerRefusedAsync(db, "PostgreSQL treats an absent marker as legacy revision 1 and refuses it after the revision advances", token);
         db.StoreVersions.Add(expected);
         await db.SaveChangesAsync(token);
         await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol + 1), token);
@@ -269,18 +269,18 @@ internal static class PostgresShippedFormatChecks
         }
         finally
         {
-            await marker.ExecuteDeleteAsync(token);
+            await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol), token);
         }
 
-        // An operation that waits for the shared marker must see a definitions row inserted by the locker.
+        // An operation that waits for the shared marker must see the revision committed by the locker.
         await using var advancing = open();
         await using var advance = await advancing.Database.BeginTransactionAsync(token);
         await advancing.Database.ExecuteSqlInterpolatedAsync($"""
             SELECT "Id" FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId} FOR UPDATE
             """, token);
         await advancing.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "KernelStoreVersions" ("Id", "StoreSchema", "MessageProtocol", "JournalCodec")
-            VALUES ({expected.Id}, {expected.StoreSchema}, {expected.MessageProtocol + 1}, {expected.JournalCodec})
+            UPDATE "KernelStoreVersions" SET "MessageProtocol" = {expected.MessageProtocol + 1}
+            WHERE "Id" = {expected.Id}
             """, token);
         var blocker = ((NpgsqlConnection)advancing.Database.GetDbConnection()).ProcessID;
         var waiting = store.PartitionCountAsync(token).AsTask();
@@ -298,8 +298,7 @@ internal static class PostgresShippedFormatChecks
         }
         finally
         {
-            // Exercise the rest of the hosted journey against a pre-revision installation.
-            await marker.ExecuteDeleteAsync(token);
+            await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol), token);
         }
 
         static async Task RefusesRevisionAsync(Func<Task> query)
