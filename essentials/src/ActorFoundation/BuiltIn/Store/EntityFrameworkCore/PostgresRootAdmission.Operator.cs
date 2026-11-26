@@ -9,7 +9,7 @@ namespace Kernel.EntityFramework;
 internal sealed partial class PostgresRootAdmission
 {
     internal const string OperatorPrefix = "!kernel-operator/1:";
-    private const string HeldOperatorPrefix = "!kernel-held-operator/1:";
+    internal const string HeldOperatorPrefix = "!kernel-held-operator/1:";
     internal const string TerminateThenDeletePrefix = "!kernel-operator/2:";
     internal const string RetentionDeletePrefix = "!kernel-operator/3:";
     private const string RetentionOperationPrefix = "~retention-";
@@ -462,7 +462,7 @@ internal sealed partial class PostgresRootAdmission
         return (header, thenDelete, retentionDelete);
     }
 
-    private static bool ValidOperatorReply(string address, long? expectedDeadline = null) =>
+    internal static bool ValidOperatorReply(string address, long? expectedDeadline = null) =>
         ReplyTo.Parse(address) is { Node.Length: > 0, Request.Length: > 0, Deadline: > 0, BeforeCommit: false } route &&
         (expectedDeadline is null || route.Deadline == expectedDeadline);
 

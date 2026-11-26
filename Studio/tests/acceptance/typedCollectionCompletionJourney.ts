@@ -59,7 +59,9 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   await page.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
   const editor = page.getByRole("textbox", { name: "JavaScript expression", exact: true });
   await expect(editor).toBeFocused();
-  await page.keyboard.insertText("variables.orders[0].");
+  await page.keyboard.insertText("variables.orders[0]");
+  await settled("variables.orders[0]");
+  await page.keyboard.press(".");
   await settled("variables.orders[0].");
   // After autosave the compact editor still shows the caret, so a suggestion list can open beside it.
   await expect.poll(() => editor.evaluate(content => {
@@ -68,7 +70,6 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
     const end = range.getBoundingClientRect().right, visible = scroller.getBoundingClientRect();
     return end > visible.left && end <= visible.right + 1;
   }), { message: "The end of the typed path is inside the compact editor's visible area" }).toBe(true);
-  await complete("variables.orders[0].");
   await expect(list()).toBeVisible();
   layout.push(await editor.evaluate(content => {
     const rect = (node: Element) => { const r = node.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)]; };
@@ -86,8 +87,12 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
     await expect(option(name).locator(".cm-completionDetail")).toHaveText("String");
   }
   await expect(page.locator(".cm-completionInfo")).toContainText(declaredNote);
+  await expect(page.locator(".cm-completionInfo code")).toHaveText(customerAlias);
   await capture(page, info, "collection-item-completion");
 
+  await page.keyboard.press("Escape");
+  await expect(list()).toHaveCount(0);
+  await complete("variables.orders[0].");
   await option("display_name").click();
   await expect(list()).toHaveCount(0);
   await expect(editor).toHaveText("variables.orders[0].display_name");

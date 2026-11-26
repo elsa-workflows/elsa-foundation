@@ -3841,8 +3841,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         foreach (var reply in unit.Replied)
             if (reply.FromFoundation) slot.Replies.Remove(reply.Route);
         foreach (var item in unit.Consumed)
+        {
+            // Opening a generated root's Park returns its held control to the durable inbox. Its
+            // caller belongs to the later command settlement, while a kept fault input answers here.
+            if (unit.OpensPark && unit.Row?.FoundationDispatchHeader is not null &&
+                item.Message is { InboxScope: InboxKey.FoundationOccurrenceScope, Operator.RootHeldReply: true }) continue;
             if (item.ReplyRoute is { } route && !Expired(route.Address) && !unit.Replied.Any(r => r.Message == item.Message.InboxKey))
                 slot.Replies.Add(route);
+        }
         var callers = slot.Replies.Where(route => Has(Flaw.EmitBeforeCommit) || ReplyTo.Parse(route.Address).BeforeCommit == early).ToList();
         for (var i = 0; i < unit.Emitted.Count; i++)
             foreach (var to in callers) Send(to, $"{Origin(unit)}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item, revision: unit.Revision, release: release);

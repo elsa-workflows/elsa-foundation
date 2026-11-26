@@ -10,8 +10,11 @@ export function StudioCodeDocumentation({ documentation }: { documentation: Stud
 }
 
 export function sanitizeStudioCodeMarkdown(markdown: string) {
+  return stripStudioCodeMarkdownMarkup(markdown).trim();
+}
+
+export function stripStudioCodeMarkdownMarkup(markdown: string) {
   return markdown
     .replace(/<[^>]*>/g, "")
-    .replace(/!?(?:\[[^\]]*\])\([^)]*\)/g, match => match.replace(/\([^)]*\)/, ""))
-    .trim();
+    .replace(/!?(?:\[[^\]]*\])\([^)]*\)/g, match => match.replace(/\([^)]*\)/, ""));
 }

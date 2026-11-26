@@ -1,4 +1,6 @@
 import { acceptCompletion, completionStatus, currentCompletions, startCompletion } from "@codemirror/autocomplete";
+import { syntaxTree } from "@codemirror/language";
+import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -6,9 +8,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StudioCodeEditor } from "../StudioCodeEditor";
 import { CodeMirrorStudioCodeEditor } from "../engines/CodeMirrorStudioCodeEditor";
 import { FallbackCodeEditor } from "../engines/FallbackCodeEditor";
+import * as codeMirrorLanguages from "../engines/codeMirrorLanguages";
 import { javaScriptLanguageAdapter } from "../languages/javascript";
 import { createStudioCodeToolingProjection } from "../toolingProjection";
 import type { StudioCodeCompletionRequest, StudioCodeDocument, StudioCodeEditorController, StudioCodeEditorEngineProps, StudioCodeEditorProps } from "../types";
+
+vi.mock("../engines/codeMirrorLanguages", async importOriginal => {
+  const original = await importOriginal<typeof codeMirrorLanguages>();
+  return { loadCodeMirrorLanguageExtensions: vi.fn(original.loadCodeMirrorLanguageExtensions) };
+});
 
 beforeEach(() => {
   window.dispatchEvent(new Event("elsa:auth-session-started"));
@@ -445,6 +453,132 @@ describe("StudioCodeEditor", () => {
     expect(requestSignal?.aborted).toBe(true);
     expect(container.querySelector(".cm-editor")).toBeNull();
     unmount();
+  }, 20000);
+
+  it.each([
+    { scenario: "while the query is pending", prefix: "variables.customer", remaining: "", result: "pending", filter: "" },
+    { scenario: "after an empty result", prefix: "variables.customer", remaining: "", result: "empty", filter: "" },
+    { scenario: "while the author types a member prefix", prefix: "variables.customer", remaining: "", result: "pending", filter: "s" },
+    { scenario: "inside a template interpolation", prefix: "`Hi ${variables.customer", remaining: "}`", result: "pending", filter: "" }
+  ])("restores implicit member completion $scenario", async ({ prefix, remaining, result, filter }) => {
+    const source = prefix + remaining;
+    const props = { document: codeDocument({ value: source }), languageAdapter: javaScriptLanguageAdapter };
+    const originalProvider = vi.fn(({ signal }: StudioCodeCompletionRequest) => result === "pending"
+      ? new Promise<never>((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }))
+      : []);
+    const refreshedProvider = vi.fn(() => [{ label: "street" }]);
+    const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: originalProvider });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const view = EditorView.findFromDOM(content)!;
+      await vi.waitFor(() => expect(syntaxTree(view.state).type.name).toBe("Script"));
+      view.dispatch({ changes: { from: prefix.length, insert: "." }, selection: { anchor: prefix.length + 1 }, userEvent: "input.type" });
+      await vi.waitFor(() => {
+        expect(originalProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false }));
+        expect(completionStatus(view.state)).toBe(result === "pending" ? "pending" : null);
+      });
+
+      if (filter) {
+        view.dispatch({ changes: { from: prefix.length + 1, insert: filter }, selection: { anchor: prefix.length + 1 + filter.length }, userEvent: "input.type" });
+      }
+      const edited = { ...props, document: { ...props.document, value: prefix + "." + filter + remaining } };
+      rerender({ ...edited, completionProvider: refreshedProvider });
+
+      await vi.waitFor(() => {
+        expect(refreshedProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false, position: prefix.length + 1 + filter.length }));
+        expect(container.querySelector(".cm-completionLabel")?.textContent).toBe("street");
+      });
+      if (result === "pending") expect(originalProvider.mock.calls[0]![0].signal.aborted).toBe(true);
+      key(content, "Escape");
+      rerender({ ...edited, completionProvider: () => [{ label: "dismissed" }] });
+      expect(completionStatus(view.state)).toBeNull();
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
+  it("restores implicit member completion when the JavaScript grammar finishes loading", async () => {
+    const languageLoader = vi.mocked(codeMirrorLanguages.loadCodeMirrorLanguageExtensions);
+    const loadExtensions = languageLoader.getMockImplementation()!;
+    const extensions = await loadExtensions("javascript");
+    let finishLoading!: (value: Extension[]) => void;
+    const loading = new Promise<Extension[]>(resolve => { finishLoading = resolve; });
+    languageLoader.mockReturnValue(loading);
+    const source = "variables.customer";
+    const props = {
+      document: codeDocument({ uri: "elsa://expressions/delayed-javascript", value: source }),
+      languageAdapter: javaScriptLanguageAdapter
+    };
+    const refreshedProvider = vi.fn(() => [{ label: "street" }]);
+    const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: () => null });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-editor"));
+      const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+      expect(syntaxTree(view.state).type.name).not.toBe("Script");
+      view.dispatch({ changes: { from: source.length, insert: "." }, selection: { anchor: source.length + 1 }, userEvent: "input.type" });
+      rerender({ ...props, document: { ...props.document, value: source + "." }, completionProvider: refreshedProvider });
+      expect(completionStatus(view.state)).toBeNull();
+      expect(refreshedProvider).not.toHaveBeenCalled();
+
+      finishLoading(extensions);
+
+      await vi.waitFor(() => {
+        expect(refreshedProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false, position: source.length + 1 }));
+        expect(container.querySelector(".cm-completionLabel")?.textContent).toBe("street");
+      });
+    } finally {
+      unmount();
+      languageLoader.mockImplementation(loadExtensions);
+    }
+  }, 20000);
+
+  it.each(["string", "comment", "template"] as const)("clears implicit completion after a period in a JavaScript %s", async kind => {
+    const source = { string: '"variables.customer', comment: "// variables.customer", template: "`variables.customer" }[kind];
+    const props = { document: codeDocument({ value: source }), languageAdapter: javaScriptLanguageAdapter };
+    const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: () => null });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-editor"));
+      const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+      await vi.waitFor(() => expect(syntaxTree(view.state).type.name).toBe("Script"));
+      view.dispatch({ changes: { from: source.length, insert: "." }, selection: { anchor: source.length + 1 }, userEvent: "input.type" });
+      expect(completionStatus(view.state)).toBe("pending");
+
+      rerender({ ...props, document: { ...props.document, value: source + "." }, completionProvider: () => [{ label: "street" }] });
+
+      expect(completionStatus(view.state)).toBeNull();
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
+  it("formats an inline type alias in the completion note", async () => {
+    const text = "Types `List<Customer>` and ``arr[`key`](x)``. Unpaired ``tick`.";
+    const source = "variables.customer.";
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: source }),
+      languageAdapter: javaScriptLanguageAdapter,
+      completionProvider: () => [{ label: "street", documentation: { markdown: text + " <img src=x>" } }]
+    });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-editor"));
+      const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+      view.dispatch({ selection: { anchor: source.length } });
+      startCompletion(view);
+
+      await vi.waitFor(() => {
+        const note = container.querySelector(".cm-completionInfo");
+        expect(Array.from(note?.querySelectorAll("code") ?? [], code => code.textContent)).toEqual(["List<Customer>", "arr[`key`](x)"]);
+        expect(note?.textContent).toBe("Types List<Customer> and arr[`key`](x). Unpaired ``tick`.");
+        expect(note?.querySelector("img")).toBeNull();
+      });
+    } finally {
+      unmount();
+    }
   }, 20000);
 
   it("applies a typed variable's nested member mid-path and replaces only the typed prefix", async () => {

@@ -27,6 +27,7 @@ public sealed partial class EfStore
         IReadOnlyDictionary<string, string> Labels, string? State, int StateVersion, long Revision)
     {
         internal string? Fault { get; init; }
+        internal long? ParkAt { get; init; }
         internal string? Jobs { get; init; }
         internal long? NextJobGeneration { get; init; }
         internal History History { get; init; }
@@ -126,7 +127,8 @@ public sealed partial class EfStore
 
     private PreparedRoot PrepareFirstRoot(string tenant, string reference, Message creator,
         PartitionFence fence, string? state, int stateVersion, string typeData,
-        IReadOnlyDictionary<string, string> labels, string journal, RootJobState? jobState = null, InstanceStatus status = InstanceStatus.Running, long terminalGrowth = 0)
+        IReadOnlyDictionary<string, string> labels, string journal, RootJobState? jobState = null, InstanceStatus status = InstanceStatus.Running, long terminalGrowth = 0,
+        string? creatorFault = null)
     {
         RequireQualifiedRootWriter();
         if (creator.Start is not { Parent: null, Creation: { Generation: 1, Previous: 0 } } start ||
@@ -139,9 +141,9 @@ public sealed partial class EfStore
         var wire = stable && state is not null ? RootSelfContent.Encode(state) : null;
         // Model and definition are in the qualified header, including values that PostgreSQL text cannot carry.
         var row = new InstanceRow(creator.Target.Id, "", "", status, "null", 1, null,
-            History: start.History, StateVersion: stateVersion, Jobs: jobState?.Jobs).WithFoundationState(storedState)
+            Fault: creatorFault is null ? null : DurableKeyJson.Write(creatorFault), History: start.History, StateVersion: stateVersion, Jobs: jobState?.Jobs).WithFoundationState(storedState)
             with { NextJobGeneration = jobState?.NextGeneration };
-        // BindCheckpointAsync consumes the exact, due creator before this same transaction lands.
+        // BindCheckpointAsync settles the exact, due creator before this same transaction lands.
         var turn = new TurnCommit(row.Id, row, null, [], [], [], [], [], journal);
         return new(turn, new FirstRootCheckpoint(tenant, reference, creator, row, header, wire, terminalGrowth));
     }
@@ -214,7 +216,7 @@ public sealed partial class EfStore
 
     private sealed record PhysicalRoot(string Id, long Creation, string State, byte[]? Wire, int StateVersion, long Revision, string Header,
         History History, InstanceStatus Status, bool Suspended, long? TerminalRevision, long? TerminalAt, long AsOf,
-        string? Jobs, long? NextJobGeneration, string? Fault);
+        string? Jobs, long? NextJobGeneration, string? Fault, long? ParkAt);
 
     internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
@@ -228,13 +230,14 @@ public sealed partial class EfStore
             SELECT i."Id", b."Creation", i."State", /*root-wire*/ AS "Wire", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
                 i."History", i."Status", i."Suspended", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
                 /*root-read-clock*/ AS "AsOf",
-                i."Jobs", i."NextJobGeneration", i."Fault"
+                i."Jobs", i."NextJobGeneration", i."Fault", /*root-park-at*/ AS "ParkAt"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Reference" = i."FoundationReference"
                 AND b."Actor" = i."Id" AND b."Tenant" = i."FoundationTenant"
             WHERE i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference} AND i."Partition" = b."Partition" AND NOT i."Retired"
             """;
         var physical = await db.Database.SqlQuery<PhysicalRoot>(FormattableStringFactory.Create(
             query.Format.Replace("/*root-wire*/", db.UsesRootStableBody ? """i."FoundationStateWire" """ : "NULL::bytea", StringComparison.Ordinal)
+                .Replace("/*root-park-at*/", db.UsesSqliteRootRuntime ? """i."FoundationParkAt" """ : "NULL::bigint", StringComparison.Ordinal)
                 .Replace("/*root-read-clock*/", db.UsesSqliteRootRuntime ? SqliteCommitDialect.MillisecondClock : "floor(extract(epoch from statement_timestamp()) * 1000)::bigint",
                     StringComparison.Ordinal),
             query.GetArguments())).SingleOrDefaultAsync(cancellationToken);
@@ -261,7 +264,9 @@ public sealed partial class EfStore
             header.Labels.ToDictionary(StringComparer.Ordinal), state, physical.StateVersion, physical.Revision)
             {
                 History = physical.History, Status = physical.Status, Suspended = physical.Suspended, TerminalRevision = physical.TerminalRevision,
-                Fault = db.UsesRootParkArrivals && physical.Fault is not null ? DurableKeyJson.Read<string>(physical.Fault) : null,
+                Fault = (db.UsesRootParkArrivals || physical.ParkAt is not null) && physical.Fault is not null
+                    ? DurableKeyJson.Read<string>(physical.Fault) : null,
+                ParkAt = physical.ParkAt,
                 TerminalAt = physical.TerminalAt, AsOf = physical.AsOf, Jobs = physical.Jobs, NextJobGeneration = physical.NextJobGeneration
             };
     }
