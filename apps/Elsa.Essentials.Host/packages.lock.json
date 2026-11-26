@@ -1199,7 +1199,10 @@
         }
       },
       "elsa.http.core": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
       },
       "elsa.http.javascript": {
         "type": "Project",

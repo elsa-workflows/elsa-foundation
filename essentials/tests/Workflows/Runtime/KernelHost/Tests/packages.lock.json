@@ -194,7 +194,10 @@
         "type": "Project"
       },
       "elsa.http.core": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
       },
       "elsa.mediator.core": {
         "type": "Project",

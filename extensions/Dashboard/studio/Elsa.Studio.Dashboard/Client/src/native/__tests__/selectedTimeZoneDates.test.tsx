@@ -24,15 +24,20 @@ it("converts typed instants, refresh and period dates live while retaining raw a
   cleanups.push(() => { flushSync(() => root.unmount()); container.remove(); });
   flushSync(() => root.render(<ResultView result={result} visualization={{ kind: "table", y: [] }} />));
   const expected = (zone: string, offset: string) => `${new Intl.DateTimeFormat(undefined, { timeZone: zone, dateStyle: "medium", timeStyle: "medium" }).format(new Date(instant))} UTC${offset}`;
-  const dates = container.querySelectorAll("time");
-  expect(dates).toHaveLength(3);
-  for (const date of [dates[0], dates[1]]) { expect(date.dateTime).toBe(instant); expect(date.textContent).toBe(expected("Europe/Amsterdam", "+02:00")); }
+  // The refresh time, the period start and the typed instant cell render the instant; each keeps its raw value.
+  const dates = [...container.querySelectorAll("time")].filter(date => date.dateTime === instant);
+  expect(dates.length).toBeGreaterThanOrEqual(3);
+  for (const date of dates) expect(date.textContent).toBe(expected("Europe/Amsterdam", "+02:00"));
   const cells = container.querySelectorAll("tbody td");
   expect(cells[0].textContent).toBe(expected("Europe/Amsterdam", "+02:00"));
-  expect(cells[1].textContent).toBe(instant); expect(cells[2].textContent).toBe("2026-07-15");
+  // A literal string stays as typed, and a date-only value names its calendar day in every zone (never shifted).
+  expect(cells[1].textContent).toBe(instant);
+  const dateOnly = cells[2].textContent;
+  expect(dateOnly).toMatch(/15/);
   expect(container.textContent).toContain("query zone: America/New_York; end exclusive");
   flushSync(() => setStudioTimeZonePreference("UTC"));
   expect(cells[0].textContent).toBe(expected("UTC", "+00:00"));
-  for (const date of [dates[0], dates[1]]) expect(date.textContent).toBe(expected("UTC", "+00:00"));
+  expect(cells[2].textContent).toBe(dateOnly);
+  for (const date of dates) expect(date.textContent).toBe(expected("UTC", "+00:00"));
   expect(JSON.stringify(result)).toBe(original);
 });

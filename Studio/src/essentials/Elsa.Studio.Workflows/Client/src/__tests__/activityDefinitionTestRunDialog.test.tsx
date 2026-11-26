@@ -181,7 +181,7 @@ describe("ActivityDefinitionTestRunDialog", () => {
     expect(firstField.getAttribute("data-invalid")).toBe("true");
     expect(firstSelect.getAttribute("aria-invalid")).toBe("true");
     const firstError = firstField.querySelector(".studio-field-error[role='alert']")!;
-    expect(firstError.textContent).toBe("FirstName is required and has no default.");
+    expect(firstError.textContent).toBe("FirstName is required.");
     expect(firstSelect.getAttribute("aria-describedby")).toContain(firstError.id);
 
     const attemptsSelect = document.body.querySelector<HTMLSelectElement>("select[aria-label='Attempts']")!;

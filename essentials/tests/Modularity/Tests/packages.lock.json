@@ -2216,7 +2216,10 @@
         }
       },
       "elsa.http.core": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
       },
       "elsa.http.javascript": {
         "type": "Project",
@@ -2487,6 +2490,7 @@
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )"
         }
       },
