@@ -56,6 +56,8 @@ if (args is ["sqlite-root-park-opening", var sqliteParkFence and ("checked" or "
     return await SqliteHostLifetimeChecks.RunParkOpeningAsync(sqliteParkFence == "in-batch");
 if (args is ["sqlite-root-park-inspection", var sqliteInspectFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunParkInspectionAsync(sqliteInspectFence == "in-batch");
+if (args is ["sqlite-root-parked-operators", var sqliteParkedOperatorFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunParkedOperatorsAsync(sqliteParkedOperatorFence == "in-batch");
 if (args is ["pg-http-owner-loss", var ownerFence and ("checked" or "in-batch"), var loss and ("before" or "before-late" or "after")])
     return await PostgresHttpOwnerLoss.RunAsync(ownerFence, loss);
 if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batch"), var pause and ("before" or "after" or "resume"), var ownerRef])

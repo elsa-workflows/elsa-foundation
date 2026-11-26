@@ -82,11 +82,10 @@ internal static partial class SqliteHostLifetimeChecks
             await PendingAsync(racesJob, 1);
             Require(jobInput.Outcome == Contract.AdmissionOutcome.Accepted, "the live-job refusal follows an earlier ordinary input");
 
-            await AddFutureParkAsync(capacity);
             using var waiting = CancellationTokenSource.CreateLinkedTokenSource(token);
             var many = Enumerable.Range(0, PostgresRootAdmission.HeldReplyLimit)
                 .Select(i => CallAsync(capacity, $"hold-{i}", window: 40_000, caller: waiting.Token)).ToArray();
-            await PendingAsync(capacity, PostgresRootAdmission.HeldReplyLimit + 1);
+            await PendingAsync(capacity, PostgresRootAdmission.HeldReplyLimit);
             Require(await CallAsync(capacity, "extra") is { Error: "operator reply capacity" } &&
                 await CallAsync(capacity, "hold-0") is { Error: "repeat" },
                 "the per-root reply capacity refuses a new caller and keeps its prior receipts");
@@ -106,7 +105,7 @@ internal static partial class SqliteHostLifetimeChecks
                 await reader.ReadFirstRootAsync(scope.Tenant, compound.Id, token) is null,
                 "compound retirement replies to the selected caller and the scrubbed sibling");
             Require(await db.Messages.AsNoTracking().SingleAsync(row => row.Id == laterPark, token) is { Done: true, ReplyTo: null, Start: null },
-                "retirement scrubs the staged-out Park-selected held route");
+                "retirement scrubs the later Park-selected held route");
             Require(await replies.ReadOperatorStatusAsync(scope.Tenant, compound.Id, token) == Contract.ActorStatus.Cancelled &&
                 await replies.ReadOperatorStatusAsync("other-tenant", compound.Id, token) is null,
                 "timeout observation reads only the exact tenant's retired checkpoint status");

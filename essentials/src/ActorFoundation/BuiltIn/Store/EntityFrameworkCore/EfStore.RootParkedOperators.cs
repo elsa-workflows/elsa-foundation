@@ -330,6 +330,7 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
         {
             if (!db.UsesRootParkedOperators) return false;
+            if (db.UsesSqliteRootRuntime) return await BindSqliteParkedTerminateAsync(db, this, token);
             var locked = await db.Database.SqlQuery<LockedParkedRoot>($"""
                 SELECT i."FoundationParkAt" AS "At", i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
                     sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion",

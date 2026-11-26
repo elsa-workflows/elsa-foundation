@@ -46,7 +46,7 @@ public sealed partial class EfStore
                 Command.Operator?.RetentionDelete == true && !db.UsesRootRetention)
                 return false;
             if (db.UsesSqliteRootRuntime)
-                return Park is null && await BindSqliteRootRetirementAsync(db, this, token);
+                return await BindSqliteRootRetirementAsync(db, this, token);
 
             var occurrence = InboxKey.FoundationOccurrenceScope;
             var rows = await db.Database.SqlQuery<long>($"""

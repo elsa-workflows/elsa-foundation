@@ -834,7 +834,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             {
                 var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
                 var result = ToGeneratedPoll(page, root, db);
-                return db.UsesSqliteRootRuntime ? result : await WithRootParkFactsAsync(db, result, cancellationToken);
+                return await WithRootParkFactsAsync(db, result, cancellationToken);
             }
             return await WithRootParkFactsAsync(db, ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db), cancellationToken);
         }

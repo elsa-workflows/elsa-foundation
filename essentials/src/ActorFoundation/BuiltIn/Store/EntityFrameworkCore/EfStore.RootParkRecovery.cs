@@ -122,7 +122,9 @@ public sealed partial class EfStore
             }
             var clearing = RereadsParkFacts(db) ? """ "FoundationParkClearing" AS "Clearing", "FoundationParkCleared" AS "Cleared" """
                 : """ NULL::text AS "Clearing", NULL::bigint AS "Cleared" """;
-            var park = await db.Database.SqlQueryRaw<ParkMarkRow>($"""
+            var park = db.UsesSqliteRootRuntime
+                ? await ReadSqliteParkMarkAsync(db, message.Target.Id, message.Target.Partition, token)
+                : await db.Database.SqlQueryRaw<ParkMarkRow>($"""
                 SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision",
                     "Jobs" IS NOT NULL OR "Children" IS NOT NULL OR "CustomHandles" IS NOT NULL
                         OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding",
@@ -132,8 +134,10 @@ public sealed partial class EfStore
                 WHERE "Id" = {"{0}"} AND "Partition" = {"{1}"} AND NOT "Retired"
                 """, message.Target.Id, message.Target.Partition).SingleOrDefaultAsync(token);
             // A clearing's control reads only the next page and one more row: nothing is kept while a clearing is open.
-            var kept = await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token,
-                command.RootParkClear ? InMemoryStore.ParkPageLimit + 1 : int.MaxValue);
+            var limit = command.RootParkClear ? InMemoryStore.ParkPageLimit + 1 : int.MaxValue;
+            var kept = db.UsesSqliteRootRuntime
+                ? (await ReadSqliteKeptAsync(db, message.Target.Id, message.Target.Partition, limit, token)).Select(row => row.Facts).ToList()
+                : await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token, limit);
             // A page restores at most 170 rows and 4 MiB of stored rows, and always has room for its first restored row.
             // A recover charges only restored (Arrived) rows, since the cleared fault input is never restored. A Terminate
             // or a Delete (S5b-3b), clears every kept row, so it charges them all.
@@ -143,7 +147,7 @@ public sealed partial class EfStore
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived), kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
                 fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Residue = park?.Residue ?? false, Rereads = RereadsParkFacts(db), Clearing = park?.Clearing, Cleared = park?.Cleared ?? 0, Page = page,
-                    ClearsInPages = ClearsParkInPages(db) };
+                    ClearsInPages = db.UsesSqliteRootRuntime || ClearsParkInPages(db) };
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }
         return polled with { Messages = messages };

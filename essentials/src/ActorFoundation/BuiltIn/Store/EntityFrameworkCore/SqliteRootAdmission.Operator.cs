@@ -30,7 +30,9 @@ internal sealed partial class SqliteRootAdmission
         {
             var cursor = await ReadSelectionCursorAsync(db, ct);
             var terminal = deletion ? PostgresRootSelection.OpenTerminal(cursor, selection, tenant, reference.Id) : null;
-            if (deletion ? terminal is not { Revision: > 0 } : !PostgresRootSelection.MatchesRunning(cursor, selection, tenant, reference.Id))
+            var park = terminal is null && !retentionDelete ? PostgresRootSelection.OpenPark(cursor, selection, tenant, reference.Id) : null;
+            if (park is not { Revision: > 0, At: > 0 } && (deletion ? terminal is not { Revision: > 0 }
+                : !PostgresRootSelection.MatchesRunning(cursor, selection, tenant, reference.Id)))
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
             var target = await ReadTargetAsync(db, tenant, reference.Id, ct);
             if (target is null)
@@ -44,8 +46,8 @@ internal sealed partial class SqliteRootAdmission
                 WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= {now}
                 """).SingleOrDefaultAsync(ct);
             if (prior == reference.Id) return new(Contract.AdmissionOutcome.Duplicate, reference);
-            var eligible = terminal is not null
-                ? target.Terminal && await MatchesTerminalAsync(db, tenant, reference.Id, target, terminal, ct)
+            var eligible = park is not null ? await MatchesParkAsync(db, tenant, reference.Id, target, park, ct)
+                : terminal is not null ? target.Terminal && await MatchesTerminalAsync(db, tenant, reference.Id, target, terminal, ct)
                 : target.Status == (int)InstanceStatus.Running ||
                     thenDelete && target.Terminal && await MatchesTerminalAsync(db, tenant, reference.Id, target, null, ct);
             if (prior is not null || !eligible)
@@ -60,7 +62,8 @@ internal sealed partial class SqliteRootAdmission
                 ON CONFLICT ("Tenant", "Operation") DO UPDATE SET "Reference" = excluded."Reference", "Until" = excluded."Until"
                 """, ct));
             var (id, header) = PostgresRootAdmission.EncodeOperator(reference.Id, idKey, digest, 1, kind, due,
-                terminal, thenDelete: thenDelete, retentionDelete: retentionDelete, replyAddress: replyAddress);
+                terminal, thenDelete: thenDelete, retentionDelete: retentionDelete, replyAddress: replyAddress,
+                park: park, window: park is null ? null : (long)window.TotalMilliseconds);
             await EnqueueAsync(db, target.Actor, target.Partition, id, InboxKey.FoundationOccurrenceScope, kind,
                 header, null, due, until, replyTo: replyAddress, token: ct);
             return new(Contract.AdmissionOutcome.Accepted, reference);
@@ -92,6 +95,16 @@ internal sealed partial class SqliteRootAdmission
         }
         catch (PostgresRootAdmission.OperatorReplyExpired) { return null; }
     }
+
+    private static Task<bool> MatchesParkAsync(KernelDb db, string tenant, string reference, Target target, FoundationParkMark park,
+        CancellationToken token) => db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM "Instances"
+                WHERE "Id" = {target.Actor} AND "Partition" = {target.Partition} AND NOT "Retired"
+                    AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference}
+                    AND "Status" = {(int)InstanceStatus.Faulted} AND "FoundationParkAt" = {park.At}
+                    AND "FoundationParkRevision" = {park.Revision} AND "FoundationParkClearing" IS NULL
+                    AND "FoundationTerminalRevision" IS NULL AND "FoundationTerminalAt" IS NULL) AS "Value"
+            """).SingleAsync(token);
 
     private static Task<bool> MatchesTerminalAsync(KernelDb db, string tenant, string reference, Target target, FoundationTerminalStamp? mark,
         CancellationToken token) => db.Database.SqlQuery<bool>($"""
