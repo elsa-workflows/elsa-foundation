@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import sys
 import tarfile
 import tempfile
@@ -19,6 +20,7 @@ from urllib.error import HTTPError, URLError
 import studio_docker_publish as publish
 from studio_profile_candidate import saved_configs
 from studio_profile_release import runtime_children
+from verify_studio_nuget_packages import _asset_contract
 
 
 REPOSITORY = "elsa-workflows/elsa-foundation"
@@ -569,6 +571,28 @@ class StudioDockerPublishTests(unittest.TestCase):
         self.assertLess(frontend, payload)
         self.assertLess(payload, first_docker_build)
         self.assertIn('$STUDIO_IMAGE_VALIDATORS/verify_studio_nuget_packages.py', workflow[payload:first_docker_build])
+
+    def test_trusted_archive_verifier_accepts_both_studio_source_roots(self) -> None:
+        expected = runpy.run_path(str(REPO_ROOT / "tools/ci/verify-studio-assets.py"))["EXPECTED_ASSETS"]
+        projects = json.loads((REPO_ROOT / "tools/ci/studio-package-identities.json").read_text())["packable_projects"]
+        for studio_root in ("studio", "Studio"):
+            with self.subTest(studio_root=studio_root), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+
+                def checkout_path(path: str) -> str:
+                    return f"{studio_root}/{path.removeprefix('studio/')}" if path.startswith("studio/") else path
+
+                for path in expected:
+                    asset = root / checkout_path(path)
+                    asset.parent.mkdir(parents=True, exist_ok=True)
+                    asset.write_text('{"version":1,"styles":[]}' if path.endswith("/entry-styles.json") else "fixture")
+                inventory = {"packable_projects": [
+                    dict(project, project=checkout_path(project["project"])) for project in projects
+                ]}
+                assets = _asset_contract(root, inventory)
+                entry = assets["Elsa.Studio.Hosting"]["staticwebassets/studio/index.html"]
+                self.assertEqual(studio_root, entry.relative_to(root).parts[0])
+                self.assertIn("staticwebassets/studio/modules/workflows/entry-styles.json", assets["Elsa.Studio.Workflows"])
 
     def test_invalid_source_cli_fails_without_writing_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

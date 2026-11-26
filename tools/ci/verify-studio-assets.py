@@ -46,8 +46,13 @@ EXPECTED_ASSETS += tuple(path.rsplit("/", 1)[0] + "/entry-styles.json"
                          for path in EXPECTED_ASSETS if path.endswith("/module.js"))
 
 
-def verify_entry_styles(root: Path) -> None:
-    for path in EXPECTED_ASSETS:
+def expected_assets(studio_root: str) -> tuple[str, ...]:
+    return tuple(studio_root + path[len("studio"):] if path.startswith("studio/") else path
+                 for path in EXPECTED_ASSETS)
+
+
+def verify_entry_styles(root: Path, studio_root: str = "studio") -> None:
+    for path in expected_assets(studio_root):
         if not path.endswith("/entry-styles.json"):
             continue
         contract = root / path

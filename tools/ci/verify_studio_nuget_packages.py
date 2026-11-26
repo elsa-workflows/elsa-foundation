@@ -285,11 +285,12 @@ def _asset_contract(root: Path, inventory: dict) -> dict[str, dict[str, Path]]:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     roots = {item["id"]: Path(item["project"]).parent / "wwwroot" for item in inventory["packable_projects"]}
-    for required in module.EXPECTED_ASSETS:
+    studio_root = _studio_root(root).name
+    for required in module.expected_assets(studio_root):
         owners = [name for name, folder in roots.items() if Path(required).is_relative_to(folder)]
         if len(owners) != 1 or not (root / required).is_file():
             raise ValueError(f"Missing or unowned generated Studio asset: {required}.")
-    module.verify_entry_styles(root)
+    module.verify_entry_styles(root, studio_root)
     return {name: {"staticwebassets/" + path.relative_to(root / folder).as_posix(): path
                    for path in (root / folder).rglob("*") if path.is_file() and ".vite" not in path.relative_to(root / folder).parts}
             for name, folder in roots.items()}
