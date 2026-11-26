@@ -27,7 +27,7 @@ to generate Studio's frontend assets and build the Workbench and Studio images.
 | Elsa Studio  | http://localhost:14000  | Management UI (React). Sign in as `admin` / `Password123!`. |
 | PostgreSQL   | localhost:5432          | user/pw/db: `elsa` / `elsa` / `elsa`    |
 
-Without the Studio image, run just the backend subset:
+Run the Compose commands below from `docker/compose/`. The first command starts Workbench and PostgreSQL.
 
 ```bash
 docker compose up --build        # postgres + elsa-workbench only

@@ -168,7 +168,7 @@ Demo credentials and the demo-only warning are the same as the [table in section
   docker compose version
   ```
 
-- **For the full stack:** Node.js 22 and pnpm build the Studio frontend in this checkout.
+- **For the full stack:** Use Node.js 22.13 or later and pnpm to build the Studio frontend in this checkout.
 - **No credentials required.** All NuGet feeds used by the image builds are public, so the builds
   work on a clean machine with no `~/.nuget` setup.
 
