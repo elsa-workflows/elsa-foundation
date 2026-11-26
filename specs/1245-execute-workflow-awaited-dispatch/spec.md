@@ -361,12 +361,20 @@ faults.
     | the whole value in a script (`toJson(getV())`, passing `getV()` on) | an object built from the rows above, with Elsa 3's keys: `{ WorkflowDefinitionVersionId, WorkflowInstanceId, CorrelationId, Status, SubStatus, Output }` |
     | the whole value bound directly into another activity's input | that binding becomes a JavaScript expression that builds the same object |
 
-  - JavaScript reads convert in every row. In Liquid only `.Output` and `.Output.X` convert: the Liquid rewrite edits
+  - JavaScript reads convert in every row. A member written in brackets with a literal name (`getV()['Output']`) and
+    optional chaining (`getV()?.Output?.X`) rewrite the same way as the dot form. A bracket with a computed name is an
+    unknown member. In Liquid only `.Output` and `.Output.X` convert: the Liquid rewrite edits
     one member, and it has no inline form for the other rows.
   - Four cases are refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`. The lost-output rule takes per-rule text for
     them, and the guidance names the read and the reason:
-    - `V` has another writer, so its reads would see two shapes. A declared initial value counts as a writer: Elsa 3
-      read `init.Output.X`, and Elsa 4 would read `init.X`;
+    - `V` has another writer, so its reads would see two shapes. A writer is any of these:
+      - another capture;
+      - a Set Variable node;
+      - a declared initial value, meaning a `value` that is not absent, `null` or `""`. Elsa 3 read `init.Output.X`,
+        and Elsa 4 would read `init.X`;
+      - a script that calls `setV`, calls `setVariable('V', …)` with the literal name, or assigns to `V` or one of its
+        members;
+      - a computed-name write (`setVariable(expr, …)`) while `V` is in scope;
     - a read of any other member `X` of `V`. Elsa 3 had that only in its bare-dictionary shape, after a child that
       suspended, so the intent is ambiguous;
     - a Liquid read of `V` other than `.Output` or `.Output.X`;

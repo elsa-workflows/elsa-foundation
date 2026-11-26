@@ -148,8 +148,12 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
    - **D-3, the wrapped result (FR-010).** `Result` becomes `CarryOutput("Result", "Output")` with a new
      wrapped-result marker on the rule. Value-flow lowering (`Elsa3ValueFlowLowerer`, where captured variables and
      activity-result reads are lowered today) then handles each variable that marker captures:
-     - **The variable's writers.** If any other node writes `V`, it refuses with
+     - **The variable's writers.** If `V` has any writer in FR-010's list, it refuses with
        `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` and the FR-010 guidance.
+       - The script check is its own. `ScriptMayWriteVariables` deliberately leaves out generated setters, so it
+         cannot be reused as is.
+       - It follows the loop-held variable check in `Elsa3ValueFlowLowerer`: other producers, explicit Set Variable
+         writes, and script writes.
      - **JavaScript reads** (`Elsa3ExpressionRewriter`, Acornima). It rewrites each member path on `getV()`,
        `variables.V` or a literal `getVariable('V')` per the FR-010 table:
        - `.Output…` becomes the variable path.

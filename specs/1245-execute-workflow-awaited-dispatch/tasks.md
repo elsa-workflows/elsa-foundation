@@ -90,7 +90,10 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   - Converter tests: one per FR-010 table row in JavaScript, Liquid `.Output` and `.Output.X`, and one per refusal
     (another writer, an initial value, an unknown member, another Liquid read, a cross-frame read, an out-of-order
     read, a computed-name read in scope of `V`). Cover the literal `getVariable('V')` form with one member-path read and
-    one whole-value read. Add one test with an Execute Workflow and a Dispatch Workflow that
+    one whole-value read.
+  - One refusal test per writer kind: another capture, Set Variable, an initial value (absent, `null` and `""` do not
+    count), `setV`, a literal `setVariable('V', …)`, a member assignment, and a computed-name write.
+  - Tests for the literal bracket form and for optional chaining. Add one test with an Execute Workflow and a Dispatch Workflow that
     both capture `Result`: each variable's reads bind to its own node.
   - One publish test: a `.SubStatus` read on a path where the dispatch may not have run is refused with
     `ValueFlow/UnavailableProducer`.
