@@ -59,6 +59,13 @@ class ProtectedProductInventoryTests(unittest.TestCase):
         self.assertFalse(etl.protected_product_inventory(historical,source,True,2))
         duplicate={**products,'actualProductVersions':[*products['actualProductVersions'][:-1],products['actualProductVersions'][0]]}
         self.assertFalse(etl.protected_product_inventory(duplicate,source,True,2))
+        renamed={**products,'actualProductVersions':[{**row,'name':'Elsa.Workbench.Host.dll'} if row['name']=='Elsa.Workbench.dll' else row
+            for row in products['actualProductVersions']]}
+        self.assertTrue(etl.protected_product_inventory(renamed,source,True,2))
+        both={**products,'actualProductVersions':[*products['actualProductVersions'][1:],renamed['actualProductVersions'][0]]}
+        self.assertTrue(etl.protected_product_inventory(both,source,True,2))
+        mixed={**products,'actualProductVersions':[*products['actualProductVersions'][:-1],renamed['actualProductVersions'][0]]}
+        self.assertFalse(etl.protected_product_inventory(mixed,source,True,2))
 
 
 class _ActualRecoveryControls(unittest.TestCase):

@@ -1,7 +1,9 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, Copy, Download } from "lucide-react";
 import {
+  formatStudioDate,
   qualifyStudioBackendPath,
+  useStudioTimeZone,
   type StudioDashboardRecordLinkContribution
 } from "@elsa-workflows/studio-sdk";
 import {
@@ -30,7 +32,12 @@ import {
   sortQueryRows,
   type TableSortState
 } from "./resultExport";
-import type { QueryColumn, QueryResult, QueryRow, Visualization } from "./types";
+import type { QueryCell, QueryColumn, QueryResult, QueryRow, Visualization } from "./types";
+
+/** A cell as the views show it: an instant follows the selected Studio time zone; export keeps cellText's raw value. */
+function displayText(cell?: QueryCell): string {
+  return cell?.type === "instant" && cell.value !== null ? formatStudioDate(cell.value) : cellText(cell);
+}
 
 function NumericSeries({ rows, column, categories, kind }: { rows: QueryRow[]; column: QueryColumn; categories: string[]; kind: "bar" | "line" }) {
   const titleId = useId();
@@ -64,13 +71,13 @@ function NumericSeries({ rows, column, categories, kind }: { rows: QueryRow[]; c
       return <li key={row.key || index}><span>{categories[index]}</span><span className="named-bar-track" aria-hidden="true">
         <span className="named-bar-zero" style={{ insetInlineStart: `${zero}%` }} />
         {value !== null ? <span className="named-bar" data-negative={value < 0} style={{ insetInlineStart: `${Math.min(zero, endpoint)}%`, width: `${Math.abs(endpoint - zero)}%` }} /> : null}
-      </span><span>{cellText(row.values[column.id])}</span></li>;
+      </span><span>{displayText(row.values[column.id])}</span></li>;
     })}</ol> : <>
       <svg className="named-line" viewBox="0 0 600 220" role="img" aria-labelledby={titleId}>
         <line x1="32" x2="568" y1={y(0)} y2={y(0)} />
         <text x="2" y={y(maximum) + 4}>{maximum}</text><text x="2" y={y(minimum) + 4}>{minimum}</text>
         {segments.map((points, index) => <polyline key={index} fill="none" points={points.map(point => `${x(point.index)},${y(point.value)}`).join(" ")} />)}
-        {values.map((value, index) => value === null ? null : <circle key={rows[index].key || index} cx={x(index)} cy={y(value)} r="4"><title>{categories[index]}: {cellText(rows[index].values[column.id])}</title></circle>)}
+        {values.map((value, index) => value === null ? null : <circle key={rows[index].key || index} cx={x(index)} cy={y(value)} r="4"><title>{categories[index]}: {displayText(rows[index].values[column.id])}</title></circle>)}
         <text x="32" y="210">{categories[0]}</text><text x="568" y="210" textAnchor="end">{categories[categories.length - 1]}</text>
       </svg>
       {values.some(value => value === null) ? <p className="named-help">Gaps represent missing values. No line connects across a gap.</p> : null}
@@ -113,6 +120,7 @@ export function ResultView({
   stickyHeader = false,
   exportFilename
 }: ResultViewProps) {
+  useStudioTimeZone();
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<TableSortState | null>(null);
   const [exportStatus, setExportStatus] = useState<string>("");
@@ -140,7 +148,7 @@ export function ResultView({
   const selected = visualization.y.map(id => columns.find(column => column.id === id));
   const valueColumns = selected.filter((column): column is QueryColumn => Boolean(column));
   const bindingsValid = selected.every(Boolean);
-  const categories = rows.map((row, index) => visualization.x ? cellText(row.values[visualization.x]) : String(index + 1));
+  const categories = rows.map((row, index) => visualization.x ? displayText(row.values[visualization.x]) : String(index + 1));
   const canMetric = bindingsValid && valueColumns.length === 1 && rows.length === 1;
   const interpretation = result.interpretation || "Results of the validated question.";
   const coverageStatus = result.coverage?.status ?? "unknown";
@@ -283,12 +291,12 @@ export function ResultView({
       </>}
     </div>
     {rows.length === 0 ? <p role="status">No authorized records matched this question. This is an empty result, not an observed zero.</p> : <>
-      {visualization.kind === "metric" ? canMetric ? <div className="named-metric"><span>{valueColumns[0].label}</span><strong>{cellText(rows[0].values[valueColumns[0].id])}</strong><span>{valueColumns[0].unit}</span></div> : <p role="status">A metric needs one result row and one value column. Choose those bindings or use a table.</p> : null}
+      {visualization.kind === "metric" ? canMetric ? <div className="named-metric"><span>{valueColumns[0].label}</span><strong>{displayText(rows[0].values[valueColumns[0].id])}</strong><span>{valueColumns[0].unit}</span></div> : <p role="status">A metric needs one result row and one value column. Choose those bindings or use a table.</p> : null}
       {visualization.kind === "bar" || visualization.kind === "line" ? bindingsValid && valueColumns.length ? <div className="named-chart">
         <p>{visualization.label || "Question chart"}. Each named series has its own labeled scale; exact values follow in the table.</p>
         {valueColumns.map(column => <NumericSeries key={column.id} rows={rows} column={column} categories={categories} kind={visualization.kind as "bar" | "line"} />)}
       </div> : <p role="status">Choose available numeric value columns for this chart. Missing bindings have not been silently substituted.</p> : null}
-      {visualization.kind === "list" ? <ul className="named-result-list">{rows.map(row => <li key={row.key}>{columns.map(column => <span key={column.id}><strong>{column.label}: </strong>{cellText(row.values[column.id])}{column.unit ? ` ${column.unit}` : ""} </span>)}</li>)}</ul> : null}
+      {visualization.kind === "list" ? <ul className="named-result-list">{rows.map(row => <li key={row.key}>{columns.map(column => <span key={column.id}><strong>{column.label}: </strong>{displayText(row.values[column.id])}{column.unit ? ` ${column.unit}` : ""} </span>)}</li>)}</ul> : null}
       <div className="named-result-table-toolbar">
         {enableFilter ? <StudioSearchInput
           className="named-result-filter"

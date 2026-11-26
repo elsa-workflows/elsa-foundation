@@ -3,6 +3,11 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const code = /\.[cm]?[jt]sx?$/;
+// Build plugins that only observe a finished build. Each is still an authenticated input, but it may read the
+// filesystem because it cannot change emitted bytes: it runs after the bundle is written and writes elsewhere.
+// - Studio/vite.release-inventory.ts: off unless STUDIO_INVENTORY is set; in writeBundle it records the package
+//   owners and digests of the written files into that separate directory.
+const outputObservers = new Set(["Studio/vite.release-inventory.ts"]);
 function moduleFiles(file, name) {
   const selected = resolve(dirname(file), name.split(/[?#]/)[0]);
   const candidates = [selected, ...[".ts", ".tsx", ".mts", ".cts", ".js", ".mjs", ".cjs", ".json"].flatMap(extension =>
@@ -129,7 +134,7 @@ export function studioHashBuildInputs(repoRoot, clients) {
       if (errors.length) throw new Error("Unresolved Studio build configuration: " + JSON.stringify(errors.map(error => ts.flattenDiagnosticMessageText(error.messageText, " "))));
     }
     if (!code.test(file)) continue;
-    if (active.has(file)) assertStaticBuildInputs(file);
+    if (active.has(file) && !outputObservers.has(relative(repoRoot, file).split(sep).join("/"))) assertStaticBuildInputs(file);
     for (const imported of ts.preProcessFile(readFileSync(file, "utf8"), true, true).importedFiles) {
       if (active.has(file) && [...ownedPackages].some(name => imported.fileName === name || imported.fileName.startsWith(name + "/")))
         throw new Error("Unsupported Studio build owned-package import: " + file + " -> " + imported.fileName);

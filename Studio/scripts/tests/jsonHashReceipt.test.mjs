@@ -283,6 +283,19 @@ test("nested module scopes bind to their real package and an unowned external co
   assert.throws(() => sourceDocument(root, join(unowned, "value.d.ts")), /no owning package/);
 }));
 
+test("only the named output-only build observer may read the filesystem, and it stays an input", () => fixture(({ root }) => {
+  const studio = join(root, "Studio"), client = join(studio, "Client");
+  mkdirSync(client, { recursive: true });
+  const observer = 'import { readFileSync } from "node:fs"; export const inventory = () => readFileSync(process.env.INPUT);';
+  writeFileSync(join(studio, "vite.release-inventory.ts"), observer);
+  writeFileSync(join(studio, "vite.other-plugin.ts"), observer);
+  const config = join(client, "vite.config.ts");
+  writeFileSync(config, 'import { inventory } from "../vite.release-inventory"; export default inventory;');
+  assert.ok(studioHashBuildInputs(root, [client]).includes(join(studio, "vite.release-inventory.ts")));
+  writeFileSync(config, 'import { inventory } from "../vite.other-plugin"; export default inventory;');
+  assert.throws(() => studioHashBuildInputs(root, [client]), /Unsupported Studio build loader\/read/);
+}));
+
 test("computed active build modules and filesystem reads refuse instead of losing their inputs", () => fixture(({ root }) => {
   const studio = join(root, "Studio"), client = join(studio, "Client"), probes = join(client, "probes");
   mkdirSync(probes, { recursive: true });

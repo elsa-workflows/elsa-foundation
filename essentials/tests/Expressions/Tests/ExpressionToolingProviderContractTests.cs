@@ -107,6 +107,20 @@ public sealed class ExpressionToolingProviderContractTests
     }
 
     [Fact]
+    public async Task A_function_hover_starts_with_its_signature()
+    {
+        // A signature already names the function, so it is the whole first line.
+        var provider = new JavaScriptExpressionToolingProvider();
+        var scope = CreateScope("JavaScript", [
+            new("lookup", "lookup", ExpressionSymbolKind.Function, Documentation: "Looks a value up.", Signatures: [new("lookup(key)")])
+        ]);
+
+        var hover = await provider.GetHoverAsync(new(scope, "lookup", new(0, "lookup".Length)), CancellationToken.None);
+
+        Assert.Equal("lookup(key)", hover.Payload!.Contents.Split(Environment.NewLine)[0]);
+    }
+
+    [Fact]
     public async Task Member_hover_keeps_its_name_when_the_type_name_starts_with_it()
     {
         var shape = new ExpressionValueShape("Order", ExpressionValueKind.Object,
