@@ -25,7 +25,7 @@ public sealed partial class EfStore
     }
 
     // The discovered birth join already limits creators to their exact tenant/reference envelope.
-    private static string SqliteRootPollScope(bool includeParkArrivals) => $"""
+    private static string SqliteRootPollScope(bool includeParkArrivals, bool recovery) => $"""
         AND m."EventMatch" IS NULL AND (m."InboxScope" = 0 OR (
             m."InboxScope" IN ({RootTimedJobScope}, {InboxKey.FoundationOccurrenceScope}) AND EXISTS (
                 SELECT 1 FROM "Instances" i
@@ -33,17 +33,21 @@ public sealed partial class EfStore
                     AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
                     AND NOT i."Retired" AND (i."FoundationParkAt" IS NULL OR
                         m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND (m."Id" GLOB 'operator/*'
-                            {(includeParkArrivals ? """OR (i."FoundationParkClearing" IS NULL AND m."ReplyTo" IS NULL)""" : "")})))
-            AND (m."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("m.")}))))
+                            {(includeParkArrivals ? """OR (i."FoundationParkClearing" IS NULL AND m."ReplyTo" IS NULL)""" : "")}))
+                    {(recovery ? RootReleasedCohortFilter : "")})
+            AND (m."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("m.", recovery)}))))
         """;
 
     // Unsupported stored operator kinds stay pending and do not block the current operator FIFO.
-    private static string SqliteSupportedOperator(string columnPrefix)
+    private static string SqliteSupportedOperator(string columnPrefix, bool recovery = false)
     {
         var address = $"""{columnPrefix}"ReplyTo" """;
         var header = $"""{columnPrefix}"Start" """;
         var wire = $"(CASE WHEN {address} IS NULL THEN {header} ELSE substr({header}, {PostgresRootAdmission.HeldOperatorPrefix.Length + 1}) END)";
         var payload = $"substr({wire}, {PostgresRootAdmission.OperatorPrefix.Length + 1})";
+        var recover = recovery ? $"""
+            OR ({columnPrefix}"Kind" = '{Kinds.Recover}' AND {address} IS NULL AND {wire} GLOB '{PostgresRootAdmission.OperatorPrefix}*')
+            """ : "";
         return $"""
         {columnPrefix}"Id" GLOB 'operator/*'
         AND ({address} IS NULL OR {header} GLOB '{PostgresRootAdmission.HeldOperatorPrefix}*')
@@ -51,21 +55,21 @@ public sealed partial class EfStore
                 ({wire} GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR {wire} GLOB '{PostgresRootAdmission.TerminateThenDeletePrefix}*'))
             OR ({columnPrefix}"Kind" = '{Kinds.Delete}' AND
                 ({wire} GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR
-                    ({address} IS NULL AND {wire} GLOB '{PostgresRootAdmission.RetentionDeletePrefix}*'))))
+                    ({address} IS NULL AND {wire} GLOB '{PostgresRootAdmission.RetentionDeletePrefix}*'))){recover})
         AND json_valid({payload})
         """;
     }
 
     internal static Task<bool> SqliteHeldOperatorCapacityReachedAsync(KernelDb db, string actor, int partition, CancellationToken token) =>
-        db.Database.SqlQuery<bool>(WithSqliteOperatorPredicate($"""
+        db.Database.SqlQuery<bool>(WithSqliteOperatorPredicate(db, $"""
             SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {actor} AND "Partition" = {partition}
                 AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND NOT "Done" AND "ReplyTo" IS NOT NULL
                 AND (/*supported-operator*/) LIMIT 1 OFFSET {PostgresRootAdmission.HeldReplyLimit - 1}) AS "Value"
             """)).SingleAsync(token);
 
-    private static FormattableString WithSqliteOperatorPredicate(FormattableString sql) =>
+    private static FormattableString WithSqliteOperatorPredicate(KernelDb db, FormattableString sql) =>
         FormattableStringFactory.Create(
-            sql.Format.Replace("/*supported-operator*/", SqliteSupportedOperator(""), StringComparison.Ordinal), sql.GetArguments());
+            sql.Format.Replace("/*supported-operator*/", SqliteSupportedOperator("", db.UsesRootParkRecovery), StringComparison.Ordinal), sql.GetArguments());
 
     private static Task<List<WorkerRoot>> ResolveSqliteWorkerRootsAsync(KernelDb db, int? partition, string[] actors,
         string[] references, CancellationToken token) =>
@@ -209,14 +213,18 @@ public sealed partial class EfStore
         if (expected.Count == 0) return true;
         var home = new InstanceRef(actor.Id).Partition;
         FormattableString ready = $"""
-            SELECT * FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
+            SELECT m.* FROM "Messages" m WHERE "Target" = {actor.Id} AND "Partition" = {home}
                 AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
                 AND "Due" <= /*sqlite-root-clock*/ AND (NOT {suspended} OR "Id" GLOB 'operator/*')
                 AND (NOT {parked && db.UsesRootParkArrivals} OR "ReplyTo" IS NULL OR "Id" GLOB 'operator/*')
-                AND ("Id" NOT GLOB 'operator/*' OR (/*supported-operator*/))
+                AND ("Id" NOT GLOB 'operator/*' OR (/*supported-operator*/)) /*released-cohort*/
             ORDER BY "Seq" LIMIT {expected.Count}
             """;
-        var eligible = WithSqliteOperatorPredicate(UseSqliteRootClock(ready));
+        var cohort = db.UsesRootParkRecovery && !parked && !suspended
+            ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter})"""
+            : "";
+        var eligible = WithSqliteOperatorPredicate(db, UseSqliteRootClock(FormattableStringFactory.Create(
+            ready.Format.Replace("/*released-cohort*/", cohort, StringComparison.Ordinal), ready.GetArguments())));
         var rows = await db.Messages.FromSqlInterpolated(eligible).AsNoTracking().ToListAsync(token);
         var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue: null)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(message => message.TargetCreation != actor.Creation) ||

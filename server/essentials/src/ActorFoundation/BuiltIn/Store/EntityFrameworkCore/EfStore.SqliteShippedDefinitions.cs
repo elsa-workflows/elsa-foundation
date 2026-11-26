@@ -145,7 +145,7 @@ public sealed partial class EfStore
             switch (operation)
             {
                 case CreateTableOperation table:
-                    AddSqliteRootColumns(table, db.UsesRootParkArrivals);
+                    AddSqliteRootColumns(table, db.UsesRootParkArrivals, db.UsesRootParkRecovery);
                     // The qualified checkpoint's Id is its only row identity, including during SQLite conflict handling.
                     var options = table.Name == "Instances" ? " STRICT, WITHOUT ROWID" : " STRICT";
                     yield return new("table", table.Name, table.Name, Render(table) + options);
@@ -170,7 +170,7 @@ public sealed partial class EfStore
             .CommandText.TrimEnd().TrimEnd(';').ReplaceLineEndings("\n");
     }
 
-    private static void AddSqliteRootColumns(CreateTableOperation table, bool parkArrivals)
+    private static void AddSqliteRootColumns(CreateTableOperation table, bool parkArrivals, bool parkRecovery)
     {
         if (table.Name == "Instances")
         {
@@ -197,6 +197,15 @@ public sealed partial class EfStore
             });
             Check("CK_Instances_FoundationParkRevision", """ "FoundationParkRevision" > 0 """);
             Check("CK_Instances_FoundationBoolean", """ "Retired" IN (0, 1) AND "Suspended" IN (0, 1) """);
+            if (parkRecovery)
+            {
+                table.Columns.Add(new AddColumnOperation
+                {
+                    Name = "FoundationParkGeneration", Table = table.Name, ColumnType = "INTEGER",
+                    IsNullable = false, DefaultValueSql = "0", ClrType = typeof(long)
+                });
+                Check("CK_Instances_FoundationParkGeneration", """ "FoundationParkGeneration" >= 0 """);
+            }
             Check("CK_FoundationParkClearing", $"""
                 ("FoundationParkClearing" IS NULL) = ("FoundationParkCleared" IS NULL)
                 AND ("FoundationParkClearing" IS NULL) = ("FoundationParkClearingKind" IS NULL)
@@ -207,6 +216,13 @@ public sealed partial class EfStore
         if (table.Name == "Messages")
         {
             Add("FoundationKeptBy", "INTEGER");
+            if (parkRecovery)
+            {
+                Add("FoundationReleasedBy", "INTEGER");
+                Check("CK_Messages_FoundationReleasedBy", $"""
+                    "FoundationReleasedBy" IS NULL OR ("FoundationReleasedBy" > 0 AND "InboxScope" = {InboxKey.FoundationOccurrenceScope})
+                    """);
+            }
             Check("CK_Messages_FoundationKeptBy", parkArrivals
                 ? """ "FoundationKeptBy" IS NULL OR ("FoundationKeptBy" IN (0, 1) AND "Done" = 1) """
                 : """ "FoundationKeptBy" IS NULL OR ("FoundationKeptBy" = 0 AND "Done" = 1) """);
@@ -301,6 +317,11 @@ public sealed partial class EfStore
         yield return Index("IX_FoundationRootInbox_Kept", "Messages", """
             ("Partition", "Target", "Seq", "Id", "InboxScope") WHERE "FoundationKeptBy" IS NOT NULL
             """);
+        if (db.UsesRootParkRecovery)
+            yield return Index("IX_FoundationRootInbox_Released", "Messages", $"""
+                ("Partition", "Target", "FoundationReleasedBy", "Seq")
+                WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationReleasedBy" IS NOT NULL
+                """);
         yield return Index("IX_FoundationRootOperators_Pending", "Messages", """
             ("Partition", "Target", "Seq", "Due")
             WHERE "InboxScope" = -4 AND "Id" GLOB 'operator/*' AND NOT "Done"
@@ -313,7 +334,7 @@ public sealed partial class EfStore
         foreach (var guard in SqliteFirstRootGuards(db)) yield return guard;
         foreach (var projector in SqliteRootProjectors()) yield return projector;
         foreach (var history in SqliteRootWorkflowHistoryDefinitions()) yield return history;
-        foreach (var outcome in SqliteRootOutcomes()) yield return outcome;
+        foreach (var outcome in SqliteRootOutcomes(db)) yield return outcome;
     }
 
     private static SqliteDefinition Table(string name, string columns) =>

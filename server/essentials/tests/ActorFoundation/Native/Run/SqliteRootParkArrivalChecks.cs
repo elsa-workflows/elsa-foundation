@@ -1,14 +1,16 @@
+using System.Data.Common;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
 
 internal static partial class SqliteHostLifetimeChecks
 {
-    internal static async Task<int> RunParkArrivalsAsync(bool fenceInBatch)
+    internal static async Task<int> RunParkArrivalsAsync(bool fenceInBatch, bool recovery = false)
     {
         const string fixture = "sqlite-park-arrivals";
         const string payload = """{"input":"retained"}""";
@@ -23,9 +25,11 @@ internal static partial class SqliteHostLifetimeChecks
             }.ToString();
             var observation = new ParkReadObservation();
             observation.Resume.TrySetResult();
-            var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connection).AddInterceptors(observation).Options;
+            var rollback = new RecoverReleaseFailure();
+            var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connection).AddInterceptors(observation, rollback).Options;
             var definitions = new SqliteAdmissionDefinitions();
-            KernelDb Open() => KernelDb.ForSqliteParkArrivalsQualification(options, definitions);
+            KernelDb Open() => recovery ? KernelDb.ForSqliteParkRecoveryQualification(options, definitions)
+                : KernelDb.ForSqliteParkArrivalsQualification(options, definitions);
             await using var db = Open();
             await EfStore.InstallSqliteShippedAsync(db, 1, token);
             await using (var shipped = KernelDb.ForSqliteRootShipped(options))
@@ -96,6 +100,73 @@ internal static partial class SqliteHostLifetimeChecks
                     SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {parked.Actor.Id} AND "Kind" = 'ordinary'
                         AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived} AND "Payload" = {payload}) AS "Value"
                     """).SingleAsync(token), "the replacement owner keeps the exact arrival under the original Park without invoking the actor");
+            if (recovery)
+            {
+                Require(await admission.OperateAsync(scope.Tenant, actor, "recover", Kinds.Recover, view.Selection!, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the SQLite recovery candidate admits an immediate selected Recover");
+                rollback.Armed = true;
+                while (!rollback.Observed && successor.Owns)
+                {
+                    await successor.WokenAsync(null, token);
+                    await successor.RunAsync(token);
+                    await Task.Delay(15, token);
+                }
+                Require(rollback.Observed, "the fixture withholds one release write after the Recover checkpoint update");
+                Require((await reads.GetAsync(scope, actor, token))?.Park == view.Park &&
+                    (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, token))?.Revision == kept.Revision,
+                    "a missing release write rolls back the Recover checkpoint and projection");
+                Require(await db.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {parked.Actor.Id} AND "Kind" = 'ordinary'
+                            AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived} AND "Payload" = {payload})
+                        AS "Value"
+                        """).SingleAsync(token), "a missing release write preserves the retained arrival");
+                Require(await db.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {parked.Actor.Id} AND "Kind" = {Kinds.Recover}
+                            AND NOT "Done") AS "Value"
+                        """).SingleAsync(token), "a missing release write rolls back the command settlement");
+                Require((await store.ReadJournalOfAsync(0, kept.Actor.Id, 0, token)).All(entry => entry.Revision <= kept.Revision),
+                    "a missing release write leaves no new journal entry");
+                await successor.ReleaseAsync(token);
+                await db.Nodes.Where(node => node.Id == "successor")
+                    .ExecuteUpdateAsync(update => update.SetProperty(node => node.LeaseUntil, 0L), token);
+                await using var recoveryOwner = await OwnAsync("recovering");
+                var recovered = await DriveAsync(recoveryOwner, actor, row => row is { Revision: >= 6, Status: InstanceStatus.Running });
+                Require(recoveryOwner.Owns && recovered is { ParkAt: null, TerminalRevision: null } && executor.Order is ["ordinary", "held"] &&
+                    await db.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {parked.Actor.Id} AND "Kind" = 'ordinary'
+                            AND "Done" AND "FoundationReleasedBy" = 1 AND "FoundationKeptBy" IS NULL)
+                        AND EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {parked.Actor.Id} AND "Kind" = 'fail'
+                            AND "Done" AND "Payload" IS NULL AND "Start" IS NULL AND "FoundationKeptBy" IS NULL) AS "Value"
+                        """).SingleAsync(token), "the SQLite recovery candidate delivers the released cohort before the older held call");
+                Require(await admission.OperateAsync(scope.Tenant, actor, "stale", Kinds.Recover, view.Selection!, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Refused }, "the old Park selection cannot recover the running root again");
+                var oversized = (await admission.StartAsync(scope.Tenant, "oversized", new(fixture, "{}"), null, null, token)).Actor!.Value;
+                await DriveAsync(recoveryOwner, oversized, row => row is { Revision: 1, Status: InstanceStatus.Running });
+                Require(await admission.SendAsync(scope.Tenant, oversized, "large-fault", "fail", null, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the one-page refusal fixture admits a faulting input");
+                var beforeRefusal = await DriveAsync(recoveryOwner, oversized, row => row is { Revision: 2, Status: InstanceStatus.Faulted });
+                var large = Json.Write(new string('x', ParkRecoveryCredit.LimitBytes / 2 + 1_024));
+                foreach (var id in new[] { "large-a", "large-b" })
+                {
+                    Require(await admission.SendAsync(scope.Tenant, oversized, id, "ordinary", large, null, null, token) is
+                        { Outcome: Contract.AdmissionOutcome.Accepted }, "the Park admits an arrival that fits by itself");
+                    var expected = beforeRefusal.Revision + 1;
+                    beforeRefusal = await DriveAsync(recoveryOwner, oversized, row => row.Revision == expected && row.Status == InstanceStatus.Faulted);
+                }
+                var selection = (await reads.GetAsync(scope, oversized, token))!.Selection!;
+                Require(await admission.OperateAsync(scope.Tenant, oversized, "large-recover", Kinds.Recover, selection, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "admission accepts a valid Recover selection for the oversized Park");
+                var refused = await DriveAsync(recoveryOwner, oversized, row => row is { Revision: 5, Status: InstanceStatus.Faulted });
+                var journal = (await store.ReadJournalOfAsync(0, refused.Actor.Id, 0, token))
+                    .Single(entry => entry.Revision == refused.Revision);
+                Require(refused.ParkAt == beforeRefusal.ParkAt && refused.State == beforeRefusal.State && executor.OrdinaryTurns == 1 &&
+                    journal.Entries.Contains("\"Reason\":\"page\"", StringComparison.Ordinal) &&
+                    await db.Database.SqlQuery<int>($"""
+                        SELECT count(*) AS "Value" FROM "Messages" WHERE "Target" = {refused.Actor.Id} AND "Done"
+                            AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived} AND "FoundationReleasedBy" IS NULL AND "Payload" = {large}
+                        """).SingleAsync(token) == 2, "Recover refuses a second page and preserves both retained envelopes and the checkpoint");
+                return 0;
+            }
             Require(await admission.OperateAsync(scope.Tenant, actor, "end", Kinds.Terminate, view.Selection!, null, null, token) is
                 { Outcome: Contract.AdmissionOutcome.Accepted }, "the original Park selection still admits a Terminate after the arrival");
             var ended = await DriveAsync(successor, actor, row => row is { Revision: >= 4, Status: InstanceStatus.Cancelled });
@@ -141,10 +212,27 @@ internal static partial class SqliteHostLifetimeChecks
         finally { directory.Delete(recursive: true); }
     }
 
+    private sealed class RecoverReleaseFailure : DbCommandInterceptor
+    {
+        internal bool Armed { get; set; }
+        internal bool Observed { get; private set; }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (!Armed || !command.CommandText.Contains("""SET "Done" = 0, "FoundationKeptBy" = NULL, "Seen" = 0""",
+                StringComparison.Ordinal)) return ValueTask.FromResult(result);
+            Armed = false;
+            Observed = true;
+            return ValueTask.FromResult(InterceptionResult<int>.SuppressWithResult(0));
+        }
+    }
+
     private sealed class SqliteArrivalActor(string type) : Contract.IActorType
     {
         internal int OrdinaryTurns { get; private set; }
         internal int HeldTurns { get; private set; }
+        internal List<string> Order { get; } = [];
         string Contract.IActorType.Type => type;
         public bool Withholds(Contract.ActorHeader header) => false;
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
@@ -158,6 +246,7 @@ internal static partial class SqliteHostLifetimeChecks
             if (turn.Inbox.Any(message => message.Kind == "fail")) throw new InvalidOperationException("park arrival fixture fault");
             OrdinaryTurns += turn.Inbox.Count(message => message.Kind == "ordinary");
             HeldTurns += turn.Inbox.Count(message => message.Kind == "held");
+            Order.AddRange(turn.Inbox.Select(message => message.Kind).Where(kind => kind is "ordinary" or "held"));
             turn.State = """{"state":"last committed"}""";
             return default;
         }

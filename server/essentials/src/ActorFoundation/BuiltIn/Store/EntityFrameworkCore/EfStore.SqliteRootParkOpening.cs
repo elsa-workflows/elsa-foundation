@@ -61,7 +61,7 @@ public sealed partial class EfStore
             """, token) != 1 || !await KeepSqliteParkInputsAsync(db, root.Actor, root.Partition, scope, ids, park.Reason, token))
             return false;
 
-        if (park.Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync(WithSqliteOperatorPredicate($"""
+        if (park.Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync(WithSqliteOperatorPredicate(db, $"""
             UPDATE "Messages" SET "Seen" = 0
             WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
                 AND "EventMatch" IS NULL AND NOT "Done" AND (/*supported-operator*/)
@@ -69,7 +69,7 @@ public sealed partial class EfStore
             """), token) != park.Returned.Length) return false;
 
         if (!park.Opening && RereadsParkFacts(db))
-            await db.Database.ExecuteSqlInterpolatedAsync(WithSqliteOperatorPredicate($"""
+            await db.Database.ExecuteSqlInterpolatedAsync(WithSqliteOperatorPredicate(db, $"""
                 UPDATE "Messages" SET "Seen" = 0, "Trial" = 0
                 WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
                     AND "EventMatch" IS NULL AND NOT "Done" AND (/*supported-operator*/) AND "Start" LIKE {ParkSelectedOperator}
