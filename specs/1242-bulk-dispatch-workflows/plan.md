@@ -129,7 +129,10 @@ The dispatch's `Inputs` is bound to a generated JavaScript expression over the c
   function only. Without that, the rewrite refuses `args` with ForbiddenCapability and guidance that points to
   `getVariable`/`getInput`, which would read the wrong value. Name resolution
   (`Elsa3ValueFlowLowerer`, the ambient resolver) resolves that accessor to
-  `VariableExpressionParameterBinding(loopNodeId, "currentItem")`, so the JavaScript rewrite emits
+  `VariableExpressionParameterBinding(loopNodeId, "currentItem")`, unless a workflow input or variable has the
+  accessor's name. Then the existing `ResolveGeneratedAccessor` order (inputs, then variables) wins, because Elsa 3's
+  `EvaluatingJavaScript` handler overwrote the argument getter with that input or variable's getter. Otherwise the
+  JavaScript rewrite emits
   `variables.currentItem` with a pinned binding. A text replacement before the rewrite would not work: a
   pre-substituted `variables.currentItem` resolves as an Elsa 3 variable named `currentItem` (MissingAmbient), and a
   left-over `getItem()` fails as an unknown host function.

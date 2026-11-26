@@ -53,6 +53,7 @@ for spec 1243's parallel ForEach.
   - a case-mismatched member gets the declared spelling;
   - an undeclared default key is omitted;
   - correlation with `getItem()`, with `args.item`, and with a custom key;
+  - a workflow variable named `Item`: `getItem()` reads that variable, as in Elsa 3, and `args.item` still reads the item;
   - a read of an enclosing loop's current value inside the lowered loop, from a branch, the correlation function or a
     JavaScript static `Input` → `ResolutionDiffers`;
   - each static `Input` form;

@@ -243,6 +243,10 @@ guidance.
   reaches the lowered loop's item, so the read is refused (FR-012).
 - The child declares an input named `ParentInstanceId`: Elsa 4 does not fill it, because the parent link lives in the
   dispatch record. The converter warns.
+- `WaitForCompletion` and the static `Input` were evaluated once per activity execution in Elsa 3; only the
+  correlation function ran per item. In Elsa 4 they sit on the body dispatch, so they are evaluated in every pass. That
+  gives a different result only when such an expression reads state that changes between passes, for example a variable
+  written in a branch, or has a side effect. The FR-011 warning and the documentation state it.
 - Elsa 3 reused one `Input` dictionary across items, so the members of one map item could leak into later children.
   That is an Elsa 3 defect. Elsa 4 builds the inputs for each item separately and the converter does not emulate the
   leak.
@@ -309,6 +313,9 @@ guidance.
     `args.item`), which Elsa 3 also set for the item, MUST read the lowered loop's current item. The JavaScript rewrite
     emits `variables.currentItem`, bound to the loop node, the current-item read of `ForEach` and of spec 1243's
     parallel ForEach. This is resolved through the rewrite's name resolution, not by a text replacement before it.
+  - Exception, as in Elsa 3: when a workflow input or variable is named like the accessor, for example a variable
+    `Item`, Elsa 3 overwrote `getItem` with that variable's getter, so the function read the variable. The accessor
+    then resolves the existing way, to that input or variable, not to the item. `args.<key>` always reads the item.
   - The rest of the expression goes through the existing JavaScript rewrite.
   - When the function is absent, `CorrelationId` stays unbound, as for Elsa 3 `DispatchWorkflow`.
 - **FR-009**: `StartNewTrace` and `ChannelName` are R3 "Removed", as for `DispatchWorkflow`. A non-default binding is
@@ -324,7 +331,8 @@ guidance.
   items, also when an expression wait evaluates to false. The guidance points to large-fan-out.md's batching advice: a sequential `ForEach` over batches. No new code is
   added for this. The fire-and-forget path (FR-002) uses `ForEach`, which has no cap, and raises no such warning.
 - **FR-011**: A conversion through FR-006 with a known target MUST raise a new warning,
-  `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`. It says that only the child's declared inputs are passed. When it applies,
+  `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`. It says that only the child's declared inputs are passed, and that the
+  static `Input` and the wait are evaluated per item (Edge Cases). When it applies,
   it also says that `ParentInstanceId` is no longer filled.
 
 **Outcomes and refusals**
