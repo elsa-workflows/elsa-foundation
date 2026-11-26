@@ -46,11 +46,59 @@ public sealed partial class EfStore
     private const string RootOutcomeEntry = "\"Entries\" LIKE '{{\"Outcome\":%'";
 
     // While released rows of the current generation are pending, the poll offers only them, in Seq order.
-    private const string RootReleasedCohortFilter = """
-        AND NOT EXISTS (SELECT 1 FROM "Messages" c WHERE c."Partition" = m."Partition" AND c."Target" = m."Target"
+    private const string RootReleasedCohortFilter = " AND " + NoEarlierReleasedCohort;
+    private const string NoEarlierReleasedCohort = """
+        NOT EXISTS (SELECT 1 FROM "Messages" c WHERE c."Partition" = m."Partition" AND c."Target" = m."Target"
             AND c."InboxScope" = -4 AND c."EventMatch" IS NULL AND NOT c."Done" AND c."FoundationReleasedBy" = i."FoundationParkGeneration"
             AND m."FoundationReleasedBy" IS DISTINCT FROM i."FoundationParkGeneration")
         """;
+
+    private bool SamplesAuthoredCohortWithholding(KernelDb db) => db.UsesRootComposedParkRecovery && !db.UsesSqliteRootRuntime &&
+        _ordinaryRoots is { Discover: true, AuthoredWithholds: not null };
+
+    private string RootPollCohortFilter(KernelDb db)
+    {
+        if (!db.UsesRootParkRecovery) return "";
+        if (!db.UsesRootComposedParkRecovery) return RootReleasedCohortFilter;
+        var withheld = SamplesAuthoredCohortWithholding(db) ? $$"""
+            OR ((m."InboxScope" = {{RootTimedJobScope}} OR m."InboxScope" = {{InboxKey.FoundationOccurrenceScope}} AND m."Id" LIKE 'operator/%')
+                AND EXISTS (SELECT 1 FROM unnest({4}::text[], {5}::bigint[]) AS withheld("Actor", "Revision")
+                    WHERE withheld."Actor" = i."Id" AND withheld."Revision" = i."Revision"))
+            """ : "";
+        return $"""AND (i."FoundationParkAt" IS NOT NULL {withheld} OR {NoEarlierReleasedCohort})""";
+    }
+
+    private sealed record WithheldCohort(string Actor, long Revision, string Tenant, string Reference, string Header);
+
+    // Only roots with pending released inputs and waiting control or job work need an authored decision. The main poll
+    // accepts each decision only at the same actor revision. Ready released inputs keep their normal priority elsewhere.
+    private async Task<WithheldCohort[]> ReadWithheldCohortsAsync(KernelDb db, int partition, long epoch, int limit, CancellationToken token)
+    {
+        var candidates = await db.Database.SqlQuery<WithheldCohort>($"""
+            SELECT i."Id" AS "Actor", i."Revision", i."FoundationTenant" AS "Tenant", i."FoundationReference" AS "Reference",
+                i."FoundationHeader" AS "Header"
+            FROM "Instances" i
+            JOIN LATERAL (
+                SELECT m."Seq" FROM "Messages" m
+                WHERE m."Partition" = i."Partition" AND m."Target" = i."Id" AND m."EventMatch" IS NULL
+                    AND NOT m."Done" AND m."Seen" <> {epoch} AND m."Due" <= floor(extract(epoch from statement_timestamp()) * 1000)::bigint
+                    AND (m."InboxScope" = {RootTimedJobScope} OR m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" LIKE 'operator/%')
+                ORDER BY m."Seq" LIMIT 1
+            ) waiting ON true
+            WHERE i."Partition" = {partition} AND i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired"
+                AND i."FoundationReference" IS NOT NULL AND i."FoundationParkGeneration" > 0
+                AND EXISTS (SELECT 1 FROM "Messages" c
+                    WHERE c."Partition" = i."Partition" AND c."Target" = i."Id" AND c."EventMatch" IS NULL AND NOT c."Done"
+                        AND c."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND c."FoundationReleasedBy" = i."FoundationParkGeneration")
+            ORDER BY waiting."Seq" LIMIT {limit}
+            """).ToArrayAsync(token);
+        return candidates.Where(candidate =>
+        {
+            var header = DurableKeyJson.Read<RootHeader>(candidate.Header);
+            return AuthoredWithholding(new(new(candidate.Reference), header.Model, candidate.Tenant, Foundation.Contracts.ActorStatus.Running,
+                null, null, null, header.TypeData, header.Labels.ToDictionary(StringComparer.Ordinal)));
+        }).ToArray();
+    }
 
     // The kept envelope digest: the fields a restore keeps, read the same way when polled and when bound. The envelope
     // digest leaves out KeepUntil, which a restore sets to the ordinary window from now.

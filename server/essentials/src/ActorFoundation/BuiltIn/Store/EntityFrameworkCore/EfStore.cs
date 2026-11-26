@@ -833,7 +833,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (!root.Includes(partition)) throw new InvalidOperationException("The root belongs to another partition.");
             if (root.Discover)
             {
-                var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
+                object[] args = [partition, epoch, (long)horizon.TotalMilliseconds, limit];
+                if (SamplesAuthoredCohortWithholding(db))
+                {
+                    var withheld = await ReadWithheldCohortsAsync(db, partition, epoch, limit, cancellationToken);
+                    args = [.. args, withheld.Select(row => row.Actor).ToArray(), withheld.Select(row => row.Revision).ToArray()];
+                }
+                var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, args).ToListAsync(cancellationToken);
                 var result = ToGeneratedPoll(page, root, db);
                 return await WithRootParkFactsAsync(db, result, cancellationToken);
             }
@@ -860,7 +866,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                    {(db.UsesRootComposedParkRecovery ? """
                      AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4 AND (m."ReplyTo" IS NULL OR m."Id" LIKE 'operator/%'))
                      """ : "")}
-                   {(db.UsesRootParkRecovery ? RootReleasedCohortFilter : "")})))
+                   {RootPollCohortFilter(db)})))
             """;
     private string PostgresOperatorPollFilter(KernelDb db)
     {

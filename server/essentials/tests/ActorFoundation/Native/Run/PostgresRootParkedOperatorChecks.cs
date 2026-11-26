@@ -391,6 +391,7 @@ internal static class PostgresRootParkedOperatorChecks
             await RecordedResultParkSet(recovery: false);
             await RecordedResultParkSet(recovery: true);
             await ComposedParkRecoveryAsync();
+            await WithheldReleasedCohortAsync();
         }
         await RecoverNeverMeetsSuspendedPark();
         await ArrivalsSet();
@@ -920,6 +921,46 @@ internal static class PostgresRootParkedOperatorChecks
             ValueTask<Contract.Admission> SendOperatorAsync(Contract.ActorRef actor, string operation, string kind, string parkSelection,
                 CancellationToken token) => ingress.SendAsync(tenant, new Contract.Target.Ref(actor), operation, kind,
                     Json.Write(new Contract.OperatorCommand(parkSelection, ExpectedTarget: actor)), cancellationToken: token);
+        }
+
+        async Task WithheldReleasedCohortAsync()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA withheld_cohort", stop);
+            var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "withheld_cohort" }.ConnectionString;
+            var cohortOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
+            var protocol = StoreFormat.Current with { MessageProtocol = 86 };
+            var capabilities = RootProfiles.Shipped | RootProfiles.Formats[StoreFormat.RootParkRecovery];
+            KernelDb OpenCohort() => KernelDb.ForUnshippedComposition(cohortOptions, protocol, capabilities);
+            await using var set = new Set("withheld-cohort", OpenCohort, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
+            await set.InstallAsync(createTables: true);
+            var first = (Worker)await set.OwnAsync();
+            var root = await set.StartAsync("withheld-released-cohort", Probe.WithheldBody);
+            set.Probe.FailsOn.Add((root.Id, Contract.Kinds.Terminate));
+            Check(await set.TerminateAsync(root, "faulting-control"), "a running withheld root accepts the control that opens its Park");
+            await set.DriveAsync(root, image => image is { Revision: 3, Status: InstanceStatus.Faulted });
+            Check(await set.SendAsync(root, "cohort-held", "cohort-held"), "the withholding fixture admits an arrival while parked");
+            var park = await set.DriveAsync(root, image => image is { Revision: 4, Status: InstanceStatus.Faulted });
+            var selection = await set.ParkSelectionAsync(root, 2);
+            Check(await set.OperateAsync(root, "old-control", Kinds.Terminate, selection, reply: true, dueAt: park.AsOf + 120_000) &&
+                await set.OperateAsync(root, "recover-cohort", Kinds.Recover, selection),
+                "the Park admits an immediate Recover and an earlier delayed Terminate");
+            await set.DriveAsync(root, image => image is { Revision: 5, Status: InstanceStatus.Running });
+            var epoch = first.Epoch;
+            await set.RetakeAsync();
+            var replacement = (Worker)set.Owner;
+            await set.ExecuteAsync($"""
+                UPDATE "Messages" SET "Due" = 0, "Seen" = 0
+                WHERE "Target" = {park.Actor.Id} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                """);
+            await set.DriveAsync(root, image => image is { Revision: 6, Status: InstanceStatus.Running, Suspended: false });
+            set.Answered("old-control", "StaleSelection");
+            await using var read = OpenCohort();
+            Check(replacement.Epoch > epoch && replacement.Owns && !set.Probe.Saw(root, "cohort-held") &&
+                await read.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {park.Actor.Id} AND "Kind" = 'cohort-held'
+                        AND NOT "Done" AND "FoundationKeptBy" IS NULL AND "FoundationReleasedBy" = 1) AS "Value"
+                    """).SingleAsync(stop),
+                "after takeover a selected control settles while the authored-withheld cohort keeps its exact release generation");
         }
 
         async Task CheckProtectionCeilingAsync(Set set, Contract.ActorRef root, EfStore.RootImage park, int cleared)
