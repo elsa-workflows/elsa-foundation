@@ -10,20 +10,38 @@ public sealed partial class EfStore
     private static async Task<List<SqliteKeptRow>> ReadSqliteRecoveryRowsAsync(KernelDb db, string actor, int partition,
         long? released, CancellationToken token)
     {
-        var scope = released is null ? """
-                AND m."Done" AND m."FoundationKeptBy" IS NOT NULL
+        var scope = released is null ? $"""
+                AND m."Done" AND m."FoundationKeptBy" = {(short)ParkKeepReason.Arrived}
                 """ : $"""
                 AND NOT m."Done" AND m."FoundationKeptBy" IS NULL AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
                 AND m."FoundationReleasedBy" IS NOT NULL AND m."FoundationReleasedBy" = {"{2}"}
                 """;
+        var discarded = released is null ? $"""
+            UNION ALL
+            SELECT m."Id", m."InboxScope", m."Seq", m."FoundationKeptBy", 0, 0,
+                m."Kind", NULL, NULL, m."Due", NULL, m."KeepUntil", m."JobGeneration", m."Sender"
+            FROM "Messages" m WHERE m."Target" = {"{0}"} AND m."Partition" = {"{1}"} AND m."EventMatch" IS NULL
+                AND m."Done" AND m."FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
+            """ : "";
+        // Quote the arrivals before opening their envelopes. Clearing a consumed input needs only its metadata.
         var sql = $"""
-            SELECT m."Id", m."InboxScope", m."Seq", coalesce(m."FoundationKeptBy", {(short)ParkKeepReason.Arrived}) AS "KeptBy",
-                (octet_length(m."Id") + octet_length(m."Kind") + coalesce(octet_length(m."Start"), 0)
-                    + coalesce(octet_length(m."Payload"), 0) + coalesce(octet_length(m."ReplyTo"), 0)) AS "Bytes",
-                0 AS "TotalRows", m."Kind", m."Start" AS "Header", m."Payload", m."Due", m."ReplyTo", m."KeepUntil",
-                m."JobGeneration", m."Sender"
-            FROM "Messages" m WHERE m."Target" = {"{0}"} AND m."Partition" = {"{1}"} AND m."EventMatch" IS NULL {scope}
-            ORDER BY m."Seq", m."Id", m."InboxScope"
+            WITH arrivals AS MATERIALIZED (
+                SELECT m."Id", m."InboxScope", m."Seq",
+                    (octet_length(m."Id") + octet_length(m."Kind") + coalesce(octet_length(m."Start"), 0)
+                        + coalesce(octet_length(m."Payload"), 0) + coalesce(octet_length(m."ReplyTo"), 0)) AS "Bytes"
+                FROM "Messages" m WHERE m."Target" = {"{0}"} AND m."Partition" = {"{1}"} AND m."EventMatch" IS NULL {scope}
+                ORDER BY m."Seq", m."Id", m."InboxScope" LIMIT {InMemoryStore.ParkPageLimit + 1}
+            ), quote AS (
+                SELECT arrivals.*, row_number() OVER step AS "Ordinal", sum("Bytes") OVER step AS "QuoteBytes"
+                FROM arrivals WINDOW step AS (ORDER BY "Seq", "Id", "InboxScope" ROWS UNBOUNDED PRECEDING)
+            )
+            SELECT q."Id" AS "Id", q."InboxScope" AS "InboxScope", q."Seq" AS "Seq", {(short)ParkKeepReason.Arrived} AS "KeptBy", q."Bytes", 0 AS "TotalRows",
+                m."Kind", m."Start" AS "Header", m."Payload", m."Due", m."ReplyTo", m."KeepUntil", m."JobGeneration", m."Sender"
+            FROM quote q LEFT JOIN "Messages" m ON m."Id" = q."Id" AND m."InboxScope" = q."InboxScope"
+                AND (q."Ordinal" = 1 OR (q."Ordinal" <= {InMemoryStore.ParkPageLimit} AND q."QuoteBytes" <= {ParkRecoveryCredit.LimitBytes}))
+            {discarded}
+            ORDER BY "Seq", "Id", "InboxScope"
+            /* bounded-park-recovery-page */
             """;
         var rows = db.Database.SqlQuery<SqliteKeptEnvelope>(released is long generation
             ? FormattableStringFactory.Create(sql, actor, partition, generation)
@@ -93,11 +111,8 @@ public sealed partial class EfStore
             WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition} AND "EventMatch" IS NULL AND "Done"
                 AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived}
             """, token) != arrived.Length ||
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE "Messages" SET "FoundationKeptBy" = NULL, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL, "KeepUntil" = {until}
-            WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition} AND "EventMatch" IS NULL AND "Done"
-                AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
-            """, token) != kept.Count - arrived.Length)
+            !await ClearSqliteParkPageAsync(db, root, kept.Where(row => row.Facts.KeptBy == (short)ParkKeepReason.Consumed).ToArray(),
+                command.Operator.RootParkWindow.Value, token))
             return false;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Messages" SET "Seen" = 0 WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition}

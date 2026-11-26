@@ -127,7 +127,7 @@ internal static class SqliteShippedInstallChecks
         finally { folder.Delete(recursive: true); }
     }
 
-    private static async Task CheckGuardsAsync(KernelDb db, CancellationToken token)
+    internal static async Task CheckGuardsAsync(KernelDb db, CancellationToken token)
     {
         await CheckStopLookupPlanAsync();
         await SeedAsync("direct", InstanceStatus.Running, qualified: false);
@@ -237,6 +237,25 @@ internal static class SqliteShippedInstallChecks
         }
 
         await SeedAsync("first-bind", InstanceStatus.Running, qualified: false);
+        if (db.UsesRootParkRecovery)
+        {
+            const string recovered = """{"Outcome":"recovered","Operation":"birth","Restored":0,"Cleared":0,"AlreadyRearmed":0}""";
+            await using (var write = await db.Database.BeginTransactionAsync(token))
+            {
+                await JournalAsync("first-bind", revision: 1, recovered);
+                await RefusedAsync<SqliteException>(() => BindAsync("first-bind", InstanceStatus.Running),
+                    "binding a fresh root refuses a Recover journal at its own revision");
+                await write.RollbackAsync(token);
+            }
+            await using (var write = await db.Database.BeginTransactionAsync(token))
+            {
+                await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Instances" WHERE "Id" = 'first-bind'""", token);
+                await JournalAsync("first-bind", revision: 1, recovered);
+                await RefusedAsync<SqliteException>(InsertFirstQualifiedAsync,
+                    "inserting a fresh qualified root refuses a Recover journal at its own revision");
+                await write.RollbackAsync(token);
+            }
+        }
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
             await JournalAsync("first-bind", revision: 2, refused);
@@ -248,15 +267,8 @@ internal static class SqliteShippedInstallChecks
         {
             await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Instances" WHERE "Id" = 'first-bind'""", token);
             await JournalAsync("first-bind", revision: 2, refused);
-            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO "Instances" ("Id", "Partition", "Model", "Definition", "State", "Status", "Revision",
-                    "StateVersion", "Suspended", "Retired", "History", "NextJobGeneration",
-                    "FoundationReference", "FoundationTenant", "FoundationHeader")
-                SELECT 'first-bind', "Partition", "Model", "Definition", "State", "Status", "Revision",
-                    "StateVersion", "Suspended", "Retired", "History", "NextJobGeneration",
-                    'first-bind', 'tenant', {ProjectionHeader}
-                FROM "Instances" WHERE "Id" = 'direct'
-                """, token), "inserting a qualified root refuses a previously journalled outcome at the wrong revision");
+            await RefusedAsync<SqliteException>(InsertFirstQualifiedAsync,
+                "inserting a qualified root refuses a previously journalled outcome at the wrong revision");
             await write.RollbackAsync(token);
         }
         await using (var write = await db.Database.BeginTransactionAsync(token))
@@ -497,6 +509,16 @@ internal static class SqliteShippedInstallChecks
             }
             finally { await db.Database.CloseConnectionAsync(); }
         }
+
+        Task<int> InsertFirstQualifiedAsync() => db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Instances" ("Id", "Partition", "Model", "Definition", "State", "Status", "Revision",
+                "StateVersion", "Suspended", "Retired", "History", "NextJobGeneration",
+                "FoundationReference", "FoundationTenant", "FoundationHeader")
+            SELECT 'first-bind', "Partition", "Model", "Definition", "State", "Status", "Revision",
+                "StateVersion", "Suspended", "Retired", "History", "NextJobGeneration",
+                'first-bind', 'tenant', {ProjectionHeader}
+            FROM "Instances" WHERE "Id" = 'direct'
+            """, token);
 
         Task<int> JournalAsync(string id, long revision, string entries) =>
             db.Database.ExecuteSqlInterpolatedAsync($"""
