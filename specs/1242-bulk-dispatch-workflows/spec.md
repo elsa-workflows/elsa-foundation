@@ -46,7 +46,7 @@ the component tests.
 | Aspect | Elsa 3 behaviour |
 |---|---|
 | Inputs | `WorkflowDefinitionId` (any expression, resolved to the published version at run time), `Items`, `DefaultItemInputKey` (default `Item`), `CorrelationIdFunction` (evaluated once per item), `Input` (an extra dictionary), `WaitForCompletion` (default true), `StartNewTrace`, `ChannelName` |
-| Items | Evaluated once. Null gives zero items. A value that is not a collection also gives zero items, silently |
+| Items | Evaluated once. Null gives zero items. A value that is not a collection also gives zero items, silently. A non-null literal is read as raw JSON text, so it also gives zero items |
 | Child input | `Input`, then `ParentInstanceId` = parent id, then the item merged on top. A map item adds each member as its own top-level input. Any other item is passed as `{DefaultItemInputKey: item}`. Undeclared names are accepted |
 | Correlation id | `CorrelationIdFunction` sees the item as `get{DefaultItemInputKey}()`, for example `getItem()`. When the function is absent, the child gets no correlation id |
 | Dispatch | All children are dispatched in one go, before the activity waits. A missing published definition throws, so the activity faults |
@@ -147,7 +147,8 @@ id, and continues without waiting.
 2. **Given** that conversion, **When** the workflow runs with 3 items, **Then** 3 children start, and the parent
    continues without waiting for them.
 3. **Given** the node has `ChildCompleted` or `ChildFaulted` branches, **When** it is converted, **Then** the branches
-   are dropped with info `ELS3-BULK-DISPATCH-UNREACHABLE`, because Elsa 3 never runs them without waiting.
+   are dropped with the existing warning `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`, because Elsa 3 never runs them
+   without waiting.
 
 ### User Story 2 - Waiting bulk dispatch converts and runs per-child branches (Priority: P1)
 
@@ -217,8 +218,12 @@ guidance.
 - `Items` is not a collection, for example a string: Elsa 3 silently dispatched nothing. The same happened for a
   collection of value types, such as `[1, 2, 3]` held as `int[]`, because Elsa 3 only enumerates `IEnumerable<object>`.
   In Elsa 4, both `ForEach` and the parallel ForEach fault the activity on a value that is not a collection, and they
-  iterate value-type collections. The converter refuses a literal non-collection it can see with
-  `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, as spec 1243 does. The documentation states the run-time difference.
+  iterate value-type collections. The documentation states the run-time difference.
+- `Items` is a non-null literal, even a JSON array: Elsa 3 deserializes a literal object or array to its raw JSON text
+  (`ExpressionDescriptor` → `JsonElementExtensions.GetValue` → `GetRawText`), so the activity sees a string and
+  dispatches nothing. The converter refuses every non-null literal `Items` with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`,
+  as spec 1243 FR-017 does. The guidance says that Elsa 3 read the value as text and dispatched no child: remove the
+  node, or bind `Items` to an expression if children were intended.
 - A child whose dispatch fails (`DispatchFailed`, for example after delivery retries): Elsa 3 faulted the activity. The
   body dispatch's `DispatchFailed` stays unconnected, so the pass ends. That is the rule the converter already applies
   to Elsa 3 `DispatchWorkflow`; see question Q3 on PR #5839.
@@ -227,6 +232,8 @@ guidance.
   for Elsa 3 `DispatchWorkflow` without a diagnostic. This spec follows that and adds none.
 - `CorrelationIdFunction` in a language other than JavaScript or Literal, for example Liquid or C#, is handled by the
   converter's existing expression rules, the same as any other input.
+- The bulk dispatch sits inside an outer `ForEach`, and a branch reads the outer loop's current value: that name now
+  reaches the lowered loop's item, so the read is refused (FR-012).
 - The child declares an input named `ParentInstanceId`: Elsa 4 does not fill it, because the parent link lives in the
   dispatch record. The converter warns.
 - Elsa 3 reused one `Input` dictionary across items, so the members of one map item could leak into later children.
@@ -256,7 +263,9 @@ guidance.
   one `DispatchWorkflow` with `WaitForCompletion` false.
 - **FR-003**: When `WaitForCompletion` is missing, a literal true or an expression, the converter MUST emit spec 1243's
   parallel ForEach. Its `Collection` is the converted `Items`, and its body is a flowchart
-  holding a `DispatchWorkflow` whose `WaitForCompletion` carries the Elsa 3 value.
+  holding a `DispatchWorkflow` whose `WaitForCompletion` carries the Elsa 3 value. A missing value is emitted as a
+  literal true, because Elsa 4's `DispatchWorkflow` defaults to false; the existing `ExecuteWorkflow` mapping does the
+  same (`DefaultFlip`).
   - The dispatch's `Completed` outcome connects to the converted `ChildCompleted` activity, when there is one.
   - Its `Faulted` outcome connects to the converted `ChildFaulted` activity, when there is one.
   - Until spec 1243 is implemented, this case stays `ELS3-ACTIVITY-NO-COUNTERPART`, with guidance that names spec 1243.
@@ -275,15 +284,23 @@ guidance.
   - When the target workflow is published by the same import, add:
     - for a map item, each declared input the item has, in the declared spelling;
     - for any other item, `DefaultItemInputKey` with the item, when the target declares that name.
+
+    The generated script names the declared inputs literally and reads item members only through
+    `Object.entries`/`filter`/`Object.fromEntries`. It has no computed member access by name, which Elsa 4 publish
+    treats as workflow-state access (VF-STATE-002). Tests check it through publish validation, not only the
+    evaluator.
   - The item wins over `Input` on a name clash, as in Elsa 3.
   - When the target is not in the import, the item is passed the Elsa 3 way (every member, or the item under the key),
-    with the existing `ELS3-BEHAVIOUR-DISPATCH-INPUT-NAMES` warning.
+    with the existing `ELS3-BEHAVIOUR-DISPATCH-INPUT-NAMES` warning. A member the child does not declare then fails
+    Elsa 4's input check at run time and the pass faults; the warning says so (Q2 on PR #5839).
   - `ParentInstanceId` is not passed.
-- **FR-007**: `DefaultItemInputKey` MUST be a literal. Any other binding is refused with
-  `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
+- **FR-007**: `DefaultItemInputKey` MUST be a literal, or null or absent; null and absent mean `Item`, as in Elsa 3.
+  Any other binding is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. `Items` null maps to an unbound
+  `Collection`, so the loop completes at once with `Done`.
 - **FR-008**: `CorrelationIdFunction` MUST become the body dispatch's `CorrelationId`.
-  - Each call of `get{DefaultItemInputKey}()` in it is rewritten to `variables.currentItem`, the current-item read of
-    `ForEach` and of spec 1243's parallel ForEach.
+  - Each call of `get{DefaultItemInputKey}()` in it MUST read the lowered loop's current item. The JavaScript rewrite
+    emits `variables.currentItem`, bound to the loop node, the current-item read of `ForEach` and of spec 1243's
+    parallel ForEach. This is resolved through the rewrite's name resolution, not by a text replacement before it.
   - The rest of the expression goes through the existing JavaScript rewrite.
   - When the function is absent, `CorrelationId` stays unbound, as for Elsa 3 `DispatchWorkflow`.
 - **FR-009**: `StartNewTrace` and `ChannelName` are R3 "Removed", as for `DispatchWorkflow`. A non-default binding is
@@ -307,25 +324,27 @@ guidance.
 | Elsa 3 use | Elsa 4 result |
 |---|---|
 | `Done` connection | the loop's `Done` connection |
-| `Canceled` connection | dropped, with info `ELS3-BULK-DISPATCH-UNREACHABLE`: Elsa 3 never emits it |
-| `Completed` connection, wait a literal false | dropped, with info `ELS3-BULK-DISPATCH-UNREACHABLE`: never emitted |
-| `Completed` connection, any other wait, every target also reached from `Done` | dropped, with info `ELS3-BULK-DISPATCH-UNREACHABLE`: `Done` covers it. No duplicate connection is emitted |
-| `Completed` connection, any other wait, a target that `Done` does not reach | refused with new error `ELS3-ACTIVITY-BULK-DISPATCH-COMPLETED-ROUTE`. Elsa 3 emitted `Completed` only when it waited and had items, and `Done` always. Guidance: connect the follow-up to `Done`; if it must not run for an empty collection or without waiting, test that in a decision |
-| `ChildCompleted` or `ChildFaulted` branch, wait a literal false | dropped, with info `ELS3-BULK-DISPATCH-UNREACHABLE`: Elsa 3 never runs it |
+| `Canceled` or `Completed` connection to a `WaitAll` join | refused with new error `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`. Elsa 3 never followed `Canceled`, and followed `Completed` only when it waited and had items, so it ran the join never or only sometimes; dropping the edge would make the join run. Guidance: connect only `Done` to the join |
+| `Canceled` connection, any other target | dropped, with the existing warning `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`: Elsa 3 never emits it |
+| `Completed` connection, wait a literal false, any other target | dropped, with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`: never emitted |
+| `Completed` connection, any other wait, every target also reached from `Done` and none a `WaitAll` join | dropped without a diagnostic: `Done` reaches the same targets, so behaviour does not change. No duplicate connection is emitted |
+| `Completed` connection, any other wait, a target that `Done` does not reach | refused with `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`. Guidance: connect the follow-up to `Done`; if it must not run for an empty collection or without waiting, test that in a decision |
+| `ChildCompleted` or `ChildFaulted` branch, wait a literal false | dropped, with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`: Elsa 3 never runs it |
+| A branch or the correlation function reading an enclosing loop's current value | refused with the existing `ResolutionDiffers` diagnostic: inside the lowered loop that name reads the new loop's item. Guidance: copy the outer value into a variable in the outer body first |
 | static `Input` in a language other than JavaScript, Literal or Object | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (FR-006) |
 | `DefaultItemInputKey` not a literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (FR-007) |
-| `Items` a literal that is not a collection | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (Edge Cases) |
-| A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | refused with new error `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`. Guidance: the branches get no child result in Elsa 4; remove the read; once spec 1245 (#5838) gives an awaited `DispatchWorkflow` an `Output`, the branch can read the body dispatch's `Output` |
+| `Items` any non-null literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. Guidance: Elsa 3 read it as text and dispatched no child (Edge Cases) |
+| A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable (`getChildInstanceId()` or `getVariable("ChildInstanceId")`), or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | refused with new error `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised where the rewrite resolves those names, so it replaces the generic unknown-name diagnostic. Guidance: the branches get no child result in Elsa 4; remove the read; once spec 1245 (#5838) gives an awaited `DispatchWorkflow` an `Output`, the branch can read the body dispatch's `Output` |
 | `WorkflowDefinitionId` not a literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (FR-005) |
 | `ChannelName` or `StartNewTrace` bound | `ELS3-ACTIVITY-REMOVED-INPUT-BOUND` (FR-009) |
 
 - **FR-013**: Every new code MUST be added to `Elsa3ActivityDiagnosticCodes` and to the spec 236 diagnostic-code
   contract:
-  - two errors: `ELS3-ACTIVITY-BULK-DISPATCH-COMPLETED-ROUTE` and `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`;
-  - one warning: `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`, plus `…-PARALLEL-LIMIT` only under FR-010;
-  - one info: `ELS3-BULK-DISPATCH-UNREACHABLE`.
+  - two errors: `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` and `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`;
+  - one warning: `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`, plus `…-PARALLEL-LIMIT` only under FR-010.
 
-  Each new error MUST carry guidance text, and each info names what was dropped.
+  Dropped dead connections and branches reuse `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. Each new error MUST carry
+  guidance text. A code is added in the phase that first raises it, so the map-coverage test holds at every phase.
 
 **Documentation and evidence**
 

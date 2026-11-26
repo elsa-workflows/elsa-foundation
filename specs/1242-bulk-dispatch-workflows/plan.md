@@ -12,8 +12,8 @@ The Elsa 3 converter stops refusing `BulkDispatchWorkflows` and lowers it to a l
   `Faulted` outcomes. This part is gated on spec 1243.
 
 Item inputs are built for each pass from the child's declared inputs. `get{DefaultItemInputKey}()` in the correlation
-function reads the loop's current item. One new warning, two new errors and one info cover the behaviour differences, the
-refusals and what is dropped. The work is limited to the converter, its tests and the docs: the runtime, Studio and the catalog are
+function reads the loop's current item. One new warning and two new errors cover the behaviour differences and the refusals;
+dropped dead edges reuse `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. The work is limited to the converter, its tests and the docs: the runtime, Studio and the catalog are
 unchanged.
 
 ## Technical Context
@@ -72,7 +72,10 @@ cannot, the lowering moves into `Elsa3FlowchartGraphBuilder`. Record the outcome
 
 ### 2. Body
 
+- **Loop members**: `Items` → `Collection` with null mapped as unbound (NullAsNull, not ForEach's NullRefused), and
+  any non-null literal refused. `DefaultItemInputKey` null or absent means `Item`.
 - **Without waiting**: the body is the `DispatchWorkflow` node itself, in `ForEach.Body`.
+- **Missing wait**: the body dispatch gets a literal true `WaitForCompletion` (Elsa 4 defaults to false).
 - **With waiting**: the body is a `Flowchart` holding the dispatch.
   - The dispatch's `Completed` and `Faulted` outcomes connect to the converted `ChildCompleted` and `ChildFaulted`
     activities, when they exist.
@@ -91,6 +94,10 @@ The dispatch's `Inputs` is bound to a generated JavaScript expression over the c
   declared name `n` it reads the item member whose name matches `n` regardless of case, and emits it under the declared
   spelling `n`; that is the #5808 rule. When the item is not a map, it emits `{[key]: item}`, but only when the target
   declares `key`. Static `Input` entries come first, so the item wins.
+- **Script form**: the declared names and the key appear as string literals. Item members are reached only through
+  `Object.entries(item).filter(...).map(...)` and `Object.fromEntries`, as `Elsa3HttpTriggerResponseModeRewrite` does.
+  There is no `item[name]`: computed member access by name on anything but `variables`/`args` is workflow-state access
+  to the read analysis (`JavaScriptVariableReadAnalyzer`), and publish refuses it with VF-STATE-002.
 - **Target unknown**: the expression spreads the map item, or emits `{[key]: item}`, and raises the existing
   `DispatchInputNames` warning.
 - A literal or Object-expression static `Input` goes through the existing `Elsa3ValueContract.DispatchInputs` check
@@ -102,15 +109,17 @@ The dispatch's `Inputs` is bound to a generated JavaScript expression over the c
 
 ### 4. Correlation id (FR-008)
 
-- The rewrite applies the JavaScript rewriter to the function with one extra substitution:
-  `get{DefaultItemInputKey}()` becomes `variables.currentItem`, the current-item read of both `ForEach` and spec 1243's
-  parallel ForEach.
-  - The substitution is new code in the rewrite, not an entry in `Elsa3LoopVariableReferencesRewrite`. That table maps
-    an Elsa 3 `CurrentValue` output memory reference to a loop variable; it does no JavaScript substitution, and
-    `getItem()` is a Jint argument getter, not a memory reference.
-  - Like the existing `variables.x` reads, the emitted read carries a pinned `VariableExpressionParameterBinding` whose
-    declaring scope is the loop node (`Elsa3ExpressionRewriter`, the `variables.` parameter bindings). It is not a
-    global host function.
+- The rewrite registers the lowered loop as a scope whose `currentItem` the body reads, and registers the generated
+  accessor `get{DefaultItemInputKey}` as an ambient name for the correlation function only. Name resolution
+  (`Elsa3ValueFlowLowerer`, the ambient resolver) resolves that accessor to
+  `VariableExpressionParameterBinding(loopNodeId, "currentItem")`, so the JavaScript rewrite emits
+  `variables.currentItem` with a pinned binding. A text replacement before the rewrite would not work: a
+  pre-substituted `variables.currentItem` resolves as an Elsa 3 variable named `currentItem` (MissingAmbient), and a
+  left-over `getItem()` fails as an unknown host function.
+  - This is not an entry in `Elsa3LoopVariableReferencesRewrite`. That table maps an Elsa 3 `CurrentValue` output
+    memory reference to a loop variable, and `getItem()` is a Jint argument getter, not a memory reference.
+  - Registering the scope also makes the existing nested-loop check (`ResolutionDiffers`) fire for a read of an
+    enclosing loop's current value inside the lowered body (FR-012).
 - A literal function becomes a literal `CorrelationId`.
 
 ### 5. Outcomes (FR-012)
@@ -118,9 +127,13 @@ The dispatch's `Inputs` is bound to a generated JavaScript expression over the c
 The rewrite rewires the Elsa 3 node's outgoing connections before the flowchart builder runs:
 
 - `Done` → the loop's `Done`.
-- `Canceled` → dropped, with info `ELS3-BULK-DISPATCH-UNREACHABLE`.
+- `Canceled` → dropped with `DeadConnectionRemoved`, unless it leads to a `WaitAll` join (refused).
 - `Completed` → handled by the FR-012 rows: dropped when the wait is a literal false or `Done` reaches every target,
-  refused otherwise.
+  refused when it leads to a `WaitAll` join or to a target `Done` does not reach.
+
+The rewrite does these checks itself, because once it drops an edge `Elsa3FlowchartGraphBuilder.CheckJoins` can no
+longer see it. For the corpus root (Done, Canceled and Completed into one `WaitAny` join), the join is left with one
+inbound edge and collapses (`ConcurrentPair` needs two).
 
 The check "every target also reached from `Done`" compares the direct target sets. No duplicate connection is
 emitted.
@@ -132,13 +145,15 @@ New constants in `Elsa3ActivityDiagnosticCodes` (plus `BulkDispatchParallelLimit
 | Constant | Code | Level |
 |---|---|---|
 | `BulkDispatchItemInputs` | `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS` | warning |
-| `BulkDispatchCompletedRoute` | `ELS3-ACTIVITY-BULK-DISPATCH-COMPLETED-ROUTE` | error |
+| `BulkDispatchOutcomeRoute` | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` | error |
 | `BulkDispatchChildResultRead` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ` | error |
-| `BulkDispatchUnreachable` | `ELS3-BULK-DISPATCH-UNREACHABLE` | info |
 
-- The child-result read check runs on the converted branch expressions. It looks for the `ChildInstanceId` variable,
-  and for `getInput`/`args` reads of `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` and `WorkflowSubStatus`.
-- A literal non-collection `Items` is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. The converter cannot see a
+- The child-result read check runs inside name resolution (`Elsa3ValueFlowLowerer`), for nodes inside a lowered
+  branch. A generated accessor or `getVariable` read of `ChildInstanceId`, or an input read of `WorkflowOutput`,
+  `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus`, resolves to `BulkDispatchChildResultRead` before the
+  generic missing-variable or unknown-function failure (lines around 1160 and 1255) is reached.
+- `ITEM-INPUTS` is added to `raisedByRewrites` in `Elsa3ActivityMapCoverageTests`.
+- Any non-null literal `Items` is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, because Elsa 3 read it as text. The converter cannot see a
   run-time value; the documentation describes the difference.
 
 ### 7. Docs
@@ -188,7 +203,7 @@ extensions/Elsa3/src/Mapping/
 ├── ActivityMap/Rewrites/Elsa3BulkDispatchAsLoopRewrite.cs (new)
 ├── Elsa3MappingFeature.cs                             (register the rewrite)
 └── README.md
-extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs (4 codes)
+extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs (3 codes)
 extensions/Elsa3/tests/Mapping/Tests/Elsa3BulkDispatchLoweringTests.cs (new)
 ```
 
