@@ -9,22 +9,24 @@ for spec 1243's parallel ForEach.
 
 - [ ] T001 [US1] Finish research item R-1 (plan §1): can a rewrite change the node's target type and give it a
   synthesized body child? Record the answer in the PR, and move the lowering into `Elsa3FlowchartGraphBuilder` if it
-  cannot.
+  cannot. The outcome handling goes in the graph builder either way (plan §5).
 - [ ] T002 [US1] Add `Elsa3NodeRewriteKind.BulkDispatchAsLoop`, register the rewrite in `Elsa3MappingFeature`, and
   replace the `NoCounterpart("BulkDispatchWorkflows")` entry in
-  `extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Entries.cs`.
+  `extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Entries.cs` with the entry shape of plan §1: every
+  member classified once, the non-loop members as `Structure`.
 - [ ] T003 [US1] Add `Elsa3BulkDispatchAsLoopRewrite`.
   - Classify `WaitForCompletion` as FR-002 does: missing, `null`, a valueless literal, a case-insensitive literal, or
     an expression.
   - For a literal false, emit a `ForEach` with a `DispatchWorkflow` body (FR-002, FR-004, ids from plan §2).
   - For every other wait, raise `NoCounterpart` with guidance naming spec 1243.
-- [ ] T004 [US1] Outcomes: `Done` → loop `Done`. Drop `Canceled`, `Completed` and the child branches with info
-  `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` (FR-012, the literal-false rows), except toward a `WaitAll` join, which
-  phase 4 refuses.
+- [ ] T004 [US1] Outcomes, in the graph builder (plan §5): `Done` → loop `Done`. Drop `Canceled`, `Completed` and the
+  child branches with the warning `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` (FR-012, the literal-false rows). Refuse
+  `Canceled` or `Completed` toward a `WaitAll` join with `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`; add that code
+  here.
 - [ ] T005 [P] [US1] Tests in `Elsa3BulkDispatchLoweringTests`:
   - the ForEach shape;
   - kept ids;
-  - outcomes and dropped branches;
+  - outcomes and dropped branches, including the `WaitAll` refusal;
   - every `WaitForCompletion` classification, including the corpus literal `"False"`.
 
 ## Phase 2: Members (US3, US4)
@@ -48,33 +50,38 @@ for spec 1243's parallel ForEach.
   - a case-mismatched member gets the declared spelling;
   - an undeclared default key is omitted;
   - correlation with `getItem()` and with a custom key;
-  - a read of an enclosing loop's current value inside the lowered loop → `ResolutionDiffers`;
+  - a read of an enclosing loop's current value inside the lowered loop, from a branch, the correlation function or a
+    JavaScript static `Input` → `ResolutionDiffers`;
   - each static `Input` form;
   - a non-null literal `Items` (array, object, string);
   - each member refusal.
 
 ## Phase 3: Diagnostics and docs
 
-- [ ] T010 Update `Elsa3ConversionDiagnosticsTests`: BulkDispatchWorkflows leaves the no-counterpart cases, and
-  ParallelForEach stays. Each new code is added in the task that first raises it (T006, T015, T016), so the
+- [ ] T010 In `Elsa3ConversionDiagnosticsTests`, add a literal-false BulkDispatchWorkflows case that converts. Keep
+  the minimal `no-counterpart:BulkDispatchWorkflows` case (no `WaitForCompletion`, so the waiting path) until T014, and
+  keep ParallelForEach. Each new code is added in the task that first raises it (T004, T006, T016), so the
   map-coverage test holds at every phase (FR-013).
 - [ ] T011 [P] Update `extensions/Elsa3/src/Mapping/README.md`, `specs/236-elsa3-activity-map/member-map.md` and
   `specs/236-elsa3-activity-map/contracts/diagnostic-codes.md` (FR-013, FR-014).
-- [ ] T012 [P] Add the "one child per item" section to the `DispatchWorkflow` README (FR-015).
+- [ ] T012 [P] Add the "one child per item" section to `essentials/src/Activities/DispatchWorkflow/Runtime/README.md`
+  (FR-015).
 - [ ] T013 Convert `performance-concurrency.json` from the S-15 corpus locally, confirm that it publishes, and record
   the result. Hand FR-016 over to S-15 through the shared notes. The hand-over asks S-15 to run the concurrency suite on
-  the Elsa 4 host and to record in its ledger whether all 300 children reach `Finished` (SC-001, the run-time part).
+  the Elsa 4 host, with its child `simple-write-hello-world.json` in the same import, and to record in its ledger
+  whether all 300 children reach `Finished` (SC-001, the run-time part).
 
 ## Phase 4: Waiting path (US2) — after spec 1243
 
 - [ ] T014 [US2] For a wait that is missing, a literal true or an expression, emit the parallel ForEach with a flowchart
   body: dispatch `Completed`/`Faulted` → the converted branches (FR-003). Use 1243's current-item read in T007's
-  substitution if it differs from `variables.currentItem`.
+  resolution if it differs from `variables.currentItem`. Remove the `no-counterpart:BulkDispatchWorkflows` test case
+  (T010) here.
 - [ ] T015 [US2] Outcomes in the waiting case:
-  - the `Completed` rows of FR-012: drop with info when `Done` reaches every target, without duplicate connections, and
-    refuse with `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` when it leads to a `WaitAll` join or a target `Done` does
-    not reach, and also refuse `Canceled` toward a `WaitAll` join. Add the code here; warning `ELS3-BEHAVIOUR-BULK-DISPATCH-PARALLEL-LIMIT` only if spec 1243
-  added a cap (FR-010).
+  - the `Completed` rows of FR-012: drop without a diagnostic when `Done` reaches every target and none is a `WaitAll`
+    join, without duplicate connections; refuse with `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` (added in T004) when
+    it leads to a target `Done` does not reach;
+  - raise spec 1243's `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED` with the bulk-dispatch text (FR-010).
 - [ ] T016 [US2] Child-result reads in the branches → `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name
   resolution (FR-012, plan §6). Add the code here.
 - [ ] T017 [P] [US2] Tests:

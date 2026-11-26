@@ -84,16 +84,18 @@ body, and `Done`, `Canceled` and `Completed` all connect to one `WaitAny` join.
   its own iteration frame, so it has its own activity execution.
 - There is no parallel loop yet. Spec 1243 (#5832) defines one:
   - input `Collection`, read once;
-  - every pass is scheduled at start, and each pass can suspend on its own bookmark;
+  - the first min(N, degree) passes start, and the next item's pass starts as each one completes; each pass can
+    suspend on its own bookmark;
   - `Done` once all passes have completed;
   - a faulted pass does not fault the loop, and the other passes keep running, as in `Sequence`;
   - the body reads `variables.currentItem` and `variables.currentIndex`;
-  - there is no parallelism setting and no cap.
+  - it follows the approved owner decision in `docs/architecture/large-fan-out.md` (release 1, decision 1): at most
+    1,000 items (more faults with `ParallelForEachCapExceeded`) and a `MaxDegreeOfParallelism` input, default 16,
+    range 1–64; the converter leaves the degree at its default and raises `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED`
+    on every converted parallel loop. large-fan-out.md also states that a body that starts a child workflow per item
+    stays inside that cap.
 
   That shape is proposed, not yet approved.
-- `docs/architecture/large-fan-out.md` (decision 1) planned a different parallel ForEach: an `Items` input, a cap of
-  1,000 items, and `MaxDegreeOfParallelism` (default 16). Spec 1243 departs from that, and this spec follows spec 1243,
-  the newer and more specific source. If spec 1243's approval brings back a cap or a degree, FR-010 applies.
 - Background eligibility (ADR 0093, spec 1230) does not apply: dispatching fails criterion C6, waiting fails C2 and a
   loop fails C1.
 
@@ -215,6 +217,9 @@ guidance.
 ### Edge Cases
 
 - `Items` is null or empty: the loop completes at once with `Done`, as in Elsa 3.
+- More than 1,000 items with waiting: the parallel ForEach faults with `ParallelForEachCapExceeded`, where Elsa 3
+  dispatched them all. The converter cannot see the run-time count, so FR-010's warning states it. Without waiting,
+  `ForEach` has no cap.
 - `Items` is not a collection, for example a string: Elsa 3 silently dispatched nothing. The same happened for a
   collection of value types, such as `[1, 2, 3]` held as `int[]`, because Elsa 3 only enumerates `IEnumerable<object>`.
   In Elsa 4, both `ForEach` and the parallel ForEach fault the activity on a value that is not a collection, and they
@@ -310,9 +315,11 @@ guidance.
 
 **Behaviour diagnostics**
 
-- **FR-010**: Spec 1243 schedules every pass at start with no cap, so the waiting path needs no behaviour warning for
-  throughput. If spec 1243 adds a cap or a parallelism limit, a conversion through FR-003 raises a new warning
-  `ELS3-BEHAVIOUR-BULK-DISPATCH-PARALLEL-LIMIT` that states it.
+- **FR-010**: A conversion through FR-003 MUST raise spec 1243's `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED`, with text
+  for bulk dispatch: Elsa 3 dispatched every child at once with no limit; Elsa 4 awaits at most 16 children at a time
+  (the default degree, which the converter does not change) and faults with `ParallelForEachCapExceeded` above 1,000
+  items. The guidance points to large-fan-out.md's batching advice: a sequential `ForEach` over batches. No new code is
+  added for this. The fire-and-forget path (FR-002) uses `ForEach`, which has no cap, and raises no such warning.
 - **FR-011**: A conversion through FR-006 with a known target MUST raise a new warning,
   `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`. It says that only the child's declared inputs are passed. When it applies,
   it also says that `ParentInstanceId` is no longer filled.
@@ -330,7 +337,7 @@ guidance.
 | `Completed` connection, any other wait, every target also reached from `Done` and none a `WaitAll` join | dropped without a diagnostic: `Done` reaches the same targets, so behaviour does not change. No duplicate connection is emitted |
 | `Completed` connection, any other wait, a target that `Done` does not reach | refused with `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`. Guidance: connect the follow-up to `Done`; if it must not run for an empty collection or without waiting, test that in a decision |
 | `ChildCompleted` or `ChildFaulted` branch, wait a literal false | dropped, with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`: Elsa 3 never runs it |
-| A branch or the correlation function reading an enclosing loop's current value | refused with the existing `ResolutionDiffers` diagnostic: inside the lowered loop that name reads the new loop's item. Guidance: copy the outer value into a variable in the outer body first |
+| A branch, the correlation function or a JavaScript static `Input` reading an enclosing loop's current value | refused with the existing `ResolutionDiffers` diagnostic: inside the lowered loop that name reads the new loop's item. Guidance: copy the outer value into a variable in the outer body first |
 | static `Input` in a language other than JavaScript, Literal or Object | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (FR-006) |
 | `DefaultItemInputKey` not a literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (FR-007) |
 | `Items` any non-null literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. Guidance: Elsa 3 read it as text and dispatched no child (Edge Cases) |
@@ -341,7 +348,7 @@ guidance.
 - **FR-013**: Every new code MUST be added to `Elsa3ActivityDiagnosticCodes` and to the spec 236 diagnostic-code
   contract:
   - two errors: `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` and `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`;
-  - one warning: `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`, plus `…-PARALLEL-LIMIT` only under FR-010.
+  - one warning: `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`. FR-010 reuses spec 1243's code.
 
   Dropped dead connections and branches reuse `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. Each new error MUST carry
   guidance text. A code is added in the phase that first raises it, so the map-coverage test holds at every phase.
@@ -350,11 +357,14 @@ guidance.
 
 - **FR-014**: The converter's mapping README and the spec 236 member map MUST describe the lowering, the member rules and
   the refusals.
-- **FR-015**: The `DispatchWorkflow` documentation MUST show the Elsa 4 pattern for one child per item, with and without
+- **FR-015**: The `DispatchWorkflow` documentation (`essentials/src/Activities/DispatchWorkflow/Runtime/README.md`)
+  MUST show the Elsa 4 pattern for one child per item, with and without
   waiting.
 - **FR-016**: The JTest effect MUST be handed to S-15 rather than edited on this branch, because the ledger lives on the
   S-15 branch. The hand-over has three parts.
-  - `performance-concurrency.json` converts as it is.
+  - `performance-concurrency.json` converts as it is, provided its child `simple-write-hello-world.json` is in the same
+    import. That child declares no inputs, so the scalar item is not passed. If the child were not in the import,
+    `{Item: n}` would be passed under the unknown-target rule, and Elsa 4 would refuse it at run time.
   - The composition root needs an adjusted copy, for coordinator approval: a literal `WorkflowDefinitionId` and a
     cleared `ChannelName`, the same precedent as `composition-dispatch-root-workflow.json`. It then converts once spec
     1243 is implemented.

@@ -41,13 +41,14 @@ JTest effect is checked by S-15.
 - **Sanctioned patterns only**: the lowering is a new `Elsa3NodeRewriteKind` with its own `IElsa3NodeRewrite`,
   registered in `Elsa3MappingFeature` next to the seven existing rewrites. Like `Elsa3SwitchValueSynthesisRewrite`
   (`context.AddChild`) and `Elsa3HttpTriggerResponseModeRewrite` (node insertion), it adds nodes. Pass.
-- **No runtime knob for authors**: the lowering adds no input to any activity, and spec 1243 has no parallelism
-  setting. Pass.
+- **No runtime knob for authors**: the lowering adds no input to any activity and sets none. The parallel ForEach's
+  `MaxDegreeOfParallelism` is the approved owner decision in large-fan-out.md, owned by spec 1243; the converter leaves
+  it at the default. Pass.
 - **Refuse over workaround**: three things are refused with guidance instead of emulated: channels, the child result in
   branches, and `Completed` routes that a run-time wait value would change. The Elsa 3 defects (input leak, shared
   bookmark counter) are not emulated. Pass.
-- **ADR needed?** No. Option B uses existing activities and spec 1243's loop. Spec 1243 departs from large-fan-out.md decision 1 (cap and
-  degree); that is spec 1243's call, recorded in spec 1242's "What Elsa 4 already has". Option A, if chosen
+- **ADR needed?** No. Option B uses existing activities and spec 1243's loop. Spec 1243 follows large-fan-out.md decision 1 (cap 1,000,
+  degree 16). Option A, if chosen
   instead, would need an ADR for the multi-child dispatch identity.
 
 ## Design
@@ -57,9 +58,13 @@ JTest effect is checked by S-15.
 - In `Elsa3BuiltInActivityMap.Entries.cs`, replace `NoCounterpart("BulkDispatchWorkflows", …)` with a catalog entry
   whose target is `ForEach`, and whose rewrite is a new `Elsa3NodeRewriteKind.BulkDispatchAsLoop`.
   - The rewrite picks between `ForEach` and the parallel ForEach (FR-002, FR-003).
-  - The entry's member rules cover the member the loop takes directly: `Items` → `Collection`.
-  - The rewrite builds the body dispatch from the remaining members, using the existing `DispatchMembers` rules where
-    they apply (`WorkflowDefinitionId`, `Input`, `StartNewTrace`, `ChannelName`, `CancelChildOnParentCancellation`).
+  - The entry classifies every Elsa 3 member exactly once, as `Every_elsa3_activity_and_member_is_classified_exactly_once`
+    requires: `Items` → `Collection` (`NullUnbound`). All other members, `ChildCompleted` and `ChildFaulted`
+    included, are `Structure` (R7) on the entry, because `ForEach` has no such inputs, and the keys are checked against
+    the real catalog by `Every_targeted_elsa4_key_slot_and_outcome_exists_in_the_real_catalog`.
+  - The rewrite applies `LiteralOnly` (`WorkflowDefinitionId`), `DispatchInputs` (`Input`), `Removed` (`StartNewTrace`,
+    `ChannelName`) and the synthetic `CancelChildOnParentCancellation` to the body dispatch node itself.
+  - The entry's `Outcome` rules map `Done` → `Done`; plan §5 covers `Completed` and `Canceled`.
 - While the parallel ForEach type key is not in the catalog, the rewrite raises `NoCounterpart` for the waiting path,
   with guidance naming spec 1243 (FR-003). Phases 1–3 ship with that gate; phase 4 (T014–T018) adds the waiting
   shape once spec 1243 is in the catalog.
@@ -68,11 +73,13 @@ Research item R-1 (mostly answered): a rewrite runs "after the member rules, bef
 add children through `Elsa3RewriteContext.AddChild` (used by `Elsa3SwitchValueSynthesisRewrite`) or insert nodes
 (`Elsa3HttpTriggerResponseModeRewrite`). What is left to confirm in code: that a rewrite can change the node's own
 target type, from the Elsa 3 node to `ForEach` or the parallel ForEach, and give it a synthesized body child. If it
-cannot, the lowering moves into `Elsa3FlowchartGraphBuilder`. Record the outcome in the PR.
+cannot, the lowering moves into `Elsa3FlowchartGraphBuilder`. A rewrite cannot see the parent flowchart's connections
+(`Elsa3RewriteContext` exposes only its node, properties, children and ancestors), so the outcome handling lives in the
+graph builder either way (§5). Record the outcome in the PR.
 
 ### 2. Body
 
-- **Loop members**: `Items` → `Collection` with null mapped as unbound (NullAsNull, not ForEach's NullRefused), and
+- **Loop members**: `Items` → `Collection` with null left unbound (`NullUnbound`, not ForEach's `NullRefused`), and
   any non-null literal refused. `DefaultItemInputKey` null or absent means `Item`.
 - **Without waiting**: the body is the `DispatchWorkflow` node itself, in `ForEach.Body`.
 - **Missing wait**: the body dispatch gets a literal true `WaitForCompletion` (Elsa 4 defaults to false).
@@ -124,15 +131,18 @@ The dispatch's `Inputs` is bound to a generated JavaScript expression over the c
 
 ### 5. Outcomes (FR-012)
 
-The rewrite rewires the Elsa 3 node's outgoing connections before the flowchart builder runs:
+The outgoing connections are handled in `Elsa3FlowchartGraphBuilder.Build`, where they are visible: a node rewrite
+cannot reach them. The rewrite records the wait classification on the node plan; a bulk-dispatch step in
+`DropDeadEdges` (which already raises `DeadConnectionRemoved` as a warning) reads it before `MapPorts`:
 
-- `Done` → the loop's `Done`.
+- `Done` → the loop's `Done` (the entry's `Outcome` rule).
 - `Canceled` → dropped with `DeadConnectionRemoved`, unless it leads to a `WaitAll` join (refused).
-- `Completed` → handled by the FR-012 rows: dropped when the wait is a literal false or `Done` reaches every target,
-  refused when it leads to a `WaitAll` join or to a target `Done` does not reach.
+- `Completed` → handled by the FR-012 rows: dropped with `DeadConnectionRemoved` when the wait is a literal false;
+  dropped silently when `Done` reaches every target; refused when it leads to a `WaitAll` join or to a target `Done`
+  does not reach.
 
-The rewrite does these checks itself, because once it drops an edge `Elsa3FlowchartGraphBuilder.CheckJoins` can no
-longer see it. For the corpus root (Done, Canceled and Completed into one `WaitAny` join), the join is left with one
+Without that step a `Completed` or `Canceled` edge whose source now has only `Done` ends at `GraphOutcomeUnmapped`. The
+step runs before `CheckJoins`, so it does the `WaitAll` check itself. For the corpus root (Done, Canceled and Completed into one `WaitAny` join), the join is left with one
 inbound edge and collapses (`ConcurrentPair` needs two).
 
 The check "every target also reached from `Done`" compares the direct target sets. No duplicate connection is
@@ -140,7 +150,7 @@ emitted.
 
 ### 6. Diagnostics (FR-010–FR-013)
 
-New constants in `Elsa3ActivityDiagnosticCodes` (plus `BulkDispatchParallelLimit` only if spec 1243 adds a cap, FR-010):
+New constants in `Elsa3ActivityDiagnosticCodes` (FR-010 reuses spec 1243's `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED`):
 
 | Constant | Code | Level |
 |---|---|---|
@@ -161,8 +171,7 @@ New constants in `Elsa3ActivityDiagnosticCodes` (plus `BulkDispatchParallelLimit
 - `extensions/Elsa3/src/Mapping/README.md`: the lowering, the member table and the refusals.
 - `specs/236-elsa3-activity-map/member-map.md` and `contracts/diagnostic-codes.md`: the BulkDispatchWorkflows row moves
   from R6 to the lowering, and the new codes are added.
-- The `DispatchWorkflow` README (`essentials/src/Activities/DispatchWorkflow/`): a "one child per item" section
-  (FR-015).
+- `essentials/src/Activities/DispatchWorkflow/Runtime/README.md`: a "one child per item" section (FR-015).
 
 ## Test scope
 
@@ -184,7 +193,8 @@ New constants in `Elsa3ActivityDiagnosticCodes` (plus `BulkDispatchParallelLimit
 ## Coordination
 
 - **Spec 1243** (#5832): its session confirmed on 2026-11-26 that the shape fits: `Collection`,
-  `variables.currentItem`, every pass scheduled at start, `Done` after all passes, no cap. A child fault routed inside
+  `variables.currentItem`, `Done` after all passes; since then 1243 adopted large-fan-out.md's cap (1,000) and degree
+  (16, a `MaxDegreeOfParallelism` input) with `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED`. A child fault routed inside
   the body is a completed pass. It is not yet approved; if 1243 changes, FR-003, FR-008 and FR-010 follow it.
 - **S-15**: the hand-over in FR-016 goes to the S-15 session's notes after approval.
 
