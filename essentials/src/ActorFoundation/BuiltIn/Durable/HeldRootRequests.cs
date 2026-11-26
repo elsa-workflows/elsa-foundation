@@ -126,6 +126,66 @@ internal sealed class HeldRootRequests : IReplyTransport
         }
 
         Contract.ActorRef? actor = target is Contract.Target.Ref exact ? exact.Actor : null;
+        return await HoldAsync(scope, id, request, add?.KeepFor, IssueAsync, ReadStatusAsync, stop);
+
+        async Task<Contract.Reply?> IssueAsync(HeldRootRequest caller, CancellationToken token)
+        {
+            if (spec is not null)
+            {
+                string? started;
+                try { started = await admission.StartAsync(caller, spec, token); }
+                catch (MetadataLimitExceeded) { return new(null, null, Error: "missing"); }
+                if (started is null) return new(null, null, Error: "timeout");
+                actor = new Contract.ActorRef(started);
+            }
+            else
+            {
+                var result = await admission.SendAsync(caller, actor!.Value.Id, kind, payload, token);
+                if (result == HeldRootAdmission.Expired) return new(null, null, Error: "timeout");
+                if (result == HeldRootAdmission.Refused) return new(null, null, Error: "missing");
+            }
+            // A duplicate does not attach this new registration to an earlier operation.
+            return null;
+        }
+
+        ValueTask<Contract.ActorStatus?> ReadStatusAsync(CancellationToken token) =>
+            actor is { } targetActor ? admission.ReadStatusAsync(scope.Tenant, targetActor.Id, token) : ValueTask.FromResult<Contract.ActorStatus?>(null);
+    }
+
+    internal async ValueTask<Contract.Reply> RequestOperatorAsync(Contract.BoundScope scope, string id,
+        Contract.RequestOptions request, TimeSpan? keepFor, Func<HeldRootRequest, CancellationToken, Task<Contract.Admission?>> issue,
+        Func<CancellationToken, ValueTask<Contract.ActorStatus?>> observeStatus, CancellationToken stop)
+    {
+        var admitted = false;
+        return await HoldAsync(scope, id, request, keepFor, IssueAsync, ReadStatusAsync, stop);
+
+        async Task<Contract.Reply?> IssueAsync(HeldRootRequest caller, CancellationToken token)
+        {
+            var result = await issue(caller, token);
+            admitted = result?.Outcome == Contract.AdmissionOutcome.Accepted;
+            return result?.Outcome switch
+            {
+                Contract.AdmissionOutcome.Accepted => null,
+                Contract.AdmissionOutcome.Duplicate => new(null, null, Error: "repeat"),
+                null => new(null, null, Error: "timeout"),
+                _ => new(null, null, Error: result.Reason switch
+                {
+                    Contract.RefusalReason.StaleSelection => "stale selection",
+                    Contract.RefusalReason.TargetMismatch => "target",
+                    Contract.RefusalReason.NodeBusy => "operator reply capacity",
+                    _ => "missing"
+                })
+            };
+        }
+
+        ValueTask<Contract.ActorStatus?> ReadStatusAsync(CancellationToken token) =>
+            admitted ? observeStatus(token) : ValueTask.FromResult<Contract.ActorStatus?>(null);
+    }
+
+    private async ValueTask<Contract.Reply> HoldAsync(Contract.BoundScope scope, string id, Contract.RequestOptions request,
+        TimeSpan? keepFor, Func<HeldRootRequest, CancellationToken, Task<Contract.Reply?>> issue,
+        Func<CancellationToken, ValueTask<Contract.ActorStatus?>> readStatus, CancellationToken stop)
+    {
         var untilDeadline = (decimal)request.Deadline - await admission.ReadClockAsync(stop);
         if (untilDeadline <= 0) return await TimeoutAsync();
 
@@ -134,29 +194,12 @@ internal sealed class HeldRootRequests : IReplyTransport
             budget.CancelAfter(TimeSpan.FromMilliseconds((double)untilDeadline));
         var token = budget.Token;
         var waiting = requests.OpenBound(id, request.Deadline, scope.Tenant, null);
-        var caller = new HeldRootRequest(scope.Tenant, node, waiting, request.ReleaseBeforeCommit, add?.KeepFor);
+        var caller = new HeldRootRequest(scope.Tenant, node, waiting, request.ReleaseBeforeCommit, keepFor);
         try
         {
-            if (spec is not null)
-            {
-                string? started;
-                try
-                {
-                    started = await admission.StartAsync(caller, spec, token);
-                }
-                catch (MetadataLimitExceeded) { return new(null, null, Error: "missing"); }
-                if (started is null) return await TimeoutAsync();
-                actor = new Contract.ActorRef(started);
-            }
-            else
-            {
-                var result = await admission.SendAsync(caller, actor!.Value.Id, kind, payload, token);
-                if (result == HeldRootAdmission.Expired) return await TimeoutAsync();
-                if (result == HeldRootAdmission.Refused)
-                    return new(null, null, Error: "missing");
-            }
+            if (await issue(caller, token) is { } immediate)
+                return immediate.Error == "timeout" ? await TimeoutAsync() : immediate;
 
-            // A duplicate does not attach this new registration to an earlier operation.
             var completion = requests.CompletionOf(waiting);
             while (!completion.IsCompleted)
             {
@@ -183,13 +226,7 @@ internal sealed class HeldRootRequests : IReplyTransport
             requests.Disconnect(waiting);
         }
 
-        // A timeout reports the root's committed status, when there is a root to read.
-        async ValueTask<Contract.Reply> TimeoutAsync()
-        {
-            if (actor is null) return new(null, null, Error: "timeout");
-            var status = await admission.ReadStatusAsync(scope.Tenant, actor.Value.Id, stop);
-            return new(null, null, status, "timeout");
-        }
+        async ValueTask<Contract.Reply> TimeoutAsync() => new(null, null, await readStatus(stop), "timeout");
 
         ValueTask<Contract.Reply> PresentAsync(Reply reply) => reply.Error == "timeout"
             ? TimeoutAsync()
@@ -210,6 +247,7 @@ internal sealed class HeldRootRequests : IReplyTransport
                 "ResolutionUnavailable" => "resolution unavailable",
                 "NotEligible" => "not eligible",
                 "Protected" => "protected",
+                "Parked" => "parked",
                 "ProtectionUnavailable" => "protection unavailable",
                 "OperatorUnavailable" => "operator unavailable",
                 _ => "missing"
