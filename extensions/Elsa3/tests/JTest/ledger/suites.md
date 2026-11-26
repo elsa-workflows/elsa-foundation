@@ -33,8 +33,8 @@ One row per suite file under `tests/` (spec 1235, data-model.md). Results: see d
 | `http/request-body-tests.json` | http-endpoints.json | pass | pass (XML case per engine, suite-changes W2) | 11, 31 |
 | `http/route-parameter-tests.json` | http-endpoints.json | pass | pass | 11, 29 |
 | `javascript/array-methods-tests.json` | javascript-array-methods.json | pass | blocked: #5686 (publish fails with VF-STATE-002 on `Body`) | 11, 29 |
-| `javascript/date-methods-tests.json` | javascript-date-methods.json | pass | incompatible (`VF-IMP-005`: date parsed from text without an offset) | 11, 29 |
-| `javascript/elsa-functions-tests.json` | javascript-elsa-functions.json | pass | incompatible (`VF-IMP-005`: byte helpers) | 11, 29 |
+| `javascript/date-methods-tests.json` | javascript-date-methods.json | pass | pass (made-compatible copy, run 34) | 11, 34 |
+| `javascript/elsa-functions-tests.json` | javascript-elsa-functions.json | pass | blocked: #5686 (the made-compatible copy converts; publish fails with VF-STATE-002 on `Body`) | 11, 34 |
 | `javascript/json-methods-tests.json` | javascript-json-methods.json | pass | pass | 11, 29 |
 | `javascript/object-methods-tests.json` | javascript-object-methods.json | pass | blocked: #5686 (publish fails with VF-STATE-002 on `Body`) | 11, 29 |
 | `javascript/script-handler-functions-tests.json` | javascript-script-handler-functions.json | pass (base64 cases; `getConfiguration` cases removed, B14) | incompatible (`VF-IMP-005`: unknown host function `getConfiguration`) | 11, 29 |
