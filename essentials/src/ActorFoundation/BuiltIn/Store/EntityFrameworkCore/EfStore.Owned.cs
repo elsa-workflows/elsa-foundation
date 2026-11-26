@@ -43,6 +43,7 @@ public sealed partial class EfStore
         if (root is not null) await CheckRootBeforeWriteAsync(root, db, cancellationToken);
         db.Database.AutoSavepointsEnabled = false;
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
             await PinRootNamespaceForCommitAsync(db, cancellationToken);
         var commands = new List<OwnedCommand>();
@@ -200,6 +201,7 @@ public sealed partial class EfStore
         var dialect = RequireDialect();
         await using var db = create();
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         var c = new OwnedCommand(dialect) { HasFence = true };
         dialect.Fence(c, rows.OrderBy(r => r.Id).ToArray(), null, Unfenced, FenceIgnoresCount);
         var result = await RunAsync(db, dialect, c, cancellationToken);
@@ -375,6 +377,7 @@ public sealed partial class EfStore
         {
             var pairs = string.Join(", ", owned.Select(f => FormattableString.Invariant($"({f.Partition}, {f.Epoch})")));
             await using var sqlite = create();
+            await RequireSqliteOperationalFormatAsync(sqlite, cancellationToken);
             await sqlite.Database.ExecuteSqlRawAsync($"""UPDATE "Partitions" SET "Owner" = NULL WHERE ("Id", "Epoch") IN (VALUES {pairs})""", cancellationToken);
             return;
         }

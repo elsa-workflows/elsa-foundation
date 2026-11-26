@@ -17,7 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Connections.Core.csproj" />
     <ProjectReference Include="..\..\..\..\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="..\..\..\Secrets\src\Core\Elsa.Secrets.Core.csproj" />
     <ProjectReference Include="..\..\..\..\essentials\src\Expressions\Core\Elsa.Expressions.Core.csproj" />
   </ItemGroup>
 

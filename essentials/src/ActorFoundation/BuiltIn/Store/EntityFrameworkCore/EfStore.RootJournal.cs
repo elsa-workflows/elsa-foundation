@@ -8,7 +8,7 @@ public sealed partial class EfStore
     internal sealed record RootJournalEntry(long Position, long Revision, string Entries);
     internal sealed record RootJournalPage(IReadOnlyList<RootJournalEntry> Rows, long AsOf);
     private sealed record JournalProjection(long AsOf, long? Position, long? Revision, string? Entries,
-        int? StoreSchema, int? MessageProtocol, int? JournalCodec);
+        int? StoreSchema, int? MessageProtocol, int? JournalCodec, string? DefinitionStamp);
 
     // The public reader will keep physical positions inside its continuation token.
     // The lower bound is inclusive so a reader can resume within one commit's entries.
@@ -23,7 +23,7 @@ public sealed partial class EfStore
         List<JournalProjection> sampled;
         try
         {
-            sampled = await db.Database.SqlQuery<JournalProjection>($"""
+            sampled = await db.Database.SqlQuery<JournalProjection>(StoreDefinitionsRevision.AddPostgresStamp($"""
                 WITH marker AS (
                     SELECT "StoreSchema", "MessageProtocol", "JournalCodec"
                     FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
@@ -43,10 +43,10 @@ public sealed partial class EfStore
                 )
                 SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
                     page."Position", page."Revision", page."Entries",
-                    marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec"
+                    marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec", /*definitions-stamp*/ AS "DefinitionStamp"
                 FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN marker ON true
                 ORDER BY page."Position"
-                """).ToListAsync(cancellationToken);
+                """)).ToListAsync(cancellationToken);
         }
         catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
         {
@@ -59,7 +59,7 @@ public sealed partial class EfStore
             throw;
         }
         var first = sampled[0];
-        RequireSnapshotFormat(expected, first.StoreSchema, first.MessageProtocol, first.JournalCodec);
+        RequireSnapshotFormat(db, first.StoreSchema, first.MessageProtocol, first.JournalCodec, first.DefinitionStamp);
         var rows = sampled.Where(row => row.Position.HasValue)
             .Select(row => new RootJournalEntry(row.Position!.Value, row.Revision!.Value, row.Entries!)).ToArray();
         return new(rows, first.AsOf);

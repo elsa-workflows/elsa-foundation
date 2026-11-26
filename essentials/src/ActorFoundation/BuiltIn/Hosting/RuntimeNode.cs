@@ -76,6 +76,9 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private Exception? _ownCancellation;     // a drain's own cancellation, kept as thrown
     private readonly CancellationTokenSource _besideEnd = new();     // A1: cancelled at the end of the stop, or on a kill
     private Task? _besideRun;
+
+    // An embedded store can release its process lock after the drains, ownership return and beside loop all end.
+    internal Action? AfterCleanStop { get; init; }
     private readonly object _halting = new();
     private volatile bool _gone;
     private Task _releases = Task.CompletedTask;     // host-admin releases under way, joined by the halt (under _halting)
@@ -400,6 +403,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     {
         try { await HaltLoopsAsync(); }
         finally { _besideEnd.Cancel(); if (_besideRun is not null) await _besideRun; }
+        if (!_kill.IsCancellationRequested) AfterCleanStop?.Invoke();
     }
 
     private async Task HaltLoopsAsync()

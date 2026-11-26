@@ -324,21 +324,33 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var current = db.Database.CurrentTransaction!;
         try
         {
-            // PostgreSQL executes the first statement before it parses or binds the second. The batch holds
-            // the marker before touching either source table, matching the lock order of schema migration.
-            var marker = new NpgsqlBatchCommand("""
-                SELECT "StoreSchema", "MessageProtocol", "JournalCodec" FROM "KernelStoreVersions"
-                WHERE "Id" = $1 FOR SHARE
-                """);
+            // Lock the shared marker first. A fresh statement then samples both markers, including a revision row
+            // inserted by the transaction that held the lock. Batch the statements to keep one round trip.
+            var separateLock = db.RequiredFormat == StoreFormat.RootShipped;
+            var marker = new NpgsqlBatchCommand(StoreDefinitionsRevision.AddPostgresStampSql("""
+                SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", /*definitions-stamp*/
+                FROM "KernelStoreVersions" v WHERE v."Id" = $1
+                """ + (separateLock ? "" : " FOR SHARE OF v"), lockDefinitions: separateLock));
             marker.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
             var transaction = (NpgsqlTransaction)current.GetDbTransaction();
-            await using var batch = new NpgsqlBatch(transaction.Connection, transaction) { BatchCommands = { marker, lookup } };
+            await using var batch = new NpgsqlBatch(transaction.Connection, transaction);
+            if (separateLock)
+            {
+                var gate = new NpgsqlBatchCommand("""SELECT 1 FROM "KernelStoreVersions" WHERE "Id" = $1 FOR SHARE""");
+                gate.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
+                batch.BatchCommands.Add(gate);
+            }
+            batch.BatchCommands.Add(marker);
+            batch.BatchCommands.Add(lookup);
             if (db.Database.GetCommandTimeout() is { } timeout)
                 batch.Timeout = timeout;
             await using var reader = await batch.ExecuteReaderAsync(token);
+            if (separateLock && (!await reader.ReadAsync(token) || !await reader.NextResultAsync(token)))
+                throw new StoreFormatException("The kernel store version marker is missing.");
             if (!await reader.ReadAsync(token))
                 throw new StoreFormatException("The kernel store version marker is missing.");
-            EfStore.RequireSnapshotFormat(db.RequiredFormat, reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2));
+            EfStore.RequireSnapshotFormat(db, reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3));
             if (!await reader.NextResultAsync(token))
                 throw new InvalidOperationException("The guarded root lookup did not return a result.");
             return await reader.ReadAsync(token) ? read(reader) : null;
