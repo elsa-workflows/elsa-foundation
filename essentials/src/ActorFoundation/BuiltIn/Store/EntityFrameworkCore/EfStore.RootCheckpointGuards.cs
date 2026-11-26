@@ -6,7 +6,9 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     internal static Task InstallFirstRootCheckpointsAsync(KernelDb db, CancellationToken cancellationToken) =>
-        db.Database.ExecuteSqlRawAsync(RenderRootGuards(db, PostgresFirstRootGuards), cancellationToken);
+        db.Database.ExecuteSqlRawAsync(RenderPostgresFirstRootGuards(db), cancellationToken);
+
+    internal static string RenderPostgresFirstRootGuards(KernelDb db) => RenderRootGuards(db, PostgresFirstRootGuards);
 
     private const string RootCheckpointWriteAllowed = """
         NEW."FoundationWriteRevision" = OLD."Revision" + 1

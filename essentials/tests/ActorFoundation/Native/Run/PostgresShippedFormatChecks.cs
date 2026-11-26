@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -228,6 +229,10 @@ internal static class PostgresShippedFormatChecks
     private static async Task CheckGuardBodyParityAsync(Func<KernelDb> open, CancellationToken token)
     {
         await using var db = open();
+        var sql = EfStore.RenderPostgresFirstRootGuards(db).ReplaceLineEndings("\n");
+        var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
+        Require(fingerprint == "73a8c69e2daa2e7417ddc7fb4c5f54f3894a30256ae8f0c72a8f254443d1e5cf",
+            "the complete emitted PostgreSQL guard installation batch retains its published bytes");
         var bodies = await db.Database.SqlQueryRaw<string>("""
             SELECT md5(p.prosrc) AS "Value"
             FROM pg_catalog.pg_proc p
