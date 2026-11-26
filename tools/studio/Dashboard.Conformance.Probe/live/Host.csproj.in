@@ -166,9 +166,9 @@
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/ExecutionEvidence/Elsa.Workflows.ExecutionEvidence.csproj" />
-    <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
-    <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="__SOURCE_ROOT__/essentials/src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
+    <ProjectReference Include="__SOURCE_ROOT__/extensions/Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj" />
+    <ProjectReference Include="__SOURCE_ROOT__/extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="__SOURCE_ROOT__/extensions/Dashboard/src/Workflows/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/extensions/Weaver/src/Dashboard/Elsa.Weaver.Dashboard.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />

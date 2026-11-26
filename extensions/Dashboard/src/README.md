@@ -1,6 +1,6 @@
 # Saved questions and dashboards
 
-Dashboard defines validated module-owned queries and saved definition resources alongside Studio Home. This slice supplies native query/resource management and four-provider EF definition persistence; The native API is now supplied; dataset sources, Studio pages and conversational authoring follow in the [delivery stack](../../../../specs/1217-ai-dashboards/delivery-slices.md).
+Dashboard defines validated module-owned queries and saved definition resources alongside Studio Home. This slice supplies native query/resource management and four-provider EF definition persistence; The native API is now supplied; dataset sources, Studio pages and conversational authoring follow in the [delivery stack](../../../specs/1217-ai-dashboards/delivery-slices.md).
 
 ## Native composition
 
@@ -12,4 +12,4 @@ No module source or HTTP route is enabled by adding this package alone. Home kee
 
 ## Qualification
 
-See the [query contract](../../../../specs/1217-ai-dashboards/contracts/query.md) and [resource contract](../../../../specs/1217-ai-dashboards/contracts/resources.md). Query and composition tests verify generic semantics with controlled module contributions. Actual Workflow/Acme math, native HTTP persistence/sharing, composed Studio and live Copilot are separate later gates. Historical evidence is not qualification of this slice.
+See the [query contract](../../../specs/1217-ai-dashboards/contracts/query.md) and [resource contract](../../../specs/1217-ai-dashboards/contracts/resources.md). Query and composition tests verify generic semantics with controlled module contributions. Actual Workflow/Acme math, native HTTP persistence/sharing, composed Studio and live Copilot are separate later gates. Historical evidence is not qualification of this slice.

@@ -3,6 +3,6 @@
     <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../Events/Core/Elsa.Events.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Events/Core/Elsa.Events.Core.csproj" />
   </ItemGroup>
 </Project>

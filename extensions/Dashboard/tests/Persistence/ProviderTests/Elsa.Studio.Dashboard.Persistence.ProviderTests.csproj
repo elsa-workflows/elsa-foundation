@@ -18,7 +18,7 @@
     <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../../src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
-    <ProjectReference Include="../../../../../src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../src/Management/Elsa.Studio.Dashboard.Management.csproj" />
+    <ProjectReference Include="../../../src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 </Project>
