@@ -1239,7 +1239,11 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                     report['playbackHostProfiles'] = profiles
                     report['playbackPinReadPolicy'] = 'Owned default copy has executable cache disabled for an exact native READ fault'
                     playback_profiles(owned, data, backend_project, studio_project, output, env, owned_processes, report['ownedPids'], profiles)
-                    browser_env['UX_PLAYBACK_PROFILES'] = json.dumps(profiles)
+                    # The browser routes to these profiles. The full provenance stays in report.json.
+                    browser_env['UX_PLAYBACK_PROFILES'] = json.dumps({
+                        name: {key: profile[key] for key in ('backendUrl', 'studioUrl', 'removedFeatures')}
+                        for name, profile in profiles.items()
+                    })
                 report['stage'] = 'journeys'
                 browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
                 if journey is not None:
