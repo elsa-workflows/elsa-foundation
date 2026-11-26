@@ -127,7 +127,7 @@
     <ProjectReference Include="..\..\..\src\Modularity\Core\Elsa.Modularity.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\extensions\Http\src\Elsa.Http\Elsa.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\extensions\Http\src\Core\Elsa.Http.Core.csproj" />
-    <ProjectReference Include="..\..\..\src\Attention\Api\Elsa.Attention.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\extensions\Attention\src\Api\Elsa.Attention.Api.csproj" />
     <ProjectReference Include="..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\src\Expressions\Api\Elsa.Expressions.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
@@ -139,7 +139,7 @@
     <ProjectReference Include="..\..\..\src\Mediator\Elsa.Mediator\Elsa.Mediator.csproj" />
     <ProjectReference Include="..\..\..\src\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
-    <ProjectReference Include="..\..\..\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\extensions\Tasks\src\Elsa.Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/Elsa.Workflows.Publishing.Releases.csproj" />

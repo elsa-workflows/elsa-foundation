@@ -39,4 +39,4 @@ The lock is only as wide as its provider:
 - `FileSystemDistributedLocking` serialises the processes that share its folder. A host that joined a cluster through a durable membership provider refuses the unconfigured default folder at shell start; a configured folder is trusted to be shared.
 - **Two nodes on one database with in-process (non-durable) membership get no refusal.** Nothing tells the file-system lock that the nodes exist, so it accepts its default node-local folder, and the two nodes are serialised only if they share a lock that spans them: compose `DatabaseDistributedLocking`, or point both at one shared `LocksFolderPath`.
 
-Catalogs: [`Elsa.Tasks/EXTENSION_POINTS.md`](../../../../Tasks/Elsa.Tasks/EXTENSION_POINTS.md), [`Elsa.Locking.FileSystem/EXTENSION_POINTS.md`](../../../../Locking/FileSystem/EXTENSION_POINTS.md).
+Catalogs: [`Elsa.Tasks/EXTENSION_POINTS.md`](../../../../../../../extensions/Tasks/src/Elsa.Tasks/EXTENSION_POINTS.md), [`Elsa.Locking.FileSystem/EXTENSION_POINTS.md`](../../../../Locking/FileSystem/EXTENSION_POINTS.md).

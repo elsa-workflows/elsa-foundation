@@ -42,7 +42,7 @@
     <ProjectReference Include="..\..\..\..\..\..\..\..\server\essentials\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
     <!-- RunJavaScript, whose result a graph body node reads (spec 246 D-8 probe). -->
     <ProjectReference Include="..\..\..\..\..\..\..\..\server\essentials\src\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\..\server\essentials\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\Tasks\src\Elsa.Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\server\essentials\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\server\essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\server\essentials\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
