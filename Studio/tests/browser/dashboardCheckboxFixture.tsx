@@ -2,14 +2,14 @@ import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
-import { QueryControls } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/QueryControls";
-import { QuestionWorkspace } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/QuestionWorkspace";
-import { NativeDialog, QuestionPickerDialog, ShareDialog, TileOptionsDialog } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/ResourceDialogs";
-import { ResultView } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/ResultView";
-import type { DashboardApi } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/api";
-import { initialDefinition, type DashboardResource, type DashboardTile, type DatasetDeclaration, type QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
+import { QueryControls } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/QueryControls";
+import { QuestionWorkspace } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/QuestionWorkspace";
+import { NativeDialog, QuestionPickerDialog, ShareDialog, TileOptionsDialog } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/ResourceDialogs";
+import { ResultView } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/ResultView";
+import type { DashboardApi } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/api";
+import { initialDefinition, type DashboardResource, type DashboardTile, type DatasetDeclaration, type QueryResult } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/types";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
-import "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/native.css";
+import "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/native.css";
 
 const dataset: DatasetDeclaration = {
   id: "checkbox-runs", ownerModuleId: "Checkbox fixture", schemaRevision: "1", title: "Retained workflow runs", description: "Rendered native grouping and parameter controls.",

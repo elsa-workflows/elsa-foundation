@@ -41,8 +41,8 @@ module in one of two ways:
 - Upload its `.nupkg` on the Modules page (`/modules`), then enable its feature on the Features page (`/features`).
 - Copy its `.nupkg` into `packages`. The watcher reconciles it within seconds. Then enable its feature on the Features page.
 
-The server side of a module is a separate add-on on the paired server host. Install both: the Studio module shows its screens
-once the backend advertises the capability it requires.
+Studio serves the module's browser files from its verified package archive. Install the module's server add-on on the paired
+server host so it can advertise the backend capability the Studio screens require.
 
 ## Run it
 
@@ -76,6 +76,4 @@ The Dockerfile copies only this app's project closure: the shared Studio project
 `.github/workflows/studio-docker.yml` publishes it with the other two flavors; [Studio Docker](../../../docs/docker.md) covers
 the runtime settings.
 
-In the image, an add-on's browser files answer 503 until [valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands. Nuplane serves an installed package's files only
-from an enrolled extracted store, and that store does not qualify a container's filesystem. Every module of this app is an add-on, so
-until then the image serves the shell, backend profiles, themes and module administration only.
+The image serves installed add-on browser files from verified package archives.

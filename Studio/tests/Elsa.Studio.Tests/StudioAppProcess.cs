@@ -60,7 +60,7 @@ public abstract class StudioAppProcess(string name, IReadOnlyDictionary<string, 
         if (!File.Exists(assembly))
             throw new FileNotFoundException($"Build {Name} ({Configuration}) before running these tests.", assembly);
 
-        _contentRoot = Directory.CreateTempSubdirectory($"{Name.ToLowerInvariant()}-").FullName;
+        _contentRoot = CreateContentRoot();
         foreach (var file in new[] { "appsettings.json", "appsettings.Development.json", "shells.json", "nuplane-management.json" })
             File.Copy(Path.Join(SourceDirectory, file), Path.Join(_contentRoot, file));
         Directory.CreateDirectory(Path.Join(_contentRoot, "packages"));
@@ -135,6 +135,22 @@ public abstract class StudioAppProcess(string name, IReadOnlyDictionary<string, 
             if (_scratch is not null)
                 TryDelete(_scratch);
         }
+    }
+
+    /// <summary>
+    /// Creates a fresh content root. On Linux, prefer the runner's workspace volume or the test output directory to the system
+    /// temporary directory because their filesystem supports more of Nuplane's native store operations.
+    /// </summary>
+    private string CreateContentRoot()
+    {
+        if (!OperatingSystem.IsLinux())
+            return Directory.CreateTempSubdirectory($"{Name.ToLowerInvariant()}-").FullName;
+
+        var workspace = Environment.GetEnvironmentVariable("RUNNER_TEMP");
+        if (string.IsNullOrWhiteSpace(workspace))
+            workspace = AppContext.BaseDirectory;
+
+        return Directory.CreateDirectory(Path.Join(workspace, $"{Name.ToLowerInvariant()}-{Guid.NewGuid():N}")).FullName;
     }
 
     private void Append(string? line)

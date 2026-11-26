@@ -212,9 +212,8 @@ Each Studio app has a Dockerfile, and `.github/workflows/studio-docker.yml` publ
 | `elsaworkflows/elsa-studio-workbench` | `Elsa.Studio.Workbench.Host` | `elsaworkflows/elsa-workbench` |
 | `elsaworkflows/elsa-studio-foundation` | `Elsa.Studio.Foundation.Host` | The bare `Elsa.Foundation.Host` |
 
-In the images, an add-on's browser files answer 503 until
-[valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands, so screens of modules installed from
-the feed do not load there yet. Build an image from the repository root (the build context must be the repo root); the
+The images serve installed add-on browser files from verified package archives.
+Build an image from the repository root (the build context must be the repo root); the
 Essentials and Foundation Dockerfiles sit beside their projects in the same way:
 
 ```bash

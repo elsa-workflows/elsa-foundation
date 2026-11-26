@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
-import type { QuestionDefinition, QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
+import type { QuestionDefinition, QueryResult } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/types";
 import { attachDashboardJson, canonicalDashboardDefinition, dashboardBackend, observeNativeWeaverBoundary, registerDashboardCleanup, seedDashboardRuns, tag, type Capture, type Resource } from "./dashboardJourneySupport";
 
 /** Derive period membership from the independent runtime inspection API, never Dashboard results. */

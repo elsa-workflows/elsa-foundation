@@ -22,10 +22,8 @@ beside their Foundation capabilities. Each Dockerfile copies only its app's proj
 > build and the Dockerfile fails if the host shell asset is missing. All three NuGet
 > feeds used by the build are public, so no NuGet credentials are required.
 
-> **Add-on browser files answer 503 in the images** until
-> [valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands. Nuplane serves an installed
-> package's files only from an enrolled extracted store, and that store does not qualify a container's filesystem. A module
-> installed from the feed loads and its feature enables, but its screens do not load. Compiled-in modules are unaffected.
+All three images serve installed add-on browser files from verified package archives. See
+[upgrading older installs](../src/essentials/Elsa.Studio.Hosting.Nuplane/README.md) if you reuse an existing package store.
 
 ## Quick start — prebuilt image (no clone or build)
 
