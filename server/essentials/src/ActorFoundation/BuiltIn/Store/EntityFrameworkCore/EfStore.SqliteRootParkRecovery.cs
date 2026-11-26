@@ -63,7 +63,7 @@ public sealed partial class EfStore
             Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(DurableKeyJson.Write(row))));
     }
 
-    private sealed record SqliteRecoverCheckpoint(long? At, long? Revision, long Generation, string? Clearing);
+    private sealed record SqliteRecoverCheckpoint(long? At, long? Revision, long Generation, string? Clearing, long? NextJobGeneration);
 
     private static async Task<bool> BindSqliteRootRecoverAsync(KernelDb db, RootParkRecover turn, CancellationToken token)
     {
@@ -71,7 +71,7 @@ public sealed partial class EfStore
         var facts = command.Operator!.RootParkFacts!;
         var prior = await db.Database.SqlQuery<SqliteRecoverCheckpoint>($"""
             SELECT i."FoundationParkAt" AS "At", i."FoundationParkRevision" AS "Revision",
-                i."FoundationParkGeneration" AS "Generation", i."FoundationParkClearing" AS "Clearing"
+                i."FoundationParkGeneration" AS "Generation", i."FoundationParkClearing" AS "Clearing", i."NextJobGeneration"
             FROM "Instances" i JOIN "FoundationRootBirths" b
                 ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                 AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
@@ -133,7 +133,9 @@ public sealed partial class EfStore
         var restored = await ReadSqliteRecoveryRowsAsync(db, root.Actor, root.Partition, generation, token);
         return restored.Select(row => row.Facts.Envelope).SequenceEqual(arrived.Select(row => row.Facts.Envelope)) &&
             await db.Database.SqlQuery<bool>($"""
-                SELECT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {root.Tenant} AND "Reference" = {root.Reference}
+                SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition}
+                    AND "Revision" = {revision} AND "Jobs" IS NULL AND "NextJobGeneration" IS NOT DISTINCT FROM {prior.NextJobGeneration})
+                AND EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {root.Tenant} AND "Reference" = {root.Reference}
                     AND "Status" = {(int)InstanceStatus.Running} AND "ParkAt" IS NULL AND "ParkRevision" IS NULL AND "ParkFault" IS NULL
                     AND "ParkResolution" IS NULL AND "EndedAt" IS NULL AND "TerminalRevision" IS NULL) AS "Value"
                 """).SingleAsync(token);

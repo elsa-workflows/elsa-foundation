@@ -327,7 +327,8 @@ public sealed partial class EfStore
                 current.Status == InstanceStatus.Running && AuthoredWithholding(root, current)));
     }
 
-    private sealed record LockedRecover(long? At, long? Revision, long Generation, string? Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
+    private sealed record LockedRecover(long? At, long? Revision, long Generation, string? Fault, byte[] StateDigest, byte[] HeaderDigest,
+        int StateVersion, long? NextJobGeneration);
 
     // One fenced commit: the root becomes Running with its Park mark cleared, the arrivals return to the inbox as the
     // next generation's cohort, and the fault input stays settled. A refusal moves only the revision and settles the command.
@@ -343,7 +344,7 @@ public sealed partial class EfStore
             FormattableString query = $"""
                 SELECT i."FoundationParkAt" AS "At", i."FoundationParkRevision" AS "Revision", i."FoundationParkGeneration" AS "Generation",
                     i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
-                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion"
+                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion", i."NextJobGeneration"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
@@ -403,6 +404,8 @@ public sealed partial class EfStore
                         AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision} AND "Status" = {(int)status}
                         AND "Fault" IS NOT DISTINCT FROM {fault}::text AND "FoundationParkAt" IS NOT DISTINCT FROM {at}::bigint
                         AND "FoundationParkRevision" IS NOT DISTINCT FROM {revision}::bigint AND "FoundationParkGeneration" = {generation}
+                        AND (NOT {Recovered} OR "Jobs" IS NULL)
+                        AND "NextJobGeneration" IS NOT DISTINCT FROM {prior.NextJobGeneration}::bigint
                         AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
                         AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest})
                     AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({cleared}) AND "Target" = {Root.Actor}
