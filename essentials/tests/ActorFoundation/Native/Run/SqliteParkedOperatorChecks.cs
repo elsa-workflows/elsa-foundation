@@ -32,6 +32,7 @@ internal static partial class SqliteHostLifetimeChecks
             var protectedActor = await AdmitAsync("protected", "protected");
             var large = await AdmitAsync("large", "plain");
             var largeDelete = await AdmitAsync("large-delete", "large-delete");
+            var exhausted = await AdmitAsync("exhausted", "exhausted");
             var withJob = await AdmitAsync("outstanding", "running");
             var protectionReads = 0;
             var executor = new ParkOpeningActor(protection: header =>
@@ -46,7 +47,7 @@ internal static partial class SqliteHostLifetimeChecks
             {
                 await first.StartAsync(token);
                 await WaitAsync(first, plain, 1);
-                foreach (var root in new[] { delete, pair, protectedActor, large, largeDelete, withJob })
+                foreach (var root in new[] { delete, pair, protectedActor, large, largeDelete, exhausted, withJob })
                 {
                     await WaitAsync(first, root, 1);
                     Require(await ingress.SendAsync(scope, new Contract.Target.Ref(root), "poison", "fail", cancellationToken: token) is
@@ -61,6 +62,8 @@ internal static partial class SqliteHostLifetimeChecks
             var largeDeleteActor = (await store.ReadFirstRootAsync(scope.Tenant, largeDelete.Id, token))!.Actor.Id;
             await SeedKeptPageAsync(largeActor, InMemoryStore.ParkPageLimit, 8);
             await SeedKeptPageAsync(largeDeleteActor, 2, ParkRecoveryCredit.LimitBytes / 2 + 1_024);
+            var exhaustedActor = (await store.ReadFirstRootAsync(scope.Tenant, exhausted.Id, token))!.Actor.Id;
+            await SeedKeptPageAsync(exhaustedActor, InMemoryStore.ParkPageLimit, 8);
             var park = await ReadAsync(plain);
             var otherPark = await ReadAsync(delete);
             Require(await ingress.SendAsync(scope, new Contract.Target.Ref(plain), "wrong", Contract.Kinds.Terminate, Command(plain, otherPark.Selection!),
@@ -121,7 +124,16 @@ internal static partial class SqliteHostLifetimeChecks
             await owner.StopAsync(token);
             Require(owner.LastError is null, "the first page owner stops with the clearing and its continuation committed");
 
-            await using var successor = SqliteEmbeddedHostedService.ForFoundation(file, "park-control-successor", new ParkOpeningActor(),
+            var exhaustedProtectionReads = 0;
+            var protectionRestored = false;
+            var replacement = new ParkOpeningActor(protection: header =>
+            {
+                if (header.TypeData == "exhausted" && !Volatile.Read(ref protectionRestored) &&
+                    Interlocked.Increment(ref exhaustedProtectionReads) > 1)
+                    throw new InvalidOperationException("The protection source remains unavailable.");
+                return false;
+            });
+            await using var successor = SqliteEmbeddedHostedService.ForFoundation(file, "park-control-successor", replacement,
                 reason => throw new InvalidOperationException(reason), Loops, fenceInBatch);
             await successor.StartAsync(token);
             while (await reads.GetAsync(scope, largeDelete, token) is not null) await Task.Delay(25, token);
@@ -135,6 +147,33 @@ internal static partial class SqliteHostLifetimeChecks
                     AND EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {largeDeleteActor} AND "Revision" = -1 AND "Entries" = '["delete"]')
                     AS "Value"
                 """).SingleAsync(token), "both larger Parks clear every kept row and persist their exact end or deletion journal");
+            var remaining = (await ReadAsync(exhausted)).Selection!;
+            Require(await ingress.SendAsync(scope, new Contract.Target.Ref(exhausted), "exhausted-delete", Contract.Kinds.Delete,
+                Command(exhausted, remaining), cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "a separate paged Delete opens while its protection can still be read");
+            var firstRefusalRevision = 4;
+            for (var refusal = 0; refusal < FoundationRootParkFacts.MaxProtectionRefusals - 1; refusal++)
+            {
+                await WaitAsync(successor, exhausted, firstRefusalRevision + refusal);
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Due" = 0
+                    WHERE "Target" = {exhaustedActor} AND "Kind" = {Kinds.Delete} AND NOT "Done"
+                    """, token);
+            }
+            var stopped = await WaitAsync(successor, exhausted, firstRefusalRevision + FoundationRootParkFacts.MaxProtectionRefusals - 1);
+            Require(stopped is { Status: InstanceStatus.Faulted, TerminalRevision: null, ParkAt: > 0 } &&
+                await ReadAsync(exhausted) is { Park.OpenResolution: null } && await db.Database.SqlQuery<bool>($"""
+                    SELECT (SELECT count(*) FROM "Messages" WHERE "Target" = {exhaustedActor} AND "FoundationKeptBy" IS NOT NULL) = 1
+                        AND NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {exhaustedActor} AND "Kind" = {Kinds.Delete} AND NOT "Done")
+                        AND EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {exhaustedActor} AND "Revision" = {stopped.Revision}
+                            AND "Entries" = {FoundationRootParkFacts.ProtectionStopped("exhausted-delete", InMemoryStore.ParkPageLimit)}) AS "Value"
+                    """).SingleAsync(token), "the retry ceiling stops the clearing, keeps its last page and publishes the exact stopped outcome");
+            Volatile.Write(ref protectionRestored, true);
+            Require(await ingress.SendAsync(scope, new Contract.Target.Ref(exhausted), "delete-after-ceiling", Contract.Kinds.Delete,
+                Command(exhausted, remaining), cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "a new operation can address the same Park after protection becomes readable");
+            while (await reads.GetAsync(scope, exhausted, token) is not null) await Task.Delay(25, token);
+
             await successor.StopAsync(token);
             Require(successor.LastError is null, "the replacement parked-operator owner stops cleanly");
             return 0;
