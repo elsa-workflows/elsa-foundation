@@ -14,8 +14,8 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
 - [ ] T001a Remove the `Result` output (FR-004, FR-005).
   - `DispatchWorkflowActivityResult.Result` becomes `Terminal`, which is not an output.
     `IRuntimeChildControlCompletion` reads `Terminal?.Control`.
-  - `DispatchWorkflowResult` loses `Outputs`, and `DispatchWorkflowOutput` is deleted. The enricher stops reading
-    `IWorkflowOutputSource` for dispatch.
+  - `DispatchWorkflowResult` loses `Outputs`, and `DispatchWorkflowOutput` is deleted. The enricher stops calling `ReadAsync` and calls
+    `ReadValuesAsync` (T003).
   - Contract test: the outputs are exactly `ChildWorkflowExecutionId`, `Output` and `Status`.
   - Add `Status` (FR-004a). Run-time tests: it equals the selected outcome for `Dispatched`, `Completed`, `Faulted`,
     `Cancelled` and `DispatchFailed`.
@@ -89,7 +89,8 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
     `getV()`, and a direct binding of `V`.
   - Converter tests: one per FR-010 table row in JavaScript, Liquid `.Output` and `.Output.X`, and one per refusal
     (another writer, an initial value, an unknown member, another Liquid read, a cross-frame read, an out-of-order
-    read, a computed-name read in scope of `V`). Add one test with an Execute Workflow and a Dispatch Workflow that
+    read, a computed-name read in scope of `V`). Cover the literal `getVariable('V')` form with one member-path read and
+    one whole-value read. Add one test with an Execute Workflow and a Dispatch Workflow that
     both capture `Result`: each variable's reads bind to its own node.
   - One publish test: a `.SubStatus` read on a path where the dispatch may not have run is refused with
     `ValueFlow/UnavailableProducer`.

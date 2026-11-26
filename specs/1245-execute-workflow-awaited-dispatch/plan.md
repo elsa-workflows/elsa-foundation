@@ -150,15 +150,15 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
      activity-result reads are lowered today) then handles each variable that marker captures:
      - **The variable's writers.** If any other node writes `V`, it refuses with
        `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` and the FR-010 guidance.
-     - **JavaScript reads** (`Elsa3ExpressionRewriter`, Acornima). It rewrites each member path on `getV()` or
-       `variables.V` per the FR-010 table:
+     - **JavaScript reads** (`Elsa3ExpressionRewriter`, Acornima). It rewrites each member path on `getV()`,
+       `variables.V` or a literal `getVariable('V')` per the FR-010 table:
        - `.Output…` becomes the variable path.
        - `.WorkflowInstanceId` becomes an `ActivityResultExpressionParameterBinding` to the node's
          `ChildWorkflowExecutionId`. The HTTP trigger rewrite binds `Request` the same way.
        - `.SubStatus` becomes a parameter bound to the node's `Status`, wrapped in the fixed mapping expression.
        - `.Status` becomes `"Finished"`.
        - `.CorrelationId` and `.WorkflowDefinitionVersionId` become `null`.
-       - A bare `getV()` becomes the object literal with Elsa 3's keys.
+       - A bare `getV()`, `variables.V` or `getVariable('V')` becomes the object literal with Elsa 3's keys.
      - **Liquid reads** (Fluid). It rewrites `.Output` and `.Output.X` only, and refuses any other Liquid read of
        `V`.
      - **A direct binding of `V`** into another activity's input is replaced by a JavaScript expression that builds the
