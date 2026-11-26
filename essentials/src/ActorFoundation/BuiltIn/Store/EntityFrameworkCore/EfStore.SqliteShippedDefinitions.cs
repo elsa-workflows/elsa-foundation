@@ -41,7 +41,12 @@ public sealed partial class EfStore
             if (installed.Count == 0)
             {
                 foreach (var definition in expected)
-                    await db.Database.ExecuteSqlRawAsync(definition.Sql, token);
+                {
+                    await using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
+                    command.CommandText = definition.Sql;
+                    await command.ExecuteNonQueryAsync(token);
+                }
                 await SeedSqliteShippedAsync(db, partitions, token);
                 installed = await ReadSqliteDefinitionsAsync(db, token);
             }
@@ -115,7 +120,9 @@ public sealed partial class EfStore
             {
                 case CreateTableOperation table:
                     AddSqliteRootColumns(table);
-                    yield return new("table", table.Name, table.Name, Render(table) + " STRICT");
+                    // The qualified checkpoint's Id is its only row identity, including during SQLite conflict handling.
+                    var options = table.Name == "Instances" ? " STRICT, WITHOUT ROWID" : " STRICT";
+                    yield return new("table", table.Name, table.Name, Render(table) + options);
                     break;
                 case CreateIndexOperation index:
                     yield return new("index", index.Name, index.Table, Render(index));
@@ -259,6 +266,7 @@ public sealed partial class EfStore
             """);
         yield return new("trigger", "kernel_physical_retirement", "Instances", PhysicalRetirement.SqliteRootGuard(db));
         yield return new("trigger", "kernel_job_generation", "Instances", "CREATE TRIGGER " + SqliteGenerationClause);
+        foreach (var guard in SqliteFirstRootGuards(db)) yield return guard;
     }
 
     private static SqliteDefinition Table(string name, string columns) =>
