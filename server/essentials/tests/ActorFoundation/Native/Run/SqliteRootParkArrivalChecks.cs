@@ -31,12 +31,13 @@ internal static partial class SqliteHostLifetimeChecks
             KernelDb Open() => recovery ? KernelDb.ForSqliteParkRecoveryQualification(options, definitions)
                 : KernelDb.ForSqliteParkArrivalsQualification(options, definitions);
             await using var db = Open();
-            await EfStore.InstallSqliteShippedAsync(db, 1, token);
+            var partitions = recovery ? 2 : 1;
+            await EfStore.InstallSqliteShippedAsync(db, partitions, token);
             await using (var shipped = KernelDb.ForSqliteRootShipped(options))
             {
                 try
                 {
-                    await EfStore.InstallSqliteShippedAsync(shipped, 1, token);
+                    await EfStore.InstallSqliteShippedAsync(shipped, partitions, token);
                     throw new InvalidOperationException("The shipped context attached to the Park arrivals qualification file.");
                 }
                 catch (StoreFormatException) { Console.WriteLine("ok the shipped context refuses the qualification format"); }
@@ -80,10 +81,11 @@ internal static partial class SqliteHostLifetimeChecks
                 "the SQLite candidate admits a one-way Park arrival and preserves its receipt");
             await using var successor = await OwnAsync("successor");
             var kept = await DriveAsync(successor, actor, row => row is { Revision: 3, Status: InstanceStatus.Faulted });
+            var actorPartition = new InstanceRef(kept.Actor.Id).Partition;
             await ExpectFoundationFailureAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "FoundationStateWire" = CAST('different' AS BLOB),
                     "Revision" = 4, "FoundationWriteRevision" = 4
-                WHERE "Id" = {kept.Actor.Id} AND "Partition" = 0
+                WHERE "Id" = {kept.Actor.Id} AND "Partition" = {actorPartition}
                 """, token), "an idle Park continuation cannot rewrite the saved state wire");
             var view = (await reads.GetAsync(scope, actor, token))!;
             var inbox = await reads.InboxAsync(scope, actor, cancellationToken: token);
@@ -102,6 +104,8 @@ internal static partial class SqliteHostLifetimeChecks
                     """).SingleAsync(token), "the replacement owner keeps the exact arrival under the original Park without invoking the actor");
             if (recovery)
             {
+                Require(successor.ClaimedPartitions().Order().SequenceEqual(new[] { 0, 1 }),
+                    "SQLite Recover polls with an owned set of two partitions");
                 Require(await admission.OperateAsync(scope.Tenant, actor, "recover", Kinds.Recover, view.Selection!, null, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted }, "the SQLite recovery candidate admits an immediate selected Recover");
                 rollback.Armed = true;
@@ -124,7 +128,7 @@ internal static partial class SqliteHostLifetimeChecks
                         SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {parked.Actor.Id} AND "Kind" = {Kinds.Recover}
                             AND NOT "Done") AS "Value"
                         """).SingleAsync(token), "a missing release write rolls back the command settlement");
-                Require((await store.ReadJournalOfAsync(0, kept.Actor.Id, 0, token)).All(entry => entry.Revision <= kept.Revision),
+                Require((await store.ReadJournalOfAsync(actorPartition, kept.Actor.Id, 0, token)).All(entry => entry.Revision <= kept.Revision),
                     "a missing release write leaves no new journal entry");
                 await successor.ReleaseAsync(token);
                 await db.Nodes.Where(node => node.Id == "successor")
@@ -157,7 +161,7 @@ internal static partial class SqliteHostLifetimeChecks
                 Require(await admission.OperateAsync(scope.Tenant, oversized, "large-recover", Kinds.Recover, selection, null, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted }, "admission accepts a valid Recover selection for the oversized Park");
                 var refused = await DriveAsync(recoveryOwner, oversized, row => row is { Revision: 5, Status: InstanceStatus.Faulted });
-                var journal = (await store.ReadJournalOfAsync(0, refused.Actor.Id, 0, token))
+                var journal = (await store.ReadJournalOfAsync(new InstanceRef(refused.Actor.Id).Partition, refused.Actor.Id, 0, token))
                     .Single(entry => entry.Revision == refused.Revision);
                 Require(refused.ParkAt == beforeRefusal.ParkAt && refused.State == beforeRefusal.State && executor.OrdinaryTurns == 1 &&
                     journal.Entries.Contains("\"Reason\":\"page\"", StringComparison.Ordinal) &&
@@ -165,6 +169,12 @@ internal static partial class SqliteHostLifetimeChecks
                         SELECT count(*) AS "Value" FROM "Messages" WHERE "Target" = {refused.Actor.Id} AND "Done"
                             AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived} AND "FoundationReleasedBy" IS NULL AND "Payload" = {large}
                         """).SingleAsync(token) == 2, "Recover refuses a second page and preserves both retained envelopes and the checkpoint");
+                await CheckReparkFifoAsync(recoveryOwner);
+                var guardFile = new SqliteConnectionStringBuilder(connection) { DataSource = Path.Combine(directory.FullName, "guard.db") };
+                var guardOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(guardFile.ConnectionString).Options;
+                await using var guards = KernelDb.ForSqliteParkRecoveryQualification(guardOptions);
+                await EfStore.InstallSqliteShippedAsync(guards, 1, token);
+                await SqliteShippedInstallChecks.CheckGuardsAsync(guards, token);
                 return 0;
             }
             Require(await admission.OperateAsync(scope.Tenant, actor, "end", Kinds.Terminate, view.Selection!, null, null, token) is
@@ -186,11 +196,45 @@ internal static partial class SqliteHostLifetimeChecks
                 "the same owner settles the preadmitted held input after the Park ends without invoking the actor");
             return 0;
 
+            async Task CheckReparkFifoAsync(Worker owner)
+            {
+                var root = (await admission.StartAsync(scope.Tenant, "repark", new(fixture, "{}"), null, null, token)).Actor!.Value;
+                var running = await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running });
+                var due = running.AsOf + 120_000;
+                Require(await admission.SendAsync(scope.Tenant, root, "older-future", "older-future", null, due, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                    await admission.SendAsync(scope.Tenant, root, "first-fault", "fail", null, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the re-Park fixture admits an older future input before the first fault");
+                await DriveAsync(owner, root, row => row is { Revision: 2, Status: InstanceStatus.Faulted });
+                Require(await admission.SendAsync(scope.Tenant, root, "released-fault", "repark-fault", null, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                    await admission.SendAsync(scope.Tenant, root, "later-release", "later-release", null, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the first Park admits two arrivals in release order");
+                await DriveAsync(owner, root, row => row is { Revision: 4, Status: InstanceStatus.Faulted });
+                var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                Require(await admission.OperateAsync(scope.Tenant, root, "repark-recover", Kinds.Recover, selection, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the first Park admits a Recover");
+                var repark = await DriveAsync(owner, root, row => row is { Revision: 6, Status: InstanceStatus.Faulted });
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {repark.Actor.Id} AND "Kind" = 'older-future' AND NOT "Done"
+                    """, token);
+                var fences = await db.Partitions.AsNoTracking().OrderBy(row => row.Id)
+                    .Select(row => new PartitionFence(row.Id, row.Epoch, row.Position)).ToArrayAsync(token);
+                Require((await store.PollAsync(fences, TimeSpan.Zero, 1, token)).Messages is [{ Message.Kind: "older-future" }],
+                    "the new Park offers the older due input ahead of the earlier generation's pending release");
+                await DriveAsync(owner, root, row => row is { Revision: 7, Status: InstanceStatus.Faulted });
+                Require(await db.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {repark.Actor.Id} AND "Kind" = 'older-future'
+                        AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived}) AS "Value"
+                    """).SingleAsync(token), "the fenced writer retains the older due input under the new Park");
+            }
+
             async Task<Worker> OwnAsync(string name)
             {
-                var worker = new Worker(name, 0, store, adapter, new WorkerOptions
+                var worker = new Worker(name, Enumerable.Range(0, partitions).ToArray(), store, adapter, new WorkerOptions
                 {
-                    Lease = TimeSpan.FromSeconds(30), PassTurnBudget = 1
+                    Lease = TimeSpan.FromSeconds(30), Partitions = partitions, PassTurnBudget = 1,
+                    PollLimit = recovery ? 1 : new WorkerOptions().PollLimit
                 });
                 if (await new DurableHost([worker]).ActivateAsync(0, token) == worker) return worker;
                 await worker.DisposeAsync();
@@ -243,7 +287,7 @@ internal static partial class SqliteHostLifetimeChecks
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
-            if (turn.Inbox.Any(message => message.Kind == "fail")) throw new InvalidOperationException("park arrival fixture fault");
+            if (turn.Inbox.Any(message => message.Kind is "fail" or "repark-fault")) throw new InvalidOperationException("park arrival fixture fault");
             OrdinaryTurns += turn.Inbox.Count(message => message.Kind == "ordinary");
             HeldTurns += turn.Inbox.Count(message => message.Kind == "held");
             Order.AddRange(turn.Inbox.Select(message => message.Kind).Where(kind => kind is "ordinary" or "held"));

@@ -34,7 +34,7 @@ public sealed partial class EfStore
                     AND NOT i."Retired" AND (i."FoundationParkAt" IS NULL OR
                         m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND (m."Id" GLOB 'operator/*'
                             {(includeParkArrivals ? """OR (i."FoundationParkClearing" IS NULL AND m."ReplyTo" IS NULL)""" : "")}))
-                    {(recovery ? RootReleasedCohortFilter : "")})
+                    {(recovery ? $"""AND (i."FoundationParkAt" IS NOT NULL OR {NoEarlierReleasedCohort})""" : "")})
             AND (m."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("m.", recovery)}))))
         """;
 

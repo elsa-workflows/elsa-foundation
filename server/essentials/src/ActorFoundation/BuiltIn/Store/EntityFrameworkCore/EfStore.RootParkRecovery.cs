@@ -46,8 +46,9 @@ public sealed partial class EfStore
     private const string RootOutcomeEntry = "\"Entries\" LIKE '{{\"Outcome\":%'";
 
     // While released rows of the current generation are pending, the poll offers only them, in Seq order.
-    private const string RootReleasedCohortFilter = """
-        AND NOT EXISTS (SELECT 1 FROM "Messages" c WHERE c."Partition" = m."Partition" AND c."Target" = m."Target"
+    private const string RootReleasedCohortFilter = "AND " + NoEarlierReleasedCohort;
+    private const string NoEarlierReleasedCohort = """
+        NOT EXISTS (SELECT 1 FROM "Messages" c WHERE c."Partition" = m."Partition" AND c."Target" = m."Target"
             AND c."InboxScope" = -4 AND c."EventMatch" IS NULL AND NOT c."Done" AND c."FoundationReleasedBy" = i."FoundationParkGeneration"
             AND m."FoundationReleasedBy" IS DISTINCT FROM i."FoundationParkGeneration")
         """;
