@@ -99,8 +99,11 @@ public sealed partial class EfStore
     internal async Task<RootWorkflowHistoryPage> ReadRootWorkflowHistoryAsync(string tenant, string type, string? definition,
         int? status, long? from, long? to, long? afterTime, string? afterRef, int limit, CancellationToken token)
     {
-        if (!postgres || Engine is not null) throw new NotSupportedException("Qualified workflow history requires PostgreSQL.");
+        if (Engine is not null) throw new NotSupportedException("Qualified workflow history requires the local store.");
         await using var db = create();
+        if (!postgres && db.UsesSqliteRootRuntime)
+            return await ReadSqliteRootWorkflowHistoryAsync(db, tenant, type, definition, status, from, to, afterTime, afterRef, limit, token);
+        if (!postgres) throw new NotSupportedException("Qualified workflow history requires PostgreSQL or a shipped SQLite root store.");
         if (!db.SupportsRootWorkflowHistory)
             throw new StoreFormatException("This store profile does not carry workflow history.");
         var expected = db.RequiredFormat;
