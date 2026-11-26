@@ -107,6 +107,7 @@
     <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj" />
     <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
+    <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
     <ProjectReference Include="../../../src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
     <ProjectReference Include="../../../src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
