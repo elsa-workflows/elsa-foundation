@@ -16,7 +16,7 @@ public sealed partial class EfStore
                 AND NEW."FoundationReference" = OLD."FoundationReference" AND NEW."FoundationTenant" = OLD."FoundationTenant"
                 AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired" /*root-park-generation*/
                 AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR /*root-park-continues*/ OR /*root-park-recover*/ OR /*root-parked-terminate*/ OR
-                    (/*root-retirement*/ AND NEW."Retired" AND NEW."State" = 'null' AND NEW."FoundationHeader" IS NULL /*root-retirement-wire*/
+                    (/*root-retirement*/ AND NEW."Retired" AND NEW."State" = 'null' AND NEW."FoundationHeader" IS NULL /*root-retirement-wire*/ /*root-retirement-footprint*/
                         AND ((OLD."Status" <> 0 AND NEW."Status" = OLD."Status"
                             AND NEW."FoundationTerminalRevision" = OLD."FoundationTerminalRevision"
                             AND NEW."FoundationTerminalAt" = OLD."FoundationTerminalAt")
@@ -45,7 +45,8 @@ public sealed partial class EfStore
         BEGIN
             IF TG_OP = 'UPDATE' AND /*checkpoint-write-allowed*/
             THEN RETURN NEW; END IF;
-            RAISE EXCEPTION 'Qualified actor checkpoint requires a qualified update' USING ERRCODE = '23514';
+            RAISE EXCEPTION 'Qualified actor checkpoint requires a qualified update'
+                USING ERRCODE = '23514', CONSTRAINT = 'kernel_require_root_checkpoint_writer';
         END
         $fn$;
         CREATE OR REPLACE TRIGGER kernel_require_root_checkpoint_writer BEFORE UPDATE OR DELETE ON "Instances"
@@ -149,7 +150,19 @@ public sealed partial class EfStore
         .Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
         .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
         .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
+        .Replace("/*root-retirement-footprint*/", db.UsesRootRetirement ? RootRetirementFootprint : "", StringComparison.Ordinal)
         .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal);
+
+    // Match the retirement lock's preconditions against the previous checkpoint and its persisted inputs.
+    private static readonly string RootRetirementFootprint = """
+        /*retire-jobs*/ AND OLD."Jobs" IS NULL
+        /*retire-children*/ AND OLD."Children" IS NULL
+        /*retire-parent*/ AND OLD."Parent" IS NULL
+        /*retire-handles*/ AND OLD."CustomHandles" IS NULL
+        /*retire-subscriptions*/ AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = NEW."Id")
+        /*retire-pending*/ AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = NEW."Id" AND m."Partition" = NEW."Partition"
+            AND /*pending-residue*/)
+        """.Replace("/*pending-residue*/", PendingResidue, StringComparison.Ordinal);
 
     // These templates use the same conditions as the PostgreSQL functions. SQLite attaches one trigger per operation.
     // The explicit IS TRUE on the update matches PL/pgSQL's IF, which also refuses an indeterminate predicate.
@@ -181,12 +194,14 @@ public sealed partial class EfStore
             BEGIN SELECT RAISE(ABORT, 'Qualified actor journal requires the next running checkpoint revision'); END
             """));
 
-        string RenderSqlite(string template) => PostgresOutcomePrefix.Replace(
-            RenderRootGuards(db, template).Replace("ROW(", "(", StringComparison.Ordinal),
-            static match => $"{match.Groups["column"].Value} GLOB '{{{match.Groups["prefix"].Value}*'");
+        string RenderSqlite(string template) => RenderSqliteOutcomePrefixes(
+            RenderRootGuards(db, template).Replace("ROW(", "(", StringComparison.Ordinal));
     }
+
+    private static string RenderSqliteOutcomePrefixes(string sql) => PostgresOutcomePrefix.Replace(sql,
+        static match => $"{match.Groups["column"].Value}{match.Groups["negation"].Value} GLOB '{{{match.Groups["prefix"].Value}*'");
 
     // Only literal outcome prefixes appear in the shared predicates. GLOB keeps their PostgreSQL case sensitivity.
     private static readonly Regex PostgresOutcomePrefix = new(
-        """(?<column>(?:[A-Za-z_][A-Za-z0-9_]*\.)?"Entries") LIKE '\{\{(?<prefix>[^'%]*)%'""", RegexOptions.CultureInvariant);
+        """(?<column>(?:[A-Za-z_][A-Za-z0-9_]*\.)?"Entries")(?<negation> NOT)? LIKE '\{\{(?<prefix>[^'%]*)%'""", RegexOptions.CultureInvariant);
 }
