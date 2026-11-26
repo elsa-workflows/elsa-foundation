@@ -2,6 +2,8 @@ using System.Data.Common;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Postgres;
+using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -381,6 +383,7 @@ internal static class PostgresRootParkedOperatorChecks
         if (shippedSet && owned)
         {
             await AuthoredWithholdingSet();
+            await HostedAuthoredWithholdingAsync();
             await LiveCompoundRefusalSet();
         }
         await RecoverNeverMeetsSuspendedPark();
@@ -401,8 +404,11 @@ internal static class PostgresRootParkedOperatorChecks
             await using var set = new Set("authored-withholding", OpenAuthored, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
             const string operation = "terminate-author-withheld";
             const string ordinaryOperation = "terminate-deliverable";
+            const string compoundOperation = "compound-author-withheld";
+            const string laterOperation = "terminate-after-compound";
             var attemptedExpected = new Dictionary<string, long?>();
             var observedEarlyPoll = false;
+            var observedCompoundPoll = false;
             string? withheldActor = null;
             long due = 0;
             set.Write = async (owner, batch, token) =>
@@ -434,6 +440,12 @@ internal static class PostgresRootParkedOperatorChecks
                     Check(sample.Messages.All(item => item.Message.Id != operation),
                         "the PostgreSQL poll withholds a selected command before the database due time");
                     observedEarlyPoll = true;
+                }
+                if (sample.Messages.Any(item => item.Message.Id == compoundOperation))
+                {
+                    Check(sample.Messages.All(item => item.Message.Id != laterOperation),
+                        "the authored poll exposes the earlier due operator before a second due operator");
+                    observedCompoundPoll = true;
                 }
                 return Task.CompletedTask;
             };
@@ -467,6 +479,52 @@ internal static class PostgresRootParkedOperatorChecks
                 due, null, stop, set.Selections[withheld]) is { Duplicate: true } &&
                 (await set.ImageAsync(withheld)).Revision == withheldEnd.Revision,
                 "replaying the terminated command returns its prior receipt without a new revision");
+
+            var compound = await set.StartAsync("compound-withheld-by-header", Probe.WithheldBody);
+            var compoundImage = await set.ImageAsync(compound);
+            Check(await set.SendAsync(compound, "ordinary-before-compound", "ordinary") &&
+                await set.OperateAsync(compound, compoundOperation, Contract.Kinds.Terminate, set.Selections[compound], reply: true, thenDelete: true) &&
+                await set.OperateAsync(compound, laterOperation, Contract.Kinds.Terminate, set.Selections[compound], reply: true),
+                "the withheld root admits ordinary input, compound Terminate and a later due operator");
+            await set.RetiredAsync(compound);
+            set.Answered(compoundOperation, "deleted");
+            set.AnsweredError(laterOperation, "missing");
+            Check(observedCompoundPoll && !set.Probe.Saw(compound, "ordinary") && ReferenceEquals(owner, set.Owner) && !set.StoodDown &&
+                await set.IsRetiredAtAsync(compoundImage.Actor.Id, 2),
+                "the compound operator retires on its first revision past withheld input and settles the younger operator");
+        }
+
+        async Task HostedAuthoredWithholdingAsync()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA hosted_authored_withholding", stop);
+            var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "hosted_authored_withholding" }.ConnectionString;
+            var hostOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
+            KernelDb OpenHosted() => PostgresPreviewHosting.CreateShippedContext(hostOptions);
+            await using var set = new Set("hosted-authored", OpenHosted, owned, inBatch, tenant, stop);
+            await set.InstallAsync(createTables: true);
+
+            const string name = "authored-host";
+            var actor = new Probe();
+            var requests = PostgresPreviewHosting.CreateRequests(OpenHosted, name, Probe.Type);
+            var api = await PostgresPreviewHosting.OpenFoundationAsync(OpenHosted, Probe.Type, requests, cancellationToken: stop);
+            using var witness = CancellationTokenSource.CreateLinkedTokenSource(stop);
+            witness.CancelAfter(TimeSpan.FromSeconds(12));
+            var token = witness.Token;
+            await using var host = await PostgresPreviewHosting.StartAsync(OpenHosted, name, actor,
+                reason => throw new InvalidOperationException(reason),
+                new LoopOptions { BalanceEvery = TimeSpan.FromMilliseconds(50), PollInterval = TimeSpan.FromMilliseconds(30) },
+                cancellationToken: token, requests: requests);
+            var root = (await api.SendAsync(tenant, new Contract.Target.Start(new(Probe.Type, Probe.WithheldBody)), "hosted-withhold-start",
+                Contract.Kinds.Start, cancellationToken: token)).Actor!.Value;
+            while (await api.GetAsync(tenant, root, token) is null) await Task.Delay(25, token);
+            Check(await set.SendAsync(root, "hosted-withheld-ordinary", "ordinary") &&
+                await set.OperateAsync(root, "hosted-withheld-terminate", Contract.Kinds.Terminate, await set.SelectionAsync(root)),
+                "the hosted shipped runtime admits a Terminate behind ordinary input on the withholding root");
+            while (await api.GetAsync(tenant, root, token) is not { Header.Status: Contract.ActorStatus.Cancelled })
+                await Task.Delay(25, token);
+            Check(await set.ImageAsync(root) is { Revision: 2, Suspended: false, TerminalRevision: 2 } && !actor.Saw(root, "ordinary"),
+                "the normal PostgreSQL host wires authored withholding into the worker and commits the selected Terminate");
+            await host.StopAsync(token);
         }
 
         async Task LiveCompoundRefusalSet()
@@ -2153,6 +2211,12 @@ internal static class PostgresRootParkedOperatorChecks
             _running[root] = await DriveAsync(root, image => image is { Revision: 1, Status: InstanceStatus.Running });
             Selections[root] = (await _reads.GetAsync(tenant, root, stop))!.Selection!;
             return root;
+        }
+
+        internal async Task<bool> IsRetiredAtAsync(string actor, long revision)
+        {
+            await using var read = open();
+            return await read.Instances.AsNoTracking().AnyAsync(row => row.Id == actor && row.Retired && row.Revision == revision, stop);
         }
 
         internal async Task<EfStore.RootImage> ImageAsync(Contract.ActorRef root) =>
