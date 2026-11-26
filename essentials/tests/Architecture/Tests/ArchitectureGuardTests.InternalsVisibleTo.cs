@@ -236,7 +236,7 @@ public sealed partial class ArchitectureGuardTests
         public const string EventsTests = "essentials/tests/Events/Tests/Elsa.Events.Tests.csproj";
         public const string DesignCore = "essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj";
         public const string Runtime = "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj";
-        public const string RuntimeHttp = "essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj";
+        public const string RuntimeHttp = "extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj";
         public const string ExtensionBuilderApi = "extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj";
         public const string ExtensionBuilderCore = "extensions/ExtensionBuilder/src/Core/Elsa.ExtensionBuilder.Core.csproj";
         public const string ModularityTests = "essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj";
@@ -249,7 +249,7 @@ public sealed partial class ArchitectureGuardTests
     [InlineData(GrantProjects.Tasks, "Tasks")]
     [InlineData(GrantProjects.TasksTests, "Tasks")]
     [InlineData(GrantProjects.RuntimeHttp, "Workflows.Runtime")]
-    [InlineData("essentials/tests/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj", "Workflows.Runtime")]
+    [InlineData("extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj", "Workflows.Runtime")]
     [InlineData(GrantProjects.ExtensionBuilderApi, "extensions/ExtensionBuilder")]
     [InlineData("extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj", "extensions/ExtensionBuilder")]
     [InlineData(GrantProjects.Workbench, null)]
