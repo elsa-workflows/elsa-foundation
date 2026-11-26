@@ -241,8 +241,10 @@ public sealed partial class EfStore
     internal async Task<(RootListItem Item, long AsOf)?> ReadRootActorAsync(string tenant, string reference,
         CancellationToken cancellationToken)
     {
-        if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root actor reads require PostgreSQL.");
+        if (Engine is not null) throw new NotSupportedException("Qualified root actor reads require the local store.");
         await using var db = create();
+        if (!postgres && db.UsesSqliteRootRuntime) return await ReadSqliteRootActorAsync(db, tenant, reference, cancellationToken);
+        if (!postgres) throw new NotSupportedException("Qualified root actor reads require PostgreSQL or a shipped SQLite root store.");
         var expected = db.RequiredFormat;
         var projection = ActorListProjection.Of(db);
         var triggers = projection.ListTriggers;
