@@ -1430,6 +1430,23 @@ internal static class PostgresRootParkedOperatorChecks
                         {reply}, 0, 0, 0, false)
                     """);
             }
+            var pending = (await set.Cold.ReadRootInboxAsync(tenant.Tenant, root.Id, 0, "", 10, stop)).Rows;
+            Check(pending.Where(row => row.Kind == Kinds.Terminate).Select(row => row.Id)
+                    .SequenceEqual(new[] { "stale-terminate", "stale-terminate-delete" }),
+                "the composed inbox projects both durable Park-selected command envelopes before settlement");
+            await using (var profileDb = OpenComposed())
+            {
+                var (controlId, controlHeader) = PostgresRootAdmission.ClearControl(root.Id, "clear", Kinds.Terminate, mark, 3_600_000, false);
+                try
+                {
+                    PostgresRootAdmission.InspectOperatorHeader(profileDb, controlHeader, root.Id, controlId, Kinds.Terminate, 0, false);
+                    throw new InvalidOperationException("The recovery composition projected a clearing continuation.");
+                }
+                catch (StoreException error) when (error.Message == "The recovery composition requires a Park-selected Terminate.")
+                {
+                    Check(true, "the same composition refuses internal clearing controls");
+                }
+            }
             var owner = set.Owner;
             var recovered = await set.DriveAsync(root, image => image is { Status: InstanceStatus.Running, Revision: 5 });
             await set.SettledInputsAsync(root);
