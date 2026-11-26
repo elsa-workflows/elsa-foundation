@@ -197,6 +197,8 @@ def smoke(args, migrated_directory=None):
         results = {"image": args.image, "imageId": args.image_id, "mountedShells": args.shells is not None,
                    "network": "none", "initialNuplaneCacheEmpty": True,
                    "readySeconds": ready_seconds, "readiness": readiness}
+        if args.variant:
+            results["pinnedPackageCount"] = args.pinned_package_count
         if migrated_directory:
             results["mountedMigratedFiles"] = True
         else:
@@ -240,9 +242,35 @@ def smoke(args, migrated_directory=None):
             docker("rm", "-f", container)
 
 
-def read_image_shells(image_id):
+def read_image_file(image_id, path):
     return docker("run", "--rm", "--pull", "never", "--network", "none",
-                  "--entrypoint", "cat", image_id, "/app/shells.json")
+                  "--entrypoint", "cat", image_id, path)
+
+
+def verify_pinned_packages(image_id):
+    settings = json.loads(read_image_file(image_id, "/app/appsettings.json"))["Nuplane"]
+    feed_name = "profile-packages"
+    manifest_path = "/app/profile-desired.json"
+    lock_path = "/app/nuplane.lock.json"
+    if settings["Setup"]["Feeds"] != [{
+        "Name": feed_name, "DirectoryPath": feed_name, "Directory": {"Role": "Cache", "Watch": False},
+    }]:
+        raise RuntimeError("Expected a single cache-only profile feed with watching disabled")
+    if settings["Convergence"]["Manifest"] != {"Enabled": True, "Path": manifest_path}:
+        raise RuntimeError("Expected the baked Nuplane desired manifest to be enabled")
+    if settings["LockFile"] != {"Mode": "Strict", "Path": lock_path, "FailOnHashMismatch": True}:
+        raise RuntimeError("Expected strict Nuplane archive hash enforcement")
+    if settings["FeedResolution"]["OfflineMode"] is not True or settings["Reconciliation"]["StartupFailurePolicy"] != "FailHost":
+        raise RuntimeError("Expected offline Nuplane resolution with fail-closed startup")
+    lock = json.loads(read_image_file(image_id, lock_path))
+    manifest = json.loads(read_image_file(image_id, manifest_path))
+    pins = [
+        {"id": package["id"], "version": package["version"], "sourceHint": package["feed"]}
+        for package in lock["packages"]
+    ]
+    if not pins or manifest != {"schemaVersion": "1.0", "generatedAtUtc": lock["generatedAt"], "packages": pins}:
+        raise RuntimeError("The baked desired manifest differs from the strict Nuplane lock")
+    return len(pins)
 
 
 def smoke_migrated_files(args, directory):
@@ -250,7 +278,7 @@ def smoke_migrated_files(args, directory):
     mounted.shells = directory / "migrated-files.json"
     if args.log:
         mounted.log = args.log.with_suffix(".migrated-files.log")
-    composition = json.loads(read_image_shells(args.image_id))
+    composition = json.loads(read_image_file(args.image_id, "/app/shells.json"))
     features = composition["CShells"]["Shells"]["default"]["Features"]
     readers = json.loads((MIGRATED_PROFILE / "migrated-files.features.json").read_text(encoding="utf-8"))
     features.update(readers)
@@ -259,6 +287,7 @@ def smoke_migrated_files(args, directory):
 
 
 def verify_profile(args):
+    args.pinned_package_count = verify_pinned_packages(args.image_id)
     with tempfile.TemporaryDirectory(prefix="elsa-profile-smoke-") as temporary:
         directory = Path(temporary)
         args.env_file = directory / "smoke.env"
@@ -286,7 +315,7 @@ def verify_profile(args):
 
         args.omit_trigger.extend(ALL_OPTIONAL_TRIGGER_TYPES)
         smoke(args)
-        shell_file = read_image_shells(args.image_id)
+        shell_file = read_image_file(args.image_id, "/app/shells.json")
         for trigger, feature_names in OPTIONAL_TRIGGER_FEATURES.items():
             mounted = copy.copy(args)
             enabled_types = OPTIONAL_TRIGGER_TYPES[trigger]

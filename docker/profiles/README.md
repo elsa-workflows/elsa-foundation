@@ -67,6 +67,8 @@ docker build --build-arg "ELSA_VERSION=$ELSA_VERSION" -t "$image" .
 
 If you have both reviewed lock files from a release artifact, you can go straight to this build. Changes to `shells.json` affect only the final layer and leave the package lock set valid. For a package update, change the roots or paired release, generate and review both locks, then build again.
 
+The build generates `/app/profile-desired.json` from the verified Nuplane lock. At startup, Nuplane reads the exact package IDs, versions and feed names from that manifest and verifies the baked archives in `/app/profile-packages` against the strict lock. Startup runs offline and skips directory-based discovery of desired packages.
+
 The build defaults to the local Linux architecture. For a different target, use the same `--platform linux/amd64` or `--platform linux/arm64` on both builds and make sure your BuildKit installation can run that platform. For release replay, use the artifact's exact `PROFILE_BUILDER_IMAGE` and `FOUNDATION_IMAGE` references as build arguments. The runtime stage checks that the Foundation files match those used to resolve the profile.
 
 To define your own named packs, put the package lists in `packs/`, add `COPY packs/ /profile/packs/` to the `profile-builder` stage, and give both `assemble` commands `--packs-directory /profile/packs`. Keep the packs the manifest references in that directory. The standard Dockerfile uses the packs supplied by the builder image.

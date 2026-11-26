@@ -20,7 +20,8 @@ FOUNDATION_DIRECTORY = TOOL_DIRECTORY / "foundation"
 DEPS_FILE = "Elsa.Foundation.Host.deps.json"
 FOUNDATION_FILES = (DEPS_FILE, "Elsa.Foundation.Host.dll", "appsettings.json", "appsettings.Production.json")
 FEED_NAME = "profile-packages"
-# The lock schema requires timestamps. A fixed value keeps identical package sets byte-identical.
+MANIFEST_FILE = "profile-desired.json"
+# A fixed timestamp keeps identical package sets byte-identical.
 PROFILE_TIME = "1970-01-01T00:00:00Z"
 PACKAGE_ID = r"[A-Za-z0-9_][A-Za-z0-9._-]*"
 VERSION = r"[0-9]+(?:\.[0-9]+){2,3}(?:-[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)?"
@@ -259,14 +260,25 @@ def stage_configuration(configuration, production, output):
     nuplane["Setup"]["Feeds"] = [{
         "Name": FEED_NAME,
         "DirectoryPath": FEED_NAME,
-        "IncludePatterns": ["*"],
-        "Directory": {"Watch": False},
+        "Directory": {"Role": "Cache", "Watch": False},
     }]
+    nuplane.setdefault("Convergence", {})["Manifest"] = {"Enabled": True, "Path": f"/app/{MANIFEST_FILE}"}
     nuplane.setdefault("FeedResolution", {})["OfflineMode"] = True
     nuplane["LockFile"] = {"Mode": "Strict", "Path": "/app/nuplane.lock.json", "FailOnHashMismatch": True}
     nuplane.setdefault("Reconciliation", {})["StartupFailurePolicy"] = "FailHost"
     nuplane["Loading"]["DefaultLoadMode"] = "HostIntegrated"
     write_json(output / "appsettings.json", configuration)
+
+
+def stage_manifest(runtime_lock, output):
+    write_json(output / MANIFEST_FILE, {
+        "schemaVersion": "1.0",
+        "generatedAtUtc": runtime_lock["generatedAt"],
+        "packages": [
+            {"id": package["id"], "version": package["version"], "sourceHint": package["feed"]}
+            for package in runtime_lock["packages"]
+        ],
+    })
 
 
 def assemble(args):
@@ -299,8 +311,10 @@ def assemble(args):
             graph, lock = restore_graph(restore, {**shared, **versions, **roots}, roots, config, reviewed_lock)
             count = stage_libraries(graph, host, roots, restore / "packages", app)
             runtime_lock = app / "nuplane.lock.json"
-            if args.locked and json_data(reviewed_runtime_lock) != json_data(runtime_lock):
+            runtime_lock_data = json_data(runtime_lock)
+            if args.locked and json_data(reviewed_runtime_lock) != runtime_lock_data:
                 raise ValueError(f"Resolved archive hashes differ from {reviewed_runtime_lock}")
+            stage_manifest(runtime_lock_data, app)
             stage_configuration(configuration, production, app)
             shutil.copyfile(lock, context / "packages.lock.json")
             shutil.copyfile(runtime_lock, context / "nuplane.lock.json")
