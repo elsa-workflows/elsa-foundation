@@ -5,9 +5,8 @@ const customerAlias = "Elsa.Workbench.ActivityDataSelectionProof.Customer";
 const declaredNote = "the stored value may differ";
 
 /**
- * A variable declared as a list of a host type completes the item type's members after an index (#5708):
- * `variables.orders[0].` lists the fixture Customer's members under the activity-value profile, with the declared-type
- * note. Insert data still offers the list as a whole value.
+ * A variable declared as a list of a host type completes the fixture Customer's members after an index (#5708)
+ * and inside an inline Array callback (#5770). Insert data offers the list as a whole value.
  */
 export async function typedCollectionCompletionJourney(page: Page, info: TestInfo, capture: Capture,
   registerCleanup: (cleanup: () => Promise<void>) => void) {
@@ -111,7 +110,9 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
     await page.mouse.move(box!.x, box!.y);
     expect((await hovered).ok()).toBe(true);
     const hover = page.locator(".cm-tooltip-hover .studio-code-editor-hover");
+    await expect(hover).toBeVisible();
     await expect(hover).toContainText("display_name: String");
+    await expect(hover).toContainText(customerAlias);
     await expect(hover).toContainText(declaredNote);
     await capture(page, info, name);
     await page.mouse.move(0, 0);
@@ -126,11 +127,15 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   await page.keyboard.press("Escape");
   await expect(list()).toHaveCount(0);
   await complete(callbackPrefix);
+  await expect(list()).toBeVisible();
   await expect(list().getByRole("option")).toHaveCount(3);
   for (const label of ["customerId", "display_name", "nickname"]) {
     await expect(option(label).locator(".cm-completionDetail")).toHaveText("String");
   }
-  await expect(page.locator(".cm-completionInfo")).toContainText(declaredNote);
+  const callbackNote = page.locator(".cm-completionInfo");
+  await expect(callbackNote).toBeVisible();
+  await expect(callbackNote).toContainText(customerAlias);
+  await expect(callbackNote).toContainText(declaredNote);
   await capture(page, info, "collection-callback-completion");
   await option("display_name").click();
   await page.keyboard.insertText(")");
