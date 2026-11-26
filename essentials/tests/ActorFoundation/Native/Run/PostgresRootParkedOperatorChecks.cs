@@ -754,7 +754,7 @@ internal static class PostgresRootParkedOperatorChecks
                 var fence = owner.Fences.Single();
                 await set.Cold.EnableRootSelfSendsAsync(stop);
                 var issuer = set.Cold.RootSelfIssuer!;
-                var timerAt = (await set.ImageAsync(root)).AsOf + 2_000;
+                var timerAt = (await set.ImageAsync(root)).AsOf + 5_000;
                 await SeedAsync(0, "private-self", null);
                 await SeedAsync(1, "private-timer", timerAt);
                 Check(await set.TerminateAsync(root, "private-terminate", await set.ParkSelectionAsync(root, 2)),
@@ -788,14 +788,17 @@ internal static class PostgresRootParkedOperatorChecks
                 {
                     var inputs = answer.Messages.Where(item => item.Message.Target.Id == parked.Actor.Id).ToArray();
                     Check(inputs.Select(item => item.Message.Kind).Where(kind => kind != Kinds.Terminate)
-                        .SequenceEqual(new[] { "private-self", "private-timer" }), "a poll in flight samples both private rows before Open");
+                        .SequenceEqual(new[] { "private-self", "private-timer" }) &&
+                        inputs.Single(item => item.Message.Kind == "private-timer").Message.Due > answer.Now,
+                        "a poll in flight samples the immediate self-send and still-future timer before Open");
                     await set.ExecuteAsync($"""
                         UPDATE "Messages" SET "Seen" = {fence.Epoch}, "Trial" = {fence.Epoch}
                         WHERE "Target" = {parked.Actor.Id} AND "InboxScope" = {EfStore.RootSelfScope} AND NOT "Done"
                         """);
                     await owner.FlushAsync(stop);
-                    Check(await set.ClearingAsync(root) is { Clearing: "private-terminate", Cleared: 170 },
-                        "Open commits with the older poll answer still held");
+                    Check(await set.ClearingAsync(root) is { Clearing: "private-terminate", Cleared: 170 } &&
+                        (await set.ImageAsync(root)).AsOf < timerAt,
+                        "Open commits before the timer is due and with the older poll answer still held");
                     Check(owner.InboxCountOf(parked.Actor.Id) == 0, "Open forgets every private delivery read ahead");
                     held = true;
                 };
