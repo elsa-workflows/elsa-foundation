@@ -390,7 +390,7 @@ internal static class PostgresRootParkedOperatorChecks
             await LiveCompoundRefusalSet();
             await RecordedResultParkSet(recovery: false);
             await RecordedResultParkSet(recovery: true);
-            await RecordedResultParkSet(recovery: true, validPlan: true);
+            await RecordedResultParkSet(recovery: true, currentPin: true);
             await ComposedParkRecoveryAsync();
             await WithheldReleasedCohortAsync();
             await ReleasedCohortCandidateProgressAsync();
@@ -685,11 +685,11 @@ internal static class PostgresRootParkedOperatorChecks
             }
         }
 
-        async Task RecordedResultParkSet(bool recovery, bool validPlan = false)
+        async Task RecordedResultParkSet(bool recovery, bool currentPin = false)
         {
             const string key = Probe.FaultingJob;
-            var schema = validPlan ? "recorded_result_resume" : recovery ? "recorded_result_recovery" : "recorded_result_park";
-            await db.Database.ExecuteSqlRawAsync(validPlan ? "CREATE SCHEMA recorded_result_resume"
+            var schema = currentPin ? "recorded_result_resume" : recovery ? "recorded_result_recovery" : "recorded_result_park";
+            await db.Database.ExecuteSqlRawAsync(currentPin ? "CREATE SCHEMA recorded_result_resume"
                 : recovery ? "CREATE SCHEMA recorded_result_recovery" : "CREATE SCHEMA recorded_result_park", stop);
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = schema }.ConnectionString;
             var resultOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
@@ -712,7 +712,7 @@ internal static class PostgresRootParkedOperatorChecks
             await set.InstallAsync(createTables: true);
             var owner = (Worker)await set.OwnAsync();
             var root = await set.StartAsync("recorded-result");
-            if (validPlan) set.Probe.RecordedJobPlans.Add(root.Id);
+            if (recovery) set.Probe.RecordedJobPlans.Add(root.Id);
             var actor = (await set.ImageAsync(root)).Actor.Id;
             var epoch = owner.Epoch;
             set.Probe.FailsOn.Add((root.Id, Contract.Kinds.JobFinished));
@@ -741,15 +741,24 @@ internal static class PostgresRootParkedOperatorChecks
             EfStore.RootImage after;
             if (recovery)
             {
-                if (validPlan)
+                if (currentPin)
                 {
                     await using var guards = OpenResult();
                     await RecordedJobRecoveryChecks.AssertInstalledGuardsAsync(guards, parked, Check, stop);
                 }
+                else
+                {
+                    await set.ExecuteAsync($"""ALTER TABLE "Instances" DROP COLUMN "FoundationParkJobResult" """);
+                    await set.InstallAsync(createTables: false);
+                    await using var read = OpenResult();
+                    Check(await ReadResultAsync(actor, stop) == kept && await read.Database.SqlQuery<bool>($"""
+                        SELECT "FoundationParkJobResult" IS NULL AS "Value" FROM "Instances" WHERE "Id" = {actor}
+                        """).SingleAsync(stop), "reinstalling over the prior staged PostgreSQL shape leaves an existing Park with a null pin");
+                }
                 const string operation = "recover-recorded-result-park";
                 Check(await set.OperateAsync(root, operation, Contract.Kinds.Recover, selection),
                     "the recovery composition admits Recover for the Park with the retained job registration");
-                if (validPlan)
+                if (currentPin)
                 {
                     var recovered = await set.DriveAsync(root, row => row is { Revision: 5, Status: InstanceStatus.Running });
                     await using var read = OpenResult();
@@ -764,7 +773,7 @@ internal static class PostgresRootParkedOperatorChecks
                 after = await set.DriveAsync(root, row => row is { Revision: 5, Status: InstanceStatus.Faulted });
                 var journal = await set.Cold.ReadJournalOfAsync(0, actor, 0, stop);
                 Check(journal[^1].Entries == Json.Write(new { Outcome = "refused", Operation = operation, Reason = "plan" }),
-                    "the current recovery composition refuses a job registration it cannot restore");
+                    "the staged owner journals a plan refusal for an older Park with a missing result pin");
             }
             else
             {

@@ -63,7 +63,9 @@ internal static class RecordedJobRecoveryChecks
         async Task ExpectRefusalAsync(Func<Task<int>> action, string description)
         {
             try { await action(); }
-            catch (PostgresException error) when (error.SqlState == "23514" && error.MessageText.StartsWith("Qualified actor", StringComparison.Ordinal))
+            catch (PostgresException error) when (error.SqlState == "23514" &&
+                (error.MessageText.StartsWith("Qualified actor", StringComparison.Ordinal) ||
+                    error.MessageText == "A recovered journal entry requires the parked checkpoint it resolves"))
             {
                 check(true, description);
                 return;

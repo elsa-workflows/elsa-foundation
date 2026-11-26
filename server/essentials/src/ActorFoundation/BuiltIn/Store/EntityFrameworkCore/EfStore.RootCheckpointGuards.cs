@@ -56,6 +56,7 @@ public sealed partial class EfStore
         BEGIN
             IF /*journal-write-refused*/
             THEN RAISE EXCEPTION 'Qualified actor journal requires the next running checkpoint revision' USING ERRCODE = '23514'; END IF;
+            /*root-park-recovered-journal*/
             RETURN NEW;
         END
         $fn$;
@@ -121,7 +122,7 @@ public sealed partial class EfStore
             .Replace(" /*old-clearing*/", db.UsesRootComposedParkRecovery
                 ? """, OLD."FoundationParkClearing", OLD."FoundationParkClearingKind", OLD."FoundationParkCleared" """ : "", StringComparison.Ordinal)
             : db.UsesRootParkedOperators ? ParkedRefusalRow(db) : "", StringComparison.Ordinal)
-        .Replace("/*pinned-result-write*/", RecordsConsumedRootJob(db) ? $"""
+        .Replace(" /*pinned-result-write*/", RecordsConsumedRootJob(db) ? $"""
             AND (NEW."FoundationParkJobResult" IS NOT DISTINCT FROM OLD."FoundationParkJobResult"
                 OR (OLD."Status" = 0 AND NEW."Status" = 2 AND NOT NEW."Retired" AND OLD."FoundationParkJobResult" IS NULL
                     AND NEW."FoundationParkAt" IS NOT NULL AND NEW."FoundationParkRevision" = NEW."Revision"
@@ -151,7 +152,14 @@ public sealed partial class EfStore
                 """ : "", StringComparison.Ordinal)
             : "false", StringComparison.Ordinal)
         // A recovered entry is journaled only on the parked root it resolves.
-        .Replace("/*invalid-recovered-journal*/", db.UsesRootParkRecovery ? """
+        .Replace("/*root-park-recovered-journal*/", db.UsesRootParkRecovery ? """
+            IF NEW."Entries" LIKE '{{"Outcome":"recovered",%' AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance"
+                AND i."FoundationReference" IS NOT NULL AND NOT (i."Status" = 2 AND NOT i."Retired" AND NOT i."Suspended"
+                    AND i."Partition" = NEW."Partition" AND NEW."Revision" = i."Revision" + 1
+                    AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0 /*park-recover-footprint*/))
+            THEN RAISE EXCEPTION 'A recovered journal entry requires the parked checkpoint it resolves' USING ERRCODE = '23514'; END IF;
+            """.Replace("/*park-recover-footprint*/", RootRecoverFootprint(db, "i", journaling: true), StringComparison.Ordinal) : "", StringComparison.Ordinal)
+        .Replace(" /*invalid-recovered-journal*/", db.UsesSqliteRootRuntime && db.UsesRootParkRecovery ? """
             OR (NEW."Entries" LIKE '{{"Outcome":"recovered",%' AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance"
                 AND i."FoundationReference" IS NOT NULL AND NOT ((i."Status" = 2 AND NOT i."Retired" AND NOT i."Suspended"
                     AND i."Partition" = NEW."Partition" AND NEW."Revision" = i."Revision" + 1

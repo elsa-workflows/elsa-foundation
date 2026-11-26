@@ -201,7 +201,8 @@ public sealed partial class EfStore
 
     private sealed record KeptRow(string Id, short KeptBy, string Digest, string Envelope, long Bytes);
 
-    private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding, bool Residue, string? Clearing, long? Cleared, string? Jobs);
+    private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding, bool Residue, string? Clearing, long? Cleared,
+        string? Jobs, string? ParkJobResult);
 
     // A pending row other than a direct input: the parked retirement branch and the Park facts share it, and the C# retirement
     // lock (EfStore.RootRetirement.cs) states the same condition with the direct scope as a parameter.
@@ -260,6 +261,7 @@ public sealed partial class EfStore
             }
             var clearing = RereadsParkFacts(db) ? """ "FoundationParkClearing" AS "Clearing", "FoundationParkCleared" AS "Cleared" """
                 : """ NULL::text AS "Clearing", NULL::bigint AS "Cleared" """;
+            var jobPin = RecordsConsumedRootJob(db) ? """ "FoundationParkJobResult" """ : "NULL::text";
             var park = db.UsesSqliteRootRuntime
                 ? await ReadSqliteParkMarkAsync(db, message.Target.Id, message.Target.Partition, token)
                 : await db.Database.SqlQueryRaw<ParkMarkRow>($"""
@@ -268,7 +270,7 @@ public sealed partial class EfStore
                         OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding",
                     EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = "Instances"."Id" AND m."Partition" = "Instances"."Partition"
                         AND {PendingResidue}) AS "Residue",
-                    {clearing}, "Jobs" FROM "Instances"
+                    {clearing}, "Jobs", {jobPin} AS "ParkJobResult" FROM "Instances"
                 WHERE "Id" = {"{0}"} AND "Partition" = {"{1}"} AND NOT "Retired"
                 """, message.Target.Id, message.Target.Partition).SingleOrDefaultAsync(token);
             // A clearing's control reads only the next page and one more row: nothing is kept while a clearing is open.
@@ -287,9 +289,11 @@ public sealed partial class EfStore
             var fits = page == charged.Length;
             var refusals = fits && command.RootParkClear && message.Kind == Kinds.Delete && park?.Clearing == message.Id
                 ? await ReadParkProtectionRefusalsAsync(db, message.Target.Id, message.Target.Partition, message.Id, long.MaxValue, token) : 0;
-            var consumedJob = fits && message.Kind == Kinds.Recover && park is { At: not null, Clearing: null, Jobs: { } registry }
-                ? await ReadConsumedRootJobAsync(db, message.Target.Id, message.Target.Partition, registry, token)
-                : null;
+            // Check the registered footprint even if the arrivals exceed one page, so a valid plan is refused for page size.
+            var consumedJob = message.Kind == Kinds.Recover &&
+                park is { At: not null, Clearing: null, Jobs: { } registry, ParkJobResult: { } pinned } &&
+                pinned == await ReadConsumedRootJobAsync(db, message.Target.Id, message.Target.Partition, registry, token)
+                ? pinned : null;
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived),
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed) + (db.UsesSqliteRootRuntime || consumedJob is null ? 0 : 1),

@@ -12,16 +12,17 @@ public sealed partial class EfStore
     private sealed record SqliteKeptRow(string Id, long Scope, KeptRow Facts);
 
     private static Task<ParkMarkRow?> ReadSqliteParkMarkAsync(KernelDb db, string actor, int partition, CancellationToken token) =>
-        db.Database.SqlQuery<ParkMarkRow>($"""
+        db.Database.SqlQuery<ParkMarkRow>(SelectParkJobResult(db, $"""
             SELECT i."FoundationParkAt" AS "At", i."FoundationParkRevision" AS "Revision",
                 (i."Jobs" IS NOT NULL OR i."Children" IS NOT NULL OR i."CustomHandles" IS NOT NULL OR EXISTS (
                     SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = i."Id" AND s."Partition" = i."Partition")) AS "Outstanding",
                 EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
                     AND NOT m."Done" AND (m."InboxScope" <> {InboxKey.FoundationOccurrenceScope}
                         OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL)) AS "Residue",
-                i."FoundationParkClearing" AS "Clearing", i."FoundationParkCleared" AS "Cleared", i."Jobs"
+                i."FoundationParkClearing" AS "Clearing", i."FoundationParkCleared" AS "Cleared", i."Jobs",
+                /*park-job-result*/ AS "ParkJobResult"
             FROM "Instances" i WHERE i."Id" = {actor} AND i."Partition" = {partition} AND NOT i."Retired"
-            """).SingleOrDefaultAsync(token);
+            """)).SingleOrDefaultAsync(token);
 
     private static async Task<List<SqliteKeptRow>> ReadSqliteKeptAsync(KernelDb db, string actor, int partition, bool opening, CancellationToken token)
     {

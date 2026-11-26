@@ -189,6 +189,7 @@ internal static partial class SqliteHostLifetimeChecks
                     "the Recover reader opens one quoted arrival body and skips the consumed and over-budget bodies");
                 await CheckCreatorRecoverAsync(recoveryOwner);
                 await CheckRecordedJobRecoverAsync(recoveryOwner);
+                await CheckRecordedJobRecoverAsync(recoveryOwner, large);
                 await CheckReparkFifoAsync(recoveryOwner);
                 var guardFile = new SqliteConnectionStringBuilder(connection) { DataSource = Path.Combine(directory.FullName, "guard.db") };
                 var guardOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(guardFile.ConnectionString).Options;
@@ -216,9 +217,10 @@ internal static partial class SqliteHostLifetimeChecks
                 "the same owner settles the preadmitted held input after the Park ends without invoking the actor");
             return 0;
 
-            async Task CheckRecordedJobRecoverAsync(Worker owner)
+            async Task CheckRecordedJobRecoverAsync(Worker owner, string? oversizedArrival = null)
             {
-                var root = (await admission.StartAsync(scope.Tenant, "recorded-recover", new(fixture, SqliteArrivalActor.RecordedPlan),
+                var operation = oversizedArrival is null ? "recorded-recover" : "recorded-recover-page";
+                var root = (await admission.StartAsync(scope.Tenant, operation, new(fixture, SqliteArrivalActor.RecordedPlan),
                     null, null, token)).Actor!.Value;
                 await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running });
                 Require(await admission.SendAsync(scope.Tenant, root, "issue-recorded", "issue-recorded", null, null, null, token) is
@@ -231,8 +233,28 @@ internal static partial class SqliteHostLifetimeChecks
                             AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {Kinds.JobFinished} AND "Done"
                             AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}) AS "Value"
                         """).SingleAsync(token), "a faulting job result remains consumed beside its registration");
-                await RecordedJobRecoveryChecks.AssertInstalledGuardsAsync(db, park, Require, token);
                 var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                if (oversizedArrival is not null)
+                {
+                    var revision = park.Revision;
+                    foreach (var id in new[] { "recorded-large-first", "recorded-large-second" })
+                    {
+                        Require(await admission.SendAsync(scope.Tenant, root, id, "ordinary", oversizedArrival, null, null, token)
+                            is { Outcome: Contract.AdmissionOutcome.Accepted }, "the recorded-result Park admits an arrival that fits by itself");
+                        var expected = ++revision;
+                        await DriveAsync(owner, root, row => row.Revision == expected && row.Status == InstanceStatus.Faulted);
+                    }
+                    Require(await admission.OperateAsync(scope.Tenant, root, "recorded-page-refusal", Kinds.Recover, selection, null, null, token)
+                        is { Outcome: Contract.AdmissionOutcome.Accepted }, "the fixture admits Recover for a recorded-result Park over one page");
+                    var samePark = await DriveAsync(owner, root, row => row.Revision == revision + 1 && row.Status == InstanceStatus.Faulted);
+                    var entry = (await store.ReadJournalOfAsync(partition, park.Actor.Id, 0, token))[^1];
+                    Require(samePark.Jobs == park.Jobs && samePark.ParkAt == park.ParkAt && owner.Owns &&
+                        entry.Entries.Contains("\"Reason\":\"page\"", StringComparison.Ordinal),
+                        "a matching job recipe with over-budget arrivals receives a page refusal");
+                    return;
+                }
+
+                await RecordedJobRecoveryChecks.AssertInstalledGuardsAsync(db, park, Require, token);
                 executor.RecordedJobArguments = new string('\0', 4 * 1024 * 1024);
                 Require(await admission.OperateAsync(scope.Tenant, root, "oversized-recorded-recipe", Kinds.Recover, selection, null, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted }, "the fixture admits Recover before checking its authored recipe");
