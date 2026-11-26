@@ -72,6 +72,10 @@ internal static class SqliteShippedInstallChecks
                 """, token), "SQLite requires a BLOB issuer key", DataTypeConstraint);
             var marker = StoreDefinitionsRevision.Seed(db)!;
             await db.StoreVersions.Where(row => row.Id == marker.Id).ExecuteUpdateAsync(
+                row => row.SetProperty(x => x.MessageProtocol, marker.MessageProtocol - 1), token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses the previous install-only definitions revision");
+            await db.StoreVersions.Where(row => row.Id == marker.Id).ExecuteUpdateAsync(
                 row => row.SetProperty(x => x.MessageProtocol, marker.MessageProtocol + 1), token);
             await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
                 "SQLite refuses an unsupported definitions revision");

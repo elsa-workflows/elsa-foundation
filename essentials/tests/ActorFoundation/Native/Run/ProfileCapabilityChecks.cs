@@ -141,8 +141,10 @@ internal static class ProfileCapabilityChecks
             var model = db.GetService<IDesignTimeModel>().Model;
             var seeds = model.FindEntityType(typeof(StoreVersionEntity))!.GetSeedData().ToArray();
             var marker = seeds.Single(row => Equals(row["Id"], StoreVersionEntity.MarkerId))["MessageProtocol"];
-            Check(seeds.Count(row => Equals(row["Id"], StoreDefinitionsRevision.MarkerId)) ==
-                (format == StoreFormat.RootShipped ? 1 : 0), $"{name} seeds the definitions marker only for the shipped format");
+            var shipped = format == StoreFormat.RootShipped;
+            Check(seeds.Length == (shipped ? 2 : 1) &&
+                seeds.Any(row => Equals(row["Id"], StoreDefinitionsRevision.MarkerId)) == shipped,
+                $"{name} seeds exactly the markers it requires");
             var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(model.ToDebugString(MetadataDebugStringOptions.LongDefault))))[..16];
             Console.WriteLine($"profile {name} protocol={db.RequiredFormat.MessageProtocol} marker={marker} timers={db.RequiredFormat == StoreFormat.RootTimers} model={fingerprint} uses=[{string.Join(",", set)}]");
             Check(db.GetType() == typeof(KernelDb), $"{name} is a plain KernelDb");
