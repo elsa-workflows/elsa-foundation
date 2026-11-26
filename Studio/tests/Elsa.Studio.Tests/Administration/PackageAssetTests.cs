@@ -12,6 +12,7 @@ using Nuplane.Admin;
 using Nuplane.Loading;
 using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Reconciliation;
+using Nuplane.Sources.Directory.Builder;
 
 namespace Elsa.Studio.Tests.Administration;
 
