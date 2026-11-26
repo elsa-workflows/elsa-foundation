@@ -8,7 +8,7 @@ import { CodeMirrorStudioCodeEditor } from "../engines/CodeMirrorStudioCodeEdito
 import { FallbackCodeEditor } from "../engines/FallbackCodeEditor";
 import { javaScriptLanguageAdapter } from "../languages/javascript";
 import { createStudioCodeToolingProjection } from "../toolingProjection";
-import type { StudioCodeDocument, StudioCodeEditorController, StudioCodeEditorEngineProps, StudioCodeEditorProps } from "../types";
+import type { StudioCodeCompletionRequest, StudioCodeDocument, StudioCodeEditorController, StudioCodeEditorEngineProps, StudioCodeEditorProps } from "../types";
 
 beforeEach(() => {
   window.dispatchEvent(new Event("elsa:auth-session-started"));
@@ -482,11 +482,11 @@ describe("StudioCodeEditor", () => {
     unmount();
   }, 20000);
 
-  it.each(["pending", "active"] as const)("refreshes %s completion after the provider changes", async status => {
+  it.each(["debouncing", "pending", "active"] as const)("refreshes %s keyboard completion after the provider changes", async status => {
     const source = "variables.customer.";
     const props = { document: codeDocument({ value: source }), languageAdapter: javaScriptLanguageAdapter };
-    const originalProvider = vi.fn(() => status === "pending"
-      ? new Promise<never>(() => {})
+    const originalProvider = vi.fn(({ signal }: StudioCodeCompletionRequest) => status === "pending"
+      ? new Promise<never>((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }))
       : [{ label: "oldMember" }]);
     const refreshedProvider = vi.fn(() => [{ label: "newMember" }]);
     const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: originalProvider });
@@ -496,18 +496,43 @@ describe("StudioCodeEditor", () => {
       const content = container.querySelector<HTMLElement>(".cm-content")!;
       const view = EditorView.findFromDOM(content)!;
       view.dispatch({ selection: { anchor: source.length } });
-      content.dispatchEvent(new KeyboardEvent("keydown", {
-        key: " ", code: "Space", ctrlKey: true, bubbles: true, cancelable: true
-      }));
-      await vi.waitFor(() => {
-        expect(originalProvider).toHaveBeenCalledOnce();
-        expect(completionStatus(view.state)).toBe(status);
-      });
+      key(content, " ", { code: "Space", ctrlKey: true });
+      if (status === "debouncing") {
+        expect(completionStatus(view.state)).toBe("pending");
+        expect(originalProvider).not.toHaveBeenCalled();
+      } else {
+        await vi.waitFor(() => {
+          expect(originalProvider).toHaveBeenCalledOnce();
+          expect(completionStatus(view.state)).toBe(status);
+        });
+      }
 
       rerender({ ...props, completionProvider: refreshedProvider });
 
       await vi.waitFor(() => expect(currentCompletions(view.state).map(item => item.label)).toEqual(["newMember"]));
       expect(refreshedProvider).toHaveBeenCalledOnce();
+      expect(refreshedProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: true, position: source.length }));
+      if (status === "pending") expect(originalProvider.mock.calls[0]![0].signal.aborted).toBe(true);
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
+  it("does not turn completion from typing into a keyboard request when the provider changes", async () => {
+    const props = { document: codeDocument({ value: "" }), languageAdapter: javaScriptLanguageAdapter };
+    const originalProvider = vi.fn(() => null);
+    const refreshedProvider = (request: StudioCodeCompletionRequest) => request.explicit ? [{ label: "shortcutOnly" }] : null;
+    const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: originalProvider });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-content")!)!;
+      view.dispatch({ changes: { from: 0, insert: "s" }, selection: { anchor: 1 }, userEvent: "input.type" });
+      expect(completionStatus(view.state)).toBe("pending");
+
+      rerender({ ...props, document: { ...props.document, value: "s" }, completionProvider: refreshedProvider });
+
+      expect(completionStatus(view.state)).toBeNull();
     } finally {
       unmount();
     }

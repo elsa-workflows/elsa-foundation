@@ -1,4 +1,4 @@
-import { acceptCompletion, closeCompletion, completionKeymap, startCompletion } from "@codemirror/autocomplete";
+import { acceptCompletion, closeCompletion, completionKeymap, completionStatus, startCompletion } from "@codemirror/autocomplete";
 import {
   defaultKeymap,
   history,
@@ -53,6 +53,7 @@ interface CodeMirrorSessionEntry {
 interface CodeMirrorRuntime {
   props: StudioCodeEditorEngineProps;
   lastEmittedValue?: string;
+  explicitCompletion?: boolean;
   tabEscapeArmed?: boolean;
 }
 
@@ -115,6 +116,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     return () => {
       controllerRef.current = undefined;
       markCodeEditorReady(root instanceof HTMLElement ? root : container, false);
+      entry.runtime.explicitCompletion = false;
       entry.runtime.tabEscapeArmed = false;
       entry.state = view.state;
       setStudioCodeEditorSessionEntry(props.session, props.document.uri, entry);
@@ -176,14 +178,16 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
 
   useEffect(() => {
     const view = viewRef.current;
-    if (!view) return;
-    const restartCompletion = closeCompletion(view);
+    const runtime = entryRef.current?.runtime;
+    if (!view || !runtime) return;
+    const wasExplicit = runtime.explicitCompletion;
+    const wasCompleting = closeCompletion(view);
     // Signature help is selection-driven. Re-dispatch the current selection when a delayed
     // authoring context replaces the initial local-only providers so the visible document can
     // immediately acquire the newly available signature.
     view.dispatch({ selection: view.state.selection });
-    // A provider refresh invalidates old suggestions but should preserve the author's completion request.
-    if (restartCompletion) startCompletion(view);
+    // Replay the shortcut after invalidating old suggestions and requests.
+    if (wasExplicit && wasCompleting) startExplicitCompletion(view, runtime);
     // A reclaimed compact view starts at the left edge; a field the author scrolled sideways keeps its position.
     if (view.hasFocus && view.scrollDOM.scrollLeft === 0) keepCaretInEditorView(view);
   }, [props.completionProvider, props.completions, props.hoverProvider, props.signatureProvider]);
@@ -310,6 +314,7 @@ function createEntryState(props: StudioCodeEditorEngineProps, entry: CodeMirrorS
   entry.editingEnabled = !!props.documentEditing;
   // setState does not notify update listeners. An adopted owner state ends the previous local emission.
   entry.runtime.lastEmittedValue = undefined;
+  entry.runtime.explicitCompletion = false;
   return EditorState.create({
       doc: props.document.value,
       selection: restoredSelection(props, entry),
@@ -422,8 +427,17 @@ function editabilityExtensions(readOnly: boolean, ariaLabel: string) {
   ];
 }
 
+function startExplicitCompletion(view: EditorView, runtime: CodeMirrorRuntime): boolean {
+  const started = startCompletion(view);
+  if (started) runtime.explicitCompletion = true;
+  return started;
+}
+
 function editorKeymap(runtime: CodeMirrorRuntime): KeyBinding[] {
-  const standard = [...completionKeymap, ...defaultKeymap, ...historyKeymap, { key: "Ctrl-m", run: toggleTabFocusMode }];
+  const completionBindings = completionKeymap.map(binding => binding.run === startCompletion
+    ? { ...binding, run: (view: EditorView) => startExplicitCompletion(view, runtime) }
+    : binding);
+  const standard = [...completionBindings, ...defaultKeymap, ...historyKeymap, { key: "Ctrl-m", run: toggleTabFocusMode }];
   const hoverHelp = ["Ctrl-Shift-h", "F1", "Alt-i"].map(key => ({
     key,
     run: (view: EditorView) => {
@@ -472,6 +486,7 @@ function editorKeymap(runtime: CodeMirrorRuntime): KeyBinding[] {
 function handleUpdate(update: ViewUpdate, entry: CodeMirrorSessionEntry) {
   entry.state = update.state;
   const { runtime } = entry;
+  if (update.docChanged || !completionStatus(update.state)) runtime.explicitCompletion = false;
   const ownerChanged = update.startState.field(ownerHistoryValue, false) !== update.state.field(ownerHistoryValue, false);
   if (!update.docChanged && !ownerChanged) return;
   entry.revision++;
