@@ -118,7 +118,7 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   - a cancelled child ends the branch (FR-011).
 
   Keep one Sequence-parent case as a regression check that a faulted child still runs the next step.
-- [ ] T013 [P] Converter README (`extensions/Elsa3/src/Mapping/README.md`): add the FR-006 to FR-011 rows, the five
+- [ ] T013 [P] Converter README (`extensions/Elsa3/src/Mapping/README.md`): add the FR-006 to FR-011 rows, the six
   accepted differences (a faulted child's outputs, a cancelled child, a failed child start, `ParentInstanceId`,
   output-name case, the suspended-child shape) with their Flowchart and Sequence behaviour, and Execute Workflow's always-wait.
 - [ ] T013a [P] Amend spec 236's `member-map.md` rows for `DispatchWorkflow.Result`, the `Done` outcome and
