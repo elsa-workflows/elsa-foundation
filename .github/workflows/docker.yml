@@ -463,6 +463,9 @@ jobs:
       TARGET: ${{ matrix.destination }}${{ needs.versions.outputs.profile-version }}
       FOUNDATION_IMAGE: elsaworkflows/elsa-foundation-host@${{ needs.build-and-push-foundation-host.outputs.digest }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.image }}-amd64-${{ github.run_number }}
@@ -494,7 +497,11 @@ jobs:
             docker load -i "$archive"
             test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$IMAGE")" = "linux/$arch"
             test "$(docker image inspect "$IMAGE" | jq -r --arg label "$foundation_label" '.[0].Config.Labels[$label]')" = "$FOUNDATION_IMAGE"
-            docker tag "$IMAGE" "$TARGET-$arch"
+            loaded_id=$(docker image inspect --format '{{.Id}}' "$IMAGE")
+            if [ "$ARTIFACT" != elsa-profile-builder ]; then
+              python3 tools/docker-profiles/archive_identity.py "$archive" "$IMAGE" "$image_id" "$loaded_id"
+            fi
+            docker tag "$loaded_id" "$TARGET-$arch"
             docker push "$TARGET-$arch"
             docker image rm "$IMAGE"
           done

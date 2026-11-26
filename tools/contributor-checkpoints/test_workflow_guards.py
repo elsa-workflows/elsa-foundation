@@ -1,11 +1,14 @@
 """Focused fixtures for the helpers used by Packages and Docker."""
 
+import hashlib
+import io
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 
@@ -166,6 +169,45 @@ class WorkflowGuardTests(unittest.TestCase):
         self.assertTrue(contract(docker))
         self.assertFalse(contract(docker.replace("if: needs.admission.outputs.allowed == 'true'", "if: true", 1)))
         self.assertFalse(contract(docker.replace("    needs: versions\n", "    needs: admission\n", 1)))
+
+
+class ServerProfileArchiveTests(unittest.TestCase):
+    def test_index_id_matches_only_the_verified_runtime_image_config(self) -> None:
+        verifier = SCRIPT.parents[1] / "docker-profiles" / "archive_identity.py"
+        image = "elsa-server-essentials-curated:qualification"
+        config = b'{"architecture":"arm64","os":"linux"}'
+        config_id = "sha256:" + hashlib.sha256(config).hexdigest()
+        files = {
+            "config.json": config,
+            "manifest.json": json.dumps([{"RepoTags": [image], "Config": "config.json"}]).encode(),
+        }
+
+        def oci_descriptor(document, **metadata):
+            data = json.dumps(document).encode()
+            digest = "sha256:" + hashlib.sha256(data).hexdigest()
+            files["blobs/" + digest.replace(":", "/", 1)] = data
+            return {"digest": digest, **metadata}
+
+        runtime = oci_descriptor({"config": {"digest": config_id}}, platform={"os": "linux", "architecture": "arm64"})
+        foreign = oci_descriptor({"config": {"digest": "sha256:" + "f" * 64}}, platform={"os": "linux", "architecture": "amd64"})
+        attestation = {"digest": "sha256:" + "a" * 64, "platform": {"os": "unknown", "architecture": "unknown"},
+                       "annotations": {"vnd.docker.reference.type": "attestation-manifest", "vnd.docker.reference.digest": runtime["digest"]}}
+        valid = oci_descriptor({"manifests": [runtime, attestation]})
+        extra_runtime = oci_descriptor({"manifests": [runtime, foreign]})
+        files["index.json"] = json.dumps({"manifests": [valid, extra_runtime]}).encode()
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "image.tar.gz"
+            with tarfile.open(path, "w:gz") as archive:
+                for name, data in files.items():
+                    info = tarfile.TarInfo(name)
+                    info.size = len(data)
+                    archive.addfile(info, io.BytesIO(data))
+            for descriptor, expected in ((valid, 0), (foreign, 1), (extra_runtime, 1)):
+                with self.subTest(descriptor=descriptor):
+                    result = subprocess.run([sys.executable, str(verifier), str(path), image, config_id, descriptor["digest"]],
+                                            capture_output=True, text=True, check=False)
+                    self.assertEqual(expected, result.returncode, result.stderr)
 
 
 if __name__ == "__main__":

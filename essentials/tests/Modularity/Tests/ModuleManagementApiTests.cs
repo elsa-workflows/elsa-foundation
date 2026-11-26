@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using CShells.Features;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Manifests;
@@ -102,6 +103,40 @@ public sealed class ModuleManagementApiTests : IDisposable
         Assert.Equal("cAcHe", retained.GetProperty("directory").GetProperty("role").GetString());
     }
 
+    [Fact]
+    public async Task Keyed_feeds_are_listed_and_feed_mutations_preserve_the_settings_file()
+    {
+        const string configuration = """
+            {
+              // The host accepts keyed declarations without a Name property.
+              "nuplane": { "setup": { "feeds": {
+                "0": { "Name": "EDITABLE", "DirectoryPath": "shadowed" },
+                "baked": { "directoryPath": "cache", "directory": { "role": "Cache" } },
+                "editable": { "directoryPath": "drop-zone" },
+              } } }
+            }
+            """;
+        await using var app = await StartAsync(configuration);
+        using var client = AuthorizedClient(app);
+        var newFeed = new { name = "new-feed", directoryPath = "new-folder", includePatterns = new[] { "*" }, directory = new { watch = true } };
+
+        using var registry = await client.GetFromJsonAsync<JsonDocument>(Api + "/registry");
+        using var update = await client.PutAsJsonAsync(Api + "/feeds/baked", newFeed);
+        using var deletion = await client.DeleteAsync(Api + "/feeds/editable");
+        using var add = await client.PostAsJsonAsync(Api + "/feeds", newFeed);
+
+        Assert.Equal(configuration, await File.ReadAllTextAsync(SettingsPath));
+        Assert.Equal(HttpStatusCode.Conflict, update.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, deletion.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, add.StatusCode);
+        var root = registry!.RootElement;
+        Assert.False(root.GetProperty("capabilities").GetProperty("canManageFeeds").GetBoolean());
+        Assert.True(root.GetProperty("capabilities").GetProperty("canUploadPackages").GetBoolean());
+        var feeds = root.GetProperty("feeds").EnumerateArray().ToArray();
+        Assert.Equal(["baked", "editable"], feeds.Select(feed => feed.GetProperty("name").GetString()));
+        Assert.Equal("drop-zone", feeds[1].GetProperty("directoryPath").GetString());
+    }
+
     [Theory]
     [InlineData(true, "drop-zone")]
     [InlineData(false, "packages")]
@@ -133,22 +168,37 @@ public sealed class ModuleManagementApiTests : IDisposable
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("drop-zone")]
-    public async Task Drop_folder_mutations_refuse_a_directory_also_owned_by_a_cache_feed(string? primaryFolder)
+    [InlineData(null, false)]
+    [InlineData("drop-zone", false)]
+    [InlineData(null, true)]
+    [InlineData("drop-zone", true)]
+    public async Task Drop_folder_mutations_refuse_a_directory_also_owned_by_a_cache_feed(string? primaryFolder, bool keyed)
     {
         const string fileName = "Fixture.1.0.0.nupkg";
         var directory = primaryFolder ?? "packages";
         var cache = _contentRoot.CreateSubdirectory(directory);
         var cachedPackage = Path.Combine(cache.FullName, fileName);
         await File.WriteAllTextAsync(cachedPackage, "baked");
-        var cachePath = JsonSerializer.Serialize(Path.Combine(_contentRoot.FullName, "unused", "..", directory) + Path.DirectorySeparatorChar);
-        var primary = primaryFolder is null ? "" : """, { "Name": "editable", "DirectoryPath": "drop-zone" }""";
-        await using var app = await StartAsync($$"""
-            { "Nuplane": { "Setup": { "Feeds": [
-              { "Name": "baked", "DirectoryPath": {{cachePath}}, "Directory": { "Role": "Cache" } }{{primary}}
-            ] } } }
-            """);
+        var cacheSettings = new JsonObject
+        {
+            ["DirectoryPath"] = Path.Combine(_contentRoot.FullName, "unused", "..", directory) + Path.DirectorySeparatorChar,
+            ["Directory"] = new JsonObject { ["Role"] = "Cache" }
+        };
+        var primarySettings = new JsonObject { ["DirectoryPath"] = primaryFolder };
+        JsonNode feeds;
+        if (keyed)
+        {
+            feeds = primaryFolder is null
+                ? new JsonObject { ["baked"] = cacheSettings }
+                : new JsonObject { ["baked"] = cacheSettings, ["editable"] = primarySettings };
+        }
+        else
+        {
+            cacheSettings["Name"] = "baked";
+            primarySettings["Name"] = "editable";
+            feeds = primaryFolder is null ? new JsonArray(cacheSettings) : new JsonArray(cacheSettings, primarySettings);
+        }
+        await using var app = await StartAsync($$"""{ "Nuplane": { "Setup": { "Feeds": {{feeds}} } } }""");
         using var client = AuthorizedClient(app);
         using var form = new MultipartFormDataContent();
         form.Add(new StringContent("uploaded"), "package", fileName);

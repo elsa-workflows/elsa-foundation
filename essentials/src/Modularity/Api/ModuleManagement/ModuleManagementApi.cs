@@ -97,7 +97,7 @@ public static class ModuleManagementApiEndpoints
             ReadRetentionPolicy(config, cleanupOptions.Value),
             new(
                 CanUploadPackages: dropFolder is not null,
-                CanManageFeeds: true,
+                CanManageFeeds: FeedSettings(config) is not JsonObject,
                 CanReconcile: true,
                 CanPrunePackages: true,
                 FeedChangesRequireRestart: true),
@@ -259,7 +259,9 @@ public static class ModuleManagementApiEndpoints
             return Results.BadRequest(new ModuleManagementErrorResponse("Feed name is required."));
 
         var config = await ReadManagementConfigurationAsync(environment, options.Value, cancellationToken);
-        var feeds = ReadFeedsArray(config);
+        if (FeedSettings(config) is JsonObject)
+            return KeyedFeedsAreReadOnly();
+        var feeds = GetOrCreateFeedsArray(config);
         if (feeds.Any(node => string.Equals((string?)node?["Name"], feed.Name, StringComparison.OrdinalIgnoreCase)))
             return Results.Conflict(new ModuleManagementErrorResponse($"Feed '{feed.Name}' already exists."));
 
@@ -276,7 +278,9 @@ public static class ModuleManagementApiEndpoints
         CancellationToken cancellationToken)
     {
         var config = await ReadManagementConfigurationAsync(environment, options.Value, cancellationToken);
-        var feeds = ReadFeedsArray(config);
+        if (FeedSettings(config) is JsonObject)
+            return KeyedFeedsAreReadOnly();
+        var feeds = GetOrCreateFeedsArray(config);
         var index = FindFeedIndex(feeds, name);
         if (index < 0)
             return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
@@ -295,7 +299,9 @@ public static class ModuleManagementApiEndpoints
         CancellationToken cancellationToken)
     {
         var config = await ReadManagementConfigurationAsync(environment, options.Value, cancellationToken);
-        var feeds = ReadFeedsArray(config);
+        if (FeedSettings(config) is JsonObject)
+            return KeyedFeedsAreReadOnly();
+        var feeds = GetOrCreateFeedsArray(config);
         var index = FindFeedIndex(feeds, name);
         if (index < 0)
             return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
@@ -314,6 +320,9 @@ public static class ModuleManagementApiEndpoints
 
     private static IResult CacheFeedIsReadOnly(string name) =>
         Results.Conflict(new ModuleManagementErrorResponse($"Cache feed '{name}' is read-only through this API. Edit it in the host configuration."));
+
+    private static IResult KeyedFeedsAreReadOnly() =>
+        Results.Conflict(new ModuleManagementErrorResponse("Keyed feed declarations are read-only through this API. Edit them in the host configuration."));
 
     private static IResult CacheDropFolderIsReadOnly() =>
         Results.Conflict(new ModuleManagementErrorResponse("The package drop folder is used by a read-only cache feed. Configure a separate directory for package management."));
@@ -393,22 +402,24 @@ public static class ModuleManagementApiEndpoints
     }
 
     private static ModuleManagementFeed[] ReadFeeds(ManagementConfiguration config, bool includeCacheFeeds = true) =>
-        ReadFeedsArray(config)
-            .OfType<JsonObject>()
-            .Where(feed => includeCacheFeeds || !IsCacheFeed(feed))
-            .Select(feed => new ModuleManagementFeed(
-                (string?)feed["Name"] ?? "",
-                (string?)feed["ServiceIndex"],
-                (string?)feed["DirectoryPath"],
-                (string?)feed["Credentials"],
-                (bool?)feed["IncludeAll"] ?? false,
-                feed["IncludePatterns"]?.AsArray().Select(x => (string?)x).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().ToArray() ?? [],
-                new(
-                    (bool?)feed["Directory"]?["Watch"] ?? true,
-                    (string?)feed["Directory"]?["DebounceWindow"] ?? "00:00:01")))
+        ReadFeedEntries(config)
+            .Where(entry => includeCacheFeeds || !IsCacheFeed(entry.Settings))
+            .Select(entry => ReadFeed(entry.Name, entry.Settings))
             .Where(feed => !string.IsNullOrWhiteSpace(feed.Name))
             .OrderBy(feed => feed.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
+    private static ModuleManagementFeed ReadFeed(string name, JsonObject feed) =>
+        new(
+            name,
+            (string?)feed["ServiceIndex"],
+            (string?)feed["DirectoryPath"],
+            (string?)feed["Credentials"],
+            (bool?)feed["IncludeAll"] ?? false,
+            feed["IncludePatterns"]?.AsArray().Select(x => (string?)x).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().ToArray() ?? [],
+            new(
+                (bool?)feed["Directory"]?["Watch"] ?? true,
+                (string?)feed["Directory"]?["DebounceWindow"] ?? "00:00:01"));
 
     private static ModuleManagementFeed[] ReadRegistryFeeds(ManagementConfiguration config) =>
         ReadFeeds(config)
@@ -434,7 +445,7 @@ public static class ModuleManagementApiEndpoints
             : StringComparison.Ordinal;
 
         // An editable feed or the default drop folder can point to the same directory as a cache.
-        var isCacheDirectory = ReadFeedsArray(config).OfType<JsonObject>()
+        var isCacheDirectory = ReadFeedEntries(config).Select(entry => entry.Settings)
             .Where(IsCacheFeed)
             .Select(cache => (string?)cache["DirectoryPath"])
             .Any(path => !string.IsNullOrWhiteSpace(path) && string.Equals(NormalizeDirectory(path), dropFolder, comparison));
@@ -476,7 +487,39 @@ public static class ModuleManagementApiEndpoints
     private static string GetManagementFilePath(IWebHostEnvironment environment, ModuleManagementApiOptions options) =>
         Path.Combine(environment.ContentRootPath, options.ConfigurationFileName);
 
-    private static JsonArray ReadFeedsArray(ManagementConfiguration config)
+    private static JsonNode? FeedSettings(ManagementConfiguration config) =>
+        config.Document["Nuplane"] is JsonObject nuplane && nuplane["Setup"] is JsonObject setup ? setup["Feeds"] : null;
+
+    private static IEnumerable<(string Name, JsonObject Settings)> ReadFeedEntries(ManagementConfiguration config) =>
+        FeedSettings(config) switch
+        {
+            JsonArray array => array.OfType<JsonObject>().Select(feed => ((string?)feed["Name"] ?? "", feed)),
+            JsonObject keyed => ReadKeyedFeedEntries(keyed),
+            _ => []
+        };
+
+    private static IEnumerable<(string Name, JsonObject Settings)> ReadKeyedFeedEntries(JsonObject feeds)
+    {
+        foreach (var (key, value) in feeds)
+        {
+            if (value is not JsonObject settings)
+                continue;
+            if (!IsFeedIndex(key))
+            {
+                yield return (key, settings);
+                continue;
+            }
+
+            // Nuplane reads numeric children as array entries and gives named keys precedence.
+            var name = (string?)settings["Name"] ?? "";
+            if (IsFeedIndex(name) || feeds[name] is not JsonObject)
+                yield return (name, settings);
+        }
+    }
+
+    private static bool IsFeedIndex(string key) => key.Length > 0 && key.All(char.IsAsciiDigit);
+
+    private static JsonArray GetOrCreateFeedsArray(ManagementConfiguration config)
     {
         var nuplane = GetOrCreateObject(config.Document, "Nuplane");
         var setup = GetOrCreateObject(nuplane, "Setup");
