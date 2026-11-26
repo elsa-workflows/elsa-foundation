@@ -321,7 +321,10 @@ public sealed partial class EfStore
             ("Partition", "Target", "Seq", "Id", "InboxScope") WHERE "FoundationKeptBy" IS NOT NULL
             """);
         if (RecordsConsumedRootJob(db))
+        {
             yield return Index("IX_FoundationRootInbox_RecordedJobResult", "Messages", RecordedJobResultIndex);
+            yield return Index("IX_FoundationRootInbox_LiveJob", "Messages", LiveRootJobIndex);
+        }
         if (db.UsesRootParkRecovery)
         {
             yield return Index("IX_FoundationRootInbox_Released", "Messages", $"""

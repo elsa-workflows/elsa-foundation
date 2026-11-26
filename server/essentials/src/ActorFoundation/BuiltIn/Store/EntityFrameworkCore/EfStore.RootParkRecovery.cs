@@ -44,6 +44,7 @@ public sealed partial class EfStore
                 ? $"""
                     ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkJobResult" text;
                     CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_RecordedJobResult" ON "Messages" {RecordedJobResultIndex};
+                    CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_LiveJob" ON "Messages" {LiveRootJobIndex};
                     """ : "", StringComparison.Ordinal)
             .Replace("/*composed-waiting-index*/", db.UsesRootComposedParkRecovery ? $"""
                 CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortGroups" ON "Messages" ("Partition", "Seen", "Due", "Seq")
@@ -278,16 +279,15 @@ public sealed partial class EfStore
             var refusals = fits && command.RootParkClear && message.Kind == Kinds.Delete && park?.Clearing == message.Id
                 ? await ReadParkProtectionRefusalsAsync(db, message.Target.Id, message.Target.Partition, message.Id, long.MaxValue, token) : 0;
             // Check the registered footprint even if the arrivals exceed one page, so a valid plan is refused for page size.
-            var consumedJob = message.Kind == Kinds.Recover &&
-                park is { At: not null, Clearing: null, Jobs: { } registry, ParkJobResult: { } pinned } &&
-                pinned == await ReadConsumedRootJobAsync(db, message.Target.Id, message.Target.Partition, registry, token)
-                ? pinned : null;
+            var job = message.Kind == Kinds.Recover && park is { At: not null, Clearing: null, Jobs: { } registry }
+                ? await ReadRecoverableRootJobAsync(db, message.Target.Id, message.Target.Partition, registry, park.ParkJobResult, token)
+                : null;
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived),
-                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed) + (db.UsesSqliteRootRuntime || consumedJob is null ? 0 : 1),
+                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed) + (db.UsesSqliteRootRuntime || job?.ConsumedId is null ? 0 : 1),
                 fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Residue = park?.Residue ?? false, Rereads = RereadsParkFacts(db), Clearing = park?.Clearing, Cleared = park?.Cleared ?? 0, Page = page,
                     ClearsInPages = db.UsesSqliteRootRuntime || ClearsParkInPages(db), ProtectionRefusals = refusals,
-                    ConsumedJobRegistry = consumedJob is null ? null : park?.Jobs };
+                    RecoverableJobRegistry = job is null ? null : park?.Jobs, KeepsRegisteredJob = job?.KeepsRegistration == true };
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }
         return polled with { Messages = messages };
@@ -315,7 +315,7 @@ public sealed partial class EfStore
         var next = WorkerRow(root, current) with
         {
             Status = row.Status, Revision = checked(expected + 1), Fault = recovered ? null : current.Fault,
-            Jobs = recovered ? null : current.Jobs, FoundationDispatchHeader = header
+            Jobs = recovered && !facts.KeepsRegisteredJob ? null : current.Jobs, FoundationDispatchHeader = header
         };
         if (row != next || header.Tenant != root.Tenant || header.Reference != root.Reference ||
             header.Header.TypeData != current.TypeData || header.Header.Labels.Count != current.Labels.Count ||
@@ -350,7 +350,7 @@ public sealed partial class EfStore
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND NOT i."Suspended"
                     AND i."Status" = {(int)Prior} AND i."Revision" = {Expected}
-                    AND (NOT {Recovered} OR i."Jobs" IS NOT DISTINCT FROM {facts.ConsumedJobRegistry}::text /*clearing*/)
+                    AND (NOT {Recovered} OR i."Jobs" IS NOT DISTINCT FROM {facts.RecoverableJobRegistry}::text /*clearing*/)
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
                 """;
@@ -361,24 +361,25 @@ public sealed partial class EfStore
             var kept = Recovered ? await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token) : [];
             if (Recovered && (facts.Mark != new FoundationParkMark(prior.Revision ?? 0, prior.At ?? 0) || KeptSetDigest(kept) != facts.KeptDigest))
                 return false;
-            var consumedJob = Recovered && facts.ConsumedJobRegistry is not null
-                ? await ReadConsumedRootJobAsync(db, Root.Actor, Root.Partition, facts.ConsumedJobRegistry, token) : null;
-            if (Recovered && (!IsPinnedParkJobResult(prior.ParkJobResult, consumedJob, facts.ConsumedJobRegistry) ||
-                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed) + (consumedJob is null ? 0 : 1) != facts.Consumed)) return false;
+            var footprint = Recovered
+                ? await ReadRecoverableRootJobAsync(db, Root.Actor, Root.Partition, facts.RecoverableJobRegistry, prior.ParkJobResult, token)
+                : new RecoverableRootJob();
+            if (footprint is not { } job || Recovered && (job.KeepsRegistration != facts.KeepsRegisteredJob ||
+                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed) + (job.ConsumedId is null ? 0 : 1) != facts.Consumed)) return false;
             var envelope = Command with { Operator = Command.Operator with { RootParkFacts = null } };
             if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [envelope], null,
                 WithheldInputs || db.UsesRootComposedParkRecovery && facts.Clearing is not null, token,
                 parked: Prior == InstanceStatus.Faulted))
                 return false;
 
-            if (!await ClearConsumedRootJobAsync(db, Root.Actor, Root.Partition, consumedJob, token)) return false;
+            if (!await BindRecoverableRootJobAsync(db, Root.Actor, Root.Partition, job, token)) return false;
 
             var generation = Recovered ? checked(prior.Generation + 1) : prior.Generation;
             var update = ClearParkJobResult(db, $"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "Status" = CASE WHEN {Recovered} THEN {(int)InstanceStatus.Running} ELSE "Status" END,
                     "Fault" = CASE WHEN {Recovered} THEN NULL ELSE "Fault" END,
-                    "Jobs" = CASE WHEN {Recovered} THEN NULL ELSE "Jobs" END,
+                    "Jobs" = CASE WHEN {Recovered && !facts.KeepsRegisteredJob} THEN NULL ELSE "Jobs" END,
                     "FoundationParkAt" = CASE WHEN {Recovered} THEN NULL ELSE "FoundationParkAt" END,
                     "FoundationParkRevision" = CASE WHEN {Recovered} THEN NULL ELSE "FoundationParkRevision" END,
                     "FoundationParkGeneration" = {generation} /*park-job-result*/
@@ -402,12 +403,13 @@ public sealed partial class EfStore
             long? at = Recovered ? null : prior.At, revision = Recovered ? null : prior.Revision;
             var fault = Recovered ? null : prior.Fault;
             var status = Recovered ? InstanceStatus.Running : Prior;
+            var registry = facts.KeepsRegisteredJob ? facts.RecoverableJobRegistry : null;
             return await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
                         AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision} AND "Status" = {(int)status}
                         AND "Fault" IS NOT DISTINCT FROM {fault}::text AND "FoundationParkAt" IS NOT DISTINCT FROM {at}::bigint
                         AND "FoundationParkRevision" IS NOT DISTINCT FROM {revision}::bigint AND "FoundationParkGeneration" = {generation}
-                        AND (NOT {Recovered} OR "Jobs" IS NULL)
+                        AND (NOT {Recovered} OR "Jobs" IS NOT DISTINCT FROM {registry}::text)
                         AND "NextJobGeneration" IS NOT DISTINCT FROM {prior.NextJobGeneration}::bigint
                         AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
                         AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest})

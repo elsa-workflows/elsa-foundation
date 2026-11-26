@@ -25,9 +25,6 @@ public sealed partial class EfStore
         FormattableStringFactory.Create(query.Format.Replace("/*park-job-result*/",
             RecordsConsumedRootJob(db) ? """i."FoundationParkJobResult" """ : "CAST(NULL AS text)", StringComparison.Ordinal), query.GetArguments());
 
-    private static bool IsPinnedParkJobResult(string? id, string? consumedId, string? registry) =>
-        registry is null ? id is null : consumedId is not null && id == consumedId;
-
     private static async Task<string?> ReadConsumedRootJobAsync(KernelDb db, string actor, int partition, string? registry,
         CancellationToken token)
     {

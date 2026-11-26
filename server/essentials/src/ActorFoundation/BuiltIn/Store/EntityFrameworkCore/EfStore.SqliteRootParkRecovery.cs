@@ -80,17 +80,18 @@ public sealed partial class EfStore
             WHERE i."Id" = {root.Actor} AND i."Partition" = {root.Partition} AND i."Revision" = {turn.Expected}
                 AND i."Status" = {(int)turn.Prior} AND NOT i."Suspended" AND NOT i."Retired"
                 AND i."FoundationTenant" = {root.Tenant} AND i."FoundationReference" = {root.Reference} AND b."Fingerprint" = {root.Fingerprint}
-                AND (NOT {turn.Recovered} OR i."Jobs" IS NOT DISTINCT FROM {facts.ConsumedJobRegistry}
+                AND (NOT {turn.Recovered} OR i."Jobs" IS NOT DISTINCT FROM {facts.RecoverableJobRegistry}
                     AND i."FoundationParkClearing" IS NULL)
             """)).SingleOrDefaultAsync(token);
         if (prior is null || (prior.At is null) != (turn.Prior == InstanceStatus.Running)) return false;
         var kept = turn.Recovered ? await ReadSqliteRecoveryRowsAsync(db, root.Actor, root.Partition, null, token) : [];
         var arrived = kept.Where(row => row.Facts.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
-        var consumedJob = turn.Recovered && facts.ConsumedJobRegistry is not null
-            ? await ReadConsumedRootJobAsync(db, root.Actor, root.Partition, facts.ConsumedJobRegistry, token) : null;
+        var footprint = turn.Recovered
+            ? await ReadRecoverableRootJobAsync(db, root.Actor, root.Partition, facts.RecoverableJobRegistry, prior.ParkJobResult, token)
+            : new RecoverableRootJob();
         var keptJobs = kept.Where(row => row.Scope == RootTimedJobScope).ToArray();
-        if (turn.Recovered && (!IsPinnedParkJobResult(prior.ParkJobResult, consumedJob, facts.ConsumedJobRegistry) ||
-            (consumedJob is null ? keptJobs.Length != 0 : keptJobs is not [var job] || job.Id != consumedJob))) return false;
+        if (footprint is not { } job || turn.Recovered && (job.KeepsRegistration != facts.KeepsRegisteredJob ||
+            (job.ConsumedId is null ? keptJobs.Length != 0 : keptJobs is not [var keptJob] || keptJob.Id != job.ConsumedId))) return false;
         if (turn.Recovered && (facts.Mark != new FoundationParkMark(prior.Revision ?? 0, prior.At ?? 0) ||
             PageLength(arrived.Select(row => row.Facts)) != arrived.Length || arrived.Any(row => row.Scope != InboxKey.FoundationOccurrenceScope) ||
             KeptSetDigest(kept.Select(row => row.Facts)) != facts.KeptDigest)) return false;
@@ -99,7 +100,7 @@ public sealed partial class EfStore
                 turn.WithheldInputs || prior.Clearing is not null, token, parked: turn.Prior == InstanceStatus.Faulted))
             return false;
 
-        if (!await ClearConsumedRootJobAsync(db, root.Actor, root.Partition, consumedJob, token)) return false;
+        if (!await BindRecoverableRootJobAsync(db, root.Actor, root.Partition, job, token)) return false;
 
         var revision = turn.JournalRevision;
         var generation = turn.Recovered ? checked(prior.Generation + 1) : prior.Generation;
@@ -107,7 +108,7 @@ public sealed partial class EfStore
             UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision},
                 "Status" = CASE WHEN {turn.Recovered} THEN {(int)InstanceStatus.Running} ELSE "Status" END,
                 "Fault" = CASE WHEN {turn.Recovered} THEN NULL ELSE "Fault" END,
-                "Jobs" = CASE WHEN {turn.Recovered} THEN NULL ELSE "Jobs" END,
+                "Jobs" = CASE WHEN {turn.Recovered && !facts.KeepsRegisteredJob} THEN NULL ELSE "Jobs" END,
                 "FoundationParkAt" = CASE WHEN {turn.Recovered} THEN NULL ELSE "FoundationParkAt" END,
                 "FoundationParkRevision" = CASE WHEN {turn.Recovered} THEN NULL ELSE "FoundationParkRevision" END,
                 "FoundationParkGeneration" = {generation} /*park-job-result*/
@@ -131,10 +132,12 @@ public sealed partial class EfStore
                 AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done" AND "Seen" <> 0
             """, token);
         var restored = await ReadSqliteRecoveryRowsAsync(db, root.Actor, root.Partition, generation, token);
+        var registry = facts.KeepsRegisteredJob ? facts.RecoverableJobRegistry : null;
         return restored.Select(row => row.Facts.Envelope).SequenceEqual(arrived.Select(row => row.Facts.Envelope)) &&
             await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition}
-                    AND "Revision" = {revision} AND "Jobs" IS NULL AND "NextJobGeneration" IS NOT DISTINCT FROM {prior.NextJobGeneration})
+                    AND "Revision" = {revision} AND "Jobs" IS NOT DISTINCT FROM {registry}
+                    AND "NextJobGeneration" IS NOT DISTINCT FROM {prior.NextJobGeneration})
                 AND EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {root.Tenant} AND "Reference" = {root.Reference}
                     AND "Status" = {(int)InstanceStatus.Running} AND "ParkAt" IS NULL AND "ParkRevision" IS NULL AND "ParkFault" IS NULL
                     AND "ParkResolution" IS NULL AND "EndedAt" IS NULL AND "TerminalRevision" IS NULL) AS "Value"

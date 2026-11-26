@@ -133,7 +133,7 @@ public sealed partial class EfStore
         .Replace("/*root-park-recover*/", db.UsesRootParkRecovery ? """
             (OLD."Status" = 2 AND NEW."Status" = 0 AND NOT NEW."Retired" AND NOT OLD."Suspended" AND NOT NEW."Suspended"
                 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 /*park-recover-footprint*/
-                AND NEW."Jobs" IS NULL AND NEW."NextJobGeneration" IS NOT DISTINCT FROM OLD."NextJobGeneration"
+                /*recovered-jobs*/ AND NEW."NextJobGeneration" IS NOT DISTINCT FROM OLD."NextJobGeneration"
                 AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL AND NEW."Fault" IS NULL
                 AND NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" + 1
                 AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
@@ -142,6 +142,7 @@ public sealed partial class EfStore
                     AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/ AND j."Entries" LIKE '{{"Outcome":"recovered",%'))
             """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
             .Replace("/*park-recover-footprint*/", RootRecoverFootprint(db, "OLD", journaling: false), StringComparison.Ordinal)
+            .Replace("/*recovered-jobs*/", RecordsConsumedRootJob(db) ? "" : """AND NEW."Jobs" IS NULL""", StringComparison.Ordinal)
             .Replace("/*sqlite-recover-footprint*/", db.UsesSqliteRootRuntime ? """
 
                 AND NEW."FoundationStateWire" IS NOT DISTINCT FROM OLD."FoundationStateWire"
@@ -204,17 +205,20 @@ public sealed partial class EfStore
         // The Park binds the retained result by its storage key. Journal before removing it, then write the
         // running checkpoint only after the key and its pin have been cleared in the same transaction.
         var retained = journaling ? ConsumedParkJobExists(actor) : $"""
-            NEW."FoundationParkJobResult" IS NULL AND NOT EXISTS (
+            NEW."Jobs" IS NULL AND NEW."FoundationParkJobResult" IS NULL AND NOT EXISTS (
                 SELECT 1 FROM "Messages" m WHERE m."Id" = OLD."FoundationParkJobResult" AND m."InboxScope" = {RootTimedJobScope})
             AND NOT EXISTS (SELECT 1 FROM "Messages" m
                 WHERE m."Partition" = OLD."Partition" AND m."Target" = OLD."Id" AND m."JobGeneration" = OLD."NextJobGeneration" - 1
                     AND {IsRecordedJobResult("m.")})
             """;
-        var jobless = journaling ? "" : """AND NEW."FoundationParkJobResult" IS NULL""";
+        var jobless = journaling ? "" : """AND NEW."Jobs" IS NULL AND NEW."FoundationParkJobResult" IS NULL""";
+        var preserved = journaling ? "" : """AND NEW."Jobs" = OLD."Jobs" AND NEW."FoundationParkJobResult" IS NULL""";
         return $"""
             AND {actor}."FoundationParkClearing" IS NULL
             AND (({actor}."Jobs" IS NULL AND {actor}."FoundationParkJobResult" IS NULL {jobless})
-                OR ({actor}."Jobs" IS NOT NULL AND {actor}."FoundationParkJobResult" IS NOT NULL AND {retained}))
+                OR ({actor}."Jobs" IS NOT NULL AND {actor}."FoundationParkJobResult" IS NOT NULL AND {retained})
+                OR ({actor}."Jobs" IS NOT NULL AND {actor}."FoundationParkJobResult" IS NULL {preserved}
+                    AND {LiveRootJobFootprint(actor, journaling)}))
             """;
     }
 
