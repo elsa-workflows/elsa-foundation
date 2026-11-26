@@ -179,9 +179,21 @@ public sealed class ModuleAdministrationTests
     {
         await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
             File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
-                """{"Nuplane":{"Setup":{"Feeds":{"baked":{"DirectoryPath":"baked","Directory":{"Watch":false,"Role":"Cache"}}}}}}"""));
+                """
+                {
+                  "Nuplane": { "Setup": { "Feeds": {
+                    "0": { "Name": "baked", "DirectoryPath": "ignored", "IncludeAll": true, "Directory": { "Watch": false } },
+                    "baked": { "DirectoryPath": "baked", "Directory": { "Watch": false, "Role": "Cache" } }
+                  } } }
+                }
+                """));
         var configuration = Path.Combine(host.Root, "nuplane-management.json");
         var before = await File.ReadAllBytesAsync(configuration);
+        var registry = await Registry(host);
+        var listed = Assert.Single(registry["feeds"]!.AsArray())!;
+        Assert.Equal("baked", (string?)listed["name"]);
+        Assert.Equal("baked", (string?)listed["directoryPath"]);
+        Assert.False((bool)registry["capabilities"]!["canManageFeeds"]!);
 
         using var add = await host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("other", "other"));
         using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/baked", Feed("baked", "replacement"));
@@ -198,6 +210,56 @@ public sealed class ModuleAdministrationTests
         upload.EnsureSuccessStatusCode();
         Assert.True(File.Exists(Path.Combine(host.Root, "packages", archive)));
         Assert.False(File.Exists(Path.Combine(host.Root, "baked", archive)));
+    }
+
+    [Fact]
+    public async Task An_empty_feed_object_accepts_the_first_feed_as_an_editable_array()
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"Nuplane":{"Setup":{"Feeds":{}}}}"""));
+        var registry = await Registry(host);
+        Assert.True((bool)registry["capabilities"]!["canManageFeeds"]!);
+        Assert.Empty(registry["feeds"]!.AsArray());
+
+        using var add = await host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("local", "uploads"));
+        add.EnsureSuccessStatusCode();
+        var document = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(host.Root, "nuplane-management.json")))!;
+        var stored = Assert.Single(document["Nuplane"]!["Setup"]!["Feeds"]!.AsArray());
+        Assert.Equal("local", (string?)stored!["Name"]);
+    }
+
+    [Fact]
+    public async Task Numeric_feed_keys_are_converted_in_configuration_order_after_a_successful_edit()
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """
+                {
+                  "Nuplane": { "Setup": { "Feeds": {
+                    "10": { "Name": "later", "DirectoryPath": "cache-later", "Directory": { "Watch": false, "Role": "Cache" } },
+                    "2": { "Name": "earlier", "DirectoryPath": "cache-earlier", "Directory": { "Watch": false, "Role": "Cache" } }
+                  } } }
+                }
+                """));
+        var configuration = Path.Combine(host.Root, "nuplane-management.json");
+        var before = await File.ReadAllBytesAsync(configuration);
+        var registry = await Registry(host);
+        Assert.True((bool)registry["capabilities"]!["canManageFeeds"]!);
+
+        using var missing = await host.Client.DeleteAsync(Prefix + "/feeds/missing");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal(before, await File.ReadAllBytesAsync(configuration));
+
+        using var add = await host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("local", "uploads"));
+        add.EnsureSuccessStatusCode();
+        var original = JsonNode.Parse(before)!["Nuplane"]!["Setup"]!["Feeds"]!;
+        var document = JsonNode.Parse(await File.ReadAllTextAsync(configuration))!;
+        var feeds = document["Nuplane"]!["Setup"]!["Feeds"]!.AsArray();
+        Assert.Collection(feeds,
+            earlier => Assert.True(JsonNode.DeepEquals(original["2"], earlier)),
+            later => Assert.True(JsonNode.DeepEquals(original["10"], later)),
+            added => Assert.Equal("local", (string?)added!["Name"]));
     }
 
     [Fact]
