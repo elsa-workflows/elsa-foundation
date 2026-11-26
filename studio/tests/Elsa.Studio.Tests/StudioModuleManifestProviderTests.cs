@@ -154,7 +154,7 @@ public sealed class StudioModuleManifestProviderTests
 
     [Theory]
     [InlineData("{\"version\":2,\"styles\":[]}")]
-    [InlineData("{\"version\":1,\"styles\":[\"..\outside.css\"]}")]
+    [InlineData("{\"version\":1,\"styles\":[\"../outside.css\"]}")]
     [InlineData("{\"version\":1,\"styles\":[\"https://example.com/style.css\"]}")]
     [InlineData("{\"version\":1,\"styles\":[\"module-missing.css\"]}")]
     [InlineData("{\"version\":1,\"styles\":[\"module-entryHash.css\",\"module-entryHash.css\"]}")]

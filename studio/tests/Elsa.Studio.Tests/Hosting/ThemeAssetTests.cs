@@ -88,7 +88,7 @@ public sealed class ThemeAssetTests
     [Theory]
     [InlineData("settings.json")]
     [InlineData("../settings.json")]
-    [InlineData("..\settings.json")]
+    [InlineData("..\\settings.json")]
     [InlineData(".")]
     [InlineData("..")]
     public async Task Asset_ids_cannot_expose_or_delete_unrelated_owned_files(string id)
