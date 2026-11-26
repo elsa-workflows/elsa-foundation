@@ -66,23 +66,11 @@ public static partial class SqliteEmbeddedHosting
             cancellationToken.ThrowIfCancellationRequested();
             if (Contract.Kinds.IsCommand(kind))
             {
-                if (kind is not (Contract.Kinds.Terminate or Contract.Kinds.Delete) || target is not Contract.Target.Ref exact ||
-                    !FoundationRootCreator.IsGeneratedReference(exact.Actor.Id) || authorizeOperator?.Invoke(scope, exact.Actor, kind) != true ||
-                    payload is not { Length: > 0 and <= 2_048 })
-                    return new(Contract.AdmissionOutcome.Refused);
-                var command = RootAdmissionWire.ReadOperatorCommand(payload);
-                if (command is not { Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null })
-                    return new(Contract.AdmissionOutcome.Refused);
-                if (command.ExpectedTarget is { } expected && expected != exact.Actor)
-                    return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
-                if (command.ThenDelete && (kind != Contract.Kinds.Terminate || command.ExpectedTarget != exact.Actor ||
-                    authorizeOperator?.Invoke(scope, exact.Actor, Contract.Kinds.Delete) != true))
-                    return new(Contract.AdmissionOutcome.Refused);
-                if (command.Selection is not { Length: > 0 } selection)
-                    return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
+                var (actor, command, refusal) = ReadCommand(scope, target, kind, payload);
+                if (command is null) return new(Contract.AdmissionOutcome.Refused, Reason: refusal);
                 using var write = AcquireFile(path);
                 var operators = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(write.Options), window, write.AdmissionDefinitions);
-                return await operators.OperateAsync(scope.Tenant, exact.Actor, id, kind, selection, options?.DueAt, options?.KeepFor,
+                return await operators.OperateAsync(scope.Tenant, actor, id, kind, command.Selection!, options?.DueAt, options?.KeepFor,
                     cancellationToken, thenDelete: command.ThenDelete);
             }
 
@@ -112,9 +100,45 @@ public static partial class SqliteEmbeddedHosting
         }
 
         public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind, string? payload,
-            Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default) =>
-            requests is not null ? requests.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken)
-                : throw new NotSupportedException("SQLite held requests require the Embedded owner's reply edge.");
+            Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default)
+        {
+            if (requests is null) throw new NotSupportedException("SQLite held requests require the Embedded owner's reply edge.");
+            if (!Contract.Kinds.IsCommand(kind))
+                return requests.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken);
+
+            ArgumentNullException.ThrowIfNull(scope);
+            ArgumentNullException.ThrowIfNull(request);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (request.Inline || request.ReleaseBeforeCommit || request.Ambient is not null)
+                return ValueTask.FromResult(new Contract.Reply(null, null, Error: "invalid operator request"));
+            if (add?.DueAt is not null)
+                return ValueTask.FromResult(new Contract.Reply(null, null, Error: "requests cannot set a due time"));
+            var (actor, command, refusal) = ReadCommand(scope, target, kind, payload);
+            return command is not null ? requests.RequestOperatorAsync(scope, actor, id, kind, command, add?.KeepFor, request, cancellationToken)
+                : ValueTask.FromResult(new Contract.Reply(null, null, Error: refusal switch
+                {
+                    Contract.RefusalReason.StaleSelection => "stale selection",
+                    Contract.RefusalReason.TargetMismatch => "target",
+                    _ => "missing"
+                }));
+        }
+
+        private (Contract.ActorRef Actor, Contract.OperatorCommand? Command, Contract.RefusalReason? Refusal) ReadCommand(
+            Contract.BoundScope scope, Contract.Target target, string kind, string? payload)
+        {
+            if (kind is not (Contract.Kinds.Terminate or Contract.Kinds.Delete) || target is not Contract.Target.Ref exact ||
+                !FoundationRootCreator.IsGeneratedReference(exact.Actor.Id) || authorizeOperator?.Invoke(scope, exact.Actor, kind) != true ||
+                payload is not { Length: > 0 and <= 2_048 })
+                return default;
+            var command = RootAdmissionWire.ReadOperatorCommand(payload);
+            if (command is not { Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null }) return default;
+            if (command.ExpectedTarget is { } expected && expected != exact.Actor)
+                return (exact.Actor, null, Contract.RefusalReason.TargetMismatch);
+            if (command.ThenDelete && (kind != Contract.Kinds.Terminate || command.ExpectedTarget != exact.Actor ||
+                authorizeOperator?.Invoke(scope, exact.Actor, Contract.Kinds.Delete) != true)) return default;
+            return command.Selection is { Length: > 0 } ? (exact.Actor, command, null)
+                : (exact.Actor, null, Contract.RefusalReason.StaleSelection);
+        }
 
         public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
             CancellationToken cancellationToken = default) =>

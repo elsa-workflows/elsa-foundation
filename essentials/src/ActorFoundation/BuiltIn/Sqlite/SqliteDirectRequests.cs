@@ -50,12 +50,20 @@ public static partial class SqliteEmbeddedHosting
 
         void IReplyTransport.Send(string destination, Reply reply) => edge.Send(destination, reply);
 
-        internal async ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind, string? payload,
-            Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken token)
+        internal ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind, string? payload,
+            Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken token) =>
+            DuringLocalOwnershipAsync(() => edge.RequestAsync(scope, target, id, kind, payload, add, request, token), token);
+
+        internal ValueTask<Contract.Reply> RequestOperatorAsync(Contract.BoundScope scope, Contract.ActorRef actor, string id, string kind,
+            Contract.OperatorCommand command, TimeSpan? keepFor, Contract.RequestOptions request, CancellationToken token) =>
+            DuringLocalOwnershipAsync(() => edge.RequestOperatorAsync(scope, actor.Id, id, request, keepFor,
+                (caller, ct) => admission.OperateAsync(actor, kind, command, caller, ct), token), token);
+
+        private async ValueTask<Contract.Reply> DuringLocalOwnershipAsync(Func<ValueTask<Contract.Reply>> request, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
             using (AcquireFile(path, requests: this)) token.ThrowIfCancellationRequested();
-            try { return await edge.RequestAsync(scope, target, id, kind, payload, add, request, token); }
+            try { return await request(); }
             catch (SqliteHostLockException)
             {
                 return new(null, null, Error: "lost");
@@ -76,6 +84,10 @@ public static partial class SqliteEmbeddedHosting
             public Task<HeldRootAdmission> SendAsync(HeldRootRequest request, string reference, string kind, string? payload,
                 CancellationToken token) =>
                 WriteAsync((admission, ct) => admission.SendRequestAsync(request, reference, kind, payload, ct), token);
+
+            internal Task<Contract.Admission?> OperateAsync(Contract.ActorRef actor, string kind, Contract.OperatorCommand command,
+                HeldRootRequest request, CancellationToken token) =>
+                WriteAsync((admission, ct) => admission.OperateHeldAsync(actor, kind, command, request, ct), token);
 
             public async ValueTask<Contract.ActorStatus?> ReadStatusAsync(string tenant, string reference, CancellationToken token)
             {

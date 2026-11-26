@@ -36,18 +36,23 @@ public sealed partial class EfStore
         """;
 
     // A staged owner leaves later operator envelopes pending. They also cannot block an earlier supported stage's FIFO.
-    private static string SqliteSupportedOperator(string columnPrefix) =>
-        $"""
-        {columnPrefix}"Id" GLOB 'operator/*' AND {columnPrefix}"ReplyTo" IS NULL
+    private static string SqliteSupportedOperator(string columnPrefix)
+    {
+        var address = $"""{columnPrefix}"ReplyTo" """;
+        var header = $"""{columnPrefix}"Start" """;
+        var wire = $"(CASE WHEN {address} IS NULL THEN {header} ELSE substr({header}, {PostgresRootAdmission.HeldOperatorPrefix.Length + 1}) END)";
+        var payload = $"substr({wire}, {PostgresRootAdmission.OperatorPrefix.Length + 1})";
+        return $"""
+        {columnPrefix}"Id" GLOB 'operator/*'
+        AND ({address} IS NULL OR {header} GLOB '{PostgresRootAdmission.HeldOperatorPrefix}*')
         AND (({columnPrefix}"Kind" = '{Kinds.Terminate}' AND
-                ({columnPrefix}"Start" GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR
-                    {columnPrefix}"Start" GLOB '{PostgresRootAdmission.TerminateThenDeletePrefix}*'))
+                ({wire} GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR {wire} GLOB '{PostgresRootAdmission.TerminateThenDeletePrefix}*'))
             OR ({columnPrefix}"Kind" = '{Kinds.Delete}' AND
-                ({columnPrefix}"Start" GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR
-                    {columnPrefix}"Start" GLOB '{PostgresRootAdmission.RetentionDeletePrefix}*')))
-        AND CASE WHEN json_valid(substr({columnPrefix}"Start", {PostgresRootAdmission.OperatorPrefix.Length + 1}))
-            THEN json_type(substr({columnPrefix}"Start", {PostgresRootAdmission.OperatorPrefix.Length + 1}), '$.Park') IS NULL ELSE 0 END
+                ({wire} GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR
+                    ({address} IS NULL AND {wire} GLOB '{PostgresRootAdmission.RetentionDeletePrefix}*'))))
+        AND CASE WHEN json_valid({payload}) THEN json_type({payload}, '$.Park') IS NULL ELSE 0 END
         """;
+    }
 
     private bool AuthoredSqliteWithholding(WorkerRoot root, RootImage current) =>
         _ordinaryRoots?.AuthoredWithholds?.Invoke(new(new(root.Reference), current.Model, root.Tenant,
