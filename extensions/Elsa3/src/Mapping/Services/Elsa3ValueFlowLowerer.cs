@@ -1312,9 +1312,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 return Resolve(Elsa3AmbientReferenceKind.WorkflowRequest, inputs[0].Name);
         }
 
-        // #5873: Elsa 3 generated accessors for the variables in scope, nearest first, so an enclosing loop's per-pass
-        // variable comes before every workflow variable; a workflow input's accessor, registered later, replaced it.
-        if (Elsa3LoopPassVariables.Owner(accessors.Elsa3ScopeNames(consumer.Activity), declared => HasAccessor(declared, name)) is { } pass)
+        // #5873: an enclosing loop's per-pass variable, unless a farther variable's accessor replaced it (inputs: above).
+        if (PassAccessorOwner(definition, consumer, accessors, name) is { } pass)
             return ResolvePassVariable(consumer, accessors, pass.Name, pass);
 
         var variables = definition.Variables.Where(value => HasAccessor(value.Name, name)).ToArray();
@@ -1351,7 +1350,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         string name)
     {
         // #5873: the setter of an enclosing loop's per-pass variable wrote that variable, not a workflow variable.
-        if (Elsa3LoopPassVariables.Owner(accessors.Elsa3ScopeNames(consumer.Activity), declared => HasGeneratedAccessor(declared, name)) is { } pass)
+        if (PassAccessorOwner(definition, consumer, accessors, name) is { } pass)
             return ResolvePassVariable(consumer, accessors, pass.Name, pass);
 
         var variables = definition.Variables.Where(value => HasGeneratedAccessor(value.Name, name)).ToArray();
@@ -1372,6 +1371,18 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             $"JavaScript calls unknown or unapproved host function 'set{name}'.",
             Elsa3ExpressionRewriter.UndeclaredFunctionGuidance($"set{name}")));
     }
+
+    /// <summary>
+    /// The loop whose per-pass variable Elsa 3's generated <c>get{name}</c>/<c>set{name}</c> reached from the consumer
+    /// (#5873): Elsa 3 registered them nearest scope first and ended with the workflow's variables (in a reusable run, its
+    /// inputs too), so the farthest registration of the same function won.
+    /// </summary>
+    private static Elsa3ScopeName? PassAccessorOwner(Elsa3WorkflowDefinition definition, ActivityProperty consumer, AccessorScope accessors, string name) =>
+        Elsa3LoopPassVariables.AccessorOwner(
+            accessors.Elsa3ScopeNames(consumer.Activity),
+            definition.Variables.Select(variable => variable.Name)
+                .Concat(accessors.IsReusable ? definition.Inputs.Select(input => input.Name) : []),
+            declared => HasGeneratedAccessor(declared, name));
 
     /// <summary>Whether Elsa 3 generated <c>get{accessor}</c> / <c>set{accessor}</c> for a variable named <paramref name="declared"/>.</summary>
     private static bool HasGeneratedAccessor(string declared, string accessor) =>

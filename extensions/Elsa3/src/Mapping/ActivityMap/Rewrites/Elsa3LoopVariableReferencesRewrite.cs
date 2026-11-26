@@ -20,7 +20,7 @@ internal sealed class Elsa3LoopVariableReferencesRewrite : IElsa3NodeRewrite
     /// loop variable that holds the same value (#5873). Elsa 3 <c>ForEach</c> declares <c>CurrentValue</c> and
     /// <c>CurrentIndex</c> (<c>ForEachT.cs:97-98</c> at 3.6.3); <c>For</c> declares <c>CurrentValue</c> only
     /// (<c>For.cs:105-108</c>). Elsa 3 matches these names ordinally. A loop that converts to another Elsa 4 loop adds
-    /// its row here (spec 1243 FR-013 for <c>ParallelForEach</c>).
+    /// its row here (spec 1243 FR-013, PR #5841, for <c>ParallelForEach</c>).
     /// </summary>
     internal static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> PassVariables =
         new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal)

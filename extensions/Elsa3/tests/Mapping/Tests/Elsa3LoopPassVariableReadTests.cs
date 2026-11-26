@@ -84,14 +84,44 @@ public sealed class Elsa3LoopPassVariableReadTests
     [Fact]
     public async Task A_variable_declared_inside_the_body_takes_precedence()
     {
-        var body = Sequence("body", Read("getVariable('CurrentValue')"));
+        var inner = Sequence("inner", Read("getVariable('CurrentValue')"));
+        inner.AdditionalProperties["variables"] = JsonSerializer.SerializeToElement(new[] { new { id = "acme-inner-value", name = "CurrentValue", typeName = "String" } });
+
+        var result = await ConvertAsync(Sequence("root", ForEach("loop", Sequence("body", inner))));
+
+        // Today's handling of a body variable applies, not the loop's: the by-name read of a container variable has no
+        // workflow declaration, so it is refused as before.
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.DanglingReference && diagnostic.Message.Contains("'CurrentValue'", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("getVariable('CurrentValue')")]
+    [InlineData("getCurrentValue()")]
+    public async Task A_variable_of_the_body_container_itself_loses_to_the_per_pass_variable(string read)
+    {
+        // Elsa 3 created the per-pass variables on the body's context before the body declared its own.
+        var body = Sequence("body", Read(read));
         body.AdditionalProperties["variables"] = JsonSerializer.SerializeToElement(new[] { new { id = "acme-body-value", name = "CurrentValue", typeName = "String" } });
 
         var result = await ConvertAsync(Sequence("root", ForEach("loop", body)));
 
-        // Today's handling of a body variable applies; the read never binds to the loop.
-        Assert.DoesNotContain(result.Value?.State is null ? [] : ReadExpression(result).Parameters.Values, parameter =>
-            parameter is VariableExpressionParameterBinding { DeclaringScopeNodeId: "loop" });
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        AssertReadsLoop(result, "loop", "currentItem");
+    }
+
+    [Fact]
+    public async Task A_generated_accessor_shared_with_a_workflow_variable_reads_the_workflow_variable()
+    {
+        // Elsa 3 registered getCurrentValue for the per-pass CurrentValue, then again for the workflow's currentValue,
+        // which replaced it.
+        var workflow = new Elsa3Variable { Id = "acme-lower", Name = "currentValue", TypeName = "String" };
+
+        var result = await ConvertAsync(Sequence("root", ForEach("loop", Read("getCurrentValue()"))), workflow);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        AssertReads(result, VariableReference.WorkflowScopeId, "acme-lower");
     }
 
     [Fact]
@@ -132,10 +162,12 @@ public sealed class Elsa3LoopPassVariableReadTests
         Assert.Contains("literal", refusal.Guidance, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task A_computed_name_in_a_run_javascript_body_inside_a_loop_is_refused()
+    [Theory]
+    [InlineData("var name = 'Current' + 'Value'; return getVariable(name);")]
+    [InlineData("var name = 'Current' + 'Value'; setVariable(name, 1); return 1;")]
+    public async Task A_computed_name_in_a_run_javascript_body_inside_a_loop_is_refused(string source)
     {
-        var script = Activity("node", "Elsa.RunJavaScript", ("script", Literal("var name = 'Current' + 'Value'; return getVariable(name);")));
+        var script = Activity("node", "Elsa.RunJavaScript", ("script", Literal(source)));
 
         var result = await ConvertAsync(Sequence("root", For("loop", script)));
 
