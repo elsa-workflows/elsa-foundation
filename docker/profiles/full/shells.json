@@ -1,0 +1,206 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Name": "default",
+        "Features": {
+          "Primitives": {},
+          "Serialization": {},
+          "Mediator": {},
+          "MemoryCache": {},
+          "Events": {},
+          "Tasks": {},
+          "FileSystemDistributedLocking": {},
+          "Expressions": {},
+          "ApiCapabilities": {},
+          "ActivitiesPrimitives": {},
+          "ActivitiesSequence": {},
+          "ActivitiesFlowchart": {},
+          "ActivitiesControlFlow": {},
+          "ActivitiesRuntime": {},
+          "ActivitiesGraphRuntime": {},
+          "ActivitiesGraphDesign": {},
+          "ActivitiesDesignApi": {},
+          "ActivitiesDesignEntityFrameworkCore": {},
+          "ActivitiesDesignReconciliation": {},
+          "ClrActivityReconciliation": {
+            "Options": {
+              "FolderPath": "/app/profile-activities"
+            }
+          },
+          "WorkflowsDesignApi": {},
+          "WorkflowsDesignEntityFrameworkCore": {},
+          "WorkflowDesignValidations": {},
+          "WorkflowsPublishing": {},
+          "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingEntityFrameworkCore": {},
+          "WorkflowsRuntimeEntityFrameworkCore": {},
+          "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeResumption": {},
+          "WorkflowsRuntimeCheckpointPersistence": {
+            "Mode": "Balanced"
+          },
+          "WorkflowsRuntimeTriggers": {},
+          "StandaloneTriggersApi": {},
+          "StandaloneEventTriggerAuthoring": {},
+          "FoundationIdentityAbstractions": {},
+          "FoundationIdentityAspNetCoreIdentity": {
+            "IsDefault": true
+          },
+          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+            "SeedAdminUserName": "admin"
+          },
+          "IdentityIamEntityFrameworkCore": {},
+          "Http": {},
+          "ActivitiesHttp": {},
+          "WorkflowsRuntimeHttp": {},
+          "StandaloneHttpTriggerAuthoring": {},
+          "ActivitiesScheduling": {},
+          "WorkflowsRuntimeScheduling": {},
+          "WorkflowsRuntimeRecurringTriggers": {},
+          "StandaloneScheduleTriggerAuthoring": {},
+          "StandaloneScheduleTriggers": {},
+          "ExpressionsApi": {},
+          "JavaScriptExpressions": {
+            "TypeDescriptors": [
+              {
+                "TypeFullName": "System.DateTime"
+              },
+              {
+                "TypeFullName": "System.DateTimeOffset"
+              },
+              {
+                "TypeFullName": "System.TimeSpan"
+              },
+              {
+                "TypeFullName": "System.Guid"
+              },
+              {
+                "TypeFullName": "System.Random"
+              },
+              {
+                "TypeFullName": "System.Object"
+              },
+              {
+                "TypeFullName": "System.Text.Json.Nodes.JsonNode, System.Text.Json"
+              },
+              {
+                "TypeFullName": "System.String"
+              },
+              {
+                "TypeFullName": "System.Boolean"
+              },
+              {
+                "TypeFullName": "System.Int16"
+              },
+              {
+                "TypeFullName": "System.Int32"
+              },
+              {
+                "TypeFullName": "System.Int64"
+              },
+              {
+                "TypeFullName": "System.Decimal"
+              },
+              {
+                "TypeFullName": "System.Single"
+              },
+              {
+                "TypeFullName": "System.Double"
+              },
+              {
+                "TypeFullName": "System.Byte[]"
+              },
+              {
+                "TypeFullName": "System.IO.Stream"
+              },
+              {
+                "TypeFullName": "System.DateOnly"
+              },
+              {
+                "TypeFullName": "System.TimeOnly"
+              },
+              {
+                "TypeFullName": "System.Collections.Generic.IDictionary`2[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Object, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"
+              }
+            ]
+          },
+          "JavaScriptJintEngine": {},
+          "JavaScriptActivities": {},
+          "JavaScriptWorkflowsDesign": {},
+          "HttpJavaScript": {},
+          "Liquid": {},
+          "ActivitiesDispatchWorkflowRuntime": {},
+          "ActivitiesDispatchWorkflowDesign": {},
+          "Elsa3Mapping": {},
+          "Elsa3ImportJsonActivities": {},
+          "Elsa3ImportActivitiesPublishing": {},
+          "Elsa3ImportActivitiesEntityFrameworkCore": {
+            "ConnectionName": "Elsa"
+          },
+          "AttentionApi": {},
+          "ModularityApi": {},
+          "ModularityAttention": {},
+          "ActivitiesBpmn": {},
+          "ActivitiesBpmnDesign": {},
+          "ActivitiesBpmnInterchange": false,
+          "ActivitiesCompensation": {},
+          "BackgroundActivities": {},
+          "AgentRuntime": {},
+          "AgentDesign": {},
+          "AgentApi": {},
+          "AgentInspectionApi": {},
+          "AgentReview": {},
+          "AgentReviewApi": {},
+          "AgentEntityFrameworkCore": {},
+          "AnthropicAgents": {},
+          "AzureOpenAIAgents": {},
+          "OpenAIAgents": {},
+          "Connections": {},
+          "ConnectionsApi": {},
+          "ConnectionsDesign": {},
+          "ConnectionsWorkflows": {},
+          "ConnectionsEntityFrameworkCore": {},
+          "Decisions": {},
+          "DecisionsApi": {},
+          "DecisionsDesign": {},
+          "DecisionsEntityFrameworkCore": {},
+          "DecisionsWorkflowsApi": {},
+          "DecisionsWorkflowsDesign": {},
+          "DecisionsWorkflowsRuntime": {},
+          "DiagnosticsOpenTelemetry": {},
+          "DiagnosticsOpenTelemetryEngineBridge": {},
+          "DiagnosticsOpenTelemetryEntityFrameworkCore": {
+            "ConnectionName": "Elsa"
+          },
+          "DiagnosticsStructuredLogs": {
+            "MinimumLevel": "Warning"
+          },
+          "DiagnosticsStructuredLogsEntityFrameworkCore": {},
+          "Secrets": {},
+          "SecretsApi": {},
+          "SecretsWorkflows": {},
+          "SecretsEntityFrameworkCore": {},
+          "StudioDashboardApi": {},
+          "StudioDashboardEntityFrameworkCore": {},
+          "StudioPreferences": {},
+          "StudioPreferencesApi": {},
+          "StudioPreferencesEntityFrameworkCore": {},
+          "WorkflowDashboardQueries": {},
+          "WorkflowsDashboard": {},
+          "WorkflowsDashboardEntityFrameworkCore": {},
+          "WorkflowsExecutionEvidence": {},
+          "WorkflowsRuntimeAttention": {},
+          "WorkflowsRuntimeHistory": {},
+          "WorkflowsRuntimeTracing": {},
+          "JavaScriptEndpoints": {}
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}

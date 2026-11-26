@@ -15,9 +15,9 @@ const string HostOwner = "Elsa.Foundation.Host";
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Shell composition (which features each shell enables) is authored in shells.json, layered under the
-// standard appsettings files. reloadOnChange lets CShells re-read a shell's blueprint on reload.
+// A mounted shells.json replaces the image's default shell. Deployment settings can override individual values.
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
+builder.Configuration.AddEnvironmentVariables().AddCommandLine(args);
 
 var configuration = builder.Configuration;
 
