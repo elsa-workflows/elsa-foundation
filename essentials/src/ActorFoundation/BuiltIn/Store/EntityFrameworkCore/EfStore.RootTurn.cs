@@ -110,8 +110,8 @@ public sealed partial class EfStore
         Message[]? expectedEnvelopes, FoundationSelfIssuer? issue, bool suspended, CancellationToken cancellationToken)
     {
         if (db.UsesSqliteRootRuntime)
-            return issue is null && !suspended && await SettleSqliteRootInputsAsync(db, reference, actor, expected,
-                expectedEnvelopes, cancellationToken);
+            return issue is null && await SettleSqliteRootInputsAsync(db, reference, actor, expected,
+                expectedEnvelopes, suspended, cancellationToken);
 
         var home = new InstanceRef(actor.Id).Partition;
         var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";

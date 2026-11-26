@@ -44,6 +44,8 @@ if (args is ["sqlite-root-timed-jobs", var sqliteJobFence and ("checked" or "in-
     return await SqliteHostLifetimeChecks.RunTimedJobsAsync(sqliteJobFence == "in-batch");
 if (args is ["sqlite-root-held-replies", var sqliteReplyFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunHeldRepliesAsync(sqliteReplyFence == "in-batch");
+if (args is ["sqlite-root-terminate", var sqliteTerminateFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunTerminateAsync(sqliteTerminateFence == "in-batch");
 if (args is ["pg-http-owner-loss", var ownerFence and ("checked" or "in-batch"), var loss and ("before" or "before-late" or "after")])
     return await PostgresHttpOwnerLoss.RunAsync(ownerFence, loss);
 if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batch"), var pause and ("before" or "after" or "resume"), var ownerRef])

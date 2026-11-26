@@ -23,15 +23,13 @@ public sealed partial class EfStore
     }
 
     // The discovered birth join already limits creators to their exact tenant/reference envelope.
-    private static readonly string SqliteRootPollFilter = $"""
+    private static string SqliteRootPollScope() => $"""
         AND m."EventMatch" IS NULL AND (m."InboxScope" = 0 OR (
-            (m."InboxScope" = {RootTimedJobScope} OR
-                m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" NOT GLOB 'operator/*') AND EXISTS (
+            m."InboxScope" IN ({RootTimedJobScope}, {InboxKey.FoundationOccurrenceScope}) AND EXISTS (
                 SELECT 1 FROM "Instances" i
                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition"
                     AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
-                    AND NOT i."Retired" AND i."FoundationParkAt" IS NULL
-                    AND (NOT i."Suspended" OR i."Status" <> {(int)InstanceStatus.Running}))))
+                    AND NOT i."Retired" AND i."FoundationParkAt" IS NULL)))
         """;
 
     private static Task<List<WorkerRoot>> ResolveSqliteWorkerRootsAsync(KernelDb db, int? partition, string[] actors,
@@ -104,8 +102,9 @@ public sealed partial class EfStore
     private static async Task<bool> BindSqliteRootTurnAsync(KernelDb db, RootTurnCheckpoint turn, CancellationToken token)
     {
         var timedFault = turn.Status == InstanceStatus.Faulted && db.RootStateFamily.Ends(turn.Status);
-        if (turn.Status is not (InstanceStatus.Running or InstanceStatus.Finished) && !timedFault || turn.Current.Suspended ||
-            turn.OperatorSuspension is not null || turn.OperatorTermination ||
+        var terminated = turn.OperatorTermination && db.UsesRootTermination && turn.Status == InstanceStatus.Cancelled;
+        if (turn.Status is not (InstanceStatus.Running or InstanceStatus.Finished) && !timedFault && !terminated ||
+            turn.Current.Suspended && !terminated || turn.OperatorSuspension is not null ||
             !turn.TimedJob && turn.JobCompletion is not null || turn.Values is not null ||
             turn.Issue is not null || turn.Recalls is not null)
             throw new NotSupportedException("The staged SQLite root worker supports ordinary and timed job checkpoints.");
@@ -127,7 +126,7 @@ public sealed partial class EfStore
                 AND b."Actor" = i."Id" AND b."Partition" = i."Partition"
             WHERE b."Reference" = {turn.Reference} AND b."Tenant" = {turn.Tenant} AND b."Creation" = {actor.Creation}
                 AND i."Id" = {actor.Id} AND i."Partition" = {home} AND i."Revision" = {turn.Current.Revision}
-                AND i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired" AND NOT i."Suspended"
+                AND i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired" AND i."Suspended" = {turn.Current.Suspended}
                 AND i."FoundationParkAt" IS NULL AND i."FoundationTerminalAt" IS NULL AND i."FoundationTerminalRevision" IS NULL
                 AND i."Jobs" IS NOT DISTINCT FROM {turn.Current.Jobs}
                 AND i."NextJobGeneration" IS NOT DISTINCT FROM {turn.Current.NextJobGeneration}
@@ -139,7 +138,7 @@ public sealed partial class EfStore
         var settled = turn.TimedJob
             ? await ConsumeRootTimedInputsAsync(db, actor, turn.Inputs, turn.JobCompletion, token)
             : await SettleSqliteRootInputsAsync(db, turn.Reference, actor,
-                turn.Inputs.Select(input => input.InboxKey).ToArray(), turn.Inputs, token);
+                turn.Inputs.Select(input => input.InboxKey).ToArray(), turn.Inputs, turn.Current.Suspended, token);
         if (!settled) return false;
         if (turn.SettledJobs is { Length: > 0 } jobIds &&
             await SqlitePendingRootTimedInputs(db, actor, jobIds).ExecuteDeleteAsync(token) != jobIds.Length) return false;
@@ -160,20 +159,19 @@ public sealed partial class EfStore
     }
 
     private static async Task<bool> SettleSqliteRootInputsAsync(KernelDb db, string reference, CreationAddress actor,
-        IReadOnlyList<InboxKey> expected, Message[]? expectedEnvelopes, CancellationToken token)
+        IReadOnlyList<InboxKey> expected, Message[]? expectedEnvelopes, bool suspended, CancellationToken token)
     {
-        if (expected.Any(key => key.Scope != InboxKey.FoundationOccurrenceScope || key.Match is not null ||
-            PostgresRootAdmission.IsOperatorOccurrence(key))) return false;
+        if (expected.Any(key => key.Scope != InboxKey.FoundationOccurrenceScope || key.Match is not null)) return false;
         if (expected.Count == 0) return true;
         var home = new InstanceRef(actor.Id).Partition;
         FormattableString ready = $"""
             SELECT * FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
                 AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
-                AND "Due" <= /*sqlite-root-clock*/ AND "Id" NOT GLOB 'operator/*'
+                AND "Due" <= /*sqlite-root-clock*/ AND (NOT {suspended} OR "Id" GLOB 'operator/*')
             ORDER BY "Seq" LIMIT {expected.Count}
             """;
         var rows = await db.Messages.FromSqlInterpolated(UseSqliteRootClock(ready)).AsNoTracking().ToListAsync(token);
-        var messages = rows.Select(row => PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol)).ToArray();
+        var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue: null)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(message => message.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
         var ids = Json.Write(expected.Select(key => key.Id).ToArray());
@@ -193,7 +191,8 @@ public sealed partial class EfStore
             WHERE b."Tenant" = {root.Tenant} AND b."Reference" = {root.Reference} AND b."Actor" = {root.Actor}
                 AND b."Creation" = 1 AND i."Partition" = {root.Partition} AND NOT i."Retired"
                 AND (i."Status" = {(int)InstanceStatus.Finished} OR
-                    ({db.RootStateFamily.EndsFaulted} AND i."Status" = {(int)InstanceStatus.Faulted}
+                    (({db.RootStateFamily.EndsFaulted} AND i."Status" = {(int)InstanceStatus.Faulted} OR
+                        {db.RootStateFamily.EndsCancelled} AND i."Status" = {(int)InstanceStatus.Cancelled})
                         AND instr(i."State", {db.RootStateFamily.Prefix}) = 1 AND i."FoundationParkAt" IS NULL))
                 AND i."FoundationTerminalAt" IS NOT NULL
                 AND i."FoundationTerminalRevision" = i."Revision"

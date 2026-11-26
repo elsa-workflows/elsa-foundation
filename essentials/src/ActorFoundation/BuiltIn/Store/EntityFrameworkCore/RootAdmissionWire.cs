@@ -1,9 +1,24 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
 
 internal static class RootAdmissionWire
 {
+    private static readonly JsonSerializerOptions OperatorJson = new()
+    {
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        AllowDuplicateProperties = false
+    };
+
+    internal static Contract.OperatorCommand? ReadOperatorCommand(string payload)
+    {
+        try { return JsonSerializer.Deserialize<Contract.OperatorCommand>(payload, OperatorJson); }
+        catch (JsonException) { return null; }
+    }
+
     internal const string CreatorPrefix = "!kernel-root/1:";
     internal const string DirectPrefix = "!kernel-direct/1:";
     internal const string HeldDirectPrefix = "!kernel-held-direct/1:";

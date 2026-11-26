@@ -881,6 +881,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                          AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now))
                    END)))
         """;
+    private static readonly string SqliteRootPollFilter = RootOperatorPollFilter
+        .Replace("LIKE 'operator/%'", "GLOB 'operator/*'", StringComparison.Ordinal) + SqliteRootPollScope();
     // A parked root without Park arrivals withholds its ordinary inputs, so only an earlier operator row holds a command back.
     // A held command admitted before the Park opened passes too: the owner refuses it there and answers its caller.
     private static bool WithholdsParkInputs(KernelDb db) => db.UsesRootParkedOperators && !db.UsesRootParkArrivals;
