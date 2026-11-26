@@ -116,7 +116,7 @@ def main(args):
                 shutil.copy2(path, feed / path.name)
             report["producer"] = "supplied production archives; source revision is external provenance"
         else:
-            check(not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all", "--", "Studio", "extensions"], cwd=REPO, text=True).strip(), "Commit production inputs before qualification")
+            check(not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all", "--", "studio", "extensions"], cwd=REPO, text=True).strip(), "Commit production inputs before qualification")
             version = args.version
             producer = root / "producer"
             producer.mkdir()
@@ -124,13 +124,13 @@ def main(args):
             with tarfile.open(root / "source.tar") as archive:
                 archive.extractall(producer)
             for package_id in ("Elsa.Studio.Hosting", "Elsa.Studio.Dashboard"):
-                relative = Path("Studio/src/essentials") / package_id / "wwwroot"
+                relative = Path("studio/src/essentials") / package_id / "wwwroot"
                 source = REPO / relative
                 check(source.is_dir(), "Build the actual frontend first: " + str(source))
                 source_assets[package_id] = {path.relative_to(source).as_posix(): path.read_bytes() for path in source.rglob("*") if path.is_file()}
                 shutil.copytree(source, producer / relative)
             for package_id in IDS:
-                project = producer / SUPPORT_PROJECTS.get(package_id, "Studio/src/essentials/" + package_id + "/" + package_id + ".csproj")
+                project = producer / SUPPORT_PROJECTS.get(package_id, "studio/src/essentials/" + package_id + "/" + package_id + ".csproj")
                 run("pack-" + package_id, [dotnet, "pack", str(project), "-c", "Release", "-p:Version=" + version,
                                           "-p:SourceRevisionId=" + revision, "-o", str(feed)], producer)
             report.update(producer="owned committed source snapshot with unchanged production project files", producerSourceRevision=revision)

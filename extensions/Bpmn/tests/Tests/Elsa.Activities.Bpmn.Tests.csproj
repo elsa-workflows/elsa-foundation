@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <EmbeddedResource Include="Fixtures/LegacyCompensationState.json" LogicalName="Bpmn.LegacyCompensationState.json" />
     <Content Include="../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/correctness/legacy-pending-fault-model.json" Link="Fixtures/ActualLegacyPendingParentFaultModel.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../../../specs/1017-direct-bpmn-hosting/evidence/embedding/human-native-recovery/root-complete/waiting-checked.json" Link="Fixtures/ActualHumanEmbedding.json" CopyToOutputDirectory="PreserveNewest" />
@@ -25,26 +25,26 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../../essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="../../src/Api/Elsa.Activities.Bpmn.Api.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
     <ProjectReference Include="../../src/Design/Elsa.Activities.Bpmn.Design.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\tests\Activities\Testing\Elsa.Activities.Testing.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\tests\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\tests\Activities\Testing\Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\tests\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
   </ItemGroup>
 
 </Project>

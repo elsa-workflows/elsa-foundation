@@ -1,7 +1,7 @@
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
 const { createRequire } = require('node:module');
 const repo = path.resolve(__dirname, '../..');
-const { request, expect } = createRequire(path.join(repo, 'Studio/package.json'))('@playwright/test');
+const { request, expect } = createRequire(path.join(repo, 'studio/package.json'))('@playwright/test');
 const base = process.env.ELSA_WORKBENCH_URL, out = process.env.DECISIONS_EXECUTION_OUT, phase = process.env.DECISIONS_PHASE || 'prepare';
 if (process.env.DECISIONS_OWNED_HOSTS !== '1' || !base || !out)
     throw Error('Explicit owned host/output required');

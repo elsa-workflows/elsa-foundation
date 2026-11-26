@@ -31,7 +31,7 @@ def verify_workbench_package_host(receipt, evidence, source, feed, run, environm
     This proves package-host restore/publish and identity-receipt compatibility. It does not
     execute a native Rules workflow in Workbench.
     """
-    with tempfile.TemporaryDirectory(prefix='RulesPackageWorkbench-', dir=Path(source) / 'apps') as host_copy:
+    with tempfile.TemporaryDirectory(prefix='RulesPackageWorkbench-', dir=Path(source) / 'server/apps') as host_copy:
         return _verify_workbench_package_host(receipt, evidence, source, feed, run, environment,
                                               probe_deployment, Path(host_copy))
 
@@ -39,7 +39,7 @@ def verify_workbench_package_host(receipt, evidence, source, feed, run, environm
 def _verify_workbench_package_host(receipt, evidence, source, feed, run, environment, probe_deployment,
                                    workbench_source) -> dict:
     evidence, source, feed, probe_deployment = map(Path, (evidence, source, feed, probe_deployment))
-    original_project = source / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
+    original_project = source / 'server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
     if not original_project.is_file():
         raise ValueError('Immutable source does not contain the expected Workbench project: ' + str(original_project))
     module_roots = receipt.get('modules')

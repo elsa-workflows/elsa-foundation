@@ -28,7 +28,7 @@ the unpinned `:latest` commands here are not that recorded run.
 > **Studio flavors.** `elsaworkflows/elsa-studio` publishes the Studio Essentials app, the pair of `elsaworkflows/elsa-essentials-host`
 > ([#5768](https://github.com/elsa-workflows/elsa-foundation/issues/5768)). Against Workbench it shows the screens of the modules
 > it compiles in. The Studio app with every module compiled in publishes as `elsaworkflows/elsa-studio-workbench`, and the bare
-> shell as `elsaworkflows/elsa-studio-foundation`; see [Studio Docker](../Studio/docs/docker.md).
+> shell as `elsaworkflows/elsa-studio-foundation`; see [Studio Docker](../studio/docs/docker.md).
 > The three Studio images take their preview numbers from one shared counter, so one commit often carries the same
 > preview number in all three. During rapid merges each image's queue can run at a different pace, and the same preview
 > number can then name different commits in different repositories. A manual publish whose number sits between the
@@ -235,7 +235,7 @@ definitions folder and enable the `JsonWorkflowReconciliation` feature:
 Each `*.json` file is an array of workflow-version envelopes; **pin `definitionId`** in every envelope
 (an omitted id is regenerated per restart, duplicating the definition) and use resolved `actver_*`
 activity ids — authoring rules and the id recipe live in the
-[feature README](../Essentials/src/Workflows/Design/Reconciliation/Json/README.md).
+[feature README](../server/essentials/src/Workflows/Design/Reconciliation/Json/README.md).
 
 > **Readiness:** deployment completes during shell activation. Wait on **`GET /health/ready`**
 > (200 = every definition imported and, with `PublishOnReconcile`, published). `GET /` returns 200

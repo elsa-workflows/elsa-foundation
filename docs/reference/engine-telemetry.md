@@ -93,5 +93,5 @@ Instrumentation is behaviour-preserving by construction:
 - Glossary: *Engine telemetry* and *OpenTelemetry ingestion domain* in
   [`docs/glossary/elsa.md`](../glossary/elsa.md).
 - Extension point: `IWorkflowEngineTracer` in
-  [`Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
+  [`server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../../server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 - Ingestion domain bucket: [`docs/program-goals/diagnostics-observability-readiness.md`](../program-goals/diagnostics-observability-readiness.md).

@@ -5,7 +5,7 @@ Commit hashes cited below are in the prototype's history, kept at the tag `proto
 **Names.** Sections 1 to 23 use the names the code had when they were written: an instance's *step* (`IStep`,
 `StepAsync`, `Step.cs`, a step commit) is a **turn** (`ITurn`, `TurnAsync`), and off-step work, a *run* (`IRun`,
 `Run`, `CancelRun`, `RunFinished`, `kernel.run`, the `runs` column), is a **background job** (`IJob`, `StartJob`,
-`CancelJob`, `JobFinished`, `kernel.job`, `jobs`). `src/Kernel` is now three projects: `../../essentials/src/ActorFoundation/BuiltIn/Runtime`,
+`CancelJob`, `JobFinished`, `kernel.job`, `jobs`). `src/Kernel` is now three projects: `../../server/essentials/src/ActorFoundation/BuiltIn/Runtime`,
 `src/Kernel.Durable` and `src/Kernel.Workflows`. The flaws `VolatileRunTicket` and `StepNewerState` are
 `VolatileJobTicket` and `TurnNewerState`. Section 24 has the mapping.
 
@@ -842,7 +842,7 @@ names; the mapping is here.
 
 | Before (`src/Kernel`) | Now |
 |---|---|
-| `Balancer.cs`: the fair share, `Defaults` | Layer 1, `../../essentials/src/ActorFoundation/BuiltIn/Runtime/PartitionRuntime.cs`: `PartitionRuntime` (activations, deactivations, `BalanceAsync`, `PassAsync`, wake hints), `Defaults` |
+| `Balancer.cs`: the fair share, `Defaults` | Layer 1, `../../server/essentials/src/ActorFoundation/BuiltIn/Runtime/PartitionRuntime.cs`: `PartitionRuntime` (activations, deactivations, `BalanceAsync`, `PassAsync`, wake hints), `Defaults` |
 | — | Layer 1, `Seam.cs`: `IActorRuntime`, `IScopeHost`, `IScopeActivation`, `IWakeSignal` and `InProcessWakeSignal`, `IMembership` and `Cluster` |
 | `Contracts.cs`: `InstanceRef`, `Flaw` | Layer 1, `Addresses.cs` |
 | `Contracts.cs`: messages, kinds, `StartSpec`, `InstanceStatus`, `History`, `IJob`, `Json` | Layer 2, `src/Kernel.Durable/Messages.cs` |
@@ -1510,7 +1510,7 @@ items of the same round.)
 
 ### The engine: extracted, and the same as main's
 
-`models/Graph` is main's Elsa 4 Flowchart engine (`Essentials/src/Activities/Flowchart` at `a3eb06e851`) lifted out
+`models/Graph` is main's Elsa 4 Flowchart engine (`server/essentials/src/Activities/Flowchart` at `a3eb06e851`) lifted out
 of the runtime: execution paths with iteration keys, scopes (root, loop iteration, first-wins race), arrivals at joins,
 the gateway policies, dead paths, the dead-path join as the default and the reachability join beside it, pruning
 (#382). No reference to the kernel, to Elsa or to any package. The first commit of its PR is the verbatim copy; the
@@ -1627,7 +1627,7 @@ suite, and an Orleans adapter that passes it, including runs that force two acti
 |---|---|---|
 | The pass renews an idle lease | `src/Kernel.Durable/Worker.cs` (`RunAsync`) | A pass beats when no commit renewed the lease for a third of it, and says when to call again for that (R1) |
 | Where a job's body runs | `WorkerOptions.JobScheduler` | Null (inline, as before) or a scheduler, so that a host on a scheduler of its own is not held up by a job (R14) |
-| The built-in runtime on a clock | `../../essentials/src/ActorFoundation/BuiltIn/Hosting` (`RuntimeNode`) | One loop per node around `PartitionRuntime`, on a scheduler of its own that runs one task at a time: balancing rounds, passes when due, hints, the poll interval; a stop that drains, a kill that gives nothing up |
+| The built-in runtime on a clock | `../../server/essentials/src/ActorFoundation/BuiltIn/Hosting` (`RuntimeNode`) | One loop per node around `PartitionRuntime`, on a scheduler of its own that runs one task at a time: balancing rounds, passes when due, hints, the poll interval; a stop that drains, a kill that gives nothing up |
 | The runtime conformance suite | `conformance/Kernel.Runtime.Conformance`, `.Run` | Ten semantic cases, a mutation (the fence broken) and a stress test, against any `IRuntimeProvider`; the store suite's workload moved to `Workload.cs` for it |
 | The Orleans adapter | `runtime/Kernel.Runtime.Orleans` | `PartitionGrain` (one per partition), `OrleansActorRuntime` (the silo's `IActorRuntime`), `PartitionKeeper`, `AddKernelRuntime` |
 | The Orleans provider | `runtime/Kernel.Runtime.Orleans.Conformance` | The suite on Orleans' in-process test cluster; a side of a split is a cluster of its own |
@@ -1841,7 +1841,7 @@ failed before the wake calculation changed. Existing Admission.Run callers now s
 ## 28. Round 5 A: virtual partitions, the two fence granularities. Run
 
 The owner's experiment of 15 November, measured and modelled: 1,024 and 4,096 virtual partitions, ranges owned by
-nodes, the fence per virtual partition or per owned range. The code is `../../essentials/src/ActorFoundation/BuiltIn/Runtime/VirtualPartitions.cs`
+nodes, the fence per virtual partition or per owned range. The code is `../../server/essentials/src/ActorFoundation/BuiltIn/Runtime/VirtualPartitions.cs`
 (addressing and placement, witnessed by `sim --placement-check`) and `experiments/VirtualPartitions` (the two variants
 as EF stores, the measurement harness, the ownership simulation and its mutations); no default changed and the kernel's
 gates ran unchanged on 64 partitions. The results, the findings F-A1 to F-A7, the recommendation and the owner's

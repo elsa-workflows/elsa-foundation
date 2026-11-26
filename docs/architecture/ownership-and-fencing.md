@@ -258,7 +258,7 @@ attempt before it runs; no mode closes it, and the kernel makes no exactly-once 
 
 What the kernel gives instead is a **stable effect key** per activity attempt, derived from committed facts only, in
 the shape the owner decided on 16 November: `{instance origin}/{node}/{iteration path}/{attempt}`. The
-[legacy EffectKey.For](../../essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs) uses the instance's id and
+[legacy EffectKey.For](../../server/essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs) uses the instance's id and
 creation for its origin. The key is independent of partitions and positions. The node is the activity's stable id in
 the definition. The iteration path
 is the iteration numbers of the repeating scopes that enclose the activation (a loop index, a loop pass, a flowchart

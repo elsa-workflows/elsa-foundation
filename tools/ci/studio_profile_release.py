@@ -21,7 +21,7 @@ def pack_source(profile, output, version):
     identities = json.loads(Path("tools/ci/studio-package-identities.json").read_bytes())
     projects = {entry["id"]: entry["project"] for entry in identities["packable_projects"]}
     package_ids = (profile / "packages.txt").read_text(encoding="utf-8").split()
-    restore_config = Path("Studio/NuGet.config").resolve()
+    restore_config = (profile.parents[2] / "NuGet.config").resolve()
     output.mkdir()
     for package_id in [*package_ids, "Elsa.Studio.Etl"]:
         subprocess.run([

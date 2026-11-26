@@ -94,7 +94,7 @@ It follows the in-place amendment pattern of `specs/1179-agents`: a dated amendm
   - `Elsa.Studio.Workflows/Client/src/builtInWorkflowTemplates.ts`
   - `workflow-editor/httpWorkflowStarter.ts` (contains `createHttpStarterState` and `getHttpStarterAvailabilityReason`)
   - `"http"` branches in `WorkflowTemplatesPage.tsx`, `CreateWorkflowDialog.tsx`, `editorHelpers.ts` and the weaver files.
-- Server: `essentials/src/Workflows/Design/Api/Capabilities/WorkflowTemplateCapabilitySource.cs` is an internal `IApiCapabilitySource`. It advertises the `workflow-templates*` links under `WorkflowDesignApiCapabilities.CapabilityId`, version 1, and is backed by `IWorkflowTemplateStore`.
+- Server: `server/essentials/src/Workflows/Design/Api/Capabilities/WorkflowTemplateCapabilitySource.cs` is an internal `IApiCapabilitySource`. It advertises the `workflow-templates*` links under `WorkflowDesignApiCapabilities.CapabilityId`, version 1, and is backed by `IWorkflowTemplateStore`.
 - Activities available to the starters:
   - `WriteLine`: writes to the console.
   - `Sequence`

@@ -3,7 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="../Core/Elsa.Agent.Core.csproj" />
     <ProjectReference Include="../../../Connections/src/Core/Elsa.Connections.Core.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Agent.Tests" />
   </ItemGroup>
 </Project>

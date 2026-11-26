@@ -42,7 +42,7 @@ catalog disclosure and private operation provisioning remain #3908 design obliga
 ## Completion
 
 Complete only after the external integration production scope has real external-source and independent public-SDK-provider
-evidence, composed Studio/UX/security/recovery/schema/reference qualification, practical docs/examples,
+evidence, composed studio/UX/security/recovery/schema/reference qualification, practical docs/examples,
 reviewed merges and resulting-main verification. Preserve the bounded record-backend assessment/decision
 and actionable #3916 follow-on; no record store is delivered by this program. Establishment, prototypes,
 mocked connectors and unmerged PRs do not complete the program.

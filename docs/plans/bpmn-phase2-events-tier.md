@@ -115,7 +115,7 @@ The events tier, in dependency order:
 3. **Timer/message/signal catch events** — NO new wait machinery: catch events compile to
    synthesized internal child activities (`BpmnIntermediateCatchEvent`) using the existing
    `ActivityBookmarkRequest` / `IDurableTimerScheduler` / stimulus-provider path (template:
-   `Essentials/src/Activities/Scheduling/Activities/Timer.cs` + `TimerStimulus`). Resume → ordinary
+   `server/essentials/src/Activities/Scheduling/Activities/Timer.cs` + `TimerStimulus`). Resume → ordinary
    `OnChildCompletedAsync`. BPMN start-event triggers ride `IActivityTriggerStimulusProvider`
    (template: `Event` + `EventTriggerStimulusProvider` in Primitives). Message correlation needs a
    delivery API — decide whether it lives in the BPMN module or as a shared runtime seam.
@@ -154,7 +154,7 @@ collaborations.
   state (they were deferred in Phase 1 — adding them alongside the schema growth is wise).
 - The state envelope will grow (event subscriptions, MI state, compensation log later): bump the
   payload additively; `StateSchemaVersion` stays 1 unless the shape breaks.
-- Tests ride `WorkflowExecutionHarness` (`Essentials/tests/Activities/Testing/`): `BpmnRuntimeFixture`
+- Tests ride `WorkflowExecutionHarness` (`server/essentials/tests/Activities/Testing/`): `BpmnRuntimeFixture`
   (BPMN tests project), `NewProbeNode` (exactly one outcome), `NewFaultingNode`, `ClrConstruction`
   for real CLR leaves (see `BpmnDecisionTests` for the contract-building recipe), and
   `RecordingStimulusRouter` for stimulus/bookmark scenarios.

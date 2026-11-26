@@ -3,11 +3,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Buffer } from "node:buffer";
-import { createActivityDataResponseCollector } from "../../Studio/tests/acceptance/activityDataResponseCollector.mjs";
+import { createActivityDataResponseCollector } from "../../studio/tests/acceptance/activityDataResponseCollector.mjs";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { attachActivityDataJson, findActivityDataAdmission, resolvedFeatureClosure } from "../../Studio/tests/acceptance/activityDataJourneySupport.ts";
+import { attachActivityDataJson, findActivityDataAdmission, resolvedFeatureClosure } from "../../studio/tests/acceptance/activityDataJourneySupport.ts";
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const expected = { expressionType: "ActivityResultMember", value: { producerNodeId: "producer", projectionKey: "Customer", isOptional: false, memberPath: ["customerId"] } };

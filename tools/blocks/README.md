@@ -1,13 +1,13 @@
 # Native block prototype qualification
 
-Supporting proof for [spec 1204](../../specs/1204-named-embedded-blocks/plan.md), S001. These tools use the actual normal Studio/Workbench composition, public authoring/publication/runtime APIs, fresh local stores and owned child processes. They do not implement the production extraction or promotion commands.
+Supporting proof for [spec 1204](../../specs/1204-named-embedded-blocks/plan.md), S001. These tools use the actual normal studio/Workbench composition, public authoring/publication/runtime APIs, fresh local stores and owned child processes. They do not implement the production extraction or promotion commands.
 
 Build the actual products from a clean committed source, including the existing metadata observer:
 
 ```sh
-dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
-(cd Studio && pnpm install --frozen-lockfile && pnpm build)
-dotnet build Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj
+dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
+(cd studio && pnpm install --frozen-lockfile && pnpm build)
+dotnet build studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj
 dotnet build tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj
 python3 tools/blocks/run_owned_prototype.py --output /tmp/elsa-blocks-owned-proof
 ```

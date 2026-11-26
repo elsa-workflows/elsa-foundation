@@ -12,7 +12,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <ProjectReference Include="../../Core/Elsa.Connections.Core.csproj" />
-    <ProjectReference Include="../../../../../essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
+    <ProjectReference Include="../../../../../server/essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
     <InternalsVisibleTo Include="Elsa.Connections.Persistence.EntityFrameworkCore.Tests" />
   </ItemGroup>
   <ItemGroup><None Update="nuplane.json" Pack="true" PackagePath="/" /></ItemGroup>

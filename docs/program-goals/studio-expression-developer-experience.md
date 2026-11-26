@@ -18,7 +18,7 @@ Reference and structured expression types retain their appropriate editors. No r
 
 ## Active objectives
 
-1. Verify and protect normally composed Studio/backend expression editing, adopting Studio #546's existing host-discovery fix.
+1. Verify and protect normally composed studio/backend expression editing, adopting Studio #546's existing host-discovery fix.
 2. Define installed-syntax conformance and align JavaScript editor grammar/help with runtime semantics.
 3. Deepen JavaScript language/member/type assistance and Liquid interpolation/filter/tag assistance, with useful runtime-owned diagnostics.
 4. Polish themed colors, compact previews, help panels, signatures, formatting, keyboard behavior and editing continuity; demonstrate the complete real workflow journey.
@@ -34,7 +34,7 @@ The incoming lead progressively elaborates these milestones into one cross-repos
 - [Assessment and staged delivery plan](../reports/studio-expression-editing/assessment.md).
 - [Independent source-audit findings](../reports/studio-expression-editing/source-audit.md).
 - [Restart checkpoint and current sequencing](#restart-checkpoint--2026-10-23).
-- [Studio spec 094](../../Studio/specs/094-expression-code-intelligence/spec.md).
+- [Studio spec 094](../../studio/specs/094-expression-code-intelligence/spec.md).
 - [Foundation spec 143](../../specs/143-expression-code-intelligence/spec.md).
 - [Existing host-discovery fix, Studio #546](https://github.com/elsa-workflows/elsa-foundation-studio/pull/546).
 
@@ -44,7 +44,7 @@ The user approved the complete assessment plan and requested a fresh implementat
 
 The initial browser evidence is fixture evidence only. Full persisted-workflow integration remains unverified; the local backend stopped during the assessment. Revalidate current refs, composition and service availability before implementation and before claiming a gate.
 
-Complete only after real Studio/backend user journeys demonstrate every scoped milestone, applicable review/build/test/architecture/map gates pass, and the issue/project records contain the actual evidence. Do not substitute closed issue counts, synthetic fixtures or historical results for this outcome. Route any justified scope change through the program issue and owner decision where material.
+Complete only after real studio/backend user journeys demonstrate every scoped milestone, applicable review/build/test/architecture/map gates pass, and the issue/project records contain the actual evidence. Do not substitute closed issue counts, synthetic fixtures or historical results for this outcome. Route any justified scope change through the program issue and owner decision where material.
 
 ## Readiness checkpoint — 2026-10-02
 
@@ -59,7 +59,7 @@ Resume the existing Foundation/Studio specs, tasks and PR stack, preserving hist
 ## Restart checkpoint — 2026-10-23
 
 The owner restarted the program on 23 October 2026 under the [ADR 0080 D0 amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus).
-Studio now lives in this repository under `Studio/`, and Foundation source under `Essentials/src/`; the program's
+Studio now lives in this repository under `studio/`, and Foundation source under `server/essentials/src/`; the program's
 records point there.
 
 - **First units.** This plan (#2367) merges with current `main`. The expression-tooling permission-hash fix from
@@ -75,4 +75,4 @@ records point there.
 - **Milestone 1.** The rest of #2373 is rebased separately onto the new layout; it is not part of this restart.
 - **Review and merge.** Review and merge follow the [ADR 0080 D7](../adr/0080-elsa-4-simplification-decisions.md#d7--recurring-review-and-fix-routines) review loop as amended on 15 October (org-wide Issue Bus Lite): the Code Review app merges once a review round leaves nothing actionable and CI is green on the exact head. There is no separate owner acceptance before Ready or merge.
 - The 6 October delivery-scope checkpoint above is historical. Its PR stack and evidence predate the move into
-  `Essentials/` and `Studio/`, and its heads must be reverified before any gate is claimed.
+  `server/essentials/` and `studio/`, and its heads must be reverified before any gate is claimed.
