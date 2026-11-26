@@ -88,7 +88,7 @@ public sealed partial class EfStore
         return kept.GetRange(0, count);
     }
 
-    private static async Task<bool> ClearSqliteParkPageAsync(KernelDb db, WorkerRoot root, List<SqliteKeptRow> page, long window, CancellationToken token)
+    private static async Task<bool> ClearSqliteParkPageAsync(KernelDb db, WorkerRoot root, IReadOnlyList<SqliteKeptRow> page, long window, CancellationToken token)
     {
         var until = checked(await ReadSqliteParkClockAsync(db, token) + window);
         foreach (var group in page.GroupBy(row => row.Scope))

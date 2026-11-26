@@ -146,10 +146,10 @@ internal static partial class SqliteHostLifetimeChecks
                     { Outcome: Contract.AdmissionOutcome.Refused }, "the old Park selection cannot recover the running root again");
                 var oversized = (await admission.StartAsync(scope.Tenant, "oversized", new(fixture, "{}"), null, null, token)).Actor!.Value;
                 await DriveAsync(recoveryOwner, oversized, row => row is { Revision: 1, Status: InstanceStatus.Running });
-                Require(await admission.SendAsync(scope.Tenant, oversized, "large-fault", "fail", null, null, null, token) is
+                var large = Json.Write(new string('x', ParkRecoveryCredit.LimitBytes / 2 + 1_024));
+                Require(await admission.SendAsync(scope.Tenant, oversized, "large-fault", "fail", large, null, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted }, "the one-page refusal fixture admits a faulting input");
                 var beforeRefusal = await DriveAsync(recoveryOwner, oversized, row => row is { Revision: 2, Status: InstanceStatus.Faulted });
-                var large = Json.Write(new string('x', ParkRecoveryCredit.LimitBytes / 2 + 1_024));
                 foreach (var id in new[] { "large-a", "large-b" })
                 {
                     Require(await admission.SendAsync(scope.Tenant, oversized, id, "ordinary", large, null, null, token) is
@@ -160,6 +160,7 @@ internal static partial class SqliteHostLifetimeChecks
                 var selection = (await reads.GetAsync(scope, oversized, token))!.Selection!;
                 Require(await admission.OperateAsync(scope.Tenant, oversized, "large-recover", Kinds.Recover, selection, null, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted }, "admission accepts a valid Recover selection for the oversized Park");
+                rollback.ObserveQuote = true;
                 var refused = await DriveAsync(recoveryOwner, oversized, row => row is { Revision: 5, Status: InstanceStatus.Faulted });
                 var journal = (await store.ReadJournalOfAsync(new InstanceRef(refused.Actor.Id).Partition, refused.Actor.Id, 0, token))
                     .Single(entry => entry.Revision == refused.Revision);
@@ -167,8 +168,11 @@ internal static partial class SqliteHostLifetimeChecks
                     journal.Entries.Contains("\"Reason\":\"page\"", StringComparison.Ordinal) &&
                     await db.Database.SqlQuery<int>($"""
                         SELECT count(*) AS "Value" FROM "Messages" WHERE "Target" = {refused.Actor.Id} AND "Done"
-                            AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived} AND "FoundationReleasedBy" IS NULL AND "Payload" = {large}
-                        """).SingleAsync(token) == 2, "Recover refuses a second page and preserves both retained envelopes and the checkpoint");
+                            AND "FoundationKeptBy" IS NOT NULL AND "FoundationReleasedBy" IS NULL AND "Payload" = {large}
+                        """).SingleAsync(token) == 3, "Recover refuses a second page and preserves all retained envelopes and the checkpoint");
+                Require(rollback.Quote is [(ParkKeepReason.Consumed, false), (ParkKeepReason.Arrived, true), (ParkKeepReason.Arrived, false)],
+                    "the Recover reader opens one quoted arrival body and skips the consumed and over-budget bodies");
+                await CheckCreatorRecoverAsync(recoveryOwner);
                 await CheckReparkFifoAsync(recoveryOwner);
                 var guardFile = new SqliteConnectionStringBuilder(connection) { DataSource = Path.Combine(directory.FullName, "guard.db") };
                 var guardOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(guardFile.ConnectionString).Options;
@@ -195,6 +199,24 @@ internal static partial class SqliteHostLifetimeChecks
                 settled is { Done: true, Start: null, Payload: null, ReplyTo: null },
                 "the same owner settles the preadmitted held input after the Park ends without invoking the actor");
             return 0;
+
+            async Task CheckCreatorRecoverAsync(Worker owner)
+            {
+                var spec = new StartSpec(fixture, SqliteArrivalActor.CreatorFault);
+                var initial = await admission.StartAsync(scope.Tenant, "creator-recover", spec, null, null, token);
+                var root = initial.Actor!.Value;
+                var park = await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Faulted });
+                Require(await db.Messages.AnyAsync(row => row.Target == park.Actor.Id && row.InboxScope == 0 && row.Done, token),
+                    "a first-turn fault retains its creator under the Park");
+                var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                Require(await admission.OperateAsync(scope.Tenant, root, "from-creator", Kinds.Recover, selection, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "a Park after a first-turn fault admits Recover");
+                await DriveAsync(owner, root, row => row is { Revision: 2, Status: InstanceStatus.Running });
+                var repeated = await admission.StartAsync(scope.Tenant, "creator-recover", spec, null, null, token);
+                Require(!await db.Messages.AnyAsync(row => row.Target == park.Actor.Id && row.InboxScope == 0, token) &&
+                    repeated is { Outcome: Contract.AdmissionOutcome.Duplicate } && repeated.Actor == root,
+                    "Recover removes the consumed creator and keeps its immutable start receipt");
+            }
 
             async Task CheckReparkFifoAsync(Worker owner)
             {
@@ -260,6 +282,30 @@ internal static partial class SqliteHostLifetimeChecks
     {
         internal bool Armed { get; set; }
         internal bool Observed { get; private set; }
+        internal bool ObserveQuote { get; set; }
+        internal List<(ParkKeepReason Reason, bool HasBody)> Quote { get; } = [];
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (!ObserveQuote || !command.CommandText.Contains("/* bounded-park-recovery-page */", StringComparison.Ordinal)) return result;
+            ObserveQuote = false;
+            await using var query = command.Connection!.CreateCommand();
+            query.Transaction = command.Transaction;
+            query.CommandText = command.CommandText;
+            foreach (DbParameter parameter in command.Parameters)
+            {
+                var copy = query.CreateParameter();
+                copy.ParameterName = parameter.ParameterName;
+                copy.DbType = parameter.DbType;
+                copy.Value = parameter.Value;
+                query.Parameters.Add(copy);
+            }
+            await using var rows = await query.ExecuteReaderAsync(cancellationToken);
+            while (await rows.ReadAsync(cancellationToken))
+                Quote.Add(((ParkKeepReason)rows.GetInt16(rows.GetOrdinal("KeptBy")), !rows.IsDBNull(rows.GetOrdinal("Payload"))));
+            return result;
+        }
 
         public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
             CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
@@ -274,6 +320,7 @@ internal static partial class SqliteHostLifetimeChecks
 
     private sealed class SqliteArrivalActor(string type) : Contract.IActorType
     {
+        internal const string CreatorFault = """{"CreatorFault":true}""";
         internal int OrdinaryTurns { get; private set; }
         internal int HeldTurns { get; private set; }
         internal List<string> Order { get; } = [];
@@ -287,7 +334,9 @@ internal static partial class SqliteHostLifetimeChecks
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
-            if (turn.Inbox.Any(message => message.Kind is "fail" or "repark-fault")) throw new InvalidOperationException("park arrival fixture fault");
+            if (turn.Inbox.Any(message => message.Kind is "fail" or "repark-fault" ||
+                message.Kind == Contract.Kinds.Start && turn.Header.TypeData == CreatorFault))
+                throw new InvalidOperationException("park arrival fixture fault");
             OrdinaryTurns += turn.Inbox.Count(message => message.Kind == "ordinary");
             HeldTurns += turn.Inbox.Count(message => message.Kind == "held");
             Order.AddRange(turn.Inbox.Select(message => message.Kind).Where(kind => kind is "ordinary" or "held"));
