@@ -21,7 +21,9 @@ internal static partial class SqliteHostLifetimeChecks
             {
                 DataSource = Path.Combine(directory.FullName, "park.db"), ForeignKeys = true, Pooling = false
             }.ToString();
-            var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connection).Options;
+            var observation = new ParkReadObservation();
+            observation.Resume.TrySetResult();
+            var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connection).AddInterceptors(observation).Options;
             var definitions = new SqliteAdmissionDefinitions();
             KernelDb Open() => KernelDb.ForSqliteParkArrivalsQualification(options, definitions);
             await using var db = Open();
@@ -74,8 +76,16 @@ internal static partial class SqliteHostLifetimeChecks
                 "the SQLite candidate admits a one-way Park arrival and preserves its receipt");
             await using var successor = await OwnAsync("successor");
             var kept = await DriveAsync(successor, actor, row => row is { Revision: 3, Status: InstanceStatus.Faulted });
+            await ExpectFoundationFailureAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Instances" SET "FoundationStateWire" = CAST('different' AS BLOB),
+                    "Revision" = 4, "FoundationWriteRevision" = 4
+                WHERE "Id" = {kept.Actor.Id} AND "Partition" = 0
+                """, token), "an idle Park continuation cannot rewrite the saved state wire");
             var view = (await reads.GetAsync(scope, actor, token))!;
             var inbox = await reads.InboxAsync(scope, actor, cancellationToken: token);
+            Require(observation.Plan.Any(step => step.Contains("IX_FoundationRootInbox_Inspectable", StringComparison.Ordinal) &&
+                step.Contains("Target=?", StringComparison.Ordinal)),
+                "the arrival inbox uses its actor-scoped partial index with both kept reasons");
             Require(successor.Epoch > epoch && kept.State == parked.State && view.Park == oldView!.Park && executor.OrdinaryTurns == 0 &&
                 PostgresRootSelection.OpenPark(cursor, view.Selection, scope.Tenant, actor.Id) == new FoundationParkMark(2, view.Park!.At) &&
                 inbox.Items.Where(input => input.Id != "held-before-park").ToArray() is
@@ -92,11 +102,22 @@ internal static partial class SqliteHostLifetimeChecks
             Require(ended is { ParkAt: null, TerminalRevision: 4 } && executor.OrdinaryTurns == 0 &&
                 (await reads.InboxAsync(scope, actor, cancellationToken: token)).Items.All(input => input.Id == "held-before-park"),
                 "selected Terminate clears the consumed fault and kept arrival without applying either input");
+            while ((await reads.InboxAsync(scope, actor, cancellationToken: token)).Items.Count != 0)
+            {
+                await successor.WokenAsync(null, token);
+                await successor.RunAsync(token);
+                await Task.Delay(15, token);
+            }
+            Require(successor.Owns && executor.HeldTurns == 0,
+                "the same owner settles the preadmitted held input after the Park ends without invoking the actor");
             return 0;
 
             async Task<Worker> OwnAsync(string name)
             {
-                var worker = new Worker(name, 0, store, adapter, new WorkerOptions { Lease = TimeSpan.FromSeconds(30), PassTurnBudget = 1 });
+                var worker = new Worker(name, 0, store, adapter, new WorkerOptions
+                {
+                    Lease = TimeSpan.FromSeconds(30), PassTurnBudget = 1
+                });
                 if (await new DurableHost([worker]).ActivateAsync(0, token) == worker) return worker;
                 await worker.DisposeAsync();
                 throw new InvalidOperationException("The SQLite Park fixture could not take the partition.");
@@ -120,6 +141,7 @@ internal static partial class SqliteHostLifetimeChecks
     private sealed class SqliteArrivalActor(string type) : Contract.IActorType
     {
         internal int OrdinaryTurns { get; private set; }
+        internal int HeldTurns { get; private set; }
         string Contract.IActorType.Type => type;
         public bool Withholds(Contract.ActorHeader header) => false;
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
@@ -132,6 +154,7 @@ internal static partial class SqliteHostLifetimeChecks
         {
             if (turn.Inbox.Any(message => message.Kind == "fail")) throw new InvalidOperationException("park arrival fixture fault");
             OrdinaryTurns += turn.Inbox.Count(message => message.Kind == "ordinary");
+            HeldTurns += turn.Inbox.Count(message => message.Kind == "held");
             turn.State = """{"state":"last committed"}""";
             return default;
         }
