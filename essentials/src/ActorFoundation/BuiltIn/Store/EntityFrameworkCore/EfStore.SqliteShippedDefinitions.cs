@@ -307,6 +307,7 @@ public sealed partial class EfStore
         yield return new("trigger", "kernel_job_generation", "Instances", "CREATE TRIGGER " + SqliteGenerationClause);
         foreach (var guard in SqliteFirstRootGuards(db)) yield return guard;
         foreach (var projector in SqliteRootProjectors()) yield return projector;
+        foreach (var history in SqliteRootWorkflowHistoryDefinitions()) yield return history;
         foreach (var outcome in SqliteRootOutcomes()) yield return outcome;
     }
 

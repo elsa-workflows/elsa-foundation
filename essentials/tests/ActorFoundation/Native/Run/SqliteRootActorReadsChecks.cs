@@ -156,6 +156,7 @@ internal static partial class SqliteHostLifetimeChecks
                 turn.SetHeader(turn.Header.TypeData, new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["group"] = "example",
+                    ["definition"] = turn.Header.TypeData switch { "nul" => "a\0b", "escaped" => "a\\u0000b", _ => turn.Header.TypeData },
                     ["key\0"] = turn.Header.TypeData switch { "nul" => "a\0b", "escaped" => "a\\u0000b", _ => "park" }
                 });
                 turn.Record(new { Step = "start-first" });
