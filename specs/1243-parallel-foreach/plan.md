@@ -45,16 +45,19 @@ concurrency setting (FR-009)
   `StructuredExecutionIdentity.Iteration(parentExecutionId, index)` and a `LoopIterationScopeRequest`, then return
   `Defer`. Give `StructuredExecutionIdentity` a neutral iteration prefix, or a loop-kind parameter, so pass ids do not
   read `foreach-iteration`. Keep `ForEach`'s existing ids unchanged.
-- `OnChildCompletedAsync`: read this loop's direct children with `IActivityExecutionStateStore.ListAllByParentAsync`,
-  keep the body node's rows, group them by `IterationId`, and count an iteration as done when any of its rows is
-  `Completed` or its latest row is `Cancelled` (a retried pass's successor carries the same iteration id). Verify
-  which evaluation the runtime gives a parent when one child is cancelled by an alteration. If it gives none, the
-  alteration path must queue a parent evaluation, or a cancelled pass would leave the loop waiting forever. Complete when done equals the item count
-  (`Collection` length, read with O(1) on a JSON array), otherwise defer. The Break outcome needs no special case
+- `OnChildCompletedAsync`: decide completion in O(1) per completion (FR-008). `Parallel`'s
+  `ListAllByParentAsync` read returns every pass row on every completion, which is O(N²) for N items, so do not copy
+  it. Preferred: a store query that counts this parent's completed, non-superseded body executions by distinct
+  `IterationId` (an indexed count, not a row list), compared with the item count (`Collection` length, O(1) on a JSON
+  array). Alternative, if the store cannot count cheaply: a durable per-loop completed-pass counter, committed with
+  each parent evaluation and keyed by iteration id so a re-delivered completion is not counted twice. A retried pass's
+  successor carries the same `IterationId` and iteration request (`ActivitySuccessorStaging.cs:75-91`). The superseded
+  row is excluded by its own status (`ActivitySuccessorStaging.cs:176`). The Break outcome needs no special case
   (FR-007).
-- Confirm in a test that a rescheduled faulted pass keeps its `IterationId` and iteration frame. If rescheduling does
-  not carry them today, the fix belongs in the reschedule alteration handler, for every loop, and is part of this
-  work.
+- The retry path is `RetryFaultedActivity` under `WaitForIntervention` (`RetryFaultedActivityAlterationHandler.cs:119-125`).
+  `RescheduleActivity` refuses a source that has a blocking incident (`RescheduleActivityAlterationHandler.cs:57-59`).
+  Test that a retried pass keeps its `IterationId` and iteration frame and that its successor's completion completes
+  the loop.
 
 ### Publish checks (US3)
 
@@ -63,6 +66,10 @@ concurrency setting (FR-009)
 - `LoopStructureHandler` reports the body as unordered with itself when `PassesUnordered` is set (today it is always
   `FirstBeforeSecond`, lines 38-39), so `UnorderedVariableWriteAnalyzer` (lines 270-277) raises the spec 266 warning.
   Review `AssessChildResult` (lines 34-35) for the same assumption.
+- `UnorderedVariableWriteAnalyzer.AnyAncestorOverlaps` walks to the root, whatever the variable's declaring scope.
+  Give the self-overlap check the variable's `ScopeId` and stop the walk at the declaring node, so a write to a
+  variable declared inside the body (one copy per pass) is not reported (FR-010). This refines spec 266; record it in
+  the PR. The other users of `AnyAncestorOverlaps` (`AreUnordered`) take the same bound.
 - Register `new LoopStructureHandler(LoopKind.ParallelForEach)` in `ActivitiesControlFlowFeature`.
 - Spec 1222 completion and spec 1231 refusals follow from `LoopKind.IterationVariableNames`. Add tests to prove it.
 
@@ -71,15 +78,20 @@ concurrency setting (FR-009)
 - `Elsa3BuiltInActivityMap.Entries.cs`: replace the `NoCounterpart("ParallelForEach", …)` entry with
   `Catalog("ParallelForEach", ParallelForEach, [Carry("Items", "Collection"), Slot("Body", "ParallelForEach.Body")])`,
   plus the no-body warning (FR-016) and the literal-value refusal (FR-017) as member rules.
-- Per-pass names: register the new loop in `Elsa3LoopVariableReferencesRewrite`/`AncestorScopeNames` with the Elsa 3
-  names `CurrentValue` → `currentItem` and `CurrentIndex` → `currentIndex`, so a resolved
-  `getVariable("CurrentValue")` in a body pins to the loop node, nearest scope first (FR-013). A computed name keeps the
-  run-time lookup. Check whether that lookup sees the Elsa 3 names. If it cannot be made to, the computed form is
-  refused with guidance.
+- Per-pass names (FR-013): `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1106-1162) resolves only variables declared
+  in the definition, so `CurrentValue` returns `MissingAmbient` today, and a workflow variable of that name would match
+  first. Add a resolution branch for `CurrentValue` and `CurrentIndex` that runs before workflow and enclosing-scope
+  variables when the reference sits in a `ParallelForEach` body. It yields a `VariableExpressionParameterBinding` to
+  `currentItem` or `currentIndex` with the loop node as declaring scope. Only a variable declared by a scope inside the
+  body is checked first. Add the Elsa 4 names to `AncestorScopeNames` for the shadowing checks, as for `ForEach`. A
+  computed name (`getVariable(expr)`) cannot be resolved this way: refuse it inside a `ParallelForEach` body when the
+  expression could yield one of the two names. That is every computed name, since it is not provable. The guidance
+  asks for a literal name.
 - Writes to those names: refused in the expression rewriter's setter path with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`
   (FR-014).
 - `Elsa3ActivityNormalizer.ApplyEntryWarnings`: the Break warning's ancestor test also accepts the `ParallelForEach`
-  type key (FR-015).
+  type key, with a message variant for it (FR-015).
+- Literal `Items` (FR-017): a member rule that refuses any non-null Literal or Object expression on `Items`.
 - New behaviour code for FR-016, for example `ELS3-BEHAVIOUR-PARALLEL-FOREACH-NO-BODY`, in
   `Elsa3ActivityDiagnosticCodes` with its message, and in the spec 236 diagnostic-codes contract.
 - Remove `"Elsa.ParallelForEach"` from any list that treats it as unsupported. Keep the value-flow lowerer's message
@@ -92,7 +104,7 @@ concurrency setting (FR-009)
 - Toolbox, body-slot editing and variable completion come from the activity descriptor and structure kind. Verify them
   in the composed host per Studio UX acceptance, with screenshots for the PR.
 - Instance view: passes show under the loop by iteration id, as `ForEach` passes do, and the retry action on a faulted
-  pass uses the existing reschedule alteration.
+  pass uses the existing `RetryFaultedActivity` alteration.
 
 ### Docs and evidence
 

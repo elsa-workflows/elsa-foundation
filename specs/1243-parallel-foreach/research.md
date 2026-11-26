@@ -16,7 +16,10 @@ corpus on `agent/claude/3052-s15-jtest-impl`.
 
 `ItemSourceActivityExecutionContextExtensions.GetItemSource<T>`: null yields nothing. Async enumerables and
 `IEnumerable<T>` yield their items. Anything else, including a string (which is `IEnumerable<char>`, not
-`IEnumerable<object>`), yields nothing, silently.
+`IEnumerable<object>`), yields nothing, silently. A literal `Items` always arrives as a string. The literal
+descriptor deserializes through `JsonElementExtensions.GetValue` (`Elsa.Expressions/Extensions/JsonElementExtensions.cs`),
+which returns `GetRawText()` for an object or an array, and the object target keeps the string. So a literal list ran
+zero passes.
 
 Unit and integration tests (`test/unit/.../Looping/ParallelForEachTests.cs`,
 `test/integration/.../ParallelForEachTests.cs`) confirm: one scheduled body per item, empty and null complete at once,
@@ -34,7 +37,9 @@ next queued work runs. Elsa 3 therefore has no true multi-threading here, and El
 ## R-3 Elsa 3 Break
 
 `Break` sends a `BreakSignal`. `BreakBehavior` is attached only to `For`, `ForEach` and `While`, and `Fork` and
-`Sequence` handle it themselves. `ParallelForEach` has neither, so the signal bubbles past it to an enclosing loop.
+`Sequence` handle it themselves. `Sequence` (`Sequence.cs:65`) marks itself as breaking but does not stop the signal.
+`ParallelForEach` has neither, so the signal bubbles past it. Every `Sequence` on the way up ends early, up to and
+including the nearest enclosing loop.
 The converter already warns `ELS3-BEHAVIOUR-BREAK-STOPS-AT-PARALLEL` for a `Break` below `Parallel`
 (`Elsa3ActivityNormalizer.ApplyEntryWarnings`). FR-015 adds `ParallelForEach` to that ancestor test.
 
@@ -63,8 +68,13 @@ The converter already warns `ELS3-BEHAVIOUR-BREAK-STOPS-AT-PARALLEL` for a `Brea
   (`ListAllByParentAsync`), grouped by node (`Parallel.cs:199-226`). A parallel loop must group by iteration id,
   because every pass has the same node. No shared "N children, done when all done" helper exists.
 - **Faults.** A parent learns of a child fault only through `IRuntimeActivityChildFaultHandler`. `Parallel` faults the
-  composite once its threshold is unreachable. `Sequence` does not handle faults, and implements
-  `IRuntimeAcceptsRescheduledFaultedChild`. Rescheduling a faulted child is refused unless the parent carries that
+  composite once its threshold is unreachable. `Sequence` does not handle faults. Both implement
+  `IRuntimeAcceptsRescheduledFaultedChild`, but a `Parallel` that has already faulted is no longer running.
+  The retry path is `RetryFaultedActivity`, which requires the `WaitForIntervention` outcome
+  (`RetryFaultedActivityAlterationHandler.cs:119-125`). `RescheduleActivity` refuses a source with a blocking incident
+  (`RescheduleActivityAlterationHandler.cs:57-59`). Under `ContinueWithIncidents` the incident becomes `Open` and the
+  backstop leaves it alone, so an unretried pass keeps the loop running, as for a `Sequence` child. There is no
+  alteration that cancels a single activity. Rescheduling a faulted child is refused unless the parent carries that
   marker **and is still running** (`IRuntimeStructuralActivity.cs:37-44`). Nothing cancels siblings on a fault
   (`StructuralParentEvaluationSupport.cs:162-163`). With the default instance strategy, an activity fault faults the
   instance. Otherwise an undecided blocking incident at quiescence faults it (`docs/runtime-fault-behavior.md`).
@@ -73,14 +83,19 @@ The converter already warns `ELS3-BEHAVIOUR-BREAK-STOPS-AT-PARALLEL` for a `Brea
   decisions 5 and 6). Inline steps are gap-free (decision 10). Loop item and index are read-only (spec 1231 FR-006).
   `UnorderedVariableWriteAnalyzer.cs:270-277` already warns for a node that overlaps itself, but only when the parent's
   structure handler reports the body as unordered with itself. `LoopStructureHandler.cs:38-39` reports
-  `FirstBeforeSecond` for every loop today.
+  `FirstBeforeSecond` for every loop today. `AnyAncestorOverlaps` walks to the root without looking at the variable's
+  declaring scope, so it would also flag writes to variables declared inside the body (one copy per pass), which
+  needs a bound (FR-010).
+- **Completion cost.** `ListAllByParentAsync` returns all child rows. Calling it on every one of N completions is
+  O(N²), which is acceptable for a handful of `Parallel` branches, not for a list of items.
 - **Background.** ADR 0093 C1 requires a leaf, so a structural loop is never a candidate. Leaf body steps keep C1–C10.
 - **Converter.** `Elsa3BuiltInActivityMap.Entries.cs:55` maps ParallelForEach as `NoCounterpart`.
   `Elsa3LoopVariableReferencesRewrite` maps ForEach's `CurrentValue` **output** to `currentItem`. Elsa 3
-  ParallelForEach has no output, so its reads go through `getVariable("CurrentValue")`, which `Elsa3ExpressionRewriter`
-  resolves through the ambient resolver (`AddResolvedEdit`). `Elsa3DefinitionConverter.AncestorScopeNames` lists the
-  names a body can read per ancestor loop. The Elsa 3 names must be added there for the new loop, mapped to the Elsa 4
-  names.
+  ParallelForEach has no output, so its reads go through `getVariable("CurrentValue")`. `Elsa3ExpressionRewriter`
+  hands that to the ambient resolver (`AddResolvedEdit`). `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1106-1162)
+  knows only declared variables, so the run-time name is missing today, and a workflow variable named `CurrentValue`
+  would match first. `Elsa3DefinitionConverter.AncestorScopeNames` carries Elsa 4 names for shadowing checks only.
+  The converter needs a resolution branch for the per-pass names (plan, Converter).
 
 ## R-6 Placement
 
@@ -93,5 +108,6 @@ registration. Studio lists loop structure kinds and safe activities in
 ## R-7 ADR need
 
 None. ADR 0028 defines the per-pass frame for "a loop activity", and its isolation is by frame instance, which holds
-for concurrent passes. ADR 0092 and spec 266 already cover unordered writes. Only the structure handler has to report
-the new ordering. The fault rule reuses an existing runtime capability. Join semantics are excluded (#4193).
+for concurrent passes. ADR 0092 and spec 266 already cover unordered writes. The structure handler has to report the
+new ordering, and spec 266's self-overlap check needs a bound at the declaring scope, which is a spec-level
+refinement, not a decision change. The fault rule reuses an existing runtime capability. Join semantics are excluded (#4193).
