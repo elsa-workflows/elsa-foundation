@@ -292,10 +292,13 @@ faults.
     initiative branch.
   - Spec 1245 supersedes the child-output and `Result`-output parts of three specs:
     - spec 096 (FR-003 and `contracts/dispatch-workflow.md`: the reserved `Result` output);
-    - spec 099 (its child-output capture through the runtime capture policy, redacted entries kept with metadata, and
-      the activity setting `Result`: User Story 2 scenarios 2 and 3, User Story 3 and its scenario 4, User Story 4
-      scenario 4, FR-009, FR-011, FR-012, FR-021, Key Entities, SC-004 and the capture-policy assumption);
-    - spec 100 (FR-004, FR-008 and FR-026, where they name `Result` or output capture).
+    - spec 099: its child-output capture through the runtime capture policy, the redacted entries kept with metadata,
+      and the activity setting `Result`. In `spec.md` that is User Story 2 scenarios 2 and 3, User Story 3 and its
+      scenario 4, User Story 4 scenario 4, FR-009, FR-011, FR-012, FR-021, Key Entities, SC-004 and the capture-policy
+      assumption. It is also the outputs and capture lines of `contracts/dispatch-wait-success.md`, and the `Result` row
+      and redacted-entry rules of `data-model.md`;
+    - spec 100: FR-004, FR-008 and FR-026 where they name `Result` or output capture, and the outputs lines of
+      `contracts/dispatch-fault-cancellation.md`.
 
     Each of those specs gets one note under its status line that cites spec 1245 and lists its superseded parts. Their
     text is otherwise unchanged.

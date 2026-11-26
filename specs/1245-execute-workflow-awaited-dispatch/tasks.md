@@ -21,14 +21,18 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
     - the contract surface baseline;
     - the Dispatch Workflow `EXTENSION_POINTS.md` and `README.md`;
     - the dispatch tests that build or read `Result`;
-    - the `DispatchWorkflowDrive` comment.
-  - Add the supersession notes to specs 096, 099 and 100 (FR-004).
+    - the `DispatchWorkflowDrive` comment;
+    - the regenerated parity report `elsa4-surface.json`.
+  - Add the supersession notes to specs 096, 099 and 100. Each names its superseded `spec.md`, contract and data-model
+    parts (FR-004).
   - Close #5851 when this lands.
 - [ ] T002 Test first, in `DispatchWorkflowEndToEndTests`, on the real `WorkflowOutputSource` with default diagnostics
   settings. Fire-and-forget, faulted, cancelled and dispatch-failed
   children each give no `Output`. A variable that captures `Output` and holds `"before"` still holds `"before"` after
   each of them (FR-002, plan D-1).
-- [ ] T003 Policy-free read of a child's committed workflow outputs (plan D-2). It selects the same outputs as
+- [ ] T003 Policy-free read of a child's committed workflow outputs (plan D-2): `IWorkflowOutputSource.ReadValuesAsync`,
+  implemented in `WorkflowOutputSource`. Update both `EXTENSION_POINTS.md` entries and `PublicAPI.Unshipped.txt`, and
+  give the test stubs (`WorkflowControlBoundaryTests.NoOutputs`, `DispatchWorkflowRuntimeTestFixture`) the member. It selects the same outputs as
   `RuntimeWorkflowOutputStateProjection`, without `IRuntimePayloadCapturePolicy`. It leaves out values whose
   `DurableValuePolicies.Read` is protected (sensitive, encryption, redaction mode, retention) and values not stored
   inline (`!InlineValue.HasValue || DurableValuePolicies.Read(row).Storage != Inline`). It returns the left-out names.

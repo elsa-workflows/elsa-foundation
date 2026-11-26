@@ -27,9 +27,19 @@ compatibility shims.
 
 - **Patterns.** No new pattern kind: one more output projection on an existing atomic result record, and data changes
   to existing converter rules.
-- **Extension points.** One public addition: `ActivityResumeContext<TState, TTrigger>.Warnings`
-  (`IExecutionWarningSink?`) in `Activities.Runtime.Core`, copied from the attempt's `Warnings`, which the resume handler
-  already sets. Update that project's `EXTENSION_POINTS.md` if it lists context members. Check whether the Dispatch
+- **Extension points.** Two public additions:
+  - `ActivityResumeContext<TState, TTrigger>.Warnings` (`IExecutionWarningSink?`) in `Activities.Runtime.Core`, copied
+    from the attempt's `Warnings`, which the resume handler already sets. Update that project's `EXTENSION_POINTS.md`
+    if it lists context members.
+  - `IWorkflowOutputSource.ReadValuesAsync` in `Workflows.Runtime.Core`: the policy-free read (D-2). It has the same
+    parameters as `ReadAsync` and returns the included values and the withheld names. `WorkflowOutputSource` in
+    `Elsa.Workflows.Runtime` implements it. It is a new member on the existing replacement contract, not a new
+    contract, so the diagnostics read and the value read sit side by side under distinct names.
+    - DispatchWorkflow references only the `.Core` projects, so the read cannot live inside it.
+    - Update the `IWorkflowOutputSource` entries in `Elsa.Workflows.Runtime/EXTENSION_POINTS.md` (its "Usage and
+      dependents" line says DispatchWorkflow reads policy-safe outputs) and in `Resumption/EXTENSION_POINTS.md`.
+    - Add the member to `Workflows/Runtime/Core/PublicAPI.Unshipped.txt`.
+  - The removed `Result` output and `DispatchWorkflowOutput` type leave the Dispatch Workflow public API files too. Check whether the Dispatch
   Workflow `EXTENSION_POINTS.md` lists outputs and update it if it does.
 - **ADRs.** No ADR change (see the spec, "Rule and boundary").
 
@@ -84,8 +94,8 @@ compatibility shims.
    - The omission is declared (ADR 0046 V6, in the contract description) and reported in each run (ADR 0045 §9, the
      warning). Carrying a per-value policy through a capture would be new ADR 0045 §9 work, and it is not built
      here.
-   - Expose that read as a separate method or contract beside the existing source, so the diagnostics read and the data
-     read cannot be confused. Use the existing contracts in `Workflows.Runtime.Core`; no new pattern.
+   - That read is `IWorkflowOutputSource.ReadValuesAsync` (see Constitution Check). The enricher calls it instead of
+     `ReadAsync`.
 4. The enricher puts that object on `WorkflowDispatchParentResumePayload` as a new `Output` (`JsonElement?`). It is set
    only for `Completed`, ordered by name, and is `{}` when the child has no outputs.
    - The intent comparison already compares the whole payload as canonical JSON (`RuntimeCheckpointCommit`), so
@@ -106,7 +116,11 @@ compatibility shims.
    - the Dispatch Workflow runtime `EXTENSION_POINTS.md` and `README.md`;
    - the dispatch tests that build or read `Result`: Contract, EndToEnd, Checkpoint, ParentResumeExecutor, the
      completion enricher, ChildControl and the WorkflowControl tests;
-   - the stale "two declared outputs" comment in `DispatchWorkflowDrive`.
+   - the test stubs that replace `IWorkflowOutputSource`, which need the new member: `WorkflowControlBoundaryTests`
+     (`NoOutputs`) and `DispatchWorkflowRuntimeTestFixture`;
+   - the stale "two declared outputs" comment in `DispatchWorkflowDrive`;
+   - the parity evidence report `docs/reports/evidence/activity-contract-parity/elsa4-surface.json`, regenerated with
+     `tools/parity/diff-activity-surfaces.py`.
 
    The BPMN control seams read the resume payload's terminal result, not the activity output, so they keep working.
 
