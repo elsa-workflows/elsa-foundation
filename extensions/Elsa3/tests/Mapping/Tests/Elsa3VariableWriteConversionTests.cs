@@ -144,8 +144,13 @@ public sealed class Elsa3VariableWriteConversionTests
 
         Assert.False(result.Succeeded);
         var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
-        Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, diagnostic.Code);
+        // Elsa 3 generated no setter for an input, so a call that ran there was a custom global (spec 1237 FR-016a).
+        Assert.Equal(Elsa3ImportDiagnosticCodes.HostFunctionMissing, diagnostic.Code);
+        Assert.Equal("setStatus", diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
         Assert.Contains("read-only", diagnostic.Message, StringComparison.Ordinal);
+        // The guidance keeps both routes: copy the input into a variable, or register the rebuilt function.
+        Assert.Contains("declared variable", diagnostic.Guidance, StringComparison.Ordinal);
+        Assert.Contains("'acme.setStatus'", diagnostic.Guidance, StringComparison.Ordinal);
     }
 
     [Theory]

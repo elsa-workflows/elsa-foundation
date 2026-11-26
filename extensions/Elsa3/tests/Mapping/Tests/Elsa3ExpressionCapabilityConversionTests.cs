@@ -89,7 +89,8 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
         Assert.Contains("JSON.stringify({ a: '<b>' })", ReadExpression(result).Source, StringComparison.Ordinal);
         var warning = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ToJsonRewritten);
         Assert.Equal(Elsa3MigrationDiagnosticSeverity.Warning, warning.Severity);
-        Assert.Contains("toJson({ a: '<b>' })", warning.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("toJson({ a: '<b>' })", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("toJson' at line 1, column 1", warning.Message, StringComparison.Ordinal);
         Assert.Contains("NaN", warning.Message, StringComparison.Ordinal);
         Assert.Equal("{\"a\":\"<b>\"}", (await PortableJavaScript.EvaluateAsync(ReadExpression(result))).GetString());
     }
@@ -424,6 +425,16 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("streamToBase64(x)")]
     [InlineData("getConfig('Key')")]
     [InlineData("getConfiguration('Key')")]
+    public async Task Functions_a_host_function_may_provide_are_missing_host_functions(string expression)
+    {
+        var result = await ConvertAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing &&
+            diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName] == expression[..expression.IndexOf('(')]);
+    }
+
+    [Theory]
     [InlineData("crypto.randomUUID()")]
     [InlineData("DateTime.Now")]
     [InlineData("new Guid('6F9619FF-8B86-D011-B42D-00CF4FC964FF')")]
@@ -448,14 +459,16 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("'abc'.ToUpper()", "'abc'.ToUpper()")]
     [InlineData("JSON.parse('{\"Items\": []}').Items.Where(function (x) { return x; })", "JSON.parse(")]
     [InlineData("Object.values({ a: 1 }).ToList()", "Object.values({ a: 1 }).ToList()")]
-    public async Task Member_use_of_a_dotnet_object_or_type_is_refused_quoting_it(string expression, string quoted)
+    public async Task Member_use_of_a_dotnet_object_or_type_is_refused_without_quoting_it(string expression, string quoted)
     {
         var result = await ConvertAsync(expression);
 
         Assert.False(result.Succeeded);
         var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
         Assert.Equal(Elsa3ImportDiagnosticCodes.DotNetMemberUsage, refusal.Code);
-        Assert.Contains(quoted, refusal.Message, StringComparison.Ordinal);
+        // Spec 1237 FR-019: the refusal names the cause and its position, never the script text.
+        Assert.DoesNotContain(quoted, refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("line ", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("JSON", refusal.Message, StringComparison.Ordinal);
     }
 

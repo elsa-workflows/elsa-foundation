@@ -220,7 +220,7 @@ internal static class Elsa3FlowchartGraphBuilder
 
             Error(UnsupportedMode, $"{forkPlan.JsonPath}.branches", fork,
                 names is null && text.Length > 0
-                    ? $"Fork '{NodeId(fork)}' has branches '{text}', which cannot be read as a list of names."
+                    ? $"Fork '{NodeId(fork)}' has branches that cannot be read as a list of names."
                     : $"Fork '{NodeId(fork)}' sets its branches by an expression, which only Elsa 3 can evaluate.",
                 "List the fork's branches literally before converting.");
             return null;

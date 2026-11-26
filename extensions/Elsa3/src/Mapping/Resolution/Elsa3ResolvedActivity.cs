@@ -93,14 +93,17 @@ internal sealed record Elsa3StructureContract(
     string SchemaVersion,
     ActivityStructureDesignFacetPayload Payload);
 
-/// <summary>Why a node could not be resolved: a stable code, a message and guidance.</summary>
-internal sealed record Elsa3ResolutionFailure(string Code, string Message, string Guidance);
+/// <summary>
+/// Why a node could not be resolved: a stable code, a message, guidance and, for a component diagnostic, its metadata
+/// (<see cref="Elsa3.Models.Elsa3MigrationDiagnosticMetadataKeys.ComponentName"/>).
+/// </summary>
+internal sealed record Elsa3ResolutionFailure(string Code, string Message, string Guidance, IReadOnlyDictionary<string, string>? Metadata = null);
 
 /// <summary>The outcome of resolving one node: exactly one of <see cref="Activity"/> or <see cref="Failure"/>.</summary>
 internal sealed record Elsa3Resolution(Elsa3ResolvedActivity? Activity, Elsa3ResolutionFailure? Failure)
 {
     public static Elsa3Resolution Resolved(Elsa3ResolvedActivity activity) => new(activity, null);
 
-    public static Elsa3Resolution Failed(string code, string message, string guidance) =>
-        new(null, new Elsa3ResolutionFailure(code, message, guidance));
+    public static Elsa3Resolution Failed(string code, string message, string guidance, IReadOnlyDictionary<string, string>? metadata = null) =>
+        new(null, new Elsa3ResolutionFailure(code, message, guidance, metadata));
 }

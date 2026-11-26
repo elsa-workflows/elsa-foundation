@@ -180,13 +180,8 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [InlineData("DateTime.Now", "DateTime", "Date or Temporal")]
     [InlineData("Guid.NewGuid()", "Guid", "newGuid()")]
     [InlineData("crypto.randomUUID()", "crypto.randomUUID", "newGuid()")]
-    [InlineData("bytesToString(x)", "bytesToString", "activity")]
-    [InlineData("streamToBytes(x)", "streamToBytes", "activity")]
-    [InlineData("getConfig('Key')", "getConfig", "workflow input")]
-    [InlineData("getWorkflowDefinitionId()", "getWorkflowDefinitionId", "correlation ID and the instance ID")]
     [InlineData("setCorrelationId('x')", "setCorrelationId", "Correlate activity")]
     [InlineData("setWorkflowInstanceName('x')", "setWorkflowInstanceName", "Set Name activity")]
-    [InlineData("getLastResult()", "getLastResult", "variable")]
     public async Task A_refused_construct_names_itself_and_the_elsa3_rewrite(string expression, string named, string guidance)
     {
         var result = await ConvertTextAsync(expression);
@@ -195,6 +190,30 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
         Assert.Contains($"'{named}'", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains(guidance, diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A refused Elsa 3 built-in a host function may take over is a missing host function (spec 1237 FR-016a): it names
+    /// itself, the Elsa 3 rewrite and the naming route, and carries the function name as ComponentName.
+    /// </summary>
+    [Theory]
+    [InlineData("bytesToString(x)", "bytesToString", "activity")]
+    [InlineData("streamToBytes(x)", "streamToBytes", "activity")]
+    [InlineData("getConfig('Key')", "getConfig", "workflow input")]
+    [InlineData("getWorkflowDefinitionId()", "getWorkflowDefinitionId", "correlation ID and the instance ID")]
+    [InlineData("getLastResult()", "getLastResult", "variable")]
+    public async Task A_refused_builtin_a_host_function_may_take_over_is_a_missing_host_function(string expression, string named, string guidance)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal(Elsa3MigrationDiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal(named, diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.Contains($"'{named}'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains(guidance, diagnostic.Guidance, StringComparison.Ordinal);
+        Assert.Contains($"'acme.{named}'", diagnostic.Guidance, StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Diagnostics, other => other.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
     }
 
     // Spec 1208 FR-027: a RunJavaScript script's setOutcome / setOutcomes converts to the returned completion form.
@@ -325,18 +344,25 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     }
 
     /// <summary>
-    /// An unmatched function keeps VF-IMP-005, with guidance to register it under a namespace prefix (#5664), whether the call
-    /// reaches the generic refusal (it has arguments) or the generated-accessor lookup (a get… call without arguments).
+    /// An unmatched function is a missing host function (ELS3-JS-HOST-FUNCTION-MISSING, spec 1237 FR-016a), with guidance to
+    /// register it under a namespace prefix (#5664) and its name as ComponentName, whether the call reaches the generic
+    /// refusal (it has arguments) or the generated-accessor lookup (a get… call without arguments, such as
+    /// getCustomerData()).
     /// </summary>
     [Theory]
     [InlineData("getConfiguration('Key')", "getConfiguration")]
     [InlineData("getCustomer()", "getCustomer")]
-    public async Task An_unmatched_host_function_keeps_the_refusal_with_the_naming_route(string expression, string name)
+    [InlineData("getCustomerData()", "getCustomerData")]
+    [InlineData("lookupCustomer('c-1')", "lookupCustomer")]
+    public async Task An_unmatched_host_function_is_a_missing_host_function_with_the_naming_route(string expression, string name)
     {
         var result = await ConvertTextAsync(expression);
 
         Assert.False(result.Succeeded);
-        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal(Elsa3MigrationDiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal(name, diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.DoesNotContain(result.Diagnostics, other => other.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
         Assert.Contains($"unknown or unapproved host function '{name}'", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains($"'acme.{name}'", diagnostic.Guidance, StringComparison.Ordinal);
         Assert.Contains($"'<prefix>.{name}'", diagnostic.Guidance, StringComparison.Ordinal);
@@ -529,8 +555,36 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         var result = await ConvertTextAsync("lookupCustomer('c-1')", [lookup]);
 
         Assert.False(result.Succeeded);
-        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing &&
             diagnostic.Message.Contains("'lookupCustomer'", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// An undeclared global used only as a value, with no host function registered, is a missing host function too
+    /// (spec 1237 FR-016a): before, it converted silently and failed at run time. Each name is reported once.
+    /// </summary>
+    [Theory]
+    [InlineData("items.map(lookupCustomer)", "lookupCustomer")]
+    [InlineData("(() => { const f = lookupCustomer; return [f, lookupCustomer]; })()", "lookupCustomer")]
+    public async Task An_undeclared_global_used_as_a_value_is_a_missing_host_function(string expression, string name)
+    {
+        var result = await ConvertTextAsync($"(() => {{ const items = []; return {expression}; }})()");
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal(Elsa3MigrationDiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal(name, diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.Contains($"'{name}'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains($"'acme.{name}'", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    /// <summary>A name no host function can take over (a standard JavaScript global) used as a value is not a component.</summary>
+    [Fact]
+    public async Task A_standard_global_used_as_a_value_is_not_a_missing_host_function()
+    {
+        var result = await ConvertTextAsync("[1.5].map(Math.round).concat([undefined, NaN]).length");
+
+        Assert.True(result.Succeeded, string.Join("; ", result.Diagnostics.Select(diagnostic => diagnostic.Message)));
     }
 
     [Fact]

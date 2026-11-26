@@ -60,7 +60,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         var applyPolicies = options?.Value.ApplyElsa3NullPolicies ?? true;
         var plan = new Elsa3ConversionPlan(request, clone) { ValuePolicies = new WorkflowValuePolicies(applyPolicies, applyPolicies) };
         plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Info,
-            "ELS3-NULL-POLICIES", applyPolicies
+            Elsa3ActivityDiagnosticCodes.NullPolicies, applyPolicies
                 ? "The converted workflow records DefaultOnNull and UndefinedAsNull."
                 : "The converted workflow keeps native Elsa 4 null and undefined rules.",
             applyPolicies ? "These policies remain pinned when the workflow is exported and imported without the converter."
@@ -97,7 +97,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
             if (type.CollectionKind == CollectionKind.Single && !NullPolicyDefaults.AcceptsNull(type, wellKnownTypeRegistry, typeDescriptors) &&
                 wellKnownTypeRegistry.TryGetTypeOrDefault(type.Alias, out var clrType) && !NullPolicyDefaults.TryGetTypeDefault(clrType, out _))
                 plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Error,
-                    "ELS3-INPUT-DEFAULT-REQUIRED", $"Optional input '{input.Name}' of type '{type.Alias}' has no supported implicit default.",
+                    Elsa3ActivityDiagnosticCodes.InputDefaultRequired, $"Optional input '{input.Name}' of type '{type.Alias}' has no supported implicit default.",
                     "Declare a default or type the member String / Any before converting.", $"$.inputs[{index}]"));
             index++;
         }
@@ -137,6 +137,11 @@ internal sealed partial class Elsa3ActivityNormalizer(
             var path = $"$.variables[{index}].value";
             var variableMetadata = new Dictionary<string, string> { ["VariableName"] = variables[index].Name };
             if (Elsa3VariableMapper.DescribeUnregisteredType(wellKnownTypeRegistry, variables[index]) is { } notice)
+            {
+                var noticeMetadata = new Dictionary<string, string>(notice.Metadata ?? new Dictionary<string, string>(), StringComparer.Ordinal)
+                {
+                    ["VariableName"] = variables[index].Name
+                };
                 plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
                     plan,
                     Elsa3MigrationDiagnosticSeverity.Info,
@@ -144,7 +149,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
                     notice.Message,
                     notice.Guidance,
                     $"$.variables[{index}]",
-                    variableMetadata));
+                    noticeMetadata));
+            }
             if (Elsa3StorageDriverCorrections.Describe("Variable", variables[index].Name, variables[index].StorageDriverTypeName) is { } correction)
                 plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Warning,
                     correction.Code, correction.Message, correction.Guidance, $"$.variables[{index}]", correction.Metadata));
@@ -177,8 +183,9 @@ internal sealed partial class Elsa3ActivityNormalizer(
         if (notes.Any(note => note.Code == LiteralDateInterpreted) && plan.Diagnostics.All(note => note.Code != Elsa3ImportDiagnosticCodes.DateInterpretationApplied))
             plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Info,
                 Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
-                $"The workflow's starting values were converted with {conversionOptions.Value.DateInterpretation}" +
-                (conversionOptions.Value.SourceTimeZone is null ? "." : $" '{conversionOptions.Value.SourceTimeZone}'."),
+                conversionOptions.Value.SourceTimeZone is null
+                    ? $"The workflow's starting values were converted with {conversionOptions.Value.DateInterpretation}."
+                    : $"The workflow's starting values were converted with {conversionOptions.Value.DateInterpretation}, in the configured source time zone.",
                 "Keep the same date interpretation when converting this workflow again.", path));
         return success;
     }
@@ -253,7 +260,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         if (resolution.Failure is { } failure)
         {
             // An unresolved node has no structure to route children into; its own error stands for them.
-            Error(plan, nodePlan, failure.Code, failure.Message, failure.Guidance);
+            Error(plan, nodePlan, failure.Code, failure.Message, failure.Guidance, failure.Metadata);
             descend = false;
         }
         else
@@ -851,7 +858,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
                         return value;
                     if (Enum.TryParse<HttpStatusCode>(literal, ignoreCase: true, out var status))
                         return Elsa3TypedValues.WithLiteral(value, ((int)status).ToString(CultureInfo.InvariantCulture));
-                    return Outside($"must be an HTTP status code, but is '{literal}'", "Use a numeric status code.");
+                    return Outside("must be an HTTP status code, but its literal is neither a number nor an HTTP status name", "Use a numeric status code.");
                 }
                 if (alias is "Int32" or "Int64" or "Int16")
                     return value;
@@ -869,8 +876,10 @@ internal sealed partial class Elsa3ActivityNormalizer(
             case Elsa3ValueContract.HttpMethodSupported:
                 if (isLiteral && literal?.Trim().ToUpperInvariant() is "PATCH" or "OPTIONS")
                 {
+                    // The method named is the converter's own spelling of the two it refuses, never the input text.
+                    var method = literal.Trim().ToUpperInvariant() == "PATCH" ? "PATCH" : "OPTIONS";
                     context.Error(NoCounterpart,
-                        $"HTTP method '{literal}' has no Elsa 4 counterpart; Elsa 4 sends GET, POST, PUT, DELETE and HEAD.",
+                        $"HTTP method {method} has no Elsa 4 counterpart; Elsa 4 sends GET, POST, PUT, DELETE and HEAD.",
                         "Use a supported method.",
                         propertyName);
                     return null;
@@ -1090,7 +1099,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
                 if (variable is null || string.IsNullOrWhiteSpace(variable.Id))
                     continue;
                 if (Elsa3VariableMapper.DescribeUnregisteredType(wellKnownTypeRegistry, variable) is { } notice)
-                    context.Info(Elsa3ImportDiagnosticCodes.VariableTypeUnregistered, notice.Message, notice.Guidance, property);
+                    context.Info(Elsa3ImportDiagnosticCodes.VariableTypeUnregistered, notice.Message, notice.Guidance, property, metadata: notice.Metadata);
                 if (Elsa3StorageDriverCorrections.Describe("Variable", variable.Name, variable.StorageDriverTypeName) is { } correction)
                     context.Warning(correction.Code, correction.Message, correction.Guidance, property, metadata: correction.Metadata);
                 if (TryMapVariable(context.Plan, variable, $"{context.Node.JsonPath}{Elsa3ConversionDiagnostics.FormatProperty(property)}.value", out var mapped, out var refusal))
@@ -1101,7 +1110,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         }
         catch (JsonException exception)
         {
-            context.Error(UnknownMember, $"The container's variables could not be read: {exception.Message}", "Fix the variable declarations.", property);
+            context.Error(UnknownMember, $"The container's variables could not be read as Elsa 3 variable declarations ({exception.GetType().Name}).", "Fix the variable declarations.", property);
         }
     }
 
@@ -1218,7 +1227,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         catch (JsonException exception)
         {
             plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Error(plan, parent, UnknownMember,
-                $"A child activity at '{jsonPath}' could not be read: {exception.Message}",
+                $"A child activity at '{jsonPath}' could not be read as an Elsa 3 activity ({exception.GetType().Name}).",
                 "Fix the child activity's JSON before converting."));
             parent.Failed = true;
             return null;
@@ -1233,10 +1242,11 @@ internal sealed partial class Elsa3ActivityNormalizer(
     private static void Warn(Elsa3RewriteContext context, string code, string? property) =>
         context.Warning(code, WarningMessages.GetValueOrDefault(code, code), "Review the converted workflow's behaviour for this difference.", property);
 
-    private static void Error(Elsa3ConversionPlan plan, Elsa3NodePlan node, string code, string message, string guidance)
+    private static void Error(Elsa3ConversionPlan plan, Elsa3NodePlan node, string code, string message, string guidance,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         node.Failed = true;
-        plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Error(plan, node, code, message, guidance));
+        plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Error(plan, node, code, message, guidance, extra: metadata));
     }
 
     private static readonly IReadOnlyDictionary<string, string> WarningMessages = new Dictionary<string, string>(StringComparer.Ordinal)

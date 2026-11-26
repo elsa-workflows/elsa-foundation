@@ -13,13 +13,13 @@ public sealed class Elsa3ExpressionRewriterTests
     [Fact]
     public void JavaScript_rewrites_only_parser_proven_reads_and_preserves_literals_comments_and_property_names()
     {
-        const string source = "\"getVariable('total')\" + getVariable(\"total\") + model.variables.total /* getVariable('total') */";
+        const string source = "\"getVariable('total')\" + getVariable(\"total\") + Math.variables.total /* getVariable('total') */";
 
         var result = _sut.Rewrite("JavaScript", source, new TypeReference("String"), Resolve);
 
         Assert.True(result.Succeeded);
         Assert.Equal(
-            "\"getVariable('total')\" + args.total + model.variables.total /* getVariable('total') */",
+            "\"getVariable('total')\" + args.total + Math.variables.total /* getVariable('total') */",
             result.Definition!.Source);
         Assert.IsType<VariableExpressionParameterBinding>(result.Definition.Parameters["total"]);
     }

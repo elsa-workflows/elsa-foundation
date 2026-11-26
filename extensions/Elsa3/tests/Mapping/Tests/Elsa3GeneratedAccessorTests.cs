@@ -48,7 +48,8 @@ public sealed class Elsa3GeneratedAccessorTests
         var result = await ConvertTextAsync(expression, variables: [Variable("orderId")]);
 
         Assert.False(result.Succeeded);
-        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing &&
+            diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName] == expression[..^2]);
     }
 
     [Fact]
@@ -56,7 +57,7 @@ public sealed class Elsa3GeneratedAccessorTests
     {
         var result = await ConvertTextAsync("getOrder_id()", variables: [Variable("order_id")]);
 
-        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
     }
 
     [Fact]
@@ -77,7 +78,7 @@ public sealed class Elsa3GeneratedAccessorTests
         var pascalCased = await ConvertTextAsync("getCustomInput()", inputs: [WorkflowInput("customInput")]);
 
         Assert.True(verbatim.Succeeded, Describe(verbatim.Diagnostics));
-        Assert.Contains(pascalCased.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains(pascalCased.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
     }
 
     [Fact]
@@ -123,7 +124,7 @@ public sealed class Elsa3GeneratedAccessorTests
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
 
-        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
     }
 
     [Fact]

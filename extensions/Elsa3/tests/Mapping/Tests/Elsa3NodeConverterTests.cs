@@ -40,7 +40,7 @@ public sealed class Elsa3NodeConverterTests
         "getVariable('o').name = 'x'",
         "args.value",
         "_.join(['a'], ',')",
-        "getVariable(name)",
+        "getVariable(['o'][0])",
     ];
 
     [Theory]
@@ -57,7 +57,8 @@ public sealed class Elsa3NodeConverterTests
         {
             Assert.False(prepared.Succeeded);
             Assert.Equal(Codes(whole.Diagnostics), Codes(prepared.Diagnostics));
-            Assert.Contains(prepared.Diagnostics, diagnostic => diagnostic.Code.StartsWith("VF-IMP-", StringComparison.Ordinal));
+            Assert.Contains(prepared.Diagnostics, diagnostic => diagnostic.Code.StartsWith("VF-IMP-", StringComparison.Ordinal) ||
+                                                                diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
             return;
         }
 

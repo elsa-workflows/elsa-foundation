@@ -90,7 +90,8 @@ internal sealed class Elsa3ActivityResolver(
         return Elsa3Resolution.Failed(
             Elsa3ActivityDiagnosticCodes.UnmappedType,
             $"Elsa 3 activity type '{type}' is not mapped to an Elsa 4 activity, not claimed by a replaced-type alias and not an Elsa 4 catalog key.",
-            "Rebuild the activity for Elsa 4 and mark it [ReplacesActivityType(\"" + type + "\")], or remove the node before converting.");
+            "Rebuild the activity for Elsa 4 and mark it [ReplacesActivityType(\"" + type + "\")], or remove the node before converting.",
+            new Dictionary<string, string>(StringComparer.Ordinal) { [Elsa3MigrationDiagnosticMetadataKeys.ComponentName] = type ?? string.Empty });
     }
 
     private async ValueTask<Elsa3Resolution> ResolveEntryAsync(Elsa3ActivityMapEntry entry, CancellationToken cancellationToken)

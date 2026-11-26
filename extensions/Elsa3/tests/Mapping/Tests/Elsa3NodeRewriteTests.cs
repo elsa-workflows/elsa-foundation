@@ -58,7 +58,8 @@ public sealed class Elsa3NodeRewriteTests
 
         var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
-        Assert.Contains($"'{joinMode}'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("neither WaitAll nor WaitAny", diagnostic.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(joinMode, diagnostic.Message, StringComparison.Ordinal);
     }
 
     [Fact]

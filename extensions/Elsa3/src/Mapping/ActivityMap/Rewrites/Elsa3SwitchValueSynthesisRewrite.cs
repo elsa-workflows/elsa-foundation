@@ -42,7 +42,7 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
                 context.Error(UnsupportedMode,
                     literal is null
                         ? "The switch mode is set by an expression; Elsa 4 needs the mode when the workflow is published."
-                        : $"Switch mode '{literal}' has no Elsa 4 counterpart; Elsa 4 takes the first matching case (MatchFirst) or every matching case (MatchAny).",
+                        : "The switch mode is neither MatchFirst nor MatchAny, so it has no Elsa 4 counterpart; Elsa 4 takes the first matching case (MatchFirst) or every matching case (MatchAny).",
                     "Set the mode to MatchFirst or MatchAny literally, or split the switch into separate decisions.",
                     modeProperty);
                 return ValueTask.CompletedTask;
@@ -173,7 +173,7 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
                 return true;
             }
 
-            reason = $"is the literal '{literal.Trim()}', which is neither true nor false";
+            reason = "is a literal that is neither true nor false";
             return false;
         }
 
@@ -240,7 +240,7 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {
-            reason = $"could not be parsed ({exception.Message})";
+            reason = "could not be parsed as JavaScript";
             return false;
         }
 
