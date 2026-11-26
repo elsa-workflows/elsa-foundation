@@ -103,8 +103,10 @@ public sealed partial class EfStore
     }
 
     private bool AuthoredWithholding(WorkerRoot root, RootImage current) =>
-        _ordinaryRoots?.AuthoredWithholds?.Invoke(new(new(root.Reference), current.Model, root.Tenant,
-            (Contract.ActorStatus)current.Status, current.Fault, null, current.TerminalAt, current.TypeData, current.Labels)) == true;
+        AuthoredWithholding(new(new(root.Reference), current.Model, root.Tenant, (Contract.ActorStatus)current.Status,
+            current.Fault, null, current.TerminalAt, current.TypeData, current.Labels));
+
+    private bool AuthoredWithholding(Contract.ActorHeader header) => _ordinaryRoots?.AuthoredWithholds?.Invoke(header) == true;
 
     private WorkerRoots InstallWorkerScope(WorkerRoots scope)
     {

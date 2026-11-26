@@ -60,7 +60,7 @@ internal static class PostgresRootParkedOperatorChecks
 
     private sealed record InputRow(long Seq, string Id, string Kind, bool Done, short? KeptBy, bool Content);
     private sealed record ControlRow(long Due, long KeepUntil, string Start);
-    private sealed record TimedInboxRow(string Id, string Kind, long Due, long Generation);
+    private sealed record TimedInboxRow(string Id, string Kind, long Due, long Generation, string? Start, string? Payload);
 
     internal static async Task<int> RunAsync(bool owned, bool inBatch, bool shippedSet = false)
     {
@@ -534,11 +534,23 @@ internal static class PostgresRootParkedOperatorChecks
             var ownOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
             KernelDb OpenLive() => KernelDb.ForPostgresRootShipped(ownOptions);
             await using var set = new Set("live-compound", OpenLive, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
+            const string operation = "compound-after-job";
+            Contract.ActorRef root = default;
+            EfStore.RootImage? before = null;
+            TimedInboxRow[] priorRows = [];
+            set.Write = async (writer, batch, token) =>
+            {
+                if (batch.Turns.Any(turn => turn is { Row: null, FoundationRootOperator.Id: operation }))
+                {
+                    before = await set.ImageAsync(root);
+                    priorRows = await ReadJobRowsAsync(before.Actor.Id);
+                }
+                return await writer.CommitAsync(batch, token);
+            };
             await set.InstallAsync(createTables: true);
             var owner = await set.OwnAsync();
-            var root = await set.StartAsync("compound-races-job");
+            root = await set.StartAsync("compound-races-job");
             var image = await set.ImageAsync(root);
-            const string operation = "compound-after-job";
             Check(await set.SendAsync(root, "issue-job-earlier", "issue-job") &&
                 await set.OperateAsync(root, operation, Contract.Kinds.Terminate, set.Selections[root], reply: true, thenDelete: true),
                 "the running root admits a ready job-issuing input before the held compound operation");
@@ -548,7 +560,9 @@ internal static class PostgresRootParkedOperatorChecks
             var jobRows = await ReadJobRowsAsync(image.Actor.Id);
             Check(running is { Revision: 2, Status: InstanceStatus.Running, TerminalRevision: null, Jobs: not null, NextJobGeneration: 1 } &&
                 jobRows.Length == 2 && jobRows.Any(row => row.Kind == Kinds.JobDeadline) && jobRows.Any(row => row.Kind == Kinds.Job) &&
-                jobRows.All(row => row.Generation == 1) && ReferenceEquals(owner, set.Owner) &&
+                before is { Revision: 2, Jobs: not null } && running.Jobs == before.Jobs && jobRows.SequenceEqual(priorRows) &&
+                JobRegistry.Read(running.Jobs) is [{ Key: "work", Generation: var generation }] &&
+                jobRows.All(row => row.Generation == generation) && ReferenceEquals(owner, set.Owner) &&
                 !set.StoodDown && (await set.InputsAsync(root)).All(row => row.Done),
                 "the held compound refusal settles at the exact running revision and preserves the timed job and deadline");
             set.Answered(operation, "StaleSelection");
@@ -568,7 +582,8 @@ internal static class PostgresRootParkedOperatorChecks
             {
                 await using var read = OpenLive();
                 return await read.Messages.AsNoTracking().Where(row => row.Target == actor && row.InboxScope == EfStore.RootTimedJobScope &&
-                    !row.Done).OrderBy(row => row.Seq).Select(row => new TimedInboxRow(row.Id, row.Kind, row.Due, row.JobGeneration)).ToArrayAsync(stop);
+                    !row.Done).OrderBy(row => row.Seq)
+                    .Select(row => new TimedInboxRow(row.Id, row.Kind, row.Due, row.JobGeneration, row.Start, row.Payload)).ToArrayAsync(stop);
             }
         }
 

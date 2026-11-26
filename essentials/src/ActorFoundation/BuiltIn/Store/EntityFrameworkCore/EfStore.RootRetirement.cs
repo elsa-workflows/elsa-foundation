@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
 
@@ -28,32 +29,35 @@ public sealed partial class EfStore
         }
     }
 
+    private sealed record LiveCompoundRoot(long Revision, bool Suspended, string Jobs, long? NextJobGeneration, string Header, string? Fault);
+
     // A job registered after admission prevents compound retirement. Settle only its refused command while the
     // exact running checkpoint and its job pair remain at the same revision.
-    private sealed record LiveCompoundRefusal(WorkerRoot Root, RootImage Current, Message Command, FoundationSelfIssuer? Issue, bool Withheld)
+    private sealed record LiveCompoundRefusal(WorkerRoot Root, LiveCompoundRoot Current, Message Command, FoundationSelfIssuer? Issue, bool Withheld)
         : QualifiedRootCheckpoint(0)
     {
-        internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
-        {
-            if (!db.UsesRootTerminateThenDelete) return false;
-            FormattableString query = $"""
-                SELECT i."Revision" AS "Value" FROM "Instances" i JOIN "FoundationRootBirths" b
-                    ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = {Current.Actor.Creation}
-                    AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
-                WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition}
-                    AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
-                    AND i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired" AND i."Revision" = {Current.Revision}
-                    AND i."FoundationTerminalRevision" IS NULL AND i."FoundationTerminalAt" IS NULL
-                    AND i."Jobs" = {Current.Jobs} AND i."NextJobGeneration" IS NOT DISTINCT FROM {Current.NextJobGeneration}
-                    AND i."Suspended" = {Current.Suspended}
-                """;
-            var parked = db.UsesRootParkOpening ? """ AND i."FoundationParkAt" IS NULL""" : "";
-            var writeLock = db.Database.IsNpgsql() ? " FOR UPDATE OF i" : "";
-            var scoped = FormattableStringFactory.Create(query.Format + parked + writeLock, query.GetArguments());
-            var locked = await db.Database.SqlQuery<long>(scoped).ToListAsync(token);
-            return locked.Count == 1 && await SettleRootInputsAsync(db, Root.Reference, Current.Actor, [Command.InboxKey],
-                [Command], Issue, Current.Suspended || Withheld, token);
-        }
+        internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token) =>
+            db.UsesRootTerminateThenDelete && await ReadLiveCompoundRootAsync(db, Root, lockRow: true, token) == Current &&
+            await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command],
+                Issue, Current.Suspended || Withheld, token);
+    }
+
+    private static Task<LiveCompoundRoot?> ReadLiveCompoundRootAsync(KernelDb db, WorkerRoot root, bool lockRow, CancellationToken token)
+    {
+        FormattableString query = $"""
+            SELECT i."Revision", i."Suspended", i."Jobs", i."NextJobGeneration", i."FoundationHeader" AS "Header", i."Fault"
+            FROM "Instances" i JOIN "FoundationRootBirths" b
+                ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
+                AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
+            WHERE i."Id" = {root.Actor} AND i."Partition" = {root.Partition}
+                AND i."FoundationTenant" = {root.Tenant} AND i."FoundationReference" = {root.Reference}
+                AND i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired" AND i."Jobs" IS NOT NULL
+                AND i."FoundationTerminalRevision" IS NULL AND i."FoundationTerminalAt" IS NULL
+            """;
+        var parked = db.UsesRootParkOpening ? """ AND i."FoundationParkAt" IS NULL""" : "";
+        var writeLock = lockRow && db.Database.IsNpgsql() ? " FOR UPDATE OF i" : "";
+        return db.Database.SqlQuery<LiveCompoundRoot>(FormattableStringFactory.Create(
+            query.Format + parked + writeLock, query.GetArguments())).SingleOrDefaultAsync(token);
     }
 
     private async Task<LiveCompoundRefusal?> PrepareLiveCompoundRefusalAsync(WorkerRoot root, InboxKey key,
@@ -62,17 +66,19 @@ public sealed partial class EfStore
         if (held is not null && held.Operator?.RootThenDelete != true) return null;
         await using var db = create();
         if (!db.UsesRootTerminateThenDelete) return null;
-        var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
-        if (current is not { Status: InstanceStatus.Running, Jobs: not null, TerminalRevision: null, TerminalAt: null }) return null;
         await using var pinned = await BeginPinnedRootOperationAsync(db, token);
         var row = await db.Messages.AsNoTracking().SingleOrDefaultAsync(message => message.Partition == root.Partition &&
-            message.Target == root.Actor && message.InboxScope == InboxKey.FoundationOccurrenceScope && message.Id == key.Id && !message.Done,
-            token);
-        if (row is null) return null;
-        var command = DecodeRootInput(db, row, root.Reference, issue: null);
-        return command is { Kind: Kinds.Terminate, Operator: { RootThenDelete: true, RootParkMark: null } } &&
-            (held is not null ? command == held : command.ReplyTo is null)
-            ? new(root, current, command, RootSelfIssuer, AuthoredWithholding(root, current)) : null;
+            message.Target == root.Actor && message.InboxScope == InboxKey.FoundationOccurrenceScope && message.Id == key.Id && !message.Done &&
+            message.Kind == Kinds.Terminate, token);
+        if (row is null || DecodeRootInput(db, row, root.Reference, issue: null) is not
+            { Operator: { RootThenDelete: true, RootParkMark: null } } command ||
+            (held is not null ? command != held : command.ReplyTo is not null)) return null;
+        var current = await ReadLiveCompoundRootAsync(db, root, lockRow: false, token);
+        if (current is null) return null;
+        var header = DurableKeyJson.Read<RootHeader>(current.Header);
+        return new(root, current, command, RootSelfIssuer, AuthoredWithholding(new(new(root.Reference), header.Model,
+            root.Tenant, Contract.ActorStatus.Running, current.Fault, null, null, header.TypeData,
+            header.Labels.ToDictionary(label => label.Key, label => label.Value, StringComparer.Ordinal))));
     }
 
     // S5b-3a: a Terminate-then-delete of a parked root clears the Park's last kept rows, ends it Cancelled and retires it in
