@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
@@ -15,12 +14,11 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootListChecks
 {
-    internal static ActorQuery ApprovalQuery()
-    {
-        var version = new NativeExecutionModel(new WorkflowRegistry()).StateVersion.ToString(CultureInfo.InvariantCulture);
-        return new(Actor.ActorType, ActorStatus.Running,
-            new Dictionary<string, string> { ["definition"] = DirectApprovalWorkflow.Definition, ["version"] = version }, Parked: false);
-    }
+    private const string CorrelationId = "actor-list-approval";
+
+    internal static ActorQuery ApprovalQuery() => new(Actor.ActorType, ActorStatus.Running,
+        new Dictionary<string, string> { ["definition"] = DirectApprovalWorkflow.Definition, [NativeLabels.CorrelationId] = CorrelationId },
+        Parked: false);
 
     internal static async Task<int> RunAsync(bool owned, bool inBatch, PageToken? saved)
     {
@@ -34,6 +32,7 @@ internal static class PostgresRootListChecks
         var ct = timeout.Token;
         var blue = EmbeddedTenant.Bind("list-blue");
         var query = ApprovalQuery();
+        var stateVersion = new NativeExecutionModel(new WorkflowRegistry()).StateVersion;
         await using var db = Open();
         if (saved is null)
         {
@@ -52,7 +51,7 @@ internal static class PostgresRootListChecks
             var first = await api.ListAsync(blue, query, cancellationToken: ct);
             var next = await api.ListAsync(blue, query with
             {
-                Labels = new Dictionary<string, string> { ["version"] = query.Labels!["version"], ["definition"] = DirectApprovalWorkflow.Definition }
+                Labels = new Dictionary<string, string> { [NativeLabels.CorrelationId] = CorrelationId, ["definition"] = DirectApprovalWorkflow.Definition }
             }, saved, ct);
             var final = await api.ListAsync(blue, query, next.Next, ct);
             var actual = first.Items.Concat(next.Items).Concat(final.Items).Select(v => v.Header.Ref.Id).ToArray();
@@ -78,6 +77,8 @@ internal static class PostgresRootListChecks
             catch (ArgumentException) { }
             Check(new[] { first, next, final }.All(page => page.AsOf > 0 && page.Items.All(item => item.AsOf == page.AsOf)),
                 "each returned page has its own database clock");
+            Check(first.Items.Concat(next.Items).Concat(final.Items).All(HasNativeStateVersion),
+                "the cold projection keeps the state version in the type header");
             Console.WriteLine($"passed projection restart {Environment.ProcessId}");
             return 0;
         }
@@ -90,7 +91,9 @@ internal static class PostgresRootListChecks
         var completed = await Start(blue, "completed", "terminal");
         Check((await api.ListAsync(blue, query, cancellationToken: ct)).Items.Count == 0 &&
             await api.GetAsync(blue, unusual, ct) is null, "admitted creators do not project uncommitted actors");
-        var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build())
+        var approvalDefinition = Wf.Workflow(DirectApprovalWorkflow.Definition, Wf.Sequence("approval-flow",
+            Wf.SetCorrelationId("list-correlation", CorrelationId), Wf.Node<DirectApprovalWorkflow>("approve")));
+        var registry = new WorkflowRegistry().Add(approvalDefinition)
             .Add(Wf.Workflow("terminal", Wf.Node<PostgresFlowchartPreview.Approval>("approval")));
         var prepared = await PostgresNativeRootOwner.PreparePartitionAsync(store, "root-list", 0, registry, 16, ct);
         await using (var owner = await prepared.TryActivateAsync(ct) ?? throw new InvalidOperationException("Expected a fresh partition owner."))
@@ -100,15 +103,19 @@ internal static class PostgresRootListChecks
             var frame = Json.Read<NativeState>(end.State!).Frames.Values.Single().Id;
             var approval = Json.Write(new CompositeSignal(frame, "approve", "done"));
             await Send(blue, completed, "finish", CompositeSignal.Kind, approval);
-            var journal = await api.TailAsync(blue, approvals[0], cancellationToken: ct);
+            PageToken? beforeSuspend = null;
+            while (await api.TailAsync(blue, approvals[0], beforeSuspend, ct) is { Next: { } nextPage })
+                beforeSuspend = nextPage;
+            Check(beforeSuspend is not null, "the completed replay supplies a journal bookmark for the suspend check");
             await Send(blue, approvals[0], "suspend", PublicKinds.Suspend);
             while ((await store.ReadFirstRootAsync(blue.Tenant, completed.Id, ct))?.Status != InstanceStatus.Finished ||
                 (await store.ReadFirstRootAsync(blue.Tenant, approvals[0].Id, ct))?.Suspended != true) await Pump(owner);
             var all = await Collect(blue, query);
             Check(all.Select(row => row.Header.Ref).ToHashSet().IsSupersetOf(approvals), "public list projects all committed approvals");
+            Check(all.All(HasNativeStateVersion), "the public type header projects the Native state version");
             using var header = JsonDocument.Parse(all.Single(row => row.Header.Ref == approvals[0]).Header.TypeData);
             Check(header.RootElement.GetProperty("Suspended").GetBoolean() &&
-                (await api.TailAsync(blue, approvals[0], journal.Next, ct)).Items.Count == 0,
+                (await api.TailAsync(blue, approvals[0], beforeSuspend, ct)).Items.Count == 0,
                 "a journal-silent suspension updates the persisted public metadata");
             Check(all.All(row => row.Park is null), "suspension leaves the parked filter false");
         }
@@ -286,6 +293,12 @@ internal static class PostgresRootListChecks
         Console.WriteLine($"projection-bookmark {page.Next!.Value.Value}");
         Console.WriteLine($"passed projection birth {Environment.ProcessId}");
         return 0;
+
+        bool HasNativeStateVersion(ActorView view)
+        {
+            using var header = JsonDocument.Parse(view.Header.TypeData);
+            return header.RootElement.GetProperty("Version").GetInt32() == stateVersion;
+        }
 
         async Task<ActorRef> Start(BoundScope scope, string id, string definition = DirectApprovalWorkflow.Definition) =>
             (await workflow.StartAsync(scope, id, NativeExecutionModel.Start(definition), cancellationToken: ct)).Actor!.Value;
