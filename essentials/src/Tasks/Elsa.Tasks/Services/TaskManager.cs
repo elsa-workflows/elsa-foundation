@@ -79,6 +79,47 @@ internal sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider
         }
     }
 
+    /// <inheritdoc />
+    public async Task RunStartupTasksOnly(CancellationToken cancellationToken = default)
+    {
+        CancellationTokenSource startupCancellation;
+        TaskStateManager stateManager;
+        lock (_stopLock)
+        {
+            if (Volatile.Read(ref _disposeRequested) == 1)
+                return;
+
+            // The same gate and shutdown link as a full start, so Stop cancels and waits for startup tasks in flight.
+            stateManager = GetOrInitializeTaskStateManager();
+            startupCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCancellationTokenSource.Token);
+        }
+
+        using var startupLifetime = startupCancellation;
+        var startupToken = startupCancellation.Token;
+        await stateManager.Gate.WaitAsync(startupToken);
+
+        try
+        {
+            if (Volatile.Read(ref _disposeRequested) == 1)
+                return;
+
+            var taskExecutor = serviceProvider.GetRequiredService<ITaskExecutor>();
+
+            // Startup tasks only: no background or recurring task is resolved, started or scheduled.
+            await RunStartupTasks(serviceProvider, taskExecutor, startupToken);
+            startupToken.ThrowIfCancellationRequested();
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "An error occurred while running startup tasks.");
+            throw;
+        }
+        finally
+        {
+            stateManager.Gate.Release();
+        }
+    }
+
     private TaskStateManager GetOrInitializeTaskStateManager()
     {
         if (taskStateManager is not null)

@@ -25,3 +25,4 @@ Elsa.Tasks.Core.ITaskManager.StartExecutingRegisteredTasks(System.Threading.Canc
 Elsa.Tasks.Core.ITaskManager.StopExecutingRegisteredTasks(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Elsa.Tasks.Core.ITaskSchedule
 Elsa.Tasks.Core.ITaskSchedule.ScheduleExecution(System.Func<System.Threading.Tasks.Task!>! action) -> Elsa.Tasks.Core.IScheduledTaskExecution!
+Elsa.Tasks.Core.ITaskManager.RunStartupTasksOnly(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!

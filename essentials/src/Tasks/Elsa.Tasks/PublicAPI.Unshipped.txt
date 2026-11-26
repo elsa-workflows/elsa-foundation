@@ -2,3 +2,5 @@
 Elsa.Tasks.TasksFeature
 Elsa.Tasks.TasksFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Tasks.TasksFeature.TasksFeature() -> void
+Elsa.Tasks.TasksFeature.StartupTasksOnly.get -> bool
+Elsa.Tasks.TasksFeature.StartupTasksOnly.set -> void
