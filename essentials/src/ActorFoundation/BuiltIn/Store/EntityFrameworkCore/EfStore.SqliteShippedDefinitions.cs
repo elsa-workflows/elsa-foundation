@@ -267,6 +267,8 @@ public sealed partial class EfStore
         yield return new("trigger", "kernel_physical_retirement", "Instances", PhysicalRetirement.SqliteRootGuard(db));
         yield return new("trigger", "kernel_job_generation", "Instances", "CREATE TRIGGER " + SqliteGenerationClause);
         foreach (var guard in SqliteFirstRootGuards(db)) yield return guard;
+        foreach (var projector in SqliteRootProjectors()) yield return projector;
+        foreach (var outcome in SqliteRootOutcomes()) yield return outcome;
     }
 
     private static SqliteDefinition Table(string name, string columns) =>
