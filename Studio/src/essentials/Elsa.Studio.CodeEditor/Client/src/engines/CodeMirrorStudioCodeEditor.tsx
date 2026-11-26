@@ -19,6 +19,8 @@ import { applyCodeMirrorDiagnostics } from "./codeMirrorDiagnostics";
 import { markCodeEditorReady } from "./markCodeEditorReady";
 import {
   cancelCodeMirrorIntelligence,
+  cancelPendingCodeMirrorCompletion,
+  clearCodeMirrorCompletionMessage,
   createCodeMirrorCodeIntelligenceExtensions,
   dismissCodeMirrorIntelligence,
   requestCodeMirrorKeyboardHover
@@ -345,7 +347,9 @@ function createEntryState(props: StudioCodeEditorEngineProps, entry: CodeMirrorS
             entry.runtime.props.onFocus?.();
             return false;
           },
-          blur: () => {
+          blur: (_event, view) => {
+            cancelPendingCodeMirrorCompletion(view);
+            clearCodeMirrorCompletionMessage(view);
             entry.runtime.explicitCompletion = false;
             entry.runtime.recentJavaScriptInput = false;
             entry.runtime.tabEscapeArmed = false;
@@ -434,6 +438,10 @@ function editabilityExtensions(readOnly: boolean, ariaLabel: string) {
 }
 
 function startExplicitCompletion(view: EditorView, runtime: CodeMirrorRuntime): boolean {
+  clearCodeMirrorCompletionMessage(view);
+  // A running automatic query would otherwise finish under its original intent.
+  if (!runtime.explicitCompletion && completionStatus(view.state) === "pending")
+    cancelPendingCodeMirrorCompletion(view);
   const started = startCompletion(view);
   if (started) {
     runtime.explicitCompletion = true;

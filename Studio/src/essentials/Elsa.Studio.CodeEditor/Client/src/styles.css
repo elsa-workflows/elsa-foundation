@@ -122,6 +122,13 @@
   padding: 0.25rem 0.5rem;
 }
 
+.studio-code-editor-completion-status:not(:empty) {
+  color: var(--studio-text-muted);
+  font-family: var(--studio-font-ui);
+  font-size: var(--studio-label-size);
+  padding: 0.25rem 0.5rem;
+}
+
 .studio-code-editor-status,
 .studio-code-editor-escape {
   color: var(--studio-text-muted);

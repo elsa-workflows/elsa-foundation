@@ -370,6 +370,155 @@ describe("StudioCodeEditor", () => {
     unmount();
   }, 20000);
 
+  it("announces an empty keyboard completion and dismisses it on Escape or typing", async () => {
+    const completionProvider = vi.fn(() => []);
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: "variables.plain." }),
+      languageAdapter: javaScriptLanguageAdapter,
+      completionProvider
+    });
+    const message = () => [...container.querySelectorAll('[role="status"]')].find(node => node.textContent === "No suggestions");
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const view = EditorView.findFromDOM(content)!;
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+      content.focus();
+      key(content, " ", { code: "Space", ctrlKey: true });
+
+      await vi.waitFor(() => expect(message()).toBeDefined());
+      key(content, "Escape");
+      expect(message()).toBeUndefined();
+
+      key(content, " ", { code: "Space", ctrlKey: true });
+      await vi.waitFor(() => expect(message()).toBeDefined());
+      const end = view.state.doc.length;
+      view.dispatch({ changes: { from: end, insert: "x" }, selection: { anchor: end + 1 }, userEvent: "input.type" });
+
+      await vi.waitFor(() => expect(completionProvider).toHaveBeenLastCalledWith(expect.objectContaining({ explicit: false })));
+      expect(message()).toBeUndefined();
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
+  it.each(["Escape", "blur"])("discards a pending empty completion after %s", async dismissal => {
+    let resolveCompletion!: (items: []) => void;
+    const pending = new Promise<[]>(resolve => { resolveCompletion = resolve; });
+    const completionProvider = vi.fn(() => pending);
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: "variables.plain." }),
+      languageAdapter: javaScriptLanguageAdapter,
+      completionProvider
+    });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      content.focus();
+      key(content, " ", { code: "Space", ctrlKey: true });
+      await vi.waitFor(() => expect(completionProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: true })));
+
+      if (dismissal === "Escape") key(content, "Escape");
+      else {
+        content.blur();
+        content.focus();
+      }
+      resolveCompletion([]);
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(container.querySelector(".studio-code-editor-completion-status")?.textContent).toBe("");
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
+  it("discards a keyboard completion when blur occurs before the provider starts", async () => {
+    const completionProvider = vi.fn(() => []);
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: "variables.plain." }),
+      languageAdapter: javaScriptLanguageAdapter,
+      completionProvider
+    });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      content.focus();
+      key(content, " ", { code: "Space", ctrlKey: true });
+      content.blur();
+      content.focus();
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+      expect(completionProvider).not.toHaveBeenCalled();
+      expect(container.querySelector(".studio-code-editor-completion-status")?.textContent).toBe("");
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
+  it("starts a fresh keyboard completion after Escape while a canceled provider is still settling", async () => {
+    let resolveCompletion!: (items: []) => void;
+    const pending = new Promise<[]>(resolve => { resolveCompletion = resolve; });
+    const completionProvider = vi.fn<NonNullable<StudioCodeEditorProps["completionProvider"]>>()
+      .mockReturnValueOnce(pending)
+      .mockReturnValue([{ label: "city" }]);
+    const source = "variables.customer.";
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: source }),
+      languageAdapter: javaScriptLanguageAdapter,
+      completionProvider
+    });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const view = EditorView.findFromDOM(content)!;
+      view.dispatch({ selection: { anchor: source.length } });
+      content.focus();
+      key(content, " ", { code: "Space", ctrlKey: true });
+      await vi.waitFor(() => expect(completionProvider).toHaveBeenCalledTimes(1));
+      key(content, "Escape");
+      key(content, " ", { code: "Space", ctrlKey: true });
+
+      await vi.waitFor(() => expect(currentCompletions(view.state).map(item => item.label)).toEqual(["city"]));
+      expect(completionProvider).toHaveBeenCalledTimes(2);
+    } finally {
+      resolveCompletion([]);
+      unmount();
+    }
+  }, 20000);
+
+  it("announces an empty keyboard result while an automatic completion is still settling", async () => {
+    let resolveAutomatic!: (items: []) => void;
+    const automatic = new Promise<[]>(resolve => { resolveAutomatic = resolve; });
+    const completionProvider = vi.fn((request: StudioCodeCompletionRequest) => request.explicit ? [] : automatic);
+    const source = "variables.plain";
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: source }),
+      languageAdapter: javaScriptLanguageAdapter,
+      completionProvider
+    });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const view = EditorView.findFromDOM(content)!;
+      content.focus();
+      view.dispatch({ changes: { from: source.length, insert: "." }, selection: { anchor: source.length + 1 }, userEvent: "input.type" });
+      await vi.waitFor(() => expect(completionProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false })));
+
+      key(content, " ", { code: "Space", ctrlKey: true });
+
+      await vi.waitFor(() => expect(container.querySelector(".studio-code-editor-completion-status")?.textContent).toBe("No suggestions"));
+      expect(completionProvider).toHaveBeenLastCalledWith(expect.objectContaining({ explicit: true }));
+    } finally {
+      resolveAutomatic([]);
+      unmount();
+    }
+  }, 20000);
+
   it("shows and announces hover help from the keyboard before Escape arms focus exit", async () => {
     const { container, unmount } = renderEditor({
       document: codeDocument({ value: "formatTotal" }),
@@ -672,7 +821,7 @@ describe("StudioCodeEditor", () => {
     }
   }, 20000);
 
-  it("clears pending completion when a provider refresh follows blur", async () => {
+  it("keeps pending completion dismissed when a provider refresh follows blur", async () => {
     const source = "variables.customer.";
     const props = { document: codeDocument({ value: source }), languageAdapter: javaScriptLanguageAdapter };
     const originalProvider = vi.fn(() => null);
@@ -688,9 +837,10 @@ describe("StudioCodeEditor", () => {
       view.dispatch({ selection: { anchor: source.length } });
       content.focus();
       key(content, " ", { code: "Space", ctrlKey: true });
+      expect(completionStatus(view.state)).toBe("pending");
       nextControl.focus();
       expect(document.activeElement).toBe(nextControl);
-      expect(completionStatus(view.state)).toBe("pending");
+      expect(completionStatus(view.state)).toBeNull();
 
       rerender({ ...props, completionProvider: refreshedProvider });
 

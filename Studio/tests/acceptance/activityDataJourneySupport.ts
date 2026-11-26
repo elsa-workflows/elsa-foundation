@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { expect, type Page, type Request, type TestInfo } from "@playwright/test";
+import { expect, type Locator, type Page, type Request, type TestInfo } from "@playwright/test";
 import type { ExpressionDescriptorsResponse } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { createActivityDataResponseCollector } from "./activityDataResponseCollector.mjs";
 import { studioBackendLink } from "./studioBackendLink";
@@ -11,7 +11,8 @@ export type Node = { nodeId: string; activityVersionId: string; inputs: { refere
 export type State = { rootActivity: Node; variables: unknown[]; inputs: unknown[]; outputs: unknown[] };
 export type Created = { definition: { id: string }; draftId: string };
 type Draft = { state: State; layout: unknown; activityPresentation: unknown };
-export type Context = { request: { definitionId: string; nodeId: string; inputKey: string; documentRevision: string; query?: { source?: Binding; memberPath?: string[] }; snapshot: State };
+export type Context = { request: { definitionId: string; nodeId: string; inputKey: string; documentRevision: string;
+  query?: { source?: Binding; parameterSource?: unknown; expressionType?: string; memberPath?: string[] }; snapshot: State };
   response: { state: string; documentRevision: string; analysis?: { memberReadsEnabled?: boolean; sources: { binding: Binding | null; shape?: { state: string; kind: string } }[] } } };
 type Execution = { activityExecutionId: string; authoredActivityId: string; status: string };
 
@@ -168,6 +169,24 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   const reference = () => page.locator(".wf-data-reference-source");
   const memberName = () => chooser().getByRole("textbox", { name: "Member name", exact: true });
   const path = () => chooser().getByRole("navigation", { name: "Member path", exact: true });
+  async function chooseWholeExpressionSource(created: Created, source: Locator) {
+    await settleContext();
+    const listing = [...contexts].reverse().find(item => item.request.definitionId === created.definition.id &&
+      item.request.nodeId === "consumer" && item.request.inputKey === "text" && item.request.query?.expressionType === "JavaScript" &&
+      !item.request.query.source && !item.request.query.parameterSource && item.response.state === "supported");
+    const memberReads = listing?.response.analysis?.memberReadsEnabled;
+    expect(typeof memberReads, "The chooser reports whether member reads are enabled").toBe("boolean");
+    await source.press("Enter");
+    if (memberReads) {
+      // An advisory declared type leaves the Activity Data source unknown. The host offers literal member entry.
+      await expect(memberName()).toBeVisible();
+      await expect(chooser().getByRole("listbox", { name: "Members", exact: true })).toHaveCount(0);
+      const wholeValue = chooser().getByRole("button", { name: "Use whole value", exact: true });
+      await expect(wholeValue).toBeEnabled();
+      await wholeValue.press("Enter");
+    }
+    await expect(chooser()).toHaveCount(0);
+  }
   async function commit(created: Created, expected: Binding, action: () => Promise<void>) {
     await contextResponses.settle();
     const oldBinding = await stored(created);
@@ -250,6 +269,6 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
       observations.push("minimal installed syntax menu and requested scripts exclude optional JavaScript/Liquid editors");
     }
   }
-  return { api, version, line, root, seed, saved, stored, binding, canvas, select, open, chooser, trigger, replace, reference, memberName, path,
+  return { api, version, line, root, seed, saved, stored, binding, canvas, select, open, chooser, trigger, replace, reference, memberName, path, chooseWholeExpressionSource,
     commit, history, codeApply, publishRun, assertComposition, settleContext, contexts, observations, selections, transportControls, writes: () => writes };
 }
