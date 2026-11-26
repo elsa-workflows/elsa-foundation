@@ -72,7 +72,8 @@ the one specs 265 and 1241 already apply.
   is the workflow that called the reusable activity. That is what Elsa 3 did ("Correlate, Set Name and Finish act on that
   calling workflow", readiness guide), and it is what spec 1234 already says these values are: they belong to the
   running workflow. The ADR 0090 correlation rule holds: existing waits keep the correlation they captured.
-  *(Decision Q1.)* Elsa 3 workflows that correlate inside a reusable activity therefore import unchanged.
+  *(Decision Q1.)* Elsa 3 workflows that correlate or name the instance inside a reusable activity with a Correlate or
+  Set Name node therefore import unchanged (a script's `setCorrelationId` stays refused, see Excluded).
 
 Excluded:
 
@@ -153,11 +154,13 @@ that call them.
 1. **Given** `Enrich`, **when** it is imported with its caller, **then** both publish and the caller reads `Result` with
    `checked = true`.
 2. **Given** a reusable Set Output that names an output the reusable workflow does not declare, **then** conversion
-   refuses it with `ELS3-REUSABLE-UNDECLARED-OUTPUT` and guidance (declare the output, or remove the Set Output). It
+   refuses it with `ELS3-ACTIVITY-REUSABLE-UNDECLARED-OUTPUT` and guidance (declare the output, or remove the Set Output). It
    never becomes the caller's workflow output.
+   A Set Output whose name differs from the declared output only in case (`result` for `Result`) converts to the
+   declared output, as in Elsa 3.
 3. **Given** a reusable body with an HTTP Endpoint whose Headers or Query String Data is captured, **then** the
    synthesized Set converts and the body variable holds the projection.
-4. **Given** a reusable body with Finish, **then** conversion refuses it with `ELS3-REUSABLE-UNSUPPORTED-FINISH`, and the
+4. **Given** a reusable body with Finish, **then** conversion refuses it with `ELS3-ACTIVITY-REUSABLE-FINISH-UNSUPPORTED`, and the
    guidance explains why Elsa 4 does not support it and how to restructure (FR-013).
 5. **Given** the two S-15 definitions above, **then** they and their two root workflows publish (the JTest ledger
    records the run result; spec 1235 owns the acceptance count).
@@ -219,13 +222,17 @@ Correlate; publish.
 - **FR-009**: The Elsa 3 converter MUST stop refusing reusable-body Set Variable, Set Output, Correlate, Set Name and
   HTTP Endpoint projections. `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED` is retired (pre-stable, no alias).
 - **FR-010**: The converter MUST convert a reusable Set Output that names a declared output to the graph's Set Output of
-  that output, with no synthesized variable or output mapping (Q3), and MUST refuse one that names an undeclared output
-  with `ELS3-REUSABLE-UNDECLARED-OUTPUT` and guidance.
+  that output, with no synthesized variable or output mapping (Q3). It matches the name case-insensitively, as Elsa 3
+  did, and writes the declared output's exact name into the Set Output's name literal (the graph compiler compares
+  exactly). One that names an undeclared output is refused with `ELS3-ACTIVITY-REUSABLE-UNDECLARED-OUTPUT` and guidance.
+  Both new conversion codes (this one and FR-013's) live in `Elsa3ActivityDiagnosticCodes` and are emitted by the
+  converter, like the code they replace.
 - **FR-011**: Studio's graph designer MUST offer Set Variable (with body targets only), Correlate and Set Name, and MUST
   focus their publish diagnostics on the node.
-- **FR-012**: The readiness guide, the Elsa 3 mapping README, the converter's guidance strings, the graph authoring
-  reference and the extension-point catalogs MUST describe the new support and drop the #3023 workarounds.
-- **FR-013**: The converter MUST refuse a reusable-body Finish with `ELS3-REUSABLE-UNSUPPORTED-FINISH`, listed in the
+- **FR-012**: The readiness guide, the Elsa 3 mapping README, the converter's guidance strings (`Elsa3ReusableGuidance`,
+  and the `Elsa3ExpressionRewriter` texts that cite the retired code), the graph authoring reference
+  (`docs/reference/activity-definition-authoring-composition.md`) and the extension-point catalogs MUST describe the new support and drop the #3023 workarounds.
+- **FR-013**: The converter MUST refuse a reusable-body Finish with `ELS3-ACTIVITY-REUSABLE-FINISH-UNSUPPORTED`, listed in the
   readiness guide as an Elsa 4 behaviour (not a gap). Its guidance and the readiness guide MUST say: what Elsa 3 did (the
   activity ended the whole calling workflow, cutting off the caller's other branches, and the activity never completed
   or returned its outputs); why Elsa 4 does not (an activity's effect on its caller is visible in the caller's own graph
@@ -234,7 +241,9 @@ Correlate; publish.
   that outcome to a Finish); and that moving the Finish into a workflow called by Dispatch or Execute Workflow is not
   equivalent (it would end that called workflow, not the caller).
 - **FR-014**: The graph compiler fingerprint (`elsa.activity-graph/compiler/…`) MUST be bumped, since compiled output
-  changes; graphs compiled before are republished, not migrated (pre-stable).
+  changes. The new fingerprint MUST be added to the compilers `GraphReleaseOccurrenceInspector` accepts, and the Graph
+  `EXTENSION_POINTS.md` rows that name the fingerprint updated. Graphs compiled before are republished, not migrated
+  (pre-stable).
 
 ### Key Entities
 
@@ -269,8 +278,8 @@ Correlate; publish.
 ## Decisions (coordinator, 2026-11-26)
 
 1. **Q1 – Correlate and Set Name in a body act on the caller: yes.** They change the running workflow's (the caller's)
-   correlation ID and instance name, as in Elsa 3. Real Elsa 3 workflows correlate inside reusable activities; they
-   import unchanged, and the per-caller workaround goes away.
+   correlation ID and instance name, as in Elsa 3. Real Elsa 3 workflows correlate inside reusable activities with a
+   Correlate node; they import unchanged, and the per-caller workaround goes away.
 2. **Q2 – Finish stays refused, as an Elsa 4 behaviour: yes.** Ending the whole caller from inside an activity is not a
    desirable behaviour. The import refuses it with its own code and guidance that is very clear about why and what to do
    (FR-013).
