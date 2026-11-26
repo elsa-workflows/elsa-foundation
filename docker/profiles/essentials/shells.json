@@ -1,0 +1,72 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Name": "default",
+        "Features": {
+          "Primitives": {},
+          "Serialization": {},
+          "Mediator": {},
+          "MemoryCache": {},
+          "Events": {},
+          "Tasks": {},
+          "FileSystemDistributedLocking": {},
+          "Expressions": {},
+          "ApiCapabilities": {},
+          "ActivitiesPrimitives": {},
+          "ActivitiesSequence": {},
+          "ActivitiesFlowchart": {},
+          "ActivitiesControlFlow": {},
+          "ActivitiesRuntime": {},
+          "ActivitiesGraphRuntime": {},
+          "ActivitiesGraphDesign": {},
+          "ActivitiesDesignApi": {},
+          "ActivitiesDesignEntityFrameworkCore": {},
+          "ActivitiesDesignReconciliation": {},
+          "ClrActivityReconciliation": {
+            "Options": {
+              "FolderPath": "/app/profile-activities"
+            }
+          },
+          "WorkflowsDesignApi": {},
+          "WorkflowsDesignEntityFrameworkCore": {},
+          "WorkflowDesignValidations": {},
+          "WorkflowsPublishing": {},
+          "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingEntityFrameworkCore": {},
+          "WorkflowsRuntimeEntityFrameworkCore": {},
+          "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeResumption": {},
+          "WorkflowsRuntimeScheduling": {},
+          "WorkflowsRuntimeRecurringTriggers": {},
+          "WorkflowsRuntimeCheckpointPersistence": {
+            "Mode": "Balanced"
+          },
+          "WorkflowsRuntimeTriggers": {},
+          "StandaloneTriggersApi": {},
+          "StandaloneEventTriggerAuthoring": false,
+          "FoundationIdentityAbstractions": {},
+          "FoundationIdentityAspNetCoreIdentity": {
+            "IsDefault": true
+          },
+          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+            "SeedAdminUserName": "admin"
+          },
+          "IdentityIamEntityFrameworkCore": {},
+          "Http": false,
+          "ActivitiesHttp": false,
+          "WorkflowsRuntimeHttp": false,
+          "StandaloneHttpTriggerAuthoring": false,
+          "ActivitiesScheduling": false,
+          "StandaloneScheduleTriggerAuthoring": false,
+          "StandaloneScheduleTriggers": false
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}

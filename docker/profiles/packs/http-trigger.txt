@@ -1,0 +1,4 @@
+# Built-in HTTP activities and trigger endpoints.
+Elsa.Activities.Http
+Elsa.Http
+Elsa.Workflows.Runtime.Http
