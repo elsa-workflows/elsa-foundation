@@ -57,8 +57,8 @@ the design side), and converter rules.
   - Catalog key `Elsa.Activities.DispatchWorkflow.Runtime.Activities.BulkDispatchWorkflows` (spec FR-001).
   - The descendant handler gives a fault deep inside a slot the same intervention-and-defer path as a direct slot
     child (spec FR-008). It does
-  not implement `IRuntimeAcceptsRescheduledFaultedChild`: it absorbs some faults, and that contract forbids the marker
-  for a parent that does (`IRuntimeStructuralActivity.cs`).
+  not implement `IRuntimeAcceptsRescheduledFaultedChild`, because retry goes through `RetryFaultedActivity`, which
+  does not need it.
 - **Input**: `Items`.
 - **Slots**: `Dispatch`, `ChildCompleted`, `ChildFaulted`, all `[ActivityChildSlot(… Single)]`.
 - **Structure handler**: `BulkDispatchWorkflowsStructureHandler` projects and replaces the three slots, as
@@ -83,6 +83,9 @@ the design side), and converter rules.
 
 ### 2. Scheduling and completion
 
+- **`Items` binding**: it gets `ForEach`'s durable-binding treatment, `[RefusesSecretBinding]` and the
+  item-envelope policy checks, because per-pass scopes and later window refills re-read `Items` from the committed
+  input. The state does not hold the items.
 - **Start**: evaluate `Items`, refusing a value that is not a collection as `ForEach` does. Check the cap (FR-007).
   Schedule `Dispatch` for the first min(N, 16) items, each with an iteration id and a `LoopIterationScopeRequest`
   carrying `currentItem` and `currentIndex`. The scope declares only those two names, typed as `ForEach` types them.
@@ -99,13 +102,13 @@ the design side), and converter rules.
   callback cannot exceed the window. There is no recount and no new store method.
 - **`OnChildCompletedAsync`**:
   - For the `Dispatch` node, route by outcome (FR-006).
-  - For a slot child, end the pass.
+  - For a slot child, end the pass. A slot is scheduled with the same iteration id as its pass's `Dispatch`, so a
+    `RetryFaultedActivity` successor maps back to the right pass (`ActivitySuccessorStaging` copies the frame
+    request).
   - Complete with `Done` when the set holds every index.
 - **`OnChildFaultedAsync`**:
-  - A `Dispatch` fault with a `ChildFaulted` slot present: `RequestChildFaultAbsorption`, then schedule `ChildFaulted`
-    in that pass's scope.
-  - Any other fault: `RequestChildFaultIntervention` and `Defer`. Retry goes through `RetryFaultedActivity`, and the
-    retried child's completion ends the pass as usual.
+  - Every fault, child or descendant: `RequestChildFaultIntervention` and `Defer`. Nothing is absorbed (spec FR-008).
+    Retry goes through `RetryFaultedActivity`, and the retried child's completion ends the pass as usual.
 - **Concurrent same-node scheduling**: no new scheduler (FR-024). Every `ScheduleChildActivity` call gets its own
   activity execution id (`SchedulerWorkItems.cs`). `BpmnProcessRuntime` already schedules one bound node, its
   call-activity `DispatchWorkflow` included, once per instance with an `IterationId` and a
@@ -200,15 +203,14 @@ the design side), and converter rules.
   - an empty or null `Items`;
   - the cap fault;
   - a slot fault becomes a blocking incident, the bulk activity defers, and a retry ends the pass;
-  - an absorbed `Dispatch` fault runs `ChildFaulted`; without the slot it stays an incident;
+  - a `Dispatch` self-fault stays an incident (`ChildFaulted` does not run), and a retry ends the pass;
   - the window of 16: never more than 16 passes open, including under repeated callbacks;
   - publish refuses an empty or wrong `Dispatch` slot (`BulkDispatch/DispatchSlot`);
   - `variables.currentItem` reads in `Dispatch` and in the slots resolve at publish;
   - a fault inside a `Sequence` in a slot takes the intervention path (descendant fault);
   - parent cancellation cancels the waiting children;
   - publish pins the `Dispatch` node through the unchanged `DispatchPinSource`;
-  - publish refuses a slot that writes a variable declared outside the bulk node, and accepts one that writes a
-    variable declared inside it.
+  - a slot that writes a workflow variable publishes with the `ValueFlow/ConcurrentWrite` warning.
 - **Converter** (`Elsa3BulkDispatchConversionTests`): every member rule; each FR-017 and FR-019 row; an item key
   that clashes with a workflow variable (the item wins in `Inputs`, and the variable wins in the correlation function,
   as in Elsa 3); the item-read

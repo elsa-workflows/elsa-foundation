@@ -174,9 +174,7 @@ correlation id and reach `Finished`.
 **Acceptance Scenarios**:
 
 1. **Given** the `Dispatch` node does not wait, **When** the activity runs, **Then** each pass ends with `Dispatched`,
-   the activity completes with `Done` without waiting for any child, and no slot runs. The one exception is a pass
-   whose `Dispatch` execution faults itself before dispatching; it runs `ChildFaulted` when that slot is present
-   (FR-008).
+   the activity completes with `Done` without waiting for any child, and no slot runs.
 2. **Given** the parent instance is cancelled after the activity completed, **When** children are still running,
    **Then** the children are not cancelled. A child is cancelled only through `CancelChildOnParentCancellation`, which
    applies while the activity is still waiting, exactly as for `DispatchWorkflow`.
@@ -221,9 +219,9 @@ and on-completed-callbacks suites pass.
 - **A slot activity faults**, for example the `WriteLine` in `ChildFaulted`: it becomes a blocking incident on that
   item's pass. The other passes keep running. The bulk activity does not complete until the incident is resolved, for
   example by retrying the slot activity (FR-008).
-- **The `Dispatch` execution itself faults** (an input the child does not declare, the nesting depth, a pin
-  mismatch): with a `ChildFaulted` slot, that slot runs and the fault is absorbed. Otherwise the fault stays a blocking
-  incident on that pass (FR-008). Elsa 3 faulted the whole activity.
+- **The `Dispatch` execution itself faults** (an input the child does not declare, the nesting depth, a missing pinned
+  target, an error in the `Inputs` or `CorrelationId` expression): the fault stays a retryable blocking incident on that
+  pass (FR-008). `ChildFaulted` does not run for it. Elsa 3 faulted the whole activity.
 - **`Dispatch` left empty, or holding another activity**: publish refuses the bulk node (FR-003).
 
 ## Requirements *(mandatory)*
@@ -280,24 +278,24 @@ and on-completed-callbacks suites pass.
   - The cap is not an author-facing input.
   - The cap itself is under question in #5875 (Elsa 3 had none), and this spec follows whatever #5875 decides.
   - Whether it applies to fire-and-forget children too is Q1.
-- **FR-008**: Faults of child executions, `Dispatch` and slot alike:
-  - **A `Dispatch` execution that faults itself**, for example on an input the child does not declare: when a
-    `ChildFaulted` slot is present, the fault is absorbed and `ChildFaulted` runs for that item.
-  - **Every other fault** stays a blocking incident on its pass, through the child-fault intervention path. That
-    covers a direct slot child, and an activity deeper inside a slot (for example inside a `Sequence`), which reaches
-    the bulk activity as a descendant fault. The bulk activity defers; it does not fault, and the other passes go on.
-  - **Retry**: retrying the faulted activity (`RetryFaultedActivity`) lets the pass end and the bulk activity continue.
-
-  No fault is absorbed without a `ChildFaulted` slot to show it.
+- **FR-008**: Faults of child executions are never absorbed.
+  - A fault of the `Dispatch` execution itself, a fault of a slot child, or a fault of an activity deeper inside a slot
+    (which reaches the bulk activity as a descendant fault) stays a blocking incident on its pass, through the
+    child-fault intervention path.
+  - The bulk activity defers; it does not fault, and the other passes go on.
+  - Retrying the faulted activity (`RetryFaultedActivity`) lets the pass end and the bulk activity continue.
+  - `ChildFaulted` is for children that ended badly (FR-006 outcomes), not for faults of the `Dispatch` node. The node
+    raises those as plain exceptions, so they cannot be told apart, and absorbing them would hide recoverable errors.
 - **FR-009**: The activity has one outcome, `Done`.
 - **FR-010**: A slot reads its item as `variables.currentItem` and `variables.currentIndex`. Reading the dispatched
   child's result in a slot is not part of this spec (Out of Scope).
 - **FR-010a**: Passes run concurrently, so `Dispatch` and both slots are unordered with themselves across passes.
-  - A write to a variable declared outside the bulk node, from `Dispatch` (an output capture) or from either slot, is
-    refused at publish by the existing unordered-write check (spec 266).
-  - Only variables declared inside the slot can be written.
-  - The README states this with the alternative: collect results per child in the child workflow, or read them after
-    the bulk activity.
+  - A variable write under the bulk node, from `Dispatch` (an output capture) or from either slot, raises spec 266's
+    publish warning `ValueFlow/ConcurrentWrite`. Spec 266 warns and never refuses, and this spec follows that rule.
+  - Today's analyzer also flags variables declared inside a slot, because it does not stop at the declaring container.
+    This spec does not change the analyzer.
+  - The README explains the lost-update risk and the alternative: record per-child results in the child workflow, or
+    read them after the bulk activity.
 
 **Converter**
 
@@ -370,9 +368,6 @@ and on-completed-callbacks suites pass.
   - Elsa 3 never ran the branches without waiting. With a literal-false wait the converter drops them with
     `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. With an expression wait, a pass whose `Dispatch` did not wait ends with
     `Dispatched`, so no branch runs (FR-006).
-  - Exception to both: a `Dispatch` execution that faults itself before dispatching (nesting depth, an undeclared
-    input) runs `ChildFaulted` whatever the wait (FR-008). Elsa 3 faulted the whole activity in that case. The branch
-    is the author's one place to see every child that did not start or complete.
 - **FR-019**: Refusals:
 
 | Elsa 3 use | Result |
@@ -383,7 +378,7 @@ and on-completed-callbacks suites pass.
 | `DefaultItemInputKey` not a literal, or static `Input` in another language | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` |
 | Target workflow not in the import | `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`, guidance: import the target in the same run |
 | `Completed`/`Canceled` route with no faithful meaning (FR-017) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` |
-| A branch (or `CorrelationIdFunction`/`Input`) writing a variable declared outside the bulk node. Elsa 3 ran the branches one at a time; Elsa 4 runs passes concurrently (FR-010a) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTER-WRITE`. Guidance: Elsa 4 runs the branches concurrently, so a shared counter or list would lose updates. Record per-child results in the child workflow, or declare the variable inside the branch |
+| A branch (or `CorrelationIdFunction`/`Input`) writing a variable declared outside the bulk node. Elsa 3 ran the branches one at a time; Elsa 4 runs passes concurrently (FR-010a) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTER-WRITE`. Guidance: Elsa 4 runs the branches concurrently, so a shared counter or list would lose updates (publish only warns). Record per-child results in the child workflow, or compute the total after the bulk activity |
 | A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution. Guidance: remove the read; the child's result is not available in the branch yet |
 
 - **FR-020**: Every conversion MUST raise warning `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED`, as an entry-level behaviour
@@ -468,3 +463,6 @@ and on-completed-callbacks suites pass.
 4. **Q4**: A fixed window of 16 open passes, with no input (recommended, FR-005)? The alternatives are spec 1243's
    author input `MaxDegreeOfParallelism`, or all at once as in Elsa 3. All at once departs from large-fan-out.md's
    bound on outstanding children, so it needs a decision-register entry or an ADR amendment first.
+5. **Q5**: The converter refuses an Elsa 3 branch that writes an outer variable (`…-OUTER-WRITE`), while an Elsa 4
+   author only gets spec 266's warning. Recommendation: keep the refusal. A converted counter would silently lose
+   updates where Elsa 3 counted correctly, and the author has not seen the warning's reason.
