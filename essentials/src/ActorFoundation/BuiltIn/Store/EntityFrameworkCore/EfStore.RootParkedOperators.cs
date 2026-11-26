@@ -15,20 +15,25 @@ public sealed partial class EfStore
         // S5b-3b: a Delete is also refused at its Open for a protected root or one whose protection cannot be read. At the
         // last page of its clearing an unreadable answer is the one refusal of a control: the clearing stays open and the
         // same commit inserts the next control, due after a backoff (RootParkedRefusal).
-        var retries = command is { Kind: Kinds.Delete, Operator: { RootParkClear: true, RootParkMark: not null, RootParkWindow: >= 0,
-            RootParkFacts: { FitsPage: true } facts } } && facts.Clearing == command.Id && facts.Mark == command.Operator.RootParkMark;
+        var facts = command.Operator?.RootParkFacts;
+        var retries = command is { Kind: Kinds.Delete, Operator: { RootParkClear: true, RootParkMark: not null, RootParkWindow: >= 0 } }
+            && facts is { FitsPage: true } && facts.Clearing == command.Id && facts.Mark == command.Operator.RootParkMark;
+        var refusedCount = retries ? facts!.ProtectionRefusals : (long?)null;
+        var stopClearing = retries && facts!.StopsForUnreadableProtection;
+        var stoppedEntry = stopClearing ? FoundationRootParkFacts.ProtectionStopped(command.Id, facts!.Cleared) : null;
         string[] reasons = command.Operator?.RootParkMark is null ? ["parked"]
             : command is { Kind: Kinds.Terminate, Operator: { RootParkFacts: not null, RootParkClear: false } } ? ["selection", "outstanding", "clearing"]
             : command is { Kind: Kinds.Delete, Operator: { RootParkFacts: not null, RootParkClear: false } }
                 ? ["selection", "outstanding", "clearing", "protected", "unavailable"]
-            : retries ? ["unavailable"] : [];
+            : retries && !stopClearing ? ["unavailable"] : [];
         // The refusal keeps the Suspended flag: a Park on a suspended root keeps it, as the in-memory reference does.
         if (turn.Row is not { Status: InstanceStatus.Faulted, Retired: false, FoundationDispatchHeader: { Terminal: null } header } row ||
             turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
             !PostgresRootAdmission.IsOperatorOccurrence(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
             (command.ReplyTo is not null) != (command.Operator?.RootHeldReply == true) ||
             command.Kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete) ||
-            !reasons.Any(reason => turn.Journal == Json.Write(new { Outcome = "refused", Operation = command.Id, Reason = reason })) ||
+            !(stopClearing ? turn.Journal == stoppedEntry :
+                reasons.Any(reason => turn.Journal == Json.Write(new { Outcome = "refused", Operation = command.Id, Reason = reason }))) ||
             turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
                 turn.Journal, Held: turn.Held)
                 { FoundationRootOperator = command } || turn.Consumed.Count + turn.Sent.Count + turn.Subscribed.Count +
@@ -42,7 +47,7 @@ public sealed partial class EfStore
             header.Tenant != root.Tenant || header.Reference != root.Reference)
             throw RootShape();
         return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
-            new RootParkedRefusal(root, expected, WithoutParkFacts(command)!, row.Suspended, retries));
+            new RootParkedRefusal(root, expected, WithoutParkFacts(command)!, row.Suspended, refusedCount));
     }
 
     private async Task<PreparedRoot?> PrepareRecoveredParkRefusalAsync(WorkerRoot root, TurnCommit turn, Message command, CancellationToken token)
@@ -92,7 +97,23 @@ public sealed partial class EfStore
 
     // S5b-3b: the backoff before a Delete's last page runs again after its protection could not be read: one second,
     // doubling with each earlier refusal of that page, at most thirty seconds.
-    internal static long ParkRetryDelay(int refusals) => Math.Min(1_000L << Math.Min(refusals, 5), 30_000L);
+    internal static long ParkRetryDelay(long refusals) => Math.Min(1_000L << (int)Math.Min(refusals, 5), 30_000L);
+
+    private static Task<long> ReadParkProtectionRefusalsAsync(KernelDb db, string actor, int partition, string operation, long before,
+        CancellationToken token)
+    {
+        var outcome = db.UsesSqliteRootRuntime ? RenderSqliteOutcomePrefixes(RootOutcomeEntry).Replace("{", "{{", StringComparison.Ordinal)
+            : RootOutcomeEntry;
+        var sql = $$"""
+            SELECT count(*) AS "Value" FROM "Journal"
+            WHERE "Instance" = {0} AND "Partition" = {1} AND "Revision" < {2}
+                AND {{outcome}} AND "Entries" = {3}
+            """;
+        return db.Database.SqlQueryRaw<long>(sql, actor, partition, before, FoundationRootParkFacts.ProtectionRefusal(operation)).SingleAsync(token);
+    }
+
+    private static bool BoundsParkProtection(KernelDb db) => db.UsesRootRetirement &&
+        (db.UsesSqliteShippedInstall || ClearsParkInPages(db));
 
     // The polled envelope carries the Park facts read with it; the stored row does not.
     private static Message? WithoutParkFacts(Message? message) => message?.Operator is { RootParkFacts: not null } command
@@ -180,8 +201,28 @@ public sealed partial class EfStore
         var discard = db.UsesRootRetirement ? " OR /*discard-end*/ " + End(
             """OLD."Status" = 2 AND NEW."Status" = 2 AND NEW."Suspended" = OLD."Suspended" AND OLD."FoundationParkClearing" IS NOT NULL """, Kinds.Delete,
             """j."Entries" LIKE '{{"Outcome":"protected","Disposition":"discarded",%' """) : "";
+        var stopEntry = db.UsesSqliteShippedInstall
+            ? """
+                json_extract(j."Entries", '$.Operation') = OLD."FoundationParkClearing"
+                    AND json_extract(j."Entries", '$.Reason') = 'unavailable'
+                    AND json_extract(j."Entries", '$.Cleared') = OLD."FoundationParkCleared"
+                """
+            : """
+                (j."Entries"::jsonb ->> 'Operation') = OLD."FoundationParkClearing"
+                    AND (j."Entries"::jsonb ->> 'Reason') = 'unavailable'
+                    AND (j."Entries"::jsonb ->> 'Cleared') = OLD."FoundationParkCleared"::text
+                """;
+        var stops = BoundsParkProtection(db) ? $$$"""
+            OR (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
+                AND OLD."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkClearing" IS NULL
+                AND NEW."FoundationParkCleared" IS NULL{{{SqliteClearingKindMatches(db, $"'{Kinds.Delete}'")}}}
+                {{{Parked}}}
+                AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
+                    AND j."Revision" = NEW."Revision" AND j."Entries" LIKE '{{"Outcome":"clearing-stopped",%'
+                    AND {{{stopEntry}}}))
+            """ : "";
         return End("""OLD."Status" = 2 AND NEW."Status" = 3 AND NOT NEW."Suspended" """, Kinds.Terminate,
-            """j."Entries" LIKE '{{"Outcome":"terminated",%' OR j."Entries" LIKE '{{"Outcome":"protected","Disposition":"terminated",%' """) + discard + $$$"""
+            """j."Entries" LIKE '{{"Outcome":"terminated",%' OR j."Entries" LIKE '{{"Outcome":"protected","Disposition":"terminated",%' """) + discard + stops + $$$"""
 
             OR /*clearing-open*/ (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
                 AND OLD."FoundationParkClearing" IS NULL AND NEW."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkCleared" > 0
@@ -243,7 +284,8 @@ public sealed partial class EfStore
     private static string ParkedTerminatedJournal(KernelDb db) => """
         OR NEW."Entries" LIKE '{{"Outcome":"terminated",%' OR NEW."Entries" LIKE '{{"Outcome":"clearing",%'
         """ + (db.UsesRootTerminateThenDelete ? """ OR NEW."Entries" LIKE '{{"Outcome":"protected","Disposition":"terminated",%' """ : "")
-        + (db.UsesRootRetirement ? """ OR NEW."Entries" LIKE '{{"Outcome":"protected","Disposition":"discarded",%' """ : "");
+        + (db.UsesRootRetirement ? """ OR NEW."Entries" LIKE '{{"Outcome":"protected","Disposition":"discarded",%' """ : "")
+        + (BoundsParkProtection(db) ? """ OR NEW."Entries" LIKE '{{"Outcome":"clearing-stopped",%' """ : "");
 
     // A composed set's refused entry pins the whole row but its revision, as format 22's refused-row rule does, at any status.
     // Each column of the set's Instances table is compared; the Park revision and the state wire exist only with their capability.
@@ -288,7 +330,7 @@ public sealed partial class EfStore
                 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.{RootOutcomeEntry})
                 EXECUTE FUNCTION kernel_require_root_outcome_checkpoint();
             """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal)
-            .Replace("/*outcome-checkpoint*/", RootParkedOutcomeCheckpoint, StringComparison.Ordinal), token);
+            .Replace("/*outcome-checkpoint*/", RootParkedOutcomeCheckpoint + (BoundsParkProtection(db) ? StoppedParkOutcomeCheckpoint : ""), StringComparison.Ordinal), token);
 
     // References i for the checkpoint and NEW for the inserted journal entry.
     private const string RootParkedOutcomeCheckpoint = """
@@ -296,6 +338,12 @@ public sealed partial class EfStore
                         OR (i."Status" = CASE WHEN NEW."Entries" LIKE '{{"Outcome":"protected","Disposition":"discarded",%' THEN 2 ELSE 3 END
                             AND NOT i."Retired" AND i."FoundationParkAt" IS NULL AND i."FoundationTerminalRevision" = NEW."Revision"))
                     AND (NEW."Entries" NOT LIKE '{{"Outcome":"clearing",%' OR i."FoundationParkClearing" IS NOT NULL)
+        """;
+
+    private const string StoppedParkOutcomeCheckpoint = """
+        AND (NEW."Entries" NOT LIKE '{{"Outcome":"clearing-stopped",%' OR
+            i."Status" = 2 AND NOT i."Retired" AND i."FoundationParkAt" IS NOT NULL
+            AND i."FoundationTerminalRevision" IS NULL AND i."FoundationParkClearing" IS NULL)
         """;
 
     // S5b-2: an open clearing on the parked root: the Terminate's operation and the rows cleared so far. Both are set only on a
@@ -311,9 +359,16 @@ public sealed partial class EfStore
 
     private sealed record LockedParkedRoot(long At, string Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion, bool Clearing);
 
-    private sealed record RootParkedRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended, bool Retries = false)
+    private sealed record RootParkedRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended, long? ProtectionRefusals)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
+        internal bool Retries => ProtectionRefusals is not null;
+        internal bool Stops => ProtectionRefusals >= FoundationRootParkFacts.MaxProtectionRefusals - 1;
+
+        internal async Task<bool> MatchesProtectionRefusalsAsync(KernelDb db, CancellationToken token) =>
+            !Retries || BoundsParkProtection(db) &&
+                await ReadParkProtectionRefusalsAsync(db, Root.Actor, Root.Partition, Command.Id, JournalRevision, token) == ProtectionRefusals;
+
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
         {
             if (!db.UsesRootParkedOperators) return false;
@@ -333,24 +388,20 @@ public sealed partial class EfStore
                         AND i."FoundationParkAt" = {Command.Operator?.RootParkMark?.At} AND i."FoundationParkRevision" = {Command.Operator?.RootParkMark?.Revision})
                 FOR UPDATE OF i
                 """).ToListAsync(token);
-            if (locked is not [var prior]) return false;
+            if (locked is not [var prior] || !await MatchesProtectionRefusalsAsync(db, token)) return false;
             // Without Park arrivals, or while its Park is being cleared, the parked root withholds its ordinary inputs, so the
             // settled prefix is its operator rows. The envelope comparison binds a held command's exact reply address.
             if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
                     suspended: !db.UsesRootParkArrivals || prior.Clearing, token)) return false;
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision}
+                UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
+                    "FoundationParkClearing" = CASE WHEN {Stops} THEN NULL ELSE "FoundationParkClearing" END,
+                    "FoundationParkCleared" = CASE WHEN {Stops} THEN NULL ELSE "FoundationParkCleared" END
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                 """, token) != 1) return false;
-            if (Retries)
+            if (ProtectionRefusals is { } refusals && !Stops)
             {
-                // The clearing stays open: its next control is the same last page, due after the backoff for the refusals of
-                // this page so far.
-                var entry = Json.Write(new { Outcome = "refused", Operation = Command.Id, Reason = "unavailable" });
-                var refusals = await db.Database.SqlQuery<int>($"""
-                    SELECT count(*)::integer AS "Value" FROM "Journal"
-                    WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" < {JournalRevision} AND "Entries" = {entry}
-                    """).SingleAsync(token);
+                // Retry the same last page after the backoff. The actor's kept rows never move on an unavailable result.
                 var (id, header) = PostgresRootAdmission.ClearControl(Root.Reference, Command.Id, Command.Kind, Command.Operator!.RootParkMark!,
                     Command.Operator.RootParkWindow!.Value, Command.Operator.RootThenDelete);
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -365,6 +416,7 @@ public sealed partial class EfStore
                         AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision}
                         AND "Status" = {(int)InstanceStatus.Faulted} AND "Suspended" = {Suspended} AND "Fault" = {prior.Fault}
                         AND "FoundationParkAt" = {prior.At} AND "FoundationTerminalRevision" IS NULL AND "StateVersion" = {prior.StateVersion}
+                        AND (NOT {Stops} OR "FoundationParkClearing" IS NULL AND "FoundationParkCleared" IS NULL)
                         AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
                         AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest})
                     AND (NOT {db.UsesRootParkInspection} OR EXISTS (SELECT 1 FROM "FoundationActorList"

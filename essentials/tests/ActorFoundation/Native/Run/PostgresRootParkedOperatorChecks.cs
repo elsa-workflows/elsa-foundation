@@ -1196,6 +1196,41 @@ internal static class PostgresRootParkedOperatorChecks
                 "once the protection could be read the last page retired the root, and the arrivals were settled by the retirement");
             set.Answered("del-kept-large", "started");
 
+            var exhausted = await set.StartAsync("del-protection-exhausted");
+            var exhaustedPark = await ParkLargeAsync(exhausted, "exhausted", copied: 169);
+            var selection = await set.ParkSelectionAsync(exhausted, 2);
+            const string exhaustedOperation = "del-protection-exhausted";
+            opened[exhaustedOperation] = () => set.Probe.Unreadable.Add(exhausted.Id);
+            Check(await set.OperateAsync(exhausted, exhaustedOperation, Contract.Kinds.Delete, selection, reply: true),
+                "the composed Delete opens before the protection source becomes unreadable");
+            var openedOwner = set.Owner;
+            var expected = exhaustedPark.Revision + 3;
+            for (var refusal = 0; refusal < FoundationRootParkFacts.MaxProtectionRefusals - 1; refusal++)
+            {
+                await set.DriveAsync(exhausted, image => image is not null && image.Revision >= expected + refusal);
+                await set.ExecuteAsync($"""
+                    UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {exhaustedPark.Actor.Id}
+                        AND "Kind" = {Kinds.Delete} AND NOT "Done"
+                    """);
+            }
+            var stopped = await set.DriveAsync(exhausted, image => image is not null &&
+                image.Revision == expected + FoundationRootParkFacts.MaxProtectionRefusals - 1);
+            var outcomes = Outcomes(await set.Cold.ReadJournalOfAsync(0, exhaustedPark.Actor.Id, 0, stop));
+            var rows = await set.InputsAsync(exhausted);
+            Check(stopped is { Status: InstanceStatus.Faulted, TerminalRevision: null } &&
+                await set.ParkAtAsync(stopped) == await set.ParkAtAsync(exhaustedPark) &&
+                await set.ClearingAsync(exhausted) is { Clearing: null, Cleared: null } &&
+                outcomes.Count(entry => entry == FoundationRootParkFacts.ProtectionRefusal(exhaustedOperation)) == FoundationRootParkFacts.MaxProtectionRefusals - 1 &&
+                outcomes[^1] == FoundationRootParkFacts.ProtectionStopped(exhaustedOperation, 170) &&
+                rows.Count(row => row.KeptBy is not null) == 1 && rows.All(row => row.Done) &&
+                ReferenceEquals(openedOwner, set.Owner) && !set.StoodDown,
+                "the PostgreSQL retry ceiling keeps the remaining page and releases the clearing on its current owner");
+            set.Answered(exhaustedOperation, "started");
+            set.Probe.Unreadable.Remove(exhausted.Id);
+            Check(await set.OperateAsync(exhausted, "del-after-ceiling", Contract.Kinds.Delete, selection),
+                "the same Park selection admits a new Delete after the source returns");
+            await set.RetiredAsync(exhausted);
+
             // A Park selection the owner finds stale is refused there as "selection", and the held caller answered once.
             Check(await set.SendAsync(stale, "del-stale-fail", "fail"), "the Delete set admits a failing input for the stale root");
             var staleImage = await set.DriveAsync(stale, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
