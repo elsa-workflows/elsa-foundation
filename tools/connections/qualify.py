@@ -61,12 +61,13 @@ def main():
         with tarfile.open(archive) as bundle:
             bundle.extractall(producer, filter="data")
         projects = set()
+        source_roots = [producer / "server/essentials/src", producer / "extensions/Connections/src"]
 
         def visit(project):
             project = project.resolve()
             if project in projects:
                 return
-            if not project.is_relative_to(producer / "server/essentials/src"):
+            if not any(project.is_relative_to(root) for root in source_roots):
                 raise RuntimeError("candidate reference is outside the owned source graph")
             projects.add(project)
             for edge in ET.parse(project).findall(".//ProjectReference"):
