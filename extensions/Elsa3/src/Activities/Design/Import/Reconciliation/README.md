@@ -103,7 +103,10 @@ Every other skip carries the import's own code; see the
 
 ## Cross-domain contributions
 
-- **Tasks:** one `IStartupTask` (`Elsa3FolderImportTask`, Order 4).
+- **Tasks:** one `IStartupTask` (`Elsa3FolderImportTask`, Order 4). It reads the files and runs the internal
+  `Elsa3ImportRun`, the import sequence the Elsa 3 migration tooling shares (spec 1237); the run returns its plan items,
+  skips, publication outcomes and run-level refusals, and the task logs them and fails the start on a refusal.
+  `Elsa3ImportRunRegistration.Add` registers the run and its collaborators.
 - **Workflows Publishing API:** a decorator of `IActivityPublishingAuthorizationContext` (below).
 - **Workflows Publishing:** it sends `PublishWorkflow`, and reads the publication policy, slots and journal through
   the Publishing and Runtime core contracts. Resolving a definition's default target slot is copied from

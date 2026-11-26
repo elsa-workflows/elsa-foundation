@@ -135,7 +135,7 @@
   inputs, so a call that ran there was a custom global); its guidance keeps both routes. Add a `get`-prefixed custom
   global (`getCustomerData()`) to the T002 fixture. Update the mapping README and the affected converter tests, and
   test the fixture calls and the value-only reference. The report builder reads `componentName` only from that metadata.
-- [ ] T005 Extract `Elsa3ImportRun` from `Elsa3FolderImportTask` in
+- [X] T005 Extract `Elsa3ImportRun` from `Elsa3FolderImportTask` in
   `extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Services/`. It returns the plan items, the skips with
   their cause and code, the publication outcomes and the publish diagnostics. Move the registration of its collaborators
   (`Elsa3ImportSelection`, `ImportedWorkflowPublisher`, `Elsa3StartupPublishingGrant`, the publishing authorization
