@@ -193,6 +193,7 @@ describe("Choose data for an activity input", () => {
     const container = render({ dataHost, onChange: next => changes.push(next) });
 
     expect(trigger(container)?.getAttribute("aria-label")).toBe("Choose data for Customer ID");
+    expect(trigger(container)?.previousElementSibling).toBe(container.querySelector(".wf-conversion-toggle"));
     await openChooser(container);
     await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
     expect(dataHost.requests).toEqual([{ nodeId: "node-1", inputKey: "customerId" }]);

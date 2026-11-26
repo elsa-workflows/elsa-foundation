@@ -7400,15 +7400,22 @@ html[data-theme-material] .availability-search .wf-search {
   color: var(--studio-text-muted);
 }
 
-.studio-field-caption-actions > .wf-conversion-toggle {
+.studio-field-caption-actions > :is(.wf-conversion-toggle, .wf-choose-data-trigger) {
   flex: none;
+  inline-size: 22px;
+  block-size: 22px;
   min-inline-size: 22px;
   min-block-size: 22px;
   padding: 0;
 }
 
-.studio-field-caption-actions > .wf-conversion-toggle > svg {
+.studio-field-caption-actions > :is(.wf-conversion-toggle, .wf-choose-data-trigger) > svg {
   flex: none;
+}
+
+.studio-field-caption-actions > .wf-choose-data-trigger:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 1px;
 }
 
 .wf-conversion-toggle:hover,
