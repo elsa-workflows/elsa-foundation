@@ -436,6 +436,9 @@ public sealed partial class EfStore
             if (turn != ended || turn.Done.Count + turn.Consumed.Count == 0 || turn.Sent.Count != 0 ||
                 turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
                 !InputsMatch(root, turn, jobs: RootTimedJobSettlementEnabled)) throw RootShape();
+            if (!postgres && turn.Done is [var refused] && turn.Consumed.Count == 0 && PostgresRootAdmission.IsOperatorOccurrence(refused) &&
+                await PrepareSqliteLiveCompoundRefusalAsync(root, refused, cancellationToken) is { } liveRefusal)
+                return new(null, liveRefusal);
             // A job that was running when its root ended (a Terminate or a Faulted end settled it) finishes where nothing waits
             // for it: its ticket and deadline rows left with the end, so the job's own input settles nothing.
             var settled = turn.Consumed.Where(key => key.Scope > 0).Select(StoredJobId).ToArray();

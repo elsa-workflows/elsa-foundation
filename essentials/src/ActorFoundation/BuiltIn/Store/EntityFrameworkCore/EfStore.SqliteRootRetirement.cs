@@ -4,6 +4,42 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
+    // An earlier turn can register a job after compound admission. The actor's refusal consumes only the command;
+    // the exact running checkpoint and its ticket/deadline remain under their original revision.
+    private sealed record SqliteLiveCompoundRefusal(WorkerRoot Root, RootImage Current, Message Command, bool Withheld)
+        : QualifiedRootCheckpoint(0)
+    {
+        internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
+        {
+            if (!db.UsesSqliteRootRuntime || !db.UsesRootTerminateThenDelete ||
+                !await db.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
+                        AND "FoundationTenant" = {Root.Tenant} AND "FoundationReference" = {Root.Reference}
+                        AND "Status" = {(int)InstanceStatus.Running} AND NOT "Retired" AND "Revision" = {Current.Revision}
+                        AND "FoundationParkAt" IS NULL
+                        AND "Jobs" = {Current.Jobs} AND "NextJobGeneration" IS NOT DISTINCT FROM {Current.NextJobGeneration}
+                        AND "Suspended" = {Current.Suspended}) AS "Value"
+                    """).SingleAsync(token)) return false;
+            return await SettleSqliteRootInputsAsync(db, Root.Reference, Current.Actor, [Command.InboxKey], [Command],
+                Current.Suspended || Withheld, token);
+        }
+    }
+
+    private async Task<SqliteLiveCompoundRefusal?> PrepareSqliteLiveCompoundRefusalAsync(WorkerRoot root, InboxKey key, CancellationToken token)
+    {
+        var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
+        if (current is not { Status: InstanceStatus.Running, Jobs: not null }) return null;
+        await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, token);
+        var row = await db.Messages.AsNoTracking().SingleOrDefaultAsync(message => message.Partition == root.Partition &&
+            message.Target == root.Actor && message.InboxScope == InboxKey.FoundationOccurrenceScope && message.Id == key.Id && !message.Done,
+            token);
+        if (row is null) return null;
+        var command = DecodeRootInput(db, row, root.Reference, issue: null);
+        return command is { Kind: Kinds.Terminate, Operator.RootThenDelete: true }
+            ? new(root, current, command, AuthoredSqliteWithholding(root, current)) : null;
+    }
+
     private static async Task<bool> BindSqliteRootRetirementAsync(KernelDb db, RootRetirement retire, CancellationToken token)
     {
         var root = retire.Root;

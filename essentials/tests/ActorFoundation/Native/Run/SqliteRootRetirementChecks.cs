@@ -28,6 +28,7 @@ internal static partial class SqliteHostLifetimeChecks
                 (_, _, kind) => kind == Contract.Kinds.Terminate, cancellationToken: token);
             var definitions = new SqliteAdmissionDefinitions();
             var reader = new EfStore(() => OpenFoundationDb(file, definitions), postgres: false, fenceInBatch);
+            var executor = new RetirementActor();
             await using var db = OpenFoundationDb(file);
             var cursor = await SqliteRootAdmission.ReadSelectionCursorAsync(db, token);
             var finished = await AdmitAsync("finished");
@@ -35,10 +36,11 @@ internal static partial class SqliteHostLifetimeChecks
             var protectedActor = await AdmitAsync("protected");
             var fresh = await AdmitAsync("fresh");
             var compound = await AdmitAsync("running");
+            var racesJob = await AdmitAsync("running-job");
             await using (var host = OpenHost())
             {
                 await host.StartAsync(token);
-                foreach (var root in new[] { finished, expired, protectedActor, fresh, compound })
+                foreach (var root in new[] { finished, expired, protectedActor, fresh, compound, racesJob })
                     await WaitForRootAsync(reader, scope.Tenant, root, 1, token);
                 var initial = (await reader.ReadFirstRootAsync(scope.Tenant, finished.Id, token))!;
                 var stamp = Seal(initial, finished);
@@ -86,6 +88,15 @@ internal static partial class SqliteHostLifetimeChecks
             while (!await db.Messages.AnyAsync(row => row.Target == before.Actor.Id && row.ReplyTo != null, token))
                 await Task.Delay(25, token);
 
+            var jobRoot = (await reader.ReadFirstRootAsync(scope.Tenant, racesJob.Id, token))!;
+            var jobTarget = new Contract.Target.Ref(racesJob);
+            var jobSelection = PostgresRootSelection.SealRunning(cursor, scope.Tenant, racesJob.Id);
+            var jobPayload = Json.Write(new Contract.OperatorCommand(jobSelection, ThenDelete: true, ExpectedTarget: racesJob));
+            Require(await ingress.SendAsync(scope, jobTarget, "issue", "issue-job", cancellationToken: token) is
+                { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                await ingress.SendAsync(scope, jobTarget, "compound-after-issue", Contract.Kinds.Terminate, jobPayload, cancellationToken: token) is
+                { Outcome: Contract.AdmissionOutcome.Accepted }, "the ready job-issuing input precedes the admitted compound operation");
+
             await using var successor = OpenHost();
             await successor.StartAsync(token);
             await WaitForRetirementAsync(before.Actor.Id, InstanceStatus.Cancelled);
@@ -96,12 +107,26 @@ internal static partial class SqliteHostLifetimeChecks
                 { Outcome: Contract.AdmissionOutcome.Duplicate } &&
                 await ingress.SendAsync(scope, target, "new", "signal", cancellationToken: token) is
                 { Outcome: Contract.AdmissionOutcome.Refused }, "retired creation keeps the compound receipt and refuses fresh ordinary ingress");
+            while (!await db.Messages.AnyAsync(row => row.Target == jobRoot.Actor.Id && row.Kind == Kinds.Terminate && row.Done, token))
+                await Task.Delay(25, token);
+            var runningJob = await reader.ReadFirstRootAsync(scope.Tenant, racesJob.Id, token);
+            Require(runningJob is { Revision: 2, Status: InstanceStatus.Running, Jobs: not null, TerminalRevision: null } &&
+                await db.Messages.CountAsync(row => row.Target == jobRoot.Actor.Id && row.InboxScope == EfStore.RootTimedJobScope, token) == 2,
+                "the compound refusal settles on the exact running checkpoint and keeps its job pair");
+            await executor.JobEntered.Task.WaitAsync(token);
+            Require(await ingress.SendAsync(scope, jobTarget, "stop-job", Contract.Kinds.Terminate,
+                Json.Write(new Contract.OperatorCommand(jobSelection)), cancellationToken: token) is
+                { Outcome: Contract.AdmissionOutcome.Accepted }, "a plain Terminate can follow the settled refusal");
+            await WaitForRootAsync(reader, scope.Tenant, racesJob, 3, token);
+            Require(await reader.ReadFirstRootAsync(scope.Tenant, racesJob.Id, token) is { Status: InstanceStatus.Cancelled, Jobs: null } &&
+                !await db.Messages.AnyAsync(row => row.Target == jobRoot.Actor.Id && row.InboxScope == EfStore.RootTimedJobScope, token),
+                "the next command ends the actor and settles the retained job");
             await successor.StopAsync(token);
             Require(successor.LastError is null, "the successor stops cleanly");
             return 0;
 
             SqliteEmbeddedHostedService OpenHost() => SqliteEmbeddedHostedService.ForFoundation(file, "retirement-owner",
-                new RetirementActor(), reason => throw new InvalidOperationException(reason), Loops, fenceInBatch, requests: replies,
+                executor, reason => throw new InvalidOperationException(reason), Loops, fenceInBatch, requests: replies,
                 retentionWindow: header => header.TypeData == "fresh" ? TimeSpan.FromHours(1) : TimeSpan.Zero);
 
             async Task<Contract.ActorRef> AdmitAsync(string definition)
@@ -137,19 +162,30 @@ internal static partial class SqliteHostLifetimeChecks
 
     private sealed class RetirementActor : Contract.IActorType
     {
+        internal TaskCompletionSource JobEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public string Type => RetirementKind;
         public bool Withholds(Contract.ActorHeader header) => false;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => header.TypeData == "protected";
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => throw new NotSupportedException();
-        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token) => throw new NotSupportedException();
+        public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token)
+        {
+            JobEntered.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return null;
+        }
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken token)
         {
             if (turn.StartSettings is not null)
             {
                 turn.State = "\"created\"";
-                if (turn.Header.TypeData != "running") turn.End(Contract.ActorStatus.Finished);
+                if (turn.Header.TypeData is not ("running" or "running-job")) turn.End(Contract.ActorStatus.Finished);
+            }
+            else if (turn.Inbox is [{ Kind: "issue-job" }])
+            {
+                turn.StartJob("work", timeout: TimeSpan.FromSeconds(30));
+                turn.Record(new { Step = "issued" });
             }
             else if (turn.Inbox is [{ Kind: Contract.Kinds.Terminate }])
                 turn.End(Contract.ActorStatus.Cancelled);
