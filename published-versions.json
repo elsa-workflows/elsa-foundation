@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "41c32a4bafb8f349743718052eb0e5b42e3a94ca",
+  "last_publish_commit": "500c92ceb5864cd30958e980b8daa9e50908f89e",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -379,8 +379,8 @@
     },
     {
       "package_id": "Elsa.Cluster.Readability",
-      "version": "4.0.30-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.31-preview",
+      "commit": "500c92ceb5864cd30958e980b8daa9e50908f89e"
     },
     {
       "package_id": "Elsa.Connections",
@@ -624,18 +624,18 @@
     },
     {
       "package_id": "Elsa.ExtensionBuilder.Api",
-      "version": "4.0.20-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.21-preview",
+      "commit": "500c92ceb5864cd30958e980b8daa9e50908f89e"
     },
     {
       "package_id": "Elsa.Foundation.DataProtection.EntityFrameworkCore",
-      "version": "4.0.18-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.19-preview",
+      "commit": "500c92ceb5864cd30958e980b8daa9e50908f89e"
     },
     {
       "package_id": "Elsa.Foundation.Hosting",
-      "version": "4.0.2-preview",
-      "commit": "92bc067918f9d3038fcd97bccea5f0e68caa7000"
+      "version": "4.0.3-preview",
+      "commit": "500c92ceb5864cd30958e980b8daa9e50908f89e"
     },
     {
       "package_id": "Elsa.Foundation.Identity",
@@ -789,8 +789,8 @@
     },
     {
       "package_id": "Elsa.Modularity.Api",
-      "version": "4.0.29-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.30-preview",
+      "commit": "500c92ceb5864cd30958e980b8daa9e50908f89e"
     },
     {
       "package_id": "Elsa.Modularity.Core",
@@ -804,8 +804,8 @@
     },
     {
       "package_id": "Elsa.Modularity.Nuplane",
-      "version": "4.0.21-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.22-preview",
+      "commit": "500c92ceb5864cd30958e980b8daa9e50908f89e"
     },
     {
       "package_id": "Elsa.Modularity.Planning",
@@ -889,8 +889,8 @@
     },
     {
       "package_id": "Elsa.Secrets.Nuplane",
-      "version": "4.0.19-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.20-preview",
+      "commit": "500c92ceb5864cd30958e980b8daa9e50908f89e"
     },
     {
       "package_id": "Elsa.Secrets.Persistence.EntityFrameworkCore",
@@ -1284,8 +1284,8 @@
     },
     {
       "package_id": "dotnet-elsa",
-      "version": "4.0.28-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.29-preview",
+      "commit": "500c92ceb5864cd30958e980b8daa9e50908f89e"
     }
   ]
 }
