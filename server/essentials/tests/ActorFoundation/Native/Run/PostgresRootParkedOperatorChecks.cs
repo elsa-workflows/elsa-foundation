@@ -2997,8 +2997,8 @@ internal static class PostgresRootParkedOperatorChecks
             }
             if (turn.Inbox is [{ Kind: "issue-faulting-result" }])
                 turn.StartJob(FaultingJob, timeout: TimeSpan.FromSeconds(30));
-            if (turn.Inbox is [{ Kind: "held-before-park" } held])
-                turn.Reply(held, "response", "released");
+            if (turn.Inbox is [{ Kind: "held-before-park" }])
+                turn.Emit("response", "released");
             return default;
         }
     }
