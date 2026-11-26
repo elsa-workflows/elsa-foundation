@@ -16,7 +16,7 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
   `ParentCompletionProcessedWorkItemId` marker) to `IActivityExecutionStateStore`, implemented in the EF Core store
   (node id, iteration id and processed-flag columns, index, migration), the in-memory store, the coalescing store
   (session overlay) and the test doubles, with a contract test shared by the three stores (distinct iteration ids,
-  superseded rows excluded, unprocessed completions not counted, staged but unflushed markers counted); update the
+  superseded rows excluded, unprocessed completions not counted, staged but unflushed markers counted, unrelated session upserts filtered before any inner lookup); update the
   store's `EXTENSION_POINTS.md`.
 
 ## Phase 2: Runtime activity (US1, US2)

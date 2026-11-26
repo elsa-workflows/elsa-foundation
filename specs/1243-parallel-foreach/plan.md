@@ -85,7 +85,9 @@ applies. The Elsa 3 converter then maps `Elsa.ParallelForEach` onto it, rewrites
       the migration can belong to a `ParallelForEach`, the only caller, and the project is pre-stable.
     - In-memory store.
     - `CoalescingActivityExecutionStateStore` (`CoalescingRuntimeStateStores.cs:85`): adjust the inner count as its
-      `CountAsync` does (`:136-157`). For each session upsert and tombstone, look up the inner row, subtract it when it
+      `CountAsync` does (`:136-157`). First keep only the session upserts whose parent id and node id match; a row's parent and node never
+      change, so no other upsert can affect the count, and FR-008's per-completion cost stays independent of
+      unrelated session rows. For each kept upsert and each tombstone, look up the inner row, subtract it when it
       matched the predicate (node, `Completed`, processed, not superseded), and add the session row when it matches. Without this, a staged but unflushed marker is
       missed, `p` is too low, and an item is started twice.
     - Every other implementer of the interface, test doubles included (about ten in essentials, for example
@@ -133,7 +135,7 @@ applies. The Elsa 3 converter then maps `Elsa.ParallelForEach` onto it, rewrites
   (`For.cs:105-108`, `ForEachT.cs:97-98`, `ParallelForEachT.cs`). If the nearest one is not a `ParallelForEach`, keep today's handling for that loop
   (`Elsa3ValueFlowLowerer.cs:1157-1161`): the read is refused with `MissingAmbient` when no declared variable has that
   name, and binds to a declared variable of that name when one exists. That silent bind is an existing gap of the
-  `For`/`ForEach` conversion, which this spec does not fix. It is reported as a follow-up. `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1106-1162) resolves only variables declared
+  `For`/`ForEach` conversion, which this spec does not fix. It is reported as a follow-up. The `Variable` case of `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1108-1163) resolves only variables declared
   in the definition, so `CurrentValue` returns `MissingAmbient` today, and a workflow variable of that name would match
   first. Add a resolution branch for `CurrentValue` and `CurrentIndex` that runs before workflow and enclosing-scope
   variables when the reference sits in a `ParallelForEach` body. It yields a `VariableExpressionParameterBinding` to

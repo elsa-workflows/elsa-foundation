@@ -97,7 +97,7 @@ The converter already warns `ELS3-BEHAVIOUR-BREAK-STOPS-AT-PARALLEL` for a `Brea
   one exists (`Elsa3ValueFlowLowerer.cs:1157-1161`). The silent bind is an existing gap, outside this spec. So the nearest Elsa 3 loop that declares the name owns a
   by-name read. Elsa 3 ParallelForEach has no output, so its reads go through
   `getVariable("CurrentValue")`. `Elsa3ExpressionRewriter`
-  hands that to the ambient resolver (`AddResolvedEdit`). `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1106-1162)
+  hands that to the ambient resolver (`AddResolvedEdit`). the `Variable` case of `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1108-1163)
   knows only declared variables, so the run-time name is missing today, and a workflow variable named `CurrentValue`
   would match first. `Elsa3DefinitionConverter.AncestorScopeNames` carries Elsa 4 names for shadowing checks only.
   The converter needs a resolution branch for the per-pass names (plan, Converter).
@@ -122,7 +122,7 @@ still says Elsa 4 has no parallel ForEach. Spec 1243 adopts decision 1 and leave
 With a degree, the loop must know how many passes it has started and how many completions it has processed. The
 store's plain `Completed` count runs ahead of the parent's evaluations, because a child's row commits before the
 parent's evaluation work item runs. The `ParentCompletionProcessedWorkItemId` marker is what records that a completion
-was processed. See plan, "Runtime activity". `IActivityExecutionStateStore` has no count query today. It has only list
+was processed. See plan, "Runtime activity". `IActivityExecutionStateStore` has no parent-scoped count today; its `CountAsync` counts the whole instance. It has only list
 and page reads (`ListByParentPageAsync`, line 58).
 
 ## R-7 ADR need
