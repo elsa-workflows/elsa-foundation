@@ -439,6 +439,9 @@ function editabilityExtensions(readOnly: boolean, ariaLabel: string) {
 
 function startExplicitCompletion(view: EditorView, runtime: CodeMirrorRuntime): boolean {
   clearCodeMirrorCompletionMessage(view);
+  // A running automatic query would otherwise finish under its original intent.
+  if (!runtime.explicitCompletion && completionStatus(view.state) === "pending")
+    cancelPendingCodeMirrorCompletion(view);
   const started = startCompletion(view);
   if (started) {
     runtime.explicitCompletion = true;

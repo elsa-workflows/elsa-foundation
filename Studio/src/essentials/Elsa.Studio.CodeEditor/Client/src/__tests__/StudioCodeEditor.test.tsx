@@ -490,6 +490,35 @@ describe("StudioCodeEditor", () => {
     }
   }, 20000);
 
+  it("announces an empty keyboard result while an automatic completion is still settling", async () => {
+    let resolveAutomatic!: (items: []) => void;
+    const automatic = new Promise<[]>(resolve => { resolveAutomatic = resolve; });
+    const completionProvider = vi.fn((request: StudioCodeCompletionRequest) => request.explicit ? [] : automatic);
+    const source = "variables.plain";
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: source }),
+      languageAdapter: javaScriptLanguageAdapter,
+      completionProvider
+    });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const view = EditorView.findFromDOM(content)!;
+      content.focus();
+      view.dispatch({ changes: { from: source.length, insert: "." }, selection: { anchor: source.length + 1 }, userEvent: "input.type" });
+      await vi.waitFor(() => expect(completionProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false })));
+
+      key(content, " ", { code: "Space", ctrlKey: true });
+
+      await vi.waitFor(() => expect(container.querySelector(".studio-code-editor-completion-status")?.textContent).toBe("No suggestions"));
+      expect(completionProvider).toHaveBeenLastCalledWith(expect.objectContaining({ explicit: true }));
+    } finally {
+      resolveAutomatic([]);
+      unmount();
+    }
+  }, 20000);
+
   it("shows and announces hover help from the keyboard before Escape arms focus exit", async () => {
     const { container, unmount } = renderEditor({
       document: codeDocument({ value: "formatTotal" }),
