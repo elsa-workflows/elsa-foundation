@@ -191,9 +191,10 @@ public sealed partial class EfStore
             var jobs = JobRegistry.Read(image.Jobs);
             // The initial staged SQLite worker persisted no generation on roots without jobs.
             var generation = !postgres && image.Jobs is null ? image.NextJobGeneration ?? 0 : image.NextJobGeneration;
+            var parked = image is { Status: InstanceStatus.Faulted, ParkAt: > 0, TerminalAt: null, TerminalRevision: null };
             if (generation is not >= 0 || jobs.Count > 1 ||
                 jobs is [var job] && (job.Generation < 0 || job.Generation != generation - 1 ||
-                    image.Status != InstanceStatus.Running && (postgres || image is not { Status: InstanceStatus.Faulted, ParkAt: > 0, TerminalAt: null }))) throw RootShape();
+                    image.Status != InstanceStatus.Running && !parked)) throw RootShape();
         }
         else if (image.Jobs is not null || image.NextJobGeneration is > 0) throw RootShape();
         return new InstanceRow(image.Actor.Id, image.Model, image.Definition, image.Status, "null", image.Revision, null,

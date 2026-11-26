@@ -205,6 +205,7 @@ public sealed partial class EfStore
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND NOT i."Suspended"
                     AND i."Status" = {(int)Prior} AND i."Revision" = {Expected}
+                    AND (NOT {Recovered} OR i."Jobs" IS NULL)
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
                 """).ToListAsync(token);

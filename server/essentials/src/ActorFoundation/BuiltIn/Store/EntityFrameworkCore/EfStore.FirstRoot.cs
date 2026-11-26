@@ -237,7 +237,8 @@ public sealed partial class EfStore
             """;
         var physical = await db.Database.SqlQuery<PhysicalRoot>(FormattableStringFactory.Create(
             query.Format.Replace("/*root-wire*/", db.UsesRootStableBody ? """i."FoundationStateWire" """ : "NULL::bytea", StringComparison.Ordinal)
-                .Replace("/*root-park-at*/", db.UsesSqliteRootRuntime ? """i."FoundationParkAt" """ : "NULL::bigint", StringComparison.Ordinal)
+                .Replace("/*root-park-at*/", db.UsesSqliteRootRuntime || db.UsesRootParkOpening && db.UsesRootTimedJobSettlement
+                    ? """i."FoundationParkAt" """ : "NULL::bigint", StringComparison.Ordinal)
                 .Replace("/*root-read-clock*/", db.UsesSqliteRootRuntime ? SqliteCommitDialect.MillisecondClock : "floor(extract(epoch from statement_timestamp()) * 1000)::bigint",
                     StringComparison.Ordinal),
             query.GetArguments())).SingleOrDefaultAsync(cancellationToken);
