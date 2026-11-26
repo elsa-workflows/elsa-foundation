@@ -24,9 +24,10 @@ A workflow that calls `Enrich` reads `Result`. Elsa 3 ran this on every call. To
 - **Import.** The converter refuses both nodes with `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED` (spec 246 D-7), and
   every workflow that calls `Enrich` is refused with `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY`. The caller cannot be
   imported at all.
-- **Native Elsa 4.** An author who builds the same body in Studio can publish the Set Output (graph compiler `3.0.0`
+- **Native Elsa 4.** An author who builds the same body in Studio can publish the Set Output (the graph compiler
   supports it), but not the Set Variable: a graph body Set may only target a variable of a native container *below* the
-  graph boundary. A Set of the body's own variable (scope `activity-graph`) is refused with
+  graph boundary. A Set of the body's own variable (inside a body addressed as scope `workflow`, or Studio's legacy
+  `activity-graph`) is refused with
   `activity.graph.set-local-target-invalid`. At run time the intrinsic executor drops the closed boundary from the write
   targets, so even a forged body would fault ("not visible to intrinsic execution").
 - **Correlate and Set Name** in a body are refused at publish with `activity.graph.intrinsic-unsupported`, and at import
@@ -43,7 +44,7 @@ workflow set") has waited on this since spec 246.
 |---|---|---|---|
 | Set Output naming a declared output | supported | supported | refused (D-7) |
 | Set of a variable of a native container inside the body | supported | not proven end to end (compile tests only) | refused (D-7) |
-| Set of the body's own variable (`activity-graph`) | refused | faults | refused (D-7) |
+| Set of the body's own variable (`workflow` / legacy `activity-graph`) | refused | faults | refused (D-7) |
 | Correlate, Set Name | refused | — | refused (D-7) |
 | Finish | refused | — | refused (D-7) |
 | A step's script/C# write of the body's own variable | supported (spec 1241) | supported (spec 1241) | converts (spec 1241) |
@@ -75,6 +76,9 @@ the one specs 265 and 1241 already apply.
 
 Excluded:
 
+- **Script identity writes in a body** (`setCorrelationId`, `setWorkflowInstanceName` from a Run JavaScript step) stay
+  refused, as spec 1234 FR-011 and spec 1241 decided. This spec lifts the refusal for the Correlate and Set Name
+  *nodes* only; an Elsa 3 reusable that correlates from a script is still refused with that spec's code and guidance.
 - **Finish** in a body: in Elsa 3 it ends the whole calling workflow from inside an activity. Elsa 4 does not carry that
   behaviour over; it is a deliberate Elsa 4 behaviour, not a gap. Publish keeps refusing it, and the import refuses it
   with its own code and guidance that explains why and what to do instead (FR-013). *(Decision Q2.)*
@@ -179,8 +183,8 @@ Correlate; publish.
 
 ### Edge Cases
 
-- A Set and a step session write the same body variable in one commit: the existing order applies (session writes, the
-  intrinsic as its own step, captures last).
+- A Set and a step session write the same body variable in one run: each commits with its own step, ordered and judged
+  as in a workflow (ADR 0092).
 - A Set Output and an output mapping for the same output: still refused (`activity.graph.set-output-mapping-conflict`).
 - A reusable activity used inside another reusable activity: each Set reaches its own nearest body only; Correlate and
   Set Name still act on the running workflow.
@@ -192,9 +196,11 @@ Correlate; publish.
 ### Functional Requirements
 
 - **FR-001**: Graph draft validation and compilation MUST accept a Set intrinsic that targets a variable declared by the
-  graph (`activity-graph` scope), in addition to today's native-container targets inside the body.
+  graph, addressed inside the body as scope `workflow` (or Studio's legacy `activity-graph`), in addition to today's
+  native-container targets inside the body. The converter emits `workflow` for every Set it makes.
 - **FR-002**: Graph draft validation MUST keep refusing a Set whose target is outside the nearest body, undeclared,
-  declared more than once, or stored externally/encrypted.
+  declared more than once, or stored externally/encrypted. The `activity.graph.set-local-target-invalid` message and its
+  reference-doc descriptor MUST name the graph's own variables as valid targets.
 - **FR-003**: At run time a Set in a body MUST write the variable of its nearest closed boundary (the boundary's variable
   row) when that is the declaring scope, and MUST NOT write any frame above the boundary.
 - **FR-004**: A body Set MUST follow the same commit rule, versioning, lost-update mode and write history as any other
@@ -203,10 +209,13 @@ Correlate; publish.
   and Set Name (`elsa.intrinsic.set-instance-name@1`) intrinsics in a body; at run time they MUST change the running
   workflow's correlation ID and instance name with the step's commit, under ADR 0090's correlation rule.
 - **FR-006**: A graph body MUST keep refusing every other intrinsic (including Finish, Merge, Reduce) with
-  `activity.graph.intrinsic-unsupported`, whose message lists what is supported.
+  `activity.graph.intrinsic-unsupported`, whose message (today "Only Set Output and Set of a declared enclosing
+  body-local variable…") MUST list what is now supported.
 - **FR-007**: The graph body write-order analysis MUST count body Set intrinsics as writers, as workflow validation does.
-- **FR-008**: Placement of a reusable activity into a workflow MUST carry body intrinsics and remap a body Set's target
-  to the placed boundary, as it does for captures.
+- **FR-008**: Placement of a reusable activity into a workflow MUST carry every supported body intrinsic: the placement
+  allow-lists that today match only Set and Set Output (visible scopes, original result-read facts) MUST also cover
+  Correlate and Set Name, and a placed body Set's visible scopes MUST include the boundary so its remapped target
+  resolves to the placed boundary.
 - **FR-009**: The Elsa 3 converter MUST stop refusing reusable-body Set Variable, Set Output, Correlate, Set Name and
   HTTP Endpoint projections. `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED` is retired (pre-stable, no alias).
 - **FR-010**: The converter MUST convert a reusable Set Output that names a declared output to the graph's Set Output of
@@ -214,16 +223,18 @@ Correlate; publish.
   with `ELS3-REUSABLE-UNDECLARED-OUTPUT` and guidance.
 - **FR-011**: Studio's graph designer MUST offer Set Variable (with body targets only), Correlate and Set Name, and MUST
   focus their publish diagnostics on the node.
+- **FR-012**: The readiness guide, the Elsa 3 mapping README, the converter's guidance strings, the graph authoring
+  reference and the extension-point catalogs MUST describe the new support and drop the #3023 workarounds.
 - **FR-013**: The converter MUST refuse a reusable-body Finish with `ELS3-REUSABLE-UNSUPPORTED-FINISH`, listed in the
   readiness guide as an Elsa 4 behaviour (not a gap). Its guidance and the readiness guide MUST say: what Elsa 3 did (the
   activity ended the whole calling workflow, cutting off the caller's other branches, and the activity never completed
   or returned its outputs); why Elsa 4 does not (an activity's effect on its caller is visible in the caller's own graph
-  through outcomes and outputs, so a caller can never be ended by something it cannot see); the supported approach
+  through outcomes, so a caller's control flow never ends by something its own graph does not show); the supported approach
   (replace Finish with a Complete that names a new declared outcome, for example `Finished`, and in each caller connect
   that outcome to a Finish); and that moving the Finish into a workflow called by Dispatch or Execute Workflow is not
   equivalent (it would end that called workflow, not the caller).
-- **FR-012**: The readiness guide, the Elsa 3 mapping README, the converter's guidance strings, the graph authoring
-  reference and the extension-point catalogs MUST describe the new support and drop the #3023 workarounds.
+- **FR-014**: The graph compiler fingerprint (`elsa.activity-graph/compiler/…`) MUST be bumped, since compiled output
+  changes; graphs compiled before are republished, not migrated (pre-stable).
 
 ### Key Entities
 
@@ -248,8 +259,8 @@ Correlate; publish.
 ## Assumptions
 
 - Spec 1241's closed-scope row write path (versioning, history, commit order) is reused, not duplicated.
-- An Elsa 3 reusable's variables convert to graph variables (specs 264/265), so its Set Variable targets the
-  `activity-graph` scope.
+- An Elsa 3 reusable's variables convert to graph variables (specs 264/265), so its Set Variable targets the graph's
+  variables, addressed inside the body as scope `workflow`.
 - Reading the correlation ID in a body expression (`getCorrelationId()`, used by the storage-drivers sub) already works
   under spec 1234's read rules; if not, it is a separate gap filed against the ledger, not fixed here.
 - A storage driver an Elsa 3 variable names (the storage-drivers sub) is handled by #5683/#5698; this spec does not
