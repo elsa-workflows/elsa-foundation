@@ -25,11 +25,11 @@ public static partial class SqliteEmbeddedHosting
 
         public ValueTask<Contract.Page<Contract.ActorView>> ListAsync(Contract.BoundScope scope, Contract.ActorQuery query,
             Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException("SQLite actor lists are outside the Park inspection slice.");
+            ReadAsync(reads => reads.ListAsync(scope, query, from, cancellationToken), cancellationToken);
 
         public ValueTask<Contract.Page<Contract.JournalEntry>> TailAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException("SQLite journal reads are outside the Park inspection slice.");
+            ReadAsync(reads => reads.TailAsync(scope, actor, from, cancellationToken), cancellationToken);
 
         private async ValueTask<T> ReadAsync<T>(Func<GeneratedRootReads, ValueTask<T>> read, CancellationToken token)
         {
