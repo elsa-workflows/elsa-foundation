@@ -10,8 +10,8 @@ internal sealed partial class PostgresRootAdmission
 {
     internal const string OperatorPrefix = "!kernel-operator/1:";
     private const string HeldOperatorPrefix = "!kernel-held-operator/1:";
-    private const string TerminateThenDeletePrefix = "!kernel-operator/2:";
-    private const string RetentionDeletePrefix = "!kernel-operator/3:";
+    internal const string TerminateThenDeletePrefix = "!kernel-operator/2:";
+    internal const string RetentionDeletePrefix = "!kernel-operator/3:";
     private const string RetentionOperationPrefix = "~retention-";
     private sealed record StoredOperator(string Reference, string Operation, long Creation, string Kind,
         [property: JsonRequired] bool ExplicitZeroDue)
@@ -133,8 +133,7 @@ internal sealed partial class PostgresRootAdmission
             }
             if (retentionDelete)
             {
-                var identity = DurableKeyJson.Write(new { tenant, reference, address.Creation, Mark = terminal });
-                operation = RetentionOperationPrefix + FoundationRootCreator.OperationDigest(identity);
+                operation = RetentionOperationFor(tenant, reference, address.Creation, terminal!);
             }
             var digest = FoundationRootCreator.OperationDigest(operation);
 
@@ -234,6 +233,12 @@ internal sealed partial class PostgresRootAdmission
             });
         return (occurrence, header);
     }
+
+    internal static string RetentionOperationFor(string tenant, string reference, long creation, FoundationTerminalStamp terminal) =>
+        RetentionOperationPrefix + FoundationRootCreator.OperationDigest(DurableKeyJson.Write(new
+        {
+            tenant, reference, Creation = creation, Mark = terminal
+        }));
 
     private static async Task<bool> LocksRootDeleteSelectionAsync(KernelDb db, CreationAddress address, string tenant,
         string reference, FoundationTerminalStamp mark, CancellationToken token)

@@ -37,11 +37,20 @@ public sealed partial class EfStore
     // A staged owner leaves later operator envelopes pending. They also cannot block an earlier supported stage's FIFO.
     private static string SqliteSupportedOperator(string columnPrefix) =>
         $"""
-        {columnPrefix}"Id" GLOB 'operator/*' AND {columnPrefix}"Kind" = '{Kinds.Terminate}'
-        AND {columnPrefix}"ReplyTo" IS NULL AND {columnPrefix}"Start" GLOB '{PostgresRootAdmission.OperatorPrefix}*'
+        {columnPrefix}"Id" GLOB 'operator/*' AND {columnPrefix}"ReplyTo" IS NULL
+        AND (({columnPrefix}"Kind" = '{Kinds.Terminate}' AND
+                ({columnPrefix}"Start" GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR
+                    {columnPrefix}"Start" GLOB '{PostgresRootAdmission.TerminateThenDeletePrefix}*'))
+            OR ({columnPrefix}"Kind" = '{Kinds.Delete}' AND
+                ({columnPrefix}"Start" GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR
+                    {columnPrefix}"Start" GLOB '{PostgresRootAdmission.RetentionDeletePrefix}*')))
         AND CASE WHEN json_valid(substr({columnPrefix}"Start", {PostgresRootAdmission.OperatorPrefix.Length + 1}))
             THEN json_type(substr({columnPrefix}"Start", {PostgresRootAdmission.OperatorPrefix.Length + 1}), '$.Park') IS NULL ELSE 0 END
         """;
+
+    private bool AuthoredSqliteWithholding(WorkerRoot root, RootImage current) =>
+        _ordinaryRoots?.AuthoredWithholds?.Invoke(new(new(root.Reference), current.Model, root.Tenant,
+            (Contract.ActorStatus)current.Status, current.Fault, null, current.TerminalAt, current.TypeData, current.Labels)) == true;
 
     private static Task<List<WorkerRoot>> ResolveSqliteWorkerRootsAsync(KernelDb db, int? partition, string[] actors,
         string[] references, CancellationToken token) =>
