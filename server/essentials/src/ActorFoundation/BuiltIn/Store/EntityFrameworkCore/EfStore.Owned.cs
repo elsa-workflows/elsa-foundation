@@ -414,8 +414,19 @@ public sealed partial class EfStore
         var poll = PollSql(db);
         if (!poll.Contains(single, StringComparison.Ordinal)) throw new InvalidOperationException("The poll has no partition predicate where the set poll replaces it.");
         var set = Q($"""m."Partition" IN ({List(owned.Select(f => f.Partition).Order())}) AND m."Seen" < {EpochOf(owned, "m.\"Partition\"")}""");
-        var sql = string.Format(System.Globalization.CultureInfo.InvariantCulture, poll.Replace(single, set, StringComparison.Ordinal), 0, 0, (long)horizon.TotalMilliseconds, limit);
-        if (_ordinaryRoots is { } root) return ToGeneratedPoll(await db.Database.SqlQueryRaw<GeneratedPollRow>(sql).ToListAsync(cancellationToken), root, db);
+        object[] args = [];
+        if (SamplesAuthoredCohortWithholding(db))
+        {
+            var (actors, revisions) = await ReadWithheldCohortsAsync(db, owned, limit, cancellationToken);
+            args = [actors, revisions];
+        }
+        var sql = string.Format(System.Globalization.CultureInfo.InvariantCulture, poll.Replace(single, set, StringComparison.Ordinal),
+            0, 0, (long)horizon.TotalMilliseconds, limit, "{0}", "{1}");
+        if (_ordinaryRoots is { } root)
+        {
+            var result = ToGeneratedPoll(await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, args).ToListAsync(cancellationToken), root, db);
+            return await WithRootParkFactsAsync(db, result, cancellationToken);
+        }
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql).ToListAsync(cancellationToken));
     }
 }
