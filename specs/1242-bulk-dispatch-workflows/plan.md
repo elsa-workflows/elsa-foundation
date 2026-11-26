@@ -59,9 +59,13 @@ JTest effect is checked by S-15.
   whose target is `ForEach`, and whose rewrite is a new `Elsa3NodeRewriteKind.BulkDispatchAsLoop`.
   - The rewrite picks between `ForEach` and the parallel ForEach (FR-002, FR-003).
   - The entry classifies every Elsa 3 member exactly once, as `Every_elsa3_activity_and_member_is_classified_exactly_once`
-    requires: `Items` → `Collection` (`NullUnbound`). All other members, `ChildCompleted` and `ChildFaulted`
-    included, are `Structure` (R7) on the entry, because `ForEach` has no such inputs, and the keys are checked against
-    the real catalog by `Every_targeted_elsa4_key_slot_and_outcome_exists_in_the_real_catalog`.
+    requires: `Items` → `Collection` (`NullUnbound`). The other inputs are `Structure` (R7) on the entry, because
+    `ForEach` has no such inputs, and the keys are checked against the real catalog by
+    `Every_targeted_elsa4_key_slot_and_outcome_exists_in_the_real_catalog`.
+  - `ChildCompleted` and `ChildFaulted` are `[Port]` members in 3.6.3, but the Elsa 3 surface fixture
+    (`extensions/Elsa3/tests/Mapping/Tests/Fixtures/elsa3-activity-surface.json`) lists only the 8 inputs. The fixture
+    gets the two ports (kind `port`), following its "corrected per spec 236 research R-4" precedent, and the entry
+    classifies them with `kind: Elsa3MemberKind.Port`, as `ParallelForEach.Body` is.
   - The rewrite applies `LiteralOnly` (`WorkflowDefinitionId`), `DispatchInputs` (`Input`), `Removed` (`StartNewTrace`,
     `ChannelName`) and the synthetic `CancelChildOnParentCancellation` to the body dispatch node itself.
   - The entry's `Outcome` rules map `Done` → `Done`; plan §5 covers `Completed` and `Canceled`.
@@ -83,6 +87,9 @@ graph builder either way (§5). Record the outcome in the PR.
   any non-null literal refused. `DefaultItemInputKey` null or absent means `Item`.
 - **Without waiting**: the body is the `DispatchWorkflow` node itself, in `ForEach.Body`.
 - **Missing wait**: the body dispatch gets a literal true `WaitForCompletion` (Elsa 4 defaults to false).
+- **Branches without waiting**: the `ChildCompleted`/`ChildFaulted` branches are nested port activities, not
+  connections, so the rewrite drops them itself, by not calling `AddChild`, and raises
+  `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` from there.
 - **With waiting**: the body is a `Flowchart` holding the dispatch.
   - The dispatch's `Completed` and `Faulted` outcomes connect to the converted `ChildCompleted` and `ChildFaulted`
     activities, when they exist.
@@ -117,7 +124,10 @@ The dispatch's `Inputs` is bound to a generated JavaScript expression over the c
 ### 4. Correlation id (FR-008)
 
 - The rewrite registers the lowered loop as a scope whose `currentItem` the body reads, and registers the generated
-  accessor `get{DefaultItemInputKey}` as an ambient name for the correlation function only. Name resolution
+  accessor `get{DefaultItemInputKey}`, and the `args.<camelKey>` member Elsa 3 also set
+  (`JavaScriptExpressionHandler` camelizes every evaluator argument into `args`), as ambient names for the correlation
+  function only. Without that, the rewrite refuses `args` with ForbiddenCapability and guidance that points to
+  `getVariable`/`getInput`, which would read the wrong value. Name resolution
   (`Elsa3ValueFlowLowerer`, the ambient resolver) resolves that accessor to
   `VariableExpressionParameterBinding(loopNodeId, "currentItem")`, so the JavaScript rewrite emits
   `variables.currentItem` with a pinned binding. A text replacement before the rewrite would not work: a

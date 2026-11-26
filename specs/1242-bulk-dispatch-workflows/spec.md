@@ -171,7 +171,8 @@ continues once both children have ended.
    carries the Elsa 3 value. `Completed` leads to the converted `ChildCompleted` activity and `Faulted` to the
    converted `ChildFaulted` activity.
 2. **Given** `WaitForCompletion` evaluates to false at run time, **When** the converted workflow runs, **Then** no
-   branch runs and the parent continues after dispatching, as in Elsa 3.
+   branch runs and the parent continues after dispatching, as in Elsa 3. The parallel ForEach's cap still applies:
+   more than 1,000 items fault (FR-010).
 3. **Given** a child is cancelled, or its branch is empty, **When** it ends, **Then** its pass ends and no branch runs.
 4. **Given** spec 1243 has not landed, **When** such a node is converted, **Then** it stays refused with
    `ELS3-ACTIVITY-NO-COUNTERPART` and guidance naming spec 1243.
@@ -218,8 +219,9 @@ guidance.
 
 - `Items` is null or empty: the loop completes at once with `Done`, as in Elsa 3.
 - More than 1,000 items with waiting: the parallel ForEach faults with `ParallelForEachCapExceeded`, where Elsa 3
-  dispatched them all. The converter cannot see the run-time count, so FR-010's warning states it. Without waiting,
-  `ForEach` has no cap.
+  dispatched them all. The converter cannot see the run-time count, so FR-010's warning states it. This holds for an
+  expression wait too, even when it evaluates to false, because an expression wait always lowers to the parallel
+  ForEach. With a literal-false wait, `ForEach` has no cap.
 - `Items` is not a collection, for example a string: Elsa 3 silently dispatched nothing. The same happened for a
   collection of value types, such as `[1, 2, 3]` held as `int[]`, because Elsa 3 only enumerates `IEnumerable<object>`.
   In Elsa 4, both `ForEach` and the parallel ForEach fault the activity on a value that is not a collection, and they
@@ -303,7 +305,8 @@ guidance.
   Any other binding is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. `Items` null maps to an unbound
   `Collection`, so the loop completes at once with `Done`.
 - **FR-008**: `CorrelationIdFunction` MUST become the body dispatch's `CorrelationId`.
-  - Each call of `get{DefaultItemInputKey}()` in it MUST read the lowered loop's current item. The JavaScript rewrite
+  - Each call of `get{DefaultItemInputKey}()`, and each read of `args.<key>` (the key camel-cased, for example
+    `args.item`), which Elsa 3 also set for the item, MUST read the lowered loop's current item. The JavaScript rewrite
     emits `variables.currentItem`, bound to the loop node, the current-item read of `ForEach` and of spec 1243's
     parallel ForEach. This is resolved through the rewrite's name resolution, not by a text replacement before it.
   - The rest of the expression goes through the existing JavaScript rewrite.
@@ -318,7 +321,7 @@ guidance.
 - **FR-010**: A conversion through FR-003 MUST raise spec 1243's `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED`, with text
   for bulk dispatch: Elsa 3 dispatched every child at once with no limit; Elsa 4 awaits at most 16 children at a time
   (the default degree, which the converter does not change) and faults with `ParallelForEachCapExceeded` above 1,000
-  items. The guidance points to large-fan-out.md's batching advice: a sequential `ForEach` over batches. No new code is
+  items, also when an expression wait evaluates to false. The guidance points to large-fan-out.md's batching advice: a sequential `ForEach` over batches. No new code is
   added for this. The fire-and-forget path (FR-002) uses `ForEach`, which has no cap, and raises no such warning.
 - **FR-011**: A conversion through FR-006 with a known target MUST raise a new warning,
   `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`. It says that only the child's declared inputs are passed. When it applies,

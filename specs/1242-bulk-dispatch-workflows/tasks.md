@@ -13,14 +13,17 @@ for spec 1243's parallel ForEach.
 - [ ] T002 [US1] Add `Elsa3NodeRewriteKind.BulkDispatchAsLoop`, register the rewrite in `Elsa3MappingFeature`, and
   replace the `NoCounterpart("BulkDispatchWorkflows")` entry in
   `extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Entries.cs` with the entry shape of plan §1: every
-  member classified once, the non-loop members as `Structure`.
+  member classified once, the non-loop inputs as `Structure`, and the two ports as `Elsa3MemberKind.Port`. Add
+  `ChildCompleted` and `ChildFaulted` (kind `port`) to `extensions/Elsa3/tests/Mapping/Tests/Fixtures/elsa3-activity-surface.json`.
 - [ ] T003 [US1] Add `Elsa3BulkDispatchAsLoopRewrite`.
   - Classify `WaitForCompletion` as FR-002 does: missing, `null`, a valueless literal, a case-insensitive literal, or
     an expression.
-  - For a literal false, emit a `ForEach` with a `DispatchWorkflow` body (FR-002, FR-004, ids from plan §2).
+  - For a literal false, emit a `ForEach` with a `DispatchWorkflow` body (FR-002, FR-004, ids from plan §2). Drop the
+    `ChildCompleted`/`ChildFaulted` branches here, by not adding them as children, with
+    `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`.
   - For every other wait, raise `NoCounterpart` with guidance naming spec 1243.
-- [ ] T004 [US1] Outcomes, in the graph builder (plan §5): `Done` → loop `Done`. Drop `Canceled`, `Completed` and the
-  child branches with the warning `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` (FR-012, the literal-false rows). Refuse
+- [ ] T004 [US1] Outcomes, in the graph builder (plan §5): `Done` → loop `Done`. Drop the `Canceled` and `Completed`
+  connections with the warning `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` (FR-012, the literal-false rows). Refuse
   `Canceled` or `Completed` toward a `WaitAll` join with `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`; add that code
   here.
 - [ ] T005 [P] [US1] Tests in `Elsa3BulkDispatchLoweringTests`:
@@ -38,8 +41,8 @@ for spec 1243's parallel ForEach.
     and to `raisedByRewrites` in `Elsa3ActivityMapCoverageTests` here.
   - The generated script uses `Object.entries`/`filter`/`Object.fromEntries` with literal names, with no computed
     member access (plan §3).
-- [ ] T007 [US3] Correlation function: handle the absent and literal cases (FR-008). Resolve `get{DefaultItemInputKey}` through name resolution as plan §4
-  says, and register the loop scope so `ResolutionDiffers` fires for outer-loop reads.
+- [ ] T007 [US3] Correlation function: handle the absent and literal cases (FR-008). Resolve
+  `get{DefaultItemInputKey}()` and `args.<camelKey>` through name resolution as plan §4 says, and register the loop scope so `ResolutionDiffers` fires for outer-loop reads.
 - [ ] T008 [US4] Member rules: `WorkflowDefinitionId` literal only; `DefaultItemInputKey` literal, null or absent
   (`Item`); `Items` null as unbound, any non-null literal refused; a missing wait emits literal true on the body dispatch;
   `StartNewTrace`/`ChannelName` Removed. `CancelChildOnParentCancellation` is synthetic false (FR-005, FR-007,
@@ -49,7 +52,7 @@ for spec 1243's parallel ForEach.
     (no VF-STATE-002);
   - a case-mismatched member gets the declared spelling;
   - an undeclared default key is omitted;
-  - correlation with `getItem()` and with a custom key;
+  - correlation with `getItem()`, with `args.item`, and with a custom key;
   - a read of an enclosing loop's current value inside the lowered loop, from a branch, the correlation function or a
     JavaScript static `Input` → `ResolutionDiffers`;
   - each static `Input` form;
