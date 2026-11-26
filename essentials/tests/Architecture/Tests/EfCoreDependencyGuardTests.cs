@@ -1415,7 +1415,11 @@ public sealed class EfCoreDependencyGuardTests
                 ["extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core", "Microsoft.EntityFrameworkCore.SqlServer"],
                 ["extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
-                [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"],
+                // The migration tooling (spec 1237 R-7) resolves EF only through the import ledger it composes; its tests
+                // resolve the tooling's closure.
+                ["extensions/Elsa3/src/Migration/Tooling/Elsa3.Migration.Tooling.csproj"] = CorePackages(),
+                ["extensions/Elsa3/tests/Migration/Tests/Elsa3.Migration.Tests.csproj"] = CorePackages()
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;

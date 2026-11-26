@@ -51,6 +51,8 @@
     <ProjectReference Include="../../../../extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\src\Cli\Worker\Elsa.Cli.Worker.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\src\Workflows\Design\CodeGeneration\Elsa.Workflows.Design.CodeGeneration.csproj" ReferenceOutputAssembly="false" />
+    <!-- The Elsa 3 migration tooling ships only with its CLI (spec 1237); until the CLI lands, nothing else builds it. -->
+    <ProjectReference Include="..\..\..\..\extensions\Elsa3\src\Migration\Tooling\Elsa3.Migration.Tooling.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
