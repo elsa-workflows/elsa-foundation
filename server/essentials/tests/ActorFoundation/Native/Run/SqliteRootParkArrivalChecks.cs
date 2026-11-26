@@ -220,9 +220,13 @@ internal static partial class SqliteHostLifetimeChecks
                 var root = (await admission.StartAsync(scope.Tenant, "cohort-start", new(fixture, SqliteArrivalActor.Withheld), null, null, token)).Actor!.Value;
                 EfStore.RootImage restored;
                 long oldEpoch;
+                string observedActor;
                 await using (var owner = await OwnAsync("authored-first"))
                 {
-                    await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running, Suspended: false });
+                    var initial = await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running, Suspended: false });
+                    var home = new InstanceRef(initial.Actor.Id).Partition;
+                    var (other, otherImage) = await StartInPartitionAsync(owner, home);
+                    observedActor = otherImage.Actor.Id;
                     var running = (await reads.GetAsync(scope, root, token))!.Selection!;
                     Require(await admission.OperateAsync(scope.Tenant, root, "cohort-fault", Kinds.Terminate, running, null, null, token) is
                         { Outcome: Contract.AdmissionOutcome.Accepted }, "a running control reaches the actor with authored withholding");
@@ -231,6 +235,11 @@ internal static partial class SqliteHostLifetimeChecks
                         { Outcome: Contract.AdmissionOutcome.Accepted }, "the Park admits an ordinary arrival while authors still withhold");
                     var kept = await DriveAsync(owner, root, row => row is { Revision: 3, Status: InstanceStatus.Faulted });
                     var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                    var otherSelection = (await reads.GetAsync(scope, other, token))!.Selection!;
+                    for (var index = 0; index < 8; index++)
+                        Require(await admission.OperateAsync(scope.Tenant, other, $"observed-{index}", Kinds.Terminate, otherSelection,
+                            kept.AsOf + 120_000, null, token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                            "an earlier scheduled control was admitted on another root in the partition");
                     Require(await admission.OperateAsync(scope.Tenant, root, "cohort-stale", Kinds.Terminate, selection,
                             kept.AsOf + 120_000, null, token) is { Outcome: Contract.AdmissionOutcome.Accepted } &&
                         await admission.OperateAsync(scope.Tenant, root, "cohort-recover", Kinds.Recover, selection, null, null, token) is
@@ -244,9 +253,14 @@ internal static partial class SqliteHostLifetimeChecks
                     UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {restored.Actor.Id} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
                     """, token);
                 await using var replacement = await OwnAsync("authored-next");
+                var partition = new InstanceRef(restored.Actor.Id).Partition;
+                var epoch = await db.Partitions.Where(row => row.Id == partition).Select(row => row.Epoch).SingleAsync(token);
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Due" = 0, "Seen" = {epoch}
+                    WHERE "Target" = {observedActor} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                    """, token);
                 var settled = await DriveAsync(replacement, root, row => row.Revision > restored.Revision &&
                     row is { Status: InstanceStatus.Running, Suspended: false });
-                var partition = new InstanceRef(settled.Actor.Id).Partition;
                 var journal = (await store.ReadJournalOfAsync(partition, settled.Actor.Id, 0, token)).Single(row => row.Revision == settled.Revision);
                 Require(replacement.Epoch > oldEpoch && replacement.Owns && executor.Order.Count == 0 &&
                     journal.Entries.Contains("\"Reason\":\"selection\"", StringComparison.Ordinal) &&
@@ -254,8 +268,20 @@ internal static partial class SqliteHostLifetimeChecks
                         SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {settled.Actor.Id} AND "Kind" = 'cohort-arrival'
                             AND NOT "Done" AND "FoundationKeptBy" IS NULL AND "FoundationReleasedBy" = 1 AND "Payload" = {payload}) AS "Value"
                         """).SingleAsync(token), "a cold owner settles the stale control while the withheld arrival retains its released generation");
-                Require(cohortPlan.Plan.Any(step => step.Contains("IX_FoundationRootInbox_CohortWaiting", StringComparison.Ordinal) &&
-                    step.Contains("Partition=?", StringComparison.Ordinal)), "the SQLite cohort sampler seeks the waiting controls by partition");
+                Require(cohortPlan.Plan.Any(step => step.Contains("IX_FoundationRootInbox_CohortSequence", StringComparison.Ordinal) &&
+                    step.Contains("Partition=? AND Seq>? AND Seq<?", StringComparison.Ordinal)),
+                    "the SQLite cohort sampler seeks waiting controls inside the sequence ceiling");
+
+                async Task<(Contract.ActorRef Root, EfStore.RootImage Image)> StartInPartitionAsync(Worker owner, int home)
+                {
+                    for (var attempt = 0; attempt < 32; attempt++)
+                    {
+                        var started = (await admission.StartAsync(scope.Tenant, $"other-{attempt}", new(fixture, "{}"), null, null, token)).Actor!.Value;
+                        var image = await DriveAsync(owner, started, row => row is { Revision: 1, Status: InstanceStatus.Running });
+                        if (new InstanceRef(image.Actor.Id).Partition == home) return (started, image);
+                    }
+                    throw new InvalidOperationException("The fixture could not place another root in the sampled partition.");
+                }
             }
 
             async Task CheckCreatorRecoverAsync(Worker owner)

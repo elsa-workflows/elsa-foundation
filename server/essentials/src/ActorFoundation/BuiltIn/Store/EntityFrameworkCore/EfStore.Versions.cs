@@ -363,7 +363,7 @@ internal static class StoreDefinitionsRevision
     private const int LegacyPostgreSqlRevision = 1;
     private const int PostgreSqlRevision = 4;
     private const int SqliteRevision = 8;
-    private const int SqliteParkRecoverRevision = 2;
+    private const int SqliteParkRecoverRevision = 3;
 
     internal static StoreVersionEntity? Seed(KernelDb db)
     {

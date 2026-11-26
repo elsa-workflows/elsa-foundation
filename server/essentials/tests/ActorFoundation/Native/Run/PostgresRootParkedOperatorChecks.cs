@@ -998,6 +998,18 @@ internal static class PostgresRootParkedOperatorChecks
             var olderSelection = await set.ParkSelectionAsync(offerable, 2);
             var youngerSelection = await set.ParkSelectionAsync(withheld, 2);
             var due = younger.AsOf + 120_000;
+            await using (var source = OpenSample())
+            {
+                var epoch = await source.Partitions.Where(row => row.Id == partition).Select(row => row.Epoch).SingleAsync(stop);
+                for (var pass = 0; pass < 8; pass++)
+                    Check(await set.TerminateAsync(tail, $"observed-tail-{pass}"),
+                        "the shared partition has an earlier ready control");
+                var tailActor = (await set.ImageAsync(tail)).Actor.Id;
+                await set.ExecuteAsync($"""
+                    UPDATE "Messages" SET "Seen" = {epoch}
+                    WHERE "Target" = {tailActor} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                    """);
+            }
             for (var pass = 0; pass < 8; pass++)
                 Check(await set.OperateAsync(tail, $"future-tail-{pass}", Kinds.Terminate, set.Selections[tail], dueAt: due),
                     "the shared partition has an earlier scheduled control that is still in the future");
@@ -1016,15 +1028,24 @@ internal static class PostgresRootParkedOperatorChecks
                     WHERE "Target" IN ({older.Actor.Id}, {younger.Actor.Id}) AND "Kind" = {Kinds.Terminate} AND NOT "Done"
                     """);
                 await ProbeSweepAsync(younger);
+                await set.ExecuteAsync($"""
+                    INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
+                    SELECT 'unrelated-' || key, 0, {partition}, {older.Actor.Id}, 'ordinary', {due}, 0, 0, 0, false
+                    FROM generate_series(1, 2048) key
+                    """);
+                await set.ExecuteAsync($"""ANALYZE "Messages" """);
                 observation.ObserveCohortPlan = true;
                 await set.DriveAsync(withheld, row => row is { Revision: 6, Status: InstanceStatus.Running });
                 set.Answered("younger-control", "StaleSelection");
                 var candidatePlan = observation.CohortPlan.SkipWhile(line => line.Trim() != "CTE candidates").Skip(1)
                     .TakeWhile(line => line.StartsWith("    ", StringComparison.Ordinal)).ToArray();
-                Check(candidatePlan.Any(line => line.Contains("IX_FoundationRootInbox_CohortWaiting", StringComparison.Ordinal) &&
+                var boundedPlan = candidatePlan.Any(line => line.Contains("IX_FoundationRootInbox_CohortSequence", StringComparison.Ordinal) &&
                         (line.Contains("Index Scan", StringComparison.Ordinal) || line.Contains("Index Only Scan", StringComparison.Ordinal))) &&
-                    candidatePlan.Any(line => line.Contains("->  Limit", StringComparison.Ordinal)),
-                    "the bounded cohort window seeks the waiting-control index and limits candidates");
+                    candidatePlan.Any(line => line.Contains("->  Limit", StringComparison.Ordinal)) &&
+                    candidatePlan.Any(line => line.Contains("Index Cond:", StringComparison.Ordinal) &&
+                        line.Contains("\"Seq\" <= ", StringComparison.Ordinal) && line.Contains(".\"Through\"", StringComparison.Ordinal));
+                Check(boundedPlan, boundedPlan ? "the cohort window seeks within the sequence ceiling and limits candidates"
+                    : string.Join(Environment.NewLine, observation.CohortPlan));
                 Check(!set.AnsweredAny("older-control") && await set.ImageAsync(offerable) is { Revision: 4 } &&
                     !set.Probe.Saw(withheld, "withheld-cohort") && !set.StoodDown,
                     "a one-row poll skips a blocked older candidate and settles the younger root's control");
@@ -1099,7 +1120,7 @@ internal static class PostgresRootParkedOperatorChecks
                     found = offered.Messages is [{ Message: { Kind: Kinds.Terminate } message }] &&
                         message.Target.Id == waiting.Actor.Id && message.Operator?.RootParkFacts is not null;
                 }
-                Check(found, "the sampler revisits the missed control despite earlier future controls and continued new admissions");
+                Check(found, "the sampler revisits the missed control despite observed controls, future controls and continued admissions");
 
                 Task MarkReleasedAsync(long seen) => set.ExecuteAsync($"""
                     UPDATE "Messages" SET "Seen" = {seen} WHERE "Target" = {waiting.Actor.Id} AND "Kind" = 'withheld-cohort' AND NOT "Done"
@@ -3115,7 +3136,7 @@ internal static class PostgresRootParkedOperatorChecks
             if (command is NpgsqlCommand cohort &&
                 cohort.CommandText.Contains("/* root-cohort-waiting */", StringComparison.Ordinal))
             {
-                CohortWindows.Add(((int[])cohort.Parameters[0].Value!, (int)cohort.Parameters[5].Value!));
+                CohortWindows.Add(((int[])cohort.Parameters[0].Value!, (int)cohort.Parameters[4].Value!));
                 if (!ObserveCohortPlan) return result;
                 ObserveCohortPlan = false;
                 var planOptions = new NpgsqlConnectionStringBuilder(connection) { Options = "-c enable_seqscan=off" };
