@@ -13,6 +13,8 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["sqlite-workbench-core-preview", var workbench])
+    return await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunSqliteAsync(workbench);
 if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
 {
     var workbenchExecutable = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_WORKBENCH");

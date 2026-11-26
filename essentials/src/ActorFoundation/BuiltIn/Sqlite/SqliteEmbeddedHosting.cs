@@ -15,6 +15,25 @@ namespace Kernel.Foundation.Sqlite;
 /// <summary>Starts one Embedded node against an installed SQLite kernel qualification store.</summary>
 public static partial class SqliteEmbeddedHosting
 {
+    /// <summary>Installs or verifies a dedicated shipped SQLite file for one Embedded owner.</summary>
+    /// <remarks>The parent directory must exist. An existing file must be empty or carry this build's shipped definitions.</remarks>
+    public static Task InstallShippedAsync(string databasePath, CancellationToken cancellationToken = default) =>
+        InstallShippedFileAsync(databasePath, cancellationToken);
+
+    internal static async Task<string> InstallShippedFileAsync(string databasePath, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        cancellationToken.ThrowIfCancellationRequested();
+        var path = Path.GetFullPath(databasePath);
+        // Create a missing file without opening SQLite or changing an existing store before acquiring the host lock.
+        using (new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite)) { }
+        using var file = AcquireFile(path, forRuntime: true);
+        await using var db = KernelDb.ForSqliteRootShipped(file.Options);
+        await EfStore.InstallSqliteShippedAsync(db, partitions: 1, cancellationToken);
+        await UseWalAsync(db, cancellationToken);
+        return file.Path;
+    }
+
     // A fault or kill may leave work running. Its runtime lease remains held through process exit.
     private static readonly object FileGate = new();
     private static readonly Dictionary<string, ActiveFile> ActiveFiles = new(StringComparer.Ordinal);
@@ -81,12 +100,7 @@ public static partial class SqliteEmbeddedHosting
                         throw new InvalidOperationException("The SQLite kernel database has no installed partitions.");
                 }
 
-                await db.Database.OpenConnectionAsync(cancellationToken);
-                await using var wal = db.Database.GetDbConnection().CreateCommand();
-                wal.CommandText = "PRAGMA journal_mode = WAL";
-                if (await wal.ExecuteScalarAsync(cancellationToken) is not string mode ||
-                    !mode.Equals("wal", StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("The SQLite kernel database could not enable WAL.");
+                await UseWalAsync(db, cancellationToken);
             }
 
             var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch) { CommitSql = CommitSql.Owned };
@@ -123,6 +137,15 @@ public static partial class SqliteEmbeddedHosting
             file.Dispose();
             throw;
         }
+    }
+
+    private static async Task UseWalAsync(KernelDb db, CancellationToken token)
+    {
+        await db.Database.OpenConnectionAsync(token);
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "PRAGMA journal_mode = WAL";
+        if (await command.ExecuteScalarAsync(token) is not string mode || !mode.Equals("wal", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The SQLite kernel database could not enable WAL.");
     }
 
     private static FileLease AcquireFile(string databasePath, bool forRuntime = false, SqliteDirectRequests? requests = null)

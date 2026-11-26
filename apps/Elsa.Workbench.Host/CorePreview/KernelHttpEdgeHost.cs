@@ -4,13 +4,10 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Api.AspNetCore;
 using Elsa.Workflows.Runtime.KernelHost;
-using Kernel.EntityFramework;
-using Kernel.Foundation.Postgres;
 using Kernel.Native;
 using Microsoft.AspNetCore.Http.Features;
 using Contract = Kernel.Foundation.Contracts;
 using NativeHttpRequest = Kernel.Native.HttpRequest;
-using WorkflowActor = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Elsa.Workbench.CorePreview;
 
@@ -23,7 +20,9 @@ namespace Elsa.Workbench.CorePreview;
 /// start routes are served: a wait route, or no route, is not found. The route is matched before the body is read; a body
 /// over <c>Elsa:CorePreview:HttpMaxRequestBodyBytes</c> (default 1 MiB, as on the old core) is refused with 413.
 /// </summary>
-internal sealed class KernelHttpEdgeHost(KernelServing serving, Func<KernelDb> open, PostgresDirectRequests requests,
+internal sealed class KernelHttpEdgeHost(KernelServing serving,
+    Func<CancellationToken, ValueTask<(Contract.IIngress Ingress, Contract.IActorReads Reads)>> openFoundation,
+    Func<CancellationToken, ValueTask<long>> readClock,
     Contract.BoundScope tenant, string basePath, TimeSpan timeout, long maxRequestBodyBytes)
 {
     internal const string BasePathKey = "Elsa:CorePreview:HttpBasePath";
@@ -35,7 +34,9 @@ internal sealed class KernelHttpEdgeHost(KernelServing serving, Func<KernelDb> o
 
     private readonly SemaphoreSlim _opening = new(1, 1);
     private readonly TaskCompletionSource _installed = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private PostgresPreviewFoundation? _foundation;
+    private Foundation? _foundation;
+
+    private sealed record Foundation(Contract.IIngress Ingress, Contract.IActorReads Reads);
 
     internal string BasePath { get; } = basePath;
 
@@ -107,28 +108,36 @@ internal sealed class KernelHttpEdgeHost(KernelServing serving, Func<KernelDb> o
         if (KernelHttpEdge.Start(serving, route, message) is not { } start) return KernelHttpEdge.NotFound;
 
         var foundation = await FoundationAsync(token);
-        var deadline = await requests.ReadClockAsync(token) + (long)timeout.TotalMilliseconds;
+        var deadline = await readClock(token) + (long)timeout.TotalMilliseconds;
         // Each request is its own operation: an HTTP edge picks a fresh id, so a retried request is a new start.
-        var reply = await foundation.RequestAsync(tenant, new Contract.Target.Start(start.Spec), Guid.NewGuid().ToString("N"),
+        var reply = await foundation.Ingress.RequestAsync(tenant, new Contract.Target.Start(start.Spec), Guid.NewGuid().ToString("N"),
             Contract.Kinds.Start, null, null, new Contract.RequestOptions(null, deadline, start.RespondBeforeCommit), token);
         return KernelHttpEdge.Answer(reply);
     }
 
-    /// <summary>The store is installed (<see cref="PostgresPreviewHosting.InstallShippedAsync"/>): the foundation may open.</summary>
+    /// <summary>The store is installed and the foundation may open.</summary>
     internal void StoreInstalled() => _installed.TrySetResult();
 
     /// <summary>
     /// The foundation the edge requests through, opened once when first needed; the kernel's run reads use it too. A request
     /// that comes while the host still installs its store waits for the install, so it is not refused by a store not yet there.
     /// </summary>
-    internal async ValueTask<PostgresPreviewFoundation> FoundationAsync(CancellationToken token)
+    internal async ValueTask<Contract.IActorReads> ReadsAsync(CancellationToken token) => (await FoundationAsync(token)).Reads;
+
+    internal Task WaitForStoreAsync(CancellationToken token) => _installed.Task.WaitAsync(token);
+
+    private async ValueTask<Foundation> FoundationAsync(CancellationToken token)
     {
         if (Volatile.Read(ref _foundation) is { } opened) return opened;
-        await _installed.Task.WaitAsync(token);
+        await WaitForStoreAsync(token);
         await _opening.WaitAsync(token);
         try
         {
-            return _foundation ??= await PostgresPreviewHosting.OpenFoundationAsync(open, WorkflowActor.ActorType, requests, cancellationToken: token);
+            if (_foundation is not null) return _foundation;
+            var (ingress, reads) = await openFoundation(token);
+            var foundation = new Foundation(ingress, reads);
+            Volatile.Write(ref _foundation, foundation);
+            return foundation;
         }
         finally { _opening.Release(); }
     }
