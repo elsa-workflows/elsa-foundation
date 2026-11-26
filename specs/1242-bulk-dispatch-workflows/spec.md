@@ -229,8 +229,12 @@ and on-completed-callbacks suites pass.
 
 **The Elsa 4 activity**
 
-- **FR-001**: Elsa 4 MUST provide `BulkDispatchWorkflows` (type key `Elsa.BulkDispatchWorkflows`) in the
-  DispatchWorkflow activity package, as a structural activity.
+- **FR-001**: Elsa 4 MUST provide `BulkDispatchWorkflows` in the DispatchWorkflow activity package, as a structural
+  activity. It has two names:
+  - the runtime activity type `Elsa.BulkDispatchWorkflows`;
+  - the catalog key, which is its CLR full name, `Elsa.Activities.DispatchWorkflow.Runtime.Activities.BulkDispatchWorkflows`.
+
+  The converter targets the catalog key, as it does for `DispatchWorkflow`.
 - **FR-002**: The bulk node's only input is `Items`: the collection, evaluated once. There is no channel, trace,
   degree, batch or wait input on the bulk node.
 - **FR-003**: Slots, all single and rendered through Studio's generic slot rendering with no Studio-specific code:
@@ -241,7 +245,8 @@ and on-completed-callbacks suites pass.
     - `WaitForCompletion` and `CancelChildOnParentCancellation`.
 
     Publish refuses the bulk node when `Dispatch` is empty or holds anything other than a `DispatchWorkflow`, with
-    diagnostic `activity.bulk-dispatch.dispatch-slot`.
+    draft-validation diagnostic `BulkDispatch/DispatchSlot`. In Studio a new bulk node starts with the slot empty, and
+    that diagnostic tells the author to drop a Dispatch Workflow there.
   - **`ChildCompleted`** and **`ChildFaulted`**: optional, as `If.Then` and `If.Else` are.
 - **FR-004**: For each item, the activity MUST schedule the `Dispatch` node once:
   - with its own iteration id (item-indexed);
@@ -275,8 +280,9 @@ and on-completed-callbacks suites pass.
 - **FR-008**: Faults of child executions, `Dispatch` and slot alike:
   - **A `Dispatch` execution that faults itself**, for example on an input the child does not declare: when a
     `ChildFaulted` slot is present, the fault is absorbed and `ChildFaulted` runs for that item.
-  - **Every other child fault** stays a blocking incident on its pass, through the child-fault intervention path. The
-    bulk activity defers; it does not fault, and the other passes go on.
+  - **Every other fault** stays a blocking incident on its pass, through the child-fault intervention path. That
+    covers a direct slot child, and an activity deeper inside a slot (for example inside a `Sequence`), which reaches
+    the bulk activity as a descendant fault. The bulk activity defers; it does not fault, and the other passes go on.
   - **Retry**: retrying the faulted activity (`RetryFaultedActivity`) lets the pass end and the bulk activity continue.
 
   No fault is absorbed without a `ChildFaulted` slot to show it.
@@ -330,8 +336,8 @@ and on-completed-callbacks suites pass.
     access (VF-STATE-002).
   - **`ParentInstanceId`** is not passed, because the parent link lives in the dispatch record.
   - **Warning**: a conversion raises warning `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`. It says that only declared
-    inputs are passed, that a child-declared `ParentInstanceId` is no longer filled, and that the static `Input` is now
-    evaluated per item.
+    inputs are passed, that a child-declared `ParentInstanceId` is no longer filled, that the static `Input` is now
+    evaluated per item, and that `ChildFaulted` now also runs for cancelled and undispatchable children (FR-018).
 - **FR-017**: Outcomes:
   - `Done` maps to `Done`.
   - `Completed` (Elsa 3 emitted it with `Done` when it waited and had items):
@@ -362,7 +368,8 @@ and on-completed-callbacks suites pass.
 | `Completed`/`Canceled` route with no faithful meaning (FR-017) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` |
 | A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution. Guidance: remove the read; the child's result is not available in the branch yet |
 
-- **FR-020**: Every conversion MUST raise warning `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED`. It says that more than 1,000
+- **FR-020**: Every conversion MUST raise warning `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED`, as an entry-level behaviour
+  warning on the map entry. It says that more than 1,000
   items fault in Elsa 4 (FR-007), and that at most 16 passes are open at once (FR-005), where Elsa 3 dispatched every
   child at once. It points to batching with a sequential `ForEach` over batches.
 - **FR-021**: New codes go to `Elsa3ActivityDiagnosticCodes` and the spec 236 diagnostic-code contract, each in the
@@ -384,12 +391,14 @@ and on-completed-callbacks suites pass.
   - the converter mapping README;
   - the spec 236 member map.
 - **FR-024**: No new scheduler is needed. Every `ScheduleChildActivity` call gets its own activity execution id, and
-  nothing deduplicates by node (`SchedulerWorkItems`), so one node can run once per item at the same time. Spec 1243
-  needs the same pieces, and the two specs MUST share them; whichever is implemented first owns them:
-  - `StructuredExecutionIdentity.Iteration` with a neutral prefix or kind parameter, keeping `ForEach`'s ids unchanged;
-  - `LoopIterationScopeRequest` with `ActivitySchedulingProvenance.From(…, iterationId)`, as `ForEach` uses it;
-  - `LoopCollection`, `ForEach`'s collection resolution extracted to
-    `essentials/src/Activities/ControlFlow/Loops/LoopCollection.cs`.
+  nothing deduplicates by node (`SchedulerWorkItems`), so one node can run once per item at the same time.
+  - 1242 uses the shared runtime contracts `LoopIterationScopeRequest` and
+    `ActivitySchedulingProvenance.From(…, iterationId)`, as `ForEach` and BPMN do.
+  - It keeps two small helpers local in the DispatchWorkflow package rather than referencing
+    `Elsa.Activities.ControlFlow` ("duplication beats dependency"): the item-indexed iteration id and the collection
+    resolution.
+  - If spec 1243 later moves those helpers to a shared runtime project, 1242 may switch to them. It does not wait for
+    that.
 
 ### Key Entities
 

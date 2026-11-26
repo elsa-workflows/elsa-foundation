@@ -7,19 +7,21 @@ converter) needs the activity in the catalog.
 
 ## Phase 1: The Elsa 4 activity (US1, US2)
 
-- [ ] T001 Decide where the `Dispatch` slot check runs (the handler's compile step or a submitted-tree validator),
-  and whether the catalog's initial payload can start the slot with an empty `DispatchWorkflow` (plan §1). Check which
-  FR-024 pieces exist on the initiative branch (the neutral iteration-id prefix, `LoopCollection`); reuse them if they
-  do. Record the outcome in the PR.
-- [ ] T002 [US1] Add `BulkDispatchWorkflows` with `Items`, the three slots, type key, cap and window constants and `Done` outcome in
-  `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/` (FR-001–FR-003, FR-009).
-- [ ] T003 [US1] Add the structure handler for the three slots and the `Dispatch` slot check (FR-003). Register it in
-  the DispatchWorkflow features. `DispatchPinSource` is not changed.
+- [ ] T001 Check whether spec 1243 has already moved the iteration-id or collection helpers to a shared runtime
+  project (FR-024). Reuse them if so; otherwise keep the local helpers.
+- [ ] T002 [US1] Add `BulkDispatchWorkflows` with `Items`, the three slots, the runtime type and catalog key, the cap
+  and window constants and the `Done` outcome in `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/`
+  (FR-001–FR-003, FR-009).
+- [ ] T003 [US1] Add the structure handler: the three slots, `ProjectIterationVariables` for `currentItem` and
+  `currentIndex`, and `Unordered` for every child pair. Add the `BulkDispatch/DispatchSlot` draft validator, with a
+  Validations.Core reference (FR-003, plan §1). Register both in the DispatchWorkflow features. `DispatchPinSource` is
+  not changed.
 - [ ] T004 [US1] [US2] Scheduling and completion:
   - `Dispatch` once per item with iteration id and scope, at most 16 passes open (FR-004, FR-005);
   - routing by outcome and completion, with the ended-index state of plan §2 (FR-006);
   - the cap (FR-007);
-  - faults: absorb a `Dispatch` fault when `ChildFaulted` is present, otherwise intervene and defer (FR-008).
+  - faults, child and descendant: absorb a `Dispatch` fault when `ChildFaulted` is present, otherwise intervene and
+    defer (FR-008).
 - [ ] T005 [P] [US1] [US2] Runtime tests (plan, Test scope: Runtime).
 - [ ] T006 [P] [US1] Check in Studio that the designer shows the three slots through the generic rendering, and that
   the instance view shows the per-item `Dispatch` executions. Add no Studio-specific code (FR-003).
@@ -27,23 +29,24 @@ converter) needs the activity in the catalog.
 
 ## Phase 2: Converter (US3, US4)
 
-- [ ] T008 [US3] Map entry for `Elsa.BulkDispatchWorkflows`, with the ports added to the surface fixture. Add a node
-  rewrite that emits the `{elsa3NodeId}.dispatch` `DispatchWorkflow` into `Dispatch`, with the member rules of
-  FR-012–FR-014 on it (FR-011).
-- [ ] T009 [US3] Node rewrite for the per-item `Inputs` and `CorrelationId` (FR-015, FR-016), with item-read
+- [ ] T008 [US3] Map entry for the CLR key `Elsa.Activities.DispatchWorkflow.Runtime.Activities.BulkDispatchWorkflows`:
+  - `Items` (FR-014) and the two ports on the bulk entry, added to the surface fixture as ports;
+  - every dispatch member as `Structure`;
+  - `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` as the entry's behaviour warning (FR-011, FR-020). Add that code here.
+- [ ] T009 [US3] The one rewrite, `BulkDispatchChild`, builds the `{elsa3NodeId}.dispatch` child marked
+  `SynthesizedFrom`, with every member set explicitly (FR-012, FR-013, FR-015, FR-016, plan §3). Add item-read
   resolution in `Elsa3ValueFlowLowerer`. Add `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` and
   `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS` here.
 - [ ] T010 [US3] Outcome step in `Elsa3FlowchartGraphBuilder` (FR-017). Add `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`
   here.
 - [ ] T011 [US4] Child-result reads in the slots (FR-019). Add `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ` here.
-- [ ] T012 Raise `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` on every conversion (FR-020). Add it here.
-- [ ] T013 [P] [US3] [US4] Converter tests (plan, Test scope: Converter). Remove `no-counterpart:BulkDispatchWorkflows`
+- [ ] T012 [P] [US3] [US4] Converter tests (plan, Test scope: Converter). Remove `no-counterpart:BulkDispatchWorkflows`
   from `Elsa3ConversionDiagnosticsTests` and keep ParallelForEach.
-- [ ] T014 [P] Update the converter README and the spec 236 member map and diagnostic-code contract (FR-021, FR-023).
-- [ ] T015 Convert `performance-concurrency.json` (with its child) and the composition root locally, and hand FR-022
+- [ ] T013 [P] Update the converter README and the spec 236 member map and diagnostic-code contract (FR-021, FR-023).
+- [ ] T014 Convert `performance-concurrency.json` (with its child) and the composition root locally, and hand FR-022
   over to S-15 through the shared notes. Ask S-15 to run the concurrency suite and record the 300-children result.
 
 ## Phase 3: Finish
 
-- [ ] T016 Run the scoped tests and the gate checker, and set the spec status to Implemented in the PR that finishes
+- [ ] T015 Run the scoped tests and the gate checker, and set the spec status to Implemented in the PR that finishes
   phase 2.
