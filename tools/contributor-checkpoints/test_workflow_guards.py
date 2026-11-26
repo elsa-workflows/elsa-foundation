@@ -200,7 +200,7 @@ class ServerProfileArchiveTests(unittest.TestCase):
                        "annotations": {"vnd.docker.reference.type": "attestation-manifest", "vnd.docker.reference.digest": runtime["digest"]}}
         valid = oci_descriptor({"manifests": [runtime, attestation]})
         extra_runtime = oci_descriptor({"manifests": [runtime, foreign]})
-        files["index.json"] = json.dumps({"manifests": [valid, extra_runtime]}).encode()
+        files["index.json"] = json.dumps({"manifests": [valid, foreign, extra_runtime]}).encode()
 
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "image.tar.gz"
