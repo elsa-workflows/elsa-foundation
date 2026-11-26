@@ -73,8 +73,10 @@ public sealed partial class EfStore
                 AND NEW."FoundationParkAt" = OLD."FoundationParkAt" AND NEW."FoundationParkRevision" = OLD."FoundationParkRevision"
                 AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
                 AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault" AND NEW."Suspended" = OLD."Suspended"
-                AND NEW."History" IS NOT DISTINCT FROM OLD."History")
-            """ : db.UsesRootParkedOperators ? """
+                AND NEW."History" IS NOT DISTINCT FROM OLD."History"/*park-arrival-footprint*/)
+            """.Replace("/*park-arrival-footprint*/", db.UsesRootParkedOperators &&
+                (db.UsesSqliteShippedInstall || db.UsesRootComposedParkRecovery) ? " " + ParkedClearingRow(db) : "", StringComparison.Ordinal)
+            : db.UsesRootParkedOperators ? """
             (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND OLD."FoundationParkAt" IS NOT NULL /*parked-clearing-pinned*/
                 AND NEW."FoundationParkAt" = OLD."FoundationParkAt" AND NEW."FoundationTerminalRevision" IS NULL
                 AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"

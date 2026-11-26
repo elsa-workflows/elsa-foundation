@@ -113,7 +113,7 @@ public sealed partial class EfStore
     {
         if (db.UsesSqliteRootRuntime)
             return issue is null && await SettleSqliteRootInputsAsync(db, reference, actor, expected,
-                expectedEnvelopes, suspended, cancellationToken);
+                expectedEnvelopes, suspended, cancellationToken, parked);
 
         var home = new InstanceRef(actor.Id).Partition;
         var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";

@@ -28,7 +28,7 @@ public sealed partial class EfStore
 
     private static async Task<bool> BindSqliteParkOpeningAsync(KernelDb db, RootParkOpening park, CancellationToken token)
     {
-        if (!park.Opening || park.Reason != ParkKeepReason.Consumed) return false;
+        if (park.Opening ? park.Reason != ParkKeepReason.Consumed : !db.UsesRootParkArrivals) return false;
         var root = park.Root;
         var recorded = park.Inputs is [{ FoundationJobResult: true }];
         var scope = recorded ? RootTimedJobScope : InboxKey.FoundationOccurrenceScope;
@@ -41,18 +41,24 @@ public sealed partial class EfStore
         if (!inputs.SequenceEqual(park.Inputs)) return false;
 
         var revision = park.JournalRevision;
+        var prior = park.Opening ? null : await ReadSqliteParkMarkAsync(db, root.Actor, root.Partition, token);
+        if (!park.Opening && prior is not { At: > 0, Revision: > 0, Clearing: null }) return false;
+        var parkAt = prior?.At ?? at;
+        var openRevision = prior?.Revision ?? revision;
+        var priorStatus = park.Opening ? InstanceStatus.Running : InstanceStatus.Faulted;
         if (await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Instances" SET "Status" = {(int)InstanceStatus.Faulted}, "Fault" = {park.EncodedFault},
-                "Revision" = {revision}, "FoundationWriteRevision" = {revision}, "FoundationParkAt" = {at}, "FoundationParkRevision" = {revision}
+                "Revision" = {revision}, "FoundationWriteRevision" = {revision}, "FoundationParkAt" = {parkAt}, "FoundationParkRevision" = {openRevision}
             WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" = {park.Expected}
-                AND "Status" = {(int)InstanceStatus.Running} AND NOT "Retired" AND "Suspended" = {park.Suspended}
-                AND "FoundationParkAt" IS NULL AND "FoundationParkRevision" IS NULL AND "FoundationParkClearing" IS NULL
+                AND "Status" = {(int)priorStatus} AND NOT "Retired" AND "Suspended" = {park.Suspended}
+                AND "FoundationParkAt" IS NOT DISTINCT FROM {prior?.At} AND "FoundationParkRevision" IS NOT DISTINCT FROM {prior?.Revision}
+                AND "FoundationParkClearing" IS NULL AND ({park.Opening} OR "Fault" = {park.EncodedFault})
                 AND "FoundationTerminalAt" IS NULL AND "FoundationTerminalRevision" IS NULL
                 AND "Jobs" IS NOT DISTINCT FROM {park.Jobs} AND "NextJobGeneration" IS NOT DISTINCT FROM {park.NextJobGeneration}
                 AND "FoundationTenant" = {root.Tenant} AND "FoundationReference" = {root.Reference}
                 AND EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Actor" = {root.Actor} AND "Partition" = {root.Partition}
                     AND "Tenant" = {root.Tenant} AND "Reference" = {root.Reference} AND "Creation" = 1 AND "Fingerprint" = {root.Fingerprint})
-            """, token) != 1 || !await KeepSqliteParkInputsAsync(db, root.Actor, root.Partition, scope, ids, token))
+            """, token) != 1 || !await KeepSqliteParkInputsAsync(db, root.Actor, root.Partition, scope, ids, park.Reason, token))
             return false;
 
         if (park.Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync(WithSqliteOperatorPredicate($"""
@@ -62,15 +68,22 @@ public sealed partial class EfStore
                 AND "Id" IN (SELECT value FROM json_each({Json.Write(park.Returned)}))
             """), token) != park.Returned.Length) return false;
 
-        await db.Database.ExecuteSqlInterpolatedAsync($"""
-            DELETE FROM "Subscriptions" WHERE "Instance" = {root.Actor} AND "Partition" = {root.Partition}
-            """, token);
-        return await VerifySqliteParkProjectionAsync(db, root.Tenant, root.Reference, revision, park.EncodedFault, token);
+        if (!park.Opening && RereadsParkFacts(db))
+            await db.Database.ExecuteSqlInterpolatedAsync(WithSqliteOperatorPredicate($"""
+                UPDATE "Messages" SET "Seen" = 0, "Trial" = 0
+                WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                    AND "EventMatch" IS NULL AND NOT "Done" AND (/*supported-operator*/) AND "Start" LIKE {ParkSelectedOperator}
+                """), token);
+        if (park.Reason == ParkKeepReason.Consumed)
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                DELETE FROM "Subscriptions" WHERE "Instance" = {root.Actor} AND "Partition" = {root.Partition}
+                """, token);
+        return await VerifySqliteParkProjectionAsync(db, root.Tenant, root.Reference, openRevision, park.EncodedFault, token);
     }
 
     private static async Task<bool> KeepSqliteParkInputsAsync(KernelDb db, string actor, int partition, long scope,
-        string[] ids, CancellationToken token) => await db.Database.ExecuteSqlInterpolatedAsync($"""
-        UPDATE "Messages" SET "Done" = 1, "Trial" = 0, "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
+        string[] ids, ParkKeepReason reason, CancellationToken token) => await db.Database.ExecuteSqlInterpolatedAsync($"""
+        UPDATE "Messages" SET "Done" = 1, "Trial" = 0, "FoundationKeptBy" = {(short)reason}
         WHERE "Target" = {actor} AND "Partition" = {partition} AND "InboxScope" = {scope} AND "EventMatch" IS NULL
             AND "Id" IN (SELECT value FROM json_each({Json.Write(ids)})) AND NOT "Done" AND "FoundationKeptBy" IS NULL
         """, token) == ids.Length;

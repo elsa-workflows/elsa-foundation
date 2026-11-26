@@ -25,14 +25,15 @@ public sealed partial class EfStore
     }
 
     // The discovered birth join already limits creators to their exact tenant/reference envelope.
-    private static string SqliteRootPollScope() => $"""
+    private static string SqliteRootPollScope(bool includeParkArrivals) => $"""
         AND m."EventMatch" IS NULL AND (m."InboxScope" = 0 OR (
             m."InboxScope" IN ({RootTimedJobScope}, {InboxKey.FoundationOccurrenceScope}) AND EXISTS (
                 SELECT 1 FROM "Instances" i
                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition"
                     AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
                     AND NOT i."Retired" AND (i."FoundationParkAt" IS NULL OR
-                        m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" GLOB 'operator/*'))
+                        m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND (m."Id" GLOB 'operator/*'
+                            {(includeParkArrivals ? """OR (i."FoundationParkClearing" IS NULL AND m."ReplyTo" IS NULL)""" : "")})))
             AND (m."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("m.")}))))
         """;
 
@@ -116,7 +117,8 @@ public sealed partial class EfStore
         var parked = checkpoint.Row is { Status: InstanceStatus.Faulted, Fault: not null };
         if (parked)
         {
-            if (!await KeepSqliteParkInputsAsync(db, pending.Target, pending.Partition, 0, [pending.Id], token)) return false;
+            if (!await KeepSqliteParkInputsAsync(db, pending.Target, pending.Partition, 0, [pending.Id], ParkKeepReason.Consumed, token))
+                return false;
         }
         else if (await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "Id" = {pending.Id} AND "InboxScope" = 0
@@ -201,7 +203,7 @@ public sealed partial class EfStore
     }
 
     private static async Task<bool> SettleSqliteRootInputsAsync(KernelDb db, string reference, CreationAddress actor,
-        IReadOnlyList<InboxKey> expected, Message[]? expectedEnvelopes, bool suspended, CancellationToken token)
+        IReadOnlyList<InboxKey> expected, Message[]? expectedEnvelopes, bool suspended, CancellationToken token, bool parked = false)
     {
         if (expected.Any(key => key.Scope != InboxKey.FoundationOccurrenceScope || key.Match is not null)) return false;
         if (expected.Count == 0) return true;
@@ -210,6 +212,7 @@ public sealed partial class EfStore
             SELECT * FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
                 AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
                 AND "Due" <= /*sqlite-root-clock*/ AND (NOT {suspended} OR "Id" GLOB 'operator/*')
+                AND (NOT {parked && db.UsesRootParkArrivals} OR "ReplyTo" IS NULL OR "Id" GLOB 'operator/*')
                 AND ("Id" NOT GLOB 'operator/*' OR (/*supported-operator*/))
             ORDER BY "Seq" LIMIT {expected.Count}
             """;

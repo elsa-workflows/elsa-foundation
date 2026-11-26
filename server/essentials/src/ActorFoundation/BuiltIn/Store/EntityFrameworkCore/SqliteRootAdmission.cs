@@ -8,7 +8,7 @@ namespace Kernel.EntityFramework;
 internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow, SqliteAdmissionDefinitions definitions)
 {
     private sealed record Issuer(byte[] Key, int Partitions);
-    private sealed record Target(string Actor, int Partition, bool HasCheckpoint, int? Status, bool Terminal, bool Pending);
+    private sealed record Target(string Actor, int Partition, bool HasCheckpoint, int? Status, bool Terminal, bool Pending, bool Parked);
 
     internal Task<int> VerifyAsync(CancellationToken token) => WriteAsync(async (db, _, ct) =>
     {
@@ -104,7 +104,8 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             if (target is null)
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
 
-            var canReceive = target.Status == (int)InstanceStatus.Running || reply is null && !target.HasCheckpoint && target.Pending;
+            var canReceive = target.Status == (int)InstanceStatus.Running || reply is null &&
+                (!target.HasCheckpoint && target.Pending || db.UsesRootParkArrivals && target.Status == (int)InstanceStatus.Faulted && target.Parked);
             if (canReceive && reply is not null && reply.Caller.Deadline <= now) return null;
             var liveReceipt = (canReceive || target.Terminal || target.Status is null && db.UsesRootRetirement)
                 && await db.Database.SqlQuery<bool>($"""
@@ -190,7 +191,8 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
                         AND i."FoundationTerminalRevision" = i."Revision") IS TRUE AS "Terminal",
                 EXISTS (SELECT 1 FROM "Messages" m
                     WHERE m."Id" = b."Creator" AND m."Target" = b."Actor" AND m."Partition" = b."Partition"
-                        AND m."InboxScope" = 0 AND NOT m."Done") AS "Pending"
+                        AND m."InboxScope" = 0 AND NOT m."Done") AS "Pending",
+                i."FoundationParkAt" IS NOT NULL AS "Parked"
             FROM "FoundationRootBirths" b
             LEFT JOIN "Instances" i ON i."Id" = b."Actor"
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1
