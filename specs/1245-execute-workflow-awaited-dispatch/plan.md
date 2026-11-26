@@ -25,8 +25,12 @@ compatibility shims.
 
 ## Constitution Check
 
-- **Patterns.** No new pattern kind: one more output projection on an existing atomic result record, and data changes
-  to existing converter rules.
+- **Patterns.** No new pattern kind:
+  - the atomic result record swaps one output projection for another;
+  - an existing replacement contract gains a member;
+  - a context gains a property;
+  - an existing converter rewrite kind is implemented;
+  - existing converter rules take new data.
 - **Extension points.** Two public additions:
   - `ActivityResumeContext<TState, TTrigger>.Warnings` (`IExecutionWarningSink?`) in `Activities.Runtime.Core`, copied
     from the attempt's `Warnings`, which the resume handler already sets. Update that project's `EXTENSION_POINTS.md`
