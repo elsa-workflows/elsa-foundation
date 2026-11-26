@@ -7,31 +7,29 @@ converter) needs the activity in the catalog.
 
 ## Phase 1: The Elsa 4 activity (US1, US2)
 
-- [ ] T001 Resolve research item R-1 (synthesized node in `CompileExecutableStructure`, or the `ProjectChildren`
-  fallback, plan §1). Check which FR-024 pieces exist on the
-  initiative branch: the neutral iteration-id prefix, `CountProcessedCompletedChildIterationsAsync` and
-  `LoopCollection`. Build the missing ones here so spec 1243 can reuse them. Record the outcome in the PR.
-- [ ] T002 [US1] Add `BulkDispatchWorkflows` with its inputs, slots, type key, cap constant and `Done` outcome in
+- [ ] T001 Decide where the `Dispatch` slot check runs (the handler's compile step or a submitted-tree validator),
+  and whether the catalog's initial payload can start the slot with an empty `DispatchWorkflow` (plan §1). Check which
+  FR-024 pieces exist on the initiative branch (the neutral iteration-id prefix, `LoopCollection`); reuse them if they
+  do. Record the outcome in the PR.
+- [ ] T002 [US1] Add `BulkDispatchWorkflows` with `Items`, the three slots, type key, cap and window constants and `Done` outcome in
   `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/` (FR-001–FR-003, FR-009).
-- [ ] T003 [US1] Add the structure handler that synthesizes the `{bulkNodeId}.dispatch` node with its bindings, and
-  extend `DispatchPinSource` to pin `Elsa.BulkDispatchWorkflows` nodes for that node id (FR-004). Register both in the
-  DispatchWorkflow features.
+- [ ] T003 [US1] Add the structure handler for the three slots and the `Dispatch` slot check (FR-003). Register it in
+  the DispatchWorkflow features. `DispatchPinSource` is not changed.
 - [ ] T004 [US1] [US2] Scheduling and completion:
-  - one dispatch child per item with iteration id and scope; all at once without waiting, at most 16 outstanding with
-    waiting (FR-004, FR-005);
-  - wait and no-wait completion and branch routing, with the counter state of plan §2 (FR-006);
+  - `Dispatch` once per item with iteration id and scope, at most 16 passes open (FR-004, FR-005);
+  - routing by outcome and completion, with the ended-index state of plan §2 (FR-006);
   - the cap (FR-007);
-  - dispatch-node and slot faults: absorb or intervene, plus rescheduled-child acceptance (FR-006, FR-008).
+  - faults: absorb a `Dispatch` fault when `ChildFaulted` is present, otherwise intervene and defer (FR-008).
 - [ ] T005 [P] [US1] [US2] Runtime tests (plan, Test scope: Runtime).
-- [ ] T006 [P] [US1] Check in Studio that the designer shows only the two slots through the generic rendering, and
-  that the executable and instance views show the per-item dispatch executions under the bulk node (spec Edge Cases).
-  Add no Studio-specific code (FR-003).
+- [ ] T006 [P] [US1] Check in Studio that the designer shows the three slots through the generic rendering, and that
+  the instance view shows the per-item `Dispatch` executions. Add no Studio-specific code (FR-003).
 - [ ] T007 [P] Write the README section and update `EXTENSION_POINTS.md` (FR-023).
 
 ## Phase 2: Converter (US3, US4)
 
-- [ ] T008 [US3] Map entry for `Elsa.BulkDispatchWorkflows`, with the member rules of FR-012–FR-014 and the ports added
-  to the surface fixture (FR-011).
+- [ ] T008 [US3] Map entry for `Elsa.BulkDispatchWorkflows`, with the ports added to the surface fixture. Add a node
+  rewrite that emits the `{elsa3NodeId}.dispatch` `DispatchWorkflow` into `Dispatch`, with the member rules of
+  FR-012–FR-014 on it (FR-011).
 - [ ] T009 [US3] Node rewrite for the per-item `Inputs` and `CorrelationId` (FR-015, FR-016), with item-read
   resolution in `Elsa3ValueFlowLowerer`. Add `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` and
   `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS` here.

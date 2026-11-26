@@ -96,13 +96,18 @@ body, and `Done`, `Canceled` and `Completed` all connect to one `WaitAny` join.
 
 ## Options
 
-**A. A dedicated `BulkDispatchWorkflows` activity (recommended).** It is a structural activity. For each item it
-schedules one ordinary `DispatchWorkflow` child execution, with its own iteration id and a scope that holds the item. It
-has optional `ChildCompleted` and `ChildFaulted` slots and completes with `Done`.
+**A. A dedicated `BulkDispatchWorkflows` activity (recommended).** It is a structural activity with `Items` and three
+slots:
+- `Dispatch`, which holds one `DispatchWorkflow` node;
+- `ChildCompleted` and `ChildFaulted`, both optional.
 
-- Each item's dispatch is a separate activity execution, so the dispatch identity scheme, specs 096–104 and every
-  dispatch consumer apply unchanged. The one dispatch change is that `DispatchPinSource` also pins the bulk node's
-  target (FR-004).
+For each item it runs the `Dispatch` node once, with its own iteration id and a scope that holds the item. It runs the
+matching slot for each child that ends, and completes with `Done`.
+
+- Each item's dispatch is a separate, ordinary `DispatchWorkflow` execution, so the dispatch identity scheme, specs
+  096–104 and every dispatch service apply unchanged, pinning included.
+- The `Dispatch` node is authored, so its per-item `Inputs` and `CorrelationId` read `currentItem` as descendants of
+  the bulk node. No node is synthesized; synthesizing one would be a new pattern.
 - Authors get one activity for "start this workflow per item". The converter maps the Elsa 3 node to it one to one.
 - The runtime already schedules one node several times under distinct iteration ids: BPMN multi-instance loops do it
   (`BpmnProcessRuntime`). The activity adds the scheduling policy and the counting. Spec 1243 shares those pieces
@@ -127,19 +132,20 @@ spec's first draft.
 
 An author adds `BulkDispatchWorkflows` to `acme.order-received`:
 
-- `Workflow`: `acme.fulfil-line`;
 - `Items`: the order lines;
-- `Inputs`: `{ sku: currentItem.sku, quantity: currentItem.quantity }`;
-- `CorrelationId`: `` `order-17_${currentIndex + 1}` ``;
-- `WaitForCompletion`: true;
+- in `Dispatch`, a `DispatchWorkflow` with:
+  - `WorkflowDefinitionId` `acme.fulfil-line`;
+  - `Inputs` `{ sku: currentItem.sku, quantity: currentItem.quantity }`;
+  - `CorrelationId` `` `order-17_${currentIndex + 1}` ``;
+  - `WaitForCompletion` true;
 - a `WriteLine` in `ChildFaulted`.
 
 **Why this priority**: This is the feature. Without it, Elsa 4 has no way to start N children and wait for them as one
 step.
 
 **Independent Test**: Run the workflow with three lines, one of whose children faults. Three children start at once
-(three is below the degree, FR-005), each with its own inputs and correlation id. `ChildFaulted` runs once, and the activity completes with `Done` after the
-third child has ended.
+(three is below the window of 16, FR-005), each with its own inputs and correlation id. `ChildFaulted` runs once,
+and the activity completes with `Done` after the third child has ended.
 
 **Acceptance Scenarios**:
 
@@ -156,8 +162,8 @@ third child has ended.
 
 ### User Story 2 - Fire and forget (Priority: P1)
 
-The same activity with `WaitForCompletion` false starts every child and completes with `Done` once all are dispatched.
-The child slots are not run.
+The same activity, with `WaitForCompletion` false on its `Dispatch` node, starts every child and completes with
+`Done` once all are dispatched. The slots are not run.
 
 **Why this priority**: The second main use, and `performance/concurrency-tests.json` asserts it with 300 items.
 
@@ -166,8 +172,8 @@ correlation id and reach `Finished`.
 
 **Acceptance Scenarios**:
 
-1. **Given** `WaitForCompletion` false, **When** the activity runs, **Then** it completes with `Done` without waiting
-   for any child, and no slot runs.
+1. **Given** the `Dispatch` node does not wait, **When** the activity runs, **Then** each pass ends with `Dispatched`,
+   the activity completes with `Done` without waiting for any child, and no slot runs.
 2. **Given** the parent instance is cancelled after the activity completed, **When** children are still running,
    **Then** the children are not cancelled. A child is cancelled only through `CancelChildOnParentCancellation`, which
    applies while the activity is still waiting, exactly as for `DispatchWorkflow`.
@@ -175,7 +181,8 @@ correlation id and reach `Finished`.
 ### User Story 3 - The converter maps Elsa 3 BulkDispatchWorkflows one to one (Priority: P1)
 
 A migrating engineer converts an Elsa 3 definition that uses `BulkDispatchWorkflows`. It becomes an Elsa 4
-`BulkDispatchWorkflows` with the same items, inputs, correlation ids, wait and branches.
+`BulkDispatchWorkflows` with the same items and branches. A `DispatchWorkflow` in its `Dispatch` slot carries the
+target, per-item inputs, correlation ids and wait.
 
 **Why this priority**: It unblocks the 2 refused corpus definitions and their 6 suites.
 
@@ -186,9 +193,9 @@ and on-completed-callbacks suites pass.
 **Acceptance Scenarios**:
 
 1. **Given** an Elsa 3 node with `getItem().correlationIdSuffix` in its correlation function, **When** it is
-   converted, **Then** the Elsa 4 `CorrelationId` reads `variables.currentItem.correlationIdSuffix`.
-2. **Given** map items and a target in the same import, **When** converted, **Then** the Elsa 4 `Inputs` passes each
-   input the target declares that the item has, in the declared spelling.
+   converted, **Then** the `Dispatch` node's `CorrelationId` reads `variables.currentItem.correlationIdSuffix`.
+2. **Given** map items and a target in the same import, **When** converted, **Then** the `Dispatch` node's `Inputs` passes
+   each input the target declares that the item has, in the declared spelling.
 3. **Given** `ChildCompleted` and `ChildFaulted` branches, **When** converted, **Then** they become the Elsa 4 slots,
    with their activity ids kept.
 
@@ -211,11 +218,10 @@ and on-completed-callbacks suites pass.
 - **A slot activity faults**, for example the `WriteLine` in `ChildFaulted`: it becomes a blocking incident on that
   item's pass. The other passes keep running. The bulk activity does not complete until the incident is resolved, for
   example by retrying the slot activity (FR-008).
-- **The hidden dispatch node itself faults** (an input the child does not declare, the nesting depth, a pin mismatch):
-  with waiting and a `ChildFaulted` slot, that slot runs and the fault is absorbed. Otherwise the fault stays a blocking
-  incident on that pass, with or without waiting (FR-006). Elsa 3 faulted the whole activity.
-- **Views**: the designer shows only the two slots. The executable and instance views show the per-item dispatch
-  executions under the bulk node, which is the inspection an operator needs.
+- **The `Dispatch` execution itself faults** (an input the child does not declare, the nesting depth, a pin
+  mismatch): with a `ChildFaulted` slot, that slot runs and the fault is absorbed. Otherwise the fault stays a blocking
+  incident on that pass (FR-008). Elsa 3 faulted the whole activity.
+- **`Dispatch` left empty, or holding another activity**: publish refuses the bulk node (FR-003).
 
 ## Requirements *(mandatory)*
 
@@ -225,69 +231,66 @@ and on-completed-callbacks suites pass.
 
 - **FR-001**: Elsa 4 MUST provide `BulkDispatchWorkflows` (type key `Elsa.BulkDispatchWorkflows`) in the
   DispatchWorkflow activity package, as a structural activity.
-- **FR-002**: Inputs:
-  - `WorkflowDefinitionId`: required, a literal pinned at publish, as for `DispatchWorkflow`;
-  - `Items`: the collection, evaluated once;
-  - `Inputs`: the child inputs, evaluated once per item with `currentItem` and `currentIndex` in scope;
-  - `CorrelationId`: evaluated once per item with the same scope. A blank value inherits the parent's, as for
-    `DispatchWorkflow`;
-  - `WaitForCompletion`: bindable, evaluated once, default false, as for `DispatchWorkflow`;
-  - `CancelChildOnParentCancellation`: default true, applied to each child, as for `DispatchWorkflow`.
+- **FR-002**: The bulk node's only input is `Items`: the collection, evaluated once. There is no channel, trace,
+  degree, batch or wait input on the bulk node.
+- **FR-003**: Slots, all single and rendered through Studio's generic slot rendering with no Studio-specific code:
+  - **`Dispatch`**: required. It holds one `DispatchWorkflow` node, authored like any other node. Everything about the
+    child is set on that node:
+    - `WorkflowDefinitionId`, a literal pinned at publish by the existing `DispatchPinSource`;
+    - `Inputs` and `CorrelationId`, which read `variables.currentItem` and `variables.currentIndex`;
+    - `WaitForCompletion` and `CancelChildOnParentCancellation`.
 
-  There is no channel, trace, degree or batch input.
-- **FR-003**: Slots: `ChildCompleted` and `ChildFaulted`, each optional and single, as `If.Then` and `If.Else` are.
-  Studio renders them through the generic slot rendering, with no Studio-specific code.
-- **FR-004**: For each item, the activity MUST schedule one `DispatchWorkflow` child execution with:
-  - its own iteration id (`StructuredExecutionIdentity.Iteration`, index = item position);
-  - an iteration scope holding `currentItem` and `currentIndex`, as `ForEach` provides (ADR 0028);
-  - the activity's `WorkflowDefinitionId`, `Inputs`, `CorrelationId`, `CancelChildOnParentCancellation` and evaluated
-    `WaitForCompletion`.
+    Publish refuses the bulk node when `Dispatch` is empty or holds anything other than a `DispatchWorkflow`, with
+    diagnostic `activity.bulk-dispatch.dispatch-slot`.
+  - **`ChildCompleted`** and **`ChildFaulted`**: optional, as `If.Then` and `If.Else` are.
+- **FR-004**: For each item, the activity MUST schedule the `Dispatch` node once:
+  - with its own iteration id (item-indexed);
+  - with an iteration scope holding `currentItem` and `currentIndex`, as `ForEach` provides (ADR 0028).
 
-  The dispatch node is not authored. The activity's structure handler synthesizes it when the executable is
-  compiled:
-  - it gets the stable node id `{bulkNodeId}.dispatch`, the `DispatchWorkflow` catalog row, and bindings taken from the
-    bulk node's inputs;
-  - `DispatchPinSource` recognizes `Elsa.BulkDispatchWorkflows` nodes and writes the pinned-target metadata for that
-    synthesized node id, so publish pins the target and `DispatchWorkflow.ValidatePin` checks it at run time.
-
-  This pin-source change is the only change to the dispatch subsystem. Identity, stager, resume, cancellation, audit,
-  test-run scope and recovery apply unchanged, because each child is an ordinary `DispatchWorkflow` execution.
+  The `Dispatch` node and the slots are descendants of the bulk node, so they resolve those names at publish. Each
+  scheduled `Dispatch` execution is an ordinary `DispatchWorkflow` activity execution. The dispatch identity, stager,
+  pinning, resume, cancellation, audit, test-run scope and recovery therefore apply unchanged. No dispatch service
+  changes.
 - **FR-005**: Scheduling:
-  - **Without waiting**: every item's dispatch child is scheduled when the activity starts. Each one completes with
-    `Dispatched` in its own turn, so nothing stays outstanding.
-  - **With waiting**: at most 16 dispatch children are outstanding at once, in item order. The next item's child is
-    scheduled as one ends. 16 is the default degree of `docs/architecture/large-fan-out.md` decision 1, which bounds
-    outstanding children and inbox results by the degree. It is a fixed constant, not an author-facing input. Elsa 3
-    dispatched all at once, and the converter warns (FR-020). This is Q4.
-- **FR-006**: Completion:
-  - **Without waiting**: each dispatch child ends with `Dispatched`, and the activity completes with `Done` once every
-    item has been dispatched.
-  - **With waiting**:
-    - A dispatch child ending with `Completed` schedules `ChildCompleted`, when present, in that item's iteration scope.
-    - A dispatch child ending with `Faulted`, `Cancelled` or `DispatchFailed` schedules `ChildFaulted`, when present,
-      in that item's iteration scope.
-    - A dispatch child that faults itself, for example on an input the child does not declare, is absorbed and routed
-      to `ChildFaulted` only when that slot is present.
-  - **A faulting dispatch child otherwise**, with no `ChildFaulted` slot or without waiting, stays a blocking incident
-    on its pass, as any faulted child does. It is never absorbed silently.
-    - The activity completes with `Done` once every item's dispatch child, and its branch when one runs, has ended.
-  - With no items, the activity completes with `Done` at once.
+  - At most 16 passes are open at once, in item order, and the next item's pass starts as one ends. A pass is one
+    item's `Dispatch` execution plus its branch, if one runs.
+  - 16 is a fixed constant, not an author-facing input. It applies whether or not the child waits:
+    - a fire-and-forget `Dispatch` ends its pass with `Dispatched` straight away, so the window refills at once;
+    - a waiting one holds its place until the child ends.
+  - Elsa 3 dispatched all at once; the converter warns (FR-020). This is Q4.
+- **FR-006**: Routing by the `Dispatch` execution's outcome:
+  - `Dispatched` (the node did not wait): the pass ends. No branch runs.
+  - `Completed`: `ChildCompleted` runs in that item's scope, when present.
+  - `Faulted`, `Cancelled` or `DispatchFailed`: `ChildFaulted` runs in that item's scope, when present.
+  - With no slot for the outcome, the pass ends.
+
+  When every pass has ended, the activity completes with `Done`. With no items, it completes with `Done` at once.
 - **FR-007**: The activity MUST fault with `BulkDispatchCapExceeded` before dispatching when `Items` has more than
-  1,000 entries. That is the release 1 cap of `docs/architecture/large-fan-out.md` decision 1, which states that a body
-  starting a child workflow per item stays inside the same cap. The cap is not an author-facing input. The cap itself
-  is under question in #5875 (Elsa 3 had none), and this spec follows whatever #5875 decides. Whether it applies
-  without waiting too is Q1.
-- **FR-008**: A slot activity that faults MUST become a blocking incident through the child-fault intervention path.
-  The bulk activity requests intervention and defers; it does not fault. Retrying the faulted slot activity lets the
-  pass end and the bulk activity continue. The activity accepts a rescheduled faulted child for that.
+  1,000 entries.
+  - This is the release 1 cap of `docs/architecture/large-fan-out.md` decision 1, which says that a body starting a
+    child workflow per item stays inside the same cap.
+  - The cap is not an author-facing input.
+  - The cap itself is under question in #5875 (Elsa 3 had none), and this spec follows whatever #5875 decides.
+  - Whether it applies to fire-and-forget children too is Q1.
+- **FR-008**: Faults of child executions, `Dispatch` and slot alike:
+  - **A `Dispatch` execution that faults itself**, for example on an input the child does not declare: when a
+    `ChildFaulted` slot is present, the fault is absorbed and `ChildFaulted` runs for that item.
+  - **Every other child fault** stays a blocking incident on its pass, through the child-fault intervention path. The
+    bulk activity defers; it does not fault, and the other passes go on.
+  - **Retry**: retrying the faulted activity (`RetryFaultedActivity`) lets the pass end and the bulk activity continue.
+
+  No fault is absorbed without a `ChildFaulted` slot to show it.
 - **FR-009**: The activity has one outcome, `Done`.
-- **FR-010**: A branch reads its item as `variables.currentItem` and `variables.currentIndex`. Reading the dispatched
-  child's result in the branch is not part of this spec (Out of Scope).
+- **FR-010**: A slot reads its item as `variables.currentItem` and `variables.currentIndex`. Reading the dispatched
+  child's result in a slot is not part of this spec (Out of Scope).
 
 **Converter**
 
 - **FR-011**: The Elsa 3 activity map entry MUST change from `NoCounterpart` to a catalog entry for Elsa 4
   `BulkDispatchWorkflows`, with every Elsa 3 member classified once.
+  - The converter emits the bulk node with `Items` and the slots.
+  - It also emits a `DispatchWorkflow` node in `Dispatch`, with id `{elsa3NodeId}.dispatch`. FR-012 to FR-016 set
+    that node's members; the existing `DispatchMembers` rules apply to it directly.
   - `ChildCompleted` and `ChildFaulted` are added to the Elsa 3 surface fixture as ports and mapped to the slots.
   - Converted branch activities keep their Elsa 3 ids.
 - **FR-012**: `WorkflowDefinitionId`, `CancelChildOnParentCancellation`, `StartNewTrace` and `ChannelName` follow the
@@ -296,7 +299,7 @@ and on-completed-callbacks suites pass.
   - `CancelChildOnParentCancellation` is synthetic false;
   - `StartNewTrace` and `ChannelName` are Removed, so a non-default binding is refused with
     `ELS3-ACTIVITY-REMOVED-INPUT-BOUND`; for `ChannelName` the default is null or an empty literal.
-- **FR-013**: `WaitForCompletion` is carried.
+- **FR-013**: `WaitForCompletion` is carried to the `Dispatch` node.
   - Elsa 3's default is true, so a missing key becomes a literal true (`DefaultFlip`, as for `ExecuteWorkflow`).
   - `null` or a valueless literal reads as false, as in Elsa 3 `GetOrDefault`.
   - Literals are parsed regardless of case, so the corpus `"False"` counts.
@@ -305,13 +308,14 @@ and on-completed-callbacks suites pass.
   - `null` is left unbound;
   - any non-null literal is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. Elsa 3 read such a literal as raw
     JSON text and dispatched nothing; spec 1243 FR-017 refuses it the same way.
-- **FR-015**: `CorrelationIdFunction` becomes `CorrelationId`.
+- **FR-015**: `CorrelationIdFunction` becomes the `Dispatch` node's `CorrelationId`.
   - `get{DefaultItemInputKey}()` and `args.<camelKey>` read the item and are resolved to `variables.currentItem`
     through the converter's name resolution.
   - Exception, as in Elsa 3: a workflow input or variable named like the generated accessor wins. Elsa 3's
     `EvaluatingJavaScript` handler overwrote the argument getter with it.
   - An absent function leaves `CorrelationId` unbound, as for Elsa 3 `DispatchWorkflow`.
-- **FR-016**: `DefaultItemInputKey`, `Input` and the item become the Elsa 4 per-item `Inputs` expression.
+- **FR-016**: `DefaultItemInputKey`, `Input` and the item become the `Dispatch` node's per-item `Inputs`
+  expression.
   - **The target must be in the same import**, so its declared inputs are known. Otherwise the node is refused with
     `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` (Q2).
   - **Contents**: the static `Input` first, then, for a map item, each declared input the item has, in the declared
@@ -344,7 +348,8 @@ and on-completed-callbacks suites pass.
   - Elsa 3 ran `ChildFaulted` only for faulted children. Elsa 4 also runs it for cancelled and undispatchable
     children (FR-006), where Elsa 3 ran nothing. The `ITEM-INPUTS` warning text states this.
   - Elsa 3 never ran the branches without waiting. With a literal-false wait the converter drops them with
-    `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`; with an expression wait Elsa 4 skips them at run time.
+    `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. With an expression wait, a pass whose `Dispatch` did not wait ends with
+    `Dispatched`, so no branch runs (FR-006).
 - **FR-019**: Refusals:
 
 | Elsa 3 use | Result |
@@ -358,9 +363,8 @@ and on-completed-callbacks suites pass.
 | A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution. Guidance: remove the read; the child's result is not available in the branch yet |
 
 - **FR-020**: Every conversion MUST raise warning `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED`. It says that more than 1,000
-  items fault in Elsa 4 (FR-007), and that a waiting activity keeps at most 16 children outstanding (FR-005), where
-  Elsa 3 dispatched them all at once, and points to batching with a sequential `ForEach`
-  over batches.
+  items fault in Elsa 4 (FR-007), and that at most 16 passes are open at once (FR-005), where Elsa 3 dispatched every
+  child at once. It points to batching with a sequential `ForEach` over batches.
 - **FR-021**: New codes go to `Elsa3ActivityDiagnosticCodes` and the spec 236 diagnostic-code contract, each in the
   task that first raises it.
   - Errors: `…-BULK-DISPATCH-TARGET-UNKNOWN`, `…-BULK-DISPATCH-OUTCOME-ROUTE`, `…-BULK-DISPATCH-CHILD-RESULT-READ`.
@@ -384,15 +388,12 @@ and on-completed-callbacks suites pass.
   needs the same pieces, and the two specs MUST share them; whichever is implemented first owns them:
   - `StructuredExecutionIdentity.Iteration` with a neutral prefix or kind parameter, keeping `ForEach`'s ids unchanged;
   - `LoopIterationScopeRequest` with `ActivitySchedulingProvenance.From(…, iterationId)`, as `ForEach` uses it;
-  - `IActivityExecutionStateStore.CountProcessedCompletedChildIterationsAsync`, which counts passes whose completion
-    the parent has processed. A raw count of completed rows runs ahead of the parent's evaluations;
   - `LoopCollection`, `ForEach`'s collection resolution extracted to
     `essentials/src/Activities/ControlFlow/Loops/LoopCollection.cs`.
 
 ### Key Entities
 
-- **BulkDispatchWorkflows**: the Elsa 4 structural activity. It has inputs (FR-002), two branch slots and an internal
-  dispatch node.
+- **BulkDispatchWorkflows**: the Elsa 4 structural activity: `Items`, the `Dispatch` slot, and two branch slots.
 - **Item pass**: one item's iteration. It holds the item scope, one `DispatchWorkflow` child execution and at most one
   branch execution.
 
@@ -400,25 +401,24 @@ and on-completed-callbacks suites pass.
 
 ### Measurable Outcomes
 
-- **SC-001**: An author starts N children (N ≤ 1,000) with one activity. Without waiting, all N start in the
-  activity's first turn. With waiting, min(N, 16) start at once, the rest as earlier ones end, and the activity ends only
-  after all N have ended.
+- **SC-001**: An author starts N children (N ≤ 1,000) with one activity. At most 16 passes are open at once, and the
+  next starts as one ends. With waiting, the activity ends only after all N children have ended.
 - **SC-002**: `performance-concurrency.json` converts and publishes unchanged, and its 300 children reach `Finished`.
 - **SC-003**: The approved adjusted composition root converts and publishes. The correlation-id, input, channels and
   on-completed-callbacks suites pass, and so does the no-wait dataset of await-completion.
-- **SC-004**: No change to `WorkflowDispatchIdentity`, the dispatch stager, resume, cancellation, audit or recovery.
-  `DispatchPinSource` is the only dispatch service that changes.
+- **SC-004**: No change to any dispatch service: `WorkflowDispatchIdentity`, the stager, `DispatchPinSource`,
+  resume, cancellation, audit and recovery.
 - **SC-005**: Every FR-017 and FR-019 row has a converter test with its code and guidance.
 
 ## Assumptions
 
-- The structure handler can add a synthesized node to the executable at compile time (plan R-1). If it cannot, it
-  synthesizes the node into the authored structure under a stable id when the structure is projected, and the designer
-  still shows only the two slots.
-- Scheduling one node under distinct iteration ids already exists (BPMN multi-instance). With the cap and the degree
-  of large-fan-out.md decision 1, the design stays within that approved decision and ADR 0028, so no ADR is needed. If
-  the coordinator prefers all-at-once dispatch with waiting (Q4), that departs from decision 1 and needs a decision
-  register entry or ADR amendment first.
+- Scheduling one node under distinct iteration ids already exists (BPMN multi-instance), and per-pass scopes follow
+  ADR 0028, so no ADR is needed for the activity's mechanics.
+- The cap and the window of 16 take their numbers from `docs/architecture/large-fan-out.md` decision 1. That decision
+  was made for the clean-slate kernel's parallel ForEach, and it exposes the degree as an author input
+  (`MaxDegreeOfParallelism`, 1–64), as spec 1243 does. This spec fixes 16 with no input, because of the
+  no-author-knobs stance. That departs from decision 1's shape and from spec 1243, and the approver should weigh it
+  (Q4).
 - The release 1 cap of 1,000 applies (FR-007, Q1, #5875).
 
 ## Out of Scope
@@ -437,6 +437,6 @@ and on-completed-callbacks suites pass.
    undeclared item member faults the child's dispatch at run time.
 3. **Q3**: `ChildFaulted` for cancelled and undispatchable children (FR-006, FR-018), where Elsa 3 ran nothing.
    Recommendation: yes. An author needs one place to see every child that did not complete.
-4. **Q4**: With waiting, a fixed internal degree of 16 (recommended, FR-005), which stays within large-fan-out.md
-   decision 1 and needs no ADR? Or all children at once, as Elsa 3 did, which needs a decision-register entry or an ADR
-   amendment first?
+4. **Q4**: A fixed window of 16 open passes, with no input (recommended, FR-005)? The alternatives are spec 1243's
+   author input `MaxDegreeOfParallelism`, or all at once as in Elsa 3. All at once departs from large-fan-out.md's
+   bound on outstanding children, so it needs a decision-register entry or an ADR amendment first.

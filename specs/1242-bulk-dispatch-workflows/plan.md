@@ -4,9 +4,10 @@
 
 ## Summary
 
-Add an Elsa 4 structural activity, `BulkDispatchWorkflows`, to the DispatchWorkflow activity package. For each item it
-schedules one ordinary `DispatchWorkflow` child execution, with its own iteration id and item scope. It runs
-`ChildCompleted` or `ChildFaulted` per child while waiting, and completes with `Done`.
+Add an Elsa 4 structural activity, `BulkDispatchWorkflows`, to the DispatchWorkflow activity package. It has
+`Items` and three slots: `Dispatch` (one authored `DispatchWorkflow`), `ChildCompleted` and `ChildFaulted`. For each
+item it runs `Dispatch` once, with its own iteration id and item scope, and at most 16 passes are open at once. It runs
+the matching slot per child that ends, and completes with `Done`.
 
 Because each child dispatch is its own activity execution, the whole dispatch subsystem is reused unchanged: identity,
 stager, resume, cancellation, audit, test-run scope and recovery. The Elsa 3 converter maps its activity to the new one
@@ -32,17 +33,17 @@ the design side), and converter rules.
 
 - **Sanctioned patterns only**: the activity is a structural activity with a structure handler, as `If` and `ForEach`
   are. The converter change is a map entry and existing rule kinds. Pass.
-- **No runtime knob for authors**: no degree, batch or channel input. The cap (FR-007) and the waiting degree of 16
-  (FR-005) are fixed constants. Pass.
+- **No runtime knob for authors**: no degree, batch or channel input. The cap (FR-007) and the window of 16
+  (FR-005) are fixed constants. Pass. This departs from large-fan-out.md decision 1's author input; that is Q4.
 - **Refuse over workaround**: the converter refuses what it cannot map faithfully (spec FR-019), and Elsa 3 defects
   (the shared bookmark counter, the leaking `Input` dictionary) are not reproduced. Pass.
 - **ADR needed?** No, with the recommended answer to Q4.
   - Each child keeps "one dispatch per activity execution" (spec 096 FR-012).
-  - Per-item iteration ids and scopes follow ADR 0028.
-  - The cap of 1,000 and the degree of 16 follow `docs/architecture/large-fan-out.md` decision 1, which bounds
-    outstanding children by the degree.
-  - All-at-once dispatch with waiting (the alternative in Q4) would depart from decision 1 and needs a decision-register
-    entry or an ADR amendment first. The rejected option B would have needed an ADR.
+  - Per-item iteration ids and scopes follow ADR 0028, and BPMN multi-instance already schedules one node per
+    iteration.
+  - No node is synthesized, so no new pattern.
+  - All-at-once dispatch (the alternative in Q4) would drop the bound on outstanding children and needs a
+    decision-register entry or an ADR amendment first. The rejected option B would have needed an ADR.
 
 ## Design
 
@@ -50,73 +51,58 @@ the design side), and converter rules.
 
 - **Placement**: `BulkDispatchWorkflows : StructuralActivity, IRuntimeStructuralActivity,
   IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler` in
-  `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/`, with type key `Elsa.BulkDispatchWorkflows`.
-- **Inputs**: the members of spec FR-002. `WorkflowDefinitionId` carries the same `[RefusesSecretBinding(…,
-  FixedAtPublish)]` as `DispatchWorkflow`.
-- **Visible slots**: `ChildCompleted` and `ChildFaulted`, `[ActivityChildSlot(… Single)]`, both optional.
-- **Synthesized dispatch node** (decision, spec FR-004): the node is not authored. `BulkDispatchWorkflowsStructureHandler`
-  (an `IActivityStructureHandler` modelled on `IfStructureHandler`) adds it to the executable in
-  `CompileExecutableStructure`:
-  - node id `{bulkNodeId}.dispatch`, activity type `Elsa.DispatchWorkflow` at the catalog's current version;
-  - input bindings copied from the bulk node: `WorkflowDefinitionId` (literal), `Inputs`, `CorrelationId` and
-    `CancelChildOnParentCancellation`;
-  - `WaitForCompletion` bound to the value the bulk node evaluated once, which it puts in each pass's scope as
-    `waitForCompletion` next to `currentItem`.
-- **Pinning**: `DispatchPinSource.GetContributionAsync` also matches `Elsa.BulkDispatchWorkflows` nodes in
-  `context.RootActivity`. It pins their `WorkflowDefinitionId` and writes `PinnedTargetMetadataKey` for the node id
-  `{bulkNodeId}.dispatch`, so `DispatchWorkflow.ValidatePin` finds it at run time. This is the only change to a
-  dispatch service.
-
-Research item R-1: confirm that `CompileExecutableStructure` can add a node that the authored structure does not
-contain, and that the compiler places it with its bindings and the pin metadata. The fallback is that
-`ProjectChildren` synthesizes the node into the authored structure under the same stable id, outside the declared
-slots, so publish sees it as authored. Either way the designer shows only the two slots. Record the outcome in the PR.
+  `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/`, with type key `Elsa.BulkDispatchWorkflows`. It does
+  not implement `IRuntimeAcceptsRescheduledFaultedChild`: it absorbs some faults, and that contract forbids the marker
+  for a parent that does (`IRuntimeStructuralActivity.cs`).
+- **Input**: `Items`.
+- **Slots**: `Dispatch`, `ChildCompleted`, `ChildFaulted`, all `[ActivityChildSlot(… Single)]`.
+- **Structure handler**: `BulkDispatchWorkflowsStructureHandler`, modelled on `IfStructureHandler`, projects and
+  replaces the three slots. Publish validation refuses an empty `Dispatch` slot or a node other than
+  `Elsa.DispatchWorkflow` in it (`activity.bulk-dispatch.dispatch-slot`). The slot attribute has no type constraint,
+  so the check goes in the handler's compile step or a submitted-tree validator; which one is decided in T001.
+- **Authoring help (optional)**: if the catalog's initial payload can carry a default child, a new
+  `BulkDispatchWorkflows` starts with an empty `DispatchWorkflow` in `Dispatch`. Otherwise Studio shows the empty slot
+  and publish explains it. T001 decides; no Studio-specific code either way.
+- **Pinning and the scope**: there is no synthesized node and no `DispatchPinSource` change. The `Dispatch` node is in
+  the executable like any authored child, so the existing pin source pins it. Being a descendant, it resolves
+  `currentItem`/`currentIndex` at publish (`ScopedVariableResolver`).
 
 ### 2. Scheduling and completion
 
-- **Start**: evaluate `Items`, refusing a value that is not a collection as `ForEach` does, and evaluate
-  `WaitForCompletion`. Check the cap (FR-007). Then schedule the dispatch node, each with an iteration id and a
-  `LoopIterationScopeRequest` carrying `currentItem`, `currentIndex` and `waitForCompletion`:
-  - without waiting, for every item at once;
-  - with waiting, for the first min(N, 16) items (FR-005).
-- **Iteration ids**: an item-indexed id derived from the bulk activity execution id with the prefix
-  `bulk-dispatch-item`. A small local helper produces it, duplicated from `StructuredExecutionIdentity.Iteration`
-  rather than adding a reference from DispatchWorkflow.Runtime to `Elsa.Activities.ControlFlow` ("duplication beats
-  dependency"). Spec 1243's neutral-prefix change, if it lands first, can replace the helper.
-- **State**: one counter design, kept in the activity's structural state:
-  - the item count and the next item index to schedule;
-  - the set of ended item indexes. Marking an index twice is a no-op, so a repeated completion callback is safe.
-
-  The activity completes when the set holds every index. A full recount is done only on recovery, grouped by iteration
-  id (not by node id, since every pass shares the dispatch node), with `CountProcessedCompletedChildIterationsAsync`
-  (FR-024). The callbacks never list children, which would be quadratic, as `Parallel.cs` warns.
+- **Start**: evaluate `Items`, refusing a value that is not a collection as `ForEach` does. Check the cap (FR-007).
+  Schedule `Dispatch` for the first min(N, 16) items, each with an iteration id and a `LoopIterationScopeRequest`
+  carrying `currentItem` and `currentIndex`. The scope declares only those two names, typed as `ForEach` types them.
+- **Iteration ids**: item-indexed, derived from the bulk activity execution id with the prefix `bulk-dispatch-item`.
+  A small local helper produces them, duplicated from `StructuredExecutionIdentity.Iteration` rather than adding a
+  reference from DispatchWorkflow.Runtime to `Elsa.Activities.ControlFlow` ("duplication beats dependency").
+  Spec 1243's neutral-prefix change, if it lands first, can replace the helper.
+- **State**: kept in the activity's structural state, which commits with each evaluation:
+  - the item count;
+  - the next item index to schedule;
+  - the set of ended item indexes.
+- **Ending a pass**: an index is marked ended only when its pass has really ended: after a `Dispatch` outcome with no
+  slot to run, or after its slot child completes. Only a newly ended index schedules the next item, so a repeated
+  callback cannot exceed the window. There is no recount and no new store method.
 - **`OnChildCompletedAsync`**:
-  - For the hidden dispatch node, read the outcome.
-    - Without waiting (`Dispatched`): mark the pass ended.
-    - With waiting: `Completed` schedules `ChildCompleted` in the same iteration scope. `Faulted`, `Cancelled` and
-      `DispatchFailed` schedule `ChildFaulted`. With no slot, the pass ends.
-  - For a slot child: mark the pass ended.
-  - With waiting, each ended pass schedules the next unscheduled item, if any.
-  - When every pass has ended, complete with `Done`.
+  - For the `Dispatch` node, route by outcome (FR-006).
+  - For a slot child, end the pass.
+  - Complete with `Done` when the set holds every index.
 - **`OnChildFaultedAsync`**:
-  - A dispatch node fault with waiting and a `ChildFaulted` slot: call `RequestChildFaultAbsorption` and schedule
-    `ChildFaulted` in that pass's scope.
-  - Any other dispatch node fault, and every slot fault: call `RequestChildFaultIntervention` and return `Defer`, so it
-    stays a blocking incident and the pass stays open (spec FR-006, FR-008).
-  - The activity implements `IRuntimeAcceptsRescheduledFaultedChild`, so a retry of the faulted child is accepted while
-    the activity runs. When the retried child ends, the pass ends as usual.
-- **Concurrent same-node scheduling**: no new scheduler (FR-024). Each `ScheduleChildActivity` call gets its own
-  activity execution id, and work-item, command and idempotency ids derive from
-  `schedule-child:{nodeId}:{childActivityExecutionId}` (`SchedulerWorkItems.cs`). `BpmnProcessRuntime` already schedules
-  one bound node, its call-activity `DispatchWorkflow` included, once per instance with an `IterationId` and a
-  `LoopIterationScopeRequest`. Use it as the reference. The shared pieces with spec 1243 are
-  the iteration-id prefix, the scope request, the processed-completion count and `LoopCollection`. Whichever spec is
-  implemented first builds them.
+  - A `Dispatch` fault with a `ChildFaulted` slot present: `RequestChildFaultAbsorption`, then schedule `ChildFaulted`
+    in that pass's scope.
+  - Any other fault: `RequestChildFaultIntervention` and `Defer`. Retry goes through `RetryFaultedActivity`, and the
+    retried child's completion ends the pass as usual.
+- **Concurrent same-node scheduling**: no new scheduler (FR-024). Every `ScheduleChildActivity` call gets its own
+  activity execution id (`SchedulerWorkItems.cs`). `BpmnProcessRuntime` already schedules one bound node, its
+  call-activity `DispatchWorkflow` included, once per instance with an `IterationId` and a
+  `LoopIterationScopeRequest`. Use it as the reference.
 
 ### 3. Converter
 
 - **Map entry**: `Elsa3BuiltInActivityMap.Entries.cs` replaces `NoCounterpart("BulkDispatchWorkflows")` with a
-  `Catalog` entry targeting `Elsa.BulkDispatchWorkflows`.
+  `Catalog` entry targeting `Elsa.BulkDispatchWorkflows`. A node rewrite emits the `DispatchWorkflow` node
+  `{elsa3NodeId}.dispatch` into the `Dispatch` slot through `context.AddChild`, as `Elsa3SwitchValueSynthesisRewrite`
+  does. The dispatch members are mapped onto that node with the existing `DispatchMembers` rules.
   - Members (spec FR-012–FR-016): reuse the `DispatchMembers` rules for the shared members, plus `Items` (`Carry`,
     `NullUnbound`, a non-null literal refused), `WaitForCompletion` (`DefaultFlip` to true, a case-insensitive
     literal, null as false), and `ChildCompleted`/`ChildFaulted` as `Port` members mapped to the slots.
@@ -154,10 +140,12 @@ slots, so publish sees it as authored. Either way the designer shows only the tw
   - each branch routing (Completed, Faulted, Cancelled, DispatchFailed, a dispatch input fault);
   - an empty or null `Items`;
   - the cap fault;
-  - a slot fault faults the activity;
+  - a slot fault becomes a blocking incident, the bulk activity defers, and a retry ends the pass;
+  - an absorbed `Dispatch` fault runs `ChildFaulted`; without the slot it stays an incident;
+  - the window of 16: never more than 16 passes open, including under repeated callbacks;
+  - publish refuses an empty or wrong `Dispatch` slot;
   - parent cancellation cancels the waiting children;
-  - publish pins the hidden node;
-  - recovery recount.
+  - publish pins the `Dispatch` node through the unchanged `DispatchPinSource`.
 - **Converter** (`Elsa3BulkDispatchConversionTests`): every member rule; each FR-017 and FR-019 row; the item-read
   resolution, including the variable-wins case and `args.item`; the inputs script through publish validation; kept
   slot ids.
