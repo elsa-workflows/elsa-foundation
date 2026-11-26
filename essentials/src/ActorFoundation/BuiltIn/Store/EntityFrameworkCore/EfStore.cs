@@ -847,9 +847,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" : db.UsesSqliteRootRuntime ? SqliteRootPollFilter :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
-             {(db.UsesRootOperatorProtocol ? db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
-                 : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : ClearsParkInPages(db) ? RootClearingOperatorPollFilter
-                 : RootOperatorPollFilter : "")}
+             {(db.UsesRootOperatorProtocol ? PostgresOperatorPollFilter(db) : "")}
              AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({RootInputScopes}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
@@ -860,6 +858,17 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                        : ClearsParkInPages(db) ? RootClearingInputFilter : "")}
                    {(db.UsesRootParkRecovery ? RootReleasedCohortFilter : "")})))
             """;
+    private string PostgresOperatorPollFilter(KernelDb db)
+    {
+        var filter = db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
+            : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : ClearsParkInPages(db) ? RootClearingOperatorPollFilter
+            : RootOperatorPollFilter;
+        // A running actor can withhold even when the physical suspension flag is clear. Offer the first due operator
+        // beside earlier ordinary inputs so the owner can choose from its committed header.
+        return _ordinaryRoots?.AuthoredWithholds is null ? filter : filter.Replace("/*authored-withholding*/",
+            $"""AND (target."Status" <> {(int)InstanceStatus.Running} OR prior."Id" LIKE 'operator/%')""", StringComparison.Ordinal);
+    }
+
     // Commands are exposed only when database time makes them due. On a suspended root the
     // first due command can pass withheld ordinary inputs. Running roots first clear their ready FIFO prefix.
     private static readonly string RootOperatorPollTemplate = $"""
@@ -873,6 +882,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                          AND prior."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND prior."EventMatch" IS NULL
                          AND NOT prior."Done" AND prior."Due" <= t.now
                          /*earlier-command-input*/
+                         /*authored-withholding*/
                          /*withheld-prior*/)
                    ELSE (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running}) AND (/*released-cohort*/ NOT EXISTS (
                        SELECT 1 FROM "Messages" op

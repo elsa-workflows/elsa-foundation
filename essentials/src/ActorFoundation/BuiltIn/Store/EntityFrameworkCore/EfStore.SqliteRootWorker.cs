@@ -55,10 +55,6 @@ public sealed partial class EfStore
         """;
     }
 
-    private bool AuthoredSqliteWithholding(WorkerRoot root, RootImage current) =>
-        _ordinaryRoots?.AuthoredWithholds?.Invoke(new(new(root.Reference), current.Model, root.Tenant,
-            (Contract.ActorStatus)current.Status, current.Fault, null, current.TerminalAt, current.TypeData, current.Labels)) == true;
-
     internal static Task<bool> SqliteHeldOperatorCapacityReachedAsync(KernelDb db, string actor, int partition, CancellationToken token) =>
         db.Database.SqlQuery<bool>(WithSqliteOperatorPredicate($"""
             SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {actor} AND "Partition" = {partition}

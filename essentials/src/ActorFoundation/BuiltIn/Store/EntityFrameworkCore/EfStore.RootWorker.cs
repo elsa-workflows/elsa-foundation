@@ -95,12 +95,16 @@ public sealed partial class EfStore
         return (InstallWorkerScope(new(partition, [], discover: true)), count);
     }
 
-    internal WorkerRoots BindWorkerNode()
+    internal WorkerRoots BindWorkerNode(Func<Contract.ActorHeader, bool>? withholds = null)
     {
         if (!postgres || Engine is not null || !OwnedSetsAvailable)
             throw new NotSupportedException("A public root node requires PostgreSQL owned-set commits.");
-        return InstallWorkerScope(new(null, [], discover: true));
+        return InstallWorkerScope(new(null, [], discover: true) { AuthoredWithholds = withholds, SettlesEndedMailbox = withholds is not null });
     }
+
+    private bool AuthoredWithholding(WorkerRoot root, RootImage current) =>
+        _ordinaryRoots?.AuthoredWithholds?.Invoke(new(new(root.Reference), current.Model, root.Tenant,
+            (Contract.ActorStatus)current.Status, current.Fault, null, current.TerminalAt, current.TypeData, current.Labels)) == true;
 
     private WorkerRoots InstallWorkerScope(WorkerRoots scope)
     {
@@ -554,13 +558,14 @@ public sealed partial class EfStore
                 return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
                     row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, operatorTermination: true,
                     jobState: settledJobs is null ? null : new(null, current.NextJobGeneration), settledJobs: settledJobs,
-                    withheldInputs: !postgres && AuthoredSqliteWithholding(root, current));
+                    withheldInputs: AuthoredWithholding(root, current));
             }
             if (!db.UsesRootOperatorProtocol || row.Status != InstanceStatus.Running ||
                 row.Suspended != (command.Kind == Kinds.Suspend) || row.StateVersion != current.StateVersion || state != current.State ||
                 turn.Sent.Count != 0 || recalls is not null || turn.Journal is not null) throw RootShape();
             return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
-                row.StateVersion, header.Header.TypeData, header.Header.Labels, null, operatorSuspension: row.Suspended, terminalGrowth: header.TerminalGrowth);
+                row.StateVersion, header.Header.TypeData, header.Header.Labels, null, operatorSuspension: row.Suspended,
+                terminalGrowth: header.TerminalGrowth, withheldInputs: AuthoredWithholding(root, current));
         }
         if (row.Suspended != current.Suspended || inputs.Any(input => input.Operator is not null)) throw RootShape();
         if (settledJobs is not null)

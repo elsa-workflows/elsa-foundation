@@ -215,7 +215,7 @@ public static class PostgresPreviewHosting
 
         var store = new EfStore(create, postgres: true);
         if (nativeJobs) await store.EnableRootJobsAsync(cancellationToken);
-        var scope = store.BindWorkerNode();
+        var scope = store.BindWorkerNode(actor.Withholds);
         var watchdog = new Watchdog(Defaults.Lease, endProcess);
         var watched = watchdog.Watch(store);
         var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actor, rootJobHandle: store.RootJobHandle,

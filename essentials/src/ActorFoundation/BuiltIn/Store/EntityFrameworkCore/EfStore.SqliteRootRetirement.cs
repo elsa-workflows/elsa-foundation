@@ -38,7 +38,7 @@ public sealed partial class EfStore
         if (row is null) return null;
         var command = DecodeRootInput(db, row, root.Reference, issue: null);
         return command is { Kind: Kinds.Terminate, Operator.RootThenDelete: true } && (held is not null ? command == held : command.ReplyTo is null)
-            ? new(root, current, command, AuthoredSqliteWithholding(root, current)) : null;
+            ? new(root, current, command, AuthoredWithholding(root, current)) : null;
     }
 
     private static async Task<bool> BindSqliteRootRetirementAsync(KernelDb db, RootRetirement retire, CancellationToken token)
