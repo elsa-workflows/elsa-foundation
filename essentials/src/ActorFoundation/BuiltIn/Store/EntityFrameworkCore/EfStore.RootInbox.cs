@@ -11,7 +11,7 @@ public sealed partial class EfStore
 
     internal sealed record RootInboxEntry(long Seq, string Occurrence, string Id, string Kind, long? Due, int Attempts, long Size, ParkKeepReason? KeptBy);
     internal sealed record RootInboxPage(IReadOnlyList<RootInboxEntry> Rows, long AsOf);
-    private sealed record InboxProjection(long AsOf, int? StoreSchema, int? MessageProtocol, int? JournalCodec, bool SourceReady,
+    private sealed record InboxProjection(long AsOf, int? StoreSchema, int? MessageProtocol, int? JournalCodec, string? DefinitionStamp, bool SourceReady,
         long? Seq, string? Occurrence, string? Kind, string? Header, long? Due, int? Attempts, long? Size, bool? HasReply,
         bool? SupportedShape, short? KeptBy);
 
@@ -76,7 +76,7 @@ public sealed partial class EfStore
                     ORDER BY m."Seq", m."Id" COLLATE "C" LIMIT {limit}
                 )
                 SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
-                    marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec",
+                    marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec", /*definitions-stamp*/ AS "DefinitionStamp",
                     (SELECT "SourceReady" FROM source) AS "SourceReady", page.*
                 FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN marker ON true
                 ORDER BY page."Seq", page."Occurrence" COLLATE "C"
@@ -85,7 +85,7 @@ public sealed partial class EfStore
                 : db.UsesRootParkInspection ? """m."FoundationKeptBy" = 0""" : "false";
             var keptBy = db.UsesRootParkInspection ? """m."FoundationKeptBy" """ : "NULL::smallint";
             var rootParked = db.UsesRootParkInspection ? """i."FoundationParkAt" IS NOT NULL""" : "false";
-            var sql = query.Format.Replace("/*kept*/", kept, StringComparison.Ordinal)
+            var sql = StoreDefinitionsRevision.AddPostgresStampSql(query.Format).Replace("/*kept*/", kept, StringComparison.Ordinal)
                 .Replace("/*kept-by*/", keptBy, StringComparison.Ordinal)
                 .Replace("/*root-parked*/", rootParked, StringComparison.Ordinal);
             sampled = await db.Database.SqlQuery<InboxProjection>(FormattableStringFactory.Create(sql, query.GetArguments()))
@@ -103,7 +103,7 @@ public sealed partial class EfStore
         }
 
         var first = sampled[0];
-        RequireSnapshotFormat(expected, first.StoreSchema, first.MessageProtocol, first.JournalCodec);
+        RequireSnapshotFormat(db, first.StoreSchema, first.MessageProtocol, first.JournalCodec, first.DefinitionStamp);
         if (!first.SourceReady) throw new StoreFormatException("The root inbox requires its source tables in the marker schema.");
 
         return new(sampled.Where(row => row.Seq.HasValue).Select(Project).ToArray(), first.AsOf);
