@@ -40,7 +40,8 @@ internal static class PackageAssetEndpoints
             }
             var bytes = PackageContentReader.Read(entry, PackageContentReader.MaximumAssetBytes, context.RequestAborted);
             var tag = new EntityTagHeaderValue('"' + Convert.ToHexStringLower(SHA256.HashData(bytes)) + '"');
-            var result = Results.File(bytes, ContentType(path), lastModified: entry.LastWriteTime, entityTag: tag, enableRangeProcessing: true);
+            // Reproducible packages can give changed entries the same ZIP timestamp. Use the byte ETag for revalidation.
+            var result = Results.File(bytes, ContentType(path), entityTag: tag, enableRangeProcessing: true);
             // A host filter can replace the result without executing it. The response still owns cleanup;
             // the result's finally retains early release, and the shared lease disposes idempotently.
             context.Response.RegisterForDisposeAsync(lease);

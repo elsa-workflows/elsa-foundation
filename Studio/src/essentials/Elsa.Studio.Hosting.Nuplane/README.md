@@ -13,10 +13,12 @@ directories that do not resolve packages cannot be selected as the upload destin
 
 Nuplane verifies the retained package archive against the hash recorded for the active package. Studio
 reads browser assets and package metadata from that archive, applying entry size and response limits.
+Browser assets from packages use content ETags for revalidation.
 Physical static providers pointing into the mutable install root also use the archive reader. Both ordinary
 and coordinated stores can serve these files. Pruning still uses Nuplane's existing coordinated store protocol.
 
-An install acquired by an older Nuplane version may need a fresh acquisition to supply the retained archive.
+An install acquired by an older Nuplane version needs a fresh acquisition to supply the retained archive.
+Reconciliation can reuse an existing install of the same version. That leaves the archive absent.
 Keep deployed state and protected installs. An archive read can report `HashNotRecorded` before reconciliation
 records the expected hash, or `ArchiveMissing` when the install has no retained archive. Publishing and acquiring
 a new package version supplies its archive.
