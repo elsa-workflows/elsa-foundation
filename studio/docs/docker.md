@@ -13,7 +13,7 @@ Until [#5768](https://github.com/elsa-workflows/elsa-foundation/issues/5768), `e
 Essentials; the Workbench app has its own image.
 
 The **build context must be the repository root** for every Dockerfile, because the build depends on repo-root configuration
-(`studio/Directory.Build.props`, `studio/Directory.Packages.props`, `studio/NuGet.config`) and the optional Studio modules
+(`studio/Directory.Build.props`, `studio/Directory.Packages.props`, `Studio/NuGet.config`) and the optional Studio modules
 beside their Foundation capabilities. Each Dockerfile copies only its app's project closure.
 
 > The React/Vite frontend assets are generated into each project's `wwwroot` by
@@ -22,10 +22,8 @@ beside their Foundation capabilities. Each Dockerfile copies only its app's proj
 > build and the Dockerfile fails if the host shell asset is missing. All three NuGet
 > feeds used by the build are public, so no NuGet credentials are required.
 
-> **Add-on browser files answer 503 in the images** until
-> [valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands. Nuplane serves an installed
-> package's files only from an enrolled extracted store, and that store does not qualify a container's filesystem. A module
-> installed from the feed loads and its feature enables, but its screens do not load. Compiled-in modules are unaffected.
+All three images serve installed add-on browser files from verified package archives. See
+[upgrading older installs](../src/essentials/Elsa.Studio.Hosting.Nuplane/README.md) if you reuse an existing package store.
 
 ## Quick start — prebuilt image (no clone or build)
 
@@ -102,8 +100,8 @@ must sign in before the Studio management and console surfaces can be used.
 From the repository root:
 
 ```bash
-pnpm --dir studio install --frozen-lockfile
-pnpm --dir studio build
+pnpm --dir Studio install --frozen-lockfile
+pnpm --dir Studio build
 docker build -f studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local .
 docker build -f studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile -t elsa-studio-essentials:local .
 docker build -f studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile -t elsa-studio-foundation:local .

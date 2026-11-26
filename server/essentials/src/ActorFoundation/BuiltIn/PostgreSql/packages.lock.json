@@ -255,7 +255,8 @@
       "elsa.actorfoundation.builtin.hosting": {
         "type": "Project",
         "dependencies": {
-          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )"
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
+          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )"
         }
       },
       "elsa.actorfoundation.builtin.runtime": {

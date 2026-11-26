@@ -2,6 +2,9 @@
   "solution": {
     "path": "Elsa.Server.slnx",
     "projects": [
+      "extensions/Http/src/Activities/Elsa.Activities.Http.csproj",
+      "extensions/Http/src/Core/Elsa.Http.Core.csproj",
+      "extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj",
       "server/essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj",
       "server/essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj",
       "server/essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj",
@@ -13,7 +16,6 @@
       "server/essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj",
       "server/essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj",
       "server/essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
-      "server/essentials/src/Activities/Http/Elsa.Activities.Http.csproj",
       "server/essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj",
       "server/essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj",
       "server/essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj",
@@ -36,7 +38,6 @@
       "server/essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
       "server/essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj",
       "server/essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj",
-      "server/essentials/src/Http/Core/Elsa.Http.Core.csproj",
       "server/essentials/src/Locking/Core/Elsa.Locking.Core.csproj",
       "server/essentials/src/Mediator/Core/Elsa.Mediator.Core.csproj",
       "server/essentials/src/Mediator/Elsa.Mediator/Elsa.Mediator.csproj",
@@ -70,7 +71,6 @@
       "server/essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj",
       "server/essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
       "server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj",
-      "server/essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj",
       "server/essentials/src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj",
       "server/essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj",
       "server/essentials/src/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj",

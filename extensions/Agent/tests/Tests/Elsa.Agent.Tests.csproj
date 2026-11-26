@@ -25,7 +25,7 @@
     <ProjectReference Include="../../src/Elsa.Agent/Elsa.Agent.csproj" />
     <ProjectReference Include="../../../../server/essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="../../../../server/essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
-    <ProjectReference Include="../../../../server/essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
+    <ProjectReference Include="../../../Secrets/src/Elsa.Secrets/Elsa.Secrets.csproj" />
     <ProjectReference Include="../../../../server/essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="../../../../server/essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="../../../../server/essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />

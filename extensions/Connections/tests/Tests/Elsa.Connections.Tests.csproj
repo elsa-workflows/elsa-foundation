@@ -24,9 +24,9 @@
     <ProjectReference Include="..\..\src\Api\Elsa.Connections.Api.csproj" />
     <ProjectReference Include="..\..\src\Design\Elsa.Connections.Design.csproj" />
     <ProjectReference Include="..\..\src\Workflows\Elsa.Connections.Workflows.csproj" />
-    <ProjectReference Include="..\..\..\..\server\essentials\src\Secrets\Elsa.Secrets\Elsa.Secrets.csproj" />
-    <ProjectReference Include="..\..\..\..\server\essentials\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\server\essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\Secrets\src\Elsa.Secrets\Elsa.Secrets.csproj" />
+    <ProjectReference Include="..\..\..\Secrets\src\Core\Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="..\..\..\Http\src\Activities\Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\server\essentials\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
     <ProjectReference Include="..\..\..\..\server\essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />

@@ -66,7 +66,7 @@
     <ProjectReference Include="../../essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="../../essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="../../essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj" />
-    <ProjectReference Include="../../essentials/src/Activities/Http/Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="../../../extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
     <ProjectReference Include="../../essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="../../essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="../../essentials/src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj" />
@@ -94,8 +94,8 @@
     <ProjectReference Include="../../essentials/src/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
     <ProjectReference Include="../../essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
     <!-- Http -->
-    <ProjectReference Include="../../essentials/src/Http/Elsa.Http/Elsa.Http.csproj" />
-    <ProjectReference Include="../../essentials/src/Http/JavaScript/Elsa.Http.JavaScript.csproj" />
+    <ProjectReference Include="../../../extensions/Http/src/Elsa.Http/Elsa.Http.csproj" />
+    <ProjectReference Include="../../../extensions/Http/src/JavaScript/Elsa.Http.JavaScript.csproj" />
     <!-- Locking -->
     <ProjectReference Include="../../essentials/src/Locking/FileSystem/Elsa.Locking.FileSystem.csproj" />
     <!-- Mediator -->
@@ -105,10 +105,10 @@
     <!-- Primitives -->
     <ProjectReference Include="../../essentials/src/Primitives/Hosting/Elsa.Primitives.Hosting.csproj" />
     <!-- Secrets -->
-    <ProjectReference Include="../../essentials/src/Secrets/Api/Elsa.Secrets.Api.csproj" />
-    <ProjectReference Include="../../essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
-    <ProjectReference Include="../../essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../essentials/src/Secrets/Workflows/Elsa.Secrets.Workflows.csproj" />
+    <ProjectReference Include="../../../extensions/Secrets/src/Api/Elsa.Secrets.Api.csproj" />
+    <ProjectReference Include="../../../extensions/Secrets/src/Elsa.Secrets/Elsa.Secrets.csproj" />
+    <ProjectReference Include="../../../extensions/Secrets/src/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../extensions/Secrets/src/Workflows/Elsa.Secrets.Workflows.csproj" />
     <!-- Serialization -->
     <ProjectReference Include="../../essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
     <!-- Studio -->
@@ -130,7 +130,7 @@
     <ProjectReference Include="../../essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj" />
     <ProjectReference Include="../../essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
-    <ProjectReference Include="../../essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj" />
+    <ProjectReference Include="../../../extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />
     <ProjectReference Include="../../essentials/src/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="../../essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
@@ -151,7 +151,7 @@
     </Content>
   </ItemGroup>
 
-  <!-- The computed-vs-source-build production configuration swap every host under server/apps/ shares (#2084, #2126). -->
+  <!-- The computed-vs-source-build production configuration swap every host under apps/ shares (#2084, #2126). -->
   <Import Project="$(MSBuildThisFileDirectory)../ComputedProductionSettings.targets" />
 
 </Project>

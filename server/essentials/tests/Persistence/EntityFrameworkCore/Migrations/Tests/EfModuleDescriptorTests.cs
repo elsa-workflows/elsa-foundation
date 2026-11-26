@@ -178,7 +178,7 @@ public sealed class EfModuleDescriptorTests
         (typeof(StructuredLogsDbContext).Assembly, "extensions/Diagnostics.StructuredLogs/src/Persistence/EntityFrameworkCore"),
         (typeof(IdentityIamDbContext).Assembly, "server/essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore"),
         (typeof(ExternalAuthenticationDbContext).Assembly, "extensions/Identity/src/Persistence/EntityFrameworkCore"),
-        (typeof(SecretsDbContext).Assembly, "server/essentials/src/Secrets/Persistence/EntityFrameworkCore"),
+        (typeof(SecretsDbContext).Assembly, "extensions/Secrets/src/Persistence/EntityFrameworkCore"),
         (typeof(StudioPreferencesDbContext).Assembly, "server/essentials/src/Preferences/Persistence/EntityFrameworkCore"),
         (typeof(WorkflowsDesignDbContext).Assembly, "server/essentials/src/Workflows/Design/Persistence/EntityFrameworkCore"),
         (typeof(PublishingSnapshotReviewDbContext).Assembly, "server/essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore"),

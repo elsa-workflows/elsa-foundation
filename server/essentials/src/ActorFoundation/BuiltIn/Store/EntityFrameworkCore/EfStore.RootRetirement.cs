@@ -9,6 +9,11 @@ public sealed partial class EfStore
     // Keep the marker lock and the pinned PostgreSQL namespace for the whole operation.
     internal static async ValueTask<IDbContextTransaction?> BeginPinnedRootOperationAsync(KernelDb db, CancellationToken token)
     {
+        if (db.Database.IsSqlite())
+        {
+            await RequireSqliteOperationalFormatAsync(db, token);
+            return null;
+        }
         if (!db.RequiresPinnedRootNamespace) return null;
         var transaction = await db.Database.BeginTransactionAsync(token);
         try

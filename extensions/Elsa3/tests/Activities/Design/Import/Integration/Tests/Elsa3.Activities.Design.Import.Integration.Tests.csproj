@@ -28,9 +28,9 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Reconciliation\Elsa3.Activities.Design.Import.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Mapping\Elsa3.Mapping.csproj" />
     <!-- The host's composition: the features its one shell enables, by assembly. -->
-    <ProjectReference Include="..\..\..\..\..\..\..\..\server\essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\..\server\essentials\src\Http\Elsa.Http\Elsa.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\..\server\essentials\src\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\Http\src\Activities\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\Http\src\Elsa.Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\Http\src\Workflows\Runtime\Elsa.Workflows.Runtime.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\server\essentials\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\server\essentials\src\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\server\essentials\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />

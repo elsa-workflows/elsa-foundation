@@ -2076,6 +2076,10 @@ jobs:
           $NAT smoke
           $NAT profile-capabilities
           $NAT cost sqlite
+          $NAT sqlite-host-lifetime checked
+          $NAT sqlite-host-lifetime in-batch
+          $NAT sqlite-shipped-install
+          $NAT sqlite-root-ingress
 
       - name: Graph engine corpus
         run: dotnet test ../../server/essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build

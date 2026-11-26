@@ -93,13 +93,15 @@ public sealed class EfCoreDependencyGuardTests
         "Npgsql.EntityFrameworkCore.PostgreSQL"
     ];
 
-    // ADR 0099 and #4229 admit these two packages. The Built-in runtime and contracts retain no EF edge.
+    // ADR 0099 and #4229 admit these provider packages. The Built-in runtime and contracts retain no EF edge.
     private static readonly IReadOnlyDictionary<string, string[]> BuiltInActorFoundationEfClosures =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             ["server/essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj"] =
                 BuiltInActorFoundationEfPackages,
             ["server/essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj"] =
+                BuiltInActorFoundationEfPackages,
+            ["server/essentials/src/ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj"] =
                 BuiltInActorFoundationEfPackages
         };
 
@@ -959,16 +961,16 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly string[] SurfacePathPrefixes =
         [
             "server/essentials/src/Persistence/EntityFramework/",
-            "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/",
+            "extensions/Secrets/src/Persistence/EntityFrameworkCore/",
             "server/essentials/tests/Persistence/EntityFramework/",
-            "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/"
+            "extensions/Secrets/tests/Persistence/EntityFrameworkCore/"
         ];
 
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
                 ["server/essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"] = CorePackages(),
-                ["server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["extensions/Secrets/src/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
                 // Binds all four engines at the pinned versions so a provider upgrade that moved a Use* extension
                 // fails CI instead of a host; nothing here opens a connection.
                 ["server/essentials/tests/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj"] =
@@ -982,17 +984,17 @@ public sealed class EfCoreDependencyGuardTests
                 ],
                 ["server/essentials/tests/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
-                ["server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj"] =
+                ["extensions/Secrets/tests/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj"] =
                 [.. CorePackages(), "MySql.EntityFrameworkCore"],
-                ["server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj"] =
+                ["extensions/Secrets/tests/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj"] =
                 [.. CorePackages(), "Npgsql.EntityFrameworkCore.PostgreSQL"],
-                ["server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj"] =
+                ["extensions/Secrets/tests/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj"] =
                 [.. CorePackages(), "Npgsql.EntityFrameworkCore.PostgreSQL"],
-                ["server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj"] =
+                ["extensions/Secrets/tests/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer"],
                 // One engine, its own: the SqlServer and Npgsql this resolved before #1878 came in through
                 // the retired Secrets Tooling project, never from anything this suite loads.
-                ["server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                ["extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 

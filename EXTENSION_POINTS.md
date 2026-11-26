@@ -76,7 +76,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| HTTP (downloadable content handlers) | [`server/essentials/src/Http/Elsa.Http/EXTENSION_POINTS.md`](server/essentials/src/Http/Elsa.Http/EXTENSION_POINTS.md) |
+| HTTP (downloadable content handlers) | [`extensions/Http/src/Elsa.Http/EXTENSION_POINTS.md`](extensions/Http/src/Elsa.Http/EXTENSION_POINTS.md) |
 
 ### API
 
@@ -121,9 +121,9 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Secrets core (contracts — manager, resolver, repository, store, type and scope providers, audit sink) | [`server/essentials/src/Secrets/Core/EXTENSION_POINTS.md`](server/essentials/src/Secrets/Core/EXTENSION_POINTS.md) |
-| Secrets (default services + shell feature registration) | [`server/essentials/src/Secrets/Elsa.Secrets/EXTENSION_POINTS.md`](server/essentials/src/Secrets/Elsa.Secrets/EXTENSION_POINTS.md) |
-| Secrets Entity Framework Core persistence (the Secrets persistence family under ADR 0073) | [`server/essentials/src/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](server/essentials/src/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Secrets core (contracts — manager, resolver, repository, store, type and scope providers, audit sink) | [`extensions/Secrets/src/Core/EXTENSION_POINTS.md`](extensions/Secrets/src/Core/EXTENSION_POINTS.md) |
+| Secrets (default services + shell feature registration) | [`extensions/Secrets/src/Elsa.Secrets/EXTENSION_POINTS.md`](extensions/Secrets/src/Elsa.Secrets/EXTENSION_POINTS.md) |
+| Secrets Entity Framework Core persistence (the Secrets persistence family under ADR 0073) | [`extensions/Secrets/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](extensions/Secrets/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 
 ### Connections
 
@@ -151,7 +151,7 @@ not automatic constitution violations.
 | Activities runtime (activity constructors + resume target declarations) | [`server/essentials/src/Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md`](server/essentials/src/Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md) |
 | DispatchWorkflow runtime (staged checkpoint dispatch and child-start contribution) | [`server/essentials/src/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md`](server/essentials/src/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md) |
 | DispatchWorkflow design (options and executable-pin contribution) | [`server/essentials/src/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md`](server/essentials/src/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md) |
-| Activities HTTP (synchronous-response sink seam; HttpEndpoint/WriteHttpResponse + inbound middleware) | [`server/essentials/src/Activities/Http/EXTENSION_POINTS.md`](server/essentials/src/Activities/Http/EXTENSION_POINTS.md) |
+| Activities HTTP (synchronous-response sink seam; HttpEndpoint/WriteHttpResponse + inbound middleware) | [`extensions/Http/src/Activities/EXTENSION_POINTS.md`](extensions/Http/src/Activities/EXTENSION_POINTS.md) |
 | Activities sequence (runtime composite activity contracts) | [`server/essentials/src/Activities/Sequence/EXTENSION_POINTS.md`](server/essentials/src/Activities/Sequence/EXTENSION_POINTS.md) |
 | Activities compensation — CompensationScope (step and compensation slots, `Done`/`Compensated` outcomes, scheduling metadata; structure handler and Draft validator contributions) | [`server/essentials/src/Activities/Compensation/EXTENSION_POINTS.md`](server/essentials/src/Activities/Compensation/EXTENSION_POINTS.md) |
 | Activities control-flow — If branch (Then/Else slots, True/False outcomes; `IActivityStructureHandler` contribution) | [`server/essentials/src/Activities/ControlFlow/If/EXTENSION_POINTS.md`](server/essentials/src/Activities/ControlFlow/If/EXTENSION_POINTS.md) |
@@ -200,7 +200,7 @@ not automatic constitution violations.
 | Runtime diagnostic history (bounded reads, delivery/retention ports and immutable owner inputs; spec 1211) | [`Runtime history provider ports`](server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#runtime-history-provider-ports), [`owner-input contracts`](server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#runtime-history-owner-input-contracts), [`EF history and timer ownership`](server/essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Workflows runtime API — executable inspection and diagnostics services | [`server/essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md`](server/essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md) |
 | Workflows runtime distributed EF Core placement persistence | [`server/essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](server/essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Workflows runtime — HTTP endpoint behaviour | [`server/essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md`](server/essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
+| Workflows runtime — HTTP endpoint behaviour | [`extensions/Http/src/Workflows/Runtime/EXTENSION_POINTS.md`](extensions/Http/src/Workflows/Runtime/EXTENSION_POINTS.md) |
 | Workflows runtime — kernel host (publications on the clean-slate kernel: coordinator, trigger extractor, schedule actors, shell feature) | [`server/essentials/src/Workflows/Runtime/KernelHost/EXTENSION_POINTS.md`](server/essentials/src/Workflows/Runtime/KernelHost/EXTENSION_POINTS.md) |
 | Workflows runtime — kernel API (the runtime API's run list from the clean-slate kernel on a kernel shell) | [`server/essentials/src/Workflows/Runtime/KernelApi/EXTENSION_POINTS.md`](server/essentials/src/Workflows/Runtime/KernelApi/EXTENSION_POINTS.md) |
 | Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`server/essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](server/essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |

@@ -169,76 +169,76 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "server/essentials/src/Persistence/EntityFramework/UnicodeOrdinalCasingTable.Generated.cs",
         "server/essentials/src/Persistence/EntityFramework/UnicodeOrdinalCasingTable.cs",
         "server/essentials/src/Persistence/EntityFramework/UsesEfModuleAttribute.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/AssemblyInfo.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Configuration/SecretRecordConfiguration.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/DependencyInjection/SecretsEntityFrameworkCoreRegistration.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Entities/SecretRecord.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260915205200_Initial.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260915205200_Initial.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260918232200_OrdinalCollation.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260918232200_OrdinalCollation.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260928002150_SchemaVersionStamp.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260928002150_SchemaVersionStamp.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260928040738_SchemaFinalization.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260928040738_SchemaFinalization.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20261020202445_FreeNameOnDelete.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20261020202445_FreeNameOnDelete.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/SecretsMySqlDbContextModelSnapshot.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260911011058_WidenLookupKeys.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260911011058_WidenLookupKeys.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260918221655_OrdinalCollation.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260918221655_OrdinalCollation.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928002110_SchemaVersionStamp.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928002110_SchemaVersionStamp.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928040734_SchemaFinalization.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928040734_SchemaFinalization.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20261020202251_FreeNameOnDelete.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20261020202251_FreeNameOnDelete.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/SecretsPostgreSqlDbContextModelSnapshot.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260910210213_Initial.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260910210213_Initial.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260911010804_WidenLookupKeys.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260911010804_WidenLookupKeys.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260918221616_OrdinalCollation.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260918221616_OrdinalCollation.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928002031_SchemaVersionStamp.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928002031_SchemaVersionStamp.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928040730_SchemaFinalization.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928040730_SchemaFinalization.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20261020202043_FreeNameOnDelete.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20261020202043_FreeNameOnDelete.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/SecretsSqlServerDbContextModelSnapshot.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260910210210_Initial.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260910210210_Initial.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260911010717_WidenLookupKeys.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260911010717_WidenLookupKeys.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928002001_SchemaVersionStamp.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928002001_SchemaVersionStamp.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928040726_SchemaFinalization.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928040726_SchemaFinalization.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20261020201900_FreeNameOnDelete.Designer.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20261020201900_FreeNameOnDelete.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/SecretsSqliteDbContextModelSnapshot.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsDbContext.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsEfModule.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsEntityFrameworkCoreFeature.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsMySqlDbContext.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsPostgreSqlDbContext.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsSqlServerDbContext.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsSqliteDbContext.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Serialization/SecretsEfJson.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/EfSecretRepository.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretDocument.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretRevisionMapper.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsProjectionContract.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsProjectionException.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsProjectionReindex.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsSearchKeys.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsUnicodeOrdinalIgnoreCaseV1.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsV1Upcaster.cs",
-        "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsWriteVersion.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/AssemblyInfo.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Configuration/SecretRecordConfiguration.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/DependencyInjection/SecretsEntityFrameworkCoreRegistration.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Entities/SecretRecord.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/MySql/20260915205200_Initial.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/MySql/20260915205200_Initial.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/MySql/20260918232200_OrdinalCollation.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/MySql/20260918232200_OrdinalCollation.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/MySql/20260928002150_SchemaVersionStamp.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/MySql/20260928002150_SchemaVersionStamp.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/MySql/20260928040738_SchemaFinalization.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/MySql/20260928040738_SchemaFinalization.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/MySql/20261020202445_FreeNameOnDelete.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/MySql/20261020202445_FreeNameOnDelete.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/MySql/SecretsMySqlDbContextModelSnapshot.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260911011058_WidenLookupKeys.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260911011058_WidenLookupKeys.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260918221655_OrdinalCollation.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260918221655_OrdinalCollation.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928002110_SchemaVersionStamp.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928002110_SchemaVersionStamp.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928040734_SchemaFinalization.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928040734_SchemaFinalization.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20261020202251_FreeNameOnDelete.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20261020202251_FreeNameOnDelete.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/PostgreSql/SecretsPostgreSqlDbContextModelSnapshot.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260910210213_Initial.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260910210213_Initial.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260911010804_WidenLookupKeys.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260911010804_WidenLookupKeys.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260918221616_OrdinalCollation.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260918221616_OrdinalCollation.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928002031_SchemaVersionStamp.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928002031_SchemaVersionStamp.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928040730_SchemaFinalization.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928040730_SchemaFinalization.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/20261020202043_FreeNameOnDelete.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/20261020202043_FreeNameOnDelete.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/SqlServer/SecretsSqlServerDbContextModelSnapshot.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260910210210_Initial.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260910210210_Initial.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260911010717_WidenLookupKeys.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260911010717_WidenLookupKeys.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928002001_SchemaVersionStamp.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928002001_SchemaVersionStamp.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928040726_SchemaFinalization.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928040726_SchemaFinalization.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/20261020201900_FreeNameOnDelete.Designer.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/20261020201900_FreeNameOnDelete.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Migrations/Sqlite/SecretsSqliteDbContextModelSnapshot.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/SecretsDbContext.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/SecretsEfModule.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/SecretsEntityFrameworkCoreFeature.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/SecretsMySqlDbContext.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/SecretsPostgreSqlDbContext.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/SecretsSqlServerDbContext.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/SecretsSqliteDbContext.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Serialization/SecretsEfJson.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Stores/EfSecretRepository.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Stores/SecretDocument.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Stores/SecretRevisionMapper.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Stores/SecretsProjectionContract.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Stores/SecretsProjectionException.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Stores/SecretsProjectionReindex.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Stores/SecretsSearchKeys.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Stores/SecretsUnicodeOrdinalIgnoreCaseV1.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Stores/SecretsV1Upcaster.cs",
+        "extensions/Secrets/src/Persistence/EntityFrameworkCore/Stores/SecretsWriteVersion.cs",
         "server/essentials/tests/Persistence/EntityFramework/BindingDriftTests/EfRelationalProviderBindingDriftTests.Reuse.cs",
         "server/essentials/tests/Persistence/EntityFramework/BindingDriftTests/EfRelationalProviderBindingDriftTests.cs",
         "server/essentials/tests/Persistence/EntityFramework/Tests/BackfillScenario.cs",
@@ -309,33 +309,33 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "server/essentials/tests/Persistence/EntityFramework/Tests/TemporarySqliteDatabaseTests.cs",
         "server/essentials/tests/Persistence/EntityFramework/Tests/UnorderedRowLimitGuard.cs",
         "server/essentials/tests/Persistence/EntityFramework/Tests/UnorderedRowLimitGuardTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/MySqlContainerFixture.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/MySqlEfSecretRepositoryTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Program.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlEfSecretRepositoryTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlSecretsShellJourneyTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgresContainerFixture.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/SecretsPackageFeedProbeTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Support/SecretsPackageFeedProbeRunner.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerContainerFixture.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerEfSecretRepositoryTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfMigrationGeneratorTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfModuleMigrationTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreFeatureTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreShellReloadTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsFeatureKeySettingsShellTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsHostCatalog.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsNameSchemaTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceCompositionTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceHostJourneyTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsProjectionContractTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsProjectionReindexTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsSearchKeysTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SqliteEfSecretRepositoryTests.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PersistenceCliProcessRunner.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PreReuseSecretsModel.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PreStampSecretsModel.cs",
-        "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/SecretNameReuseScenario.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/MySql/Tests/MySqlContainerFixture.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/MySql/Tests/MySqlEfSecretRepositoryTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Program.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlEfSecretRepositoryTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlSecretsShellJourneyTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgresContainerFixture.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/PostgreSql/Tests/SecretsPackageFeedProbeTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/PostgreSql/Tests/Support/SecretsPackageFeedProbeRunner.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerContainerFixture.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerEfSecretRepositoryTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SecretsEfMigrationGeneratorTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SecretsEfModuleMigrationTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreFeatureTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreShellReloadTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SecretsFeatureKeySettingsShellTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SecretsHostCatalog.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SecretsNameSchemaTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceCompositionTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceHostJourneyTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SecretsProjectionContractTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SecretsProjectionReindexTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SecretsSearchKeysTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/SqliteEfSecretRepositoryTests.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/Support/PersistenceCliProcessRunner.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/Support/PreReuseSecretsModel.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/Support/PreStampSecretsModel.cs",
+        "extensions/Secrets/tests/Persistence/EntityFrameworkCore/Tests/Support/SecretNameReuseScenario.cs",
     ];
 
     [Fact]
@@ -344,9 +344,9 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         Assert.Equal(
             [
                 "server/essentials/src/Persistence/EntityFramework/",
-                "server/essentials/src/Secrets/Persistence/EntityFrameworkCore/",
+                "extensions/Secrets/src/Persistence/EntityFrameworkCore/",
                 "server/essentials/tests/Persistence/EntityFramework/",
-                "server/essentials/tests/Secrets/Persistence/EntityFrameworkCore/"
+                "extensions/Secrets/tests/Persistence/EntityFrameworkCore/"
             ],
             EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.SurfacePathPrefixes);
 
@@ -357,14 +357,14 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
             .Where(path => !IsBuildOutput(path))
             .Order(StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.ProjectPaths, projects);
+        Assert.Equal(EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.ProjectPaths.Order(StringComparer.Ordinal), projects);
     }
 
     [Fact]
     public void Policy_and_module_packages_stay_provider_free()
     {
-        var policy = PackageIncludes(RepoPath("server", "essentials", "src", "Persistence", "EntityFramework", "Elsa.Persistence.EntityFramework.csproj"));
-        var module = PackageIncludes(RepoPath("server", "essentials", "src", "Secrets", "Persistence", "EntityFrameworkCore", "Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"));
+        var policy = PackageIncludes(RepoPath("server", "server", "essentials", "src", "Persistence", "EntityFramework", "Elsa.Persistence.EntityFramework.csproj"));
+        var module = PackageIncludes(RepoPath("extensions", "Secrets", "src", "Persistence", "EntityFrameworkCore", "Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"));
 
         Assert.Equal(PolicyPackages, policy);
         Assert.Equal(ModulePackages, module);
@@ -376,7 +376,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     public void PostgreSql_shell_proof_supplies_exactly_one_relational_provider_package()
     {
         var packages = PackageIncludes(RepoPath(
-            "server", "essentials", "tests", "Secrets", "Persistence", "EntityFrameworkCore", "PostgreSql", "Tests",
+            "extensions", "Secrets", "tests", "Persistence", "EntityFrameworkCore", "PostgreSql", "Tests",
             "Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj"));
 
         Assert.Equal(
@@ -388,7 +388,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     public void MySql_shell_proof_supplies_exactly_one_relational_provider_package()
     {
         var packages = PackageIncludes(RepoPath(
-            "server", "essentials", "tests", "Secrets", "Persistence", "EntityFrameworkCore", "MySql", "Tests",
+            "extensions", "Secrets", "tests", "Persistence", "EntityFrameworkCore", "MySql", "Tests",
             "Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj"));
 
         Assert.Equal(
@@ -400,7 +400,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     public void Package_feed_probe_has_one_provider_and_no_compile_time_secrets_ef_module_reference()
     {
         var projectPath = RepoPath(
-            "server", "essentials", "tests", "Secrets", "Persistence", "EntityFrameworkCore", "PostgreSql", "PackageFeedProbe",
+            "extensions", "Secrets", "tests", "Persistence", "EntityFrameworkCore", "PostgreSql", "PackageFeedProbe",
             "Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj");
         var project = XDocument.Load(projectPath);
         var packages = project.Descendants("PackageReference")
@@ -425,7 +425,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     public void Module_package_declares_host_integrated_nuplane_loading()
     {
         var projectPath = RepoPath(
-            "server", "essentials", "src", "Secrets", "Persistence", "EntityFrameworkCore",
+            "extensions", "Secrets", "src", "Persistence", "EntityFrameworkCore",
             "Elsa.Secrets.Persistence.EntityFrameworkCore.csproj");
         var project = XDocument.Load(projectPath);
         var metadataItem = Assert.Single(project.Descendants("None"), element =>
@@ -434,7 +434,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         Assert.Equal("/", metadataItem.Attribute("PackagePath")?.Value);
 
         using var metadata = System.Text.Json.JsonDocument.Parse(File.ReadAllText(
-            RepoPath("server", "essentials", "src", "Secrets", "Persistence", "EntityFrameworkCore", "nuplane.json")));
+            RepoPath("extensions", "Secrets", "src", "Persistence", "EntityFrameworkCore", "nuplane.json")));
         var loading = metadata.RootElement.GetProperty("loading");
         Assert.Equal("HostIntegrated", loading.GetProperty("loadMode").GetString());
         Assert.Equal("DependencyClosure", loading.GetProperty("scope").GetString());
@@ -449,13 +449,13 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
             .Where(path => !IsBuildOutput(path))
             .Order(StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(PilotSources, actual);
+        Assert.Equal(PilotSources.Order(StringComparer.Ordinal), actual);
     }
 
     [Fact]
     public void Workbench_enables_the_secrets_ef_module_by_default()
     {
-        var workbench = XDocument.Load(RepoPath("server/apps", "Elsa.Workbench.Host", "Elsa.Workbench.Host.csproj"));
+        var workbench = XDocument.Load(RepoPath("server", "server", "apps", "Elsa.Workbench.Host", "Elsa.Workbench.Host.csproj"));
         var references = workbench.Descendants("ProjectReference")
             .Select(element => element.Attribute("Include")?.Value)
             .OfType<string>()

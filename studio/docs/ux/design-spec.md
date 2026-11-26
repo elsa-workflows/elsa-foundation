@@ -74,6 +74,12 @@ code.
 | Designer header | `exists` | Save, the publication split control and Test Run are all visible. These domain controls do not use `StudioButton`. `WorkflowEditorToolbar` fills the publication action; Test Run uses the surface background with an accent border. |
 | Designer header primary | `exists` | The publication split control is the filled action, defaulting to Review & publish. Save is an icon action and Test Run is outlined. |
 
+## Executable Inspector activity details
+
+A selected activity shows its input bindings and output captures in full-width rows. Long URLs, expressions and identifiers wrap inside the panel. When the server supplies an authorized full text literal or expression, an abbreviated preview can be expanded. Use the shared Technical details disclosure for activity identity and conversion plans, following the Runs inspector’s disclosure pattern.
+
+Check an unselected activity tab, a published activity with a long input and a short neighbor, and the expanded value and identity on desktop and narrow screens in light and dark. The same compiled binding permissions apply when opening details.
+
 ## Shared module composition (#3511)
 
 **Status: `exists`**; exact-revision qualification is recorded on [PR #3512](https://github.com/elsa-workflows/elsa-foundation/pull/3512). The
@@ -381,7 +387,7 @@ track the theme instead of a per-descriptor hex.
       `.stylelintrc.json` `ignoreFiles`.
 - [ ] Keyboard and focus behaviour unchanged or better.
 - [ ] Axe: `pnpm test:browser -- expression-code-intelligence-accessibility.spec.ts` (Chromium
-      project in `studio/playwright.config.ts`) passes (it fails on any critical/serious
+      project in `Studio/playwright.config.ts`) passes (it fails on any critical/serious
       violation). A new surface adds a sibling spec under `studio/tests/browser/` that injects
       `axe-core` the same way. `Client/src/__tests__/a11y.test.tsx` is keyboard/ARIA unit
       coverage, not axe.

@@ -2,6 +2,6 @@
   <PropertyGroup><ElsaTrackPublicApi>true</ElsaTrackPublicApi></PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../server/essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
-    <ProjectReference Include="../../../../server/essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="../../../Secrets/src/Core/Elsa.Secrets.Core.csproj" />
   </ItemGroup>
 </Project>

@@ -17,8 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\Secrets\Elsa.Secrets\Elsa.Secrets.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\extensions\Secrets\src\Elsa.Secrets\Elsa.Secrets.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\extensions\Secrets\src\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
 </Project>

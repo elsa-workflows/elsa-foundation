@@ -144,7 +144,7 @@
 		<ProjectReference Include="../../essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
 		<ProjectReference Include="../../essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
 		<ProjectReference Include="../../essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj" />
-		<ProjectReference Include="../../essentials/src/Activities/Http/Elsa.Activities.Http.csproj" />
+		<ProjectReference Include="../../../extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
 		<ProjectReference Include="../../essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
 		<ProjectReference Include="../../essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
 		<ProjectReference Include="../../essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
@@ -154,8 +154,8 @@
 		<ProjectReference Include="../../essentials/src/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/Elsa.Expressions.JavaScript.Rendering.csproj" />
 		<ProjectReference Include="../../essentials/src/Expressions/Liquid/Elsa.Expressions.Liquid.csproj" />
 		<ProjectReference Include="../../essentials/src/Expressions/Api/Elsa.Expressions.Api.csproj" />
-		<ProjectReference Include="../../essentials/src/Http/Elsa.Http/Elsa.Http.csproj" />
-		<ProjectReference Include="../../essentials/src/Http/JavaScript/Elsa.Http.JavaScript.csproj" />
+		<ProjectReference Include="../../../extensions/Http/src/Elsa.Http/Elsa.Http.csproj" />
+		<ProjectReference Include="../../../extensions/Http/src/JavaScript/Elsa.Http.JavaScript.csproj" />
 		<ProjectReference Include="../../essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
 		<ProjectReference Include="../../essentials/src/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
 		<ProjectReference Include="../../../extensions/Identity/src/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
@@ -167,7 +167,7 @@
 		<ProjectReference Include="../../essentials/src/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<!-- The host-composed OpenIddict token store (EF Core, SQLite/SQL Server/PostgreSQL), composed in Program.cs. -->
 		<ProjectReference Include="../../essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj" />
-		<ProjectReference Include="../../essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="../../../extensions/Secrets/src/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="../../essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="../../../extensions/Diagnostics.OpenTelemetry/src/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="../../../extensions/Diagnostics.StructuredLogs/src/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj" />
@@ -227,10 +227,10 @@
 		<ProjectReference Include="../../essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
 		<ProjectReference Include="../../essentials/src/Preferences/Core/Elsa.Studio.Preferences.Core.csproj" />
 		<ProjectReference Include="../../essentials/src/Preferences/Api/Elsa.Studio.Preferences.Api.csproj" />
-		<ProjectReference Include="../../essentials/src/Secrets/Api/Elsa.Secrets.Api.csproj" />
-		<ProjectReference Include="../../essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj" />
-		<ProjectReference Include="../../essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
-		<ProjectReference Include="../../essentials/src/Secrets/Workflows/Elsa.Secrets.Workflows.csproj" />
+		<ProjectReference Include="../../../extensions/Secrets/src/Api/Elsa.Secrets.Api.csproj" />
+		<ProjectReference Include="../../../extensions/Secrets/src/Core/Elsa.Secrets.Core.csproj" />
+		<ProjectReference Include="../../../extensions/Secrets/src/Elsa.Secrets/Elsa.Secrets.csproj" />
+		<ProjectReference Include="../../../extensions/Secrets/src/Workflows/Elsa.Secrets.Workflows.csproj" />
 		<ProjectReference Include="../../../extensions/Connections/src/Core/Elsa.Connections.Core.csproj" />
 		<ProjectReference Include="../../../extensions/Connections/src/Elsa.Connections/Elsa.Connections.csproj" />
 		<ProjectReference Include="../../../extensions/Connections/src/Api/Elsa.Connections.Api.csproj" />
@@ -242,7 +242,7 @@
 		<ProjectReference Include="../../essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj" />
 		<ProjectReference Include="../../essentials/src/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj" />
 		<ProjectReference Include="../../essentials/src/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
-		<ProjectReference Include="../../essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj" />
+		<ProjectReference Include="../../../extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />
 		<ProjectReference Include="../../essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj" />
 		<!--
 			The EF Core persistence providers and durable lane features each declare

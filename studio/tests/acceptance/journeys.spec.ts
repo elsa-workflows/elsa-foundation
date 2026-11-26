@@ -14,7 +14,7 @@ import { dashboardHomeJourney } from "./dashboardHomeJourney";
 import { activityDefinitionTitleJourney } from "./activityDefinitionTitleJourney";
 import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
-import { executableDesignerJourney } from "./executableDesignerJourney";
+import { executableActivityBindingsJourney, executableDesignerJourney } from "./executableDesignerJourney";
 import { compactInputsJourney } from "./compactInputsJourney";
 import { executionNavigationJourney } from "./executionNavigationJourney";
 import { historyOccurrenceQualificationJourney } from "./historyOccurrenceQualificationJourney";
@@ -122,6 +122,9 @@ test("settings tabs and preserved edits", async ({ page }, info) => settingsTabs
 test("structured logs table accessibility", async ({ page }, info) => structuredLogsJourney(page, info, capture));
 test("structured logs readability and recovery", async ({ page }, info) => structuredLogsReadabilityJourney(page, info, capture));
 test("phone authoring and settings content priority", async ({ page }, info) => phoneContentJourney(page, info, capture));
+test("executable activity bindings fit the inspector", async ({ page }, info) => {
+  await executableActivityBindingsJourney(page, info, capture, id => designerDefinitions.get(page)!.push(id));
+});
 
 test.afterEach(async ({ page, playwright }, info) => {
   const failures: string[] = [];
@@ -172,7 +175,7 @@ test.afterEach(async ({ page, playwright }, info) => {
 });
 
 test.beforeEach(async ({ page }, info) => {
-  const reportedAppearance = info.title === "feature filtering and settings dialogs";
+  const reportedAppearance = ["feature filtering and settings dialogs", "executable activity bindings fit the inspector"].includes(info.title);
   const authoredNamesTheme = ["explicit authored activity names survive publication and execution", "named blocks across graph authoring", "named blocks preserve declared expression results", "named blocks promote to reusable activities"].includes(info.title)
     ? info.project.use.colorScheme === "dark" ? "builtin:graphite" : "builtin:porcelain"
     : undefined;

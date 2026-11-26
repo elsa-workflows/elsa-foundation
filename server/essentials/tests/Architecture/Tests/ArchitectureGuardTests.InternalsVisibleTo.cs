@@ -45,7 +45,7 @@ public sealed partial class ArchitectureGuardTests
     public void Every_production_project_is_built_before_the_architecture_tests()
     {
         var built = new HashSet<string>(StringComparer.Ordinal);
-        var pending = new Stack<string>([Path.GetFullPath(Path.Join(RepoRoot, "server", "essentials", "tests", "Architecture", "Tests", "Elsa.Architecture.Tests.csproj"))]);
+        var pending = new Stack<string>([Path.GetFullPath(Path.Join(RepoRoot, "server", "server", "essentials", "tests", "Architecture", "Tests", "Elsa.Architecture.Tests.csproj"))]);
         while (pending.TryPop(out var project))
         {
             if (built.Add(project))
@@ -198,7 +198,7 @@ public sealed partial class ArchitectureGuardTests
     /// <summary>The rule, one grant at a time, in a sandbox holding only the granting project and the project it names.</summary>
     [Theory]
     [InlineData(GrantProjects.TasksCore, GrantProjects.Tasks)]
-    [InlineData(GrantProjects.RuntimeHttp, GrantProjects.Runtime)]
+    [InlineData(GrantProjects.RuntimeCore, GrantProjects.Runtime)]
     [InlineData(GrantProjects.ExtensionBuilderCore, GrantProjects.ExtensionBuilderApi)]
     [InlineData(GrantProjects.Tasks, GrantProjects.TasksTests)]
     [InlineData(GrantProjects.Workbench, GrantProjects.ModularityTests)]
@@ -236,7 +236,8 @@ public sealed partial class ArchitectureGuardTests
         public const string EventsTests = "server/essentials/tests/Events/Tests/Elsa.Events.Tests.csproj";
         public const string DesignCore = "server/essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj";
         public const string Runtime = "server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj";
-        public const string RuntimeHttp = "server/essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj";
+        public const string RuntimeCore = "server/essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj";
+        public const string RuntimeHttp = "extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj";
         public const string ExtensionBuilderApi = "extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj";
         public const string ExtensionBuilderCore = "extensions/ExtensionBuilder/src/Core/Elsa.ExtensionBuilder.Core.csproj";
         public const string ModularityTests = "server/essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj";
@@ -248,8 +249,8 @@ public sealed partial class ArchitectureGuardTests
     [Theory]
     [InlineData(GrantProjects.Tasks, "Tasks")]
     [InlineData(GrantProjects.TasksTests, "Tasks")]
-    [InlineData(GrantProjects.RuntimeHttp, "Workflows.Runtime")]
-    [InlineData("server/essentials/tests/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj", "Workflows.Runtime")]
+    [InlineData(GrantProjects.RuntimeHttp, "extensions/Http")]
+    [InlineData("extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj", "extensions/Http")]
     [InlineData(GrantProjects.ExtensionBuilderApi, "extensions/ExtensionBuilder")]
     [InlineData("extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj", "extensions/ExtensionBuilder")]
     [InlineData(GrantProjects.Workbench, null)]

@@ -1,3 +1,4 @@
+import { TechnicalDetails } from "@elsa-workflows/studio-ui";
 import { readConversionPlan, shortenFingerprint } from "./conversionSettings";
 
 /**
@@ -14,15 +15,17 @@ export function ConversionPlanCaption({ plan }: { plan: unknown }) {
   const flow = [summary.sourceRepresentation, summary.targetContract].filter(Boolean).join(" → ");
 
   return (
-    <span className="wf-conversion-plan">
-      <span className="wf-chip wf-conversion-plan-mode">{summary.mode}</span>
-      {profileLabel ? <span className="wf-conversion-plan-profile">{profileLabel}</span> : null}
-      {flow ? <span className="wf-conversion-plan-flow">{flow}</span> : null}
-      {summary.fingerprint ? (
-        <code className="wf-conversion-plan-fingerprint" title={summary.fingerprint}>
-          {shortenFingerprint(summary.fingerprint)}
-        </code>
-      ) : null}
-    </span>
+    <TechnicalDetails label="Conversion plan">
+      <span className="wf-conversion-plan">
+        <span className="wf-chip wf-conversion-plan-mode">{summary.mode}</span>
+        {profileLabel ? <span className="wf-conversion-plan-profile">{profileLabel}</span> : null}
+        {flow ? <span className="wf-conversion-plan-flow">{flow}</span> : null}
+        {summary.fingerprint ? (
+          <code className="wf-conversion-plan-fingerprint" title={summary.fingerprint}>
+            {shortenFingerprint(summary.fingerprint)}
+          </code>
+        ) : null}
+      </span>
+    </TechnicalDetails>
   );
 }

@@ -229,7 +229,7 @@ SQLite allows one writer, and at its default `synchronous=FULL` each commit is a
 
 ## Where this lives in the code
 
-All paths are relative to the repository root, under `server/essentials/`.
+All paths are relative to the repository root, under `Essentials/`.
 
 | Topic | Type(s) | Path |
 |---|---|---|
@@ -240,9 +240,9 @@ All paths are relative to the repository root, under `server/essentials/`.
 | EF Core runtime feature | `RuntimeEntityFrameworkCoreFeature` | `src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeEntityFrameworkCoreFeature.cs` |
 | Execute endpoint | `Endpoint` | `src/Workflows/Runtime/Api/Endpoints/Executables/Execute/Endpoint.cs` |
 | Start service | `WorkflowExecutionStartService` | `src/Workflows/Runtime/Api/Handlers/WorkflowExecutionStartService.cs` |
-| HTTP trigger middleware | `HttpEndpointMiddleware` | `src/Activities/Http/Middleware/HttpEndpointMiddleware.cs` |
+| HTTP trigger middleware | `HttpEndpointMiddleware` | `extensions/Http/src/Activities/Middleware/HttpEndpointMiddleware.cs` |
 | Stimulus router | `StimulusRouter` | `src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusRouter.cs` |
-| Multi-node HTTP notes | — | `src/Workflows/Runtime/Http/EXTENSION_POINTS.md` |
+| Multi-node HTTP notes | — | `extensions/Http/src/Workflows/Runtime/EXTENSION_POINTS.md` |
 | Executable model | `WorkflowExecutable` | `src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs` |
 | Publishing | `PublishWorkflowRequestHandler` | `src/Workflows/Publishing/Elsa.Workflows.Publishing/Handlers/PublishWorkflowRequestHandler.cs` |
 | Executable store | `IWorkflowExecutableStore`, `InMemoryWorkflowExecutableStore`, `CachingWorkflowExecutableStore`, `EfWorkflowExecutableStore` | `src/Workflows/Runtime/Core/Contracts/IWorkflowExecutableStore.cs`, `src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/`, `src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/` |
@@ -260,8 +260,8 @@ All paths are relative to the repository root, under `server/essentials/`.
 | Command kinds | `WorkflowExecutionCommandKind` | `src/Workflows/Runtime/Core/Models/WorkflowExecutionCommand.cs` |
 | Checkpoint model | `RuntimeCheckpointCommit` | `src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs` |
 | Committer | `RuntimeCheckpointCommitter` | `src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs` |
-| Commit stores | `IRuntimeCheckpointCommitStore`, `InMemoryRuntimeCheckpointCommitStore`, `EfRuntimeCheckpointCommitStore` | `src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs`, `server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/`, `src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/` |
-| SQLite cost budgets | — | `tests/Activities/Http/IntegrationTests/CommandBudgets/ef-command-budgets.json` |
+| Commit stores | `IRuntimeCheckpointCommitStore`, `InMemoryRuntimeCheckpointCommitStore`, `EfRuntimeCheckpointCommitStore` | `src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs`, `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/`, `src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/` |
+| SQLite cost budgets | — | `extensions/Http/tests/Activities/IntegrationTests/CommandBudgets/ef-command-budgets.json` |
 | Bookmark model | `BookmarkState` | `src/Workflows/Runtime/Core/Models/BookmarkState.cs` |
 | Stimulus endpoint | `Endpoint` | `src/Workflows/Runtime/Api/Endpoints/Stimuli/Dispatch/Endpoint.cs` |
 | Resume dispatcher | `BookmarkResumeDispatcher` | `src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs` |

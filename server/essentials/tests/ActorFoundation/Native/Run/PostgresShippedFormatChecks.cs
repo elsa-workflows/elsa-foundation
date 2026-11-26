@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -57,6 +58,8 @@ internal static class PostgresShippedFormatChecks
         await store.InstallPreviewRootSchemaAsync(stop);
         await store.InstallPreviewRootSchemaAsync(stop);
         Require(true, "the shipped schema and its workflow history install, and install again over themselves");
+        await CheckGuardBodyParityAsync(Open, stop);
+        await CheckDefinitionRevisionAsync(Open, store, stop);
         await RefusalsAsync(connection, options, stop);
 
         var registry = new WorkflowRegistry()
@@ -96,6 +99,8 @@ internal static class PostgresShippedFormatChecks
             var fetched = await SettledAsync(answered);
             Require(fetched is { Status: InstanceStatus.Finished } && Variable(fetched, "outcome") == "200" && partner.Calls("/ok") == 1,
                 "its SendHttpRequest job runs after the answer, settles, and the root commits Finished");
+            await using (var guard = Open())
+                await PostgresRootRetirementChecks.CheckRetirementFootprintAsync(guard, fetched!.Actor.Id, stop);
 
             // A timed job that passes its deadline settles on the Timeout outcome.
             var stuck = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("stuck")), "stuck-1", Contract.Kinds.Start,
@@ -219,6 +224,88 @@ internal static class PostgresShippedFormatChecks
             return await db.Database.SqlQuery<int>($"""
                 SELECT count(*)::integer AS "Value" FROM "FoundationWorkflowHistory" WHERE "Tenant" = {scope.Tenant} AND "Reference" = {root.Id}
                 """).SingleAsync(stop);
+        }
+    }
+
+    // These fingerprints pin the PostgreSQL definitions revision. A deliberate definition change advances its revision.
+    private static async Task CheckGuardBodyParityAsync(Func<KernelDb> open, CancellationToken token)
+    {
+        await using var db = open();
+        var sql = EfStore.RenderPostgresFirstRootGuards(db).ReplaceLineEndings("\n");
+        var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
+        Require(fingerprint == "01952f871066ceecbfef28c303000a5651b13157c0f02323ed767c06a522b634",
+            $"the complete emitted PostgreSQL guard installation batch matches its revision ({fingerprint})");
+        var bodies = await db.Database.SqlQueryRaw<string>("""
+            SELECT md5(p.prosrc) AS "Value"
+            FROM pg_catalog.pg_proc p
+            WHERE p.pronamespace = pg_catalog.current_schema()::regnamespace
+                AND p.proname IN ('kernel_require_root_checkpoint_writer', 'kernel_require_root_journal_revision')
+            ORDER BY p.proname
+            """).ToListAsync(token);
+        Require(bodies is ["c1c1b59c33a6d7089ec69286de2bbde8", "b8adb6d016ff58efc1a496a316309a74"],
+            "the installed PostgreSQL checkpoint and journal function bodies match their revision");
+    }
+
+    private static async Task CheckDefinitionRevisionAsync(Func<KernelDb> open, EfStore store, CancellationToken token)
+    {
+        await using var db = open();
+        var expected = StoreDefinitionsRevision.Seed(db)!;
+        var marker = db.StoreVersions.Where(row => row.Id == expected.Id);
+        Require(await marker.ExecuteDeleteAsync(token) == 1, "new PostgreSQL installs have a definitions marker");
+        await RequireMarkerRefusedAsync(db, "PostgreSQL treats an absent marker as legacy revision 1 and refuses it after the revision advances", token);
+        db.StoreVersions.Add(expected);
+        await db.SaveChangesAsync(token);
+        await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol + 1), token);
+        try
+        {
+            await RequireMarkerRefusedAsync(db, "PostgreSQL refuses an unsupported definitions revision", token);
+            await RefusesRevisionAsync(() => store.PartitionCountAsync(token).AsTask());
+            await RefusesRevisionAsync(() => store.ReadRootActorAsync("tenant", "missing", token));
+            await RefusesRevisionAsync(() => store.ReadRootActorListAsync("tenant", "", null, null, [], null, null, 1, token));
+            await RefusesRevisionAsync(() => store.ReadRootJournalAsync("tenant", "missing", 1, 1, token));
+            await RefusesRevisionAsync(() => store.ReadRootInboxAsync("tenant", "missing", 0, "", 1, token));
+            await RefusesRevisionAsync(() => store.ReadRootWorkflowHistoryAsync("tenant", "type", null, null, null, null, null, null, 1, token));
+            Require(true, "the owner and all shipped snapshot readers reject a mismatched definitions revision");
+        }
+        finally
+        {
+            await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol), token);
+        }
+
+        // An operation that waits for the shared marker must see the revision committed by the locker.
+        await using var advancing = open();
+        await using var advance = await advancing.Database.BeginTransactionAsync(token);
+        await advancing.Database.ExecuteSqlInterpolatedAsync($"""
+            SELECT "Id" FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId} FOR UPDATE
+            """, token);
+        await advancing.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "KernelStoreVersions" SET "MessageProtocol" = {expected.MessageProtocol + 1}
+            WHERE "Id" = {expected.Id}
+            """, token);
+        var blocker = ((NpgsqlConnection)advancing.Database.GetDbConnection()).ProcessID;
+        var waiting = store.PartitionCountAsync(token).AsTask();
+        while (!waiting.IsCompleted && !await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM pg_stat_activity
+                WHERE datname = current_database() AND {blocker} = ANY(pg_blocking_pids(pid))) AS "Value"
+            """).SingleAsync(token))
+            await Task.Delay(20, token);
+        Require(!waiting.IsCompleted, "the operation waits for the shared PostgreSQL marker lock");
+        await advance.CommitAsync(token);
+        try
+        {
+            await RefusesRevisionAsync(() => waiting);
+            Require(true, "the operation sees the new definitions revision after its marker lock wait");
+        }
+        finally
+        {
+            await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol), token);
+        }
+
+        static async Task RefusesRevisionAsync(Func<Task> query)
+        {
+            try { await query(); }
+            catch (StoreFormatException) { return; }
+            throw new InvalidOperationException("The shipped query accepted a mismatched definitions revision.");
         }
     }
 

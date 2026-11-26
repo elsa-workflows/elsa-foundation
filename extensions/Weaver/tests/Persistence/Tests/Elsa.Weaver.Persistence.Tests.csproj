@@ -21,7 +21,7 @@
     <ProjectReference Include="../../../src/Core/Elsa.Weaver.Core.csproj" />
     <ProjectReference Include="../../../src/Api/Elsa.Weaver.Api.csproj" />
     <ProjectReference Include="../../../../../server/essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
-    <ProjectReference Include="../../../../../server/essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
+    <ProjectReference Include="../../../../Secrets/src/Elsa.Secrets/Elsa.Secrets.csproj" />
     <ProjectReference Include="../../../../../server/essentials/tests/Testing/Elsa.Testing.csproj" />
   </ItemGroup>
 

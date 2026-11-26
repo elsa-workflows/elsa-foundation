@@ -95,7 +95,7 @@ public sealed partial class ArchitectureGuardTests
     [Fact]
     public void Shared_persistence_resolution_does_not_depend_on_feature_assemblies()
     {
-        var policy = Path.Combine(RepoRoot, "server", "essentials", "src", "Persistence", "EntityFramework");
+        var policy = Path.Combine(RepoRoot, "server", "server", "essentials", "src", "Persistence", "EntityFramework");
         var project = XDocument.Load(Path.Join(policy, "Elsa.Persistence.EntityFramework.csproj"));
         // Its three project references are no feature assembly: Elsa.Primitives, the root of the Line A contract baseline,
         // holds the write refusal's persistence-agnostic base that the domain APIs answer, and
@@ -562,6 +562,9 @@ public sealed partial class ArchitectureGuardTests
         ("Elsa.ExtensionBuilder.", "ExtensionBuilder"),
         ("Elsa.Integrations.", "Integrations"),
         ("Elsa.Connections.", "Connections"),
+        ("Elsa.Git.", "Git"),
+        ("Elsa.Http.", "Http"),
+        ("Elsa.Secrets.", "Secrets"),
         ("Elsa.Studio.Dashboard.", "Dashboard"),
         ("Elsa.Activities.Bpmn.", "Bpmn"),
         ("Elsa.Foundation.Identity.ExternalAuthentication.", "Identity"),
@@ -579,6 +582,15 @@ public sealed partial class ArchitectureGuardTests
         // The Workflow dataset adapter and its tests live beside saved Dashboards rather than the Home widgets.
         ["Elsa.Workflows.Dashboard.Queries"] = "extensions/Dashboard/src/Workflows/Queries/Elsa.Workflows.Dashboard.Queries.csproj",
         ["Elsa.Workflows.Dashboard.QueryTests"] = "extensions/Dashboard/tests/Workflows/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
+        // Keep the Git-specific reconciliation source beside the shared Git client.
+        ["Elsa.Workflows.Design.Reconciliation.Git"] = "extensions/Git/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.Git.csproj",
+        // Workflow activities and endpoint routing share the HTTP capability.
+        ["Elsa.Activities.Http"] = "extensions/Http/src/Activities/Elsa.Activities.Http.csproj",
+        ["Elsa.Activities.Http.CommandCost.Tests"] = "extensions/Http/tests/Activities/CommandCost/Tests/Elsa.Activities.Http.CommandCost.Tests.csproj",
+        ["Elsa.Activities.Http.IntegrationTests"] = "extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
+        ["Elsa.Activities.Http.Tests"] = "extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj",
+        ["Elsa.Workflows.Runtime.Http"] = "extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj",
+        ["Elsa.Workflows.Runtime.Http.Tests"] = "extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj",
         // The CLR scanner tests read this assembly's name ("Elsa.Activities.Design.Tests.ClrFixture") and its activities' type names.
         ["Elsa.Activities.Design.Tests.ClrFixture"] = "server/essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj",
         // Icon fixtures live in their own assembly so CLR reconciliation still counts the original eighteen.

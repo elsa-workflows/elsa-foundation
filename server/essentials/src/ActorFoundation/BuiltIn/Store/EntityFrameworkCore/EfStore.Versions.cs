@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -55,9 +56,8 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootParkRecovery => Current with { MessageProtocol = 22 };
 
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
-    // qualification profiles, kept for their checks until K14. A change to the shipped format's functions, triggers or
-    // stored framing takes the next number, so a database installed under the old one is refused and recreated: S5b-3b
-    // (a Delete of a parked root) moved it from 24 to 25; #5692 holds 23. Refer to it as RootShipped, not by number.
+    // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
+    // A change to an engine's definitions advances its own StoreDefinitionsRevision.
     internal static StoreFormat RootShipped => Current with { MessageProtocol = 25 };
 
     public override string ToString() =>
@@ -237,7 +237,7 @@ internal sealed record RootStateFamily(string Prefix, bool EndsCancelled, bool E
 internal sealed class KernelModelCacheKeyFactory : IModelCacheKeyFactory
 {
     public object Create(DbContext context, bool designTime) => context is KernelDb db
-        ? (context.GetType(), db.RequiredFormat, db.Capabilities, designTime)
+        ? (context.GetType(), db.RequiredFormat, db.Capabilities, db.SqliteShippedInstall, designTime)
         : (context.GetType(), designTime);
 }
 
@@ -269,51 +269,74 @@ public sealed partial class EfStore
     internal static Task LockCompatibleStoreFormatAsync(KernelDb db, CancellationToken cancellationToken, bool exclusive = false)
         => RequireStoreVersionsAsync(db, cancellationToken, exclusive ? FormatLock.Exclusive : FormatLock.Shared);
 
-    internal static void RequireSnapshotFormat(StoreFormat expected, int? schema, int? protocol, int? codec)
+    internal static void RequireSnapshotFormat(KernelDb db, int? schema, int? protocol, int? codec, string? definitionStamp)
     {
         if (schema is null || protocol is null || codec is null)
             throw new StoreFormatException("The kernel store version marker is missing.");
         var stored = new StoreFormat(schema.Value, protocol.Value, codec.Value);
-        if (stored != expected) throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {expected}.");
+        if (stored != db.RequiredFormat)
+            throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {db.RequiredFormat}.");
+        StoreDefinitionsRevision.Require(db, definitionStamp);
     }
 
     private static async Task RequireStoreVersionsAsync(KernelDb db, CancellationToken cancellationToken,
         FormatLock formatLock)
     {
-        var stored = await ReadStoreFormatAsync(db, formatLock, cancellationToken);
-        if (stored != db.RequiredFormat)
-            throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {db.RequiredFormat}.");
+        RefuseSqliteShippedRuntime(db);
+        await RequireInstalledStoreVersionsAsync(db, formatLock, cancellationToken);
+    }
+
+    private static async Task RequireInstalledStoreVersionsAsync(KernelDb db, FormatLock formatLock, CancellationToken token)
+    {
+        var (stored, definitions) = await ReadVersionMarkersAsync(db, formatLock, token);
+        // A locked read can wait for a concurrent change. Re-sample both rows after the lock on the same transaction.
+        if (db.RequiredFormat == StoreFormat.RootShipped && formatLock != FormatLock.None && db.Database.IsNpgsql())
+            (stored, definitions) = await ReadVersionMarkersAsync(db, FormatLock.None, token);
+        RequireSnapshotFormat(db, stored.StoreSchema, stored.MessageProtocol, stored.JournalCodec,
+            definitions is null ? null : StoreDefinitionsRevision.Stamp(definitions));
     }
 
     private static async Task<StoreFormat> ReadStoreFormatAsync(KernelDb db, FormatLock formatLock, CancellationToken cancellationToken)
     {
-        StoreVersionEntity? stored;
+        var (stored, _) = await ReadVersionMarkersAsync(db, formatLock, cancellationToken);
+        return stored.Format;
+    }
+
+    private static async Task<(StoreVersionEntity Format, StoreVersionEntity? Definitions)> ReadVersionMarkersAsync(
+        KernelDb db, FormatLock formatLock, CancellationToken cancellationToken)
+    {
+        var withDefinitions = db.RequiredFormat == StoreFormat.RootShipped;
+        List<StoreVersionEntity> rows;
         try
         {
-            var sql = FormatReadSql(db, formatLock);
-            stored = sql is null
-                ? await db.StoreVersions.AsNoTracking().SingleOrDefaultAsync(row => row.Id == StoreVersionEntity.MarkerId, cancellationToken)
-                : (await db.StoreVersions.FromSqlRaw(sql, StoreVersionEntity.MarkerId).AsNoTracking()
-                    .ToListAsync(cancellationToken)).SingleOrDefault();
+            var sql = FormatReadSql(db, formatLock, withDefinitions);
+            rows = sql is null
+                ? await db.StoreVersions.AsNoTracking().Where(row => row.Id == StoreVersionEntity.MarkerId ||
+                    withDefinitions && row.Id == StoreDefinitionsRevision.MarkerId).ToListAsync(cancellationToken)
+                : await db.StoreVersions.FromSqlRaw(sql, StoreVersionEntity.MarkerId).AsNoTracking()
+                    .ToListAsync(cancellationToken);
         }
         catch (Exception error) when (MissingVersionTable(error))
         {
             throw new StoreFormatException("The kernel store version marker table is missing.", error);
         }
 
-        if (stored is null)
-            throw new StoreFormatException("The kernel store version marker is missing.");
-        return stored.Format;
+        var stored = rows.SingleOrDefault(row => row.Id == StoreVersionEntity.MarkerId)
+            ?? throw new StoreFormatException("The kernel store version marker is missing.");
+        return (stored, rows.SingleOrDefault(row => row.Id == StoreDefinitionsRevision.MarkerId));
     }
 
     // Ownership and the marker advance take their locks in the same order. SQLite holds its writer transaction.
-    private static string? FormatReadSql(KernelDb db, FormatLock formatLock)
+    private static string? FormatReadSql(KernelDb db, FormatLock formatLock, bool withDefinitions)
     {
         if (formatLock == FormatLock.None || db.Database.IsSqlite()) return null;
         var exclusive = formatLock == FormatLock.Exclusive;
         if (db.Database.IsSqlServer())
             return $"""SELECT * FROM "KernelStoreVersions" WITH ({(exclusive ? "XLOCK, " : "")}HOLDLOCK, ROWLOCK) WHERE "Id" = {"{0}"}""";
-        var sql = $"""SELECT * FROM "KernelStoreVersions" WHERE "Id" = {"{0}"} FOR {(exclusive ? "UPDATE" : "SHARE")}""";
+        var predicate = withDefinitions
+            ? FormattableString.Invariant($$""" "Id" IN ({0}, {{StoreDefinitionsRevision.MarkerId}}) ORDER BY "Id" """)
+            : """ "Id" = {0} """;
+        var sql = $"""SELECT * FROM "KernelStoreVersions" WHERE {predicate} FOR {(exclusive ? "UPDATE" : "SHARE")}""";
         return db.Database.IsNpgsql() ? sql : sql.Replace('"', '`');
     }
 
@@ -327,4 +350,52 @@ public sealed partial class EfStore
             sqlite.Message.Contains("no such table: " + StoreVersionEntity.Table, StringComparison.Ordinal),
         _ => false
     };
+}
+
+// Row 1 retains the shared protocol marker. Row 2 uses the three existing fields for engine, revision and reserved zero.
+internal static class StoreDefinitionsRevision
+{
+    internal const int MarkerId = 2;
+    private const int PostgreSql = 1;
+    private const int Sqlite = 2;
+    private const int LegacyPostgreSqlRevision = 1;
+    private const int PostgreSqlRevision = 2;
+    private const int SqliteRevision = 4;
+
+    internal static StoreVersionEntity? Seed(KernelDb db)
+    {
+        if (db.RequiredFormat != StoreFormat.RootShipped) return null;
+        var sqlite = db.Database.IsSqlite();
+        return new StoreVersionEntity
+        {
+            Id = MarkerId,
+            StoreSchema = sqlite ? Sqlite : PostgreSql,
+            MessageProtocol = sqlite ? SqliteRevision : PostgreSqlRevision,
+            JournalCodec = 0
+        };
+    }
+
+    internal static string Stamp(StoreVersionEntity row) =>
+        FormattableString.Invariant($"{row.StoreSchema}/{row.MessageProtocol}/{row.JournalCodec}");
+
+    internal static void Require(KernelDb db, string? stored)
+    {
+        if (Seed(db) is not { } expected) return;
+        var actual = stored ?? (db.Database.IsNpgsql() ? FormattableString.Invariant($"{PostgreSql}/{LegacyPostgreSqlRevision}/0") : null);
+        if (!string.Equals(actual, Stamp(expected), StringComparison.Ordinal))
+            throw new StoreFormatException($"Incompatible kernel store definitions revision. Stored {actual ?? "missing"}. " +
+                $"This build reads {Stamp(expected)}. Recreate or migrate the database.");
+    }
+
+    // Query the stamp inside the same statement as the format, so a reader cannot combine two store revisions.
+    private static readonly string PostgresStampSql = FormattableString.Invariant($"""
+        SELECT d."StoreSchema"::text || '/' || d."MessageProtocol"::text || '/' || d."JournalCodec"::text
+        FROM "KernelStoreVersions" d WHERE d."Id" = {MarkerId}
+        """);
+
+    internal static string AddPostgresStampSql(string sql, bool lockDefinitions = false) =>
+        sql.Replace("/*definitions-stamp*/", "(" + PostgresStampSql + (lockDefinitions ? " FOR SHARE OF d)" : ")"), StringComparison.Ordinal);
+
+    internal static FormattableString AddPostgresStamp(FormattableString sql) =>
+        FormattableStringFactory.Create(AddPostgresStampSql(sql.Format), sql.GetArguments());
 }

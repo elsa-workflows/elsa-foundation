@@ -173,8 +173,7 @@ public sealed partial class EfStore
                     OLD."Children", OLD."Parent", OLD."Model", OLD."Definition", OLD."NextJobGeneration", OLD."CustomHandles")
         """;
 
-    // The retirement of a parked root by its Terminate-then-delete carries the C# retirement lock's conditions itself (#5746):
-    // no jobs, children, parent, custom handles or subscriptions, no pending row but a direct occurrence, and nothing kept.
+    // Park retirement adds its Park mark and kept-input conditions to the common retirement footprint checks.
     // S5b-3b: a Delete retires it the same way, still Faulted; a Terminate-then-delete needs its capability.
     private static string ParkedRetirementCheckpoint(KernelDb db) => ParkedRetirementSql
         .Replace("/*retired-status*/", db.UsesRootTerminateThenDelete ? "IN (2, 3)" : "= 2", StringComparison.Ordinal);
@@ -182,14 +181,9 @@ public sealed partial class EfStore
         (OLD."Status" = 2 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationTerminalRevision" IS NULL
             AND NEW."Status" /*retired-status*/ AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
             AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
-            AND OLD."Jobs" IS NULL /*retire-children*/ AND OLD."Children" IS NULL /*retire-parent*/ AND OLD."Parent" IS NULL
-            /*retire-handles*/ AND OLD."CustomHandles" IS NULL
-            /*retire-subscriptions*/ AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = NEW."Id")
-            /*retire-pending*/ AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = NEW."Id" AND m."Partition" = NEW."Partition"
-                AND /*pending-residue*/)
             /*retire-kept*/ AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
                 AND k."FoundationKeptBy" IS NOT NULL))
-        """.Replace("/*pending-residue*/", PendingResidue, StringComparison.Ordinal);
+        """;
 
     // The journal trigger admits a "terminated" entry on the parked root at its next revision.
     // A protected entry needs a set with Terminate-then-delete (terminated and kept) or retirement (a Delete's discard).
@@ -230,10 +224,7 @@ public sealed partial class EfStore
             BEGIN
                 IF EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance" AND i."FoundationReference" IS NOT NULL
                     AND NOT (i."Partition" = NEW."Partition" AND i."Revision" = NEW."Revision"
-                        AND (NEW."Entries" NOT LIKE '{{"Outcome":"terminated",%' AND NEW."Entries" NOT LIKE '{{"Outcome":"protected",%'
-                            OR (i."Status" = CASE WHEN NEW."Entries" LIKE '{{"Outcome":"protected","Disposition":"discarded",%' THEN 2 ELSE 3 END
-                                AND NOT i."Retired" AND i."FoundationParkAt" IS NULL AND i."FoundationTerminalRevision" = NEW."Revision"))
-                        AND (NEW."Entries" NOT LIKE '{{"Outcome":"clearing",%' OR i."FoundationParkClearing" IS NOT NULL)))
+                        AND /*outcome-checkpoint*/))
                 THEN RAISE EXCEPTION 'An operator outcome entry requires the checkpoint write at its revision' USING ERRCODE = '23514'; END IF;
                 RETURN NULL;
             END
@@ -242,7 +233,16 @@ public sealed partial class EfStore
             CREATE CONSTRAINT TRIGGER kernel_require_root_outcome_checkpoint AFTER INSERT ON "Journal"
                 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.{RootOutcomeEntry})
                 EXECUTE FUNCTION kernel_require_root_outcome_checkpoint();
-            """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal), token);
+            """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal)
+            .Replace("/*outcome-checkpoint*/", RootParkedOutcomeCheckpoint, StringComparison.Ordinal), token);
+
+    // References i for the checkpoint and NEW for the inserted journal entry.
+    private const string RootParkedOutcomeCheckpoint = """
+        (NEW."Entries" NOT LIKE '{{"Outcome":"terminated",%' AND NEW."Entries" NOT LIKE '{{"Outcome":"protected",%'
+                        OR (i."Status" = CASE WHEN NEW."Entries" LIKE '{{"Outcome":"protected","Disposition":"discarded",%' THEN 2 ELSE 3 END
+                            AND NOT i."Retired" AND i."FoundationParkAt" IS NULL AND i."FoundationTerminalRevision" = NEW."Revision"))
+                    AND (NEW."Entries" NOT LIKE '{{"Outcome":"clearing",%' OR i."FoundationParkClearing" IS NOT NULL)
+        """;
 
     // S5b-2: an open clearing on the parked root: the Terminate's operation and the rows cleared so far. Both are set only on a
     // Faulted row with its Park mark.

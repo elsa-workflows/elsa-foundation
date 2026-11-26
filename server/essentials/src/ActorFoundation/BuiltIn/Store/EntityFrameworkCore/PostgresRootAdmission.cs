@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
+using static Kernel.EntityFramework.RootAdmissionWire;
 
 namespace Kernel.EntityFramework;
 
@@ -13,8 +13,6 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record StartWrite(bool Claimed, bool Enqueued);
-    private sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput, bool ExplicitZeroDue = false);
-    private const string CreatorPrefix = "!kernel-root/1:";
     // Bound the formatting and payload cost of a duplicate that loses the batched receipt claim.
     private const int BatchedStartInputCodeUnits = 8 * 1024;
     private const string ClaimReceiptSql = """
@@ -218,13 +216,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     private async Task<Receipt?> AdmitCoreAsync(string tenant, string operation, StartSpec spec, long? due,
         TimeSpan? keepFor, DirectReply? reply, CancellationToken cancellationToken)
     {
-        if (!FoundationMetadataLimits.IsOutsideMessageId(operation) || spec is { Parent: not null } or { Creation: not null } ||
-            spec.ParentCreation != 0 || !FoundationMetadataLimits.FitsName(spec.Model))
-            throw new ArgumentException("Invalid root creator metadata.");
-        FoundationMetadataLimits.RequireContent(spec.Definition, nameof(spec), FoundationMetadataLimits.TypeDataBytes);
-        FoundationMetadataLimits.RequireContent(spec.Input, nameof(spec), FoundationMetadataLimits.StartContentBytes);
-        var window = keepFor is { } requested && requested < deduplicationWindow ? requested : deduplicationWindow;
-        ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
+        RequireCreator(operation, spec);
+        var window = ReceiptWindow(deduplicationWindow, keepFor);
 
         var digest = FoundationRootCreator.OperationDigest(operation);
         var name = tenant + "_" + Guid.NewGuid().ToString("N");
@@ -255,15 +248,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
 
         var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, reply?.Address);
         var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
-        // Raw PostgreSQL text avoids JSON expansion for large quoted or international inputs. Only a
-        // value that PostgreSQL text cannot represent travels in the reversible JSON envelope.
-        var escaped = spec.Input is { } input && (input.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(input));
-        var payload = escaped ? null : spec.Input;
-        var storedSpec = escaped ? creator.Start! : creator.Start! with { Input = null };
-        var header = CreatorPrefix + DurableKeyJson.Write(new StoredRoot(creator.Id, storedSpec, escaped, due == 0));
-        const int contentLimit = 16 * 1024 * 1024 - 24 * 1024;
-        var fits = Encoding.UTF8.GetByteCount(header) + (payload is null ? 0 : Encoding.UTF8.GetByteCount(payload)) +
-            (reply is null ? 0 : Encoding.UTF8.GetByteCount(reply.Address)) <= contentLimit;
+        var (header, payload) = EncodeCreator(creator);
+        var fits = FitsEnvelope(header, payload, reply?.Address);
 
         // A live receipt wins even when the replay's encoded envelope is too large. When no receipt
         // wins, this transaction rolls back the claim if its creator cannot be stored.
@@ -292,7 +278,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             actor.Id, actor.Partition, creator.InboxKey.Id, fingerprint, fits, creator.Kind, creator.Due ?? 0,
             (fits ? payload : null)!, fits ? header : "", (reply?.Address)!).ToListAsync(cancellationToken)).Single();
         if (!write.Claimed) return await Replay();
-        if (!fits) throw new MetadataLimitExceeded(nameof(spec), contentLimit);
+        if (!fits) throw new MetadataLimitExceeded(nameof(spec), EfStore.RootContentBytes);
         if (!write.Enqueued)
             throw new InvalidOperationException("A generated root start must commit its creator with the receipt.");
         await transaction.CommitAsync(cancellationToken);
@@ -324,21 +310,33 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var current = db.Database.CurrentTransaction!;
         try
         {
-            // PostgreSQL executes the first statement before it parses or binds the second. The batch holds
-            // the marker before touching either source table, matching the lock order of schema migration.
-            var marker = new NpgsqlBatchCommand("""
-                SELECT "StoreSchema", "MessageProtocol", "JournalCodec" FROM "KernelStoreVersions"
-                WHERE "Id" = $1 FOR SHARE
-                """);
+            // Lock the shared marker first. A fresh statement then samples both markers, including a revision row
+            // inserted by the transaction that held the lock. Batch the statements to keep one round trip.
+            var separateLock = db.RequiredFormat == StoreFormat.RootShipped;
+            var marker = new NpgsqlBatchCommand(StoreDefinitionsRevision.AddPostgresStampSql("""
+                SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", /*definitions-stamp*/
+                FROM "KernelStoreVersions" v WHERE v."Id" = $1
+                """ + (separateLock ? "" : " FOR SHARE OF v"), lockDefinitions: separateLock));
             marker.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
             var transaction = (NpgsqlTransaction)current.GetDbTransaction();
-            await using var batch = new NpgsqlBatch(transaction.Connection, transaction) { BatchCommands = { marker, lookup } };
+            await using var batch = new NpgsqlBatch(transaction.Connection, transaction);
+            if (separateLock)
+            {
+                var gate = new NpgsqlBatchCommand("""SELECT 1 FROM "KernelStoreVersions" WHERE "Id" = $1 FOR SHARE""");
+                gate.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
+                batch.BatchCommands.Add(gate);
+            }
+            batch.BatchCommands.Add(marker);
+            batch.BatchCommands.Add(lookup);
             if (db.Database.GetCommandTimeout() is { } timeout)
                 batch.Timeout = timeout;
             await using var reader = await batch.ExecuteReaderAsync(token);
+            if (separateLock && (!await reader.ReadAsync(token) || !await reader.NextResultAsync(token)))
+                throw new StoreFormatException("The kernel store version marker is missing.");
             if (!await reader.ReadAsync(token))
                 throw new StoreFormatException("The kernel store version marker is missing.");
-            EfStore.RequireSnapshotFormat(db.RequiredFormat, reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2));
+            EfStore.RequireSnapshotFormat(db, reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3));
             if (!await reader.NextResultAsync(token))
                 throw new InvalidOperationException("The guarded root lookup did not return a result.");
             return await reader.ReadAsync(token) ? read(reader) : null;

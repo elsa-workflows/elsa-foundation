@@ -6,6 +6,99 @@ type Submitted = { definition: { id: string }; draftId: string; version: { id: s
 type Published = { artifactId: string; sourceReferenceId: string };
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 
+export async function executableActivityBindingsJourney(page: Page, info: TestInfo, capture: Capture, ownDefinition: (id: string) => void) {
+  const base = process.env.ELSA_WORKBENCH_URL!;
+  async function api<T>(path: string, method = "GET", data?: unknown): Promise<T> {
+    const response = await page.request.fetch(base + path, { method, data });
+    expect(response.ok(), `${method} ${path}: ${response.status()} ${await response.text()}`).toBe(true);
+    return response.status() === 204 ? undefined as T : await response.json() as T;
+  }
+  await api("/_elsa/identity/login", "POST", { username: "admin", password: "Password123!" });
+  const version = async (type: string) => {
+    const catalog = await api<{ items: { definition: { activityTypeKey: string; headVersionId: string } }[] }>(
+      "/design/activities/definitions?search=" + encodeURIComponent(type));
+    const match = catalog.items.find(item => item.definition.activityTypeKey === type);
+    expect(match).toBeDefined();
+    return match!.definition.headVersionId;
+  };
+  const [sequenceVersion, requestVersion] = await Promise.all([
+    version("Elsa.Activities.Sequence.Activities.Sequence"),
+    version("Elsa.Activities.Http.Activities.SendHttpRequest")
+  ]);
+  const expression = JSON.stringify("https://example.test/products/" + "longsegment".repeat(24) + "?id=1&preview=true");
+  const textLiteral = "Example request content. ".repeat(7).trim();
+  const request: Node = {
+    nodeId: "request-" + "long-node-id".repeat(10),
+    activityVersionId: requestVersion,
+    inputs: [
+      { referenceKey: "Url", value: { expressionType: "JavaScript", value: expression } },
+      { referenceKey: "Method", value: { expressionType: "Literal", value: "GET" } },
+      { referenceKey: "Content", value: { expressionType: "Literal", value: textLiteral } }
+    ],
+    outputs: []
+  };
+  const rootActivity: Node = {
+    nodeId: "root",
+    activityVersionId: sequenceVersion,
+    inputs: [],
+    outputs: [],
+    structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [request] } }
+  };
+  const submitted = await api<Submitted>("/design/workflows/definitions/submit", "POST", {
+    name: "Long executable inputs " + info.project.name, state: { rootActivity, variables: [], inputs: [], outputs: [] }
+  });
+  ownDefinition(submitted.definition.id);
+  const published = await api<Published>("/publishing/workflows/" + submitted.version.id + "/publish", "POST", {});
+  await page.goto("/workflows/executables/" + published.artifactId + "?ref=" + encodeURIComponent(published.sourceReferenceId));
+  const canvas = page.getByRole("region", { name: "Executable canvas", exact: true });
+  await expect(canvas).toBeVisible();
+  const expandInspector = page.getByRole("button", { name: "Expand inspector panel", exact: true });
+  if (await expandInspector.isVisible()) await expandInspector.click();
+  await page.getByRole("tab", { name: "Activity", exact: true }).click();
+  await expect(page.getByText("Select an activity in the graph to inspect its details.", { exact: true })).toBeVisible();
+  await capture(page, info, "executable-activity-empty");
+  await canvas.getByRole("button", { name: "1. Send Http Request", exact: true }).press("Enter");
+  const panel = page.locator(".wf-executable-activity");
+  await expect(panel.getByRole("heading", { name: "Inputs", exact: true })).toBeVisible();
+  if ((info.project.use.viewport?.width ?? 1440) < 800) {
+    await page.getByRole("button", { name: "Maximize inspector panel", exact: true }).click();
+  }
+  const url = panel.locator(".wf-executable-bindings > div").filter({ has: page.getByText("URL", { exact: true }) });
+  const method = panel.locator(".wf-executable-bindings > div").filter({ has: page.getByText("Method", { exact: true }) });
+  await expect(url.locator("code").first()).toContainText("https://example.test/products/");
+  await expect(method.locator("code").first()).toContainText("GET");
+  const assertNoOverflow = () => expect.poll(() => panel.evaluate(element => {
+    const container = element.closest(".wf-instance-tab-content")!;
+    return container.scrollWidth - container.clientWidth;
+  })).toBeLessThanOrEqual(1);
+  await assertNoOverflow();
+  const fullValue = url.getByRole("button", { name: "Full value for URL", exact: true });
+  await fullValue.scrollIntoViewIfNeeded();
+  await capture(page, info, "executable-activity-inputs");
+  await fullValue.press("Enter");
+  await expect(url.getByText(expression, { exact: true })).toBeVisible();
+  await expect(fullValue).toHaveAttribute("aria-expanded", "true");
+  await assertNoOverflow();
+  await capture(page, info, "executable-activity-expanded");
+  await fullValue.press("Space");
+  await expect(fullValue).toHaveAttribute("aria-expanded", "false");
+  const conversion = method.getByRole("button", { name: "Conversion plan", exact: true });
+  await conversion.press("Enter");
+  await expect(method.locator(".wf-conversion-plan")).toBeVisible();
+  await assertNoOverflow();
+  await conversion.press("Space");
+  const fullContent = panel.getByRole("button", { name: "Full value for Content", exact: true });
+  await fullContent.press("Enter");
+  await expect(panel.getByText(textLiteral, { exact: true })).toBeVisible();
+  await assertNoOverflow();
+  await fullContent.press("Space");
+  const identity = panel.getByRole("button", { name: "Activity identity", exact: true });
+  await identity.click();
+  await expect(panel.getByText(request.nodeId, { exact: true }).first()).toBeVisible();
+  await assertNoOverflow();
+  await capture(page, info, "executable-activity-identity");
+}
+
 /** Real catalog versions, immutable publication and editable source draft in the disposable host. */
 export async function executableDesignerJourney(page: Page, info: TestInfo, capture: Capture, ownDefinition: (id: string) => void) {
   const base = process.env.ELSA_WORKBENCH_URL!;

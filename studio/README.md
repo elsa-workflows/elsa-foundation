@@ -25,7 +25,7 @@ The host is composed from independently enabled Studio capabilities:
 - `Elsa.Studio.Attention` contributes the ordinary wide/full Attention widget.
 - `Elsa.Studio.Workflows.Dashboard` contributes the workflow task group and workflow widgets on Home: Get started, Quick actions, Recent workflows, Recent runs, Needs attention, Tasks, portfolio and run health.
 - `Elsa.Studio.Samples.WeatherForecast` contributes a frontend route and deterministic sample endpoint.
-- `Elsa.Studio.Decisions` contributes the Decisions collection, table authoring, cases, explanations and published-version workflow selector; see its [module guide](../extensions/Decisions/studio/Elsa.Studio.Decisions/README.md).
+- `Elsa.Studio.Decisions` contributes the Decisions collection, table authoring, cases, explanations and published-version workflow selector; see its [module guide](../Extensions/Decisions/studio/Elsa.Studio.Decisions/README.md).
 - `Elsa.Studio.ConsoleStream` demonstrates a backend-scoped console stream module.
 - `Elsa.Studio.ExtensionBuilder` is an optional module: the Extension Builder page plus its bridge relay to the backend's `/_elsa/extension-builder` surface. It is not part of the default composition (see below).
 
@@ -130,7 +130,7 @@ values fail host startup with a `Themes:ThemesMode` configuration error.
 > The `.NET` commands below are existing developer commands; the scoped checks do not establish a complete fresh-machine setup or source-edit journey.
 
 ```bash
-cd studio
+cd Studio
 pnpm install
 pnpm build
 dotnet build Elsa.Studio.slnx
@@ -140,7 +140,7 @@ dotnet test Elsa.Studio.slnx
 ## Run
 
 ```bash
-cd studio
+cd Studio
 dotnet run --project src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj
 ```
 
@@ -165,7 +165,7 @@ When `Studio:BackendBaseUrl` points at an Elsa Server backend, the console panel
 ## Consuming Studio packages in your own app
 
 The Studio front-end ships four npm packages you can use in any host app —
-React or not. See runnable examples under [`examples/`](./examples): `react-host` (Vite + React)
+React or not. See runnable examples under [`examples/`](examples): `react-host` (Vite + React)
 and `vanilla-host` (framework-free, no JSX).
 
 ```bash
@@ -212,14 +212,13 @@ Each Studio app has a Dockerfile, and `.github/workflows/studio-docker.yml` publ
 | `elsaworkflows/elsa-studio-workbench` | `Elsa.Studio.Workbench.Host` | `elsaworkflows/elsa-workbench` |
 | `elsaworkflows/elsa-studio-foundation` | `Elsa.Studio.Foundation.Host` | The bare `Elsa.Foundation.Host` |
 
-In the images, an add-on's browser files answer 503 until
-[valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands, so screens of modules installed from
-the feed do not load there yet. Build an image from the repository root (the build context must be the repo root); the
+The images serve installed add-on browser files from verified package archives.
+Build an image from the repository root (the build context must be the repo root); the
 Essentials and Foundation Dockerfiles sit beside their projects in the same way:
 
 ```bash
-pnpm --dir studio install --frozen-lockfile
-pnpm --dir studio build
+pnpm --dir Studio install --frozen-lockfile
+pnpm --dir Studio build
 docker build -f studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local .
 docker run --rm -p 8080:8080 \
   -e Studio__BackendBaseUrl=https://your-elsa-server:443 \
