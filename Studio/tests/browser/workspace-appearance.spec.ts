@@ -40,6 +40,30 @@ for (const style of styles) for (const scheme of ["linen", "classic", "drift"]) 
 }
 
 for (const mode of ["light", "dark", "high-contrast"]) {
+  test(`Linen ${mode} keeps the Sequence insert icons and selection readable`, async ({ page }, info) => {
+    await open(page, "linen", "linen", mode);
+    const step = page.getByRole("button", { name: "1. Notify buyer", exact: true });
+    await step.click();
+    await expect(step).toHaveAttribute("aria-pressed", "true");
+    await expect(step).toHaveCSS("border-top-left-radius", "16px");
+    await page.mouse.move(0, 0);
+    await page.screenshot({ path: info.outputPath("sequence-selection.png") });
+
+    const arrow = page.locator(".wf-sequence-connector > svg").first();
+    const canvasBackground = await page.getByLabel("Sequence canvas", { exact: true }).evaluate(canvas => getComputedStyle(canvas).backgroundColor);
+    const insert = page.getByRole("button", { name: "Insert step before Notify buyer", exact: true });
+    await expect(insert.locator("svg")).toHaveCSS("width", "14px");
+    await expect(arrow).toHaveCSS("background-color", canvasBackground);
+    await page.keyboard.press("Tab");
+    await insert.focus();
+    await expect(insert).toHaveCSS("outline-style", "solid");
+    await insert.press("Enter");
+    await expect(page.getByRole("searchbox", { name: "Search activities" }).last()).toBeFocused();
+    await page.keyboard.press("Escape");
+  });
+}
+
+for (const mode of ["light", "dark", "high-contrast"]) {
   test(`Linen ${mode} lets editor tab strips inherit their panel surfaces`, async ({ page }) => {
     await open(page, "linen", "linen", mode);
 

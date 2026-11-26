@@ -572,7 +572,7 @@ function WorkflowExecutableOrigins({ executable, definitionNames }: { executable
       {definitionIds.map(definitionId => {
         const name = definitionNames.get(definitionId) ?? "Workflow definition";
         return (
-          <StudioButton
+          <button
             type="button"
             className="wf-executable-workflow-name"
             key={definitionId}
@@ -581,7 +581,7 @@ function WorkflowExecutableOrigins({ executable, definitionNames }: { executable
             onClick={() => openSourceDefinition(definitionId)}
           >
             {name}
-          </StudioButton>
+          </button>
         );
       })}
       {definitionIds.length === 0 ? <strong title="Source unavailable">Source unavailable</strong> : null}

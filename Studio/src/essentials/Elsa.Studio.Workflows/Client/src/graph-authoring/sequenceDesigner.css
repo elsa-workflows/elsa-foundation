@@ -414,6 +414,10 @@ html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime.is-se
   cursor: pointer;
 }
 
+.wf-sequence-insert:not(.wf-sequence-insert-empty, .wf-sequence-insert-end) {
+  padding: 0;
+}
+
 .wf-sequence-insert:hover {
   border-color: var(--studio-accent);
   color: var(--studio-accent);
@@ -468,7 +472,7 @@ html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime.is-se
   position: relative;
   z-index: 1;
   padding-top: .125rem;
-  background: var(--studio-bg);
+  background: var(--studio-canvas);
 }
 
 .wf-sequence-empty {
