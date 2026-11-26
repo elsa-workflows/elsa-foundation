@@ -79,13 +79,13 @@ describe("signature themes", () => {
     expect(getTheme("space")?.sidebarBackdrop).toBe("starfield");
   });
 
-  it.each(foundationThemeIds)("%s defines all four modes, its typography and shape, and validates", id => {
+  it.each(foundationThemeIds)("%s defines all four modes and typography, shares Linen’s shape and validates", id => {
     const theme = getTheme(id)!;
 
     expect(getSupportedThemeModes(theme)).toEqual(["light", "dark", "dim", "high-contrast"]);
     expect(theme.typography?.sans).toBeTruthy();
     expect(theme.typography?.mono).toBeTruthy();
-    expect(theme.shape?.radius).toMatch(/px$/);
+    expect(theme.shape).toEqual(getTheme("linen")!.shape);
     expect(validateThemeDefinition(theme).issues.filter(issue => issue.severity === "error")).toEqual([]);
   });
 
@@ -151,7 +151,7 @@ describe("theme modes", () => {
 
     expect(copy.modes.highContrast).toEqual(getTheme("atelier")!.modes.highContrast);
     expect(copy.typography?.display).toContain("Instrument Serif");
-    expect(copy.shape?.radius).toBe("9px");
+    expect(copy.shape).toEqual(getTheme("atelier")!.shape);
     expect(getSupportedThemeModes(copy)).toEqual(["light", "dark", "dim", "high-contrast"]);
     expect(spaceCopy.sidebarBackdrop).toBe("starfield");
     expect(cloneThemeDefinition(spaceCopy).sidebarBackdrop).toBe("starfield");

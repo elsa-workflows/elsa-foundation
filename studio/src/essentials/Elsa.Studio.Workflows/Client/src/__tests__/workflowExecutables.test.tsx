@@ -478,12 +478,13 @@ describe("WorkflowExecutables", () => {
   });
 
   it("inspects from plain cells while preserving source links, identifier actions and selected text", async () => {
+    const listPath = "/workflows/executables?backend=runtime";
+    window.history.replaceState({}, "", listPath);
     vi.mocked(listExecutables).mockResolvedValue([executableSummary()]);
     vi.mocked(listDefinitions).mockResolvedValue({ definitions: [definitionSummary("Nightly orders")], page: 1, pageSize: 100, totalCount: 1 });
     flushSync(() => root.render(<WorkflowExecutables context={{} as StudioEndpointContext} ai={emptyAi()} runInputEditors={[]} definitionFilter={null} onDefinitionFilterChange={() => {}} />));
     await flushAsyncUpdates();
 
-    const listPath = "/workflows/executables?backend=runtime";
     for (const selector of [".wf-executable-name", ".wf-executable-identifiers", ".wf-executable-version-cell", ".wf-executable-root", ".wf-executable-published"]) {
       window.history.replaceState({}, "", listPath);
       container.querySelector<HTMLElement>(selector)!.click();
@@ -492,7 +493,9 @@ describe("WorkflowExecutables", () => {
     }
 
     window.history.replaceState({}, "", listPath);
-    container.querySelector<HTMLButtonElement>(".wf-executable-workflow-name")!.click();
+    const sourceLink = container.querySelector<HTMLAnchorElement>("a.wf-executable-workflow-name")!;
+    expect(new URL(sourceLink.href).searchParams.get("backend")).toBe("runtime");
+    sourceLink.click();
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
 

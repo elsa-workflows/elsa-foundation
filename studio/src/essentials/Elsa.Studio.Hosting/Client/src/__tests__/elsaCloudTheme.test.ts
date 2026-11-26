@@ -44,9 +44,7 @@ describe("Elsa Cloud palette", () => {
     }
   });
 
-  it("follows the console's shape and typography", () => {
-    expect(cloud.shape?.radius).toBe("8px");
-    expect(cloud.shape?.radiusLg).toBe("12px");
+  it("follows the console's typography and uses the classic layout", () => {
     expect(cloud.typography?.mono).toContain("Geist Mono");
     expect(cloud.layout).toBe("classic");
     expect(getTheme("meridian")!.typography).toBe(cloud.typography);

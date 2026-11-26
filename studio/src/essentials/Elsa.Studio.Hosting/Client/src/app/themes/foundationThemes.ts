@@ -4,7 +4,7 @@ import { minimalStudioPresets } from "./minimalPresets";
 
 /*
  * The signature Elsa Studio 4 themes. Each defines all four modes — Light, Dark, Dim and High
- * contrast — plus its own typography, corner radii and layout. Elevation (shadow) recipes, which are not
+ * contrast — plus its own typography and layout. Built-in themes share Linen’s corner scale. Elevation (shadow) recipes, which are not
  * colour tokens, live beside them in ui/tokens.css under `html[data-theme="<id>"]`.
  *
  * This module only builds plain definitions (no calls into presets.ts) so the two can import each
@@ -133,12 +133,19 @@ function highContrast(accent: string, accentHue: number, overrides: Partial<Them
 const monoFallback = 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
 const sansFallback = '"Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
 
+export const linenShape = {
+  radiusSm: "9px",
+  radius: "11px",
+  radiusMd: "16px",
+  radiusLg: "20px",
+  radiusXl: "24px"
+} as const;
+
 function definition(
   id: string,
   name: string,
   description: string,
   typography: ThemeTypography,
-  shape: StudioThemeDefinition["shape"],
   layout: StudioThemeLayout,
   modes: Required<StudioThemeDefinition["modes"]>
 ): StudioThemeDefinition {
@@ -152,7 +159,7 @@ function definition(
     published: true,
     supportedModes: ["light", "dark", "dim", "high-contrast"],
     typography,
-    shape,
+    shape: { ...linenShape },
     layout,
     modes
   };
@@ -179,7 +186,6 @@ const classic = definition(
   "Classic",
   "The Elsa 3 Studio look: sky-blue primary, pale tinted sidebar, hairline cards and Geist. Available as an original preset.",
   geistTypography,
-  { radiusSm: "5px", radius: "8px", radiusMd: "10px", radiusLg: "12px", radiusXl: "14px" },
   "classic",
   {
     light: mode({
@@ -210,7 +216,6 @@ const classic = definition(
 const linen = definition(
   "linen", "Linen", "Warm porcelain, charcoal navigation and a restrained copper accent.",
   { sans: `"Manrope Variable", "Manrope", ${sansFallback}`, mono: geistTypography.mono },
-  { radiusSm: "9px", radius: "11px", radiusMd: "16px", radiusLg: "20px", radiusXl: "24px" },
   "classic",
   {
     light: mode({
@@ -241,7 +246,6 @@ const meridian = definition(
   "Meridian",
   "Crisp, neutral precision with a single indigo accent.",
   geistTypography,
-  { radiusSm: "5px", radius: "7px", radiusMd: "9px", radiusLg: "12px", radiusXl: "14px" },
   "classic",
   {
     light: mode({
@@ -274,7 +278,6 @@ const drift = definition(
     sans: `"Manrope Variable", "Manrope", ${sansFallback}`,
     mono: `"DM Mono", ${monoFallback}`
   },
-  { radiusSm: "8px", radius: "12px", radiusMd: "14px", radiusLg: "18px", radiusXl: "22px" },
   "floating",
   {
     light: mode({
@@ -302,12 +305,11 @@ const drift = definition(
 const schematic = definition(
   "schematic",
   "Schematic",
-  "An engineering workbench: squared corners, blueprint neutrals and a signal-orange accent.",
+  "An engineering workbench: blueprint neutrals and a signal-orange accent.",
   {
     sans: `"IBM Plex Sans", ${sansFallback}`,
     mono: `"IBM Plex Mono", ${monoFallback}`
   },
-  { radiusSm: "2px", radius: "3px", radiusMd: "4px", radiusLg: "4px", radiusXl: "6px" },
   "workbench",
   {
     light: mode({
@@ -344,7 +346,6 @@ const atelier = definition(
     display: `"Instrument Serif", Georgia, "Times New Roman", serif`,
     mono: `"JetBrains Mono Variable", "JetBrains Mono", ${monoFallback}`
   },
-  { radiusSm: "6px", radius: "9px", radiusMd: "10px", radiusLg: "14px", radiusXl: "16px" },
   "editorial",
   {
     light: mode({
@@ -386,7 +387,6 @@ const elsaCloud = definition(
   "Elsa Cloud",
   "The Elsa Cloud console look: near-black surfaces, a hot-pink accent and mono eyebrow labels.",
   geistTypography,
-  { radiusSm: "6px", radius: "8px", radiusMd: "10px", radiusLg: "12px", radiusXl: "16px" },
   "classic",
   {
     light: mode({
@@ -414,7 +414,7 @@ const elsaCloud = definition(
   }
 );
 
-// Signal: an instrument panel. Olive-tinted neutrals, hairline borders, tight corners, mono labels and a single
+// Signal: an instrument panel. Olive-tinted neutrals, hairline borders, mono labels and a single
 // phosphor-lime accent (hue 125). Light shifts to hue 135, a deeper ink-green, because the lime itself washes out on a
 // pale ground; the accent keeps its identity without matching the dark modes exactly. Mono is carried by the display
 // face, so titles read like panel legends. Density comes from smaller type-size tokens (tokens.css); the mono eyebrow
@@ -425,13 +425,12 @@ const signalLightHue = 135;
 const signal = definition(
   "signal",
   "Signal",
-  "An instrument panel: hairline borders, tight corners, mono legends and one phosphor-lime accent.",
+  "An instrument panel: hairline borders, mono legends and one phosphor-lime accent.",
   {
     sans: `"Geist Variable", "Geist", ${sansFallback}`,
     display: `"JetBrains Mono Variable", "JetBrains Mono", ${monoFallback}`,
     mono: `"JetBrains Mono Variable", "JetBrains Mono", ${monoFallback}`
   },
-  { radiusSm: "2px", radius: "3px", radiusMd: "3px", radiusLg: "4px", radiusXl: "6px" },
   "classic",
   {
     light: mode({
@@ -471,7 +470,6 @@ const dusk = definition(
     sans: `"Instrument Sans Variable", "Instrument Sans", ${sansFallback}`,
     mono: `"JetBrains Mono Variable", "JetBrains Mono", ${monoFallback}`
   },
-  { radiusSm: "7px", radius: "10px", radiusMd: "12px", radiusLg: "16px", radiusXl: "20px" },
   "classic",
   {
     light: mode({
@@ -503,7 +501,6 @@ const space = {
     "Space",
     "Soft blue-teal gradients, a faint grid and sparse point-like stars, with calmer slate tones in Dark and Dim.",
     geistTypography,
-    { radiusSm: "5px", radius: "8px", radiusMd: "10px", radiusLg: "12px", radiusXl: "16px" },
     "classic",
     {
       light: mode({
@@ -580,7 +577,6 @@ function minimalMode(scheme: "light" | "dark" | "dim", id: string): ThemeModeDef
 const minimalThemes = minimalStudioPresets.map(preset => ({
   ...definition(preset.id, preset.name, preset.description,
     { sans: `"Manrope Variable", "Manrope", ${sansFallback}`, mono: geistTypography.mono },
-    { radiusSm: "6px", radius: "8px", radiusMd: "12px", radiusLg: "16px", radiusXl: "20px" },
     "classic", {
       light: minimalMode("light", preset.id), dark: minimalMode("dark", preset.id),
       dim: minimalMode("dim", preset.id), highContrast: highContrast(oklch(0.9, 0.035, preset.id === "builtin:porcelain" ? 240 : 150), 150)
