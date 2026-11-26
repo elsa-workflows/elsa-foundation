@@ -22,6 +22,20 @@ is ported the same way, whoever does it. Read it on its own, or follow it from [
 
 The "before" examples show typical Elsa 3 code. They are written for this catalog; your code may differ in detail.
 
+**Namespaces.** The "after" examples leave out `using` lines. They come from:
+
+| Namespace | For |
+|---|---|
+| `Elsa.Activities.Runtime.Core` | `ActivityInputUIHints` |
+| `Elsa.Activities.Runtime.Core.Attributes` | the activity attributes, including Elsa 4's own `[Required]` |
+| `Elsa.Activities.Runtime.Core.Models` | the base classes, transitions, contexts and `VariableReference<T>` |
+| `Elsa.Activities.Runtime.Core.Contracts` | `IActivity` and `IStatefulActivity<…>` (tests) |
+| `Elsa.Workflows.Runtime.Core.Contracts`, `Elsa.Workflows.Runtime.Core.Models` | trigger stimulus providers (case 09) |
+| `Elsa.Expressions.JavaScript.Core.Contracts` | `JavaScriptHostFunctionDeclaration` (case 14) |
+| `Elsa.Expressions.Core.Contracts`, `Elsa.Expressions.Core.Models`, `Elsa.Primitives.Models` | variable type providers (case 16) |
+| `CShells.Features`, `Microsoft.Extensions.DependencyInjection`, `Microsoft.Extensions.DependencyInjection.Extensions` | the feature (case 18) |
+| `System.Text.Json`, `System.Text`, `System.Security.Cryptography` | JSON values and stimulus hashes |
+
 ---
 
 ## Case 01: Base class
@@ -93,11 +107,8 @@ public sealed record SendInvoiceResult(
 2. Gather everything the Elsa 3 activity wrote to `Result` and its `Output<T>` properties into one result record
    (case 04): the activity returns all its outputs at once. The property that holds Elsa 3's `Result` keeps that name
    with `[Output(Key = "Result")]`.
-3. Override `ExecuteAsync(ActivityExecutionContext context)` and return a transition (case 05).
-   The examples need `using Elsa.Activities.Runtime.Core;` (`ActivityInputUIHints`),
-   `using Elsa.Activities.Runtime.Core.Attributes;` (the attributes, including Elsa 4's own `[Required]`) and
-   `using Elsa.Activities.Runtime.Core.Models;` (the base classes and transitions); tests also need
-   `using Elsa.Activities.Runtime.Core.Contracts;` (`IActivity`).
+3. Override `ExecuteAsync(ActivityExecutionContext context)` and return a transition (case 05).   Mark required inputs with Elsa 4's own `[Required]` (case 03). The examples leave out `using` lines; see
+   **Namespaces** at the top of this catalog.
 4. An activity that waits for something from outside derives from a stateful base class instead (cases 08 and 09).
 
 ## Case 02: Type name and the exact-name rule

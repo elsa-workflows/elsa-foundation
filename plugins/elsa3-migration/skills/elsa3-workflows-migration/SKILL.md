@@ -248,6 +248,11 @@ the user:
 - This local setup is a temporary development setup, not the production go-live. The go-live comes with an Elsa 3
   migration app profile once Elsa 4's distribution channels are decided, and this guide will be updated then.
 - Moving the clone to another commit means running the assessment again before trying the result.
+- The host keeps its data between runs (in its git-ignored `data/` folder). If you change a ported activity after the
+  host has loaded it, the host refuses to start, because the same activity version now has different content. Either
+  give the activity a higher version with `[Version("1.0.1")]` (from `Elsa.Activities.Runtime.Core.Attributes`), or
+  delete the host's `data/` folder before starting it again. The assessment is not affected: each run starts from an
+  empty store.
 
 ## Rules for the cases this guide does not spell out above
 
