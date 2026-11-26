@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "a0246fe921cd0a9186b9a854f6746b816bbd0ee1",
+  "last_publish_commit": "0190daa9303551ab30e955dd86c02bcef78384c2",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -169,8 +169,8 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
-      "version": "4.0.45-preview",
-      "commit": "a0246fe921cd0a9186b9a854f6746b816bbd0ee1"
+      "version": "4.0.46-preview",
+      "commit": "0190daa9303551ab30e955dd86c02bcef78384c2"
     },
     {
       "package_id": "Elsa.ActorFoundation.Contracts",
