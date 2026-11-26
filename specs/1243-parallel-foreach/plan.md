@@ -42,8 +42,10 @@ concurrency setting (FR-009)
   `ControlFlow/Loops/` (for example `LoopCollection`), so both loops resolve, refuse and envelope items identically
   (FR-005). Messages keep the `ForEach` wording, with the activity name as a parameter.
 - `MaxDegreeOfParallelism` input (`int`, default 16). Range check (1 to 64) when evaluated, and the cap check (1,000
-  items, `ParallelForEachCapExceeded`) before any pass is scheduled (FR-009a). The cap is a named constant, so the
-  state-size benchmark can lower it in one place. Designer validation for literal values goes in the activity's
+  items, `ParallelForEachCapExceeded`) before any pass is scheduled (FR-009a). The cap is the named constant
+  `MaxParallelItems`, as large-fan-out.md names it, so the state-size benchmark can lower it in one place. The
+  collection input keeps `ForEach`'s name `Collection`, where the large fan-out page says `Items`. One name across both
+  loops wins, and T020 aligns the page. Designer validation for literal values goes in the activity's
   design-side validation, the same place `ForEach`'s literal checks live.
 - `ExecuteStructureAsync`: resolve the collection once. If it is empty or there is no body, return `Complete()`.
   Otherwise schedule the passes for items `0 .. min(N, degree) - 1`, each with
@@ -52,16 +54,28 @@ concurrency setting (FR-009)
   read `foreach-iteration`. Keep `ForEach`'s existing ids unchanged.
 - `OnChildCompletedAsync`: decide in O(1) per completion (FR-008). `Parallel`'s `ListAllByParentAsync` read returns
   every pass row on every completion, which is O(N²) for N items, so do not copy it.
-  - Add a member to `IActivityExecutionStateStore`, for example `CountCompletedChildIterationsAsync(workflowExecutionId,
-    parentActivityExecutionId, executableNodeId)`. It counts the distinct `IterationId`s with a `Completed`,
-    non-superseded row, as an indexed count rather than a row list. Implement it in the EF Core store (with an index
-    on parent id, node id and status, plus a migration) and in the in-memory store, with a contract test shared by
-    both. Update the store's `EXTENSION_POINTS.md`.
-  - With `c` completed passes counted after this completion: if `c` equals `N`, complete with `Done`. Otherwise, if
-    `degree + c - 1 < N`, schedule the pass for item `degree + c - 1`. Each completion frees exactly one slot, so the
-    next unstarted item follows from `c` alone, and the loop keeps no state of its own. A completion that is
-    re-delivered is already dropped once per child (`WorkflowParentActivityCompletionSchedulerWorkHandler.cs:134`,
-    `ParentCompletionProcessedWorkItemId`).
+  - A plain count of `Completed` rows is not enough. A child's `Completed` row commits in its own stage, and the
+    parent's evaluation is a later work item (`WorkflowCompleteActivitySchedulerWorkHandler.cs:131-132,148-182`).
+    With inline bodies, several rows can be `Completed` before the first evaluation runs. A formula on that count
+    would skip items and schedule some twice. For example, with degree 2 over 3 items, both evaluations see 2
+    completions and item 2 never runs.
+  - So each evaluation reads two counts, each consistent with the evaluations before it. `p` is the number of passes
+    whose completion the parent has already **processed**: distinct `IterationId`s with a `Completed`, non-superseded
+    row that carries the `ParentCompletionProcessedWorkItemId` marker. The marker is committed with the parent's
+    callback (`ActivityAttemptActivationClaimer.cs:187-196`), and a retried successor starts without it
+    (`ActivitySuccessorStaging.cs:209`). This evaluation adds one, so `c = p + 1`. `s` is the number of passes
+    **started**: the distinct `IterationId`s among this loop's body children, which each evaluation commits in the same
+    commit as its scheduling.
+  - Add these as one member of `IActivityExecutionStateStore`, for example
+    `CountChildIterationsAsync(workflowExecutionId, parentActivityExecutionId, executableNodeId)`, which returns
+    `(Started, ProcessedCompleted)` as indexed counts, never a row list. Implement it in the EF Core store (with an index
+    on parent id and node id, plus a migration) and in the in-memory store, with a contract test shared by both. Update
+    the store's `EXTENSION_POINTS.md`.
+  - Decision: if `c` equals `N`, complete with `Done`. Otherwise schedule the passes for items `s .. min(N, c + degree) - 1`
+    (often one, none when no slot is free) and defer. Running passes are `s - c`, so a new pass starts only while fewer
+    than `degree` are running. Every item is started exactly once, in item order. The loop keeps no state of its own,
+    and a late or batched evaluation catches up. A re-delivered completion is dropped once per child before the loop
+    is called (`WorkflowParentActivityCompletionSchedulerWorkHandler.cs:143`, `WasParentCompletionProcessed`).
   - A faulted pass is never counted, so it holds its slot until its retry completes (US2 scenario 1). A retried pass's
     successor keeps the iteration through `source with` (`ActivitySuccessorStaging.cs:108`) and the provenance built in
     `RetryFaultedActivityAlterationHandler.cs:200-209`, so it counts once for its item. A superseded row is excluded by

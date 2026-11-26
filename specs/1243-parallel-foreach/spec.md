@@ -285,7 +285,8 @@ loop with its own item and index.
   from 1 to 64), one optional body in the child slot
   `ParallelForEach.Body`, no outputs, and the single outcome `Done`.
 - **FR-002**: On start, the activity MUST schedule the passes of the first `min(items, degree)` items, in item order.
-  Each time a pass completes, it MUST schedule the pass of the next unstarted item, until every item has a pass. Each pass
+  As passes complete, it MUST start the next unstarted items, in item order, so that every item gets exactly one pass
+  and no more than `degree` passes are running at any time. This MUST hold however late completions are evaluated. Each pass
   MUST get its own iteration identity and its own iteration frame holding `currentItem` and, when `ExposeIndex` is
   `true`, `currentIndex` (ADR 0028).
 - **FR-003**: Passes MUST run interleaved on the instance's queue. A pass that suspends MUST NOT hold back the others.
@@ -306,8 +307,9 @@ loop with its own item and index.
   `MaxDegreeOfParallelism`.
 - **FR-009a**: A collection of more than 1,000 items MUST fault the activity with `ParallelForEachCapExceeded` before
   any pass is scheduled. A degree outside 1 to 64 MUST fault the activity when evaluated. Designer validation MUST
-  report a literal collection above the cap and a literal degree outside the range. The cap is a product constant,
-  set by large fan-out decision 1, and the state-size benchmark may lower it.
+  report a literal collection above the cap and a literal degree outside the range. The cap is the product constant
+  `MaxParallelItems`, set by large fan-out decision 1, and the state-size benchmark may lower it. The collection input
+  is named `Collection`, as in `ForEach`, where the large fan-out page says `Items`. The page is aligned (FR-020).
 
 **Publish-time checks**
 

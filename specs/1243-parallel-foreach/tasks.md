@@ -12,14 +12,16 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
 - [ ] T002 Give `StructuredExecutionIdentity` an iteration id for the new loop without changing `ForEach`'s ids; unit
   test both forms round-trip through `TryReadIteration`.
 - [ ] T003 Add `LoopKind.ParallelForEach` (iteration names, `ExposeIndex` switch, `PassesUnordered = true`).
-- [ ] T003a Add `CountCompletedChildIterationsAsync` to `IActivityExecutionStateStore`, implemented in the EF Core store
+- [ ] T003a Add `CountChildIterationsAsync` (started iterations, and processed completed iterations carrying the
+  `ParentCompletionProcessedWorkItemId` marker) to `IActivityExecutionStateStore`, implemented in the EF Core store
   (index and migration) and the in-memory store, with a shared contract test (distinct iteration ids, superseded rows
-  excluded); update the store's `EXTENSION_POINTS.md`.
+  excluded, unprocessed completions not counted); update the store's `EXTENSION_POINTS.md`.
 
 ## Phase 2: Runtime activity (US1, US2)
 
 - [ ] T004 [US1] Tests first in `essentials/tests/Activities/ControlFlow/Tests/ParallelForEach/`: the first
-  `min(N, degree)` passes scheduled at start in item order, then one per completion (degree 2 over 5 items); each pass
+  `min(N, degree)` passes scheduled at start in item order, then more as slots free up. With inline bodies (completions
+  evaluated late), degree 2 over 3 and over 5 items: every item runs exactly once and never more than 2 at a time; each pass
   reads its own `currentItem`/`currentIndex`; a JSON `null` item is an explicit null; empty, null and no body complete
   with `Done`; a string, object or number faults with the shared message; 1,001 items fault with
   `ParallelForEachCapExceeded` before any pass; a degree of 0 or 65 faults; nested loops read the right item; per-pass
@@ -75,8 +77,10 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
 
 ## Phase 6: Docs, evidence, close-out
 
-- [ ] T020 README and `EXTENSION_POINTS.md` for the new activity (FR-020); control-flow module README list; the two
-  `docs/architecture/large-fan-out.md` rows that say the parallel ForEach does not exist.
+- [ ] T020 README and `EXTENSION_POINTS.md` for the new activity (FR-020); control-flow module README list;
+  `docs/architecture/large-fan-out.md`: the "What exists today" row (line 29) that says Elsa 4 has none, the
+  in-instance effect-key row (line 240, proposed → built, with the new iteration id form), and the release 1 section
+  (lines 250-256) in the present tense with the input named `Collection`.
 - [ ] T021 Regenerate the activity contract surface baseline and the Elsa 4 parity surface evidence (FR-021).
 - [ ] T022 Run the JTest `single-outcome` suite on Elsa 4; record the ParallelForEach steps in the S-15 ledger
   (SC-002); name remaining blockers with their issues.

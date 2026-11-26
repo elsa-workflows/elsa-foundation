@@ -117,9 +117,11 @@ and `MaxDegreeOfParallelism` (default 16, 1 to 64). The reason is one instance's
 is an explicit option after release 1, and a parked child keeps its parent waiting. The page's "What exists today"
 still says Elsa 4 has no parallel ForEach. Spec 1243 adopts decision 1 and leaves decision 2 for later.
 
-With a degree, the next pass follows from the completed count alone. The first `d` passes start together, and each
-completion frees one slot, so after `c` completions the next unstarted item is `d + c - 1`. That needs a cheap count,
-and `IActivityExecutionStateStore` has none today. It has only list and page reads (`ListByParentPageAsync`, line 58).
+With a degree, the loop must know how many passes it has started and how many completions it has processed. The
+store's plain `Completed` count runs ahead of the parent's evaluations, because a child's row commits before the
+parent's evaluation work item runs. The `ParentCompletionProcessedWorkItemId` marker is what records that a completion
+was processed. See plan, "Runtime activity". `IActivityExecutionStateStore` has no count query today. It has only list
+and page reads (`ListByParentPageAsync`, line 58).
 
 ## R-7 ADR need
 
