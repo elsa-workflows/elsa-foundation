@@ -329,34 +329,20 @@ internal static class SqliteShippedInstallChecks
         Require(await ReadProjectionAsync("projected") is { ParkAt: 200, ParkFault: "opened", ParkRevision: 2 },
             "opening a clearing commits its outcome and preserves the projected Park mark");
 
-        await using (var write = await db.Database.BeginTransactionAsync(token))
+        var unavailable = FoundationRootParkFacts.ProtectionRefusal("123");
+        var copies = Enumerable.Repeat(unavailable, FoundationRootParkFacts.MaxProtectionRefusals - 1).ToArray();
+        await RequireEarlyStopRefusedAsync([copies], "duplicate refusal rows in one revision");
+        (string Entry, string Shape)[] invalidRefusals =
+        [
+            ("""{"Outcome":"refused","Operation":"123","Reason":"unavailable","Extra":true}""", "an extra refusal field"),
+            ("""{"Outcome":"refused","Operation":123,"Reason":"unavailable"}""", "a numeric operation in place of its text ID"),
+            ("""{"Outcome":"refused","Operation":"123","Reason":"unavailable", """, "malformed refusal JSON")
+        ];
+        foreach (var (entry, shape) in invalidRefusals)
         {
-            var unavailable = FoundationRootParkFacts.ProtectionRefusal("123");
-            for (var copy = 0; copy < FoundationRootParkFacts.MaxProtectionRefusals - 1; copy++)
-                await JournalAsync("projected", revision: 4, unavailable);
-            await db.Database.ExecuteSqlRawAsync("""
-                UPDATE "Instances" SET "Revision" = 4, "FoundationWriteRevision" = 4 WHERE "Id" = 'projected'
-                """, token);
-            string[] invalidRefusals =
-            [
-                """{"Outcome":"refused","Operation":"123","Reason":"unavailable","Extra":true}""",
-                """{"Outcome":"refused","Operation":123,"Reason":"unavailable"}""",
-                """{"Outcome":"refused","Operation":"123","Reason":"unavailable", """
-            ];
-            for (var index = 0; index < invalidRefusals.Length; index++)
-            {
-                var revision = 5 + index;
-                await JournalAsync("projected", revision, invalidRefusals[index]);
-                await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision} WHERE "Id" = 'projected'
-                    """, token);
-            }
-            await JournalAsync("projected", revision: 8, stopped);
-            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
-                UPDATE "Instances" SET "Revision" = 8, "FoundationWriteRevision" = 8, "FoundationParkClearing" = NULL,
-                    "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL WHERE "Id" = 'projected'
-                """, token), "duplicate or noncanonical refusal rows cannot authorize an early SQLite clearing stop");
-            await write.RollbackAsync(token);
+            var prior = Enumerable.Repeat(new[] { unavailable }, FoundationRootParkFacts.MaxProtectionRefusals - 2).ToList();
+            prior.Add([entry]);
+            await RequireEarlyStopRefusedAsync(prior, shape);
         }
         await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
             UPDATE "Instances" SET "Revision" = 4, "FoundationWriteRevision" = 4, "FoundationParkCleared" = 2,
@@ -464,6 +450,26 @@ internal static class SqliteShippedInstallChecks
                 "FoundationHeader" = NULL, "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL
             WHERE "Id" = {id}
             """, token);
+
+        async Task RequireEarlyStopRefusedAsync(IReadOnlyList<string[]> prior, string shape)
+        {
+            var revision = 4;
+            await using var write = await db.Database.BeginTransactionAsync(token);
+            foreach (var group in prior)
+            {
+                foreach (var refusal in group) await JournalAsync("projected", revision, refusal);
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision} WHERE "Id" = 'projected'
+                    """, token);
+                revision++;
+            }
+            await JournalAsync("projected", revision, stopped);
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision}, "FoundationParkClearing" = NULL,
+                    "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL WHERE "Id" = 'projected'
+                """, token), $"the SQLite guard rejects an early stop after {shape}");
+            await write.RollbackAsync(token);
+        }
 
         async Task CheckStopLookupPlanAsync()
         {
