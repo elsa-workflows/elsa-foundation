@@ -1,3 +1,4 @@
+using System.Reflection;
 using global::Nuplane.Abstractions;
 using global::Nuplane.Admin;
 using global::Nuplane.Loading;
@@ -42,19 +43,22 @@ internal sealed class PackageContentReader(INuplaneAdminOperations admin, IPacka
         catch { _requests.Release(); throw; }
     }
 
-    public async Task<PackageArchive?> OpenAssetAsync(string packageOrAssembly, CancellationToken cancellationToken)
+    public async Task<PackageArchive?> OpenAssetAsync(string packageOrAssembly, CancellationToken cancellationToken, Assembly? expectedAssembly = null)
     {
-        var package = await ResolveAssetOwnerAsync(packageOrAssembly, cancellationToken);
+        var package = await ResolveAssetOwnerAsync(packageOrAssembly, expectedAssembly, cancellationToken);
         return package is null ? null : await OpenAsync(package, cancellationToken);
     }
 
-    private async Task<ActivePackage?> ResolveAssetOwnerAsync(string packageOrAssembly, CancellationToken cancellationToken)
+    private async Task<ActivePackage?> ResolveAssetOwnerAsync(string packageOrAssembly, Assembly? expectedAssembly, CancellationToken cancellationToken)
     {
         await _catalogQueries.WaitAsync(cancellationToken);
         try
         {
             // RCL URLs can name either a package ID or a loaded assembly.
-            var owners = await AssemblyOwnersAsync(packageOrAssembly, cancellationToken);
+            var owners = await AssemblyOwnersAsync(packageOrAssembly, expectedAssembly, cancellationToken);
+            if (expectedAssembly is not null && owners.Length == 0)
+                return null;
+
             var packages = await admin.GetPackagesAsync(cancellationToken);
             if (owners.Any(owner => !packages.Packages.Any(package => SameOwner(package, owner))))
                 return null;
@@ -68,13 +72,15 @@ internal sealed class PackageContentReader(INuplaneAdminOperations admin, IPacka
         finally { _catalogQueries.Release(); }
     }
 
-    private async Task<(string PackageId, string Version)[]> AssemblyOwnersAsync(string name, CancellationToken cancellationToken)
+    private async Task<(string PackageId, string Version)[]> AssemblyOwnersAsync(string name, Assembly? expectedAssembly, CancellationToken cancellationToken)
     {
         // Leave all reflection references in this short-lived query; never retain assemblies across generations.
         var loaded = await assemblies.GetPackagedAssembliesAsync(cancellationToken);
-        return loaded.Where(package => package.Assemblies.Any(assembly =>
-                string.Equals(assembly.GetName().Name, name, StringComparison.OrdinalIgnoreCase)))
-            .Select(package => (package.PackageId, package.Version)).ToArray();
+        var owners = loaded.Where(package => package.Assemblies.Any(assembly =>
+            string.Equals(assembly.GetName().Name, name, StringComparison.OrdinalIgnoreCase))).ToArray();
+        if (expectedAssembly is not null && !owners.Any(owner => owner.Assemblies.Any(assembly => ReferenceEquals(assembly, expectedAssembly))))
+            return [];
+        return owners.Select(package => (package.PackageId, package.Version)).ToArray();
     }
 
     private static bool SameOwner(ActivePackage package, (string PackageId, string Version) owner) =>

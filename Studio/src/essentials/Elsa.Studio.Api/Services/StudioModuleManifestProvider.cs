@@ -111,7 +111,9 @@ public sealed class StudioModuleManifestProvider(
             (string[] Styles, bool HaveContentHashes) styles;
             try
             {
-                styles = attr.HasStyles ? ResolveStyles(assemblyName, attr.Slug, version) : ([], false);
+                styles = attr.HasStyles
+                    ? await ResolveStylesAsync(featureType.Assembly, assemblyName, attr.Slug, version, cancellationToken)
+                    : ([], false);
             }
             catch (Exception exception) when (exception is JsonException or InvalidDataException or
                                                KeyNotFoundException or InvalidOperationException or FormatException or IOException)
@@ -174,51 +176,60 @@ public sealed class StudioModuleManifestProvider(
     /// styles load with their Vite chunks using content-hashed URLs. Legacy producers retain
     /// the numbered-stylesheet enumeration contract, including the conventional URL fallback.
     /// </summary>
-    private (string[] Styles, bool HaveContentHashes) ResolveStyles(string assemblyName, string slug, string version)
+    private async ValueTask<(string[] Styles, bool HaveContentHashes)> ResolveStylesAsync(
+        Assembly assembly, string assemblyName, string slug, string version, CancellationToken cancellationToken)
     {
-        var basePath = $"/_content/{assemblyName}/studio/modules/{slug}";
+        var moduleDirectory = $"studio/modules/{slug}";
+        var directory = $"_content/{assemblyName}/{moduleDirectory}";
+        var basePath = $"/{directory}";
         var fallback = new[] { $"{basePath}/module.css?v={version}" };
         var webRoot = serviceProvider.GetService<IWebHostEnvironment>()?.WebRootFileProvider;
-
-        if (webRoot is null)
-            return (fallback, false);
-
-        var directory = $"_content/{assemblyName}/studio/modules/{slug}";
-        var entryStyles = webRoot.GetFileInfo($"{directory}/entry-styles.json");
-
-        if (entryStyles.Exists)
+        if (webRoot?.GetFileInfo($"{directory}/entry-styles.json") is { Exists: true } entryStyles)
         {
             using var stream = entryStyles.CreateReadStream();
-            using var document = JsonDocument.Parse(stream);
-            var root = document.RootElement;
-            if (root.GetProperty("version").GetInt32() != 1)
-                throw new InvalidDataException($"Unsupported entry stylesheet contract for {assemblyName}.");
-
-            var names = root.GetProperty("styles").EnumerateArray().Select(x => x.GetString()).ToArray();
-            if (names.Any(name => name is null || !HashedModuleStylePattern.IsMatch(name) ||
-                                  !webRoot.GetFileInfo($"{directory}/{name}").Exists) ||
-                names.Distinct(StringComparer.Ordinal).Count() != names.Length)
-                throw new InvalidDataException($"Invalid entry stylesheet contract for {assemblyName}.");
-
+            var names = ReadEntryStyles(stream, name => webRoot.GetFileInfo($"{directory}/{name}").Exists);
             return (names.Select(name => $"{basePath}/{name}").ToArray(), true);
         }
 
-        var contents = webRoot.GetDirectoryContents(directory);
+        if (webRoot?.GetDirectoryContents(directory) is { Exists: true } contents)
+        {
+            var styles = contents
+                .Select(file => (file, match: ModuleStylePattern.Match(file.Name)))
+                .Where(x => !x.file.IsDirectory && x.match.Success)
+                .OrderBy(x => x.match.Groups[1].Value is "" ? 1 : int.Parse(x.match.Groups[1].Value))
+                .Select(x => $"{basePath}/{x.file.Name}?v={version}")
+                .ToArray();
+            return (styles.Length > 0 ? styles : fallback, false);
+        }
 
-        if (!contents.Exists)
-            return (fallback, false);
-
-        var styles = contents
-            .Select(file => (file, match: ModuleStylePattern.Match(file.Name)))
-            .Where(x => !x.file.IsDirectory && x.match.Success)
-            .OrderBy(x => x.match.Groups[1].Value is "" ? 1 : int.Parse(x.match.Groups[1].Value))
-            .Select(x => $"{basePath}/{x.file.Name}?v={version}")
-            .ToArray();
-
-        return (styles.Length > 0 ? styles : fallback, false);
+        var packageStyles = serviceProvider.GetService<IStudioPackageEntryStyles>();
+        var packagedNames = packageStyles is null ? null : await packageStyles.ReadAsync(assembly, moduleDirectory, cancellationToken);
+        return packagedNames is null
+            ? (fallback, false)
+            : (packagedNames.Select(name => $"{basePath}/{name}").ToArray(), true);
     }
 
-    private static readonly Regex HashedModuleStylePattern = new(@"^module-[A-Za-z0-9_-]+\.css$", RegexOptions.Compiled);
+    internal static string[] ReadEntryStyles(Stream stream, Func<string, bool> stylesheetExists)
+    {
+        using var document = JsonDocument.Parse(stream);
+        var root = document.RootElement;
+        if (root.GetProperty("version").GetInt32() != 1)
+            throw new InvalidDataException("Unsupported entry stylesheet contract version.");
+
+        var names = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var style in root.GetProperty("styles").EnumerateArray())
+        {
+            var name = style.GetString();
+            if (name is null || !HashedModuleStylePattern.IsMatch(name) || !seen.Add(name) || !stylesheetExists(name))
+                throw new InvalidDataException("Invalid entry stylesheet contract.");
+            names.Add(name);
+        }
+
+        return names.ToArray();
+    }
+
+    private static readonly Regex HashedModuleStylePattern = new(@"\Amodule-[A-Za-z0-9_-]+\.css\z", RegexOptions.Compiled);
 
     private static readonly Regex ModuleStylePattern = new(@"^module(\d*)\.css$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 

@@ -48,6 +48,10 @@ internal static class ModuleManagementEndpoints
                 new(true, management.CanWrite(FeedPrefix), true, true, true,
                     management.CanWrite(ManagementConfigurationStore.RetentionPrefix)), diagnostics));
         }
+        catch (StudioModuleDiscoveryBusyException)
+        {
+            return ActiveShellStudioApiEndpoint.Busy(context);
+        }
         catch (PackageStoreAdmissionException error)
         {
             context.Response.Headers.RetryAfter = "1";

@@ -1,6 +1,7 @@
 using CShells.Nuplane;
 using CShells.Features;
 using CShells.AspNetCore.Features;
+using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Features;
 using Elsa.Studio.Core.Attributes;
 using Elsa.Modularity.Nuplane.Extensions;
@@ -56,6 +57,7 @@ public static class NuplaneHostingExtensions
         studio.Services.AddNuplaneAdmin();
         studio.Services.AddNuplanePackageStoreMaintenance();
         studio.Services.AddSingleton<PackageContentReader>();
+        studio.Services.AddSingleton<IStudioPackageEntryStyles, PackageEntryStyles>();
         studio.Services.AddSingleton<ManagementConfigurationStore>();
         var configuration = studio.Configuration.GetSection("Nuplane");
         studio.Services.AddNuplane(configuration, nuplane =>
@@ -114,6 +116,7 @@ public static class NuplaneHostingExtensions
             integration.AutoReload = true;
         }).ShareSingletonWithShells<StudioNuplaneSettings>()
           .ShareSingletonWithShells<PackageContentReader>()
+          .ShareSingletonWithShells<IStudioPackageEntryStyles>()
           .ShareSingletonWithShells<IShellFeatureConfigurationStore>());
         return studio;
     }
