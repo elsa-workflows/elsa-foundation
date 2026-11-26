@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-26
 
-**Status**: Approved (coordinator, 2026-11-26)
+**Status**: Approved — coordinator, 2026-11-26
 
 **Input**: Issue [#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023), part of initiative
 [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052). A reusable (graph) activity body holds the engine
