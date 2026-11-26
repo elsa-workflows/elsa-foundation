@@ -378,7 +378,7 @@ public sealed class ExecutableNodeCompiler(
     /// </summary>
     private static void EnsureReadOnly(string nodeId, string inputKey, ScriptVariableReadPlan plan)
     {
-        if (plan.WorkflowState.AccessesState)
+        if (plan.WorkflowState.ReferencesCapability)
             throw new ArgumentException($"VF-STATE-002: Input '{inputKey}' on node '{nodeId}' cannot access body workflow state. Use an inline leaf body.");
         if (plan.Writes.Count == 0)
             return;
