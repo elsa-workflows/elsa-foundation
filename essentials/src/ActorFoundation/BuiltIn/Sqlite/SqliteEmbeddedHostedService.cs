@@ -7,7 +7,7 @@ namespace Kernel.Foundation.Sqlite;
 
 /// <summary>Runs an Embedded SQLite node for the lifetime of its application host.</summary>
 public sealed class SqliteEmbeddedHostedService(string databasePath, string node, IActorType actor, Action<string> endProcess,
-    LoopOptions? options = null, bool fenceInBatch = false, ILogger<SqliteEmbeddedHostedService>? logger = null)
+    LoopOptions? options = null, bool fenceInBatch = true, ILogger<SqliteEmbeddedHostedService>? logger = null)
     : IHostedService, IAsyncDisposable
 {
     private readonly NodeHostedService _service = new("SQLite embedded", node, endProcess,

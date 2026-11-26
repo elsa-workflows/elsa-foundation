@@ -31,6 +31,13 @@ internal static class SqliteHostLifetimeChecks
             var path = Path.Combine(directory.FullName, "kernel.db");
             var store = Store(path, fenceInBatch);
             await store.CreateAsync(1);
+            await using (var db = Open(path))
+                await db.Database.ExecuteSqlRawAsync("""
+                    CREATE TRIGGER fixture_release_after_checkpoint BEFORE UPDATE OF "Owner" ON "Partitions"
+                    WHEN OLD."Owner" = 'first' AND NEW."Owner" IS NULL
+                      AND NOT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = '0/slow' AND "Revision" = 1)
+                    BEGIN SELECT RAISE(ABORT, 'ownership released before the checkpoint committed'); END
+                    """, token);
             await AdmitStartAsync(store, Slow, token);
             await AdmitStartAsync(store, Sibling, token);
             var actor = new WaitingActor();
@@ -95,12 +102,12 @@ internal static class SqliteHostLifetimeChecks
 
             await RunPeerAsync("start", path, fenceInBatch, token);
 
-            foreach (var mode in new[] { "kill", "dispose", "fault" })
+            foreach (var mode in new[] { "kill", "dispose", "fault", "stuck" })
             {
                 var deadlinePath = Path.Combine(directory.FullName, mode + ".db");
                 await Store(deadlinePath, fenceInBatch).CreateAsync(1);
                 await RunPeerAsync(mode, deadlinePath, fenceInBatch, token);
-                await RunPeerAsync("start", deadlinePath, fenceInBatch, token);
+                await RunPeerAsync("recover", deadlinePath, fenceInBatch, token);
             }
             return 0;
         }
@@ -114,12 +121,29 @@ internal static class SqliteHostLifetimeChecks
     {
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var token = budget.Token;
-        var actor = new WaitingActor();
+        var actor = new WaitingActor(recovering: mode == "recover", blocks: mode == "stuck");
         var log = new LifetimeLog();
-        await using var service = Service(path, "peer", actor, fenceInBatch, log, mode == "dispose" ? TimeSpan.FromMilliseconds(400) : null);
+        var escalation = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var owner = mode == "recover" ? "successor" : "peer";
+        await using var service = Service(path, owner, actor, fenceInBatch, log,
+            mode == "dispose" ? TimeSpan.FromMilliseconds(400) : null, reason => escalation.TrySetResult(reason));
         if (mode == "refused")
         {
             await RequireRefusedAsync(service, token);
+            return 0;
+        }
+
+        var store = Store(path, fenceInBatch);
+        if (mode == "recover")
+        {
+            var prior = await FenceAsync(path, token);
+            await service.StartAsync(token);
+            await WaitForRevisionAsync(store, Slow, 1, token);
+            var after = await FenceAsync(path, token);
+            Require(after.Owner == owner && after.Epoch > prior.Epoch &&
+                await ReadAsync(store, Slow, token) is { State: "\"replayed\"" },
+                "a new process replays the pending delivery under a newer fence");
+            await service.StopAsync(token);
             return 0;
         }
 
@@ -130,18 +154,20 @@ internal static class SqliteHostLifetimeChecks
             return 0;
         }
 
-        var store = Store(path, fenceInBatch);
         await AdmitStartAsync(store, Slow, token);
         await actor.SlowEntered.Task.WaitAsync(token);
         var fence = await FenceAsync(path, token);
         using var application = new CancellationTokenSource();
         try
         {
-            if (mode == "kill")
+            if (mode is "kill" or "stuck")
             {
                 var stopping = service.StopAsync(application.Token);
                 application.Cancel();
                 await RequireCancellationAsync(stopping, application.Token, token);
+                if (mode == "stuck")
+                    Require((await escalation.Task.WaitAsync(token)).Contains("application shutdown deadline", StringComparison.Ordinal),
+                        "a stopped process whose actor stays blocked past the grace invokes its process policy");
             }
             else if (mode == "dispose")
             {
@@ -161,25 +187,34 @@ internal static class SqliteHostLifetimeChecks
                 await service.DisposeAsync().AsTask().WaitAsync(token);
                 Require(service.LastError is ScopeOwnershipLostException && log.OwnershipErrors == 1 && log.Kills == 0,
                     "disposing after a lost fence records one Error and returns twice without throwing");
-                await RunPeerAsync("refused", path, fenceInBatch, token);
+                await CheckAbandonedTurnAsync();
                 return 0;
             }
 
             Require(await FenceAsync(path, token) == fence && fence.Owner == "peer" &&
                 await ReadAsync(store, Slow, token) is null && log.Kills == 1 && service.LastError is null,
                 $"the {mode} deadline warns once, leaves the fence to expire and discards the incomplete turn");
-            await RunPeerAsync("refused", path, fenceInBatch, token);
+            if (mode != "stuck") Require(!escalation.Task.IsCompleted, "a prompt kill needs no process escalation");
+            await CheckAbandonedTurnAsync();
         }
         finally
         {
             actor.ReleaseSlow.TrySetResult();
         }
         return 0;
+
+        async Task CheckAbandonedTurnAsync()
+        {
+            actor.ReleaseSlow.TrySetResult();
+            await actor.SlowReturned.Task.WaitAsync(token);
+            await RunPeerAsync("refused", path, fenceInBatch, token);
+            Require(await ReadAsync(store, Slow, token) is null, "returning from an abandoned turn leaves its checkpoint unwritten");
+        }
     }
 
     private static SqliteEmbeddedHostedService Service(string path, string node, WaitingActor actor, bool fenceInBatch,
-        ILogger<SqliteEmbeddedHostedService>? log = null, TimeSpan? disposeDeadline = null) =>
-        new(path, node, actor, reason => throw new InvalidOperationException(reason),
+        ILogger<SqliteEmbeddedHostedService>? log = null, TimeSpan? disposeDeadline = null, Action<string>? endProcess = null) =>
+        new(path, node, actor, endProcess ?? (reason => throw new InvalidOperationException(reason)),
             Loops with { DisposeDeadline = disposeDeadline ?? TimeSpan.FromSeconds(15) }, fenceInBatch, log);
 
     private static async Task RunPeerAsync(string mode, string path, bool fenceInBatch, CancellationToken token)
@@ -190,6 +225,8 @@ internal static class SqliteHostLifetimeChecks
         start.ArgumentList.Add(mode);
         start.ArgumentList.Add(path);
         start.ArgumentList.Add(fenceInBatch ? "in-batch" : "checked");
+        if (mode == "refused" && !OperatingSystem.IsWindows())
+            start.Environment["DOTNET_SYSTEM_IO_DISABLEFILELOCKING"] = "1";
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Cannot start the SQLite host probe.");
         try
         {
@@ -272,10 +309,11 @@ internal static class SqliteHostLifetimeChecks
         }
     }
 
-    private sealed class WaitingActor(bool acceptStart = true) : IActorType
+    private sealed class WaitingActor(bool acceptStart = true, bool recovering = false, bool blocks = false) : IActorType
     {
         internal TaskCompletionSource SlowEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource SiblingEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource SlowReturned { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource ReleaseSlow { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource ReleaseSibling { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -297,8 +335,11 @@ internal static class SqliteHostLifetimeChecks
                 if (!acceptStart || message.Kind != Kinds.Start) throw new InvalidOperationException("Unexpected creator turn.");
                 var sibling = turn.Actor == Sibling;
                 (sibling ? SiblingEntered : SlowEntered).TrySetResult();
-                await (sibling ? ReleaseSibling : ReleaseSlow).Task;
-                row = new(input.Actor, Model, Model, InstanceStatus.Running, "\"waiting\"", turn.Revision, null);
+                var release = (sibling ? ReleaseSibling : ReleaseSlow).Task;
+                if (blocks) release.GetAwaiter().GetResult();
+                else if (!recovering) await release;
+                row = new(input.Actor, Model, Model, InstanceStatus.Running, recovering ? "\"replayed\"" : "\"waiting\"",
+                    turn.Revision, null);
             }
             else
             {
@@ -306,7 +347,9 @@ internal static class SqliteHostLifetimeChecks
                     throw new InvalidOperationException("The continuation requires the previous host's checkpoint.");
                 row = input.Row with { Status = InstanceStatus.Finished, Revision = turn.Revision };
             }
-            return turn.Seal(turn.Outcome(row.Status), row, row.State, Json.Write(new[] { message.Id }));
+            var outcome = turn.Seal(turn.Outcome(row.Status), row, row.State, Json.Write(new[] { message.Id }));
+            if (turn.Actor == Slow) SlowReturned.TrySetResult();
+            return outcome;
         }
     }
 }

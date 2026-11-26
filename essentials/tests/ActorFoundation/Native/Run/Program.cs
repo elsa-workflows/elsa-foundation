@@ -62,7 +62,7 @@ if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flow
 if (args is ["pg-preview-host-lifetime"]) return await PostgresPreviewLifetimeChecks.RunAsync();
 if (args is ["sqlite-host-lifetime", var sqliteFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunAsync(sqliteFence == "in-batch");
-if (args is ["sqlite-host-lifetime-peer", var sqliteMode and ("refused" or "start" or "kill" or "dispose" or "fault"), var sqlitePath,
+if (args is ["sqlite-host-lifetime-peer", var sqliteMode and ("refused" or "start" or "kill" or "dispose" or "fault" or "stuck" or "recover"), var sqlitePath,
     var peerFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunPeerAsync(sqliteMode, sqlitePath, peerFence == "in-batch");
 if (args is ["pg-preview-host-watchdog"]) return await PostgresPreviewHostChecks.RunAsync();
