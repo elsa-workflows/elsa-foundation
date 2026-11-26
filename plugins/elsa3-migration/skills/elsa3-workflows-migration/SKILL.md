@@ -141,7 +141,7 @@ After every run, record the command, its exit code and the date as `Last report`
    list) and the number of references (`usages`). Add one row per component to the plan with status `todo`. A component that exists in the
    Elsa 3 source but that no definition uses is not migrated.
 3. Show the user the components with their counts.
-4. Mark the Elsa 3 built-ins: a storage driver or activity type whose namespace starts with `Elsa.` (Elsa 3's own), and a
+4. Mark the Elsa 3 built-ins: a storage driver or activity type whose type name starts with `Elsa.` (Elsa 3's own, such as `Elsa.SetVariable`), and a
    JavaScript function that case 14 of the porting catalog lists as one Elsa 3 defined itself. Record their source as
    `Elsa 3 built-in` and do not search for them.
 5. Ask for the folders or repositories of the Elsa 3 source (asking once per folder before searching it) and record
@@ -178,7 +178,7 @@ each:
 6. **Redesign.** When a case's verdict for this component is *redesign*, write no workaround code. Record the
    alternatives from the case, let the user decide, and set the status to `redesign` (or `dropped`) with the decision
    in Notes.
-7. **Elsa 3 built-in activities.** An activity type in an `Elsa.` namespace that the report still names is one of Elsa
+7. **Elsa 3 built-in activities.** An activity type whose name starts with `Elsa.` that the report still names is one of Elsa
    3's own activities that Elsa 4 does not map. There is no source to port and no catalog case: record the user's
    decision (rebuild the step with Elsa 4's own activities, or drop the definitions that use it) and set the status to
    `redesign` or `dropped`.

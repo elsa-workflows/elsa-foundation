@@ -101,7 +101,7 @@ the export under its assembly-qualified name, so it is found, like a storage dri
 before the comma; a storage
 driver by the type name before the comma in its assembly-qualified name.
 
-A component is an Elsa 3 built-in, recorded as such and not searched for, when it is a storage driver or activity type whose namespace starts with `Elsa.` (Elsa 3's own), or a JavaScript function that case 14 lists as one Elsa 3 defined itself (the names the
+A component is an Elsa 3 built-in, recorded as such and not searched for, when it is a storage driver or activity type whose type name starts with `Elsa.` (Elsa 3's own, such as `Elsa.SetVariable`), or a JavaScript function that case 14 lists as one Elsa 3 defined itself (the names the
 Elsa 3 mapping README gives for functions a host function may take over: the configuration and definition readers,
 the last-result reader and the byte and stream helpers). These are names, not diagnostic codes.
 

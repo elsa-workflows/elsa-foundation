@@ -235,7 +235,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   its type name. It records the source location, or "not found", in the plan. A component that is an Elsa 3
   built-in (the memory storage driver, or a built-in JavaScript function such as a configuration reader that a host
   function may take over) is not searched for: the plan records it as "Elsa 3 built-in". A component is an Elsa 3 built-in when it is
-  a storage driver or activity type whose namespace starts with `Elsa.` (Elsa 3's own), or a JavaScript function that case 14 lists as one Elsa 3 defined itself (research R-6). A storage-driver row is
+  a storage driver or activity type whose type name starts with `Elsa.` (Elsa 3's own, such as `Elsa.SetVariable`), or a JavaScript function that case 14 lists as one Elsa 3 defined itself (research R-6). A storage-driver row is
   answered by the case 17 interview, not by a port.
 - **FR-010**: **Prepare.** For each component the skill MUST record in the plan its Elsa 4 target name, the Elsa 4
   feature and project it belongs to, the porting cases that apply, the tests to port, and its status; then port it
