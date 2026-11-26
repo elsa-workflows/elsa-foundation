@@ -58,3 +58,9 @@ The job first stages the manifests using the corresponding `-amd64` and `-arm64`
 The `ELSA_STUDIO_PROFILE_PUBLISHING` repository variable controls versioned candidate image publication.
 Set it to `true` to enable this path. Unset it to stop further candidate writes while checking registry state.
 The separate consolidated package publisher retains its existing authorization.
+
+## Ordinary Studio Essentials image
+
+The ordinary Studio Docker workflow uses the Foundation Dockerfile and the profile files from the verified source commit. Automatic publication packs the seven modules at the allocated preview version. Manual builds use the selected package artifact after verifying its provenance, inventory, and payload.
+
+The publisher pushes a workflow-scoped staging index and qualifies its exact AMD64 and ARM64 children before assigning the ordinary tags. The qualification artifact records the tested image IDs and whether each runtime ran natively or under emulation. The job records the previous `latest` digest, checks that the source is still on main, and verifies that `latest` resolves to the tested index after promotion. Build-only dispatches qualify a locally loaded AMD64 image.
