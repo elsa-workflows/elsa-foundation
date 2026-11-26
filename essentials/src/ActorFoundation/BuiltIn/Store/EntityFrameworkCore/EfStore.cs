@@ -120,10 +120,11 @@ public class KernelDb : DbContext
     // same creation transaction as the schema. An existing database keeps its original marker.
     public KernelDb(DbContextOptions<KernelDb> options) : this(options, StoreFormat.Current, RootCapabilities.None) { }
 
-    private KernelDb(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) : base(options)
+    private KernelDb(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities, bool sqliteShippedInstall = false) : base(options)
     {
         RequiredFormat = format;
         Capabilities = capabilities;
+        SqliteShippedInstall = sqliteShippedInstall;
         RootStateFamily = RootStateFamily.Of(capabilities);
     }
 
@@ -140,7 +141,8 @@ public class KernelDb : DbContext
                 ? throw new ArgumentException($"The capability set lacks the prerequisites {missing}.", nameof(capabilities))
                 : new(options, format, capabilities);
 
-    internal bool UsesSqliteShippedInstall => RequiredFormat == StoreFormat.RootShipped && Database.IsSqlite();
+    internal bool SqliteShippedInstall { get; }
+    internal bool UsesSqliteShippedInstall => SqliteShippedInstall && Database.IsSqlite();
     internal StoreFormat RequiredFormat { get; }
     internal RootCapabilities Capabilities { get; }
     // The one state family this set writes and reads, with its terminal statuses.
@@ -169,7 +171,8 @@ public class KernelDb : DbContext
     internal bool ProjectsRootParkRevision => UsesRootParkInspection && (UsesRootParkRecovery || UsesRootParkedOperators);
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
-    internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
+    internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options) =>
+        new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true);
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
@@ -434,7 +437,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
-        if (pinned is null) await RequireStoreVersionsAsync(db, cancellationToken);
+        if (pinned is null && !db.Database.IsSqlite()) await RequireStoreVersionsAsync(db, cancellationToken);
         return await db.Partitions.CountAsync(cancellationToken);
     }
 
@@ -643,6 +646,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
         db.Database.AutoSavepointsEnabled = false;      // ENGINES.md E4: SAVEPOINT and RELEASE were two more round trips per commit on PostgreSQL
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
             await PinRootNamespaceForCommitAsync(db, cancellationToken);
         var now = 0L;
@@ -961,7 +965,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         CreationProtocol.RejectUnsupported(delivery.Message);
         await using var db = create();
-        RefuseSqliteShippedRuntime(db);
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         return await EventInsert.Run(db, Engine, postgres, ToEntity(delivery.Message, 0, 0), cancellationToken);
     }
 
@@ -969,7 +973,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         CreationProtocol.RejectUnsupported(message);
         await using var db = create();
-        RefuseSqliteShippedRuntime(db);
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         var m = ToEntity(message, 0, 0);
         if (Engine is not null) return await Engine.AddAsync(db, m, cancellationToken);
         var seq = postgres ? ("", "") : (""", "Seq" """, """, (SELECT COALESCE(MAX("Seq"), 0) + 1 FROM "Messages")""");
@@ -985,6 +989,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (_ordinaryRoots is { } root)
         {
             root = await ResolveWorkerRootsAsync(root, ids, [], cancellationToken);
@@ -1038,6 +1043,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (Engine is not null) { await Engine.PublishAsync(db, @event, cancellationToken); return; }
         await db.Database.ExecuteSqlRawAsync(
             """INSERT INTO "Events" ("Key", "Id", "Payload", "KeepUntil") VALUES ({0}, {1}, CAST({2} AS TEXT), {3}) ON CONFLICT DO NOTHING""",
@@ -1047,6 +1053,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         var rows = await db.Subscriptions.AsNoTracking().Where(s => s.Key == key).ToListAsync(cancellationToken);
         return rows.Select(s => new SubscriptionRow(s.Key, s.Instance, s.Wait, s.Start is null ? null : Json.Read<StartSpec>(s.Start))).ToList();
     }
@@ -1055,6 +1062,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         CreationProtocol.RejectUnsupported(subscription);
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (Engine is not null) { await Engine.SubscribeAsync(db, subscription, cancellationToken); return; }
         await db.Database.ExecuteSqlRawAsync(
             """INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition", "Start") VALUES ({0}, {1}, {2}, 0, CAST({3} AS TEXT)) ON CONFLICT DO NOTHING""",
@@ -1064,6 +1072,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         var rows = await (from e in db.Events.AsNoTracking()
             join s in db.Subscriptions.AsNoTracking() on e.Key equals s.Key
             where e.Key == published.Key && e.Id == published.Id
@@ -1078,6 +1087,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         var unqualified = waits.Where(w => !CreationProtocol.Qualified(w)).ToArray();
         if (unqualified.Length == 0) return [];
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         // One parameter carries the whole ticket, avoiding per-wait SQL parameters and expression-depth limits.
         var unpack = Engine switch
         {
@@ -1103,6 +1113,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         var rows = await db.Events.FromSqlRaw(Q($"""SELECT * FROM "Events" WHERE "KeepUntil" >= {Now}""")).AsNoTracking().Where(e => keys.Contains(e.Key)).ToListAsync(cancellationToken);
         return rows.Select(e => new EventRow(e.Key, e.Id, e.Payload, e.KeepUntil)).ToList();
     }

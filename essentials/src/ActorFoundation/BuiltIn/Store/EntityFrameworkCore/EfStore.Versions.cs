@@ -237,7 +237,7 @@ internal sealed record RootStateFamily(string Prefix, bool EndsCancelled, bool E
 internal sealed class KernelModelCacheKeyFactory : IModelCacheKeyFactory
 {
     public object Create(DbContext context, bool designTime) => context is KernelDb db
-        ? (context.GetType(), db.RequiredFormat, db.Capabilities, designTime)
+        ? (context.GetType(), db.RequiredFormat, db.Capabilities, db.SqliteShippedInstall, designTime)
         : (context.GetType(), designTime);
 }
 
@@ -282,8 +282,18 @@ public sealed partial class EfStore
     private static async Task RequireStoreVersionsAsync(KernelDb db, CancellationToken cancellationToken,
         FormatLock formatLock)
     {
-        var (stored, definitions) = await ReadVersionMarkersAsync(db, formatLock, cancellationToken);
-        RequireSnapshotFormat(db, stored.StoreSchema, stored.MessageProtocol, stored.JournalCodec, definitions is null ? null : StoreDefinitionsRevision.Stamp(definitions));
+        RefuseSqliteShippedRuntime(db);
+        await RequireInstalledStoreVersionsAsync(db, formatLock, cancellationToken);
+    }
+
+    private static async Task RequireInstalledStoreVersionsAsync(KernelDb db, FormatLock formatLock, CancellationToken token)
+    {
+        var (stored, definitions) = await ReadVersionMarkersAsync(db, formatLock, token);
+        // A locked read can wait for a concurrent change. Re-sample both rows after the lock on the same transaction.
+        if (db.RequiredFormat == StoreFormat.RootShipped && formatLock != FormatLock.None && db.Database.IsNpgsql())
+            (stored, definitions) = await ReadVersionMarkersAsync(db, FormatLock.None, token);
+        RequireSnapshotFormat(db, stored.StoreSchema, stored.MessageProtocol, stored.JournalCodec,
+            definitions is null ? null : StoreDefinitionsRevision.Stamp(definitions));
     }
 
     private static async Task<StoreFormat> ReadStoreFormatAsync(KernelDb db, FormatLock formatLock, CancellationToken cancellationToken)
@@ -379,12 +389,12 @@ internal static class StoreDefinitionsRevision
 
     // Query the stamp inside the same statement as the format, so a reader cannot combine two store revisions.
     private static readonly string PostgresStampSql = FormattableString.Invariant($"""
-        (SELECT d."StoreSchema"::text || '/' || d."MessageProtocol"::text || '/' || d."JournalCodec"::text
-         FROM "KernelStoreVersions" d WHERE d."Id" = {MarkerId})
+        SELECT d."StoreSchema"::text || '/' || d."MessageProtocol"::text || '/' || d."JournalCodec"::text
+        FROM "KernelStoreVersions" d WHERE d."Id" = {MarkerId}
         """);
 
-    internal static string AddPostgresStampSql(string sql) =>
-        sql.Replace("/*definitions-stamp*/", PostgresStampSql, StringComparison.Ordinal);
+    internal static string AddPostgresStampSql(string sql, bool lockDefinitions = false) =>
+        sql.Replace("/*definitions-stamp*/", "(" + PostgresStampSql + (lockDefinitions ? " FOR SHARE OF d)" : ")"), StringComparison.Ordinal);
 
     internal static FormattableString AddPostgresStamp(FormattableString sql) =>
         FormattableStringFactory.Create(AddPostgresStampSql(sql.Format), sql.GetArguments());

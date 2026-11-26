@@ -248,7 +248,36 @@ internal static class PostgresShippedFormatChecks
         }
         finally
         {
-            await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol), token);
+            await marker.ExecuteDeleteAsync(token);
+        }
+
+        // An operation that waits for the shared marker must see a definitions row inserted by the locker.
+        await using var advancing = open();
+        await using var advance = await advancing.Database.BeginTransactionAsync(token);
+        await advancing.Database.ExecuteSqlInterpolatedAsync($"""
+            SELECT "Id" FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId} FOR UPDATE
+            """, token);
+        await advancing.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "KernelStoreVersions" ("Id", "StoreSchema", "MessageProtocol", "JournalCodec")
+            VALUES ({expected.Id}, {expected.StoreSchema}, {expected.MessageProtocol + 1}, {expected.JournalCodec})
+            """, token);
+        var waiting = store.PartitionCountAsync(token).AsTask();
+        while (!waiting.IsCompleted && !await db.Database.SqlQueryRaw<bool>("""
+            SELECT EXISTS (SELECT 1 FROM pg_stat_activity
+                WHERE datname = current_database() AND pid <> pg_backend_pid() AND wait_event_type = 'Lock') AS "Value"
+            """).SingleAsync(token))
+            await Task.Delay(20, token);
+        Require(!waiting.IsCompleted, "the operation waits for the shared PostgreSQL marker lock");
+        await advance.CommitAsync(token);
+        try
+        {
+            await RefusesRevisionAsync(() => waiting);
+            Require(true, "the operation sees the new definitions revision after its marker lock wait");
+        }
+        finally
+        {
+            // Exercise the rest of the hosted journey against a pre-revision installation.
+            await marker.ExecuteDeleteAsync(token);
         }
 
         static async Task RefusesRevisionAsync(Func<Task> query)

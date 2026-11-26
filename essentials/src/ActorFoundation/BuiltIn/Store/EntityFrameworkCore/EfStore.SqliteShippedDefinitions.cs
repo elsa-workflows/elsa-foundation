@@ -16,6 +16,9 @@ public sealed partial class EfStore
             throw new NotSupportedException("The SQLite shipped format is available for install verification only.");
     }
 
+    private static Task RequireSqliteOperationalFormatAsync(KernelDb db, CancellationToken token) =>
+        db.Database.IsSqlite() ? RequireStoreVersionsAsync(db, token) : Task.CompletedTask;
+
     private sealed record SqliteDefinition(string Type, string Name, string Table, string Sql);
 
     // The installer owns one immediate transaction from the empty-store check to the definition and marker checks.
@@ -42,7 +45,7 @@ public sealed partial class EfStore
                 await SeedSqliteShippedAsync(db, partitions, token);
                 installed = await ReadSqliteDefinitionsAsync(db, token);
             }
-            await RequireStoreVersionsAsync(db, token);
+            await RequireInstalledStoreVersionsAsync(db, FormatLock.None, token);
 
             var expectedByName = expected.ToDictionary(definition => definition.Name, StringComparer.Ordinal);
             if (installed.Count != expectedByName.Count ||
@@ -54,7 +57,7 @@ public sealed partial class EfStore
                     AND (SELECT min("Id") FROM "Partitions") = 0
                     AND (SELECT max("Id") FROM "Partitions") = {partitions - 1}
                     AND EXISTS (SELECT 1 FROM "FoundationRootIssuer"
-                        WHERE "Singleton" = 1 AND length("Key") = 32 AND "Partitions" = {partitions}) AS "Value"
+                        WHERE "Singleton" = 1 AND typeof("Key") = 'blob' AND length("Key") = 32 AND "Partitions" = {partitions}) AS "Value"
                 """).SingleAsync(token))
                 throw new StoreFormatException("The SQLite root issuer and partition count differ from this install. Recreate or migrate the database.");
 
@@ -67,11 +70,13 @@ public sealed partial class EfStore
     {
         if (!await db.Database.SqlQueryRaw<bool>("""
             SELECT (SELECT foreign_keys FROM pragma_foreign_keys) = 1
+                AND (SELECT ignore_check_constraints FROM pragma_ignore_check_constraints) = 0
+                AND (SELECT journal_mode FROM pragma_journal_mode) IN ('delete', 'truncate', 'persist', 'wal')
                 AND NOT EXISTS (SELECT 1 FROM temp.sqlite_schema)
                 AND NOT EXISTS (SELECT 1 FROM pragma_database_list WHERE name NOT IN ('main', 'temp'))
                 AS "Value"
             """).SingleAsync(token))
-            throw new StoreFormatException("The SQLite installer requires foreign keys on and a dedicated database without temporary objects or attachments.");
+            throw new StoreFormatException("The SQLite installer requires a durable journal, foreign keys and CHECK constraints, and a dedicated database without temporary objects or attachments.");
     }
 
     private static Task<List<SqliteDefinition>> ReadSqliteDefinitionsAsync(KernelDb db, CancellationToken token) =>
@@ -110,7 +115,7 @@ public sealed partial class EfStore
             {
                 case CreateTableOperation table:
                     AddSqliteRootColumns(table);
-                    yield return new("table", table.Name, table.Name, Render(table));
+                    yield return new("table", table.Name, table.Name, Render(table) + " STRICT");
                     break;
                 case CreateIndexOperation index:
                     yield return new("index", index.Name, index.Table, Render(index));
@@ -150,23 +155,28 @@ public sealed partial class EfStore
                 PrincipalTable = "FoundationRootBirths",
                 PrincipalColumns = ["Reference"]
             });
-            table.CheckConstraints.Add(new AddCheckConstraintOperation
-            {
-                Name = "CK_Instances_FoundationParkRevision",
-                Table = table.Name,
-                Sql = """ "FoundationParkRevision" > 0 """
-            });
+            Check("CK_Instances_FoundationParkRevision", """ "FoundationParkRevision" > 0 """);
+            Check("CK_Instances_FoundationBoolean", """ "Retired" IN (0, 1) AND "Suspended" IN (0, 1) """);
+            Check("CK_FoundationParkClearing", """
+                ("FoundationParkClearing" IS NULL) = ("FoundationParkCleared" IS NULL)
+                AND ("FoundationParkClearing" IS NULL OR "Status" = 2 AND "FoundationParkAt" IS NOT NULL AND "FoundationParkCleared" > 0)
+                """);
         }
         if (table.Name == "Messages")
         {
             Add("FoundationKeptBy", "INTEGER");
-            table.CheckConstraints.Add(new AddCheckConstraintOperation
-            {
-                Name = "CK_Messages_FoundationKeptBy",
-                Table = table.Name,
-                Sql = """ "FoundationKeptBy" IS NULL OR ("FoundationKeptBy" = 0 AND "Done" = 1) """
-            });
+            Check("CK_Messages_FoundationKeptBy", """ "FoundationKeptBy" IS NULL OR ("FoundationKeptBy" = 0 AND "Done" = 1) """);
+            Check("CK_Messages_Done", """ "Done" IN (0, 1) """);
         }
+
+        if (table.Name == "Partitions") Check("CK_Partitions_Died", """ "Died" IN (0, 1) """);
+
+        void Check(string name, string sql) => table.CheckConstraints.Add(new AddCheckConstraintOperation
+        {
+            Name = name,
+            Table = table.Name,
+            Sql = sql
+        });
 
         void Add(string name, string type) => table.Columns.Add(new AddColumnOperation
         {
@@ -251,7 +261,7 @@ public sealed partial class EfStore
     }
 
     private static SqliteDefinition Table(string name, string columns) =>
-        new("table", name, name, $"""CREATE TABLE "{name}" ({columns})""");
+        new("table", name, name, $"""CREATE TABLE "{name}" ({columns}) STRICT""");
 
     private static SqliteDefinition Index(string name, string table, string columns) =>
         new("index", name, table, $"""CREATE INDEX "{name}" ON "{table}" {columns}""");

@@ -1,5 +1,6 @@
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Postgres;
 using Kernel.Runtime;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -8,7 +9,9 @@ namespace Kernel.Native.Run;
 
 internal static class SqliteShippedInstallChecks
 {
+    private const int CheckConstraint = 275;
     private const int TriggerConstraint = 1811;
+    private const int DataTypeConstraint = 3091;
 
     internal static async Task<int> RunAsync()
     {
@@ -16,9 +19,10 @@ internal static class SqliteShippedInstallChecks
         var token = deadline.Token;
         var folder = Directory.CreateTempSubdirectory("sqlite-shipped-install");
         var path = Path.Combine(folder.FullName, "kernel.db");
-        KernelDb New(bool foreignKeys = true) => KernelDb.ForSqliteRootShipped(
+        DbContextOptions<KernelDb> Options(bool foreignKeys = true) =>
             new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
-            { DataSource = path, ForeignKeys = foreignKeys, Pooling = false }.ToString()).Options);
+            { DataSource = path, ForeignKeys = foreignKeys, Pooling = false }.ToString()).Options;
+        KernelDb New(bool foreignKeys = true) => KernelDb.ForSqliteRootShipped(Options(foreignKeys));
 
         try
         {
@@ -31,15 +35,36 @@ internal static class SqliteShippedInstallChecks
                 "a clean SQLite shipped install and its reinstall keep one issuer and the requested partitions");
 
             await CheckRetirementAndGenerationAsync(db, token);
-            var store = new EfStore(() => New(), postgres: false);
-            await RefusedAsync<NotSupportedException>(() => store.CreateAsync(2), "the generic installer refuses the staged shipped format");
-            await RefusedAsync<NotSupportedException>(() => store.TakeAsync(0, "owner", TimeSpan.FromSeconds(10), token).AsTask(),
-                "a node cannot take ownership of the install-only store");
-            await RefusedAsync<NotSupportedException>(() => store.PollAsync(0, 1, TimeSpan.Zero, 1, token).AsTask(),
-                "the runtime cannot poll the install-only store");
-            await RefusedAsync<NotSupportedException>(() => store.AddAsync(new("ordinary", InstanceRef.In(0, "root"), "advance"), token).AsTask(),
-                "ordinary admission cannot bypass the install-only guard");
+            var staged = new EfStore(() => New(), postgres: false);
+            var ordinary = new EfStore(() => new KernelDb(Options()), postgres: false);
+            (string Name, Func<EfStore, Task> Run)[] operations =
+            [
+                ("generic install", store => store.CreateAsync(2)),
+                ("take", store => store.TakeAsync(0, "owner", TimeSpan.FromSeconds(10), token).AsTask()),
+                ("heartbeat", store => store.HeartbeatAsync("owner", TimeSpan.FromSeconds(10), token).AsTask()),
+                ("fence", store => store.FenceAsync([new(0, 0, 0, 1)], token).AsTask()),
+                ("release", store => store.ReleaseAsync([new(0, 0, 0)], token).AsTask()),
+                ("single poll", store => store.PollAsync(0, 1, TimeSpan.Zero, 1, token).AsTask()),
+                ("set poll", store => store.PollAsync([new(0, 1, 0)], TimeSpan.Zero, 1, token).AsTask()),
+                ("ordinary send", store => store.AddAsync(new("ordinary", InstanceRef.In(0, "root"), "advance"), token).AsTask()),
+                ("event publish", store => store.PublishAsync(new("topic", "event", null, 10), token).AsTask()),
+                ("subscription", store => store.SubscribeAsync(new("topic", "root", "wait"), token).AsTask())
+            ];
+            foreach (var (name, run) in operations)
+            {
+                await RefusedAsync<NotSupportedException>(() => run(staged), $"the SQLite install profile refuses {name}");
+                await RefusedAsync<StoreFormatException>(() => run(ordinary), $"the ordinary SQLite profile refuses {name} on the shipped file");
+            }
+            await using (var wrongProvider = PostgresPreviewHosting.CreateShippedContext(Options()))
+                await RefusedAsync<NotSupportedException>(() => Task.FromResult(wrongProvider.Model),
+                    "the PostgreSQL shipped context refuses SQLite at model build");
 
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+                UPDATE "KernelStoreVersions" SET "MessageProtocol" = 'wrong-revision'
+                """, token), "SQLite requires integer version fields", DataTypeConstraint);
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+                UPDATE "FoundationRootIssuer" SET "Key" = 'abcdefghijklmnopqrstuvwxyzabcdef'
+                """, token), "SQLite requires a BLOB issuer key", DataTypeConstraint);
             var marker = StoreDefinitionsRevision.Seed(db)!;
             await db.StoreVersions.Where(row => row.Id == marker.Id).ExecuteUpdateAsync(
                 row => row.SetProperty(x => x.MessageProtocol, marker.MessageProtocol + 1), token);
@@ -61,6 +86,14 @@ internal static class SqliteShippedInstallChecks
                     "SQLite refuses a connection with foreign keys disabled");
 
             await db.Database.OpenConnectionAsync(token);
+            await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode = OFF", token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses installation without a durable journal");
+            await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode = DELETE", token);
+            await db.Database.ExecuteSqlRawAsync("PRAGMA ignore_check_constraints = ON", token);
+            await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
+                "SQLite refuses installation with CHECK constraints disabled");
+            await db.Database.ExecuteSqlRawAsync("PRAGMA ignore_check_constraints = OFF", token);
             await db.Database.ExecuteSqlRawAsync("""CREATE TEMP TABLE "Instances" ("Id" TEXT)""", token);
             await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
                 "SQLite refuses temporary objects that can shadow the main schema");
@@ -95,6 +128,16 @@ internal static class SqliteShippedInstallChecks
         await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
             UPDATE "Instances" SET "NextJobGeneration" = 0 WHERE "Id" = 'direct'
             """, token), "the job generation trigger refuses a rewind");
+
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "Retired" = 2 WHERE "Id" = 'direct'
+            """, token), "SQLite keeps the retirement flag in the Boolean domain", CheckConstraint);
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "NextJobGeneration" = 'wrong-type' WHERE "Id" = 'direct'
+            """, token), "SQLite keeps job generations in the integer domain", DataTypeConstraint);
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "FoundationParkClearing" = 'operation' WHERE "Id" = 'direct'
+            """, token), "the Park clearing columns require the paired count and a parked root", CheckConstraint);
 
         foreach (var id in new[] { "atomic", "parked" })
         {
@@ -133,10 +176,10 @@ internal static class SqliteShippedInstallChecks
         }
     }
 
-    private static async Task RefusedAsync<T>(Func<Task> action, string witness) where T : Exception
+    private static async Task RefusedAsync<T>(Func<Task> action, string witness, int sqliteCode = TriggerConstraint) where T : Exception
     {
         try { await action(); }
-        catch (T error) when (error is not SqliteException sqlite || sqlite.SqliteExtendedErrorCode == TriggerConstraint)
+        catch (T error) when (error is not SqliteException sqlite || sqlite.SqliteExtendedErrorCode == sqliteCode)
         {
             Require(true, witness);
             return;
