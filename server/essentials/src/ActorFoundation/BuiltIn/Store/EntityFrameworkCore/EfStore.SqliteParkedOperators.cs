@@ -88,10 +88,12 @@ public sealed partial class EfStore
         return kept.GetRange(0, count);
     }
 
-    private static async Task<bool> ClearSqliteParkPageAsync(KernelDb db, WorkerRoot root, List<SqliteKeptRow> page, long window, CancellationToken token)
+    private static async Task<bool> ClearSqliteParkPageAsync(KernelDb db, WorkerRoot root, List<SqliteKeptRow> page, long window, CancellationToken token) =>
+        await ClearSqliteParkRowsAsync(db, root, page, checked(await ReadSqliteParkClockAsync(db, token) + window), token);
+
+    private static async Task<bool> ClearSqliteParkRowsAsync(KernelDb db, WorkerRoot root, IReadOnlyList<SqliteKeptRow> rows, long until, CancellationToken token)
     {
-        var until = checked(await ReadSqliteParkClockAsync(db, token) + window);
-        foreach (var group in page.GroupBy(row => row.Scope))
+        foreach (var group in rows.GroupBy(row => row.Scope))
         {
             var ids = Json.Write(group.Select(row => row.Id).ToArray());
             // A creator has no outside delivery receipt. Its immutable birth and start receipt remain, and the consumed

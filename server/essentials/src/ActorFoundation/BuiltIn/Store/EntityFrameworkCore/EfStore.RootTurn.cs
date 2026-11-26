@@ -158,7 +158,8 @@ public sealed partial class EfStore
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
                 ? db.UsesSqliteRootRuntime
                     ? PostgresRootAdmission.DecodeOperator(row, reference, terminations: true, retirements: true,
-                        terminateThenDelete: true, retentionDeletes: true, operatorReplies: true, parkedTerminate: true)
+                        terminateThenDelete: true, retentionDeletes: true, operatorReplies: true, parkedTerminate: true,
+                        parkRecovery: db.UsesRootParkRecovery, composedRecovery: db.UsesRootComposedParkRecovery)
                     : PostgresRootAdmission.DecodeOperator(db, row, reference)
                 : PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol)
         };

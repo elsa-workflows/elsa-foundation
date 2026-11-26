@@ -125,7 +125,7 @@ public sealed partial class EfStore
             scope.RequiresCommittedTerminal = db.UsesRootRetirement;
             scope.KeepsParkInputs = db.UsesRootParkOpening;
             scope.KeepsParkArrivals = db.UsesRootParkArrivals;
-            scope.RecoversPark = db.UsesRootParkRecovery && !db.UsesSqliteRootRuntime;
+            scope.RecoversPark = db.UsesRootParkRecovery;
             scope.RefusesParkedOperators = db.UsesRootParkedOperators;
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
@@ -406,7 +406,8 @@ public sealed partial class EfStore
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
         if (!postgres && (turn.FoundationKept is not null && !turn.OpensPark && _ordinaryRoots?.KeepsParkArrivals != true ||
-            turn.FoundationRootOperator is { Kind: not (Kinds.Terminate or Kinds.Delete) }))
+            turn.FoundationRootOperator is { Kind: not (Kinds.Terminate or Kinds.Delete) } sqliteOperator &&
+            (sqliteOperator.Kind != Kinds.Recover || _ordinaryRoots?.RecoversPark != true)))
             throw new NotSupportedException("This SQLite root writer supports ordinary checkpoints, timed jobs, Park opening and selected Terminate and Delete.");
         if (turn is { Row.Status: InstanceStatus.Running, FoundationRootOperator: { Kind: Kinds.Terminate or Kinds.Delete,
                 Operator: { RootParkMark: not null, RootParkClear: false } } stale })
