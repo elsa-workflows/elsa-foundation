@@ -212,8 +212,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "1.0.1",
-        "contentHash": "B9Uud5b0LNA5QMOKeQV4Bv17OzStoaDu30YmA+zRtijAO/N0zw4eoc/YUaej+ta80LjZsVrhW1cIhMX8/1ZX5g=="
+        "resolved": "0.0.15",
+        "contentHash": "IGmLRHXJ/BcHWmjfilrikRFCkkJOyb5V7KoRld+yxGB0PzmWxEaBUWsz0+FXEIrmDz7lOoDESq7MI8XADRUoNA=="
       },
       "Polly.Core": {
         "type": "Transitive",
@@ -372,9 +372,9 @@
       },
       "Nuplane": {
         "type": "CentralTransitive",
-        "requested": "[1.0.1, )",
-        "resolved": "1.0.1",
-        "contentHash": "JkZrd86iYOPU9MScjUSO3VRWvdrCruFNY+vxtS/gHEX+EuhT62lXuak3tsm8Y5/QArmazQ/QllsHTx5A6VBWug==",
+        "requested": "[0.0.15, )",
+        "resolved": "0.0.15",
+        "contentHash": "psdnr45tl3YlgI2HiRjU/EgBmO3BulZIFi9vxnYbEY9H6UA3cLL92vODg1TgNWeksHJiMUurUYuBZmeRsEVTIA==",
         "dependencies": {
           "Microsoft.Extensions.Configuration.Binder": "10.0.3",
           "Microsoft.Extensions.DependencyInjection": "10.0.3",
@@ -387,7 +387,7 @@
           "NuGet.Protocol": "6.13.1",
           "NuGet.Resolver": "6.13.1",
           "NuGet.Versioning": "6.13.1",
-          "Nuplane.Abstractions": "1.0.1",
+          "Nuplane.Abstractions": "0.0.15",
           "Polly.Extensions": "8.6.5"
         }
       },
