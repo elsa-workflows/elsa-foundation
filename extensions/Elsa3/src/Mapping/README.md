@@ -420,6 +420,21 @@ R-10). An older Elsa 3 version of a reusable whose `{m}.{R}.0` would be below a 
 published is refused by the activity version bump rule and skipped with its dependents; the versions imported at the
 earlier revision keep running.
 
+## Changing the converter
+
+The Elsa 3 migration skill (`plugins/elsa3-migration/skills/elsa3-workflows-migration/`) tells users how to act on
+what this converter reports, so a change here is not finished until the skill and the JTest suites match it:
+
+- **A converter change** (a new mapping, refusal, warning or rewrite rule) needs JTest suites that cover it, in the JTest
+  suite folder of spec 1235 (`extensions/Elsa3/tests/JTest/`), and an update to the skill: the porting catalog
+  (`porting-catalog.md`) where a case states the rule, and the plan template (`migration-plan-template.md`) where the
+  plan records something new.
+- **A change to the storage-driver migration guide** ([docs/migration/elsa3-storage-drivers.md](../../../../docs/migration/elsa3-storage-drivers.md))
+  needs the same change in the catalog's case 17, which restates its interview.
+- **A change to an Elsa 4 activity authoring API** that a *port* case uses needs the Acme sample
+  (`extensions/Elsa3/tests/Migration/Sample/`) and the catalog updated together. The sample stops compiling, or
+  `tools/skills/check_migration_skill.py` fails in CI when a catalog example no longer equals its sample region.
+
 ## Registration
 
 `Elsa3MappingFeature` registers the following:

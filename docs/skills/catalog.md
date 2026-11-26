@@ -10,6 +10,8 @@ This catalog defines the workflows agents and engineers should follow. AI-provid
 - AI-provider wrappers should stay thin and point back to this catalog.
 - Plan first for decisions. Act as follow-through for obligations: before starting a new architecture-affecting unit, produce a plan/checklist and wait for approval; after an approved unit is underway, complete required tests, extension-point catalog updates, dependency-map refreshes, and small docs follow-through without a second approval unless the follow-through changes architecture meaning.
 
+User-facing product skills, such as the Elsa 3 migration skill, live under `plugins/` and are not contributor workflows; this catalog does not list them.
+
 The current skill audit lives in [skills-stabilization-audit.md](../reports/skills-stabilization-audit.md).
 
 ## AI-Provider Wrapper Validation

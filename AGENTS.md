@@ -99,6 +99,7 @@ Maintainers publish organization-repository branches and contributors use fork P
 | Glossary lookup | [docs/glossary/root.md](docs/glossary/root.md) and [docs/glossary/elsa.md](docs/glossary/elsa.md) |
 | Feature composition | [Feature Composition Explorer](docs/skills/catalog.md#feature-composition-explorer) |
 | Architecture tour | [docs/architecture-tour.md](docs/architecture-tour.md) |
+| Changing the Elsa 3 converter or an Elsa 4 activity authoring API | Also update JTest suites and the Elsa 3 migration skill: [Changing the converter](extensions/Elsa3/src/Mapping/README.md#changing-the-converter) |
 
 ## Constitution boundary
 

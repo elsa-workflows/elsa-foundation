@@ -44,6 +44,21 @@ Modules should stay opt-in. A shell composes only the capabilities it needs, and
 - [docs/README.md](docs/README.md) routes to glossary, skills, maps, reports, and architecture orientation.
 - `.specify/memory/constitution-framework.md` and `.specify/memory/constitution.md` are the two-layer constitution and should be treated as quality gates, not as the primary learning path.
 
+## Migrating from Elsa 3
+
+The migration converts an Elsa 3 export of workflow definitions to Elsa 4, ports the custom Elsa 3 code the definitions
+use (activities, JavaScript functions, variable types, storage drivers), and ends with a local test migration and a
+report of what to patch, what to reconsider and what goes smoothly. Read
+[the migration guide](plugins/elsa3-migration/skills/elsa3-workflows-migration/SKILL.md) and follow it by hand, or
+give it to an AI assistant. Installing it as an AI skill is optional:
+
+- Claude Code: `/plugin marketplace add elsa-workflows/elsa-foundation`, then `/plugin install elsa3-migration@elsa-workflows`.
+- Agents that read `.agents/skills/`: copy the folder `plugins/elsa3-migration/skills/elsa3-workflows-migration/` into
+  your workspace's `.agents/skills/`.
+
+Not covered: live workflow instances, running Elsa 3 next to Elsa 4, persistence data migration, identity and
+authentication migration, Elsa 3 Studio extensions, and C# and Python expressions.
+
 ## Repository role
 
 This repo currently supports two roles:
