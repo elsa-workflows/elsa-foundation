@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Elsa3.Migration.Cli" />
     <InternalsVisibleTo Include="Elsa3.Migration.Tests" />
   </ItemGroup>
 
