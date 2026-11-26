@@ -2474,7 +2474,7 @@ describe("workflows module", () => {
       : response(null, 403)));
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
     await waitForText(container, "artifact-1");
-    expect(buttonByLabel(container, "Open source definition definition-1: Workflow definition")).not.toBeNull();
+    expect(container.querySelector('a[aria-label="Open source definition definition-1: Workflow definition"]')).not.toBeNull();
     expect(buttonByLabel(container, "Inspect executable artifact-1")).not.toBeNull();
     await click(buttonByLabel(container, "Identifiers for Workflow definition"));
     expect(buttonByLabel(document.body, "Copy Source ID")).not.toBeNull();
@@ -2494,7 +2494,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
 
     await waitForText(container, "artifact-1");
-    await click(buttonByLabel(container, "Open source definition definition-1: Hello World"));
+    await click(container.querySelector('a[aria-label="Open source definition definition-1: Hello World"]'));
 
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(window.location.search).toBe("?definition=definition-1");

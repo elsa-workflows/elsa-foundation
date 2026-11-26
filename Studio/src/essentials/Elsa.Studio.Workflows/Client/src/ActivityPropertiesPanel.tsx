@@ -1024,9 +1024,12 @@ function PropertyRow({
   useEffect(() => {
     if (!focusAfterClear.current || syntax === activityResultSyntax) return;
     focusAfterClear.current = false;
-    const frame = requestAnimationFrame(() => rowRef.current?.querySelector<HTMLButtonElement>(
-      ".wf-choose-data-trigger, .wf-syntax-picker-trigger"
-    )?.focus());
+    const frame = requestAnimationFrame(() => {
+      const row = rowRef.current;
+      const chooseData = row?.querySelector<HTMLButtonElement>(".studio-field-caption-actions > .wf-choose-data-trigger");
+      const focusTarget = chooseData ?? row?.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger");
+      focusTarget?.focus();
+    });
     return () => cancelAnimationFrame(frame);
   }, [syntax]);
 
@@ -1359,11 +1362,13 @@ function PropertyRow({
     onClick={() => setInputBindingsOpen(open => !open)}
   /> : null;
   const fieldOwnedTrailing = useInlineSyntaxPicker && fieldOwnsInlineActions ? <>{inlineSyntaxPicker}{inlineExpandAction}</> : null;
-  const renderedFieldEditor = editorPresentsField && (conversionToggle || inputBindingsToggle || fieldOwnedTrailing)
-    ? <StudioFieldAdornmentProvider caption={<>{conversionToggle}{inputBindingsToggle}</>} trailing={fieldOwnedTrailing}>{renderedValueEditor}</StudioFieldAdornmentProvider>
+  const captionActions = conversionToggle || chooseDataButton || inputBindingsToggle
+    ? <>{conversionToggle}{chooseDataButton}{inputBindingsToggle}</>
+    : null;
+  const renderedFieldEditor = editorPresentsField && (captionActions || fieldOwnedTrailing)
+    ? <StudioFieldAdornmentProvider caption={captionActions} trailing={fieldOwnedTrailing}>{renderedValueEditor}</StudioFieldAdornmentProvider>
     : renderedValueEditor;
-  const hasHeaderMeta = !canRevealConversion || Boolean(chooseDataButton) || Boolean(wrapped && !useInlineSyntaxPicker && !useDictionarySyntaxPicker);
-  const hasFallbackActions = Boolean(conversionToggle || inputBindingsToggle);
+  const hasHeaderMeta = !canRevealConversion || Boolean(wrapped && !useInlineSyntaxPicker && !useDictionarySyntaxPicker);
 
   return (
     <div ref={rowRef} className="wf-property-row" role="group" aria-label={`${input.displayName || input.name} property`}>
@@ -1371,11 +1376,10 @@ function PropertyRow({
         <div className="wf-property-row-header">
           {editorPresentsField ? null : <>
             <span className="wf-property-row-caption">{input.displayName || input.name}</span>
-            {hasFallbackActions ? <div className="studio-field-caption-actions">{conversionToggle}{inputBindingsToggle}</div> : null}
+            {captionActions ? <div className="studio-field-caption-actions">{captionActions}</div> : null}
           </>}
           {hasHeaderMeta ? <div className="wf-property-row-header-meta">
             {!canRevealConversion ? <span>{formatTypeName(input.typeName)}</span> : null}
-            {chooseDataButton}
             {wrapped && !useInlineSyntaxPicker && !useDictionarySyntaxPicker ? (
               <SyntaxPicker
                 label={`${input.displayName || input.name} expression syntax`}

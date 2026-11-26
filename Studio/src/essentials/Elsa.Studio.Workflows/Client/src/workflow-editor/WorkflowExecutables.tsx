@@ -43,6 +43,7 @@ import {
 } from "./editorHelpers";
 import { WorkflowListIdentifiers, type WorkflowListIdentifier } from "./WorkflowListIdentifiers";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
+import { StudioLink } from "../StudioLink";
 
 export function openExecutableInspector(artifactId: string, sourceReferenceId?: string | null) {
   const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
@@ -562,26 +563,20 @@ function collectExecutableIdentifiers(executable: WorkflowExecutableSummary): Wo
 function WorkflowExecutableOrigins({ executable, definitionNames }: { executable: WorkflowExecutableSummary; definitionNames: ReadonlyMap<string, string> }) {
   const definitionIds = getExecutableDefinitionIds(executable);
 
-  const openSourceDefinition = (definitionId: string) => {
-    window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`));
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  };
-
   return (
     <div className="wf-executable-workflow-cell">
       {definitionIds.map(definitionId => {
         const name = definitionNames.get(definitionId) ?? "Workflow definition";
         return (
-          <StudioButton
-            type="button"
-            className="wf-executable-workflow-name"
+          <StudioLink
+            className="studio-row-link wf-executable-workflow-name"
+            href={`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`}
             key={definitionId}
             title={`Open source workflow: ${name}`}
             aria-label={`Open source definition ${definitionId}: ${name}`}
-            onClick={() => openSourceDefinition(definitionId)}
           >
             {name}
-          </StudioButton>
+          </StudioLink>
         );
       })}
       {definitionIds.length === 0 ? <strong title="Source unavailable">Source unavailable</strong> : null}
