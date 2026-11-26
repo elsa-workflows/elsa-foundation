@@ -1,4 +1,5 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
+import { studioBackendLink } from "./studioBackendLink";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 type Node = { nodeId: string; activityVersionId: string; inputs: unknown[]; outputs: unknown[]; structure?: { kind: string; schemaVersion: string; payload: Record<string, unknown> } };
@@ -177,8 +178,11 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
         draftId = fresh.draftId;
       }
       const item = { host, kind, before, baselineVersion } as typeof proof[number]; proof.push(item);
-      const route = host === "workflow" ? `/workflows/definitions?backend=legacy&definition=${definitionId}` : `/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`;
-      await page.goto(route); await canvas();
+      const route = host === "workflow"
+        ? `/workflows/definitions?definition=${definitionId}`
+        : `/workflows/activity-definitions?definition=${definitionId}&section=editor&draft=${draftId}`;
+      await page.goto(studioBackendLink(page, route));
+      await canvas();
       if (host === "workflow") {
         // Loading expands wire inputs. A normal save acknowledges their canonical form before the
         // preview freezes the source, including Object literals imported as raw JSON numbers.
@@ -385,7 +389,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
         await page.getByRole("tab", { name: "Runtime", exact: true }).click();
         await page.getByRole("button", { name: "Inspect captured snapshot", exact: true }).click();
         await expect(page.getByRole("group", { name: "Execution controls", exact: true })).toContainText("Captured snapshot · read only");
-      } else await page.goto(`/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`);
+      } else await page.goto(studioBackendLink(page, `/workflows/activity-definitions?definition=${definitionId}&section=editor&draft=${draftId}`));
       await canvas(); await expect(row(blockId)).toBeVisible();
       for (const action of ["Create Sequence block", "Create Flowchart block", "Extract block…", "Ungroup…"]) await expect(page.getByRole("button", { name: action, exact: true })).toBeDisabled();
       if (host === "activity" && kind === "flowchart") {
@@ -403,7 +407,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       // Complete is legal only in reusable bodies. The Workflow editor still renders an invalid
       // authored placement unambiguously, and its normal promotion gate must retain that refusal.
       const invalid = await createWorkflow(`Owned Workflow Complete refusal ${info.project.name}`, body("flowchart", false, true));
-      await page.goto(`/workflows/definitions?backend=legacy&definition=${invalid.definitionId}`); await canvas();
+      await page.goto(studioBackendLink(page, `/workflows/definitions?definition=${invalid.definitionId}`)); await canvas();
       await terminalAffordance();
       const refused = await page.request.post(`${backend}/design/workflows/drafts/${invalid.draftId}/promote`, { data: { operationKey: crypto.randomUUID() } });
       expect(refused.status()).toBe(409);

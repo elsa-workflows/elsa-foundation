@@ -1,5 +1,6 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { activityDataSupport, type Capture } from "./activityDataJourneySupport";
+import { studioBackendLink } from "./studioBackendLink";
 
 export async function scopedExpressionReferencesJourney(page: Page, info: TestInfo, capture: Capture,
   registerCleanup: (cleanup: () => Promise<void>) => void) {
@@ -32,7 +33,7 @@ export async function scopedExpressionReferencesJourney(page: Page, info: TestIn
     const value = await savedValue();
     return typeof value === "string" ? value : value.source;
   };
-  const route = `/workflows/activity-definitions?backend=legacy&definition=${created.definition.definitionId}&section=editor&draft=${created.draft.draftId}`;
+  const route = studioBackendLink(page, `/workflows/activity-definitions?definition=${created.definition.definitionId}&section=editor&draft=${created.draft.draftId}`);
   const outputs = page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: /^Outputs/ });
   const source = page.getByRole("region", { name: "Value source for Sum" });
   const expression = source.getByRole("textbox", { name: "JavaScript expression" });

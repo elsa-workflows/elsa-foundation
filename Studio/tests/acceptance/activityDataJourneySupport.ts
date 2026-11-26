@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import { expect, type Page, type Request, type TestInfo } from "@playwright/test";
 import type { ExpressionDescriptorsResponse } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { createActivityDataResponseCollector } from "./activityDataResponseCollector.mjs";
+import { studioBackendLink } from "./studioBackendLink";
 
 export type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 export type Binding = { expressionType: string; value: unknown };
@@ -150,7 +151,7 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   }
   async function open(created: Created) {
     const signedInProfile = new URL(page.url()).searchParams.get("backend");
-    await page.goto(`/workflows/definitions?definition=${created.definition.id}&backend=legacy`);
+    await page.goto(studioBackendLink(page, `/workflows/definitions?definition=${created.definition.id}`));
     expect(new URL(page.url()).searchParams.get("backend"), "The definition link keeps the signed-in Studio backend profile").toBe(signedInProfile);
     await expect(page.locator('.wf-sequence-step[data-id="consumer"],.react-flow__node[data-id="consumer"]').first()).toBeAttached();
     await select(); await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });

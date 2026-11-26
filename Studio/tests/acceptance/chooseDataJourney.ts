@@ -1,5 +1,6 @@
 import { activityDataSupport, attachActivityDataJson } from "./activityDataJourneySupport";
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { studioBackendLink } from "./studioBackendLink";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 type Node = { nodeId: string; activityVersionId: string; inputs: unknown[]; outputs: unknown[]; structure?: { kind: string; schemaVersion: string; payload: Record<string, unknown> } };
@@ -68,7 +69,7 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
     ({ value: { producerNodeId, projectionKey, isOptional: false }, expressionType: "ActivityResult" });
 
   async function openConsumer(definitionId: string) {
-    await page.goto(`/workflows/definitions?definition=${definitionId}&backend=legacy`);
+    await page.goto(studioBackendLink(page, `/workflows/definitions?definition=${definitionId}`));
     const consumer = page.locator('.wf-sequence-step[data-id="consumer"], .react-flow__node[data-id="consumer"]').first();
     await expect(consumer).toBeAttached();
     // Phone authoring starts with the canvas; explicitly open the selected activity's details.

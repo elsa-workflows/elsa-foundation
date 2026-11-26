@@ -1,5 +1,6 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { hasExactUrlMultimap } from "./exactUrl.mjs";
+import { studioBackendLink } from "./studioBackendLink";
 
 type Node = { nodeId: string; activityVersionId: string; inputs: unknown[]; outputs: unknown[]; structure?: { kind: string; schemaVersion: string; payload: Record<string, unknown> } };
 type Submitted = { definition: { id: string }; draftId: string; version: { id: string } };
@@ -132,7 +133,7 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     return { submitted, published };
   }
   async function inspect(published: Published) {
-    await page.goto(`/workflows/executables/${published.artifactId}?backend=legacy&ref=${published.sourceReferenceId}`);
+    await page.goto(studioBackendLink(page, `/workflows/executables/${published.artifactId}?ref=${published.sourceReferenceId}`));
     await expect(page.getByRole("region", { name: "Executable canvas", exact: true })).toBeVisible();
   }
   async function collapseEditorPanels() {
@@ -154,7 +155,7 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     name: `Navigation frame ${stamp}`, state: state(seq("frame-root", Array.from({ length: 16 }, (_, index) => line(`frame-${index}`, `Frame step ${index}`))))
   });
   ownDefinition(frameDraft.definition.id);
-  const frameUrl = `/workflows/definitions?backend=legacy&definition=${frameDraft.definition.id}&version=${frameDraft.version.id}`;
+  const frameUrl = studioBackendLink(page, `/workflows/definitions?definition=${frameDraft.definition.id}&version=${frameDraft.version.id}`);
   const expectedFrameUrl = new URL(frameUrl, page.url());
   await page.goto(frameUrl);
   const editor = page.locator('.studio-workspace-panel:not([hidden]) > .wf-editor');
@@ -244,7 +245,7 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
   await collapseDock.click();
   const root = seq("root", [line("first", "Pinned hello"), seq("nested", [line("inner", "Nested hello")]), line("last", "Pinned goodbye")]);
   const { submitted, published } = await publish(root, "Sequence parity");
-  await page.goto(`/workflows/definitions?backend=legacy&definition=${submitted.definition.id}&version=${submitted.version.id}`);
+  await page.goto(studioBackendLink(page, `/workflows/definitions?definition=${submitted.definition.id}&version=${submitted.version.id}`));
   await expect(page.locator(".wf-sequence-step")).toHaveCount(3);
   const narrow = (info.project.use.viewport?.width ?? 1440) < 800;
   if (narrow) {
@@ -293,7 +294,7 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     definitionId: submitted.definition.id, snapshotId: `designer-${stamp}`, state: state(seq("draft-root", [line("draft-step", "Draft snapshot hello")])), layout: [], acknowledgeUnavailableExpressionValidation: true
   });
   expect(draftRun.artifactId, JSON.stringify(draftRun)).toBeTruthy();
-  await page.goto(`/workflows/executables/${draftRun.artifactId}?backend=legacy`);
+  await page.goto(studioBackendLink(page, `/workflows/executables/${draftRun.artifactId}`));
   await expect(canvas.locator(".wf-sequence-step")).toHaveCount(1);
   await expect(canvas).toContainText("Draft snapshot hello");
   await capture(page, info, "draft-sequence");

@@ -2,6 +2,7 @@ import { confirmNewResource } from "../newResourceDialog";
 import { readFileSync } from "node:fs";
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { holdToastForPlacement } from "./toastPlacementControl";
+import { studioBackendLink } from "./studioBackendLink";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 interface Asset { id: string; revision: string; sourceHash: string }
@@ -233,7 +234,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       state: { inputs: [], outputs: [], variables: [], rootActivity: { nodeId: "root", activityVersionId: sequence, inputs: [], outputs: [],
         structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [{ nodeId: "decide", activityVersionId: evaluate, inputs: [], outputs: [] }] } } } } });
     try {
-      await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy`);
+      await page.goto(studioBackendLink(page, `/workflows/definitions?definition=${submitted.definition.id}`));
       await expect(page.locator('.wf-sequence-step[data-id="decide"]')).toBeVisible();
       // Autosave off, so the pick below stays an unsaved edit that only the open tab holds.
       const saveStatus = page.locator(".wf-editor-save-status");

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { activityDataSupport, attachActivityDataJson, wireIdentity, type Binding, type Capture, type Created, type Node, type State, resolvedFeatureClosure, optionalBackendFeatures, type FeatureFact } from "./activityDataJourneySupport";
+import { studioBackendLink } from "./studioBackendLink";
 
 type Execution = { authoredActivityId: string; activityExecutionId: string; status: string };
 type CopyReceipt = { definitionId: string; operation: string; before: unknown; after: unknown; producerId?: string; consumerId: string };
@@ -279,7 +280,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     const group = s.root([canonicalLeaf({ nodeId: "producer", activityVersionId: customerVersion, inputs: [], outputs: [] }), consumer, portable, switchNode], "sequence", [variable]); group.nodeId = "group";
     const outer = s.root([group], "sequence", [{ ...variable, default: { expressionType: "Object", value: '{"a.b":{"":"outer-shadow"}}' } }]);
     const created = await s.seed("copy nested scope and portable", outer);
-    await s.settleContext(); await page.goto(`/workflows/definitions?definition=${created.definition.id}&backend=legacy`); await expect(node("group")).toBeAttached();
+    await s.settleContext(); await page.goto(studioBackendLink(page, `/workflows/definitions?definition=${created.definition.id}`)); await expect(node("group")).toBeAttached();
     const beforeDuplicate = (await s.saved(created)).state;
     await s.select("group"); await s.canvas(); await node("group").press("ControlOrMeta+d");
     await waitCount(created, 13);

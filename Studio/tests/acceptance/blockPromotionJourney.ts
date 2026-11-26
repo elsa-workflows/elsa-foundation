@@ -1,4 +1,5 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
+import { studioBackendLink } from "./studioBackendLink";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 type Node = { nodeId: string; activityVersionId: string; inputs: unknown[]; outputs: unknown[]; structure?: { kind: string; schemaVersion: string; payload: Record<string, unknown> } | null };
@@ -128,7 +129,7 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     workflowIds.push(workflow.definition.id);
     const draftId = workflow.draft.id;
     const saved = () => api<WorkflowDraft>(`/design/workflows/drafts/${draftId}`);
-    await page.goto(`/workflows/definitions?backend=legacy&definition=${workflow.definition.id}`); await canvas();
+    await page.goto(studioBackendLink(page, `/workflows/definitions?definition=${workflow.definition.id}`)); await canvas();
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
     await expect(row("block")).toBeVisible();
@@ -198,7 +199,7 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
         resultType: { alias: "String", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1", parameters: {} } })])]), variables: [], inputs: [], outputs: [] }
     });
     workflowIds.push(opaque.definition.id);
-    await page.goto(`/workflows/definitions?backend=legacy&definition=${opaque.definition.id}`); await canvas();
+    await page.goto(studioBackendLink(page, `/workflows/definitions?definition=${opaque.definition.id}`)); await canvas();
     // Opening expands wire inputs; an ordinary save acknowledges their canonical form before the baseline is taken.
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
@@ -229,7 +230,7 @@ export async function blockPromotionJourney(page: Page, info: TestInfo, capture:
     });
     activityIds.push(graph.definition.definitionId);
     const graphDraft = () => api<ActivityDraft>(`/design/activities/drafts/${graph.draft.draftId}`);
-    await page.goto(`/workflows/activity-definitions?backend=legacy&definition=${graph.definition.definitionId}&section=editor&draft=${graph.draft.draftId}`); await canvas();
+    await page.goto(studioBackendLink(page, `/workflows/activity-definitions?definition=${graph.definition.definitionId}&section=editor&draft=${graph.draft.draftId}`)); await canvas();
     await expect(row("block")).toBeVisible();
     const nested = await promoteWithoutInputs(`Pack items ${stamp}`);
     const graphCalls = async () => (await graphDraft()).provider.payload.rootActivity.structure!.payload.activities as Node[];
