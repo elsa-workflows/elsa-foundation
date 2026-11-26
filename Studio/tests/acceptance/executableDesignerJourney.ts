@@ -26,12 +26,14 @@ export async function executableActivityBindingsJourney(page: Page, info: TestIn
     version("Elsa.Activities.Http.Activities.SendHttpRequest")
   ]);
   const expression = JSON.stringify("https://example.test/products/" + "longsegment".repeat(24) + "?id=1&preview=true");
+  const textLiteral = "Example request content. ".repeat(7).trim();
   const request: Node = {
     nodeId: "request-" + "long-node-id".repeat(10),
     activityVersionId: requestVersion,
     inputs: [
       { referenceKey: "Url", value: { expressionType: "JavaScript", value: expression } },
-      { referenceKey: "Method", value: { expressionType: "Literal", value: "GET" } }
+      { referenceKey: "Method", value: { expressionType: "Literal", value: "GET" } },
+      { referenceKey: "Content", value: { expressionType: "Literal", value: textLiteral } }
     ],
     outputs: []
   };
@@ -85,6 +87,11 @@ export async function executableActivityBindingsJourney(page: Page, info: TestIn
   await expect(method.locator(".wf-conversion-plan")).toBeVisible();
   await assertNoOverflow();
   await conversion.press("Space");
+  const fullContent = panel.getByRole("button", { name: "Full value for Content", exact: true });
+  await fullContent.press("Enter");
+  await expect(panel.getByText(textLiteral, { exact: true })).toBeVisible();
+  await assertNoOverflow();
+  await fullContent.press("Space");
   const identity = panel.getByRole("button", { name: "Activity identity", exact: true });
   await identity.click();
   await expect(panel.getByText(request.nodeId, { exact: true }).first()).toBeVisible();

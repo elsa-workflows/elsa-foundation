@@ -726,8 +726,8 @@ function readFullBindingValue(binding: WorkflowExecutableInputBinding): string |
   if (binding.source === "Expression" && typeof binding.expression?.expression === "string") {
     return binding.expression.expression;
   }
-  if (binding.source === "Literal" && binding.literalValue !== undefined) {
-    return JSON.stringify(binding.literalValue) ?? null;
+  if (binding.source === "Literal" && typeof binding.literalValue === "string") {
+    return binding.literalValue;
   }
   return null;
 }

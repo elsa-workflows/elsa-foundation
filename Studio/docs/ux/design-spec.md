@@ -76,7 +76,7 @@ code.
 
 ## Executable Inspector activity details
 
-A selected activity shows its input bindings and output captures in full-width rows. Long URLs, expressions and identifiers wrap inside the panel. When the server supplies an authorized full literal or expression, an abbreviated preview can be expanded. Use the shared Technical details disclosure for activity identity and conversion plans, following the Runs inspector’s disclosure pattern.
+A selected activity shows its input bindings and output captures in full-width rows. Long URLs, expressions and identifiers wrap inside the panel. When the server supplies an authorized full text literal or expression, an abbreviated preview can be expanded. Use the shared Technical details disclosure for activity identity and conversion plans, following the Runs inspector’s disclosure pattern.
 
 Check an unselected activity tab, a published activity with a long input and a short neighbor, and the expanded value and identity on desktop and narrow screens in light and dark. The same compiled binding permissions apply when opening details.
 
