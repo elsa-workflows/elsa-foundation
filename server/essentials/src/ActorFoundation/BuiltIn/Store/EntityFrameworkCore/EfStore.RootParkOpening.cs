@@ -5,8 +5,7 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    // Qualified generated roots keep only ordinary direct inputs here. The same fenced
-    // path covers opening and continuing the Park without entering the actor model.
+    // The fenced Park path keeps direct inputs and can open on an authenticated timed-job result.
     private async Task<PreparedRoot?> PrepareRootParkOpeningAsync(WorkerRoot root, TurnCommit turn, bool parkedOperators,
         CancellationToken cancellationToken)
     {
@@ -19,8 +18,8 @@ public sealed partial class EfStore
         string[] returned = split ? turn.Done.Where(PostgresRootAdmission.IsOperatorOccurrence).Select(key => key.Id).ToArray() : [];
         if (split) turn = WithoutOperators(turn);
         // A recorded timed result is already durably published. If its actor callback faults,
-        // keep that exact result beside the same job registration in SQLite's Park commit.
-        var recorded = !postgres && opening && RootTimedJobSettlementEnabled && turn.Row is { } resultTarget &&
+        // keep that exact result beside the same job registration in the Park commit.
+        var recorded = opening && RootTimedJobSettlementEnabled && turn.Row is { } resultTarget &&
             turn.FoundationRootParkInputs is [var result] && RootJobTicket.IsRecordedResult(result, resultTarget);
         // A Park keeps the row's Suspended flag, as the in-memory reference does. Only a composed set with operators can
         // suspend a root, so only there can a Park open or continue on a suspended one.
@@ -89,6 +88,9 @@ public sealed partial class EfStore
         {
             if (!db.UsesRootParkOpening || !Opening && !db.UsesRootParkArrivals) return false;
             if (db.UsesSqliteRootRuntime) return await BindSqliteParkOpeningAsync(db, this, cancellationToken);
+            var recorded = Inputs is [{ FoundationJobResult: true }];
+            if (recorded && (!Opening || !db.UsesRootTimedJobSettlement)) return false;
+            var scope = recorded ? RootTimedJobScope : InboxKey.FoundationOccurrenceScope;
             var priorStatus = Opening ? InstanceStatus.Running : InstanceStatus.Faulted;
             FormattableString read = $"""
                 SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "At", i."FoundationParkAt" AS "ParkAt",
@@ -101,6 +103,7 @@ public sealed partial class EfStore
                     AND i."Suspended" = {Suspended} AND i."Status" = {(int)priorStatus} AND i."Revision" = {Expected}
                     AND (i."FoundationParkAt" IS NULL) = {Opening} /*no-clearing*/
                     AND ({Opening} OR i."Fault" = {EncodedFault})
+                    AND i."Jobs" IS NOT DISTINCT FROM {Jobs} AND i."NextJobGeneration" IS NOT DISTINCT FROM {NextJobGeneration}
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
                 """;
@@ -128,14 +131,15 @@ public sealed partial class EfStore
                     [.. write.GetArguments(), openRevision]);
             if (await db.Database.ExecuteSqlInterpolatedAsync(write, cancellationToken) != 1) return false;
 
-            var keys = Inputs.Select(input => input.InboxKey.Id).ToArray();
+            var keys = Inputs.Select(input => recorded ? StoredJobId(input.InboxKey) : input.InboxKey.Id).ToArray();
             // A different input can mature between dispatch and Park. Lock the dispatched identities.
             var pending = await db.Messages.FromSqlInterpolated($"""
                 SELECT * FROM "Messages" WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
-                    AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({keys})
-                    AND "EventMatch" IS NULL AND NOT "Done" AND "Due" <= {prior.At} ORDER BY "Seq" FOR UPDATE
+                    AND "InboxScope" = {scope} AND "Id" = ANY({keys})
+                    AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationKeptBy" IS NULL AND "Due" <= {prior.At}
+                ORDER BY "Seq" FOR UPDATE
                 """).AsNoTracking().ToListAsync(cancellationToken);
-            var inputs = pending.Select(row => DecodeRootInput(db, row, Root.Reference, null)).ToArray();
+            var inputs = (recorded ? pending.Select(DecodeRootTimedRow) : pending.Select(row => DecodeRootInput(db, row, Root.Reference, null))).ToArray();
             if (inputs.Any(input => input.TargetCreation != 1 || input.Operator is not null) ||
                 !inputs.OrderBy(input => input.InboxKey.Id, StringComparer.Ordinal)
                     .SequenceEqual(Inputs.OrderBy(input => input.InboxKey.Id, StringComparer.Ordinal)))
@@ -144,7 +148,7 @@ public sealed partial class EfStore
             var kept = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Done" = true, "Trial" = 0, "FoundationKeptBy" = {(short)Reason}
                 WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
-                    AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
+                    AND "InboxScope" = {scope} AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationKeptBy" IS NULL
                 """, cancellationToken);
             if (kept != keys.Length || Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Seen" = 0
@@ -167,7 +171,7 @@ public sealed partial class EfStore
 
             var retained = await db.Messages.AsNoTracking()
                 .Where(row => row.Target == Root.Actor && row.Partition == Root.Partition &&
-                    row.InboxScope == InboxKey.FoundationOccurrenceScope && row.EventMatch == null && keys.Contains(row.Id))
+                    row.InboxScope == scope && row.EventMatch == null && keys.Contains(row.Id))
                 .OrderBy(row => row.Seq).ToArrayAsync(cancellationToken);
             var envelope = (MessageEntity row) => new
             {
@@ -185,8 +189,9 @@ public sealed partial class EfStore
                         AND "Status" = {(int)InstanceStatus.Faulted} AND "Fault" = {EncodedFault} AND "FoundationParkAt" = {parkAt}
                         AND "Suspended" = {Suspended} AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
                         AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest}
+                        AND "Jobs" IS NOT DISTINCT FROM {Jobs} AND "NextJobGeneration" IS NOT DISTINCT FROM {NextJobGeneration}
                 ) AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor}
-                        AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        AND "Partition" = {Root.Partition} AND "InboxScope" = {scope}
                         AND "EventMatch" IS NULL AND "Done" AND "Trial" = 0 AND "FoundationKeptBy" = {(short)Reason}
                 ) = {keys.Length}
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})

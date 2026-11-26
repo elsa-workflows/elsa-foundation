@@ -61,6 +61,8 @@ internal static class PostgresRootParkedOperatorChecks
     private sealed record InputRow(long Seq, string Id, string Kind, bool Done, short? KeptBy, bool Content);
     private sealed record ControlRow(long Due, long KeepUntil, string Start);
     private sealed record TimedInboxRow(string Id, string Kind, long Due, long Generation, string? Start, string? Payload);
+    private sealed record PublishedResult(string Id, long Seq, string Kind, long Due, long Generation, string? Start,
+        string? Payload, string? Sender, long? KeepUntil, string? ReplyTo, long Seen, int Attempts, long Trial, bool Done, short? KeptBy);
 
     internal static async Task<int> RunAsync(bool owned, bool inBatch, bool shippedSet = false)
     {
@@ -385,6 +387,7 @@ internal static class PostgresRootParkedOperatorChecks
             await AuthoredWithholdingSet();
             await HostedAuthoredWithholdingAsync();
             await LiveCompoundRefusalSet();
+            await RecordedResultParkSet();
         }
         await RecoverNeverMeetsSuspendedPark();
         await ArrivalsSet();
@@ -584,6 +587,77 @@ internal static class PostgresRootParkedOperatorChecks
                 return await read.Messages.AsNoTracking().Where(row => row.Target == actor && row.InboxScope == EfStore.RootTimedJobScope &&
                     !row.Done).OrderBy(row => row.Seq)
                     .Select(row => new TimedInboxRow(row.Id, row.Kind, row.Due, row.JobGeneration, row.Start, row.Payload)).ToArrayAsync(stop);
+            }
+        }
+
+        async Task RecordedResultParkSet()
+        {
+            const string schema = "recorded_result_park";
+            const string key = Probe.FaultingJob;
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + schema, stop);
+            var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = schema }.ConnectionString;
+            var resultOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
+            KernelDb OpenResult() => KernelDb.ForPostgresRootShipped(resultOptions);
+            await using var set = new Set("recorded-result-park", OpenResult, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
+            EfStore.RootImage? before = null;
+            PublishedResult? published = null;
+            set.Write = async (writer, batch, token) =>
+            {
+                if (batch.Turns.SingleOrDefault(turn => turn.OpensPark) is { Row.FoundationDispatchHeader: { } header } park)
+                {
+                    before = await writer.ReadFirstRootAsync(header.Tenant, header.Reference, token);
+                    published = await ReadResultAsync(park.Instance, token);
+                }
+                return await writer.CommitAsync(batch, token);
+            };
+            await set.InstallAsync(createTables: true);
+            var owner = (Worker)await set.OwnAsync();
+            var root = await set.StartAsync("recorded-result");
+            var actor = (await set.ImageAsync(root)).Actor.Id;
+            var epoch = owner.Epoch;
+            set.Probe.FailsOn.Add((root.Id, Contract.Kinds.JobFinished));
+            Check(await set.SendAsync(root, "issue-result", "issue-faulting-result"), "the shipped root admits a timed job with a result handler that throws");
+            var parked = await set.DriveAsync(root, row => row is { Status: InstanceStatus.Faulted });
+            var view = (await set.Cold.ReadRootActorAsync(tenant.Tenant, root.Id, stop))?.Item;
+            var kept = await ReadResultAsync(actor, stop);
+            Check(before is { Revision: 3, Status: InstanceStatus.Running, NextJobGeneration: 1, Jobs: not null } &&
+                parked is { Revision: 4, TerminalRevision: null, TerminalAt: null, NextJobGeneration: 1 } &&
+                view is { Status: InstanceStatus.Faulted, ParkFault: Fault, ParkAt: > 0 } &&
+                parked.Jobs == before.Jobs && JobRegistry.Read(parked.Jobs) is [{ Key: key, Generation: 0 }] &&
+                parked.State == before.State && parked.TypeData == before.TypeData && parked.StateVersion == before.StateVersion &&
+                published is { Kind: Kinds.JobFinished, Due: 0, Generation: 0, Done: false, KeptBy: null } &&
+                published.Payload == Json.Write(new JobFinished(key, "\"published\"", null)) &&
+                kept == (published with { Done = true, Trial = 0, KeptBy = (short)ParkKeepReason.Consumed }),
+                "the Park keeps the exact published result bytes and live job registration beside the prior checkpoint");
+
+            var selection = await set.ParkSelectionAsync(root, parked.Revision);
+            await set.RetakeAsync();
+            var successor = (Worker)set.Owner;
+            var neighbor = await set.StartAsync("after-recorded-result-park");
+            Check(successor.Epoch > epoch && successor.Owns && set.Probe.Saw(neighbor, Contract.Kinds.Start) &&
+                set.Probe.Count(root, Contract.Kinds.JobFinished) == 1 && await set.ImageAsync(root) is { Revision: 4, Status: InstanceStatus.Faulted } &&
+                await ReadResultAsync(actor, stop) == kept,
+                "replacement ownership runs a neighbor and leaves the recorded result settled without replay");
+            Check(await set.OperateAsync(root, "terminate-recorded-result-park", Contract.Kinds.Terminate, selection, reply: true) &&
+                await set.OperateAsync(root, "delete-recorded-result-park", Contract.Kinds.Delete, selection, reply: true),
+                "the shipped operator ingress admits controls for the Park with the retained job registration");
+            await set.DriveAsync(root, row => row is { Revision: 6, Status: InstanceStatus.Faulted });
+            set.Answered("terminate-recorded-result-park", "ParkOutstanding");
+            set.Answered("delete-recorded-result-park", "ParkOutstanding");
+            var after = await set.ImageAsync(root);
+            Check(after.Jobs == parked.Jobs && after.NextJobGeneration == parked.NextJobGeneration &&
+                await set.ParkAtAsync(after) == await set.ParkAtAsync(parked) && await ReadResultAsync(actor, stop) == kept &&
+                set.Probe.Count(root, Contract.Kinds.JobFinished) == 1 && successor.Owns,
+                "the parked-operator refusals preserve the job footprint, original Park and owner");
+
+            async Task<PublishedResult> ReadResultAsync(string target, CancellationToken token)
+            {
+                await using var read = OpenResult();
+                return await read.Database.SqlQuery<PublishedResult>($"""
+                    SELECT "Id", "Seq", "Kind", "Due", "JobGeneration" AS "Generation", "Start", "Payload", "Sender",
+                        "KeepUntil", "ReplyTo", "Seen", "Attempts", "Trial", "Done", "FoundationKeptBy" AS "KeptBy"
+                    FROM "Messages" WHERE "Target" = {target} AND "InboxScope" = {EfStore.RootTimedJobScope}
+                    """).SingleAsync(token);
             }
         }
 
@@ -2606,10 +2680,12 @@ internal static class PostgresRootParkedOperatorChecks
     private sealed class Probe : Contract.IActorType
     {
         internal const string Type = "postgres-parked-operators";
+        internal const string FaultingJob = "faulting-result";
         internal const string WithheldBody = """{"Withholds":true}""";
         private readonly List<(string Actor, string Kind)> _seen = [];
         public HashSet<(string Actor, string Kind)> FailsOn { get; } = [];
         public bool Saw(Contract.ActorRef actor, string kind) => _seen.Contains((actor.Id, kind));
+        internal int Count(Contract.ActorRef actor, string kind) => _seen.Count(entry => entry == (actor.Id, kind));
         string Contract.IActorType.Type => Type;
         public bool Withholds(Contract.ActorHeader header) => header.TypeData == WithheldBody;
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
@@ -2627,6 +2703,7 @@ internal static class PostgresRootParkedOperatorChecks
         internal TaskCompletionSource JobEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
         {
+            if (job.Key == FaultingJob) return "published";
             JobEntered.TrySetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return null;
@@ -2647,6 +2724,8 @@ internal static class PostgresRootParkedOperatorChecks
                 turn.StartJob("work", timeout: TimeSpan.FromSeconds(30));
                 turn.Record("issued");
             }
+            if (turn.Inbox is [{ Kind: "issue-faulting-result" }])
+                turn.StartJob(FaultingJob, timeout: TimeSpan.FromSeconds(30));
             return default;
         }
     }
