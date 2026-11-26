@@ -112,6 +112,17 @@ public sealed class ExportInputTests : IDisposable
         Assert.Empty(input.InputFindings);
     }
 
+    [Fact]
+    public void An_output_folder_at_the_export_root_excludes_nothing()
+    {
+        Write("a.json", Definition("a", 1));
+
+        var (input, refusal) = ExportInputReader.Read(_root, _root);
+
+        Assert.Null(refusal);
+        Assert.Single(input!.Items);
+    }
+
     internal static string Definition(string definitionId, int version, bool published = true, string? versionId = null, string rootActivities = "", bool reusable = false)
     {
         var options = reusable ? "{\"usableAsActivity\":true}" : "{}";
@@ -180,25 +191,39 @@ public sealed class VersionSelectionTests
     [Fact]
     public void Dispatch_targets_pin_nothing()
     {
-        var items = Items(("a", 1, true, null), ("a", 2, true, null),
-            ("app", 1, true, """{"id":"d","nodeId":"d","type":"Elsa.DispatchWorkflow","version":1,"workflowDefinitionId":"a"}"""));
+        // 'target' is reusable, so only the dispatch exclusion keeps its older version out.
+        var items = Items(("target", 1, true, null), ("target", 2, true, null),
+            ("app", 1, true, """{"id":"d","nodeId":"d","type":"Elsa.DispatchWorkflow","version":1,"workflowDefinitionId":"target"}"""));
 
         var result = VersionSelection.Select(items, allVersions: false);
 
-        Assert.DoesNotContain(result.Selected, item => item.Definition.Id == "a-v1");
+        Assert.DoesNotContain(result.Selected, item => item.Definition.Id == "target-v1");
     }
 
     [Fact]
     public void Duplicates_of_a_selected_version_are_kept_for_the_duplicate_refusal()
     {
-        var items = Items(("a", 1, true, null), ("a", 2, true, null), ("a", 2, true, null))
+        // other v1 is not selected on its own (other v2 is newer); it stays only because it reuses the selected id a-v2.
+        var items = Items(("a", 1, true, null), ("a", 2, true, null), ("a", 2, true, null), ("other", 2, true, null))
             .Append(Parse("dup.json", ExportInputTests.Definition("other", 1, versionId: "a-v2")))
             .ToArray();
 
         var result = VersionSelection.Select(items, allVersions: false);
 
         Assert.Equal(3, result.Selected.Count(item => item.Definition.Id == "a-v2"));
+        Assert.Contains(result.Selected, item => item is { Definition.DefinitionId: "other", Definition.Version: 1 });
         Assert.Equal([("a", 1)], result.NotConverted.Select(item => (item.DefinitionId, item.Version)));
+    }
+
+    [Fact]
+    public void Activities_without_a_type_or_null_children_do_not_break_selection()
+    {
+        var items = Items(("app", 1, true, """{"id":"x","nodeId":"x","version":1},null"""));
+
+        var result = VersionSelection.Select(items, allVersions: false);
+
+        Assert.Single(result.Selected);
+        Assert.Empty(MissingTargetDetector.Detect(result.Selected.Select(item => item.Definition), result.Selected.Select(item => item.Definition)));
     }
 
     [Fact]
@@ -226,7 +251,7 @@ public sealed class VersionSelectionTests
         Assert.Equal(["app-v1", "lib-v2", "plain-v2"], result.Selected.Select(item => item.Definition.Id).Order(StringComparer.Ordinal));
     }
 
-    private static readonly HashSet<string> Reusable = new(StringComparer.Ordinal) { "lib", "inner" };
+    private static readonly HashSet<string> Reusable = new(StringComparer.Ordinal) { "lib", "inner", "target" };
 
     private static ExportItem[] Items(params (string Id, int Version, bool Published, string? Activities)[] definitions) =>
         definitions.Select((definition, index) => Parse($"f{index}.json",

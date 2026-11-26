@@ -11,7 +11,7 @@ See [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md) for the `ITaskManager` and `ITa
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `StartupTasksOnly` | `false` | When `true`, the shell runs only its startup tasks, in dependency order, when it activates, and starts no background or recurring task. For a process, such as a one-shot tool, that needs the startup work (migrations, seeding, catalog registration) but must not run shell-lifetime work. |
+| `StartupTasksOnly` | `false` | When `true`, the shell runs only its startup tasks, in dependency order, when it activates, and starts no background or recurring task. For a process, such as a one-shot tool, that needs the startup work (migrations, seeding, catalog registration) but must not run shell-lifetime work. Background events are not processed in this mode: the background event publisher is a background task, so events written to the event channel stay unhandled. |
 
 In a shell's configuration:
 

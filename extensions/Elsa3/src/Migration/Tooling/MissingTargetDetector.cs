@@ -29,7 +29,7 @@ internal static class MissingTargetDetector
         {
             foreach (var activity in Enumerate(definition.Root))
             {
-                if (!DispatchTypes.Contains(activity.Type) || ReadLiteral(activity.AdditionalProperties, "workflowDefinitionId") is not { Length: > 0 } target || known.Contains(target))
+                if (activity.Type is null || !DispatchTypes.Contains(activity.Type) || ReadLiteral(activity.AdditionalProperties, "workflowDefinitionId") is not { Length: > 0 } target || known.Contains(target))
                     continue;
 
                 if (!missing.TryGetValue(target, out var referencedBy))
@@ -52,7 +52,8 @@ internal static class MissingTargetDetector
         {
             yield return current;
             foreach (var child in current.Activities ?? [])
-                stack.Push(child);
+                if (child is not null)
+                    stack.Push(child);
         }
     }
 

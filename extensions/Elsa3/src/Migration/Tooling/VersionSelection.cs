@@ -104,7 +104,7 @@ internal static class VersionSelection
     {
         foreach (var activity in EnumerateActivities(definition.Root))
         {
-            if (DispatchTypes.Contains(activity.Type))
+            if (activity.Type is null || DispatchTypes.Contains(activity.Type))
                 continue;
 
             var versionId = ReadString(activity.AdditionalProperties, "workflowDefinitionVersionId");
@@ -142,7 +142,8 @@ internal static class VersionSelection
         {
             yield return current;
             foreach (var child in current.Activities ?? [])
-                stack.Push(child);
+                if (child is not null)
+                    stack.Push(child);
         }
     }
 

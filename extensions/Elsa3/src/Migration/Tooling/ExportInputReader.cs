@@ -157,9 +157,14 @@ internal static class ExportInputReader
 
     private static IReadOnlyList<(string File, byte[] Content)> ReadFolder(string root, string? excludedFolder)
     {
+        // Only a folder strictly inside the export is left out; --out at or above the export root excludes nothing.
+        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var rootPrefix = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
         var excluded = excludedFolder is null ? null : Path.TrimEndingDirectorySeparator(Path.GetFullPath(excludedFolder)) + Path.DirectorySeparatorChar;
+        if (excluded is not null && (excluded.Length <= rootPrefix.Length || !excluded.StartsWith(rootPrefix, comparison)))
+            excluded = null;
         return Directory.EnumerateFiles(root, "*.json", JsonFiles)
-            .Where(path => excluded is null || !Path.GetFullPath(path).StartsWith(excluded, StringComparison.OrdinalIgnoreCase))
+            .Where(path => excluded is null || !Path.GetFullPath(path).StartsWith(excluded, comparison))
             .Select(path => (File: Path.GetRelativePath(root, path).Replace('\\', '/'), Path: path))
             .OrderBy(file => file.File, StringComparer.Ordinal)
             .Select(file => (file.File, File.ReadAllBytes(file.Path)))
