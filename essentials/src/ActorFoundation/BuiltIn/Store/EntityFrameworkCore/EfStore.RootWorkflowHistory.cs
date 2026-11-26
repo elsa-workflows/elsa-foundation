@@ -100,6 +100,7 @@ public sealed partial class EfStore
         int? status, long? from, long? to, long? afterTime, string? afterRef, int limit, CancellationToken token)
     {
         if (Engine is not null) throw new NotSupportedException("Qualified workflow history requires the local store.");
+        ArgumentOutOfRangeException.ThrowIfNegative(limit);
         await using var db = create();
         if (!postgres && db.UsesSqliteRootRuntime)
             return await ReadSqliteRootWorkflowHistoryAsync(db, tenant, type, definition, status, from, to, afterTime, afterRef, limit, token);
