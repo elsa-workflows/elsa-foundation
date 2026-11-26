@@ -91,7 +91,7 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   - Lowering rewrites every read of the captured variable: JavaScript member paths, Liquid member paths, a bare
     `getV()`, and a direct binding of `V`.
   - Converter tests: one per FR-010 table row in JavaScript, Liquid `.Output` and `.Output.X`, and one per refusal
-    (another writer, an initial value, an unknown member, another Liquid read, a cross-frame read, an out-of-order
+    (another writer, an initial value, an unknown member, another Liquid read, a Liquid `Output` root read of the node's `Result`, a cross-frame read, an out-of-order
     read, a computed-name read in scope of `V`). Cover the literal `getVariable('V')` form with one member-path read and
     one whole-value read.
   - One refusal test per writer kind: another capture, Set Variable, an initial value (absent, `null` and `""` do not

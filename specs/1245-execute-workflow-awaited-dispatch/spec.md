@@ -380,7 +380,8 @@ faults.
       - a computed-name write (`setVariable(expr, …)`) while `V` is in scope;
     - a read of any other member `X` of `V`. Elsa 3 had that only in its bare-dictionary shape, after a child that
       suspended, so the intent is ambiguous;
-    - a Liquid read of `V` other than `.Output` or `.Output.X`;
+    - a Liquid read of `V` other than `.Output` or `.Output.X`, and a Liquid read of the node's result through the
+      `Output` root (`Output.<node>.Result`);
     - a script that reads a variable by a computed name (`getVariable(expr)`, `variables[expr]`), when `V` is in its
       scope. Elsa 4 keeps such a read as a run-time lookup (spec 1222 FR-027), so it would get `Output`'s shape. The
       guidance says to read `V` by its literal name. The converter already refuses computed reads that can reach a
