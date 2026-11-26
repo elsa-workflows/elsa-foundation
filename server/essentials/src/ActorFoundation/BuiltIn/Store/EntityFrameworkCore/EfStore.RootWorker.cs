@@ -103,8 +103,10 @@ public sealed partial class EfStore
     }
 
     private bool AuthoredWithholding(WorkerRoot root, RootImage current) =>
-        _ordinaryRoots?.AuthoredWithholds?.Invoke(new(new(root.Reference), current.Model, root.Tenant,
-            (Contract.ActorStatus)current.Status, current.Fault, null, current.TerminalAt, current.TypeData, current.Labels)) == true;
+        AuthoredWithholding(new(new(root.Reference), current.Model, root.Tenant, (Contract.ActorStatus)current.Status,
+            current.Fault, null, current.TerminalAt, current.TypeData, current.Labels));
+
+    private bool AuthoredWithholding(Contract.ActorHeader header) => _ordinaryRoots?.AuthoredWithholds?.Invoke(header) == true;
 
     private WorkerRoots InstallWorkerScope(WorkerRoots scope)
     {
@@ -444,8 +446,8 @@ public sealed partial class EfStore
             if (turn != ended || turn.Done.Count + turn.Consumed.Count == 0 || turn.Sent.Count != 0 ||
                 turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
                 !InputsMatch(root, turn, jobs: RootTimedJobSettlementEnabled)) throw RootShape();
-            if (!postgres && turn.Done is [var refused] && turn.Consumed.Count == 0 && PostgresRootAdmission.IsOperatorOccurrence(refused) &&
-                await PrepareSqliteLiveCompoundRefusalAsync(root, refused, held, cancellationToken) is { } liveRefusal)
+            if (turn.Done is [var refused] && turn.Consumed.Count == 0 && PostgresRootAdmission.IsOperatorOccurrence(refused) &&
+                await PrepareLiveCompoundRefusalAsync(root, refused, held, cancellationToken) is { } liveRefusal)
                 return new(null, liveRefusal);
             // A job that was running when its root ended (a Terminate or a Faulted end settled it) finishes where nothing waits
             // for it: its ticket and deadline rows left with the end, so the job's own input settles nothing.

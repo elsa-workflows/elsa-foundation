@@ -60,6 +60,7 @@ internal static class PostgresRootParkedOperatorChecks
 
     private sealed record InputRow(long Seq, string Id, string Kind, bool Done, short? KeptBy, bool Content);
     private sealed record ControlRow(long Due, long KeepUntil, string Start);
+    private sealed record TimedInboxRow(string Id, string Kind, long Due, long Generation, string? Start, string? Payload);
 
     internal static async Task<int> RunAsync(bool owned, bool inBatch, bool shippedSet = false)
     {
@@ -383,6 +384,7 @@ internal static class PostgresRootParkedOperatorChecks
         {
             await AuthoredWithholdingSet();
             await HostedAuthoredWithholdingAsync();
+            await LiveCompoundRefusalSet();
         }
         await RecoverNeverMeetsSuspendedPark();
         await ArrivalsSet();
@@ -523,6 +525,66 @@ internal static class PostgresRootParkedOperatorChecks
             Check(await set.ImageAsync(root) is { Revision: 2, Suspended: false, TerminalRevision: 2 } && !actor.Saw(root, "ordinary"),
                 "the normal PostgreSQL host wires authored withholding into the worker and commits the selected Terminate");
             await host.StopAsync(token);
+        }
+
+        async Task LiveCompoundRefusalSet()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA live_compound_refusal", stop);
+            var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "live_compound_refusal" }.ConnectionString;
+            var ownOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
+            KernelDb OpenLive() => KernelDb.ForPostgresRootShipped(ownOptions);
+            await using var set = new Set("live-compound", OpenLive, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
+            const string operation = "compound-after-job";
+            Contract.ActorRef root = default;
+            EfStore.RootImage? before = null;
+            TimedInboxRow[] priorRows = [];
+            set.Write = async (writer, batch, token) =>
+            {
+                if (batch.Turns.Any(turn => turn is { Row: null, FoundationRootOperator.Id: operation }))
+                {
+                    before = await set.ImageAsync(root);
+                    priorRows = await ReadJobRowsAsync(before.Actor.Id);
+                }
+                return await writer.CommitAsync(batch, token);
+            };
+            await set.InstallAsync(createTables: true);
+            var owner = await set.OwnAsync();
+            root = await set.StartAsync("compound-races-job");
+            var image = await set.ImageAsync(root);
+            Check(await set.SendAsync(root, "issue-job-earlier", "issue-job") &&
+                await set.OperateAsync(root, operation, Contract.Kinds.Terminate, set.Selections[root], reply: true, thenDelete: true),
+                "the running root admits a ready job-issuing input before the held compound operation");
+            await set.PassUntilAsync(() => set.AnsweredAny(operation));
+            await set.Probe.JobEntered.Task.WaitAsync(stop);
+            var running = await set.ImageAsync(root);
+            var jobRows = await ReadJobRowsAsync(image.Actor.Id);
+            Check(running is { Revision: 2, Status: InstanceStatus.Running, TerminalRevision: null, Jobs: not null, NextJobGeneration: 1 } &&
+                jobRows.Length == 2 && jobRows.Any(row => row.Kind == Kinds.JobDeadline) && jobRows.Any(row => row.Kind == Kinds.Job) &&
+                before is { Revision: 2, Jobs: not null } && running.Jobs == before.Jobs && jobRows.SequenceEqual(priorRows) &&
+                JobRegistry.Read(running.Jobs) is [{ Key: "work", Generation: var generation }] &&
+                jobRows.All(row => row.Generation == generation) && ReferenceEquals(owner, set.Owner) &&
+                !set.StoodDown && (await set.InputsAsync(root)).All(row => row.Done),
+                "the held compound refusal settles at the exact running revision and preserves the timed job and deadline");
+            set.Answered(operation, "StaleSelection");
+
+            Check(await set.SendAsync(root, "ordinary-after-refusal", "ordinary"), "a new ordinary input is admitted after the refusal");
+            var continued = await set.DriveAsync(root, checkpoint => checkpoint is { Revision: 3, Status: InstanceStatus.Running });
+            Check(set.Probe.Saw(root, "ordinary") && continued.Jobs == running.Jobs &&
+                (await ReadJobRowsAsync(image.Actor.Id)).SequenceEqual(jobRows) && ReferenceEquals(owner, set.Owner) && !set.StoodDown,
+                "the same owner processes the next input with the exact timed pair still pending");
+            Check(await set.OperateAsync(root, "terminate-live-job", Contract.Kinds.Terminate, set.Selections[root]),
+                "a plain Terminate is admitted after the compound refusal");
+            await set.DriveAsync(root, checkpoint => checkpoint is { Revision: 4, Status: InstanceStatus.Cancelled, Jobs: null });
+            Check((await ReadJobRowsAsync(image.Actor.Id)).Length == 0, "the plain Terminate settles the retained job and deadline");
+            set.Answered(operation, "StaleSelection");
+
+            async Task<TimedInboxRow[]> ReadJobRowsAsync(string actor)
+            {
+                await using var read = OpenLive();
+                return await read.Messages.AsNoTracking().Where(row => row.Target == actor && row.InboxScope == EfStore.RootTimedJobScope &&
+                    !row.Done).OrderBy(row => row.Seq)
+                    .Select(row => new TimedInboxRow(row.Id, row.Kind, row.Due, row.JobGeneration, row.Start, row.Payload)).ToArrayAsync(stop);
+            }
         }
 
         async Task CheckProtectionCeilingAsync(Set set, Contract.ActorRef root, EfStore.RootImage park, int cleared)
@@ -2111,7 +2173,9 @@ internal static class PostgresRootParkedOperatorChecks
             // A set with direct held replies dispatches held inputs, as PostgresPreviewHosting wires its owner.
             bool heldReplies;
             await using (var profile = open()) heldReplies = profile.UsesRootReplyProtocol;
-            var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), Probe, rootHeldReplies: heldReplies);
+            var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), Probe, rootHeldReplies: heldReplies,
+                rootJobHandle: UsesAuthoredWithholding ? store.RootJobHandle : null,
+                rootTimedJobClock: UsesAuthoredWithholding && store.RootTimedJobSettlementEnabled ? store.ReadRootTimedJobPublicationTimeAsync : null);
             IKernelStore kernel = store;
             if (Write is { } write)
             {
@@ -2560,7 +2624,13 @@ internal static class PostgresRootParkedOperatorChecks
             return Protects.Contains(header.Ref.Id);
         }
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
-        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
+        internal TaskCompletionSource JobEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+        {
+            JobEntered.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return null;
+        }
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
@@ -2572,6 +2642,11 @@ internal static class PostgresRootParkedOperatorChecks
             }
             turn.State = "{\"running\":true}";
             if (turn.Inbox.Any(input => input.Kind == Contract.Kinds.Terminate)) turn.End(Contract.ActorStatus.Cancelled);
+            if (turn.Inbox is [{ Kind: "issue-job" }])
+            {
+                turn.StartJob("work", timeout: TimeSpan.FromSeconds(30));
+                turn.Record("issued");
+            }
             return default;
         }
     }
