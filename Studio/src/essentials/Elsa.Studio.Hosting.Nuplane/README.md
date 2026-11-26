@@ -11,17 +11,18 @@ configuration mutation lease. Feed edits take effect on restart. A cache-only di
 without declaring new desired packages; reconciliation/loading outcomes remain authoritative. Source-only
 directories that do not resolve packages cannot be selected as the upload destination.
 
-Installed metadata/assets require the coordinated immutable extracted-store profile. Nuplane owns admission,
-identity/link checks and guarded bytes; the HTTP adapter adds preflight size and response limits. Ordinary,
-unenrolled, archive and custom mutable installs receive explicit refusal/diagnostics. Host-owned nonphysical
-static providers remain trusted immutable content; physical static-provider aliases into the install store
-take the admitted path. No automatic enrollment, local prune algorithm or arbitrary external-writer guarantee.
+Nuplane verifies the retained package archive against the hash recorded for the active package. Studio
+reads browser assets and package metadata from that archive, applying entry size and response limits.
+Physical static providers pointing into the mutable install root also use the archive reader. Both ordinary
+and coordinated stores can serve these files. Pruning still uses Nuplane's existing coordinated store protocol.
 
-This package never enrolls a store itself. The shipped Studio apps opt in one level up: `Elsa.Studio.Hosting.Distribution`
-composes the coordinated store and enrolls a fresh one when `Studio:Hosting:Nuplane:EnrollPackageStore` is `true` (see its
-[README](../Elsa.Studio.Hosting.Distribution/README.md#package-store-enrollment)). A host that composes this package directly
-keeps the behaviour described here. While a reconciliation cycle holds an enrolled store's non-waiting root lock, the Features
-catalog and apply routes answer `503` with `Retry-After`, as the module registry does.
+An install acquired by an older Nuplane version may need a fresh acquisition to supply the retained archive.
+Keep deployed state and protected installs. An archive read can report `HashNotRecorded` before reconciliation
+records the expected hash, or `ArchiveMissing` when the install has no retained archive. Publishing and acquiring
+a new package version supplies its archive.
+
+Custom hosts using a coordinated store may see `503` with `Retry-After` on the Features catalog, apply,
+or module registry routes while reconciliation holds the store's root lock.
 
 ## Compose a host
 

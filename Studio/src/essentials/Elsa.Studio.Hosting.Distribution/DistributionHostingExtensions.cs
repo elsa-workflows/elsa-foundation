@@ -4,7 +4,6 @@ using Elsa.Studio.Backends;
 using Elsa.Studio.Hosting.Nuplane;
 using Elsa.Studio.Hosting.Themes;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Studio.Hosting.Distribution;
 
@@ -23,9 +22,6 @@ public static class DistributionHostingExtensions
     /// The Studio API and Backends feature assemblies are always startup assemblies, and the Theme Store assemblies are always
     /// registered for discovery, so a bare app passes only the modules it adds. Every other module arrives from the Nuplane feed. <paramref name="configure"/> runs after
     /// <c>Studio:Hosting</c> is bound, as in <see cref="StudioHostingExtensions.AddElsaStudio"/>.
-    /// With <c>Studio:Hosting:Nuplane:EnrollPackageStore</c> set to <c>true</c>, the package store under the content root is the
-    /// coordinated store with this app as its only client: a fresh store is enrolled on first start, an enrolled one is reused, and an
-    /// unenrolled store that holds files stops startup. Unset or <c>false</c> leaves the store unenrolled.
     /// </remarks>
     /// <exception cref="StudioHostingException">The shell or management configuration cannot be loaded.</exception>
     public static StudioBuilder AddElsaStudioDistribution(this WebApplicationBuilder builder, IEnumerable<Assembly> startupAssemblies, Action<StudioHostingOptions>? configure = null)
@@ -33,19 +29,10 @@ public static class DistributionHostingExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(startupAssemblies);
         var assemblies = startupAssemblies.Append(typeof(BackendsStudioFeature).Assembly).Distinct().ToArray();
-        var enrollPackageStore = PackageStoreEnrollment.IsOn(builder.Configuration);
-        // First among the hosted services, so the store is enrolled before anything starts using it.
-        if (enrollPackageStore)
-            builder.Services.AddHostedService<PackageStoreEnrollmentStartup>();
 
         var studio = builder.AddElsaStudio(configure);
         builder.Services.AddStudioBackendsHostConfiguration(builder.Configuration);
-        var contentRoot = builder.Environment.ContentRootPath;
-        studio.AddElsaStudioNuplane(options => options.DirectoryFeedName ??= DirectoryFeedName, nuplane =>
-        {
-            if (enrollPackageStore)
-                PackageStoreEnrollment.Compose(nuplane, builder.Configuration, contentRoot);
-        });
+        studio.AddElsaStudioNuplane(options => options.DirectoryFeedName ??= DirectoryFeedName);
         studio.AddElsaStudioThemes();
         studio.ConfigureShells(shells => shells.WithStudioStartupAssemblies(assemblies));
         return studio;

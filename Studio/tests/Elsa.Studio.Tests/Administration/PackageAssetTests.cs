@@ -203,12 +203,15 @@ public sealed class PackageAssetTests
         Assert.DoesNotContain("outside-sentinel", await response.Content.ReadAsStringAsync());
     }
 
-    internal static void Pack(AdministrationHost host, string version, string? payload, bool oversized = false, string? manifest = null, string manifestPath = "elsa-package.json", string? assembly = null, string packageId = PackageId)
+    internal static void Pack(AdministrationHost host, string version, string? payload, bool oversized = false, string? manifest = null, string manifestPath = "elsa-package.json", string? assembly = null, string packageId = PackageId, bool oversizedNuspec = false)
     {
         var feed = Directory.CreateDirectory(Path.Combine(host.Root, "feed")).FullName;
         using var archive = ZipFile.Open(Path.Combine(feed, packageId + "." + version + ".nupkg"), ZipArchiveMode.Create);
         using (var writer = new StreamWriter(archive.CreateEntry(packageId + ".nuspec").Open()))
+        {
             writer.Write($"<package><metadata><id>{packageId}</id><version>{version}</version><authors>Studio qualification</authors><description>Owned fixture</description></metadata></package>");
+            if (oversizedNuspec) writer.Write(new string(' ', 1024 * 1024));
+        }
         if (manifest is not null)
         {
             using var writer = new StreamWriter(archive.CreateEntry(manifestPath).Open());

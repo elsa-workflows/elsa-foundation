@@ -4,6 +4,7 @@ using Elsa.Modularity.Core.Models;
 using Elsa.Modularity.Nuplane.Services;
 using global::Nuplane.Abstractions;
 using global::Nuplane.Abstractions.PackageStoreProtection;
+using global::Nuplane.PackageArchives;
 
 namespace Elsa.Studio.Hosting.Nuplane;
 
@@ -34,10 +35,11 @@ internal sealed class ProtectedPackageManifestContributor(PackageContentReader r
     {
         try
         {
-            await using var scope = await reader.OpenAsync(package, cancellationToken);
+            var archive = await reader.OpenAsync(package, cancellationToken);
             foreach (var path in new[] { "elsa-package.json", "build/elsa-package.json" })
-                if (scope.Read(path, PackageContentReader.MaximumMetadataBytes, cancellationToken) is { } content)
-                    return PackageManifestCatalogMapper.ReadManifestBytes(content.Bytes, path);
+                if (archive.GetEntry(path) is { } entry)
+                    return PackageManifestCatalogMapper.ReadManifestBytes(
+                        PackageContentReader.Read(entry, PackageContentReader.MaximumMetadataBytes, cancellationToken), path);
             return PackageManifestReadResult.Missing("Package manifest not found.");
         }
         catch (PackageStoreAdmissionException error)
@@ -45,7 +47,8 @@ internal sealed class ProtectedPackageManifestContributor(PackageContentReader r
             return PackageManifestReadResult.Missing($"Protected package metadata is unavailable ({error.Reason}).");
         }
         catch (PackageContentSizeException error) { return PackageManifestReadResult.Missing(error.Message); }
-        catch (PackageContentProfileException error) { return PackageManifestReadResult.Missing(error.Message); }
+        catch (PackageArchiveException error) { return PackageManifestReadResult.Missing($"Package archive metadata is unavailable ({error.Reason})."); }
+        catch (InvalidDataException) { return PackageManifestReadResult.Missing("Package metadata entry could not be read."); }
         catch (JsonException) { return PackageManifestReadResult.Missing("Package manifest is not valid JSON."); }
         catch (IOException) { return PackageManifestReadResult.Missing("Protected package metadata could not be read."); }
         catch (UnauthorizedAccessException) { return PackageManifestReadResult.Missing("Protected package metadata access was refused."); }

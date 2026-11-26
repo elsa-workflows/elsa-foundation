@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using global::Nuplane.Abstractions.PackageStoreProtection;
 using global::Nuplane.Feeds.Configuration;
+using global::Nuplane.PackageArchives;
 
 namespace Elsa.Studio.Hosting.Nuplane;
 
@@ -18,28 +19,28 @@ internal static class PackageAssetEndpoints
         IWebHostEnvironment environment, IOptions<FeedResolutionOptions> options, PackageContentReader reader)
     {
         context.Response.Headers.CacheControl = "no-cache";
-        var path = assetPath is null ? null : PackageReadScope.NormalizeRelativePath(assetPath);
+        var path = assetPath is null ? null : PackageContentReader.NormalizeRelativePath(assetPath);
         if (path is null || string.IsNullOrWhiteSpace(packageId) || packageId is "." or ".."
             || packageId.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not '.' and not '-' and not '_'))
             return Results.NotFound();
         var deployed = environment.WebRootFileProvider.GetFileInfo($"_content/{packageId}/{path}");
         // SDK/deployed assets are immutable host content. A provider pointing into the configured mutable install
-        // root must go through admitted package access instead; it cannot turn that path into an unprotected result.
+        // root must go through verified package archive access instead; it cannot turn that path into an unprotected result.
         if (deployed.Exists && !IsInstalledPath(deployed.PhysicalPath, options.Value.PackageInstallRoot))
             return DeployedFile(deployed);
         var lease = await reader.TryAcquireResponseAsync(context.RequestAborted);
         if (lease is null) return Busy(context);
         try
         {
-            await using var scope = await reader.OpenAssetAsync(packageId, context.RequestAborted);
-            var content = scope?.Read("staticwebassets/" + path, PackageContentReader.MaximumAssetBytes, context.RequestAborted);
-            if (content is null)
+            var archive = await reader.OpenAssetAsync(packageId, context.RequestAborted);
+            if (archive?.GetEntry("staticwebassets/" + path) is not { } entry)
             {
                 await lease.DisposeAsync();
                 return Results.NotFound();
             }
-            var tag = new EntityTagHeaderValue('"' + Convert.ToHexString(SHA256.HashData(content.Bytes)).ToLowerInvariant() + '"');
-            var result = Results.File(content.Bytes, ContentType(path), lastModified: content.LastModified, entityTag: tag, enableRangeProcessing: true);
+            var bytes = PackageContentReader.Read(entry, PackageContentReader.MaximumAssetBytes, context.RequestAborted);
+            var tag = new EntityTagHeaderValue('"' + Convert.ToHexStringLower(SHA256.HashData(bytes)) + '"');
+            var result = Results.File(bytes, ContentType(path), lastModified: entry.LastWriteTime, entityTag: tag, enableRangeProcessing: true);
             // A host filter can replace the result without executing it. The response still owns cleanup;
             // the result's finally retains early release, and the shared lease disposes idempotently.
             context.Response.RegisterForDisposeAsync(lease);
@@ -56,10 +57,15 @@ internal static class PackageAssetEndpoints
             context.Response.Headers.RetryAfter = "1";
             return Results.Json(new { Error = "Protected package content is unavailable.", Reason = error.Reason.ToString() }, statusCode: StatusCodes.Status503ServiceUnavailable);
         }
-        catch (PackageContentProfileException error)
+        catch (PackageArchiveException error)
         {
             await lease.DisposeAsync();
-            return Results.Json(new { Error = error.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+            return Results.Json(new { Error = "Package archive content is unavailable.", Reason = error.Reason.ToString() }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+        catch (InvalidDataException)
+        {
+            await lease.DisposeAsync();
+            return Results.Json(new { Error = "Package archive entry could not be read." }, statusCode: StatusCodes.Status503ServiceUnavailable);
         }
         catch (IOException)
         {
