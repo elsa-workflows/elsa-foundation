@@ -6,6 +6,19 @@
 
 This page used to hold the whole reference. It is now split into the pages below; the old section links on this page still work and point to the new location.
 
+## Profile settings and shell overlays
+
+A profile image can supply its settings in `/app/appsettings.json` and `/app/appsettings.<environment>.json`.
+Foundation then loads `/app/shells.json` and the environment-specific shell overlay. Environment variables
+and command-line arguments take precedence.
+
+For a browser-based Studio, set `Cors:AllowedOrigins` to the Studio origins. For shell-provided sign-in, see
+[Identity configuration](reference/identity-configuration.md). `Elsa:ModuleManagement:PackageApiEnabled` enables the
+credential-protected package management API, including the registry, uploads, pruning, feed settings and retention.
+`Elsa:ModuleManagement:Enabled` also enables the static API key endpoints for manual reconciliation and shell reload.
+`Elsa:Persistence:EntityFramework:Migrate:GuardFeatureActivation` enables the migration guard for features
+activated through module management.
+
 ## Pages
 
 | Page | Read it when you want to… |

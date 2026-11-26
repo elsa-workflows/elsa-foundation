@@ -107,6 +107,10 @@ EF Core, and the former `configureDbContext` parameter on `AddFoundationIdentity
 Hosts must register an OpenIddict vendor store explicitly before composing the feature. The opt-in
 `Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore` package is Elsa's EF Core store, built on `OpenIddict.EntityFrameworkCore`; a
 host composes it once on its root container with `services.AddOpenIddictEntityFrameworkCoreStore(configuration)`, as Workbench does.
+In `Elsa.Foundation.Host`, set `Elsa:Identity:OpenIddict:EntityFrameworkCore:Enabled` to `true` to register the store
+before shell activation. Set `Elsa:Authentication:Enabled` to `true` to use the active shell's authentication and
+authorization providers for requests. The curated server Essentials profile enables both settings.
+
 Another host may select a different vendor provider instead.
 
 #### Where the token store lives

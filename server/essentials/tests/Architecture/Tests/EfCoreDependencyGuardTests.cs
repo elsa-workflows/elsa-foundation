@@ -22,21 +22,23 @@ public sealed class EfCoreDependencyGuardTests
 
     /// <summary>
     /// <c>Elsa.Foundation.Host</c> carries EF Core (#2151, #2191) for its opt-in
-    /// cluster membership provider and its opt-in Data Protection key store and nothing else, so its closure is theirs - EF
-    /// Core and Relational - plus the four engines their tables can live in. No design-time package, no in-memory provider
-    /// and no vendor EF store: every feature's EF module still arrives from a feed.
+    /// cluster membership, Data Protection and OpenIddict token stores. The OpenIddict demo store uses EF InMemory.
+    /// The host's four database engines also serve feed-loaded modules. The vendor store keeps EF design-time tooling private.
     /// </summary>
     private static readonly string[] AllowedFoundationHostEfPackages =
     [
         "Microsoft.EntityFrameworkCore",
         "Microsoft.EntityFrameworkCore.Abstractions",
         "Microsoft.EntityFrameworkCore.Analyzers",
+        "Microsoft.EntityFrameworkCore.InMemory",
         "Microsoft.EntityFrameworkCore.Relational",
         "Microsoft.EntityFrameworkCore.Sqlite",
         "Microsoft.EntityFrameworkCore.Sqlite.Core",
         "Microsoft.EntityFrameworkCore.SqlServer",
         "MySql.EntityFrameworkCore",
-        "Npgsql.EntityFrameworkCore.PostgreSQL"
+        "Npgsql.EntityFrameworkCore.PostgreSQL",
+        "OpenIddict.EntityFrameworkCore",
+        "OpenIddict.EntityFrameworkCore.Models"
     ];
 
     /// <summary>
