@@ -396,7 +396,8 @@ internal sealed partial class PostgresRootAdmission
         bool retentionDeletes = false, bool operatorReplies = false, bool parkRecovery = false, bool parkedTerminate = false)
     {
         if (!IsOperatorOccurrence(new(row.Id, row.InboxScope)) || !IsStoredOperator(row.Start) || row.Kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete or Kinds.Recover) ||
-            (row.Kind == Kinds.Recover) != parkRecovery ||
+            row.Kind == Kinds.Recover && !parkRecovery ||
+            row.Kind != Kinds.Recover && parkRecovery && !(parkedTerminate && row.Kind == Kinds.Terminate) ||
             row.Kind == Kinds.Terminate && !terminations || row.Kind == Kinds.Delete && !retirements || row.EventMatch is not null || row.Payload is not null || row.Sender is not null ||
             row.JobGeneration != 0 || row.KeepUntil is not { } until)
             throw new StoreException(Failure.Definite, "Unexpected stored one-way operator envelope.");
@@ -406,6 +407,8 @@ internal sealed partial class PostgresRootAdmission
             throw new StoreException(Failure.Definite, "Unexpected stored operator reply route.");
         var (header, thenDelete, retentionDelete) = ReadOperatorHeader(row.Start!, reference, row.Id, row.Kind, row.Due,
             held, terminateThenDelete, retentionDeletes, parkedTerminate);
+        if (parkRecovery && row.Kind == Kinds.Terminate && header.Park is null)
+            throw new StoreException(Failure.Definite, "Unexpected stored one-way operator envelope.");
         var suffix = row.Id.LastIndexOf('/');
         return FoundationIngressAddress.Occurrence(header.Operation, row.Id[..suffix], row.Id[(suffix + 1)..],
             new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, row.ReplyTo, new(null)

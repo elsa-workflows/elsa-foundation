@@ -87,6 +87,7 @@ internal static class PostgresRootParkedOperatorChecks
         var tenant = EmbeddedTenant.Bind("parked");
         var main = new Set("parked", Open, owned, inBatch, tenant, stop);
         await main.InstallAsync(createTables: false);
+        await RefuseRecoveredParkCommands();
         await using var mainOwner = await main.OwnAsync();
         var probe = main.Probe;
         var early = await main.StartAsync("early");
@@ -1396,6 +1397,54 @@ internal static class PostgresRootParkedOperatorChecks
                     format22 ? "format 22: the next owner read the Recover again and recovered the root with the kept arrival"
                         : "the composed recovery set: the owner that re-parked the root read the Recover again and recovered it, with no stand-down");
             }
+        }
+
+        async Task RefuseRecoveredParkCommands()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA stale_park_selection", stop);
+            var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "stale_park_selection" }.ConnectionString;
+            var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
+            var profile = StoreFormat.Current with { MessageProtocol = 87 };
+            var capabilities = RootProfiles.Formats[StoreFormat.RootParkRecovery] | RootProfiles.Formats[StoreFormat.RootOperatorReplies];
+            KernelDb OpenComposed() => KernelDb.ForUnshippedComposition(options, profile, capabilities);
+            await using var set = new Set("stale-park-selection", OpenComposed, owned, inBatch, tenant, stop);
+            await set.InstallAsync(createTables: true);
+            await set.OwnAsync();
+            var root = await set.StartAsync("recover-before-terminate");
+            Check(await set.SendAsync(root, "stale-park-fail", "fail"), "the composed stale-selection root receives a failing input");
+            var parked = await set.DriveAsync(root, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            var mark = new FoundationParkMark(parked.Revision, (await set.ParkAtAsync(parked))!.Value);
+            Check(await set.OperateAsync(root, "recover-first", Contract.Kinds.Recover, await set.ParkSelectionAsync(root, parked.Revision)),
+                "the composed fixture admits Recover against the exact Park");
+            foreach (var (operation, compound) in new[] { ("stale-terminate", false), ("stale-terminate-delete", true) })
+            {
+                // Seed the same durable envelopes that the joint admission path will write when shipped.
+                var until = parked.AsOf + 600_000;
+                var reply = ReplyTo.Of(HeldCaller, operation, until);
+                var (id, header) = PostgresRootAdmission.EncodeOperator(root.Id, operation, FoundationRootCreator.OperationDigest(operation),
+                    1, Kinds.Terminate, due: null, park: mark, window: 3_600_000, thenDelete: compound, replyAddress: reply);
+                await set.ExecuteAsync($"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "ReplyTo",
+                        "Seen", "Attempts", "Trial", "Done")
+                    VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, 0, {parked.Actor.Id}, {Kinds.Terminate}, {header}, 0, {until},
+                        {reply}, 0, 0, 0, false)
+                    """);
+            }
+            var owner = set.Owner;
+            var recovered = await set.DriveAsync(root, image => image is { Status: InstanceStatus.Running, Revision: 5 });
+            await set.SettledInputsAsync(root);
+            var journal = await set.Cold.ReadJournalOfAsync(0, recovered.Actor.Id, 0, stop);
+            Check(recovered is { ParkAt: null, TerminalRevision: null, TerminalAt: null } && recovered.State == parked.State &&
+                ReferenceEquals(owner, set.Owner) && !set.StoodDown &&
+                Outcomes(journal).TakeLast(3).SequenceEqual([
+                    Json.Write(new { Outcome = "recovered", Operation = "recover-first", Restored = 0, Cleared = 1, AlreadyRearmed = 0 }),
+                    Json.Write(new { Outcome = "refused", Operation = "stale-terminate", Reason = "selection" }),
+                    Json.Write(new { Outcome = "refused", Operation = "stale-terminate-delete", Reason = "selection" })]),
+                "both obsolete Park selections settle in order, journalled on the same running owner");
+            set.Answered("stale-terminate", "StaleSelection");
+            set.Answered("stale-terminate-delete", "StaleSelection");
+            Check(await set.SendAsync(root, "after-stale-selection", "ordinary"), "an ordinary input is admitted behind the stale commands");
+            await set.DriveAsync(root, image => image is { Status: InstanceStatus.Running, Revision: 6 });
         }
 
         // A composed set with Park arrivals and termination journals the refusal through the arrivals branch and keeps

@@ -45,6 +45,51 @@ public sealed partial class EfStore
             new RootParkedRefusal(root, expected, WithoutParkFacts(command)!, row.Suspended, retries));
     }
 
+    private async Task<PreparedRoot?> PrepareRecoveredParkRefusalAsync(WorkerRoot root, TurnCommit turn, Message command, CancellationToken token)
+    {
+        await using var db = create();
+        if (!db.UsesRootParkRecovery || !db.UsesRootParkedOperators ||
+            turn.Row is not { Status: InstanceStatus.Running, FoundationDispatchHeader: { Terminal: null } header } row ||
+            turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
+            !PostgresRootAdmission.IsOperatorOccurrence(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
+            turn.Journal != Json.Write(new { Outcome = "refused", Operation = command.Id, Reason = "selection" }) ||
+            turn.Consumed.Count + turn.Sent.Count + turn.Subscribed.Count + turn.Unsubscribed.Count != 0 ||
+            turn.Held is { Count: > 0 } || turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
+                turn.Journal, Held: turn.Held)
+                { FoundationRootOperator = command })
+            throw RootShape();
+
+        var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
+        if (current is not { Status: InstanceStatus.Running, ParkAt: null, TerminalRevision: null, TerminalAt: null } || current.Revision != expected)
+            return null;
+        if (row != WorkerRow(root, current) with { Revision = checked(expected + 1), FoundationDispatchHeader = header } ||
+            header.Tenant != root.Tenant || header.Reference != root.Reference)
+            throw RootShape();
+        return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
+            new RecoveredParkRefusal(root, expected, WithoutParkFacts(command)!, current.Suspended, RootSelfIssuer));
+    }
+
+    private sealed record RecoveredParkRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended, FoundationSelfIssuer? Issue)
+        : QualifiedRootCheckpoint(checked(Expected + 1))
+    {
+        internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
+        {
+            if (!db.UsesRootParkRecovery || !db.UsesRootParkedOperators) return false;
+            var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision}
+                WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
+                    AND "Status" = {(int)InstanceStatus.Running} AND NOT "Retired" AND "Suspended" = {Suspended}
+                    AND "FoundationParkAt" IS NULL AND "FoundationParkRevision" IS NULL
+                    AND "FoundationTerminalAt" IS NULL AND "FoundationTerminalRevision" IS NULL
+                    AND "FoundationTenant" = {Root.Tenant} AND "FoundationReference" = {Root.Reference}
+                    AND EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Tenant" = {Root.Tenant}
+                        AND "Reference" = {Root.Reference} AND "Actor" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Creation" = 1)
+                """, token);
+            return updated == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command],
+                Issue, Suspended, token);
+        }
+    }
+
     // S5b-3b: the backoff before a Delete's last page runs again after its protection could not be read: one second,
     // doubling with each earlier refusal of that page, at most thirty seconds.
     internal static long ParkRetryDelay(int refusals) => Math.Min(1_000L << Math.Min(refusals, 5), 30_000L);

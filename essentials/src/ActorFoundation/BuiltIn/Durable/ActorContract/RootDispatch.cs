@@ -205,13 +205,25 @@ internal sealed partial class ActorAdapter
         };
     }
 
-    // S5b-3a: a command that names a Park the root no longer has, because the root ended before it ran, is refused as a
-    // stale selection and its held caller answered once. An ended root takes no journal entry; the command settles there.
-    private Durable.TurnOutcome? RefuseStaleParkCommand(Durable.TurnInput input) =>
-        roots is { RefusesParkedOperators: true } &&
-        input.Row is { Status: not Durable.InstanceStatus.Running, Retired: false, Creation: 1, FoundationDispatchHeader.Terminal: not null } row &&
-        input.Taken is [{ Durable: true, Message: { Operator.RootParkMark: not null } control }] && IsRootControl(control) && control.Target.Id == row.Id
-            ? Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection") : null;
+    // An ended root settles a command which names its old Park without a journal entry. A recovered root must
+    // also refuse the old selection, but its running checkpoint records the outcome before releasing the caller.
+    private Durable.TurnOutcome? RefuseStaleParkCommand(Durable.TurnInput input)
+    {
+        if (roots is not { RefusesParkedOperators: true } ||
+            input.Row is not { Retired: false, Creation: 1, FoundationDispatchHeader: { } header } row ||
+            input.Taken is not [{ Durable: true, Message: { Operator.RootParkMark: not null } control }] ||
+            !IsRootControl(control) || control.Target.Id != row.Id) return null;
+        if (row.Status != Durable.InstanceStatus.Running)
+            return header.Terminal is not null ? Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection") : null;
+        if (!roots.RecoversPark || header.Terminal is not null ||
+            control is not { Kind: Durable.Kinds.Terminate or Durable.Kinds.Delete, Operator.RootParkClear: false }) return null;
+        var refused = Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
+        refused.Revision = checked(row.Revision + 1);
+        refused.Expected = row.Revision;
+        refused.Row = row with { Revision = refused.Revision };
+        refused.Journal = Durable.Json.Write(new { Outcome = "refused", Operation = control.Id, Reason = "selection" });
+        return refused;
+    }
 
     private bool RestoresNothing(Durable.InstanceRow row)
     {

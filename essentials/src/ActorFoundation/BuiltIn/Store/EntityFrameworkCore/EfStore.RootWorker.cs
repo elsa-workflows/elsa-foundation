@@ -401,6 +401,9 @@ public sealed partial class EfStore
         if (!postgres && (turn.FoundationKept is not null && !turn.OpensPark ||
             turn.FoundationRootOperator is { Kind: not (Kinds.Terminate or Kinds.Delete) }))
             throw new NotSupportedException("This SQLite root writer supports ordinary checkpoints, timed jobs, Park opening and selected Terminate and Delete.");
+        if (turn is { Row.Status: InstanceStatus.Running, FoundationRootOperator: { Kind: Kinds.Terminate or Kinds.Delete,
+                Operator: { RootParkMark: not null, RootParkClear: false } } stale })
+            return await PrepareRecoveredParkRefusalAsync(root, turn, stale, cancellationToken);
         if (turn.FoundationRootOperator is { Kind: Kinds.Recover }) return await PrepareRootParkRecoverAsync(root, turn, cancellationToken);
         // A delete, or a retired marker, of an ended Faulted root goes on to retirement below.
         if (turn is { FoundationRootOperator: not null, Row: { Status: InstanceStatus.Faulted or InstanceStatus.Cancelled, Retired: false },
