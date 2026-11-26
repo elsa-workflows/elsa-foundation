@@ -461,18 +461,18 @@
       "medianMinutes": 0.01
     },
     {
-      "project": "essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj",
+      "project": "extensions/Dashboard/tests/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj",
       "tier": "integration",
       "medianMinutes": null,
       "trait": "testcontainers"
     },
     {
-      "project": "essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
+      "project": "extensions/Dashboard/tests/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
       "tier": "pr",
       "medianMinutes": null
     },
     {
-      "project": "essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
+      "project": "extensions/Dashboard/tests/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
       "tier": "pr",
       "medianMinutes": null
     },
@@ -535,7 +535,7 @@
       "medianMinutes": 0.01
     },
     {
-      "project": "essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
+      "project": "extensions/Dashboard/tests/Workflows/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
       "tier": "pr",
       "medianMinutes": null
     },
@@ -1027,11 +1027,11 @@
           "essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj",
           "essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj",
           "essentials/tests/Foundation/Hosting/Tests/Elsa.Foundation.Hosting.Tests.csproj",
-          "essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
-          "essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
+          "extensions/Dashboard/tests/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
+          "extensions/Dashboard/tests/Workflows/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
           "extensions/Weaver/tests/Dashboard/Tests/Elsa.Weaver.Dashboard.Tests.csproj",
           "extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj",
-          "essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
+          "extensions/Dashboard/tests/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
           "essentials/tests/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj",
           "essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj",
           "essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
@@ -1151,7 +1151,7 @@
   "containerSuites": [
     {
       "suite": "studio-dashboard",
-      "project": "essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj",
+      "project": "extensions/Dashboard/tests/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj",
       "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
     },
     {

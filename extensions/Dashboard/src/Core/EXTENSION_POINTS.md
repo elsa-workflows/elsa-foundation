@@ -29,6 +29,6 @@ Actor/scope values are server-owned inputs. The native boundary resolves one can
 
 The management feature publishes through Elsa Events using Sequential dispatch and one aggregating handler per event. It reads contributions back, so Background dispatch is unsuitable. Contributors declare dataset/schema ownership; duplicate or missing owners fail closed. Validation, execution and drill select the matching owner; unrelated contributors cannot supply a replacement result. Source modules own field/record/aggregate authorization, metric meaning, coverage and bounded reads. No contributor receives permission to execute arbitrary SQL, scripts or generated widget code.
 
-See the [query contract](../../../../../specs/1217-ai-dashboards/contracts/query.md), [resource contract](../../../../../specs/1217-ai-dashboards/contracts/resources.md) and [authoring contract](../../../../../specs/1217-ai-dashboards/contracts/weaver.md) for admission and failure semantics.
+See the [query contract](../../../../specs/1217-ai-dashboards/contracts/query.md), [resource contract](../../../../specs/1217-ai-dashboards/contracts/resources.md) and [authoring contract](../../../../specs/1217-ai-dashboards/contracts/weaver.md) for admission and failure semantics.
 
-`IDashboardAuthoringService` now has its model-agnostic default in `Elsa.Weaver.Dashboard`: see the [owning authoring catalog](../../../../../extensions/Weaver/src/Dashboard/EXTENSION_POINTS.md). Provider adapters remain outside these contracts.
+`IDashboardAuthoringService` now has its model-agnostic default in `Elsa.Weaver.Dashboard`: see the [owning authoring catalog](../../../Weaver/src/Dashboard/EXTENSION_POINTS.md). Provider adapters remain outside these contracts.

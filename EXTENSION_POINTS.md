@@ -264,13 +264,13 @@ not automatic constitution violations.
 
 ## Studio
 
-- [Dashboard native API](essentials/src/Studio/Dashboard/Api/EXTENSION_POINTS.md)
+- [Dashboard native API](extensions/Dashboard/src/Api/EXTENSION_POINTS.md)
 
-- [Dashboard definition persistence](essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)
+- [Dashboard definition persistence](extensions/Dashboard/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)
 
-- [Dashboard native management](essentials/src/Studio/Dashboard/Management/EXTENSION_POINTS.md)
+- [Dashboard native management](extensions/Dashboard/src/Management/EXTENSION_POINTS.md)
 
-- [Dashboard query, resource and authoring contracts](essentials/src/Studio/Dashboard/Core/EXTENSION_POINTS.md)
+- [Dashboard query, resource and authoring contracts](extensions/Dashboard/src/Core/EXTENSION_POINTS.md)
 
 - [External sign-in Studio module and standalone management client](extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/README.md)
 
@@ -280,7 +280,7 @@ not automatic constitution violations.
 
 - [Workflow inspection authorization](essentials/src/Workflows/Runtime/Inspection/Core/EXTENSION_POINTS.md)
 
-- [Workflow Dashboard source](essentials/src/Workflows/Dashboard/Queries/EXTENSION_POINTS.md)
+- [Workflow Dashboard source](extensions/Dashboard/src/Workflows/Queries/EXTENSION_POINTS.md)
 
 - [Studio Dashboard routes and Weaver contributions](extensions/Dashboard/studio/Elsa.Studio.Dashboard/EXTENSION_POINTS.md)
 

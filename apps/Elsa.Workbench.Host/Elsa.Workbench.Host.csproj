@@ -275,9 +275,9 @@
 
 	<ItemGroup>
         <!-- Named definitions and source queries are independent of Home's widget preferences. -->
-        <ProjectReference Include="../../essentials/src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
-        <ProjectReference Include="../../essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
-        <ProjectReference Include="../../essentials/src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
+        <ProjectReference Include="../../extensions/Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj" />
+        <ProjectReference Include="../../extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+        <ProjectReference Include="../../extensions/Dashboard/src/Workflows/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
         <ProjectReference Include="../../extensions/Weaver/src/Dashboard/Elsa.Weaver.Dashboard.csproj" />
     </ItemGroup>
 

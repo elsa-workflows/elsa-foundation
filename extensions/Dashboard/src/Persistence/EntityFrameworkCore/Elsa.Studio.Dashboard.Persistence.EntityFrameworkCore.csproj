@@ -10,7 +10,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../Core/Elsa.Studio.Dashboard.Core.csproj" />
-    <ProjectReference Include="../../../../Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
+    <ProjectReference Include="../../../../../essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
   </ItemGroup>
   <ItemGroup><None Update="nuplane.json" Pack="true" PackagePath="/" /></ItemGroup>
 </Project>

@@ -6,6 +6,6 @@
 
 Native controls use installed dataset declarations for fields, metrics, filters, periods, parameters and presentation. Preview, Save, reopening, refresh and drill use the current viewer. Optional Weaver authoring proposes a declarative draft; Preview, Use and Save remain explicit native actions. A missing provider leaves normal editing available.
 
-Named dashboards arrange saved questions as tiles. Sharing a dashboard leaves each question's audience unchanged. The sharing/copy dialogs review dependencies and offer separate private question copies. Shared definitions never carry the author's results or source authority. See the [native domain guide](../../../../essentials/src/Studio/Dashboard/README.md) and [UX acceptance record](../../../../specs/1217-ai-dashboards/ux-acceptance.md).
+Named dashboards arrange saved questions as tiles. Sharing a dashboard leaves each question's audience unchanged. The sharing/copy dialogs review dependencies and offer separate private question copies. Shared definitions never carry the author's results or source authority. See the [native domain guide](../../src/README.md) and [UX acceptance record](../../../../specs/1217-ai-dashboards/ux-acceptance.md).
 
 Delivery status: component tests, type checking, lint and bundle checks are supporting proof. Current composed-host screenshots, actual IAM/source journeys and independent UX inspection remain incomplete until the integration qualification slice. This source is not final product acceptance.

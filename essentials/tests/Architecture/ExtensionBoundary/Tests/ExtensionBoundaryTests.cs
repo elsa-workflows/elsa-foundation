@@ -54,6 +54,9 @@ public sealed class ExtensionBoundaryTests
     /// </remarks>
     private static readonly (string From, string To)[] DeclaredExtensionEdges =
     [
+        // Weaver and the Acme example contribute to saved dashboard contracts.
+        ("Elsa.Weaver.Dashboard", "Elsa.Studio.Dashboard.Core"),
+        ("Acme.Processing", "Elsa.Studio.Dashboard.Core"),
         // Agent and ETL use the shared service connection contracts.
         ("Elsa.Agent.Api", "Elsa.Connections.Core"),
         ("Elsa.Agent.Connections", "Elsa.Connections.Core"),

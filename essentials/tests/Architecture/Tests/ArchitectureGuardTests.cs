@@ -562,6 +562,7 @@ public sealed partial class ArchitectureGuardTests
         ("Elsa.ExtensionBuilder.", "ExtensionBuilder"),
         ("Elsa.Integrations.", "Integrations"),
         ("Elsa.Connections.", "Connections"),
+        ("Elsa.Studio.Dashboard.", "Dashboard"),
         ("Elsa.Activities.Bpmn.", "Bpmn"),
         ("Elsa.Foundation.Identity.ExternalAuthentication.", "Identity"),
         ("Elsa.Diagnostics.ConsoleLogStreaming.", "ConsoleStream"),
@@ -571,11 +572,13 @@ public sealed partial class ArchitectureGuardTests
     ];
 
     /// <summary>
-    /// Test fixtures that sit beside the test project they serve, under its area's <c>Fixtures/</c> folder, rather than
-    /// inside it (#2577). Their names stay what the tests load them by, so the names no longer spell the path.
+    /// Projects that retain their assembly names when grouped with the capability or test they serve.
     /// </summary>
-    private static readonly Dictionary<string, string> RelocatedTestProjects = new(StringComparer.Ordinal)
+    private static readonly Dictionary<string, string> RelocatedProjects = new(StringComparer.Ordinal)
     {
+        // The Workflow dataset adapter and its tests live beside saved Dashboards rather than the Home widgets.
+        ["Elsa.Workflows.Dashboard.Queries"] = "extensions/Dashboard/src/Workflows/Queries/Elsa.Workflows.Dashboard.Queries.csproj",
+        ["Elsa.Workflows.Dashboard.QueryTests"] = "extensions/Dashboard/tests/Workflows/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
         // The CLR scanner tests read this assembly's name ("Elsa.Activities.Design.Tests.ClrFixture") and its activities' type names.
         ["Elsa.Activities.Design.Tests.ClrFixture"] = "essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj",
         // Icon fixtures live in their own assembly so CLR reconciliation still counts the original eighteen.
@@ -616,7 +619,7 @@ public sealed partial class ArchitectureGuardTests
         if (project.Name == "Elsa.Essentials.Host")
             return "apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj";
 
-        if (RelocatedTestProjects.TryGetValue(project.Name, out var relocated))
+        if (RelocatedProjects.TryGetValue(project.Name, out var relocated))
             return relocated;
 
         if (project.Name == "Elsa.Primitives")

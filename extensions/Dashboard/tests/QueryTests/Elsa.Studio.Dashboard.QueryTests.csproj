@@ -11,7 +11,7 @@
     <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
-    <ProjectReference Include="../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../src/Management/Elsa.Studio.Dashboard.Management.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
   </ItemGroup>
 </Project>

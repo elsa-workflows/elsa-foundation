@@ -480,13 +480,13 @@
     <Project Path="essentials/src/Secrets/Workflows/Elsa.Secrets.Workflows.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Studio/" />
-  <Folder Name="/essentials/src/Studio/Dashboard/">
-    <Project Path="essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj" />
-    <Project Path="essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
-    <Project Path="essentials/src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
+  <Folder Name="/extensions/Dashboard/src/">
+    <Project Path="extensions/Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj" />
+    <Project Path="extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj" />
+    <Project Path="extensions/Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj" />
   </Folder>
-  <Folder Name="/essentials/src/Studio/Dashboard/Persistence/">
-    <Project Path="essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+  <Folder Name="/extensions/Dashboard/src/Persistence/">
+    <Project Path="extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Studio/Preferences/">
     <Project Path="essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj" />
@@ -507,7 +507,6 @@
     <Project Path="essentials/src/Workflows/ExecutionEvidence/Elsa.Workflows.ExecutionEvidence.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Workflows/Dashboard/">
-    <Project Path="essentials/src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
     <Project Path="essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Workflows/Dashboard/Persistence/">
@@ -855,12 +854,12 @@
     <Project Path="essentials/tests/Secrets/Workflows/Tests/Elsa.Secrets.Workflows.Tests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Studio/" />
-  <Folder Name="/essentials/tests/Studio/Dashboard/">
-    <Project Path="essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj" />
-    <Project Path="essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj" />
+  <Folder Name="/extensions/Dashboard/tests/">
+    <Project Path="extensions/Dashboard/tests/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj" />
+    <Project Path="extensions/Dashboard/tests/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj" />
   </Folder>
-  <Folder Name="/essentials/tests/Studio/Dashboard/Persistence/">
-    <Project Path="essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj" />
+  <Folder Name="/extensions/Dashboard/tests/Persistence/">
+    <Project Path="extensions/Dashboard/tests/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Studio/Preferences/">
     <Project Path="essentials/tests/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj" />
@@ -893,7 +892,6 @@
     <Project Path="essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Dashboard/">
-    <Project Path="essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj" />
     <Project Path="essentials/tests/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Dashboard/Persistence/" />
@@ -1078,5 +1076,11 @@
   </Folder>
   <Folder Name="/essentials/tests/Foundation/Hosting/">
     <Project Path="essentials/tests/Foundation/Hosting/Tests/Elsa.Foundation.Hosting.Tests.csproj" />
+  </Folder>
+  <Folder Name="/extensions/Dashboard/src/Workflows/">
+    <Project Path="extensions/Dashboard/src/Workflows/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
+  </Folder>
+  <Folder Name="/extensions/Dashboard/tests/Workflows/">
+    <Project Path="extensions/Dashboard/tests/Workflows/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj" />
   </Folder>
 </Solution>

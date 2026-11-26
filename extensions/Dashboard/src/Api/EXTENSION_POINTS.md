@@ -6,7 +6,7 @@
 
 The feature supplies scoped `HttpDashboardActorContext` for `IDashboardActorContext` and scoped `DashboardAudienceDirectory` for `IDashboardAudienceDirectory`, preserving deliberate host replacements. `DashboardAudienceCursors` holds process-wide cursor signing state. One guard instance runs through both plain-host IHostedService and CShells IShellInitializer hooks. It checks descriptor cardinality for exactly one actor, query/resource service, store, definition validator and audience directory without constructing request-scoped replacements. A host must select a definition store and normal Identity authorization services; a request never supplies an author principal.
 
-The actor resolver requires one current normalized principal, canonical user/tenant mapping and current effective operation permissions. Role audiences use current active user/membership records and tenant role lookup. See the [Core contract catalog](../Core/EXTENSION_POINTS.md) and [Identity catalog](../../../Foundation/Identity/Core/EXTENSION_POINTS.md).
+The actor resolver requires one current normalized principal, canonical user/tenant mapping and current effective operation permissions. Role audiences use current active user/membership records and tenant role lookup. See the [Core contract catalog](../Core/EXTENSION_POINTS.md) and [Identity catalog](../../../../essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md).
 
 ## Contributions
 

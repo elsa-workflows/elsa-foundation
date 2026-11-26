@@ -17,9 +17,9 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
-    <ProjectReference Include="../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
-    <ProjectReference Include="../../../../src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
-    <ProjectReference Include="../../../../src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../src/Api/Elsa.Studio.Dashboard.Api.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../src/Management/Elsa.Studio.Dashboard.Management.csproj" />
+    <ProjectReference Include="../../src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 </Project>
