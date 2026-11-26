@@ -80,8 +80,8 @@ Converter (`extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Ent
   `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`, in `Elsa3ActivityNormalizer` (lost-output handling).
 - `Elsa3NodeRewriteKind.ExecuteWorkflowAsDispatch` is declared on the Execute Workflow entry, but no rewrite implements
   it. The warning comes from the generic entry-warning path.
-- The only rule for a captured output whose Elsa 4 counterpart means something else is `SemanticsChanged`
-  (`ELS3-ACTIVITY-MEMBER-SEMANTICS-CHANGED`). Its message and guidance are hard-coded for HTTP `ParsedContent`.
+- Lost-output text is generic today. `SemanticsChanged` was considered for Execute Workflow `Result` while Elsa 4 still
+  had a `Result` output. With that output removed, `Lost` with per-rule text is the right rule.
 - Execute Workflow takes `WaitForCompletion` as a `DefaultFlip`, so a bound expression or a literal false is carried
   over. Elsa 3's inline-run semantics are then lost: a false makes the Elsa 4 dispatch fire-and-forget.
 - The outcome maps are `Done → Dispatched, Completed` (Dispatch Workflow) and `Done → Completed` (Execute Workflow). A

@@ -17,10 +17,12 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   - `DispatchWorkflowResult` loses `Outputs`, and `DispatchWorkflowOutput` is deleted. The enricher stops reading
     `IWorkflowOutputSource` for dispatch.
   - Contract test: the outputs are exactly `ChildWorkflowExecutionId` and `Output`.
-  - Update every consumer that names the Dispatch `Result` output: the dispatch tests, the BPMN interchange tests, the
-    Studio client tests and `e2e-tests/composition/Test-DispatchWorkflowOutcomes.ps1`.
-  - Amend specs 099 (FR-011, FR-012, FR-021, User Story 2 scenario 4) and 100 (FR-004, FR-008) in place, citing spec
-    1245.
+  - Update the consumers in plan Runtime step 6:
+    - the contract surface baseline;
+    - the Dispatch Workflow `EXTENSION_POINTS.md` and `README.md`;
+    - the dispatch tests that build or read `Result`;
+    - the `DispatchWorkflowDrive` comment.
+  - Add the supersession notes to specs 096, 099 and 100 (FR-004).
   - Close #5851 when this lands.
 - [ ] T002 Test first, in `DispatchWorkflowEndToEndTests`, on the real `WorkflowOutputSource` with default diagnostics
   settings. Fire-and-forget, faulted, cancelled and dispatch-failed
@@ -59,8 +61,8 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   - A child with no outputs gives `{}`.
 - [ ] T004 [P] `DispatchWorkflowCheckpointTests`: a waiting parent resumed after a restart gives the same `Output`
   (FR-012).
-- [ ] T005 [P] Check that `Output` is capturable in the Design descriptor and the Studio output list (FR-005). Change
-  nothing if it already shows. Update `EXTENSION_POINTS.md` only if it lists outputs.
+- [ ] T005 [P] Check that `Output` is capturable, and that `Result` is gone, in the Design descriptor and the Studio
+  output list (FR-005). Change nothing there if they follow the contract.
 
 ## Phase 2: Converter rules (US2 to US4; FR-006 to FR-011)
 

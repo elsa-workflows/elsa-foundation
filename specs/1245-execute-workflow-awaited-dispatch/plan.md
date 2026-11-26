@@ -41,11 +41,13 @@ compatibility shims.
    `[Output(Key = "Output", Path = "output", IsRequired = false)]`.
    - Its `Result` property loses its `[Output]` attribute and becomes `Terminal`, a stored member that is not an
      output. Projections come only from `[Output]` properties (`ExecutableNodeCompiler`,
-     `RegisterActivityTypesStartupTask`), so it stays in the stored result for inspection, and nothing can capture it.
+     `RegisterActivityTypesStartupTask`), so no capture names it. The whole-result read (`$result`,
+     `RuntimeInputBindingResolver`, `ActivityDataSelectionAnalyzer`) still reaches it, as it reaches `Result` today.
+     That is accepted (FR-004).
    - `IRuntimeChildControlCompletion.ChildControl` reads `Terminal?.Control`.
    - `DispatchWorkflowResult` loses `Outputs`. It keeps the child id, the status, the allow-listed diagnostics and the
      control transport. `DispatchWorkflowOutput` is deleted.
-   - Specs 099 and 100 are amended in place where they say the activity sets `Result` (FR-004).
+   - Specs 096, 099 and 100 each get a supersession note listing the parts that spec 1245 replaces (FR-004).
 2. **D-1, absent rather than null.** When no output is produced, the property is left out of the serialized result
    (`JsonIgnore(WhenWritingNull)`). A missing path is an absent projection, so a capture leaves its variable unchanged.
    A serialized `null` would write null into the variable (research R-2). The step that checks this is T002.
@@ -98,8 +100,15 @@ compatibility shims.
    `DispatchWorkflowActivityResult.Output` for `Completed`. Fire-and-forget sets `Terminal` to null. Every other path,
    including `Dispatched`, passes `null`, which D-1 leaves out of the serialized result.
 6. **Designer and consumers.** Outputs come from the activity contract descriptor, so `Output` appears and `Result`
-   disappears. Find every consumer that names the Dispatch `Result` output and update it: the BPMN interchange tests,
-   the Studio client tests, `e2e-tests/composition/Test-DispatchWorkflowOutcomes.ps1`, and the dispatch tests (FR-005).
+   disappears. The consumers to update (FR-005):
+   - `essentials/tests/Activities/Design/Tests/Contracts/activity-contract-surface.baseline.json`
+     (`ActivityContractSurfaceSnapshotTests`);
+   - the Dispatch Workflow runtime `EXTENSION_POINTS.md` and `README.md`;
+   - the dispatch tests that build or read `Result`: Contract, EndToEnd, Checkpoint, ParentResumeExecutor, the
+     completion enricher, ChildControl and the WorkflowControl tests;
+   - the stale "two declared outputs" comment in `DispatchWorkflowDrive`.
+
+   The BPMN control seams read the resume payload's terminal result, not the activity output, so they keep working.
 
 ### Converter (US2 to US4; FR-006 to FR-011)
 

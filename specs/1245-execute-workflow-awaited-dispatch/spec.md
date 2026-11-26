@@ -53,8 +53,8 @@ The specification has two parts:
 - **Elsa 4 runtime.** Dispatch Workflow gets one data output, `Output`: the completed child's named outputs as one
   JSON object, holding the child's committed values unchanged. The `Result` output is removed. Its status repeats the
   outcome, and its `outputs` were a diagnostics view of the same values, so an author would see two outputs holding
-  nearly the same thing. The terminal status and the safe diagnostics stay in the activity's stored result, for
-  inspection only.
+  nearly the same thing. The terminal status and the safe diagnostics stay in the activity's stored result. They are
+  not a named output, but the whole-result read (`$result`) still reaches them, as it reaches `Result` today.
 - **Converter.** The Elsa 3 converter carries an awaited Dispatch Workflow's `Result` to `Output`. It refuses an Execute
   Workflow `Result` capture with guidance, and it routes `Done` the way Elsa 3 did.
 
@@ -284,16 +284,28 @@ faults.
   - The values MUST be replay-stable: a resumed or retried parent gets the same `Output` (spec 099 FR-008).
 - **FR-004**: Dispatch Workflow MUST NOT declare a `Result` output. Its outputs are `ChildWorkflowExecutionId` and
   `Output`, and the outcome carries the terminal status.
-  - The safe terminal result MUST stay in the activity's stored result for inspection, as a member that is not an
-    output: the status, the allow-listed fault and cancellation diagnostics (spec 100 FR-004 to FR-006), and the
-    child-control transport.
+  - The safe terminal result MUST stay in the activity's stored result as a member that is not an output: the status,
+    the allow-listed fault and cancellation diagnostics (spec 100 FR-004 to FR-006), and the child-control transport.
+    The whole-result read (`$result`) still reaches it, as it reaches `Result` today. That is accepted, because spec 100
+    made these fields safe to cross to the parent.
   - It MUST no longer carry child output entries. The diagnostics-view outputs are removed, which closes #5851 on the
     initiative branch.
-  - Specs 099 and 100 MUST be amended in place where they say the activity sets `Result`: spec 099 FR-011, FR-012,
-    FR-021 and User Story 2 scenario 4, and spec 100 FR-004 and FR-008. Each amendment cites spec 1245.
+  - Spec 1245 supersedes the child-output and `Result`-output parts of three specs:
+    - spec 096 (FR-003 and `contracts/dispatch-workflow.md`: the reserved `Result` output);
+    - spec 099 (its child-output capture through the runtime capture policy, redacted entries kept with metadata, and
+      the activity setting `Result`: User Story 2 scenarios 2 and 3, User Story 3 and its scenario 4, User Story 4
+      scenario 4, FR-009, FR-011, FR-012, FR-021, Key Entities, SC-004 and the capture-policy assumption);
+    - spec 100 (FR-004, FR-008 and FR-026, where they name `Result` or output capture).
+
+    Each of those specs gets one note under its status line that cites spec 1245 and lists its superseded parts. Their
+    text is otherwise unchanged.
 - **FR-005**: The Dispatch Workflow designer surface MUST show `Output` as a capturable output and no longer show
-  `Result`. Every consumer that names the Dispatch `Result` output MUST be updated: the BPMN interchange, Studio, the e2e
-  scripts and the tests.
+  `Result`. Every consumer of the Dispatch outputs MUST be updated:
+  - the activity contract surface baseline (`activity-contract-surface.baseline.json`, which
+    `ActivityContractSurfaceSnapshotTests` checks);
+  - the Dispatch Workflow `EXTENSION_POINTS.md` and `README.md`, which describe policy-safe outputs and redacted
+    entries;
+  - the dispatch tests that build or read `Result`.
 
 **Converter: Dispatch Workflow**
 
