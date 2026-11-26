@@ -1,5 +1,6 @@
 import { acceptCompletion, completionStatus, currentCompletions, startCompletion } from "@codemirror/autocomplete";
 import { syntaxTree } from "@codemirror/language";
+import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -7,9 +8,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StudioCodeEditor } from "../StudioCodeEditor";
 import { CodeMirrorStudioCodeEditor } from "../engines/CodeMirrorStudioCodeEditor";
 import { FallbackCodeEditor } from "../engines/FallbackCodeEditor";
+import * as codeMirrorLanguages from "../engines/codeMirrorLanguages";
 import { javaScriptLanguageAdapter } from "../languages/javascript";
 import { createStudioCodeToolingProjection } from "../toolingProjection";
 import type { StudioCodeCompletionRequest, StudioCodeDocument, StudioCodeEditorController, StudioCodeEditorEngineProps, StudioCodeEditorProps } from "../types";
+
+vi.mock("../engines/codeMirrorLanguages", async importOriginal => {
+  const original = await importOriginal<typeof codeMirrorLanguages>();
+  return { loadCodeMirrorLanguageExtensions: vi.fn(original.loadCodeMirrorLanguageExtensions) };
+});
 
 beforeEach(() => {
   window.dispatchEvent(new Event("elsa:auth-session-started"));
@@ -489,6 +496,42 @@ describe("StudioCodeEditor", () => {
       expect(completionStatus(view.state)).toBeNull();
     } finally {
       unmount();
+    }
+  }, 20000);
+
+  it("restores implicit member completion when the JavaScript grammar finishes loading", async () => {
+    const languageLoader = vi.mocked(codeMirrorLanguages.loadCodeMirrorLanguageExtensions);
+    const loadExtensions = languageLoader.getMockImplementation()!;
+    const extensions = await loadExtensions("javascript");
+    let finishLoading!: (value: Extension[]) => void;
+    const loading = new Promise<Extension[]>(resolve => { finishLoading = resolve; });
+    languageLoader.mockReturnValue(loading);
+    const source = "variables.customer";
+    const props = {
+      document: codeDocument({ uri: "elsa://expressions/delayed-javascript", value: source }),
+      languageAdapter: javaScriptLanguageAdapter
+    };
+    const refreshedProvider = vi.fn(() => [{ label: "street" }]);
+    const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: () => null });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-editor"));
+      const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+      expect(syntaxTree(view.state).type.name).not.toBe("Script");
+      view.dispatch({ changes: { from: source.length, insert: "." }, selection: { anchor: source.length + 1 }, userEvent: "input.type" });
+      rerender({ ...props, document: { ...props.document, value: source + "." }, completionProvider: refreshedProvider });
+      expect(completionStatus(view.state)).toBeNull();
+      expect(refreshedProvider).not.toHaveBeenCalled();
+
+      finishLoading(extensions);
+
+      await vi.waitFor(() => {
+        expect(refreshedProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false, position: source.length + 1 }));
+        expect(container.querySelector(".cm-completionLabel")?.textContent).toBe("street");
+      });
+    } finally {
+      unmount();
+      languageLoader.mockImplementation(loadExtensions);
     }
   }, 20000);
 
