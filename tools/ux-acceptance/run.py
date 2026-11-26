@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark', 'narrow-390-light', 'narrow-390-dark'}
 TOUCH_PROJECTS = {f'touch-{width}-{mode}' for width in (360, 390, 1440) for mode in ('light', 'dark')}
 CAPTURES = {
+    'executable activity bindings fit the inspector': ['reference', 'executable-activity-empty', 'executable-activity-inputs', 'executable-activity-expanded', 'executable-activity-identity'],
     'native child and compensation history navigation': ['reference', 'child-dispatch', 'child-journal', 'child-consumed-bookmark', 'child-settlement', 'child-cause', 'compensation-confirmed', 'compensation-recovery', 'compensation-journal'],
     'durable timer history and bookmark resumption': ['reference', 'timer-waiting-journal', 'timer-active-bookmark', 'timer-dispatched', 'timer-cause', 'timer-consumed-bookmark'],
     'native BPMN workflow blocks preserve reviewed XML bindings': ['reference'] + [f'workflow-bpmn-{state}' for state in ('selection', 'preview', 'nested', 'nested-edit', 'nested-reopened', 'reopened', 'import-review', 'imported', 'ungrouped')],
