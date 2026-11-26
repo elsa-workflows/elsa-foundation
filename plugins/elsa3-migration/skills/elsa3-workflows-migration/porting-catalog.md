@@ -836,7 +836,8 @@ The conversion's rules, as they stand:
   itself.
 - **Never matched.** Functions the converter converts itself keep that conversion: the variable and input readers
   and setters (`getVariable`, `setVariable`, `getInput`, `setInput`), `toJson`, the Elsa 4
-  built-ins such as `newGuid` and `isNullOrEmpty`, the outcome setters, the instance-state helpers (including the
+  built-ins such as `newGuid`, the Elsa 3 string helpers the converter inlines (`isNullOrEmpty`,
+  `isNullOrWhiteSpace`), the outcome setters, the instance-state helpers (including the
   instance-name readers), the read roots (`variables`, `input`, `activities`, `workflow`, `args`), the CLR, lodash and
   moment globals, and standard JavaScript globals such as `String` or `encodeURIComponent`.
 - **Direct calls only.** The converter rewrites direct calls. A use other than a direct call (`const f =
