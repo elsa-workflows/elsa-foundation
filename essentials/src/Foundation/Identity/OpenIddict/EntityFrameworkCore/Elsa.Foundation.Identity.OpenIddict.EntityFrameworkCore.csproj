@@ -28,7 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Behavior\Elsa.Foundation.Identity.OpenIddict.Behavior.csproj" />
+    <ProjectReference Include="..\..\Core\Elsa.Foundation.Identity.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
   </ItemGroup>
 

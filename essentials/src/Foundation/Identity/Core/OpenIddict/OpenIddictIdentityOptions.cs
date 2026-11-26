@@ -1,5 +1,6 @@
 namespace Elsa.Foundation.Identity.OpenIddict;
 
+/// <summary>Configuration shared by the OpenIddict shell feature and its host-composed token store.</summary>
 public sealed class OpenIddictIdentityOptions
 {
     public string ProviderId { get; set; } = "openiddict";

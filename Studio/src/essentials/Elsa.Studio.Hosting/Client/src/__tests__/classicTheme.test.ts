@@ -107,10 +107,9 @@ describe("Classic palette", () => {
     expect(card.lightness).toBeLessThan(background.lightness);
   });
 
-  it("uses Geist and Elsa 3's 8px radius on the classic layout", () => {
+  it("uses Geist on the classic layout", () => {
     expect(classic.typography?.sans).toContain("Geist");
     expect(classic.typography?.mono).toContain("Geist Mono");
-    expect(classic.shape?.radius).toBe("8px");
     expect(classic.layout).toBe("classic");
     expect(allThemeModes.every(mode => getThemeModeDefinition(classic, mode))).toBe(true);
   });

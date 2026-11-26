@@ -102,8 +102,7 @@ public sealed partial class EfStore
         try
         {
             deadline.CheckRenewalWindow();
-            if (db.RequiresPinnedRootNamespace) await PostgresRootAdmission.PinRootNamespaceAsync(db, deadline.Token);
-            else await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
+            await RequireNodeStoreFormatAsync(db, deadline.Token);
             var expired = new List<string>();
             if (ids is not null)
             {
@@ -135,6 +134,11 @@ public sealed partial class EfStore
                 await deadline.IncludeCallbackFailureAsync(e));
         }
     }
+
+    private static Task RequireNodeStoreFormatAsync(KernelDb db, CancellationToken token) =>
+        db.UsesSqliteRootRuntime ? RequireSqliteWorkerFormatAsync(db, token)
+        : db.RequiresPinnedRootNamespace ? PostgresRootAdmission.PinRootNamespaceAsync(db, token)
+        : RequireStoreVersionsAsync(db, token, FormatLock.Shared);
 
     /// <summary>The node record's write: <c>SeenAt</c> at database time, <c>LeaseUntil</c> at that time plus the lease. Returns the time.</summary>
     private async Task<long> RenewAsync(KernelDb db, string node, TimeSpan lease, CancellationToken cancellationToken) =>
@@ -173,8 +177,7 @@ public sealed partial class EfStore
                 await using var transaction = await BeginReadCommittedAsync(db, deadline.Token);
                 // PostgreSQL bounds the heartbeat on the server too (NL-10's bound rests on it); SET LOCAL ends with the transaction.
                 if (Engine is null && postgres) await db.Database.ExecuteSqlRawAsync(FormattableString.Invariant($"SET LOCAL statement_timeout = {Math.Max(1, (long)(lease / 3).TotalMilliseconds)}"), deadline.Token);
-                if (db.RequiresPinnedRootNamespace) await PostgresRootAdmission.PinRootNamespaceAsync(db, deadline.Token);
-                else await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
+                await RequireNodeStoreFormatAsync(db, deadline.Token);
                 deadline.CheckRenewalWindow();
                 now = await RenewAsync(db, node, lease, deadline.Token);
                 deadline.CheckRenewalWindow();

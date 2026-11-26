@@ -1,6 +1,7 @@
 import type { StudioThemeLayout } from "../../sdk";
 import type { NavMode } from "./navMode";
 import type { Theme } from "./presets";
+import { linenShape } from "./foundationThemes";
 
 export type WorkspaceStyle = "linen" | "minimal" | "quiet" | "focus" | "open";
 
@@ -42,8 +43,6 @@ export function applyWorkspaceStyle(theme: Theme, style: WorkspaceStyle | null):
     },
     shape: style === "minimal"
       ? { radiusSm: "6px", radius: "8px", radiusMd: "12px", radiusLg: "16px", radiusXl: "20px" }
-      : style === "linen"
-      ? { radiusSm: "9px", radius: "11px", radiusMd: "16px", radiusLg: "20px", radiusXl: "24px" }
-      : { radiusSm: "5px", radius: "8px", radiusMd: "10px", radiusLg: "12px", radiusXl: "14px" }
+      : { ...linenShape }
   };
 }

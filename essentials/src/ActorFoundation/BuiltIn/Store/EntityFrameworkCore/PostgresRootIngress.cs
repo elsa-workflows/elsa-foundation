@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
@@ -12,12 +10,6 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
     (Requests Requests, string Node, Func<long> Clock)? heldOperators = null,
     Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeRecover = null) : Contract.IIngress
 {
-    private static readonly JsonSerializerOptions OperatorJson = new()
-    {
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        AllowDuplicateProperties = false
-    };
-
     public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -81,10 +73,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         if (!FoundationMetadataLimits.IsOutsideMessageId(id) || payload is null || payload.Length > 2_048)
             return new(Contract.AdmissionOutcome.Refused);
 
-        Contract.OperatorCommand? command;
-        try { command = JsonSerializer.Deserialize<Contract.OperatorCommand>(payload, OperatorJson); }
-        catch (JsonException) { return new(Contract.AdmissionOutcome.Refused); }
-
+        var command = RootAdmissionWire.ReadOperatorCommand(payload);
         if (command is not { Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null } ||
             kind == Contract.Kinds.Recover && options?.DueAt is not null)
             return new(Contract.AdmissionOutcome.Refused);

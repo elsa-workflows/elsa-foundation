@@ -1283,3 +1283,37 @@ Elsa.Foundation.Identity.Core.Authentication.AuthenticationStoreException.Record
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.SubjectIssuer.get -> string?
 Elsa.Foundation.Identity.Core.Authentication.TokenIssueRequest.SubjectIssuer.init -> void
 static Elsa.Foundation.Identity.Core.Authentication.TokenSubject.ForProviderSubject(string! tenantId, string! provider, string! providerSubject, string! issuer) -> Elsa.Foundation.Identity.Core.Authentication.TokenSubject!
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.AccessTokenLifetime.get -> System.TimeSpan
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.AccessTokenLifetime.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.AutoMigrate.get -> bool
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.AutoMigrate.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.ConnectionString.get -> string?
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.ConnectionString.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.DisplayName.get -> string!
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.DisplayName.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.Enabled.get -> bool
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.Enabled.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.EncryptionKey.get -> string?
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.EncryptionKey.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.ExternalBearerScheme.get -> string!
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.ExternalBearerScheme.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.InteractiveCookieName.get -> string!
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.InteractiveCookieName.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.InteractiveScheme.get -> string!
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.InteractiveScheme.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.IsDefault.get -> bool
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.IsDefault.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.IsDevelopmentOrDemo.get -> bool
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.IsDevelopmentOrDemo.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.Issuer.get -> string!
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.Issuer.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.OpenIddictIdentityOptions() -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.ProviderId.get -> string!
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.ProviderId.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.RefreshTokenLifetime.get -> System.TimeSpan
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.RefreshTokenLifetime.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.SigningKey.get -> string?
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.SigningKey.set -> void
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.TenantId.get -> string?
+Elsa.Foundation.Identity.OpenIddict.OpenIddictIdentityOptions.TenantId.set -> void

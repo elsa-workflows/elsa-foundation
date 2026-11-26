@@ -40,6 +40,16 @@ if (args is ["pg-root-operators", var operatorWriter and ("owned" or "ef"), var 
 if (args is ["sqlite-plan-projection", ..]) return await SqlitePlanFixtureCommand.RunAsync(args);
 if (args is ["sqlite-shipped-install"]) return await SqliteShippedInstallChecks.RunAsync();
 if (args is ["sqlite-root-ingress"]) return await SqliteRootIngressChecks.RunAsync();
+if (args is ["sqlite-root-timed-jobs", var sqliteJobFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunTimedJobsAsync(sqliteJobFence == "in-batch");
+if (args is ["sqlite-root-held-replies", var sqliteReplyFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunHeldRepliesAsync(sqliteReplyFence == "in-batch");
+if (args is ["sqlite-held-reply-peer", var sqliteReplyPath, var sqlitePeerFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunHeldReplyPeerAsync(sqliteReplyPath, sqlitePeerFence == "in-batch");
+if (args is ["sqlite-root-terminate", var sqliteTerminateFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunTerminateAsync(sqliteTerminateFence == "in-batch");
+if (args is ["sqlite-root-retirement", var sqliteRetireFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunRetirementAsync(sqliteRetireFence == "in-batch");
 if (args is ["pg-http-owner-loss", var ownerFence and ("checked" or "in-batch"), var loss and ("before" or "before-late" or "after")])
     return await PostgresHttpOwnerLoss.RunAsync(ownerFence, loss);
 if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batch"), var pause and ("before" or "after" or "resume"), var ownerRef])
@@ -64,7 +74,9 @@ if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flow
 if (args is ["pg-preview-host-lifetime"]) return await PostgresPreviewLifetimeChecks.RunAsync();
 if (args is ["sqlite-host-lifetime", var sqliteFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunAsync(sqliteFence == "in-batch");
-if (args is ["sqlite-host-lifetime-peer", var sqliteMode and ("refused" or "start" or "kill" or "dispose" or "fault" or "stuck" or "recover"), var sqlitePath,
+if (args is ["sqlite-host-lifetime", var shippedSqliteFence and ("checked" or "in-batch"), "shipped"])
+    return await SqliteHostLifetimeChecks.RunFoundationAsync(shippedSqliteFence == "in-batch");
+if (args is ["sqlite-host-lifetime-peer", var sqliteMode and ("refused" or "start" or "kill" or "dispose" or "fault" or "stuck" or "recover" or "foundation-stuck" or "foundation-recover"), var sqlitePath,
     var peerFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunPeerAsync(sqliteMode, sqlitePath, peerFence == "in-batch");
 if (args is ["pg-preview-host-watchdog"]) return await PostgresPreviewHostChecks.RunAsync();

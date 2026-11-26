@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Kernel.Native.Run;
 
-internal static class SqliteHostLifetimeChecks
+internal static partial class SqliteHostLifetimeChecks
 {
     private const string Model = "sqlite-host-lifetime";
     private static readonly InstanceRef Slow = InstanceRef.In(0, "slow"), Sibling = InstanceRef.In(0, "sibling");
@@ -121,6 +121,9 @@ internal static class SqliteHostLifetimeChecks
     {
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var token = budget.Token;
+        if (mode is "foundation-stuck" or "foundation-recover")
+            return await RunFoundationPeerAsync(path, fenceInBatch, mode == "foundation-recover", token);
+
         var actor = new WaitingActor(recovering: mode == "recover", blocks: mode == "stuck");
         var log = new LifetimeLog();
         var escalation = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);

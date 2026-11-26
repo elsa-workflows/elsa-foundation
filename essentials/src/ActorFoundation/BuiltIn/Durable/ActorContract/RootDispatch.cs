@@ -14,6 +14,7 @@ internal interface IRootDispatchHeaders
     bool KeepsParkArrivals { get; }
     bool RecoversPark { get; }
     bool RefusesParkedOperators { get; }
+    bool SettlesEndedMailbox { get; }
 }
 
 internal sealed partial class ActorAdapter

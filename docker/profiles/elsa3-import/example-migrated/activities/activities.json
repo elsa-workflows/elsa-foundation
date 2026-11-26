@@ -1,0 +1,30 @@
+[
+  {
+    "version": "1.0.0",
+    "activityTypeKey": "Elsa.Examples.Migrated.WriteLine",
+    "displayName": "Migrated WriteLine example",
+    "category": "Examples",
+    "description": "An Elsa 4 catalog activity backed by the built-in WriteLine runtime.",
+    "providerKey": "elsa.clr-activity",
+    "providerSchemaVersion": "1",
+    "consumerKey": "elsa.clr-activity",
+    "consumerSchemaVersion": "1",
+    "descriptor": {
+      "typeAlias": "Elsa.Activities.Primitives.Activities.WriteLine"
+    },
+    "inputs": [
+      {
+        "referenceKey": "text",
+        "name": "Text",
+        "type": {
+          "alias": "String"
+        },
+        "isNullable": false,
+        "isRequired": true,
+        "displayName": "Text"
+      }
+    ],
+    "outputs": [],
+    "designFacets": []
+  }
+]

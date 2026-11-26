@@ -2078,8 +2078,18 @@ jobs:
           $NAT cost sqlite
           $NAT sqlite-host-lifetime checked
           $NAT sqlite-host-lifetime in-batch
+          $NAT sqlite-host-lifetime checked shipped
+          $NAT sqlite-host-lifetime in-batch shipped
           $NAT sqlite-shipped-install
           $NAT sqlite-root-ingress
+          $NAT sqlite-root-timed-jobs checked
+          $NAT sqlite-root-timed-jobs in-batch
+          $NAT sqlite-root-held-replies checked
+          $NAT sqlite-root-held-replies in-batch
+          $NAT sqlite-root-terminate checked
+          $NAT sqlite-root-terminate in-batch
+          $NAT sqlite-root-retirement checked
+          $NAT sqlite-root-retirement in-batch
 
       - name: Graph engine corpus
         run: dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build
