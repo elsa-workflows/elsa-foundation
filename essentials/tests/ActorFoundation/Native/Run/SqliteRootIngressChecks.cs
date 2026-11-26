@@ -45,7 +45,9 @@ internal static class SqliteRootIngressChecks
             var root = starts.Single(result => result.Outcome == Contract.AdmissionOutcome.Accepted).Actor!.Value;
             Require(starts.Count(result => result.Outcome == Contract.AdmissionOutcome.Duplicate) == 5 &&
                 starts.All(result => result.Actor == root) && FoundationRootCreator.IsGeneratedReference(root.Id),
-                "concurrent starts of one operation admit one birth and replay its issued reference");
+                ReferenceEquals(alias, foundation)
+                    ? "concurrent starts of one operation admit one birth and replay its issued reference"
+                    : "concurrent starts through case aliases share one lease and replay the issued reference");
 
             var creatorRow = await db.Messages.AsNoTracking().SingleAsync(token);
             var creator = PostgresRootAdmission.DecodeCreator(creatorRow);

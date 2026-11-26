@@ -103,16 +103,22 @@ public static partial class SqliteEmbeddedHosting
         {
             if (!ActiveFiles.TryGetValue(path, out var file))
             {
-                var connectionString = new SqliteConnectionStringBuilder
+                var identity = ReadLinuxIdentity(path);
+                if (identity is not null)
+                    file = ActiveFiles.Values.FirstOrDefault(open => open.LinuxIdentity == identity);
+                if (file is null)
                 {
-                    DataSource = path,
-                    Mode = SqliteOpenMode.ReadWrite,
-                    DefaultTimeout = 2,
-                    ForeignKeys = true
-                }.ToString();
-                var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connectionString).Options;
-                file = new(path, connectionString, options, AcquireLock(path + ".host-lock"));
-                ActiveFiles.Add(path, file);
+                    var connectionString = new SqliteConnectionStringBuilder
+                    {
+                        DataSource = path,
+                        Mode = SqliteOpenMode.ReadWrite,
+                        DefaultTimeout = 2,
+                        ForeignKeys = true
+                    }.ToString();
+                    var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connectionString).Options;
+                    file = new(path, connectionString, options, AcquireLock(path + ".host-lock"), identity);
+                    ActiveFiles.Add(path, file);
+                }
             }
             if (forRuntime && file.Runtime)
                 throw new SqliteHostLockException(file.Lock.Name);
@@ -123,13 +129,15 @@ public static partial class SqliteEmbeddedHosting
         }
     }
 
-    private sealed class ActiveFile(string path, string connectionString, DbContextOptions<KernelDb> options, FileStream sidecar)
+    private sealed class ActiveFile(string path, string connectionString, DbContextOptions<KernelDb> options, FileStream sidecar,
+        LinuxFileIdentity? linuxIdentity)
     {
         internal string Path => path;
         internal string ConnectionString => connectionString;
         internal DbContextOptions<KernelDb> Options => options;
         internal SqliteAdmissionDefinitions AdmissionDefinitions { get; } = new();
         internal FileStream Lock => sidecar;
+        internal LinuxFileIdentity? LinuxIdentity => linuxIdentity;
         internal int Users { get; set; }
         internal bool Runtime { get; set; }
     }
@@ -181,7 +189,7 @@ public static partial class SqliteEmbeddedHosting
 
     private static string ResolveUnixPath(string path)
     {
-        // The filesystem supplies the actual spelling where lookups are case-insensitive.
+        // Resolve symlinks. Darwin also supplies the filesystem's spelling for case aliases.
         var resolved = UnixRealPath(path, IntPtr.Zero);
         if (resolved == IntPtr.Zero)
             throw new IOException($"Cannot resolve the SQLite database path '{path}'.", new Win32Exception(Marshal.GetLastPInvokeError()));
@@ -194,6 +202,38 @@ public static partial class SqliteEmbeddedHosting
 
     [DllImport("libc", EntryPoint = "free")]
     private static extern void FreeUnixPath(IntPtr path);
+
+    private readonly record struct LinuxFileIdentity(uint DeviceMajor, uint DeviceMinor, ulong Inode);
+
+    // The Linux statx ABI has the same layout across architectures. Only the identity fields are used here.
+    [StructLayout(LayoutKind.Explicit, Size = 256)]
+    private struct LinuxFileStat
+    {
+        [FieldOffset(0)] internal uint Mask;
+        [FieldOffset(32)] internal ulong Inode;
+        [FieldOffset(136)] internal uint DeviceMajor;
+        [FieldOffset(140)] internal uint DeviceMinor;
+    }
+
+    private static LinuxFileIdentity? ReadLinuxIdentity(string path)
+    {
+        if (!OperatingSystem.IsLinux()) return null;
+        // Linux canonicalizes links but can preserve the lookup spelling on casefold filesystems.
+        // Join an already-open inode through its original SQLite filename and pool.
+        const int currentDirectory = -100;
+        const uint inode = 0x100;
+        try
+        {
+            if (LinuxStatx(currentDirectory, path, 0, inode, out var status) == 0 && (status.Mask & inode) != 0)
+                return new(status.DeviceMajor, status.DeviceMinor, status.Inode);
+        }
+        catch (EntryPointNotFoundException) { } // An older libc can still use its canonical path.
+        return null;
+    }
+
+    [DllImport("libc", EntryPoint = "statx")]
+    private static extern int LinuxStatx(int directory, [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        int flags, uint mask, out LinuxFileStat status);
 
     // Use an explicit Unix flock: the CLR can be configured to skip the implicit lock from FileShare.None.
     [DllImport("libc", EntryPoint = "flock", SetLastError = true)]
