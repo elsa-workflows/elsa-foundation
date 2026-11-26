@@ -909,7 +909,10 @@ internal sealed class AcmeVariableTypes : IVariableTypeDescriptorProvider
    matches nothing. Either change the variable's type in the Elsa 3 definition to the Elsa 4 alias (`acme.Invoice`)
    before converting, or keep the variable untyped (it converts as Any) and record the component as dropped in the
    plan.
-4. A variable type exported under its assembly-qualified name matches when the Elsa 4 type has the same full name.
+4. A variable type exported under its assembly-qualified name (`Acme.Invoice, Acme.Elsa3`) matches only when a type of
+   that full name loads from an assembly of that same name and is registered: the assembly part is not ignored. An
+   Elsa 4 project with another assembly name (`Acme.Elsa4`) does not match it. Change the variable's type in the Elsa 3
+   definition to the Elsa 4 alias, as in step 3.
 
 ## Case 17: Storage drivers
 

@@ -121,9 +121,11 @@ After every run, record the command, its exit code and the date as `Last report`
 - **Redacted.** Confirm the report's `redacted` marker is `true` before reading further (see the privacy statement).
 - **Progress.** Show the user the report's `summary` after every run: definitions, how many go smoothly, the counts per
   category and per bucket, and how many are blocked by a dependency.
-- **Buckets** (per definition): `convert-as-is` (nothing to do), `convert-with-adjustments` (converts; findings to
-  reconsider or take into account) and `incompatible` (does not convert until its Must fix findings are resolved).
-  Work the `incompatible` definitions first, then `convert-with-adjustments`; `convert-as-is` needs no work.
+- **Buckets** (per definition): `convert-as-is` (no Must fix and no Reconsider finding: nothing to do),
+  `incompatible` (a finding with remedy `none`: no Elsa 4 change helps, so the user decides to redesign, drop or accept
+  the refusal) and `convert-with-adjustments` (everything else: a component to build, a definition to patch, a finding
+  to reconsider, or a dependency that blocks it). Settle the `incompatible` definitions with the user early, so no
+  porting is spent on definitions that will be dropped; then work `convert-with-adjustments`.
 - **Categories**: `mustFix` (the definition does not convert until fixed), `reconsider` (it converts, but behaves
   differently), `takeIntoAccount` (good to know).
 - **Remedy** (Must fix findings only): `build-component` means a custom component is missing, so go to the plan's

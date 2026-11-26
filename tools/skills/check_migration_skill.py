@@ -4,7 +4,8 @@
 Fails when:
 1. a catalog block marked ``<!-- sample: case-NN -->`` differs from the sample region ``case-NN``;
 2. a region has no catalog block, or a block has no region;
-3. a case number is missing, duplicated or out of order, or a block sits under another case's heading;
+3. a case number is missing, duplicated or out of order, a block sits under another case's heading, or a case whose
+   verdict has a *port* part has no marked block;
 4. any file in the skill folder holds an Elsa 3 conversion or value-flow code literal (a token starting with the
    ``ELS3-`` or ``VF-`` prefix). Other code families and provider-neutral wording are left to review.
 
@@ -31,6 +32,7 @@ CATALOG = SKILL_FOLDER / "porting-catalog.md"
 SAMPLE_ROOT = Path("extensions/Elsa3/tests/Migration/Sample")
 
 HEADING = re.compile(r"^## Case (\d{2}): \S")
+VERDICT = re.compile(r"^\*\*Verdict\*\*:\s*(.*)$")
 BLOCK_MARKER = re.compile(r"<!--\s*sample:\s*case-(\d{2})\s*-->")
 REGION_MARKER = re.compile(r"^\s*// catalog:case-(\d{2}) (begin|end)\s*$")
 CODE_LITERAL = re.compile(r"(?<![A-Za-z0-9_])(?:ELS3|VF)-[A-Za-z0-9]")
@@ -77,6 +79,7 @@ def read_catalog(catalog: Path, errors: list[str]) -> dict[str, str]:
     lines = catalog.read_text(encoding="utf-8").splitlines()
     blocks: dict[str, str] = {}
     headings: list[str] = []
+    ports: set[str] = set()
     current: str | None = None
     index = 0
     while index < len(lines):
@@ -85,6 +88,9 @@ def read_catalog(catalog: Path, errors: list[str]) -> dict[str, str]:
         if heading:
             current = heading.group(1)
             headings.append(current)
+        verdict = VERDICT.match(line)
+        if verdict and current is not None and re.match(r"port\b", verdict.group(1)):
+            ports.add(current)
         marker = BLOCK_MARKER.search(line)
         if marker:
             case = marker.group(1)
@@ -120,6 +126,8 @@ def read_catalog(catalog: Path, errors: list[str]) -> dict[str, str]:
     for case in headings:
         if case not in expected:
             errors.append(f"{catalog.as_posix()}: case {case} is not one of 01-{CASE_COUNT:02d}")
+    for case in sorted(ports - set(blocks)):
+        errors.append(f"{catalog.as_posix()}: case {case} has a port verdict but no block marked <!-- sample: case-{case} -->")
     if len(set(headings)) == len(headings) and headings != sorted(headings):
         errors.append(f"{catalog.as_posix()}: cases are out of order: {', '.join(headings)}")
     return blocks
@@ -174,10 +182,12 @@ class CheckMigrationSkillTests(unittest.TestCase):
         self.directory.cleanup()
 
     @staticmethod
-    def catalog(blocks: dict[int, str], order: list[int] | None = None) -> str:
+    def catalog(blocks: dict[int, str], order: list[int] | None = None, ports: set[int] | None = None) -> str:
+        """Cases with a block, or listed in ``ports``, get a port verdict; the others a redesign verdict."""
         parts = ["# Porting catalog\n"]
         for number in order or range(1, CASE_COUNT + 1):
-            parts.append(f"## Case {number:02d}: Title {number}\n\n**Verdict**: port\n")
+            verdict = "port" if number in blocks or number in (ports or set()) else "redesign"
+            parts.append(f"## Case {number:02d}: Title {number}\n\n**Verdict**: {verdict}\n")
             if number in blocks:
                 parts.append(f"**After (Elsa 4)** <!-- sample: case-{number:02d} -->\n\n```csharp\n{blocks[number]}```\n")
         return "\n".join(parts)
@@ -226,6 +236,19 @@ class CheckMigrationSkillTests(unittest.TestCase):
     def test_out_of_order_cases_fail(self):
         root = self.tree(self.catalog({}, order=[2, 1, *range(3, CASE_COUNT + 1)]), self.sample({}))
         self.assertTrue(any("out of order" in error for error in check(root)))
+
+    def test_port_case_without_marked_block_fails(self):
+        root = self.tree(self.catalog({}, ports={1}), self.sample({}))
+        self.assertTrue(any("case 01 has a port verdict but no block" in error for error in check(root)))
+
+    def test_port_part_of_a_two_part_verdict_needs_a_block(self):
+        text = self.catalog({}).replace("## Case 08: Title 8\n\n**Verdict**: redesign",
+                                        "## Case 08: Title 8\n\n**Verdict**: port (bookmarks); redesign (signals)")
+        self.assertTrue(any("case 08 has a port verdict but no block" in error for error in check(self.tree(text, self.sample({})))))
+
+    def test_redesign_and_interview_cases_need_no_block(self):
+        text = self.catalog({}).replace("## Case 17: Title 17\n\n**Verdict**: redesign", "## Case 17: Title 17\n\n**Verdict**: interview")
+        self.assertEqual([], check(self.tree(text, self.sample({}))))
 
     def test_block_under_another_heading_fails(self):
         text = self.catalog({}).replace("## Case 02: Title 2\n",
