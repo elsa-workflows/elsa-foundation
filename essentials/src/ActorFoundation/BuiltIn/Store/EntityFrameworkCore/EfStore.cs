@@ -121,12 +121,12 @@ public class KernelDb : DbContext
     public KernelDb(DbContextOptions<KernelDb> options) : this(options, StoreFormat.Current, RootCapabilities.None) { }
 
     private KernelDb(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities,
-        bool sqliteShippedInstall = false, bool sqliteRootRuntime = false) : base(options)
+        bool sqliteShippedInstall = false, SqliteAdmissionDefinitions? sqliteRuntimeDefinitions = null) : base(options)
     {
         RequiredFormat = format;
         Capabilities = capabilities;
         SqliteShippedInstall = sqliteShippedInstall;
-        SqliteRootRuntime = sqliteRootRuntime;
+        SqliteRuntimeDefinitions = sqliteRuntimeDefinitions;
         RootStateFamily = RootStateFamily.Of(capabilities);
     }
 
@@ -145,8 +145,8 @@ public class KernelDb : DbContext
 
     internal bool SqliteShippedInstall { get; }
     internal bool UsesSqliteShippedInstall => SqliteShippedInstall && Database.IsSqlite();
-    private bool SqliteRootRuntime { get; }
-    internal bool UsesSqliteRootRuntime => SqliteRootRuntime && UsesSqliteShippedInstall;
+    internal SqliteAdmissionDefinitions? SqliteRuntimeDefinitions { get; }
+    internal bool UsesSqliteRootRuntime => SqliteRuntimeDefinitions is not null && UsesSqliteShippedInstall;
     internal StoreFormat RequiredFormat { get; }
     internal RootCapabilities Capabilities { get; }
     // The one state family this set writes and reads, with its terminal statuses.
@@ -177,8 +177,8 @@ public class KernelDb : DbContext
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
     internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options) =>
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true);
-    internal static KernelDb ForSqliteRootRuntime(DbContextOptions<KernelDb> options) =>
-        new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRootRuntime: true);
+    internal static KernelDb ForSqliteRootRuntime(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
+        new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;

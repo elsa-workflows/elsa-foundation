@@ -22,12 +22,17 @@ internal static partial class SqliteHostLifetimeChecks
         try
         {
             var path = Path.Combine(directory.FullName, "foundation.db");
+            await ExpectFoundationFailureAsync<ArgumentException>(() => SqliteEmbeddedHosting.StartFoundationAsync(path, "invalid",
+                new FoundationLifetimeActor { Type = "" }, _ => { }, cancellationToken: token),
+                "host startup refuses an empty configured actor type before opening the file");
             await InstallFoundationAsync(path, token);
             var scope = EmbeddedTenant.Bind(FoundationKind);
+            await CheckWideFoundationFenceAsync(Path.Combine(directory.FullName, "wide.db"), scope, fenceInBatch, token);
             var ingress = await SqliteEmbeddedHosting.OpenFoundationAsync(path, FoundationKind, cancellationToken: token);
             var slow = await AdmitFoundationStartAsync(ingress, scope, "slow", token);
             var sibling = await AdmitFoundationStartAsync(ingress, scope, "sibling", token);
-            var store = new EfStore(() => OpenFoundationDb(path, runtime: true), postgres: false, fenceInBatch);
+            var definitions = new SqliteAdmissionDefinitions();
+            var store = new EfStore(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
             store.BindSqliteWorkerNode();
             var polled = await store.PollAsync([new PartitionFence(0, 1, 0)], TimeSpan.Zero, 8, token);
             Require(polled.Messages.Count == 2 && polled.Messages.All(message => message.Message.FoundationRootBinding is not null),
@@ -117,6 +122,9 @@ internal static partial class SqliteHostLifetimeChecks
             await InstallFoundationAsync(deadlinePath, token);
             await RunPeerAsync("foundation-stuck", deadlinePath, fenceInBatch, token);
             await RunPeerAsync("foundation-recover", deadlinePath, fenceInBatch, token);
+            var driftPath = Path.Combine(directory.FullName, "foundation-definition-drift.db");
+            await InstallFoundationAsync(driftPath, token);
+            await RunPeerAsync("foundation-definition-drift", driftPath, fenceInBatch, token);
             return 0;
 
             Task<EfStore.RootImage?> ReadRootAsync(Contract.ActorRef actorRef) => store.ReadFirstRootAsync(scope.Tenant, actorRef.Id, token);
@@ -124,6 +132,99 @@ internal static partial class SqliteHostLifetimeChecks
                 ingress.SendAsync(scope, new Contract.Target.Ref(slow), kind, kind, options: options, cancellationToken: token);
         }
         finally { directory.Delete(recursive: true); }
+    }
+
+    private static async Task CheckWideFoundationFenceAsync(string path, Contract.BoundScope scope, bool fenceInBatch, CancellationToken token)
+    {
+        const int partitions = 1024;
+        await InstallFoundationAsync(path, token, partitions);
+        var ingress = await SqliteEmbeddedHosting.OpenFoundationAsync(path, FoundationKind, cancellationToken: token);
+        await using var db = OpenFoundationDb(path);
+        var rootCount = 0;
+        do
+        {
+            await AdmitFoundationStartAsync(ingress, scope, $"wide-{++rootCount}", token);
+        } while (await db.Messages.Select(message => message.Partition).Distinct().CountAsync(token) < 2);
+
+        var definitions = new SqliteAdmissionDefinitions();
+        var store = new EfStore(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
+        store.BindSqliteWorkerNode();
+        var take = await store.TakeAsync(Enumerable.Range(0, partitions).ToArray(), "wide-worker", Defaults.Lease, token);
+        var fences = take.Taken.Select(lease => new PartitionFence(lease.Partition, lease.Epoch, lease.Position)).ToArray();
+        Require(fences.Length == partitions, "the shipped SQLite writer acquires all 1,024 partitions");
+        var polled = await store.PollAsync(fences, TimeSpan.Zero, 8, token);
+        var seen = polled.Messages.Select(message => message.Message.InboxKey).ToArray();
+        Require(seen.Length == rootCount, "the 1,024-partition poll discovers creators in distinct partitions");
+
+        var home = polled.Messages[0].Message.Target.Partition;
+        var renewed = (await store.TakeAsync(home, "wide-worker", Defaults.Lease, token))!;
+        var stale = await store.CommitAsync(CommitBatch.Owned(fences, Defaults.Lease, false, [], seen, []), token);
+        Require(!stale.Landed && await db.Messages.AllAsync(message => message.Seen == 0, token),
+            "one stale epoch refuses all marks in the 1,024-partition batch");
+        var current = fences.Select(fence => fence.Partition == home ? new PartitionFence(home, renewed.Epoch, renewed.Position) : fence)
+            .ToArray();
+        var marked = await store.CommitAsync(CommitBatch.Owned(current, Defaults.Lease, false, [], seen, []), token);
+        var messages = await db.Messages.AsNoTracking().ToListAsync(token);
+        var epochs = current.ToDictionary(fence => fence.Partition, fence => fence.Epoch);
+        Require(marked.Landed && messages.All(message => message.Seen == epochs[message.Partition]),
+            "the fresh 1,024-partition batch marks each creator with its own epoch");
+        await store.ReleaseAsync(current, token);
+    }
+
+    private static async Task<int> CheckFoundationDefinitionDriftAsync(string path, bool fenceInBatch, CancellationToken token)
+    {
+        var scope = EmbeddedTenant.Bind(FoundationKind);
+        var ingress = await SqliteEmbeddedHosting.OpenFoundationAsync(path, FoundationKind, cancellationToken: token);
+        var root = await AdmitFoundationStartAsync(ingress, scope, "drift", token);
+        var definitions = new SqliteAdmissionDefinitions();
+        var store = new EfStore(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
+        Require(await store.ReadFirstRootAsync(scope.Tenant, root.Id, token) is null, "the drift fixture verifies the original definitions");
+        var actor = new FoundationLifetimeActor();
+        await using var service = FoundationService(path, "drift", actor, fenceInBatch, _ => { });
+        await service.StartAsync(token);
+        await AwaitEntryAsync(service, actor.SlowEntered.Task, token);
+        try
+        {
+            await using var db = OpenFoundationDb(path);
+            var definitionsToRestore = await db.Database.SqlQueryRaw<string>("""
+                SELECT sql AS "Value" FROM main.sqlite_schema
+                WHERE name IN ('kernel_project_root_actor_list', 'kernel_require_root_actor_list')
+                """).ToListAsync(token);
+            Require(definitionsToRestore.Count == 2, "the actor-list projector and its guard are installed");
+            await using (var update = await db.Database.BeginTransactionAsync(token))
+            {
+                await db.Database.ExecuteSqlRawAsync("DROP TRIGGER kernel_project_root_actor_list", token);
+                await db.Database.ExecuteSqlRawAsync("DROP TRIGGER kernel_require_root_actor_list", token);
+                await update.CommitAsync(token);
+            }
+
+            var fence = await db.Partitions.AsNoTracking().SingleAsync(token);
+            await ExpectFoundationFailureAsync<StoreFormatException>(() =>
+                store.FenceAsync([new(0, fence.Epoch, fence.Position, fence.Position)], token).AsTask(),
+                "the owned write checks the manifest again before updating its fence");
+            actor.ReleaseSlow.TrySetResult();
+            await actor.SlowReturned.Task.WaitAsync(token);
+            // A bad definition also refuses lease renewal. Give the authored turn its whole remaining lease.
+            while (await LeaseAsync(path, "drift", token) > DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                await Task.Delay(25, token);
+            Require(!await db.Instances.AnyAsync(token) && !await db.Journal.AnyAsync(token),
+                "an authored creator stays uncommitted through lease expiry while the projection definitions are absent");
+
+            await using (var update = await db.Database.BeginTransactionAsync(token))
+            {
+                foreach (var definition in definitionsToRestore)
+                    await db.Database.ExecuteSqlRawAsync(definition, token);
+                await update.CommitAsync(token);
+            }
+            await WaitForRootAsync(store, scope.Tenant, root, 1, token);
+            Require(await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {scope.Tenant}
+                    AND "Reference" = {root.Id}) AS "Value"
+                """).SingleAsync(token), "retry after restoring the definition commits the checkpoint with its projection");
+            await service.StopAsync(token);
+            return 0;
+        }
+        finally { actor.ReleaseSlow.TrySetResult(); }
     }
 
     private static async Task<int> RunFoundationPeerAsync(string path, bool fenceInBatch, bool recovering, CancellationToken token)
@@ -141,7 +242,8 @@ internal static partial class SqliteHostLifetimeChecks
         await using var service = FoundationService(path, recovering ? "recovery" : "deadline", actor, fenceInBatch,
             reason => policy.TrySetResult(reason), log);
         var before = await FenceAsync(path, token);
-        var store = new EfStore(() => OpenFoundationDb(path, runtime: true), postgres: false, fenceInBatch);
+        var definitions = new SqliteAdmissionDefinitions();
+        var store = new EfStore(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
         Require(await store.ReadFirstRootAsync(scope.Tenant, root.Id, token) is null,
             "the creator is still pending before the deadline or takeover attempt");
         await service.StartAsync(token);
@@ -178,19 +280,19 @@ internal static partial class SqliteHostLifetimeChecks
         SqliteEmbeddedHostedService.ForFoundation(path, node, actor, endProcess,
             Loops with { DisposeDeadline = TimeSpan.FromSeconds(15) }, fenceInBatch, log);
 
-    private static async Task InstallFoundationAsync(string path, CancellationToken token)
+    private static async Task InstallFoundationAsync(string path, CancellationToken token, int partitions = 1)
     {
         await using var db = OpenFoundationDb(path);
-        await EfStore.InstallSqliteShippedAsync(db, 1, token);
+        await EfStore.InstallSqliteShippedAsync(db, partitions, token);
     }
 
-    private static KernelDb OpenFoundationDb(string path, bool runtime = false)
+    private static KernelDb OpenFoundationDb(string path, SqliteAdmissionDefinitions? definitions = null)
     {
         var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
         {
             DataSource = path, ForeignKeys = true, Pooling = false
         }.ToString()).Options;
-        return runtime ? KernelDb.ForSqliteRootRuntime(options) : KernelDb.ForSqliteRootShipped(options);
+        return definitions is not null ? KernelDb.ForSqliteRootRuntime(options, definitions) : KernelDb.ForSqliteRootShipped(options);
     }
 
     private static async Task<Contract.ActorRef> AdmitFoundationStartAsync(Contract.IIngress ingress, Contract.BoundScope scope, string id,
@@ -200,6 +302,17 @@ internal static partial class SqliteHostLifetimeChecks
             cancellationToken: token);
         Require(start is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "the shipped store admits the durable creator");
         return start.Actor!.Value;
+    }
+
+    private static async Task ExpectFoundationFailureAsync<T>(Func<Task> action, string witness) where T : Exception
+    {
+        try { await action(); }
+        catch (T)
+        {
+            Require(true, witness);
+            return;
+        }
+        throw new InvalidOperationException(witness);
     }
 
     private static async Task AwaitEntryAsync(SqliteEmbeddedHostedService service, Task entered, CancellationToken token)
@@ -220,8 +333,9 @@ internal static partial class SqliteHostLifetimeChecks
 
     private sealed class FoundationLifetimeActor(bool acceptStart = true, bool blocks = false) : Contract.IActorType
     {
-        public string Type => FoundationKind;
+        public string Type { get; init; } = FoundationKind;
         internal TaskCompletionSource SlowEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource SlowReturned { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource SiblingEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource ReleaseSlow { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource ReleaseSibling { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -243,6 +357,7 @@ internal static partial class SqliteHostLifetimeChecks
                 if (blocks) release.GetAwaiter().GetResult();
                 else await release.WaitAsync(token);
                 turn.State = WaitingState;
+                if (!sibling) SlowReturned.TrySetResult();
                 return;
             }
 

@@ -16,8 +16,13 @@ internal sealed class SqliteCommitDialect() : ReturningDialect(SqliteCommitDiale
     {
         if (window is not null) throw new NotSupportedException("Commit windows are PostgreSQL's.");
         if (rows.Count == 1) { base.Fence(c, rows, window, unfenced, ignoreCount); return; }
-        // k rows: one writer, so no lock order to keep; UPDATE ... FROM a derived table (SQLite 3.33).
-        var f = string.Join(" UNION ALL ", rows.Select(r => FormattableString.Invariant($"SELECT {r.Id} AS id, {r.Epoch} AS epoch, {r.Position} AS pos, {r.NewPosition} AS np")));
-        c.Statement(FormattableString.Invariant($"""UPDATE "Partitions" SET "Position" = f.np FROM ({f}) AS f WHERE "Partitions"."Id" = f.id AND ({(unfenced ? "1 = 1" : "\"Partitions\".\"Epoch\" = f.epoch AND \"Partitions\".\"Position\" = f.pos")}) RETURNING {Now} AS "Value" """), Expect.Fence, rows.Count);
+        // A VALUES CTE can carry the whole owned set without SQLite's compound SELECT term limit.
+        var values = string.Join(", ", rows.Select(r => FormattableString.Invariant($"({r.Id}, {r.Epoch}, {r.Position}, {r.NewPosition})")));
+        var held = unfenced ? "1 = 1" : """ "Partitions"."Epoch" = f.epoch AND "Partitions"."Position" = f.pos """;
+        c.Statement($"""
+            WITH f(id, epoch, pos, np) AS (VALUES {values})
+            UPDATE "Partitions" SET "Position" = f.np FROM f WHERE "Partitions"."Id" = f.id AND ({held})
+            RETURNING {Now} AS "Value"
+            """, Expect.Fence, rows.Count);
     }
 }

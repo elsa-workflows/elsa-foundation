@@ -136,7 +136,7 @@ public sealed partial class EfStore
     }
 
     private static Task RequireNodeStoreFormatAsync(KernelDb db, CancellationToken token) =>
-        db.UsesSqliteRootRuntime ? RequireSqliteRootAdmissionAsync(db, token)
+        db.UsesSqliteRootRuntime ? RequireSqliteWorkerFormatAsync(db, token)
         : db.RequiresPinnedRootNamespace ? PostgresRootAdmission.PinRootNamespaceAsync(db, token)
         : RequireStoreVersionsAsync(db, token, FormatLock.Shared);
 

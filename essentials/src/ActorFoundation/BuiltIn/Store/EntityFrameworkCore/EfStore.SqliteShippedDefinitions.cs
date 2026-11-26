@@ -17,8 +17,14 @@ public sealed partial class EfStore
     }
 
     private static Task RequireSqliteOperationalFormatAsync(KernelDb db, CancellationToken token) =>
-        db.UsesSqliteRootRuntime ? RequireSqliteRootAdmissionAsync(db, token)
+        db.UsesSqliteRootRuntime ? RequireSqliteWorkerFormatAsync(db, token)
         : db.Database.IsSqlite() ? RequireStoreVersionsAsync(db, token) : Task.CompletedTask;
+
+    private static async Task RequireSqliteWorkerFormatAsync(KernelDb db, CancellationToken token)
+    {
+        await RequireSqliteRootAdmissionAsync(db, token);
+        await db.SqliteRuntimeDefinitions!.RequireAsync(db, token);
+    }
 
     private sealed record SqliteDefinition(string Type, string Name, string Table, string Sql);
 

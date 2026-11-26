@@ -30,11 +30,12 @@ public static partial class SqliteEmbeddedHosting
     }
 
     /// <summary>Starts an Embedded node on the shipped format for durable creators and ordinary root turns.</summary>
-    public static Task<RuntimeNode> StartFoundationAsync(string databasePath, string node, Contract.IActorType actor,
+    internal static Task<RuntimeNode> StartFoundationAsync(string databasePath, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
         CancellationToken cancellationToken = default, Action<Exception>? onFault = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
+        RequireFoundationActorType(actor.Type);
         return StartCoreAsync(databasePath, node, store => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode()), actor),
             shipped: true, endProcess, options, fenceInBatch, cancellationToken, onFault);
     }
@@ -57,7 +58,7 @@ public static partial class SqliteEmbeddedHosting
         var file = AcquireFile(databasePath, forRuntime: true);
         try
         {
-            KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options) : new(file.Options);
+            KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions) : new(file.Options);
 
             int partitions;
             await using (var db = Open())

@@ -23,7 +23,7 @@ public sealed class SqliteEmbeddedHostedService : IHostedService, IAsyncDisposab
     private SqliteEmbeddedHostedService(NodeHostedService service) => _service = service;
 
     /// <summary>Runs the shipped SQLite format with durable creators and ordinary root turns.</summary>
-    public static SqliteEmbeddedHostedService ForFoundation(string databasePath, string node, Contract.IActorType actor,
+    internal static SqliteEmbeddedHostedService ForFoundation(string databasePath, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true, ILogger<SqliteEmbeddedHostedService>? logger = null) =>
         new(new NodeHostedService("SQLite embedded", node, endProcess, (options ?? new LoopOptions()).DisposeDeadline,
             (fault, escalate, token) => SqliteEmbeddedHosting.StartFoundationAsync(databasePath, node, actor, escalate, options,
