@@ -5,13 +5,13 @@ One row per suite file under `tests/` (spec 1235, data-model.md). Results: see d
 | Suite | Definitions | Elsa 3 result | Elsa 4 result | Last run |
 |---|---|---|---|---|
 | `branching/fork-parallel-tests.json` | branching-fork-parallel.json | pass | blocked: JOIN (#4193; `ELS3-ACTIVITY-GRAPH-JOIN-UNSUPPORTED`: WaitAny join whose branches can run at the same time) | 11, 29 |
-| `branching/if-then-else-tests.json` | branching-flows.json | pass | pass (run 29); run 32: load failure, the run took 27 s at 97 % CPU and the synchronous HTTP response window closed before the final response activity ran | 11, 32 |
+| `branching/if-then-else-tests.json` | branching-flows.json | pass | pass (run 29); runs 32 and 35: load failure (synchronous response window closed, HTTP 408) at 97-100 % CPU | 11, 32 |
 | `branching/implicit-tests.json` | branching-implicit.json | excluded (coordinator, 2026-11-24: re-evaluate on Elsa 4) | excluded | 4 |
 | `branching/join-wait-all-active-tests.json` | branching-wait-all-active.json | excluded (coordinator, 2026-11-24: re-evaluate on Elsa 4) | excluded | 4 |
 | `branching/join-wait-all-tests.json` | branching-wait-all.json | pass | blocked: JOIN (#4193; `ELS3-ACTIVITY-GRAPH-JOIN-UNSUPPORTED`: WaitAll join where not every branch provably runs) | 11, 29 |
 | `branching/join-wait-any-tests.json` | branching-wait-any.json | pass | blocked: JOIN (#4193; `ELS3-ACTIVITY-GRAPH-JOIN-UNSUPPORTED`: WaitAny join whose branches can run at the same time) | 11, 29 |
 | `branching/switch-match-any-mode-tests.json` | branching-flows.json | pass | blocked: #1152 (Switch mode set by an expression; the adjusted copy fixes `MatchFirst`, so only case 1 of 2 runs) | 11, 29 |
-| `branching/switch-match-first-mode-tests.json` | branching-flows.json | pass | pass | 11, 29 |
+| `branching/switch-match-first-mode-tests.json` | branching-flows.json | pass | pass (run 29); runs 32 and 35: load failure, HTTP 408 while the machine was at 97-100 % CPU | 11, 29 |
 | `branching/switchflow-case-default-tests.json` | branching-flows.json | pass | pass | 11, 29 |
 | `branching/switchflow-case-fail-tests.json` | branching-flows.json | pass | pass | 11, 29 |
 | `composition/bulk-dispatch-workflow-channels-tests.json` | composition-bulk-dispatch-root-workflow.json, composition-bulk-dispatch-sub-workflow.json | pass | incompatible (`ELS3-ACTIVITY-NO-COUNTERPART`: BulkDispatchWorkflows) | 11, 29 |
@@ -42,7 +42,7 @@ One row per suite file under `tests/` (spec 1235, data-model.md). Results: see d
 | `logging/logging-tests.json` | logging-workflow.json | pass | blocked: #5686 (publish fails with VF-STATE-002 on `Headers`) | 11, 29 |
 | `performance/baseline-dispatch-tests.json` | performance-baseline-dispatch-sub.json, performance-baseline-dispatch.json | excluded | excluded | - |
 | `performance/big-data-tests.json` | performance-bigdata.json | pass | blocked: value capture (`output.OutputData`, `activityState.Value`/`OutputValue`, `outputs.Result`: snapshot trees; 10 782 items also exceed the snapshot limits) | 11, 29 |
-| `performance/commit-after-every-activity-tests.json` | performance-commit-after-every-activity.json | pass | blocked: #5697 (adjusted copy converts; publish fails with `ActivityDataSelection/VariableUnknown` on the loop-variable read) | 11, 29 |
+| `performance/commit-after-every-activity-tests.json` | performance-commit-after-every-activity.json | pass | blocked: value capture (#5647): since #5697 was fixed the adjusted copy publishes and runs; the suite then reads the loop variable's value (`variables['fbbc2932e0d13d2d']`), a value read | 11, 35 |
 | `performance/concurrency-tests.json` | performance-concurrency.json, simple-write-hello-world.json | pass | incompatible (`ELS3-ACTIVITY-NO-COUNTERPART`: BulkDispatchWorkflows) | 11, 29 |
 | `single-outcome/single-outcome-tests.json` | single-outcome-activities.json | pass | incompatible (`ELS3-ACTIVITY-NO-COUNTERPART`: ParallelForEach) | 11, 29 |
 | `storage-drivers/variables-tests.json` | storage-drivers-variables-root-workflow.json, storage-drivers-variables-sub-workflow.json | pass | blocked: #3023 (reusable workflow holds `SetOutput`) | 11, 29 |
