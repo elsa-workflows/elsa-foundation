@@ -24,19 +24,27 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   externalized workflow outputs yet". Set Output writes both.
 - [ ] T003a `WorkflowDispatchCompletionEnricher` sets `WorkflowDispatchParentResumePayload.Output` for `Completed` from
   T003.
-  - The payload carries `WithheldOutputs` (names only).
+  - The payload carries `WithheldOutputs` (names only, sorted ordinally). Both new members are constructor parameters:
+    null unless `Completed`, and `WithheldOutputs` is empty when nothing is left out. Payload `Output` stays
+    `JsonElement?`.
   - The payload constructor rejects `Output` and `WithheldOutputs` on any other status.
+  - Test: several withheld names arrive in reverse store order, and the re-enriched intent is still equivalent.
   - `WorkflowDispatchDeliveryFailureProjector` passes null, and `DispatchWorkflowResumeGuard` reads the member.
   - Update the "payload-safe" doc comment.
   - Enricher tests: the value is replay-stable; a conflicting re-enrichment fails closed; a payload with `Output` on
     `Faulted` is rejected; `Result.outputs` is unchanged.
-- [ ] T003b `DispatchWorkflow.ResumeAsync` copies `payload.Output` into the activity result for `Completed`. End-to-end
+- [ ] T003c Add `Warnings` (`IExecutionWarningSink?`) to `ActivityResumeContext<TState, TTrigger>`, copied from the
+  attempt. Test that a warning reported in `ResumeAsync` is recorded on the activity execution. Update
+  `EXTENSION_POINTS.md` if it lists context members.
+- [ ] T003b `DispatchWorkflow.ResumeAsync` copies `payload.Output` into the activity result for `Completed`, and reports
+  `dispatch.child-output-withheld` (Warning, `Details.outputs`) through T003c when `WithheldOutputs` is not empty. End-to-end
   tests:
   - A child with output `Decision = "approved"` gives `{ "Decision": "approved" }`.
   - A 1,000-character `Summary` and an output named `token` arrive unchanged, while `Result.outputs` shows the
     diagnostic view.
   - Outputs that are sensitive, encryption-required, redaction-moded or retention-governed are left out. The dispatch
-    reports one execution warning naming them, and the warning text contains no value.
+    reports one `dispatch.child-output-withheld` warning whose `outputs` detail lists their names in ordinal order. The
+    warning contains no value.
   - Two declared outputs with one set give one property.
   - A child with no outputs gives `{}`.
 - [ ] T004 [P] `DispatchWorkflowCheckpointTests`: a waiting parent resumed after a restart gives the same `Output`

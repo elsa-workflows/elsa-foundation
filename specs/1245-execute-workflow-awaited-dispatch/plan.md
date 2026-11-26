@@ -26,8 +26,10 @@ compatibility shims.
 
 - **Patterns.** No new pattern kind: one more output projection on an existing atomic result record, and data changes
   to existing converter rules.
-- **Extension points.** No new contract. The Dispatch Workflow `EXTENSION_POINTS.md` is unchanged; check whether it
-  lists outputs and update it if it does.
+- **Extension points.** One public addition: `ActivityResumeContext<TState, TTrigger>.Warnings`
+  (`IExecutionWarningSink?`) in `Activities.Runtime.Core`, copied from the attempt's `Warnings`, which the resume handler
+  already sets. Update that project's `EXTENSION_POINTS.md` if it lists context members. Check whether the Dispatch
+  Workflow `EXTENSION_POINTS.md` lists outputs and update it if it does.
 - **ADRs.** No ADR change (see the spec, "Rule and boundary").
 
 ## Design
@@ -54,9 +56,17 @@ compatibility shims.
      #5851, and it is out of scope.
    - "Not stored inline" means `!row.InlineValue.HasValue || DurableValuePolicies.Read(row).Storage != Inline`. That
      covers a null row whose minimum storage is External, which the existing projection reports as inline.
-   - The payload also carries the names left out (`WithheldOutputs`, names only), so that `ResumeAsync` can report one
-     execution warning in protected form (`ExecutionWarning.ProtectedForm`, as `RuntimeOutputCaptureProjector` does).
-     Check that the resume context exposes the warning sink; if it does not, report from the resume handler.
+   - The payload also carries the names left out (`WithheldOutputs`, names only, sorted ordinally).
+     - `ResumeAsync` reports one plain `ExecutionWarning` (`dispatch.child-output-withheld`, Warning, `Details`:
+       `outputs`) through the new `ActivityResumeContext.Warnings`.
+     - It is not a `ProtectedForm`: that form names roots only and would drop the output names. The names are contract
+       names, not values.
+     - Dispatch knowledge stays in the activity, not in the generic resume handler.
+   - Both new payload members are constructor parameters, with one convention: null unless `Completed`; `WithheldOutputs`
+     is an empty list when nothing is left out.
+     - Payload `Output` stays `JsonElement?`. A dictionary type would fail `PersistableActivityValue.ValidateType`.
+     - Ordinal ordering of both makes the canonical-JSON comparisons stable at all four points: the enricher's
+       `ValidateIntent`, `ParentResumeExecutor`, `DispatchWorkflowResumeGuard`, and trigger materialization.
    - Update the "payload-safe" doc comment on `WorkflowDispatchParentResumePayload` to say what `Output` carries. Fix
      the two stale comments in `RuntimeWorkflowOutputStateProjection` ("nothing writes it yet" and "nothing writes
      externalized workflow outputs yet"): Set Output writes both.
@@ -109,8 +119,8 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
 4. **Records.**
    - `extensions/Elsa3/src/Mapping/README.md` gets the rows for FR-006 to FR-011, including the five accepted
      differences.
-   - Spec 236's `member-map.md` rows for `DispatchWorkflow.Result`, the `Done` outcome and `ExecuteWorkflow` are
-     amended in place, citing spec 1245 (FR-011a).
+   - Spec 236's `member-map.md` rows for `DispatchWorkflow.Result`, the `Done` outcome and `ExecuteWorkflow`, and the
+     null-member row for `ExecuteWorkflow.WaitForCompletion`, are amended in place, citing spec 1245 (FR-011a).
    - `Elsa3ActivityMapCoverageTests` and the `elsa3-activity-surface.json` fixture are updated to the new rules.
 
 ### Tests (FR-012)

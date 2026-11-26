@@ -100,8 +100,8 @@ loud in two ways:
 
 - **At design time.** The `Output` contract description states it: a declared loss under
   [ADR 0046](../../docs/adr/0046-output-binding-coercion-uses-pinned-value-representations.md) V6.
-- **In each run.** When the dispatch resumes, it reports one execution warning that names every output it left out. It
-  uses the protected form of the existing warning pattern, so the warning carries names and never a value.
+- **In each run.** When the dispatch resumes, it reports one execution warning that names every output it left out.
+  The names are the child's declared contract names, not value data, so the warning carries names and never a value.
 
 `Result.outputs` is not that signal. It keeps every name, but today it carries a preview of a redaction-mode or
 retention-governed value. That existing gap is #5851, and it is not fixed here.
@@ -270,8 +270,10 @@ faults.
   - An output marked sensitive, or required to be encrypted, or carrying a redaction mode or a retention policy (its value protection policy), or not stored inline, MUST be left out.
   - The `Output` contract description MUST state that protected and externally stored outputs are left out (ADR 0046
     V6: a declared loss).
-  - When an output is left out, the dispatch MUST report one execution warning on resume. It names each left-out
-    output, in protected form, with no value (ADR 0045 §9: not silent).
+  - When an output is left out, the dispatch MUST report one execution warning on resume (ADR 0045 §9: not silent):
+    - code `dispatch.child-output-withheld`, severity Warning;
+    - the left-out output names, sorted ordinally, under the `Details` key `outputs`;
+    - no value.
   - A completed child with no outputs gives `{}`.
   - The values MUST be replay-stable: a resumed or retried parent gets the same `Output` (spec 099 FR-008).
 - **FR-004**: `Result` and `ChildWorkflowExecutionId` MUST keep their current shape and behaviour.
