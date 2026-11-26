@@ -18,21 +18,25 @@ internal sealed partial class SqliteRootAdmission
         HeldRootRequest? reply = null)
     {
         if (!FoundationRootCreator.IsGeneratedReference(reference.Id) || !retentionDelete && !FoundationMetadataLimits.IsOutsideMessageId(operation) ||
-            kind is not (Kinds.Terminate or Kinds.Delete) || thenDelete && kind != Kinds.Terminate || retentionDelete && kind != Kinds.Delete)
+            kind is not (Kinds.Terminate or Kinds.Delete or Kinds.Recover) || thenDelete && kind != Kinds.Terminate || retentionDelete && kind != Kinds.Delete)
             return Task.FromResult(new Contract.Admission(Contract.AdmissionOutcome.Refused));
         var window = ReceiptWindow(deduplicationWindow, keepFor);
         var deletion = kind == Kinds.Delete;
+        var recover = kind == Kinds.Recover;
+        if (recover && (due is not null || reply is not null))
+            return Task.FromResult(new Contract.Admission(Contract.AdmissionOutcome.Refused));
         var replyAddress = reply?.Address;
         if (reply is not null && (!reply.IsOpen || reply.Tenant != tenant || due is not null || retentionDelete ||
             !PostgresRootAdmission.ValidOperatorReply(replyAddress!, reply.Caller.Deadline)))
             return Task.FromResult(new Contract.Admission(Contract.AdmissionOutcome.Refused));
         return WriteAsync<Contract.Admission>(async (db, now, ct) =>
         {
+            if (recover && !db.UsesRootParkRecovery) return new(Contract.AdmissionOutcome.Refused);
             var cursor = await ReadSelectionCursorAsync(db, ct);
             var terminal = deletion ? PostgresRootSelection.OpenTerminal(cursor, selection, tenant, reference.Id) : null;
             var park = terminal is null && !retentionDelete ? PostgresRootSelection.OpenPark(cursor, selection, tenant, reference.Id) : null;
-            if (park is not { Revision: > 0, At: > 0 } && (deletion ? terminal is not { Revision: > 0 }
-                : !PostgresRootSelection.MatchesRunning(cursor, selection, tenant, reference.Id)))
+            if (park is not { Revision: > 0, At: > 0 } && (recover || (deletion ? terminal is not { Revision: > 0 }
+                : !PostgresRootSelection.MatchesRunning(cursor, selection, tenant, reference.Id))))
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
             var target = await ReadTargetAsync(db, tenant, reference.Id, ct);
             if (target is null)
