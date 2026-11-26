@@ -41,7 +41,8 @@ activated through module management.
 | **Shell** | A CShells unit of configured features; shells reload to pick up new packages. |
 | **Cluster membership** | How hosts sharing one database learn about each other. |
 
-> **Tested with:** Nuplane 0.0.11 and CShells 0.0.30 (as referenced on `main`). The include-pattern behaviour table was measured against Nuplane 0.0.9-preview.61 and has not been re-measured since.
+The host uses Nuplane 1.0.1 and CShells 0.0.31. The include-pattern behaviour table was measured
+against Nuplane 0.0.9-preview.61.
 
 ## Old section links
 

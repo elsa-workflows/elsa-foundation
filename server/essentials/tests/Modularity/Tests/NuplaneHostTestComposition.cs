@@ -12,7 +12,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Nuplane.Abstractions;
 using Nuplane.Events;
-using Nuplane.Observability;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
@@ -92,9 +91,7 @@ internal static class NuplaneHostTestComposition
 
             Observer = _services.GetServices<INuplaneObserver>().Single(observer => observer is IShellGenerationBuildParticipant);
             Participant = Assert.IsAssignableFrom<IShellGenerationBuildParticipant>(Observer);
-            Dispatcher = new ObserverEventDispatcher(
-                _services.GetServices<INuplaneObserver>(),
-                new ReconciliationLogger(new Logger<ReconciliationLogger>(Logger)));
+            Dispatcher = _services.GetRequiredService<IObserverEventDispatcher>();
         }
 
         public ConfigurationRoot Configuration { get; }

@@ -98,7 +98,7 @@ internal sealed class ChildHostProcess : IAsyncDisposable
             startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
             // Nuplane keeps its store state and the packages it installs beside the host binaries by default, which every
             // run would share.
-            startInfo.Environment["Nuplane__Setup__StateFilePath"] = Path.Join(contentRoot, ".nuplane", "store-state.json");
+            startInfo.Environment["Nuplane__StoreRegistry__StateFilePath"] = Path.Join(contentRoot, ".nuplane", "store-state.json");
             startInfo.Environment["Nuplane__FeedResolution__PackageInstallRoot"] = InstallRoot(contentRoot);
             startInfo.Environment["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information";
             foreach (var (key, value) in settings)

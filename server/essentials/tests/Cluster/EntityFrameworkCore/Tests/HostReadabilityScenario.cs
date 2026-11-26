@@ -32,8 +32,8 @@ internal static class HostReadabilityScenario
         settings[$"{ef}:ConnectionString"] = $"Data Source={membershipDatabase};Pooling=False;Default Timeout=5";
         settings[$"{ef}:CleanupPeriod"] = "00:01:00";
         settings["Elsa:Cluster:ReadabilityControl:Directory"] = controlDirectory;
-        settings["Nuplane:Setup:AutomaticReconciliation"] = automaticReconciliation.ToString();
-        settings["Nuplane:Setup:PollInterval"] = "1.00:00:00";
+        settings["Nuplane:Reconciliation:EnableAutomaticReconciliation"] = automaticReconciliation.ToString();
+        settings["Nuplane:Reconciliation:PollInterval"] = "1.00:00:00";
         settings["Nuplane:Setup:Feeds:0:Directory:Watch"] = "false";
     }
 

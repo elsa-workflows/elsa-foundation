@@ -716,7 +716,7 @@ internal static partial class WorkbenchPostgresPreview
                 System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(), "..", "..", ".."));
             start.Environment["DOTNET_ENVIRONMENT"] = "Development";
             start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
-            start.Environment["Nuplane__Setup__StateFilePath"] = Path.Combine(workspace.FullName, ".nuplane", "store-state.json");
+            start.Environment["Nuplane__StoreRegistry__StateFilePath"] = Path.Combine(workspace.FullName, ".nuplane", "store-state.json");
             start.Environment["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information";
             if (enabled)
                 start.Environment["Elsa__CorePreview__Enabled"] = "true";

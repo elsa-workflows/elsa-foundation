@@ -278,6 +278,7 @@ public sealed class EngineCapabilityCliTests : IDisposable
     private static string ModuleFeed =>
         """
           "local-packages": {
+            "Trust": "Trusted",
             "DirectoryPath": "packages",
             "IncludePatterns": [ "Acme.*" ]
           }
@@ -290,6 +291,7 @@ public sealed class EngineCapabilityCliTests : IDisposable
     private static string NamedEngineFeed =>
         $$"""
             "local-packages": {
+              "Trust": "Trusted",
               "DirectoryPath": "packages",
               "IncludePatterns": [ "Acme.*", "{{RestoreHost.EngineId(Option)}}" ]
             }

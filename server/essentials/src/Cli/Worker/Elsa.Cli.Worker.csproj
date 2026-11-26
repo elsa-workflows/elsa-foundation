@@ -29,9 +29,8 @@
          Nuplane host supplies them and a host with no Nuplane never loads them, because the only files
          that touch a Nuplane type — NuplaneLoader, NuplaneRestoreRunner, NuplaneDirectoryFeeds — are
          reached only once a caller has decided this host carries the matching package.
-         Nuplane.Sources.Directory is the same arrangement one level down: a host whose feeds are
-         directories carries it, the core package deliberately does not reference it, and the worker's one
-         call site is entered only when the host's own deps file lists it. -->
+         Older hosts may carry Nuplane.Sources.Directory separately. The worker's legacy registration
+         call site is entered only when the host's own deps file lists that package. -->
     <PackageReference Include="Nuplane" ExcludeAssets="runtime" PrivateAssets="all" />
     <PackageReference Include="Nuplane.Loading" ExcludeAssets="runtime" PrivateAssets="all" />
     <PackageReference Include="Nuplane.Sources.Directory" ExcludeAssets="runtime" PrivateAssets="all" />

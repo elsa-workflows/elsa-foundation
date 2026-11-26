@@ -110,7 +110,7 @@ internal sealed record RestoreOutcome(
 /// </remarks>
 internal static class HostPackageRestore
 {
-    /// <summary>The package a host carries when its feeds are directories rather than service indexes.</summary>
+    /// <summary>The directory feed module carried by older Nuplane hosts.</summary>
     private const string DirectoryFeedPackageId = "Nuplane.Sources.Directory";
 
     /// <summary>The package whose presence makes a host one whose modules arrive as packages at all.</summary>
@@ -287,7 +287,7 @@ internal static class HostPackageRestore
                 "restore-unavailable",
                 $"--restore needs this host's own Nuplane to populate '{target.StateFile}', and this host does not provide " +
                 $"all of it: {failure.Message} " +
-                "A host restored from directory feeds also carries Nuplane.Sources.Directory, and one that reads an " +
+                "Older hosts may use Nuplane.Sources.Directory for directory feeds, and a host that reads an " +
                 "appsettings.json carries the JSON configuration provider.");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -6,14 +6,12 @@ using System.Runtime.CompilerServices;
 namespace Elsa.Cli.Worker;
 
 /// <summary>
-/// The one call that registers a host's directory-backed feeds for a restore, and the only file in this
-/// project that names a type from <c>Nuplane.Sources.Directory</c>.
+/// Registers directory-backed feeds for legacy hosts that carry <c>Nuplane.Sources.Directory</c>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Nuplane's core <c>AddNuplane</c> skips every configured feed that declares a directory path, because
-/// directory feeds belong to a module the core package does not reference. A caller that references that
-/// module adds them back through <c>NuplaneRestoreOptions.ConfigureBuilder</c> — and must pass the
+/// Older versions of <c>AddNuplane</c> delegate directory feeds to a separate module. The worker
+/// registers them through <c>NuplaneRestoreOptions.ConfigureBuilder</c> and passes the
 /// callback's <em>own</em> second argument, the already-resolved <c>Nuplane</c> section, rather than a
 /// configuration root captured from the call site, which would make the registration helper find no keys
 /// at all.

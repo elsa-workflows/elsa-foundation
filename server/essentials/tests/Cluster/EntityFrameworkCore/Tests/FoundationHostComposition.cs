@@ -34,6 +34,7 @@ internal static class FoundationHostComposition
         // A second feed beside the host's own `packages` one, which resolves what the packages there depend on and holds
         // nothing the host loads on its own account: with no include patterns it is a source, not a list of roots.
         ["Nuplane:Setup:Feeds:1:Name"] = "closure",
+        ["Nuplane:Setup:Feeds:1:Trust"] = "Trusted",
         ["Nuplane:Setup:Feeds:1:DirectoryPath"] = feed.ClosureDirectory,
         // The one engine the module's ef-provider capability offers that this database uses.
         ["Nuplane:Capabilities:ef-provider"] = provider,

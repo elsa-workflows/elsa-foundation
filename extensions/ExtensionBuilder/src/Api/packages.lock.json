@@ -4,11 +4,11 @@
     "net10.0": {
       "Nuplane.Admin": {
         "type": "Direct",
-        "requested": "[0.0.15, )",
-        "resolved": "0.0.15",
-        "contentHash": "rn5LhqpTOc6CSW+rL5aTmrT44/49580nR6nAV9BCuXe1i+jfeFTMNd0SGECLMJBEeq6OnQ4CItcxAHsBrShRCQ==",
+        "requested": "[1.0.1, )",
+        "resolved": "1.0.1",
+        "contentHash": "7zz4M7YO1pc2URX0fUO+yuJzSRUJ9mOdKCEQ4IGe6/En+KG3HIeiWPSM68Gm/izUKebvMcEIeAbtcheVaFKxXw==",
         "dependencies": {
-          "Nuplane": "0.0.15"
+          "Nuplane": "1.0.1"
         }
       },
       "JetBrains.Annotations": {
@@ -90,8 +90,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.15",
-        "contentHash": "IGmLRHXJ/BcHWmjfilrikRFCkkJOyb5V7KoRld+yxGB0PzmWxEaBUWsz0+FXEIrmDz7lOoDESq7MI8XADRUoNA=="
+        "resolved": "1.0.1",
+        "contentHash": "B9Uud5b0LNA5QMOKeQV4Bv17OzStoaDu30YmA+zRtijAO/N0zw4eoc/YUaej+ta80LjZsVrhW1cIhMX8/1ZX5g=="
       },
       "Polly.Core": {
         "type": "Transitive",
@@ -145,7 +145,7 @@
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
-          "Nuplane.Loading.Abstractions": "[0.0.15, )"
+          "Nuplane.Loading.Abstractions": "[1.0.1, )"
         }
       },
       "elsa.foundation.identity": {
@@ -211,26 +211,26 @@
       },
       "Nuplane": {
         "type": "CentralTransitive",
-        "requested": "[0.0.15, )",
-        "resolved": "0.0.15",
-        "contentHash": "psdnr45tl3YlgI2HiRjU/EgBmO3BulZIFi9vxnYbEY9H6UA3cLL92vODg1TgNWeksHJiMUurUYuBZmeRsEVTIA==",
+        "requested": "[1.0.1, )",
+        "resolved": "1.0.1",
+        "contentHash": "JkZrd86iYOPU9MScjUSO3VRWvdrCruFNY+vxtS/gHEX+EuhT62lXuak3tsm8Y5/QArmazQ/QllsHTx5A6VBWug==",
         "dependencies": {
           "Microsoft.Extensions.Resilience": "10.1.0",
           "NuGet.Frameworks": "6.13.1",
           "NuGet.Protocol": "6.13.1",
           "NuGet.Resolver": "6.13.1",
           "NuGet.Versioning": "6.13.1",
-          "Nuplane.Abstractions": "0.0.15",
+          "Nuplane.Abstractions": "1.0.1",
           "Polly.Extensions": "8.6.5"
         }
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.15, )",
-        "resolved": "0.0.15",
-        "contentHash": "lDjC7irExdJXl2Br9kiOz9hhYewlXLEgpw8hi2S0DILX3JRbhNl/pTcj62fEntLAYa5zBMGBmO+/zezdJLRnMA==",
+        "requested": "[1.0.1, )",
+        "resolved": "1.0.1",
+        "contentHash": "lcPcEr/DU3E2K1/+f9PRKr4gZW57EaWjxCl864w1I0MUgrX2Qzk0wcNEdY+fQcTyoO8oS26X9tuD+JUhwKiLeA==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.15"
+          "Nuplane.Abstractions": "1.0.1"
         }
       },
       "System.Security.Cryptography.Pkcs": {

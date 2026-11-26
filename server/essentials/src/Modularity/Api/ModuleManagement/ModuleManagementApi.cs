@@ -257,6 +257,8 @@ public static class ModuleManagementApiEndpoints
     {
         if (string.IsNullOrWhiteSpace(feed.Name))
             return Results.BadRequest(new ModuleManagementErrorResponse("Feed name is required."));
+        if (!IsValidFeedTrust(feed.Trust))
+            return InvalidFeedTrust();
 
         var config = await ReadManagementConfigurationAsync(environment, options.Value, cancellationToken);
         if (FeedSettings(config) is JsonObject)
@@ -277,6 +279,9 @@ public static class ModuleManagementApiEndpoints
         [FromServices] IOptions<ModuleManagementApiOptions> options,
         CancellationToken cancellationToken)
     {
+        if (!IsValidFeedTrust(feed.Trust))
+            return InvalidFeedTrust();
+
         var config = await ReadManagementConfigurationAsync(environment, options.Value, cancellationToken);
         if (FeedSettings(config) is JsonObject)
             return KeyedFeedsAreReadOnly();
@@ -287,7 +292,11 @@ public static class ModuleManagementApiEndpoints
         if (IsCacheFeed(feeds[index]))
             return CacheFeedIsReadOnly(name);
 
-        feeds[index] = ToJson(feed with { Name = name });
+        var existing = ReadFeed(name, feeds[index]!.AsObject());
+        var trust = feed.Trust;
+        if (trust is null && feed.ServiceIndex == existing.ServiceIndex && feed.DirectoryPath == existing.DirectoryPath)
+            trust = existing.Trust;
+        feeds[index] = ToJson(feed with { Name = name, Trust = trust });
         await WriteManagementConfigurationAsync(environment, options.Value, config, cancellationToken);
         return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate feed registration changes."));
     }
@@ -312,6 +321,13 @@ public static class ModuleManagementApiEndpoints
         await WriteManagementConfigurationAsync(environment, options.Value, config, cancellationToken);
         return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate feed registration changes."));
     }
+
+    private static bool IsValidFeedTrust(string? trust) =>
+        trust is null || string.Equals(trust, nameof(FeedTrustLevel.Trusted), StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(trust, nameof(FeedTrustLevel.Untrusted), StringComparison.OrdinalIgnoreCase);
+
+    private static IResult InvalidFeedTrust() =>
+        Results.BadRequest(new ModuleManagementErrorResponse("Feed trust must be Trusted or Untrusted."));
 
     private static bool IsCacheFeed(JsonNode? feed) =>
         feed?["Directory"]?["Role"] is JsonValue role &&
@@ -419,7 +435,10 @@ public static class ModuleManagementApiEndpoints
             feed["IncludePatterns"]?.AsArray().Select(x => (string?)x).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().ToArray() ?? [],
             new(
                 (bool?)feed["Directory"]?["Watch"] ?? true,
-                (string?)feed["Directory"]?["DebounceWindow"] ?? "00:00:01"));
+                (string?)feed["Directory"]?["DebounceWindow"] ?? "00:00:01"))
+        {
+            Trust = (string?)feed["Trust"]
+        };
 
     private static ModuleManagementFeed[] ReadRegistryFeeds(ManagementConfiguration config) =>
         ReadFeeds(config)
@@ -566,6 +585,10 @@ public static class ModuleManagementApiEndpoints
         Rename(node, "credentials", "Credentials");
         Rename(node, "includeAll", "IncludeAll");
         Rename(node, "includePatterns", "IncludePatterns");
+        if (feed.Trust is null)
+            node.Remove("trust");
+        else
+            Rename(node, "trust", "Trust");
         if (node.Remove("directory", out var directory))
             node["Directory"] = directory;
         if (node["Directory"] is JsonObject dir)
@@ -981,7 +1004,10 @@ internal sealed record ModuleManagementFeed(
     string? Credentials,
     bool IncludeAll,
     IReadOnlyList<string> IncludePatterns,
-    ModuleManagementDirectoryFeedSettings Directory);
+    ModuleManagementDirectoryFeedSettings Directory)
+{
+    public string? Trust { get; init; }
+}
 
 internal sealed record ModuleManagementDirectoryFeedSettings(bool Watch, string DebounceWindow);
 

@@ -396,12 +396,12 @@ contribution before fetching it (`capability-unpinned`), and the CLI reports it 
 the lock file like any other root, and is never subject to `Nuplane:HostProvidedPackages`, which is
 consulted only for dependencies.
 
-Nuplane also models a desired manifest (`Nuplane:Convergence:Manifest` — a file of
+Nuplane also models a desired manifest (`Nuplane:DesiredState:Manifest` — a file of
 `{ Id, Version, SourceHint, Sha512 }` entries). Since `0.0.11-preview.83`
 ([valence-works/nuplane#76](https://github.com/valence-works/nuplane/issues/76)),
 `DesiredManifestPackageSource` is always registered as an `IDesiredPackageSource`, but the source
-itself is skipped unless `Nuplane:Convergence:Manifest:Enabled` is true AND
-`Nuplane:Convergence:Manifest:Path` is set, so it is available and opt-in rather than unregistered.
+itself is enabled by setting `Nuplane:DesiredState:Manifest:Enabled` to true and supplying
+`Nuplane:DesiredState:Manifest:Path`.
 It is not a prerequisite for feed-based deployment: exact-id include patterns plus the lock file
 cover pinning and integrity.
 

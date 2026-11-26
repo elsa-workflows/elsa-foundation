@@ -13,7 +13,6 @@
     <PackageReference Include="Nuplane" />
     <PackageReference Include="Nuplane.Admin" />
     <PackageReference Include="Nuplane.Loading" />
-    <PackageReference Include="Nuplane.Sources.Directory" />
     <!-- Typed endpoint ownership/security metadata for the opt-in health and module-management endpoints. -->
     <ProjectReference Include="../../Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
     <!-- The contract the opt-in shell-activation Attention contributor implements. -->

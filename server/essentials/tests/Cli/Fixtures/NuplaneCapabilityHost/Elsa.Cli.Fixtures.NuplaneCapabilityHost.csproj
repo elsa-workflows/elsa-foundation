@@ -18,7 +18,6 @@
     <!-- What a host whose feeds are directories actually carries: the directory-feed module and the JSON
          configuration provider that reads its own appsettings.json — the file the engine selection and the
          feed declarations both live in. -->
-    <PackageReference Include="Nuplane.Sources.Directory" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
   </ItemGroup>
 

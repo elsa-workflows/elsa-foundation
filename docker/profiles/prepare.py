@@ -272,14 +272,16 @@ def stage_configuration(configuration, production, output, allow_add_ons):
     nuplane = configuration["Nuplane"]
     nuplane["Setup"]["Feeds"] = [{
         "Name": FEED_NAME,
+        "Trust": "Trusted",
         "DirectoryPath": FEED_NAME,
         "Directory": {"Role": "Cache", "Watch": False},
     }]
-    nuplane.setdefault("Convergence", {})["Manifest"] = {"Enabled": True, "Path": f"/app/{MANIFEST_FILE}"}
+    nuplane.setdefault("DesiredState", {})["Manifest"] = {"Enabled": True, "Path": f"/app/{MANIFEST_FILE}"}
     if allow_add_ons:
         # Module management uses the first directory as its upload target.
         nuplane["Setup"]["Feeds"].insert(0, {
             "Name": "local-packages",
+            "Trust": "Trusted",
             "DirectoryPath": "packages",
             "IncludePatterns": ["*"],
             "Directory": {"Watch": True, "DebounceWindow": "00:00:01"},
