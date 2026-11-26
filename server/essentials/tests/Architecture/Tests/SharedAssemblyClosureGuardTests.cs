@@ -72,17 +72,6 @@ public sealed class SharedAssemblyClosureGuardTests
         Assert.Equal(foundationHost.Where(ProjectGraph.IsElsa), Examined(foundationHost));
         Assert.DoesNotContain("Elsa.Workflows.Runtime.Distributed", Reachable("Elsa.Foundation.Host", ElsaReferences));
 
-        // The Essentials host shares what Elsa.Foundation.Host shares, so an add-on binds the same host contracts on either
-        // host, plus the domain contracts of the features it compiles in, which Elsa.Workbench shares for the same reason: a
-        // feed add-on binds the host's copy of them instead of loading its own. Those are exactly Workbench's domain shares,
-        // less Elsa.Weaver.Core, whose feature it does not compile in.
-        var foundationContracts = foundationHost.Except(TokenStoreShares)
-            .Where(name => name != "Elsa.Modularity.Core");
-        var essentialsDomainShares = workbench.Except(foundationContracts).Where(name => name != "Elsa.Weaver.Core");
-        Assert.Equal(
-            foundationContracts.Union(essentialsDomainShares).Order(StringComparer.Ordinal),
-            SharedAssemblies(ReadNuplane("Elsa.Essentials.Host")).Order(StringComparer.Ordinal));
-
         // The edge behind the original bug, resolved from the real csproj files.
         Assert.Contains("Elsa.Events.Core", ElsaReferences["Elsa.Serialization.Core"]);
     }

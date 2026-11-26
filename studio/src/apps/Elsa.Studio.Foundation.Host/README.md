@@ -1,16 +1,16 @@
 # Elsa.Studio.Foundation.Host
 
-The bare Studio shell. It pairs with the bare server host, [`server/apps/Elsa.Foundation.Host`](../../../../server/apps/Elsa.Foundation.Host),
-and is the base for custom Studio builds: a deployable Studio where every module comes from a Nuplane feed.
+The bare Studio shell pairs with the bare server host, [`server/apps/Elsa.Foundation.Host`](../../../../server/apps/Elsa.Foundation.Host).
+Use it as a base for custom Studio builds that load add-on modules from a Nuplane feed.
 
-| Studio app | Pairs with | Compiled in |
+| Studio host or profile | Pairs with | Studio modules |
 | --- | --- | --- |
 | `Elsa.Studio.Foundation.Host` (this app) | `Elsa.Foundation.Host` | The bare shell |
-| [`Elsa.Studio.Essentials.Host`](../Elsa.Studio.Essentials.Host) | `Elsa.Essentials.Host` | The bare shell plus the modules the Essentials server serves |
+| [Essentials Docker profile](../../../docker/profiles/essentials/README.md) | [Curated Essentials server](../../../../docker/profiles/essentials-curated/README.md) | Seven curated modules from the package feed |
 | [`Elsa.Studio.Workbench.Host`](../Elsa.Studio.Workbench.Host) | `Elsa.Workbench.Host` | Every Studio module |
 
-An app decides which modules ship compiled in. It never decides which server Studio talks to: capability discovery decides which
-screens show, and each module hides itself when the backend lacks its capability.
+Each host or profile determines which Studio modules it includes. Capability discovery determines which screens appear based on
+the capabilities the configured backend advertises.
 
 ## What is compiled in
 
@@ -55,7 +55,7 @@ dotnet run --project studio/src/apps/Elsa.Studio.Foundation.Host/Elsa.Studio.Fou
 | `http://localhost:5088` | This Studio (`http` profile; the `https` profile adds `https://localhost:7029`). |
 | `https://localhost:7250` | The default backend, `Studio:BackendBaseUrl`: the `https` profile of `Elsa.Foundation.Host`. |
 
-Build the Studio frontend first (`pnpm build` in `Studio`), as for any Studio app from source. `Studio:Auth:Enabled` is `true`, so
+Build the Studio frontend first (`pnpm build` in `studio`), as for any Studio app from source. `Studio:Auth:Enabled` is `true`, so
 the module admin API needs a signed-in backend session; the server provides sign-in through its identity add-on. Point
 `Studio__BackendBaseUrl` at another server to use it with that server instead.
 
@@ -64,8 +64,8 @@ checks the index page, Home served from the shell's own assets, the module admin
 
 ## Docker image
 
-This app publishes as **`elsaworkflows/elsa-studio-foundation`**. Build it from the repository root after `pnpm build` in
-`Studio`:
+This app publishes as **`elsaworkflows/elsa-studio-foundation`**. Run `pnpm build` in `studio` first, then build the image
+from the repository root.
 
 ```bash
 docker build -f studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile -t elsa-studio-foundation:local .

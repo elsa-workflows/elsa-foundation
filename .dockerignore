@@ -51,13 +51,11 @@ tools/
 # Nuplane reconciliation state and directory-feed contents
 **/.nuplane/
 server/apps/Elsa.Workbench.Host/packages/
-server/apps/Elsa.Essentials.Host/packages/
 # Extension Builder runtime workspace (lowercase; source lives in extensions/ExtensionBuilder/)
 server/apps/Elsa.Workbench.Host/extension-builder/
 # GitHubCopilotAgent working directory (config.json is regenerated / supplied via mount)
 server/apps/Elsa.Workbench.Host/.elsa/
 studio/src/apps/Elsa.Studio.Workbench.Host/packages/
-studio/src/apps/Elsa.Studio.Essentials.Host/packages/
 studio/src/apps/Elsa.Studio.Foundation.Host/packages/
 studio/.git/
 studio/.github/

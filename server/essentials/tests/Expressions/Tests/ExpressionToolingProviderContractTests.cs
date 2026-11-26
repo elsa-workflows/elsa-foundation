@@ -192,6 +192,110 @@ public sealed class ExpressionToolingProviderContractTests
     }
 
     [Fact]
+    public async Task Typed_callback_item_hover_keeps_the_declared_type_note_without_member_diagnostics()
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var scope = CreateCallbackScope();
+        const string source = "variables.orders.filter(order => order.city)";
+        var offset = source.IndexOf("city", StringComparison.Ordinal) + 2;
+
+        var hover = await provider.GetHoverAsync(new(scope, source, new(0, offset)), CancellationToken.None);
+        var validation = await provider.ValidateAsync(new(scope, "variables.orders.filter(order => order.cty)"), CancellationToken.None);
+
+        Assert.StartsWith("city: String" + Environment.NewLine, hover.Payload!.Contents, StringComparison.Ordinal);
+        Assert.Contains(CallbackTypeNote, hover.Payload.Contents, StringComparison.Ordinal);
+        Assert.Empty(validation.Payload!.Diagnostics);
+    }
+
+    [Theory]
+    [InlineData("variables.orders.map(o => o.", "city", "home")]
+    [InlineData("variables.orders.filter(order => order.ci", "city")]
+    [InlineData("variables.orders.reduce((total, order) => order.", "city", "home")]
+    [InlineData("variables.orders.map(function (order) { return order.", "city", "home")]
+    [InlineData("variables.orders.map(order => {\n return order.home.", "street")]
+    [InlineData("variables.orders.map(item => { var item; return item.", "city", "home")]
+    [InlineData("variables.orders.map(item => `Hello ${item.", "city", "home")]
+    public async Task Typed_collection_items_complete_inside_the_callback_body(string source, params string[] labels)
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var lines = source.Split('\n');
+        var completion = await provider.GetCompletionsAsync(
+            new(CreateCallbackScope(), source, new(lines.Length - 1, lines[^1].Length)), CancellationToken.None);
+
+        Assert.Equal(labels, completion.Payload!.Items.Select(item => item.Label).ToArray());
+        Assert.All(completion.Payload.Items, item => Assert.Equal(CallbackTypeNote, item.Documentation));
+    }
+
+    [Theory]
+    [InlineData("variables.orders.map((item, index) => index.")]
+    [InlineData("variables.orders.reduce((total, item) => total.")]
+    [InlineData("variables.orders.unknownMethod(item => item.")]
+    [InlineData("variables.lookup.map(item => item.")]
+    [InlineData("variables.orders.map(item => { { const item = {}; return item.")]
+    [InlineData("variables.orders.map(item => { function inner() { if (true) { var item = {}; } return item.")]
+    public async Task Callback_completion_leaves_untyped_and_shadowed_parameters_unbound(string source)
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var result = await provider.GetCompletionsAsync(new(CreateCallbackScope(), source, new(0, source.Length)), CancellationToken.None);
+        Assert.Empty(result.Payload!.Items);
+    }
+
+    [Fact]
+    public async Task A_binding_in_another_switch_case_shadows_the_callback_item()
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var scope = CreateCallbackScope();
+        const string source = "variables.orders.map(item => { switch (mode) { case 0: return item.city; case 1: const item = {}; } })";
+        var member = source.IndexOf("city", StringComparison.Ordinal);
+
+        var completion = await provider.GetCompletionsAsync(new(scope, source, new(0, member)), CancellationToken.None);
+        var hover = await provider.GetHoverAsync(new(scope, source, new(0, member + 2)), CancellationToken.None);
+
+        Assert.Empty(completion.Payload!.Items);
+        Assert.Empty(hover.Payload!.Contents);
+    }
+
+    [Fact]
+    public async Task A_switch_discriminant_still_sees_the_callback_item()
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        const string source = "variables.orders.map(item => { switch (item.city) { default: const item = {}; } })";
+        var member = source.IndexOf("city", StringComparison.Ordinal);
+        var completion = await provider.GetCompletionsAsync(new(CreateCallbackScope(), source, new(0, member)), CancellationToken.None);
+
+        Assert.Equal(["city", "home"], completion.Payload!.Items.Select(item => item.Label));
+    }
+
+    [Theory]
+    [InlineData("variables.orders.map(item => [\"item.city\"].length)")]
+    [InlineData("variables.orders.map(item => ({ data: 1 })./* item.city */data)")]
+    [InlineData("variables.orders.reduce((total = item.city, item) => total, undefined)")]
+    [InlineData("variables.orders.map(item => class item { static property = item.city; })")]
+    [InlineData("variables.orders.map(item => { { return item.city; const item = {}; } }); const broken =")]
+    public async Task Callback_item_hover_requires_member_syntax_and_a_bound_item_at_the_cursor(string source)
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var member = source.IndexOf("city", StringComparison.Ordinal);
+        var hover = await provider.GetHoverAsync(new(CreateCallbackScope(), source, new(0, member + 2)), CancellationToken.None);
+
+        Assert.Empty(hover.Payload!.Contents);
+    }
+
+    private const string CallbackTypeNote = "From the declared type `shop.address`; the stored value may differ.";
+
+    private static ExpressionToolingRequestScope CreateCallbackScope()
+    {
+        var item = new ExpressionValueShape("shop.address", ExpressionValueKind.Object,
+            Members: [new("city", new("String", ExpressionValueKind.Scalar, false), CallbackTypeNote),
+                new("home", new("shop.street", ExpressionValueKind.Object,
+                    Members: [new("street", new("String", ExpressionValueKind.Scalar, false), CallbackTypeNote)]), CallbackTypeNote)]);
+        return CreateScope("JavaScript", [
+            new("orders", "orders", ExpressionSymbolKind.Variable, new("shop.address", ExpressionValueKind.Array, Item: item)),
+            new("lookup", "lookup", ExpressionSymbolKind.Variable, new("shop.address", ExpressionValueKind.Map, Value: item))
+        ]);
+    }
+
+    [Fact]
     public async Task Providers_resolve_dotted_activity_results_as_nested_namespaces()
     {
         var symbol = new ExpressionSymbol(

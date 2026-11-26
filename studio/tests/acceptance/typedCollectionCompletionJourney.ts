@@ -5,9 +5,8 @@ const customerAlias = "Elsa.Workbench.ActivityDataSelectionProof.Customer";
 const declaredNote = "the stored value may differ";
 
 /**
- * A variable declared as a list of a host type completes the item type's members after an index (#5708):
- * `variables.orders[0].` lists the fixture Customer's members under the activity-value profile, with the declared-type
- * note. Insert data still offers the list as a whole value.
+ * A variable declared as a list of a host type completes the fixture Customer's members after an index (#5708)
+ * and inside an inline Array callback (#5770). Insert data offers the list as a whole value.
  */
 export async function typedCollectionCompletionJourney(page: Page, info: TestInfo, capture: Capture,
   registerCleanup: (cleanup: () => Promise<void>) => void) {
@@ -100,28 +99,57 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   await expectNoOverscroll(editor, "Applied item member");
   await capture(page, info, "collection-item-applied");
 
-  // Hover on the item member carries the declared-type note.
-  const box = await editor.evaluate(content => {
-    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const at = node.textContent!.lastIndexOf("display_name");
-      if (at < 0) continue;
-      const range = document.createRange(); range.setStart(node, at + 2); range.setEnd(node, at + 8);
-      const rect = range.getBoundingClientRect(); return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-    }
-    return null;
-  });
-  expect(box, "The applied member is rendered").toBeTruthy();
-  const hovered = page.waitForResponse(response => isTooling(response) && response.url().endsWith("/hover"));
-  await page.mouse.move(box!.x, box!.y);
-  expect((await hovered).ok()).toBe(true);
-  const hover = page.locator(".cm-tooltip-hover .studio-code-editor-hover");
-  await expect(hover).toContainText("display_name");
-  await expect(hover).toContainText(declaredNote);
-  await capture(page, info, "collection-item-hover");
-  await page.mouse.move(0, 0);
-  await expect(hover).toHaveCount(0);
+  async function captureDisplayNameHover(name: string) {
+    const box = await editor.evaluate(content => {
+      const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const at = node.textContent!.lastIndexOf("display_name");
+        if (at < 0) continue;
+        const range = document.createRange(); range.setStart(node, at + 2); range.setEnd(node, at + 8);
+        const rect = range.getBoundingClientRect(); return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      }
+      return null;
+    });
+    expect(box, "The applied member is rendered").toBeTruthy();
+    const hovered = page.waitForResponse(response => isTooling(response) && response.url().endsWith("/hover"));
+    await page.mouse.move(box!.x, box!.y);
+    expect((await hovered).ok()).toBe(true);
+    const hover = page.locator(".cm-tooltip-hover .studio-code-editor-hover");
+    await expect(hover).toBeVisible();
+    await expect(hover).toContainText("display_name: String");
+    await expect(hover).toContainText(customerAlias);
+    await expect(hover).toContainText(declaredNote);
+    await capture(page, info, name);
+    await page.mouse.move(0, 0);
+    await expect(hover).toHaveCount(0);
+  }
+  await captureDisplayNameHover("collection-item-hover");
 
+  const callbackPrefix = "variables.orders.map(o => o.";
+  await editor.press("ControlOrMeta+a");
+  await page.keyboard.insertText(callbackPrefix);
+  await settled(callbackPrefix);
+  await page.keyboard.press("Escape");
+  await expect(list()).toHaveCount(0);
+  await complete(callbackPrefix);
+  await expect(list()).toBeVisible();
+  await expect(list().getByRole("option")).toHaveCount(3);
+  for (const label of ["customerId", "display_name", "nickname"]) {
+    await expect(option(label).locator(".cm-completionDetail")).toHaveText("String");
+  }
+  const callbackNote = page.locator(".cm-completionInfo");
+  await expect(callbackNote).toBeVisible();
+  await expect(callbackNote).toContainText(customerAlias);
+  await expect(callbackNote).toContainText(declaredNote);
+  await capture(page, info, "collection-callback-completion");
+  await option("display_name").click();
+  await page.keyboard.insertText(")");
+  await settled(callbackPrefix + "display_name)");
+  await captureDisplayNameHover("collection-callback-hover");
+
+  await editor.press("ControlOrMeta+a");
+  await page.keyboard.insertText("variables.orders[0].display_name");
+  await settled("variables.orders[0].display_name");
   // Insert data offers the whole list while the JavaScript editor provides advisory item members.
   await editor.press("ControlOrMeta+End");
   await page.keyboard.insertText(" + ");

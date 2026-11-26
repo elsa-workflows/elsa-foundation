@@ -1442,12 +1442,12 @@ jobs:
             ${{ runner.temp }}/studio-consumer-qualification/archive-controls/*.json
             ${{ runner.temp }}/studio-consumer-qualification/evidence/**
 
-      - name: Build standalone Studio images without publishing
-        # Every Studio flavor's Dockerfile copies its own project closure; building each one catches a missing COPY
-        # before studio-docker.yml publishes it.
+      - name: Build the Studio host images without publishing
+        # Each host Dockerfile copies its project closure. The Essentials profile is qualified as a derived image
+        # by the Studio Docker workflow.
         run: |
           set -euo pipefail
-          for app in Workbench Essentials Foundation; do
+          for app in Workbench Foundation; do
             flavor=$(tr '[:upper:]' '[:lower:]' <<< "$app")
             docker build --file "studio/src/apps/Elsa.Studio.$app.Host/Dockerfile" --build-arg "STUDIO_VERSION=$STUDIO_PACKAGE_VERSION" \
               --tag "elsa-studio-$flavor:ci-${{ github.sha }}" .

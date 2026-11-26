@@ -627,10 +627,6 @@ public sealed partial class ArchitectureGuardTests
         if (project.Name == "Elsa.Foundation.Host")
             return "server/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
 
-        // The workflow-essentials host, beside Elsa.Foundation.Host for the same reason.
-        if (project.Name == "Elsa.Essentials.Host")
-            return "server/apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj";
-
         if (RelocatedProjects.TryGetValue(project.Name, out var relocated))
             return relocated;
 
@@ -695,7 +691,7 @@ public sealed partial class ArchitectureGuardTests
 
         // Deployable host app under server/apps/ (see ExpectedProjectPath): grouped directly beneath the Apps
         // solution folder, alongside Elsa.Workbench.
-        if (project.Name is "Elsa.Foundation.Host" or "Elsa.Essentials.Host")
+        if (project.Name == "Elsa.Foundation.Host")
             return "/server/apps/";
 
         var directory = Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/');

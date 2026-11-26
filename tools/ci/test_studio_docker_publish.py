@@ -10,6 +10,7 @@ from pathlib import Path
 from textwrap import dedent
 import re
 import runpy
+from shutil import copyfile
 import subprocess
 import sys
 import tarfile
@@ -22,6 +23,7 @@ from urllib.error import HTTPError, URLError
 import studio_docker_publish as publish
 from studio_profile_candidate import saved_configs
 from studio_profile_release import runtime_children
+import verify_studio_nuget_packages as nuget
 from verify_studio_nuget_packages import _asset_contract
 
 
@@ -598,10 +600,58 @@ class StudioDockerPublishTests(unittest.TestCase):
         payload = workflow.index("Verify the selected Studio package payload")
         first_docker_build = workflow.index("Build and optionally publish versioned image tags")
         self.assertIn("tools/ci/verify-studio-assets.py", workflow[trusted:checkout])
-        self.assertIn('verify_packages(Path.cwd(), artifact, manifest["version"], verify_payload=False)', workflow[:frontend])
+        self.assertIn('verify_packages(Path.cwd(), artifact, manifest["version"], verify_payload=False, historical_source=True)',
+                      workflow[:frontend])
         self.assertLess(frontend, payload)
         self.assertLess(payload, first_docker_build)
         self.assertIn('$STUDIO_IMAGE_VALIDATORS/verify_studio_nuget_packages.py', workflow[payload:first_docker_build])
+        self.assertIn('--historical-source', workflow[payload:first_docker_build])
+
+    def test_manual_archive_verification_accepts_only_the_listed_retired_non_packable_project(self) -> None:
+        inventory = json.loads(nuget.IDENTITY_FILE.read_text())
+        projects = {item["project"] for item in inventory["non_packable_projects"]}
+        projects.update(item["project"] for item in inventory["packable_projects"])
+        paths = projects | {
+            inventory["layout_manifest"], "studio/Directory.Build.props", f'studio/{inventory["package_icon"]}',
+        }
+        extension_props = {str(Path(*Path(path).parts[:3], "Directory.Build.props"))
+                           for path in projects if path.startswith("extensions/")}
+        for studio_root in ("studio", "Studio"):
+            with self.subTest(studio_root=studio_root), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for path in paths | extension_props:
+                    checkout_path = f"{studio_root}/{path.removeprefix('studio/')}" if path.startswith("studio/") else path
+                    target = root / checkout_path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    if path in extension_props:
+                        target.write_text((REPO_ROOT / path).read_text().replace("studio/Directory.Build.props",
+                                                                                f"{studio_root}/Directory.Build.props"))
+                    else:
+                        copyfile(REPO_ROOT / path, target)
+                package_dir = root / "packages"
+                package_dir.mkdir()
+                version = "4.0.0-preview.1"
+                ids = sorted(item["id"] for item in inventory["packable_projects"])
+                for package_id in ids:
+                    nuget._write_test_package(package_dir / f"{package_id}.nupkg", package_id, version, inventory["package_icon"])
+                self.assertEqual(ids, nuget.verify_packages(root, package_dir, version, verify_payload=False))
+
+                retired = root / studio_root / "src/apps/Elsa.Studio.Essentials.Host/Elsa.Studio.Essentials.Host.csproj"
+                retired.parent.mkdir(parents=True)
+                retired.write_text("<Project><PropertyGroup><IsPackable>false</IsPackable></PropertyGroup></Project>")
+                with self.assertRaisesRegex(ValueError, "inventory mismatch"):
+                    nuget.verify_packages(root, package_dir, version, verify_payload=False)
+                self.assertEqual(ids, nuget.verify_packages(root, package_dir, version, verify_payload=False,
+                                                            historical_source=True))
+
+                unknown = retired.with_name("Elsa.Studio.Unknown.Host.csproj")
+                copyfile(retired, unknown)
+                with self.assertRaisesRegex(ValueError, "inventory mismatch"):
+                    nuget.verify_packages(root, package_dir, version, verify_payload=False, historical_source=True)
+                unknown.unlink()
+                retired.write_text("<Project><PropertyGroup><IsPackable>true</IsPackable></PropertyGroup></Project>")
+                with self.assertRaisesRegex(ValueError, "must explicitly set IsPackable=false"):
+                    nuget.verify_packages(root, package_dir, version, verify_payload=False, historical_source=True)
 
     def test_trusted_archive_verifier_accepts_both_studio_source_roots(self) -> None:
         expected = runpy.run_path(str(REPO_ROOT / "tools/ci/verify-studio-assets.py"))["EXPECTED_ASSETS"]

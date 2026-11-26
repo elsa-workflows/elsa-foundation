@@ -131,7 +131,7 @@ def _verify_pinned_layout(root: Path, inventory: dict) -> None:
         raise ValueError(f"Pinned Studio project identity mismatch; missing={missing}, unexpected={unexpected}, mismatched={mismatched}.")
 
 
-def verify_project_inventory(root: Path) -> dict:
+def verify_project_inventory(root: Path, *, historical_source: bool = False) -> dict:
     root = root.resolve()
     inventory = json.loads(IDENTITY_FILE.read_text())
     _verify_pinned_layout(root, inventory)
@@ -146,8 +146,15 @@ def verify_project_inventory(root: Path) -> dict:
             if not (root / item["project"]).is_file() and (root / previous).is_file():
                 item["project"] = previous
 
-    expected_paths = {item["project"] for item in packable + non_packable}
     actual_paths = _studio_projects(root)
+    if historical_source:
+        # Manual Docker builds can qualify artifacts produced before a non-packable app was retired.
+        retired = [
+            dict(item, project=_source_project_path(item["project"], studio))
+            for item in inventory.get("retired_non_packable_projects", [])
+        ]
+        non_packable = non_packable + [item for item in retired if item["project"] in actual_paths]
+    expected_paths = {item["project"] for item in packable + non_packable}
     if actual_paths != expected_paths:
         missing = sorted(expected_paths - actual_paths)
         unexpected = sorted(actual_paths - expected_paths)
@@ -342,8 +349,8 @@ def _verify_payload(path: Path, assets: dict[str, Path], contract=None) -> dict:
 
 
 def verify_packages(root: Path, package_dir: Path, expected_version: str | None = None, *, verify_payload: bool = True,
-                    report: dict | None = None) -> list[str]:
-    inventory = verify_project_inventory(root)
+                    report: dict | None = None, historical_source: bool = False) -> list[str]:
+    inventory = verify_project_inventory(root, historical_source=historical_source)
     package_dir = package_dir.resolve()
     if not package_dir.is_dir():
         raise ValueError(f"NuGet package directory is missing: {package_dir}.")
@@ -714,6 +721,7 @@ def main() -> None:
     parser.add_argument("--root", type=Path, default=Path.cwd(), help="consolidated repository root")
     parser.add_argument("--packages", type=Path, required=False, help="NuGet package output/artifact directory")
     parser.add_argument("--version", help="required package version from build provenance")
+    parser.add_argument("--historical-source", action="store_true", help="allow listed retired non-packable projects in an older producer checkout")
     parser.add_argument("--self-test", action="store_true", help="exercise identity, dependency, framework and asset guards")
     parser.add_argument("--report", type=Path, help="retain complete archive observations or the precise failure")
     parser.add_argument("--controls-output", type=Path, help="new owned directory for genuine positive/fault/restored archive controls")
@@ -735,7 +743,8 @@ def main() -> None:
         return
     report = {"status": "running", "stage": "archive", "toolSha256": _hash(Path(__file__).read_bytes())}
     try:
-        ids = verify_packages(args.root, args.packages, args.version, report=report)
+        ids = verify_packages(args.root, args.packages, args.version, report=report,
+                              historical_source=args.historical_source)
         report.update(status="passed", stage="complete")
         print(f"Verified the exact {len(ids)} Studio NuGet package IDs, version set, MIT license, package icon, dependency metadata and static payload bytes.")
     except (ValueError, OSError) as error:

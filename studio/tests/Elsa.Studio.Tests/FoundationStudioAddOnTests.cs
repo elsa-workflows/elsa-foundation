@@ -8,17 +8,16 @@ using System.Text.Json.Nodes;
 namespace Elsa.Studio.Tests;
 
 /// <summary>
-/// A Studio add-on installs into the running Essentials Studio from the feed, with no rebuild and no restart (#5768). The test
+/// A Studio add-on installs into the running Studio Foundation from the feed, with no rebuild or restart (#5768). The test
 /// packs the real ETL Studio module with <c>dotnet pack</c>, uploads the package the way the Modules page does, enables its
 /// feature the way the Features page does, and reads the module and its browser assets back from the same process.
 /// </summary>
 /// <remarks>
-/// ETL is a feed-only module of Studio Essentials, so <see cref="EssentialsStudioHostBootTests"/> pins that the app's build output
-/// has no copy of it: whatever the app serves for it here came through Nuplane. Studio auth is off for this host, the demo posture,
-/// because the module admin API otherwise asks the backend to validate a signed-in session and no backend runs here. The ETL
+/// The host has no compiled ETL assembly, and the test verifies the feed-loaded module's assets. Studio auth is off for
+/// this fixture because the module admin API otherwise asks the backend to validate a signed-in session. The ETL
 /// screens themselves stay capability-gated in the browser on <c>elsa.api.etl-*</c>; this test stops at the Studio host.
 /// </remarks>
-public sealed class EssentialsStudioAddOnTests : IAsyncLifetime
+public sealed class FoundationStudioAddOnTests : IAsyncLifetime
 {
     private const string ModuleId = "Elsa.Studio.Etl";
     private const string FeatureId = "EtlStudio";
@@ -32,7 +31,7 @@ public sealed class EssentialsStudioAddOnTests : IAsyncLifetime
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task An_add_on_installed_from_the_feed_loads_into_the_running_essentials_studio(bool hasEntryStyles)
+    public async Task An_add_on_installed_from_the_feed_loads_into_the_running_foundation_studio(bool hasEntryStyles)
     {
         var processId = host.ProcessId;
         Assert.DoesNotContain(ModuleId, await ModuleIdsAsync());
@@ -218,6 +217,6 @@ public sealed class EssentialsStudioAddOnTests : IAsyncLifetime
         }
     }
 
-    /// <summary>The Essentials Studio app with Studio auth off and an empty feed for each run.</summary>
-    public sealed class Host() : StudioAppProcess("Elsa.Studio.Essentials.Host", new Dictionary<string, string> { ["Studio__Auth__Enabled"] = "false" });
+    /// <summary>Studio Foundation with Studio auth off and an empty feed for each run.</summary>
+    public sealed class Host() : StudioAppProcess("Elsa.Studio.Foundation.Host", new Dictionary<string, string> { ["Studio__Auth__Enabled"] = "false" });
 }
