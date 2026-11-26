@@ -10,7 +10,8 @@ public static partial class SqliteEmbeddedHosting
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
         ArgumentOutOfRangeException.ThrowIfEqual(pageSize, int.MaxValue);
-        return new SqliteEmbeddedReads(Path.GetFullPath(databasePath), pageSize);
+        using var file = AcquireFile(databasePath);
+        return new SqliteEmbeddedReads(file.Path, pageSize);
     }
 
     private sealed class SqliteEmbeddedReads(string path, int pageSize) : Contract.IActorReads
