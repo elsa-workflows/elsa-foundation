@@ -208,7 +208,8 @@ Correlate; publish.
 - **FR-009**: The Elsa 3 converter MUST stop refusing reusable-body Set Variable, Set Output, Correlate, Set Name and
   HTTP Endpoint projections, and MUST keep refusing Finish with `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`.
 - **FR-010**: The converter MUST convert a reusable Set Output that names a declared output to the graph's Set Output of
-  that output, and MUST refuse one that names an undeclared output with a stable code and guidance. *(Open question Q3.)*
+  that output, with no synthesized variable or output mapping (Q3), and MUST refuse one that names an undeclared output
+  with a stable code and guidance.
 - **FR-011**: Studio's graph designer MUST offer Set Variable (with body targets only), Correlate and Set Name, and MUST
   focus their publish diagnostics on the node.
 - **FR-012**: The readiness guide, the Elsa 3 mapping README, the converter's guidance strings, the graph authoring
@@ -253,7 +254,7 @@ Correlate; publish.
 2. **Q2 – Finish stays refused.** Keep Finish in a body out of scope, refused with today's guidance (replace it with a
    declared outcome the caller connects to a Finish)? *Recommendation: yes.* Ending the whole caller from inside an
    activity is a different decision, and no case needs it.
-3. **Q3 – Converter Set Output becomes the graph's native Set Output.** Convert a reusable Set Output to the graph Set
-   Output intrinsic, and remove the synthesized `output.{hash}` variable plus output mapping that
-   `Elsa3ReusableOutputWriteRewrite` adds today? *Recommendation: yes.* The rewrite exists because Set Output could not
-   sit in a graph; now it can. The imported body then looks like one a Studio author builds. Pre-stable, no shim.
+3. **Q3 – Converter Set Output becomes the graph's native Set Output.** *Decided (coordinator, 2026-11-26): yes.* A
+   reusable Set Output converts to the graph Set Output intrinsic; the synthesized `output.{hash}` variable and output
+   mapping that `Elsa3ReusableOutputWriteRewrite` adds today are removed. The rewrite existed because Set Output could
+   not sit in a graph; now it can. Pre-stable, no shim.
