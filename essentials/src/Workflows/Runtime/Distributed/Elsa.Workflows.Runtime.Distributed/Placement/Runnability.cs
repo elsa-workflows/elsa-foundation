@@ -1,7 +1,7 @@
-using System.Collections.Concurrent;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
+using Elsa.Cluster.Core.Services;
 using Elsa.Cluster.InProcess;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -30,23 +30,25 @@ namespace Elsa.Workflows.Runtime.Distributed.Placement;
 /// </remarks>
 public sealed class ShellRunnabilityRegistry
 {
-    private readonly ConcurrentDictionary<string, RunnabilityEntry> _entries = new(StringComparer.Ordinal);
+    private readonly RunnabilityRegistry _registry;
 
-    public IReadOnlyList<RunnabilityEntry> Entries =>
-        _entries.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => pair.Value).ToArray();
+    public ShellRunnabilityRegistry() : this(new RunnabilityRegistry())
+    {
+    }
+
+    internal ShellRunnabilityRegistry(RunnabilityRegistry registry) => _registry = registry;
+
+    public IReadOnlyList<RunnabilityEntry> Entries => _registry.Entries;
 
     /// <summary>Records the entry of <paramref name="shell"/>, and returns whether it differs from the one before.</summary>
     public bool Record(DistributedRuntimeShell shell, RunnabilityEntry entry)
     {
         ArgumentNullException.ThrowIfNull(shell);
-        ArgumentNullException.ThrowIfNull(entry);
-        var previous = _entries.TryGetValue(shell.Instance, out var existing) ? existing : null;
-        _entries[shell.Instance] = entry;
-        return !entry.Equals(previous);
+        return _registry.Record(shell.Instance, entry);
     }
 
     /// <summary>Removes the entry of <paramref name="shell"/>, and returns whether it had one.</summary>
-    public bool Remove(DistributedRuntimeShell shell) => _entries.TryRemove(shell.Instance, out _);
+    public bool Remove(DistributedRuntimeShell shell) => _registry.Remove(shell.Instance);
 }
 
 /// <summary>The one source of the runnability section.</summary>
@@ -111,7 +113,8 @@ public static class WorkflowRuntimeRunnabilityServiceCollectionExtensions
 
         // An instance, not a type: every shell container is built from copies of these registrations, and a copied
         // instance registration is the one object all of them share.
-        services.TryAddSingleton(new ShellRunnabilityRegistry());
+        if (!HasSharedRegistry(services))
+            services.TryAddSingleton(new ShellRunnabilityRegistry());
         return services.AddShellRunnabilitySource();
     }
 
@@ -119,8 +122,19 @@ public static class WorkflowRuntimeRunnabilityServiceCollectionExtensions
     /// report: without the host's registry, the shell has its own and publishes through the in-process default.</summary>
     internal static IServiceCollection AddShellRunnabilitySource(this IServiceCollection services)
     {
-        services.TryAddSingleton<ShellRunnabilityRegistry>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IMemberReportSource<RunnabilitySection>, WorkflowRuntimeRunnabilitySource>());
+        if (HasSharedRegistry(services))
+        {
+            services.TryAddSingleton(provider => new ShellRunnabilityRegistry(provider.GetRequiredService<RunnabilityRegistry>()));
+        }
+        else
+        {
+            services.TryAddSingleton<ShellRunnabilityRegistry>();
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<IMemberReportSource<RunnabilitySection>, WorkflowRuntimeRunnabilitySource>());
+        }
+
         return services.TryAddInProcessClusterMembership();
     }
+
+    private static bool HasSharedRegistry(IServiceCollection services) =>
+        services.Any(descriptor => descriptor.ServiceType == typeof(RunnabilityRegistry) && !descriptor.IsKeyedService);
 }
