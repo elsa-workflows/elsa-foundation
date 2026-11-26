@@ -84,7 +84,7 @@ public sealed class DerivedDatasetTests : IDisposable
         var snapshot = Snapshot(commit, DatasetSource.Auto);
 
         Assert.True(snapshot.MapDerived);
-        Assert.Equal([Primitives, Tasks, "server/essentials/tests/Tasks/Elsa.Tasks.Tests.csproj", Agent], snapshot.Map.Nodes.Select(node => node.Path));
+        Assert.Equal([Agent, Primitives, Tasks, "server/essentials/tests/Tasks/Elsa.Tasks.Tests.csproj"], snapshot.Map.Nodes.Select(node => node.Path));
         Assert.Equal("A", snapshot.Map.ByPath[Primitives].Line);
         Assert.False(snapshot.Map.ByPath["server/essentials/tests/Tasks/Elsa.Tasks.Tests.csproj"].Packable);
         Assert.Contains(snapshot.Map.ByPath[Tasks].Edges, edge => edge is { Kind: MapEdgeKind.PinnedTransitive, Id: "Microsoft.Extensions.Primitives", Version: "10.0.10" });

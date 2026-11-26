@@ -162,6 +162,25 @@ jobs:
           ref: ${{ steps.ci_source.outputs.source_sha || steps.source.outputs.sha }}
           persist-credentials: false
 
+      - name: Resolve Studio paths at the verified source commit
+        id: layout
+        env:
+          FLAVOR_DOCKERFILE: ${{ steps.flavor.outputs.dockerfile }}
+        run: |
+          set -euo pipefail
+          if git cat-file -e HEAD:studio/package.json 2>/dev/null; then
+            studio_root=studio
+          elif git cat-file -e HEAD:Studio/package.json; then
+            studio_root=Studio
+          else
+            echo "::error::The verified source commit has no supported Studio product root."
+            exit 1
+          fi
+          dockerfile="$studio_root/${FLAVOR_DOCKERFILE#studio/}"
+          git cat-file -e "HEAD:$dockerfile"
+          echo "root=$studio_root" >> "$GITHUB_OUTPUT"
+          echo "dockerfile=$dockerfile" >> "$GITHUB_OUTPUT"
+
       - name: Reject a stale main image source
         if: github.event_name == 'workflow_run' || (inputs.publish == true && steps.source.outputs.head_branch == 'main')
         env:
@@ -178,7 +197,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: elsa-foundation-studio-nuget-packages
-          path: studio/packages/nuget
+          path: ${{ steps.layout.outputs.root }}/packages/nuget
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ steps.source.outputs.run_id }}
@@ -192,6 +211,7 @@ jobs:
           EXPECTED_RUN_NUMBER: ${{ steps.source.outputs.run_number }}
           EXPECTED_HEAD_BRANCH: ${{ steps.source.outputs.head_branch }}
           EXPECTED_SHA: ${{ steps.source.outputs.sha }}
+          STUDIO_ROOT: ${{ steps.layout.outputs.root }}
           PUBLISH_IMAGE: ${{ inputs.publish }}
           PREVIEW_IMAGE_TAG: ${{ inputs.preview_image_tag }}
           PUBLISHING_ENABLED: ${{ vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING }}
@@ -209,7 +229,7 @@ jobs:
           from studio_docker_publish import read_repository_preview_floor, require_preview_above_floor
           from verify_studio_nuget_packages import verify_packages
 
-          artifact = Path("studio/packages/nuget")
+          artifact = Path(os.environ["STUDIO_ROOT"]) / "packages/nuget"
           manifest_path = artifact / "studio-package-build.json"
           if not manifest_path.is_file():
               raise SystemExit("Studio package provenance manifest is missing from the selected artifact.")
@@ -279,22 +299,22 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          package_json_file: studio/package.json
+          package_json_file: ${{ steps.layout.outputs.root }}/package.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: studio/pnpm-lock.yaml
+          cache-dependency-path: ${{ steps.layout.outputs.root }}/pnpm-lock.yaml
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
-        working-directory: studio
+        working-directory: ${{ steps.layout.outputs.root }}
 
       - name: Build frontend assets
         run: pnpm build
-        working-directory: studio
+        working-directory: ${{ steps.layout.outputs.root }}
 
       - name: Verify Studio frontend assets
         run: python3 tools/ci/verify-studio-assets.py
@@ -318,7 +338,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ steps.flavor.outputs.dockerfile }}
+          file: ${{ steps.layout.outputs.dockerfile }}
           platforms: ${{ (github.event_name == 'workflow_run' || inputs.publish == true) && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.event_name == 'workflow_run' || inputs.publish == true }}
           tags: ${{ steps.image.outputs.tags }}
