@@ -10,7 +10,7 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record Target(string Actor, int Partition, bool HasCheckpoint, int? Status, bool Terminal, bool Pending);
 
-    internal Task VerifyAsync(CancellationToken token) => WriteAsync(async (db, _, ct) =>
+    internal Task<int> VerifyAsync(CancellationToken token) => WriteAsync(async (db, _, ct) =>
     {
         var issuer = await ReadIssuerAsync(db, ct);
         if (!await db.Database.SqlQuery<bool>($"""
@@ -18,7 +18,7 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
             FROM "Partitions"
             """).SingleAsync(ct))
             throw new StoreFormatException("The SQLite root issuer and installed virtual partitions must agree.");
-        return true;
+        return issuer.Partitions;
     }, token);
 
     internal Task<Contract.Admission> StartAsync(string tenant, string operation, StartSpec spec, long? due, TimeSpan? keepFor,
@@ -116,7 +116,7 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
         await EfStore.RequireSqliteRootAdmissionAsync(db, token);
         await definitions.RequireAsync(db, token);
         var now = await db.Database.SqlQueryRaw<long>(
-            """SELECT CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) AS "Value" """).SingleAsync(token);
+            "SELECT " + SqliteCommitDialect.MillisecondClock + """ AS "Value" """).SingleAsync(token);
         var result = await write(db, now, token);
         await transaction.CommitAsync(token);
         return result;

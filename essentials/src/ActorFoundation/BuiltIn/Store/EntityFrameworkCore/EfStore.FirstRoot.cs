@@ -75,6 +75,7 @@ public sealed partial class EfStore
 
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
+            if (db.UsesSqliteRootRuntime) return await BindSqliteFirstRootAsync(db, this, cancellationToken);
             // The existing transaction owns the fence. Return the exact deleted envelope for application-side
             // comparison. A missing bind or changed envelope returns false and rolls back all effects.
             var family = RootStatePrefix(db);
@@ -107,12 +108,13 @@ public sealed partial class EfStore
                 SELECT consumed.* FROM consumed JOIN bound ON bound."Id" = consumed."Target"
                 """, Wire)).AsNoTracking().ToListAsync(cancellationToken);
             if (candidates.Count != 1) return false;
-            var admitted = PostgresRootAdmission.DecodeCreator(candidates[0]);
-            return admitted.Id == Creator.Id && admitted.Target == Creator.Target && admitted.InboxKey == Creator.InboxKey &&
-                admitted.Start == Creator.Start && admitted.Payload == Creator.Payload && admitted.Due == Creator.Due &&
-                admitted.KeepUntil == Creator.KeepUntil && admitted.ReplyTo == Creator.ReplyTo &&
-                admitted.SenderCreation == Creator.SenderCreation;
+            return MatchesCreator(PostgresRootAdmission.DecodeCreator(candidates[0]));
         }
+
+        internal bool MatchesCreator(Message admitted) =>
+            admitted.Id == Creator.Id && admitted.Target == Creator.Target && admitted.InboxKey == Creator.InboxKey &&
+            admitted.Start == Creator.Start && admitted.Payload == Creator.Payload && admitted.Due == Creator.Due &&
+            admitted.KeepUntil == Creator.KeepUntil && admitted.ReplyTo == Creator.ReplyTo && admitted.SenderCreation == Creator.SenderCreation;
     }
 
     /// <summary>The manual first Running checkpoint of a generated root, with its creator as the sole input.
@@ -126,7 +128,7 @@ public sealed partial class EfStore
         PartitionFence fence, string? state, int stateVersion, string typeData,
         IReadOnlyDictionary<string, string> labels, string journal, RootJobState? jobState = null, InstanceStatus status = InstanceStatus.Running, long terminalGrowth = 0)
     {
-        if (!postgres || Engine is not null) throw new NotSupportedException("First root checkpoints require PostgreSQL.");
+        RequireQualifiedRootWriter();
         if (creator.Start is not { Parent: null, Creation: { Generation: 1, Previous: 0 } } start ||
             creator.TargetCreation != 1 || creator.Kind != Kinds.Start || creator.Target.Partition != fence.Partition ||
             creator.InboxKey != new InboxKey("root:" + creator.Target.Id) || creator.Payload != start.Input || creator.Sender is not null ||
@@ -225,14 +227,16 @@ public sealed partial class EfStore
         FormattableString query = $"""
             SELECT i."Id", b."Creation", i."State", /*root-wire*/ AS "Wire", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
                 i."History", i."Status", i."Suspended", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
-                floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
+                /*root-read-clock*/ AS "AsOf",
                 i."Jobs", i."NextJobGeneration", i."Fault"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Reference" = i."FoundationReference"
                 AND b."Actor" = i."Id" AND b."Tenant" = i."FoundationTenant"
             WHERE i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference} AND i."Partition" = b."Partition" AND NOT i."Retired"
             """;
         var physical = await db.Database.SqlQuery<PhysicalRoot>(FormattableStringFactory.Create(
-            query.Format.Replace("/*root-wire*/", db.UsesRootStableBody ? """i."FoundationStateWire" """ : "NULL::bytea", StringComparison.Ordinal),
+            query.Format.Replace("/*root-wire*/", db.UsesRootStableBody ? """i."FoundationStateWire" """ : "NULL::bytea", StringComparison.Ordinal)
+                .Replace("/*root-read-clock*/", db.UsesSqliteRootRuntime ? SqliteCommitDialect.MillisecondClock : "floor(extract(epoch from statement_timestamp()) * 1000)::bigint",
+                    StringComparison.Ordinal),
             query.GetArguments())).SingleOrDefaultAsync(cancellationToken);
         if (physical is null) return null;
         if (!physical.State.StartsWith(family, StringComparison.Ordinal))

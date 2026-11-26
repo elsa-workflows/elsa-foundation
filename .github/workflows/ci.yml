@@ -2078,6 +2078,8 @@ jobs:
           $NAT cost sqlite
           $NAT sqlite-host-lifetime checked
           $NAT sqlite-host-lifetime in-batch
+          $NAT sqlite-host-lifetime checked shipped
+          $NAT sqlite-host-lifetime in-batch shipped
           $NAT sqlite-shipped-install
           $NAT sqlite-root-ingress
 
