@@ -21,14 +21,24 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
         return issuer.Partitions;
     }, token);
 
-    internal Task<Contract.Admission> StartAsync(string tenant, string operation, StartSpec spec, long? due, TimeSpan? keepFor,
-        CancellationToken token)
+    internal async Task<Contract.Admission> StartAsync(string tenant, string operation, StartSpec spec, long? due, TimeSpan? keepFor,
+        CancellationToken token) => (await StartCoreAsync(tenant, operation, spec, due, keepFor, null, token))!;
+
+    internal async Task<string?> StartRequestAsync(HeldRootRequest request, StartSpec spec, CancellationToken token)
+    {
+        if (!request.IsOpen) throw new ArgumentException("A held SQLite start requires an open caller bound to its tenant.", nameof(request));
+        return (await StartCoreAsync(request.Tenant, request.Caller.Id, spec, null, request.KeepFor, request, token))?.Actor?.Id;
+    }
+
+    private Task<Contract.Admission?> StartCoreAsync(string tenant, string operation, StartSpec spec, long? due, TimeSpan? keepFor,
+        HeldRootRequest? reply, CancellationToken token)
     {
         RequireCreator(operation, spec);
         var window = ReceiptWindow(deduplicationWindow, keepFor);
         var digest = FoundationRootCreator.OperationDigest(operation);
-        return WriteAsync<Contract.Admission>(async (db, now, ct) =>
+        return WriteAsync<Contract.Admission?>(async (db, now, ct) =>
         {
+            if (reply is not null && reply.Caller.Deadline <= now) return null;
             var existing = await db.Database.SqlQuery<string>($"""
                 SELECT "Reference" AS "Value" FROM "FoundationRootReceipts"
                 WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= {now}
@@ -40,9 +50,9 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
             var name = tenant + "_" + Guid.NewGuid().ToString("N");
             var actor = InstanceRef.In(InstanceRef.Spread(name, issuer.Partitions), name);
             var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
-            var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, replyTo: null);
+            var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, reply?.Address);
             var (header, payload) = EncodeCreator(creator);
-            if (!FitsEnvelope(header, payload))
+            if (!FitsEnvelope(header, payload, creator.ReplyTo))
                 throw new MetadataLimitExceeded(nameof(spec), EfStore.RootContentBytes);
 
             var until = checked(now + (long)window.TotalMilliseconds);
@@ -57,27 +67,45 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
                 ON CONFLICT ("Tenant", "Operation") DO UPDATE SET "Reference" = excluded."Reference", "Until" = excluded."Until"
                 """, ct));
             await EnqueueAsync(db, actor.Id, actor.Partition, creator.InboxKey.Id, 0, creator.Kind, header, payload, due,
-                keepUntil: null, token: ct);
+                keepUntil: null, replyTo: creator.ReplyTo, token: ct);
             return new(Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(reference));
         }, token);
     }
 
-    internal Task<Contract.Admission> SendAsync(string tenant, Contract.ActorRef reference, string id, string kind, string? payload,
-        long? due, TimeSpan? keepFor, CancellationToken token)
+    internal async Task<Contract.Admission> SendAsync(string tenant, Contract.ActorRef reference, string id, string kind, string? payload,
+        long? due, TimeSpan? keepFor, CancellationToken token) =>
+        (await SendCoreAsync(tenant, reference, id, kind, payload, due, keepFor, null, token))!;
+
+    internal async Task<HeldRootAdmission> SendRequestAsync(HeldRootRequest request, string reference, string kind, string? payload,
+        CancellationToken token)
+    {
+        if (!request.IsOpen) return HeldRootAdmission.Refused;
+        return (await SendCoreAsync(request.Tenant, new(reference), request.Caller.Id, kind, payload, null, request.KeepFor, request, token))?.Outcome switch
+        {
+            Contract.AdmissionOutcome.Accepted => HeldRootAdmission.Accepted,
+            Contract.AdmissionOutcome.Duplicate => HeldRootAdmission.Duplicate,
+            null => HeldRootAdmission.Expired,
+            _ => HeldRootAdmission.Refused
+        };
+    }
+
+    private Task<Contract.Admission?> SendCoreAsync(string tenant, Contract.ActorRef reference, string id, string kind, string? payload,
+        long? due, TimeSpan? keepFor, HeldRootRequest? reply, CancellationToken token)
     {
         if (!FoundationRootCreator.IsGeneratedReference(reference.Id) || !FoundationMetadataLimits.IsOutsideMessageId(id) ||
             !FoundationMetadataLimits.IsOrdinaryKind(kind) || !FoundationMetadataLimits.FitsContent(payload))
-            return Task.FromResult(new Contract.Admission(Contract.AdmissionOutcome.Refused));
+            return Task.FromResult<Contract.Admission?>(new(Contract.AdmissionOutcome.Refused));
 
         var window = ReceiptWindow(deduplicationWindow, keepFor);
         var digest = FoundationRootCreator.OperationDigest(id);
-        return WriteAsync<Contract.Admission>(async (db, now, ct) =>
+        return WriteAsync<Contract.Admission?>(async (db, now, ct) =>
         {
             var target = await ReadTargetAsync(db, tenant, reference.Id, ct);
             if (target is null)
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
 
-            var canReceive = target.Status == (int)InstanceStatus.Running || (!target.HasCheckpoint && target.Pending);
+            var canReceive = target.Status == (int)InstanceStatus.Running || reply is null && !target.HasCheckpoint && target.Pending;
+            if (canReceive && reply is not null && reply.Caller.Deadline <= now) return null;
             var liveReceipt = (canReceive || target.Terminal || target.Status is null && db.UsesRootRetirement)
                 && await db.Database.SqlQuery<bool>($"""
                     SELECT EXISTS (SELECT 1 FROM "FoundationDirectReceipts"
@@ -88,8 +116,9 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
                 return new(Contract.AdmissionOutcome.Refused,
                     Reason: target.Status is null ? Contract.RefusalReason.TargetMismatch : null);
 
-            var (header, body, storedKind) = EncodeDirect(id, 1, kind, payload, due, held: false);
-            if (!FitsEnvelope(header, body)) return new(Contract.AdmissionOutcome.Refused);
+            var address = reply?.Address;
+            var (header, body, storedKind) = EncodeDirect(id, 1, kind, payload, due, held: address is not null);
+            if (!FitsEnvelope(header, body, address)) return new(Contract.AdmissionOutcome.Refused);
 
             var until = checked(now + (long)window.TotalMilliseconds);
             var occurrence = $"{reference.Id}/{digest}/{Guid.NewGuid():N}";
@@ -99,10 +128,23 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
                 ON CONFLICT ("Reference", "Operation") DO UPDATE SET "Until" = excluded."Until"
                 """, ct));
             await EnqueueAsync(db, target.Actor, target.Partition, occurrence, InboxKey.FoundationOccurrenceScope, storedKind,
-                header, body, due, until, ct);
+                header, body, due, until, address, ct);
             return new(Contract.AdmissionOutcome.Accepted, reference);
         }, token);
     }
+
+    internal async ValueTask<long> ReadReplyTimeAsync(CancellationToken token)
+    {
+        await using var db = create();
+        await db.Database.OpenConnectionAsync(token);
+        await EfStore.RequireSqliteRootAdmissionAsync(db, token);
+        await definitions.RequireAsync(db, token);
+        return await ReadClockAsync(db, token);
+    }
+
+    private static Task<long> ReadClockAsync(KernelDb db, CancellationToken token) =>
+        db.Database.SqlQueryRaw<long>(
+            "SELECT " + SqliteCommitDialect.MillisecondClock + """ AS "Value" """).SingleAsync(token);
 
     private async Task<T> WriteAsync<T>(Func<KernelDb, long, CancellationToken, Task<T>> write, CancellationToken token)
     {
@@ -112,12 +154,13 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
         token.ThrowIfCancellationRequested();
         // Competing callers serialize before any receipt or checkpoint is read. SQLite cannot upgrade a stale read snapshot.
         await using var transaction = ((SqliteConnection)db.Database.GetDbConnection()).BeginTransaction(deferred: false);
+        token.ThrowIfCancellationRequested();
         await using var enlistment = await db.Database.UseTransactionAsync(transaction, token);
         await EfStore.RequireSqliteRootAdmissionAsync(db, token);
         await definitions.RequireAsync(db, token);
-        var now = await db.Database.SqlQueryRaw<long>(
-            "SELECT " + SqliteCommitDialect.MillisecondClock + """ AS "Value" """).SingleAsync(token);
+        var now = await ReadClockAsync(db, token);
         var result = await write(db, now, token);
+        token.ThrowIfCancellationRequested();
         await transaction.CommitAsync(token);
         return result;
     }
@@ -155,13 +198,13 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
     }
 
     private static async Task EnqueueAsync(KernelDb db, string actor, int partition, string id, long scope, string kind,
-        string header, string? payload, long? due, long? keepUntil, CancellationToken token)
+        string header, string? payload, long? due, long? keepUntil, string? replyTo, CancellationToken token)
     {
         RequireOne(await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Seq", "Kind", "Due", "Payload", "Start",
-                "Done", "Seen", "Attempts", "Trial", "JobGeneration", "KeepUntil")
+                "Done", "Seen", "Attempts", "Trial", "JobGeneration", "KeepUntil", "ReplyTo")
             VALUES ({id}, {scope}, {actor}, {partition}, (SELECT coalesce(max("Seq"), 0) + 1 FROM "Messages"),
-                {kind}, {due ?? 0}, {payload}, {header}, 0, 0, 0, 0, 0, {keepUntil})
+                {kind}, {due ?? 0}, {payload}, {header}, 0, 0, 0, 0, 0, {keepUntil}, {replyTo})
             """, token));
     }
 
