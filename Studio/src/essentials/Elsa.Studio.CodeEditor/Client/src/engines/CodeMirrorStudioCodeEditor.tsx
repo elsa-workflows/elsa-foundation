@@ -18,8 +18,8 @@ import { useEffect, useRef } from "react";
 import { applyCodeMirrorDiagnostics } from "./codeMirrorDiagnostics";
 import { markCodeEditorReady } from "./markCodeEditorReady";
 import {
-  abortCodeMirrorCompletionRequests,
   cancelCodeMirrorIntelligence,
+  cancelPendingCodeMirrorCompletion,
   clearCodeMirrorCompletionMessage,
   createCodeMirrorCodeIntelligenceExtensions,
   dismissCodeMirrorIntelligence,
@@ -348,7 +348,7 @@ function createEntryState(props: StudioCodeEditorEngineProps, entry: CodeMirrorS
             return false;
           },
           blur: (_event, view) => {
-            abortCodeMirrorCompletionRequests(view);
+            cancelPendingCodeMirrorCompletion(view);
             clearCodeMirrorCompletionMessage(view);
             entry.runtime.explicitCompletion = false;
             entry.runtime.recentJavaScriptInput = false;
