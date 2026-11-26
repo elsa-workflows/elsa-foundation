@@ -31,27 +31,44 @@ public sealed partial class EfStore
                 SELECT 1 FROM "Instances" i
                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition"
                     AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
-                    AND NOT i."Retired" AND i."FoundationParkAt" IS NULL)
+                    AND NOT i."Retired" AND (i."FoundationParkAt" IS NULL OR
+                        m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" GLOB 'operator/*'))
             AND (m."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("m.")}))))
         """;
 
     // A staged owner leaves later operator envelopes pending. They also cannot block an earlier supported stage's FIFO.
-    private static string SqliteSupportedOperator(string columnPrefix) =>
-        $"""
-        {columnPrefix}"Id" GLOB 'operator/*' AND {columnPrefix}"ReplyTo" IS NULL
+    private static string SqliteSupportedOperator(string columnPrefix)
+    {
+        var address = $"""{columnPrefix}"ReplyTo" """;
+        var header = $"""{columnPrefix}"Start" """;
+        var wire = $"(CASE WHEN {address} IS NULL THEN {header} ELSE substr({header}, {PostgresRootAdmission.HeldOperatorPrefix.Length + 1}) END)";
+        var payload = $"substr({wire}, {PostgresRootAdmission.OperatorPrefix.Length + 1})";
+        return $"""
+        {columnPrefix}"Id" GLOB 'operator/*'
+        AND ({address} IS NULL OR {header} GLOB '{PostgresRootAdmission.HeldOperatorPrefix}*')
         AND (({columnPrefix}"Kind" = '{Kinds.Terminate}' AND
-                ({columnPrefix}"Start" GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR
-                    {columnPrefix}"Start" GLOB '{PostgresRootAdmission.TerminateThenDeletePrefix}*'))
+                ({wire} GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR {wire} GLOB '{PostgresRootAdmission.TerminateThenDeletePrefix}*'))
             OR ({columnPrefix}"Kind" = '{Kinds.Delete}' AND
-                ({columnPrefix}"Start" GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR
-                    {columnPrefix}"Start" GLOB '{PostgresRootAdmission.RetentionDeletePrefix}*')))
-        AND CASE WHEN json_valid(substr({columnPrefix}"Start", {PostgresRootAdmission.OperatorPrefix.Length + 1}))
-            THEN json_type(substr({columnPrefix}"Start", {PostgresRootAdmission.OperatorPrefix.Length + 1}), '$.Park') IS NULL ELSE 0 END
+                ({wire} GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR
+                    ({address} IS NULL AND {wire} GLOB '{PostgresRootAdmission.RetentionDeletePrefix}*'))))
+        AND CASE WHEN json_valid({payload}) THEN json_type({payload}, '$.Park') IS NULL ELSE 0 END
         """;
+    }
 
     private bool AuthoredSqliteWithholding(WorkerRoot root, RootImage current) =>
         _ordinaryRoots?.AuthoredWithholds?.Invoke(new(new(root.Reference), current.Model, root.Tenant,
             (Contract.ActorStatus)current.Status, current.Fault, null, current.TerminalAt, current.TypeData, current.Labels)) == true;
+
+    internal static Task<bool> SqliteHeldOperatorCapacityReachedAsync(KernelDb db, string actor, int partition, CancellationToken token) =>
+        db.Database.SqlQuery<bool>(WithSqliteOperatorPredicate($"""
+            SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {actor} AND "Partition" = {partition}
+                AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND NOT "Done" AND "ReplyTo" IS NOT NULL
+                AND (/*supported-operator*/) LIMIT 1 OFFSET {PostgresRootAdmission.HeldReplyLimit - 1}) AS "Value"
+            """)).SingleAsync(token);
+
+    private static FormattableString WithSqliteOperatorPredicate(FormattableString sql) =>
+        FormattableStringFactory.Create(
+            sql.Format.Replace("/*supported-operator*/", SqliteSupportedOperator(""), StringComparison.Ordinal), sql.GetArguments());
 
     private static Task<List<WorkerRoot>> ResolveSqliteWorkerRootsAsync(KernelDb db, int? partition, string[] actors,
         string[] references, CancellationToken token) =>
@@ -100,24 +117,32 @@ public sealed partial class EfStore
         if (fingerprint is null) return false;
         var pending = await ReadSqliteCreatorAsync(db, checkpoint.Tenant, checkpoint.Reference, fingerprint, token);
         if (pending is null || !checkpoint.MatchesCreator(DecodeSqliteCreator(pending))) return false;
-        if (await db.Database.ExecuteSqlInterpolatedAsync($"""
+        var parked = checkpoint.Row is { Status: InstanceStatus.Faulted, Fault: not null };
+        if (parked)
+        {
+            if (!await KeepSqliteParkInputsAsync(db, pending.Target, pending.Partition, 0, [pending.Id], token)) return false;
+        }
+        else if (await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "Id" = {pending.Id} AND "InboxScope" = 0
                 AND "Target" = {pending.Target} AND "Partition" = {pending.Partition} AND NOT "Done"
             """, token) != 1) return false;
 
-        var ended = checkpoint.Row.Status == InstanceStatus.Finished || db.RootStateFamily.Ends(checkpoint.Row.Status);
+        var ended = !parked && db.RootStateFamily.Ends(checkpoint.Row.Status);
         var family = RootStatePrefix(db);
         var revision = checkpoint.JournalRevision;
         FormattableString update = $"""
             UPDATE "Instances" SET "FoundationReference" = {checkpoint.Reference}, "FoundationTenant" = {checkpoint.Tenant},
                 "FoundationHeader" = {checkpoint.Header}, "FoundationStateWire" = {checkpoint.Wire}, "State" = {family} || "State",
                 "FoundationTerminalRevision" = CASE WHEN {ended} THEN {revision} END,
-                "FoundationTerminalAt" = CASE WHEN {ended} THEN /*sqlite-root-clock*/ END
+                "FoundationTerminalAt" = CASE WHEN {ended} THEN /*sqlite-root-clock*/ END,
+                "FoundationParkAt" = CASE WHEN {parked} THEN /*sqlite-root-clock*/ END,
+                "FoundationParkRevision" = CASE WHEN {parked} THEN {revision} END
             WHERE "Id" = {pending.Target} AND "Partition" = {pending.Partition} AND "Revision" = {revision}
                 AND "Status" = {(int)checkpoint.Row.Status} AND "FoundationReference" IS NULL
                 AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {pending.Target}))
             """;
-        return await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock(update), token) == 1;
+        return await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock(update), token) == 1 &&
+            (!parked || await VerifySqliteParkProjectionAsync(db, checkpoint.Tenant, checkpoint.Reference, revision, checkpoint.Row.Fault!, token));
     }
 
     private static async Task<bool> BindSqliteRootTurnAsync(KernelDb db, RootTurnCheckpoint turn, CancellationToken token)
@@ -192,9 +217,7 @@ public sealed partial class EfStore
                 AND ("Id" NOT GLOB 'operator/*' OR (/*supported-operator*/))
             ORDER BY "Seq" LIMIT {expected.Count}
             """;
-        var sql = UseSqliteRootClock(ready);
-        var eligible = FormattableStringFactory.Create(
-            sql.Format.Replace("/*supported-operator*/", SqliteSupportedOperator(""), StringComparison.Ordinal), sql.GetArguments());
+        var eligible = WithSqliteOperatorPredicate(UseSqliteRootClock(ready));
         var rows = await db.Messages.FromSqlInterpolated(eligible).AsNoTracking().ToListAsync(token);
         var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue: null)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(message => message.TargetCreation != actor.Creation) ||

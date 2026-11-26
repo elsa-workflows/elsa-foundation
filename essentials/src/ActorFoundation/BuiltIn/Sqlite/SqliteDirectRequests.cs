@@ -50,16 +50,53 @@ public static partial class SqliteEmbeddedHosting
 
         void IReplyTransport.Send(string destination, Reply reply) => edge.Send(destination, reply);
 
-        internal async ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind, string? payload,
-            Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken token)
+        internal ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind, string? payload,
+            Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken token) =>
+            DuringLocalOwnershipAsync(() => edge.RequestAsync(scope, target, id, kind, payload, add, request, token), token);
+
+        internal ValueTask<Contract.Reply> RequestOperatorAsync(Contract.BoundScope scope, Contract.ActorRef actor, string id, string kind,
+            Contract.OperatorCommand command, TimeSpan? keepFor, Contract.RequestOptions request, CancellationToken token) =>
+            DuringLocalOwnershipAsync(() => edge.RequestOperatorAsync(scope, id, request, keepFor,
+                (caller, ct) => admission.OperateAsync(actor, kind, command, caller, ct),
+                ct => ReadOperatorStatusAsync(scope.Tenant, actor.Id, ct), token), token);
+
+        internal ValueTask<Contract.ActorStatus?> ReadOperatorStatusAsync(string tenant, string reference, CancellationToken token) =>
+            ObserveOperatorStatusAsync(ct => admission.ReadOperatorStatusAsync(tenant, reference, ct), token);
+
+        internal static async ValueTask<Contract.ActorStatus?> ObserveOperatorStatusAsync(
+            Func<CancellationToken, ValueTask<Contract.ActorStatus?>> read, CancellationToken token)
+        {
+            // The timeout is already settled. A SQLite command can wait synchronously despite its cancellation token.
+            var allowance = TimeSpan.FromMilliseconds(100);
+            using var observation = CancellationTokenSource.CreateLinkedTokenSource(token);
+            observation.CancelAfter(allowance);
+            var readToken = observation.Token;
+            var pending = Task.Run(async () => await read(readToken), readToken);
+            try { return await pending.WaitAsync(allowance, token); }
+            catch (OperationCanceledException) when (!token.IsCancellationRequested) { return null; }
+            catch (Exception error) when (error is TimeoutException or SqliteException or StoreException ||
+                error is IOException and not SqliteHostLockException) { return null; }
+            finally
+            {
+                if (!pending.IsCompletedSuccessfully) _ = ObserveAbandonedAsync(pending);
+            }
+        }
+
+        private async ValueTask<Contract.Reply> DuringLocalOwnershipAsync(Func<ValueTask<Contract.Reply>> request, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
             using (AcquireFile(path, requests: this)) token.ThrowIfCancellationRequested();
-            try { return await edge.RequestAsync(scope, target, id, kind, payload, add, request, token); }
+            try { return await request(); }
             catch (SqliteHostLockException)
             {
                 return new(null, null, Error: "lost");
             }
+        }
+
+        private static async Task ObserveAbandonedAsync(Task operation)
+        {
+            try { await operation; }
+            catch (Exception) { } // The caller's wait has already settled.
         }
 
         private sealed class Admission(SqliteDirectRequests owner, string path, TimeSpan window) : IHeldRootAdmission
@@ -77,11 +114,21 @@ public static partial class SqliteEmbeddedHosting
                 CancellationToken token) =>
                 WriteAsync((admission, ct) => admission.SendRequestAsync(request, reference, kind, payload, ct), token);
 
+            internal Task<Contract.Admission?> OperateAsync(Contract.ActorRef actor, string kind, Contract.OperatorCommand command,
+                HeldRootRequest request, CancellationToken token) =>
+                WriteAsync((admission, ct) => admission.OperateHeldAsync(actor, kind, command, request, ct), token);
+
             public async ValueTask<Contract.ActorStatus?> ReadStatusAsync(string tenant, string reference, CancellationToken token)
             {
                 using var file = AcquireFile(path);
                 var store = new EfStore(() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions), postgres: false);
                 return (Contract.ActorStatus?)(await store.ReadFirstRootAsync(tenant, reference, token))?.Status;
+            }
+
+            internal async ValueTask<Contract.ActorStatus?> ReadOperatorStatusAsync(string tenant, string reference, CancellationToken token)
+            {
+                using var file = AcquireFile(path);
+                return await ForFile(file).ReadOperatorStatusAsync(tenant, reference, token);
             }
 
             private SqliteRootAdmission ForFile(FileLease file) =>
@@ -112,16 +159,11 @@ public static partial class SqliteEmbeddedHosting
                 try { return await write.WaitAsync(token); }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
-                    _ = ObserveCancelledWriteAsync(write);
+                    _ = ObserveAbandonedAsync(write);
                     throw;
                 }
             }
 
-            private static async Task ObserveCancelledWriteAsync(Task write)
-            {
-                try { await write; }
-                catch (Exception) { } // The caller already observed cancellation. The operation owns its rollback.
-            }
         }
     }
 }
