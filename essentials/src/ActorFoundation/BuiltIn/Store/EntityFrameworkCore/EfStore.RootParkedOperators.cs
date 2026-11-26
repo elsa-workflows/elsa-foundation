@@ -116,24 +116,26 @@ public sealed partial class EfStore
             """;
         string Row(string side) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal);
-        string End(string ended, string entries) => $$$"""
+        var keptScope = db.UsesSqliteShippedInstall ? "" : """k."InboxScope" = -4 AND """;
+        var pageKind = db.UsesSqliteShippedInstall ? """ AND NEW."FoundationParkClearingKind" = OLD."FoundationParkClearingKind" """ : "";
+        string End(string ended, string kind, string entries) => $$$"""
             ({{{ended}}} AND NOT NEW."Retired"
-                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 AND OLD."FoundationTerminalRevision" IS NULL
+                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 AND OLD."FoundationTerminalRevision" IS NULL{{{SqliteClearingKindMatches(db, $"'{kind}'")}}}
                 AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
                 AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
                 AND NEW."Jobs" IS NULL AND NEW."Children" IS NULL AND NEW."CustomHandles" IS NULL AND OLD."Fault" IS NOT NULL
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = NEW."Id")
                 AND {{{Row("NEW")}}} IS NOT DISTINCT FROM {{{Row("OLD")}}}
                 AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
-                    AND k."InboxScope" = -4 AND k."FoundationKeptBy" IS NOT NULL)
+                    AND {{{keptScope}}}k."FoundationKeptBy" IS NOT NULL)
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
                     AND j."Revision" = NEW."Revision" AND ({{{entries}}})))
             """;
         // A discard is the last page of a clearing: a single page checked protection at its Open and never discards.
         var discard = db.UsesRootRetirement ? " OR /*discard-end*/ " + End(
-            """OLD."Status" = 2 AND NEW."Status" = 2 AND NEW."Suspended" = OLD."Suspended" AND OLD."FoundationParkClearing" IS NOT NULL """,
+            """OLD."Status" = 2 AND NEW."Status" = 2 AND NEW."Suspended" = OLD."Suspended" AND OLD."FoundationParkClearing" IS NOT NULL """, Kinds.Delete,
             """j."Entries" LIKE '{{"Outcome":"protected","Disposition":"discarded",%' """) : "";
-        return End("""OLD."Status" = 2 AND NEW."Status" = 3 AND NOT NEW."Suspended" """,
+        return End("""OLD."Status" = 2 AND NEW."Status" = 3 AND NOT NEW."Suspended" """, Kinds.Terminate,
             """j."Entries" LIKE '{{"Outcome":"terminated",%' OR j."Entries" LIKE '{{"Outcome":"protected","Disposition":"terminated",%' """) + discard + $$$"""
 
             OR /*clearing-open*/ (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
@@ -142,7 +144,7 @@ public sealed partial class EfStore
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
                     AND j."Revision" = NEW."Revision" AND j."Entries" LIKE '{{"Outcome":"clearing",%'))
             OR /*clearing-page*/ (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
-                AND OLD."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkClearing" = OLD."FoundationParkClearing"
+                AND OLD."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkClearing" = OLD."FoundationParkClearing"{{{pageKind}}}
                 AND NEW."FoundationParkCleared" > OLD."FoundationParkCleared"
                 {{{Parked}}}
                 AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
@@ -176,9 +178,15 @@ public sealed partial class EfStore
     // Park retirement adds its Park mark and kept-input conditions to the common retirement footprint checks.
     // S5b-3b: a Delete retires it the same way, still Faulted; a Terminate-then-delete needs its capability.
     private static string ParkedRetirementCheckpoint(KernelDb db) => ParkedRetirementSql
-        .Replace("/*retired-status*/", db.UsesRootTerminateThenDelete ? "IN (2, 3)" : "= 2", StringComparison.Ordinal);
+        .Replace("/*retired-status*/", db.UsesRootTerminateThenDelete ? "IN (2, 3)" : "= 2", StringComparison.Ordinal)
+        .Replace("/*retired-clearing-kind*/", SqliteClearingKindMatches(db,
+            $"""CASE WHEN NEW."Status" = 3 THEN '{Kinds.Terminate}' ELSE '{Kinds.Delete}' END"""), StringComparison.Ordinal);
+
+    private static string SqliteClearingKindMatches(KernelDb db, string kind) => db.UsesSqliteShippedInstall
+        ? $""" AND (OLD."FoundationParkClearingKind" IS NULL OR OLD."FoundationParkClearingKind" = {kind})""" : "";
+
     private static readonly string ParkedRetirementSql = """
-        (OLD."Status" = 2 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationTerminalRevision" IS NULL
+        (OLD."Status" = 2 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationTerminalRevision" IS NULL/*retired-clearing-kind*/
             AND NEW."Status" /*retired-status*/ AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
             AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
             /*retire-kept*/ AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
