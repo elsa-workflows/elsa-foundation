@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, type Edge, type Node } from "@xyflow/react";
 import { AlertCircle, Fingerprint, ListTree, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
-import { StudioResultState, CopyableIdentifier, StudioShellBreadcrumbs, StudioButton, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { StudioResultState, CopyableIdentifier, StudioShellBreadcrumbs, StudioButton, StudioTimestamp, TechnicalDetails } from "@elsa-workflows/studio-ui";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
@@ -13,6 +13,7 @@ import type {
   WorkflowDefinitionSummary,
   WorkflowDraft,
   WorkflowExecutableDetails,
+  WorkflowExecutableInputBinding,
   WorkflowExecutableInputSources,
   WorkflowExecutableReference
 } from "../workflowTypes";
@@ -21,6 +22,7 @@ import { CompensationScopeDesigner } from "../graph-authoring/CompensationScopeD
 import { compensationStepsSlotId } from "../compensationScope";
 import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { formatActivitySummary } from "../activitySummary";
+import { humanizeIdentifier } from "../activityAvailability";
 import { resolveRuntimeActivityLabel as resolveActivityLabel } from "../runtimeActivityDisplay";
 import {
   buildCanvas,
@@ -597,6 +599,7 @@ function WorkflowExecutablePanelContent({ activeTab, detail, activityCatalog, gr
         </>
       ) : activeTab === "activity" ? (
         <WorkflowExecutableNodePanel
+          key={selectedFact?.executableNodeId}
           fact={selectedFact ?? null}
           displayName={selectedDisplayName}
           description={selectedPresentation?.description}
@@ -618,8 +621,7 @@ function WorkflowExecutablePanelContent({ activeTab, detail, activityCatalog, gr
 }
 
 // Read-only view of the selected node's Execution Material facts: type identity, input-binding
-// summaries (literals/expressions arrive pre-truncated; reference-typed values only name their
-// type/id, never the secret), each binding's pinned conversion plan, and output captures with theirs.
+// summaries, source details authorized by the server, pinned conversion plans and output captures.
 function WorkflowExecutableNodePanel({
   fact,
   displayName,
@@ -637,24 +639,23 @@ function WorkflowExecutableNodePanel({
   );
 
   return (
-    <section className="wf-instance-section">
-      <h4>Activity details</h4>
-      <dl className="wf-instance-meta">
-        <dt>Display name</dt>
-        <dd>{displayName}</dd>
-        {description ? (
-          <>
-            <dt>Description</dt>
-            <dd>{description}</dd>
-          </>
-        ) : null}
-        <dt>Type</dt>
-        <dd>{fact.activityType} <small>{fact.activityTypeVersion}</small></dd>
-        <dt>Executable node</dt>
-        <dd>{fact.executableNodeId}</dd>
-        <dt>Authored activity</dt>
-        <dd>{fact.authoredActivityId}</dd>
-      </dl>
+    <div className="wf-executable-activity">
+      <div className="wf-executable-activity-heading">
+        <h4>{displayName || fact.activityType}</h4>
+        {description ? <p>{description}</p> : null}
+        <TechnicalDetails label="Activity identity">
+          <dl className="wf-executable-activity-identity">
+            <dt>Type</dt>
+            <dd><code>{fact.activityType}</code></dd>
+            <dt>Version</dt>
+            <dd><code>{fact.activityTypeVersion}</code></dd>
+            <dt>Executable node</dt>
+            <dd><code>{fact.executableNodeId}</code></dd>
+            <dt>Authored activity</dt>
+            <dd><code>{fact.authoredActivityId}</code></dd>
+          </dl>
+        </TechnicalDetails>
+      </div>
       {!fact.available ? <p className="wf-instance-note">This activity is not available in this environment; the executable cannot run here.</p> : null}
       {fact.structureDiagnostics && fact.structureDiagnostics.length > 0 ? (
         <div className="wf-instance-note" role="note">
@@ -668,28 +669,23 @@ function WorkflowExecutableNodePanel({
           </ul>
         </div>
       ) : null}
-      {fact.inputBindings.length > 0 ? (
-        <dl className="wf-instance-meta wf-executable-bindings">
-          {fact.inputBindings.map(binding => (
-            <div key={binding.inputName}>
-              <dt>{binding.inputName}</dt>
-              <dd>
-                <span className="wf-chip">{binding.source}</span> {binding.summary ?? ""}
-                <ConversionPlanCaption plan={binding.conversionPlan} />
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : (
-        <p className="wf-muted">No input bindings.</p>
-      )}
+      <section className="wf-executable-activity-section">
+        <h5>Inputs</h5>
+        {fact.inputBindings.length > 0 ? (
+          <dl className="wf-executable-bindings">
+            {fact.inputBindings.map(binding => <ExecutableInputBinding key={binding.inputName} binding={binding} />)}
+          </dl>
+        ) : (
+          <p className="wf-muted">No input bindings.</p>
+        )}
+      </section>
       {fact.outputCaptures.length > 0 ? (
-        <>
-          <h4>Output captures</h4>
-          <dl className="wf-instance-meta wf-executable-bindings">
+        <section className="wf-executable-activity-section">
+          <h5>Output captures</h5>
+          <dl className="wf-executable-bindings">
             {fact.outputCaptures.map(capture => (
               <div key={capture.outputName}>
-                <dt>{capture.outputName}</dt>
+                <dt title={capture.outputName}>{humanizeIdentifier(capture.outputName)}</dt>
                 <dd>
                   {capture.storage ? <span className="wf-chip">{capture.storage}</span> : null}
                   <ConversionPlanCaption plan={capture.conversionPlan} />
@@ -697,10 +693,43 @@ function WorkflowExecutableNodePanel({
               </div>
             ))}
           </dl>
-        </>
+        </section>
       ) : null}
-    </section>
+    </div>
   );
+}
+
+function ExecutableInputBinding({ binding }: { binding: WorkflowExecutableInputBinding }) {
+  const label = humanizeIdentifier(binding.inputName);
+  const fullValue = readFullBindingValue(binding);
+  return (
+    <div>
+      <dt title={binding.inputName}>{label}</dt>
+      <dd>
+        <span className="wf-chip">{humanizeIdentifier(binding.source)}</span>
+        {binding.summary ? <code className="wf-executable-binding-value">{binding.summary}</code>
+          : <span className="wf-muted">{binding.isSensitive ? "Value hidden" : "No value preview"}</span>}
+        {fullValue !== null ? (
+          <TechnicalDetails label={`Full value for ${label}`}>
+            <code className="wf-executable-binding-value">{fullValue}</code>
+          </TechnicalDetails>
+        ) : null}
+        <ConversionPlanCaption plan={binding.conversionPlan} />
+      </dd>
+    </div>
+  );
+}
+
+function readFullBindingValue(binding: WorkflowExecutableInputBinding): string | null {
+  if (binding.isSensitive || !binding.summary?.endsWith("…")) return null;
+
+  if (binding.source === "Expression" && typeof binding.expression?.expression === "string") {
+    return binding.expression.expression;
+  }
+  if (binding.source === "Literal" && binding.literalValue !== undefined) {
+    return JSON.stringify(binding.literalValue) ?? null;
+  }
+  return null;
 }
 
 function SourceDefinitionAction({ reference, sourceDefinition, onOpen }: {

@@ -4784,10 +4784,6 @@ button.wf-reference-select {
   color: var(--studio-success-fg);
 }
 
-.wf-executable-bindings > div {
-  min-width: 0;
-}
-
 .wf-properties {
   position: relative;
   z-index: 2;
