@@ -54,6 +54,7 @@ interface CodeMirrorRuntime {
   props: StudioCodeEditorEngineProps;
   lastEmittedValue?: string;
   explicitCompletion?: boolean;
+  typedMemberCompletion?: boolean;
   tabEscapeArmed?: boolean;
 }
 
@@ -117,6 +118,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       controllerRef.current = undefined;
       markCodeEditorReady(root instanceof HTMLElement ? root : container, false);
       entry.runtime.explicitCompletion = false;
+      entry.runtime.typedMemberCompletion = false;
       entry.runtime.tabEscapeArmed = false;
       entry.state = view.state;
       setStudioCodeEditorSessionEntry(props.session, props.document.uri, entry);
@@ -188,6 +190,10 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     view.dispatch({ selection: view.state.selection });
     // Replay the shortcut after invalidating old suggestions and requests.
     if (wasExplicit && wasCompleting) startExplicitCompletion(view, runtime);
+    else if (runtime.typedMemberCompletion && !runtime.props.readOnly) {
+      // Activate CodeMirror's implicit completion after the selection dispatch cancels the previous query.
+      view.dispatch({ userEvent: "input.type" });
+    }
     // A reclaimed compact view starts at the left edge; a field the author scrolled sideways keeps its position.
     if (view.hasFocus && view.scrollDOM.scrollLeft === 0) keepCaretInEditorView(view);
   }, [props.completionProvider, props.completions, props.hoverProvider, props.signatureProvider]);
@@ -315,6 +321,7 @@ function createEntryState(props: StudioCodeEditorEngineProps, entry: CodeMirrorS
   // setState does not notify update listeners. An adopted owner state ends the previous local emission.
   entry.runtime.lastEmittedValue = undefined;
   entry.runtime.explicitCompletion = false;
+  entry.runtime.typedMemberCompletion = false;
   return EditorState.create({
       doc: props.document.value,
       selection: restoredSelection(props, entry),
@@ -343,6 +350,7 @@ function createEntryState(props: StudioCodeEditorEngineProps, entry: CodeMirrorS
           },
           blur: () => {
             entry.runtime.explicitCompletion = false;
+            entry.runtime.typedMemberCompletion = false;
             entry.runtime.tabEscapeArmed = false;
             entry.runtime.props.onBlur?.();
             return false;
@@ -430,7 +438,10 @@ function editabilityExtensions(readOnly: boolean, ariaLabel: string) {
 
 function startExplicitCompletion(view: EditorView, runtime: CodeMirrorRuntime): boolean {
   const started = startCompletion(view);
-  if (started) runtime.explicitCompletion = true;
+  if (started) {
+    runtime.explicitCompletion = true;
+    runtime.typedMemberCompletion = false;
+  }
   return started;
 }
 
@@ -461,6 +472,7 @@ function editorKeymap(runtime: CodeMirrorRuntime): KeyBinding[] {
     {
       key: "Escape",
       run: view => {
+        runtime.typedMemberCompletion = false;
         if (dismissCodeMirrorIntelligence(view)) return true;
         runtime.tabEscapeArmed = true;
         return temporarilySetTabFocusMode(view);
@@ -488,6 +500,11 @@ function handleUpdate(update: ViewUpdate, entry: CodeMirrorSessionEntry) {
   entry.state = update.state;
   const { runtime } = entry;
   if (update.docChanged || !completionStatus(update.state)) runtime.explicitCompletion = false;
+  if (update.docChanged) {
+    runtime.typedMemberCompletion = runtime.props.document.language === "javascript" && typedMemberAccess(update);
+  } else if (!update.state.selection.eq(update.startState.selection)) {
+    runtime.typedMemberCompletion = false;
+  }
   const ownerChanged = update.startState.field(ownerHistoryValue, false) !== update.state.field(ownerHistoryValue, false);
   if (!update.docChanged && !ownerChanged) return;
   entry.revision++;
@@ -509,6 +526,12 @@ function handleUpdate(update: ViewUpdate, entry: CodeMirrorSessionEntry) {
     runtime.props.onNewline?.();
     if (runtime.props.profile === "compact") runtime.props.onExpand?.();
   }
+}
+
+function typedMemberAccess(update: ViewUpdate): boolean {
+  const { empty, head } = update.state.selection.main;
+  return empty && update.transactions.some(transaction => transaction.isUserEvent("input.type")) &&
+    /[\p{ID_Continue}$)\]]\.$/u.test(update.state.sliceDoc(Math.max(0, head - 3), head));
 }
 
 function requestExpansion(runtime: CodeMirrorRuntime) {

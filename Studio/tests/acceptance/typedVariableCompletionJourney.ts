@@ -60,6 +60,7 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
       await expect(option.locator(".cm-completionDetail")).toHaveText("String");
     }
     await expect(page.locator(".cm-completionInfo")).toContainText(declaredNote);
+    await expect(page.locator(".cm-completionInfo code")).toHaveText(connectionAlias);
     await expectReadable(page.locator(".cm-completionInfo"), "Declared-type note");
     await expectUncovered(page.locator(".cm-completionInfo"), "Declared-type note");
     // The note box belongs to the completion popup; at narrow widths CodeMirror places it over the following options.
@@ -112,12 +113,20 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await page.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
   const compact = page.getByRole("textbox", { name: "JavaScript expression", exact: true });
   await expect(compact).toBeFocused();
-  await page.keyboard.insertText("variables.conn.");
+  await page.keyboard.insertText("variables.conn");
+  await expect.poll(source).toBe("variables.conn");
+  await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
+  await page.keyboard.press(".");
   await expect.poll(source).toBe("variables.conn.");
   await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
-  await complete("variables.conn.");
   await expectConnectionMembers();
   await capture(page, info, "typed-compact-completion");
+
+  // The explicit shortcut should still answer with one press after autosave.
+  await page.keyboard.press("Escape");
+  await expect(list()).toHaveCount(0);
+  await complete("variables.conn.");
+  await expectConnectionMembers();
 
   // Applying a member inserts only its name and is saved like typed text.
   await options().filter({ has: page.locator(".cm-completionLabel", { hasText: /^connection$/ }) }).click();

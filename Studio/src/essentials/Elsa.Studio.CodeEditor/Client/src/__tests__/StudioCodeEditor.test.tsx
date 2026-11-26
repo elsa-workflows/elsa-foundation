@@ -447,28 +447,36 @@ describe("StudioCodeEditor", () => {
     unmount();
   }, 20000);
 
-  it("completes JavaScript members after typing a period during a provider refresh", async () => {
+  it.each(["pending", "empty"] as const)("completes JavaScript members after a period and refresh of a %s query", async result => {
     const source = "variables.customer";
     const props = { document: codeDocument({ value: source }), languageAdapter: javaScriptLanguageAdapter };
-    const originalProvider = vi.fn(() => new Promise<never>(() => {}));
+    const originalProvider = vi.fn(({ signal }: StudioCodeCompletionRequest) => result === "pending"
+      ? new Promise<never>((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }))
+      : []);
     const refreshedProvider = vi.fn(() => [{ label: "street" }]);
     const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: originalProvider });
 
     try {
-      await waitFor(() => !!container.querySelector(".cm-editor"));
-      const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const view = EditorView.findFromDOM(content)!;
       view.dispatch({ changes: { from: source.length, insert: "." }, selection: { anchor: source.length + 1 }, userEvent: "input.type" });
       await vi.waitFor(() => {
         expect(originalProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false }));
-        expect(completionStatus(view.state)).toBe("pending");
+        expect(completionStatus(view.state)).toBe(result === "pending" ? "pending" : null);
       });
 
-      rerender({ ...props, document: { ...props.document, value: source + "." }, completionProvider: refreshedProvider });
+      const edited = { ...props, document: { ...props.document, value: source + "." } };
+      rerender({ ...edited, completionProvider: refreshedProvider });
 
       await vi.waitFor(() => {
         expect(refreshedProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false, position: source.length + 1 }));
         expect(container.querySelector(".cm-completionLabel")?.textContent).toBe("street");
       });
+      if (result === "pending") expect(originalProvider.mock.calls[0]![0].signal.aborted).toBe(true);
+      key(content, "Escape");
+      rerender({ ...edited, completionProvider: () => [{ label: "dismissed" }] });
+      expect(completionStatus(view.state)).toBeNull();
     } finally {
       unmount();
     }
