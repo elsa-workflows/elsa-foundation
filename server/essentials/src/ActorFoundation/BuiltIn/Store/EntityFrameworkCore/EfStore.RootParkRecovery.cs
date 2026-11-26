@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,7 @@ public sealed partial class EfStore
                 CHECK ("FoundationReleasedBy" IS NULL OR ("FoundationReleasedBy" > 0 AND "InboxScope" = -4));
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_Released" ON "Messages" ("Partition", "Target", "FoundationReleasedBy", "Seq")
                 WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationReleasedBy" IS NOT NULL;
+            /*composed-waiting-index*/
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootJournal_Outcome" ON "Journal" ("Partition", "Instance", "Revision")
                 WHERE {RootOutcomeEntry};
             CREATE OR REPLACE FUNCTION kernel_require_root_outcome_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $fn$
@@ -36,6 +38,10 @@ public sealed partial class EfStore
                 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.{RootOutcomeEntry})
                 EXECUTE FUNCTION kernel_require_root_outcome_checkpoint();
             """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal)
+            .Replace("/*composed-waiting-index*/", db.UsesRootComposedParkRecovery ? $"""
+                CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortWaiting" ON "Messages" ("Partition", "Due", "Seq")
+                    WHERE {CohortWaitingWork};
+                """ : "", StringComparison.Ordinal)
             .Replace("/*parked-operator-outcomes*/",
                 db.UsesRootComposedParkRecovery ? "AND " + RootParkedOutcomeCheckpoint + StoppedParkOutcomeCheckpoint : "",
                 StringComparison.Ordinal), token);
@@ -46,12 +52,126 @@ public sealed partial class EfStore
     private const string RootOutcomeEntry = "\"Entries\" LIKE '{{\"Outcome\":%'";
 
     // While released rows of the current generation are pending, the poll offers only them, in Seq order.
-    private const string RootReleasedCohortFilter = "AND " + NoEarlierReleasedCohort;
+    private const string RootReleasedCohortFilter = " AND " + NoEarlierReleasedCohort;
     private const string NoEarlierReleasedCohort = """
         NOT EXISTS (SELECT 1 FROM "Messages" c WHERE c."Partition" = m."Partition" AND c."Target" = m."Target"
             AND c."InboxScope" = -4 AND c."EventMatch" IS NULL AND NOT c."Done" AND c."FoundationReleasedBy" = i."FoundationParkGeneration"
             AND m."FoundationReleasedBy" IS DISTINCT FROM i."FoundationParkGeneration")
         """;
+
+    private bool SamplesAuthoredCohortWithholding(KernelDb db) => db.UsesRootComposedParkRecovery && !db.UsesSqliteRootRuntime &&
+        _ordinaryRoots is { Discover: true, AuthoredWithholds: not null };
+
+    private string RootPollCohortFilter(KernelDb db)
+    {
+        if (!db.UsesRootParkRecovery) return "";
+        if (!db.UsesRootComposedParkRecovery) return RootReleasedCohortFilter;
+        var withheld = SamplesAuthoredCohortWithholding(db) ? $$"""
+            OR (m."InboxScope" = {{InboxKey.FoundationOccurrenceScope}} AND m."Id" LIKE 'operator/%'
+                AND EXISTS (SELECT 1 FROM unnest({4}::text[], {5}::bigint[]) AS withheld("Actor", "Revision")
+                    WHERE withheld."Actor" = i."Id" AND withheld."Revision" = i."Revision"))
+            """ : "";
+        return $"""AND (i."FoundationParkAt" IS NOT NULL {withheld} OR {NoEarlierReleasedCohort})""";
+    }
+
+    private sealed record CohortSample(long Epoch, long Through = -1, long Due = long.MinValue, long Seq = 0);
+    private sealed record CohortCandidate(int Partition, long Through, long? Due, long? Seq, string? Actor, long? Revision,
+        string? Tenant, string? Reference, string? Header);
+    private readonly ConcurrentDictionary<int, CohortSample> _cohortSamples = new();
+    private int _cohortPartitionWindow;
+
+    private static readonly string CohortWaitingWork = $"""
+        "EventMatch" IS NULL AND NOT "Done" AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" LIKE 'operator/%'
+        """;
+
+    // Only roots with pending released inputs and waiting controls need an authored decision. The main poll accepts
+    // each decision at the same revision. A sweep fixes a sequence ceiling so new admissions cannot prevent a wrap.
+    private async Task<(string[] Actors, long[] Revisions)> ReadWithheldCohortsAsync(KernelDb db, IReadOnlyCollection<PartitionFence> fences,
+        int limit, CancellationToken token)
+    {
+        // Bound the whole owner's sample. Rotate the included partitions when there are fewer slots than fences.
+        var ordered = fences.OrderBy(fence => fence.Partition).ToArray();
+        var width = Math.Min(limit, ordered.Length);
+        if (width == 0) return ([], []);
+        var offset = width == ordered.Length ? 0 :
+            (int)((uint)(Interlocked.Add(ref _cohortPartitionWindow, width) - width) % ordered.Length);
+        var partitions = new List<int>(width);
+        var epochs = new List<long>(width);
+        var afterDue = new List<long>(width);
+        var afterSeq = new List<long>(width);
+        var through = new List<long>(width);
+        var sampled = new Dictionary<int, (long Epoch, CohortSample Previous)>(width);
+        for (var index = 0; index < width; index++)
+        {
+            var fence = ordered[(offset + index) % ordered.Length];
+            var sample = _cohortSamples.GetOrAdd(fence.Partition, _ => new(fence.Epoch));
+            if (sample.Epoch > fence.Epoch) continue;
+            partitions.Add(fence.Partition);
+            epochs.Add(fence.Epoch);
+            afterDue.Add(sample.Epoch == fence.Epoch ? sample.Due : long.MinValue);
+            afterSeq.Add(sample.Epoch == fence.Epoch ? sample.Seq : 0);
+            through.Add(sample.Epoch == fence.Epoch ? sample.Through : -1);
+            sampled.Add(fence.Partition, (fence.Epoch, sample));
+        }
+        if (partitions.Count == 0) return ([], []);
+        var candidates = await db.Database.SqlQuery<CohortCandidate>(System.Runtime.CompilerServices.FormattableStringFactory.Create(
+            $"""
+            WITH fences AS MATERIALIZED (
+                SELECT * FROM unnest({"{0}"}::integer[], {"{1}"}::bigint[], {"{2}"}::bigint[], {"{3}"}::bigint[], {"{4}"}::bigint[])
+                    AS f("Partition", "Epoch", "AfterDue", "AfterSeq", "Through")
+            ), bounds AS MATERIALIZED (
+                SELECT f."Partition", f."Epoch", f."AfterDue", f."AfterSeq",
+                    CASE WHEN f."Through" >= 0 THEN f."Through" ELSE coalesce(last."Seq", 0) END AS "Through"
+                FROM fences f LEFT JOIN LATERAL (
+                    SELECT "Seq" FROM "Messages" WHERE f."Through" < 0 AND "Partition" = f."Partition"
+                    ORDER BY "Seq" DESC LIMIT 1
+                ) last ON true
+            ), candidates AS MATERIALIZED (
+                SELECT b."Partition", b."Epoch", m."Target", m."Due", m."Seq", m."Seen"
+                FROM bounds b CROSS JOIN LATERAL (
+                    SELECT "Target", "Due", "Seq", "Seen" FROM "Messages"
+                    WHERE "Partition" = b."Partition" AND ("Due", "Seq") > (b."AfterDue", b."AfterSeq") AND "Seq" <= b."Through"
+                        AND "Due" <= floor(extract(epoch from statement_timestamp()) * 1000)::bigint AND {CohortWaitingWork}
+                    ORDER BY "Due", "Seq" LIMIT {"{5}"}
+                ) m
+            ), tail AS (
+                SELECT DISTINCT ON ("Partition") "Partition", "Due", "Seq" FROM candidates ORDER BY "Partition", "Due" DESC, "Seq" DESC
+            ), eligible AS (
+                SELECT i."Partition", i."Id" AS "Actor", i."Revision", i."FoundationTenant" AS "Tenant", i."FoundationReference" AS "Reference",
+                    i."FoundationHeader" AS "Header"
+                FROM (SELECT DISTINCT "Partition", "Target" FROM candidates WHERE "Seen" < "Epoch") w
+                JOIN "Instances" i ON i."Id" = w."Target" AND i."Partition" = w."Partition"
+                WHERE i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired"
+                    AND i."FoundationReference" IS NOT NULL AND i."FoundationParkGeneration" > 0
+                    AND EXISTS (SELECT 1 FROM "Messages" c
+                        WHERE c."Partition" = i."Partition" AND c."Target" = i."Id" AND c."EventMatch" IS NULL AND NOT c."Done"
+                            AND c."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND c."FoundationReleasedBy" = i."FoundationParkGeneration")
+            )
+            SELECT b."Partition", b."Through", t."Due", t."Seq", e."Actor", e."Revision", e."Tenant", e."Reference", e."Header"
+            FROM bounds b LEFT JOIN tail t ON t."Partition" = b."Partition"
+            LEFT JOIN eligible e ON e."Partition" = b."Partition"
+            /* root-cohort-waiting */
+            """, partitions.ToArray(), epochs.ToArray(), afterDue.ToArray(), afterSeq.ToArray(), through.ToArray(), limit / width)).ToArrayAsync(token);
+        foreach (var page in candidates.GroupBy(candidate => candidate.Partition))
+        {
+            var (epoch, previous) = sampled[page.Key];
+            var next = page.First() is { Due: { } due, Seq: { } last } row ? new CohortSample(epoch, row.Through, due, last) : new(epoch);
+            _cohortSamples.AddOrUpdate(page.Key, next, (_, current) => current.Epoch < epoch || ReferenceEquals(current, previous) ? next : current);
+        }
+        var actors = new List<string>();
+        var revisions = new List<long>();
+        foreach (var candidate in candidates)
+        {
+            if (candidate is not { Actor: { } actor, Revision: { } revision, Header: { } encoded,
+                    Reference: { } reference, Tenant: { } tenant }) continue;
+            var header = DurableKeyJson.Read<RootHeader>(encoded);
+            if (!AuthoredWithholding(new(new(reference), header.Model, tenant, Foundation.Contracts.ActorStatus.Running,
+                    null, null, null, header.TypeData, header.Labels.ToDictionary(StringComparer.Ordinal)))) continue;
+            actors.Add(actor);
+            revisions.Add(revision);
+        }
+        return (actors.ToArray(), revisions.ToArray());
+    }
 
     // The kept envelope digest: the fields a restore keeps, read the same way when polled and when bound. The envelope
     // digest leaves out KeepUntil, which a restore sets to the ordinary window from now.
