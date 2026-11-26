@@ -58,8 +58,10 @@ compatibility shims.
 
 ### Runtime (US1; FR-001 to FR-005)
 
-1. `DispatchWorkflowActivityResult` keeps `ChildWorkflowExecutionId` and gets `Output`: `JsonElement?`, with
-   `[Output(Key = "Output", Path = "output", IsRequired = false)]`.
+1. `DispatchWorkflowActivityResult` keeps `ChildWorkflowExecutionId` and gets two outputs:
+   - `Output`: `JsonElement?`, with `[Output(Key = "Output", Path = "output", IsRequired = false)]`;
+   - `Status`: `string`, with `[Output(Key = "Status", Path = "status")]`, always set to the selected outcome's name
+     (FR-004a).
    - Its `Result` property loses its `[Output]` attribute and becomes `Terminal`, a stored member that is not an
      output. Projections come only from `[Output]` properties (`ExecutableNodeCompiler`,
      `RegisterActivityTypesStartupTask`), so no capture names it. The whole-result read (`$result`,
@@ -143,9 +145,27 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
 1. **Dispatch Workflow.** `DispatchMembers(executeWorkflow: false)` replaces `Lost("Result")` with
    `CarryOutput("Result", "Output")`, the same rule `Event` uses for `Result → Payload`.
 2. **Execute Workflow.**
-   - `Result` stays `Lost("Result")`, refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`. Its message ("has no such
-     output") is now true. Give `Lost` optional per-rule message and guidance on `Elsa3MemberRule`, defaulting to
-     today's text, and give the Execute Workflow rule the FR-010 text.
+   - **D-3, the wrapped result (FR-010).** `Result` becomes `CarryOutput("Result", "Output")` with a new
+     wrapped-result marker on the rule. Value-flow lowering (`Elsa3ValueFlowLowerer`, where captured variables and
+     activity-result reads are lowered today) then handles each variable that marker captures:
+     - **The variable's writers.** If any other node writes `V`, it refuses with
+       `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` and the FR-010 guidance.
+     - **JavaScript reads** (`Elsa3ExpressionRewriter`, Acornima). It rewrites each member path on `getV()` or
+       `variables.V` per the FR-010 table:
+       - `.Output…` becomes the variable path.
+       - `.WorkflowInstanceId` becomes an `ActivityResultExpressionParameterBinding` to the node's
+         `ChildWorkflowExecutionId`. The HTTP trigger rewrite binds `Request` the same way.
+       - `.SubStatus` becomes a parameter bound to the node's `Status`, wrapped in the fixed mapping expression.
+       - `.Status` becomes `"Finished"`.
+       - `.CorrelationId` and `.WorkflowDefinitionVersionId` become `null`.
+       - A bare `getV()` becomes the object literal with Elsa 3's keys.
+     - **Liquid reads** (Fluid). It rewrites the same member paths. A whole-value Liquid read is refused.
+     - **A direct binding of `V`** into another activity's input is replaced by a JavaScript expression that builds the
+       object literal.
+     - **Refused reads** get the FR-010 per-read text, through an optional per-rule message and guidance on
+       `Elsa3MemberRule` that defaults to today's text:
+       - a parameter whose activity-result availability is not `Definite`;
+       - any other member of `V`.
    - `WaitForCompletion` becomes `Structure("WaitForCompletion", Elsa3MemberKind.Input)`. Implement the existing
      `ExecuteWorkflowAsDispatch` rewrite kind, which is declared but has no `IElsa3NodeRewrite` today, beside the other
      rewrites in `ActivityMap/Rewrites/`. Register it in `Elsa3MappingFeature` like the others. The rewrite must emit

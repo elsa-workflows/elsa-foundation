@@ -51,12 +51,14 @@ the same gap:
 The specification has two parts:
 
 - **Elsa 4 runtime.** Dispatch Workflow gets one data output, `Output`: the completed child's named outputs as one
-  JSON object, holding the child's committed values unchanged. The `Result` output is removed. Its status repeats the
+  JSON object, holding the child's committed values unchanged. It also gets a `Status` output: the status the
+  outcome names, as data a later step can read. The `Result` output is removed. Its status repeats the
   outcome, and its `outputs` were a diagnostics view of the same values, so an author would see two outputs holding
   nearly the same thing. The terminal status and the safe diagnostics stay in the activity's stored result. They are
   not a named output, but the whole-result read (`$result`) still reaches them, as it reaches `Result` today.
-- **Converter.** The Elsa 3 converter carries an awaited Dispatch Workflow's `Result` to `Output`. It refuses an Execute
-  Workflow `Result` capture with guidance, and it routes `Done` the way Elsa 3 did.
+- **Converter.** The Elsa 3 converter carries an awaited Dispatch Workflow's `Result` to `Output`. It converts an
+  Execute Workflow `Result` capture and every read of it: each read becomes the Elsa 4 value it stood for. It routes
+  `Done` the way Elsa 3 did.
 
 ### Build on #4229, not beside it
 
@@ -202,8 +204,17 @@ expression, each followed by a node on `Done`. Run each with a child that comple
    a literal true omits the sentence.
 3. **Given** a child that completes or faults, **When** the converted parent runs, **Then** the node on Elsa 3's `Done`
    runs in both cases.
-4. **Given** an Execute Workflow node that captures `Result`, **When** it is converted, **Then** it is refused with
-   `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` and the guidance in FR-010.
+4. **Given** an Execute Workflow node that captures `Result` into `Credit`, and scripts that read
+   `getCredit().Output.Decision`, `getCredit().SubStatus`, `getCredit().WorkflowInstanceId` and `toJson(getCredit())`,
+   **When** it is converted and run with a child that completes, **Then** the reads return:
+   - the child's `Decision`;
+   - `"Finished"`;
+   - the child's execution id;
+   - an object with Elsa 3's keys holding those values.
+
+   With a child that faults, `SubStatus` reads `"Faulted"` (FR-010).
+5. **Given** a captured `Result` variable that another node also writes, **When** it is converted, **Then** it is refused
+   with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` and guidance that names the other writer.
 
 ---
 
@@ -283,8 +294,8 @@ faults.
     - no value.
   - A completed child with no outputs gives `{}`.
   - The values MUST be replay-stable: a resumed or retried parent gets the same `Output` (spec 099 FR-008).
-- **FR-004**: Dispatch Workflow MUST NOT declare a `Result` output. Its outputs are `ChildWorkflowExecutionId` and
-  `Output`, and the outcome carries the terminal status.
+- **FR-004**: Dispatch Workflow MUST NOT declare a `Result` output. Its outputs are `ChildWorkflowExecutionId`, `Output`
+  and `Status` (FR-004a).
   - The safe terminal result MUST stay in the activity's stored result as a member that is not an output: the status,
     the allow-listed fault and cancellation diagnostics (spec 100 FR-004 to FR-006), and the child-control transport.
     The whole-result read (`$result`) still reaches it, as it reaches `Result` today. That is accepted, because spec 100
@@ -306,8 +317,14 @@ faults.
 
     Each of those specs gets one note under its status line that cites spec 1245 and lists its superseded parts. Their
     text is otherwise unchanged.
-- **FR-005**: The Dispatch Workflow designer surface MUST show `Output` as a capturable output and no longer show
-  `Result`. Every consumer of the Dispatch outputs MUST be updated:
+- **FR-004a**: Dispatch Workflow MUST declare a `Status` output, a string that is always produced.
+  - Its value is the outcome the activity selected: `Dispatched`, `Completed`, `Faulted`, `Cancelled` or
+    `DispatchFailed`.
+  - It is the kernel's `DispatchResult.Status`.
+  - The outcome routes the flow. `Status` lets a later step read what happened when several outcomes lead to the same
+    node, which is what a converted Elsa 3 `Done` does.
+- **FR-005**: The Dispatch Workflow designer surface MUST show `Output` and `Status` as capturable outputs and no longer
+  show `Result`. Every consumer of the Dispatch outputs MUST be updated:
   - the activity contract surface baseline (`activity-contract-surface.baseline.json`, which
     `ActivityContractSurfaceSnapshotTests` checks);
   - the Dispatch Workflow `EXTENSION_POINTS.md` and `README.md`, which describe policy-safe outputs and redacted
@@ -327,20 +344,33 @@ faults.
   Elsa 3 value is anything but literal true (unset, null, literal false or bound), the warning MUST also say that Elsa 4
   waits for a child that suspends where Elsa 3 continued.
 - **FR-009**: An Elsa 3 Execute Workflow's `Done` MUST map to `Completed` and `Faulted`.
-- **FR-010**: An Elsa 3 Execute Workflow `Result` capture MUST be refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`.
-  Elsa 4 Dispatch Workflow has no `Result` output. The lost-output rule's message and guidance are generic today, so the
-  rule MUST take per-rule text.
-  - The message MUST say that Elsa 3's result wraps the child's output with its instance id and status, and that Elsa 4
-    returns these separately.
-  - The guidance MUST name both ways forward: replace the node in Elsa 3 with a Dispatch Workflow that waits for
-    completion (its result is the child's output alone and converts per FR-006), or remove the capture, convert, and
-    capture `Output` in Elsa 4.
-  - The guidance MUST give the read mapping:
-    - `Result.Output.X` becomes `Output.X`;
-    - `Result.WorkflowInstanceId` becomes `ChildWorkflowExecutionId`;
-    - `Result.Status` or `Result.SubStatus` becomes the selected outcome;
-    - `Result.CorrelationId` and `Result.WorkflowDefinitionVersionId` were never set by Elsa 3, so they have no
-      counterpart.
+- **FR-010**: An Elsa 3 Execute Workflow `Result` capture MUST convert, and every read of the captured variable MUST
+  convert with it. An Elsa 3 user cannot prepare for anything else: Execute Workflow declares only `Done`, and it has no
+  output but `Result`. So a refusal would block the import with no fix on the Elsa 3 side.
+  - The node captures `Output` into the same variable `V`.
+  - Each read of `V` is rewritten to the Elsa 4 value it stood for. The rewrite reads the dispatch node's own outputs
+    through activity-output parameters, as the converter already does for other activity results:
+
+    | Elsa 3 read of `V` | Elsa 4 |
+    |---|---|
+    | `.Output`, `.Output.X` | `variables.V`, `variables.V.X` |
+    | `.WorkflowInstanceId` | the node's `ChildWorkflowExecutionId` output |
+    | `.Status` | `"Finished"`. Elsa 3 continued an awaited parent only once the child had finished, and a faulted child counts as finished; Elsa 4 always waits. |
+    | `.SubStatus` | the node's `Status` output (FR-004a), mapped: `Completed` → `"Finished"`; `Faulted` and `DispatchFailed` → `"Faulted"`; `Cancelled` → `"Cancelled"` |
+    | `.CorrelationId`, `.WorkflowDefinitionVersionId` | `null`, which is what Elsa 3 always held |
+    | the whole value in a script (`toJson(getV())`, passing `getV()` on) | an object built from the rows above, with Elsa 3's keys: `{ WorkflowDefinitionVersionId, WorkflowInstanceId, CorrelationId, Status, SubStatus, Output }` |
+    | the whole value bound directly into another activity's input | that binding becomes a JavaScript expression that builds the same object |
+
+  - JavaScript and Liquid member reads both convert. A Liquid read of the whole value is refused, because Liquid cannot
+    build an object.
+  - Four cases are refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`. The lost-output rule takes per-rule text for
+    them, and the guidance names the read and the reason:
+    - `V` has another writer, so its reads would see two shapes;
+    - a read happens where the dispatch has not definitely run before it (the activity-output parameter is not
+      definite). Elsa 3 read `V`'s earlier value there;
+    - a read of any other member `X` of `V`. Elsa 3 had that only in its bare-dictionary shape, after a child that
+      suspended, so the intent is ambiguous;
+    - a Liquid read of the whole value.
 
 **Differences, tests and records**
 
@@ -361,12 +391,15 @@ faults.
   current core, including restart of a waiting parent, where the existing waited-dispatch tests already run.
 - **FR-013**: The S-15 ledger MUST be updated in the S-15 session, not in this PR.
   - The adjusted dispatch root no longer needs its `result` capture removed.
-  - The Execute Workflow root stays refused, with the FR-010 guidance and the existing dynamic `WorkflowDefinitionId`
-    refusal.
-  - Any new adjusted copy needs the coordinator's approval.
+  - The Execute Workflow root's whole-value read converts (FR-010). The root also sets `workflowDefinitionId` from a
+    script, which Elsa 4 refuses because it pins the child at publish.
+  - On 2026-11-26 the coordinator approved an adjusted copy that sets the child id as a literal. No other edit is
+    needed.
+  - Any other adjusted copy needs the coordinator's approval.
 
 ### Key Entities
 
+- **Dispatch status** (`Status`): the selected outcome's name, as a string.
 - **Dispatch output object** (`Output`): the completed child's named outputs, name → JSON value, without outputs whose
   value policy protects them (FR-003). Its shape is the kernel's `DispatchResult.Output`.
 - **Terminal result** (stored, not an output): the child execution id, the terminal status, the allow-listed
@@ -383,6 +416,9 @@ the current core but are refused or behave differently on the kernel:
    needs the Native `Output` to be absent, not null, unless the child finished normally. Today it is not:
    - `ChildDone.Output` is passed on for any status;
    - `Dispatched` completes with an explicit `null` (`DispatchResult(null, "Dispatched")`), which a capture writes.
+
+   The Native `Status` is `"Finished"` for a child that completed. FR-004a names it `Completed`, after the outcome.
+   The kernel mapping should translate it, or the kernel should adopt `Completed`.
 2. **Children on PostgreSQL, and `Children: true` on the Workbench Core Preview.** The #5794 description names this
    slice "PostgreSQL child workflows (Dispatch)". It is not filed yet. Until it lands, the Workbench refuses Dispatch at
    publish whenever the Core Preview publications are on.
@@ -396,12 +432,13 @@ the current core but are refused or behave differently on the kernel:
 
 ### Measurable Outcomes
 
-- **SC-001**: For the two Problem section examples, the awaited Dispatch Workflow converts with no diagnostic other than
-  existing ones, and the Execute Workflow capture is refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` and the FR-010
-  guidance. Converter tests pin each diagnostic.
+- **SC-001**: Both Problem section examples convert with no diagnostic other than existing ones, and their reads
+  return the child's values when run. Each FR-010 table row and each refusal has a converter test, and each row has a
+  run-time test.
 - **SC-002**: With the `result` capture restored in the adjusted S-15 dispatch root, every output assertion in
   `dispatch-workflow-awaitCompletion` and `dispatch-workflow-handling-input-output` passes on the default Workbench,
-  once #5818 is fixed.
+  once #5818 is fixed. With the literal child id in the adjusted Execute Workflow root, every assertion in
+  `composition/execute-workflow` passes.
 - **SC-003**: 100% of the FR-001 to FR-004 cases pass on the current core with the real workflow output source and
   default diagnostics settings, including a waiting parent that resumes after a restart.
 - **SC-004**: No existing waited-dispatch, Dispatch Workflow contract or Elsa 3 converter test changes behaviour, except
@@ -417,6 +454,7 @@ the current core but are refused or behave differently on the kernel:
   FR-003 replaces the policy-filtered read with a read of the values themselves.
 - An output that is absent leaves its capture's variable unchanged (`RuntimeOutputCaptureProjector`). Elsa 3 behaved
   the same way when it never set `Result`.
-- Pre-stable: the Dispatch Workflow contract gains `Output` and loses `Result` with no compatibility work.
+- Pre-stable: the Dispatch Workflow contract gains `Output` and `Status` and loses `Result`, with no compatibility
+  work.
 - Execute Workflow's in-process, synchronous run is not kept. The child is a durable dispatch (spec 236), and the
   existing behaviour warning says so.

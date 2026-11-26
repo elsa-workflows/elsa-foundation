@@ -16,7 +16,9 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
     `IRuntimeChildControlCompletion` reads `Terminal?.Control`.
   - `DispatchWorkflowResult` loses `Outputs`, and `DispatchWorkflowOutput` is deleted. The enricher stops reading
     `IWorkflowOutputSource` for dispatch.
-  - Contract test: the outputs are exactly `ChildWorkflowExecutionId` and `Output`.
+  - Contract test: the outputs are exactly `ChildWorkflowExecutionId`, `Output` and `Status`.
+  - Add `Status` (FR-004a). Run-time tests: it equals the selected outcome for `Dispatched`, `Completed`, `Faulted`,
+    `Cancelled` and `DispatchFailed`.
   - Update the consumers in plan Runtime step 6:
     - the contract surface baseline;
     - the Dispatch Workflow `EXTENSION_POINTS.md` and `README.md`;
@@ -79,12 +81,16 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
 - [ ] T007 Outcomes (FR-007, FR-009). Dispatch Workflow: `Done` goes to `Dispatched`, `Completed` and `Faulted`.
   Execute Workflow: `Done` goes to `Completed` and `Faulted`. `Cancelled` stays unmapped. Converter tests pin the
   emitted connections.
-- [ ] T008 Give `Lost` optional per-rule message and guidance on `Elsa3MemberRule`, with today's text as the default.
-  Existing lost-output tests stay unchanged.
-- [ ] T009 Execute Workflow: `Lost("Result")` with the FR-010 message and guidance
-  (`ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`). A converter test
-  asserts the code, both ways forward, and the read mapping (`Result.Output.X` to `Output.X`, `WorkflowInstanceId` to
-  `ChildWorkflowExecutionId`, status to outcome).
+- [ ] T008 Give `Elsa3MemberRule` optional per-rule message and guidance, with today's text as the default. Existing
+  lost-output tests stay unchanged.
+- [ ] T009 Execute Workflow wrapped result (FR-010, plan D-3).
+  - `CarryOutput("Result", "Output")` with the wrapped-result marker.
+  - Lowering rewrites every read of the captured variable: JavaScript member paths, Liquid member paths, a bare
+    `getV()`, and a direct binding of `V`.
+  - Converter tests: one per FR-010 table row, in JavaScript and Liquid where both apply, and one per refusal (another
+    writer, not definite, an unknown member, a whole-value Liquid read).
+  - Run-time tests: US3 scenario 4 with a child that completes and with one that faults. The whole-value read is
+    checked against the Elsa 3 key set.
 - [ ] T010 Implement the `ExecuteWorkflowAsDispatch` rewrite (`ActivityMap/Rewrites/`) and register it in
   `Elsa3MappingFeature`, with a feature-registration test. `WaitForCompletion` becomes
   `Structure("WaitForCompletion", Elsa3MemberKind.Input)`, and the rewrite emits it with `SetProperty`, so
