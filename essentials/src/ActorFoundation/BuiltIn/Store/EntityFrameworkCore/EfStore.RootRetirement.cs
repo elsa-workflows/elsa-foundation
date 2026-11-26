@@ -76,9 +76,10 @@ public sealed partial class EfStore
         var current = await ReadLiveCompoundRootAsync(db, root, lockRow: false, token);
         if (current is null) return null;
         var header = DurableKeyJson.Read<RootHeader>(current.Header);
+        var fault = db.UsesRootParkArrivals && current.Fault is not null ? DurableKeyJson.Read<string>(current.Fault) : null;
         return new(root, current, command, RootSelfIssuer, AuthoredWithholding(new(new(root.Reference), header.Model,
-            root.Tenant, Contract.ActorStatus.Running, current.Fault, null, null, header.TypeData,
-            header.Labels.ToDictionary(label => label.Key, label => label.Value, StringComparer.Ordinal))));
+            root.Tenant, Contract.ActorStatus.Running, fault, null, null, header.TypeData,
+            header.Labels.ToDictionary(StringComparer.Ordinal))));
     }
 
     // S5b-3a: a Terminate-then-delete of a parked root clears the Park's last kept rows, ends it Cancelled and retires it in
