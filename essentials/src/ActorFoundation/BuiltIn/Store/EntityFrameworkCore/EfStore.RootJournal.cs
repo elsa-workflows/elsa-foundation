@@ -15,10 +15,13 @@ public sealed partial class EfStore
     internal async Task<RootJournalPage> ReadRootJournalAsync(string tenant, string reference, long fromPosition, int limit,
         CancellationToken cancellationToken = default)
     {
-        if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root journal reads require PostgreSQL.");
+        if (Engine is not null) throw new NotSupportedException("Qualified root journal reads require the local store.");
         ArgumentOutOfRangeException.ThrowIfNegative(fromPosition);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
         await using var db = create();
+        if (!postgres && db.UsesSqliteRootRuntime)
+            return await ReadSqliteRootJournalAsync(db, tenant, reference, fromPosition, limit, cancellationToken);
+        if (!postgres) throw new NotSupportedException("Qualified root journal reads require PostgreSQL or a shipped SQLite root store.");
         var expected = db.RequiredFormat;
         List<JournalProjection> sampled;
         try
