@@ -9,18 +9,19 @@ public sealed partial class EfStore
         CohortWaitingWork.Replace("LIKE 'operator/%'", "GLOB 'operator/*'", StringComparison.Ordinal);
 
     private const string SqliteCohortDecision = """
-        EXISTS (SELECT 1 FROM json_each({4}) actor JOIN json_each({5}) rev ON rev.key = actor.key
-            WHERE actor.value = i."Id" AND rev.value = i."Revision")
+        EXISTS (SELECT 1 FROM json_each({4}) decision
+            WHERE (decision.value ->> 'Actor') = i."Id" AND (decision.value ->> 'Revision') = i."Revision")
         """;
+    private static string SqliteCohortDecisions(string[] actors, long[] revisions) =>
+        Json.Write(actors.Zip(revisions, (actor, revision) => new { Actor = actor, Revision = revision }).ToArray());
 
     private static FormattableString SqliteCohortCandidates(int[] partitions, long[] epochs, long[] afterDue,
         long[] afterSeq, long[] through, int limit) => FormattableStringFactory.Create(
         $"""
         WITH fences AS MATERIALIZED (
-            SELECT p.value AS "Partition", e.value AS "Epoch", d.value AS "AfterDue", s.value AS "AfterSeq", t.value AS "Through"
-            FROM json_each({"{0}"}) p JOIN json_each({"{1}"}) e ON e.key = p.key
-            JOIN json_each({"{2}"}) d ON d.key = p.key JOIN json_each({"{3}"}) s ON s.key = p.key
-            JOIN json_each({"{4}"}) t ON t.key = p.key
+            SELECT f.value ->> 'Partition' AS "Partition", f.value ->> 'Epoch' AS "Epoch",
+                f.value ->> 'AfterDue' AS "AfterDue", f.value ->> 'AfterSeq' AS "AfterSeq", f.value ->> 'Through' AS "Through"
+            FROM json_each({"{0}"}) f
         ), bounds AS MATERIALIZED (
             SELECT f."Partition", f."Epoch", f."AfterDue", f."AfterSeq",
                 CASE WHEN f."Through" >= 0 THEN f."Through" ELSE coalesce((
@@ -35,7 +36,7 @@ public sealed partial class EfStore
                 FROM (SELECT "Target", "Due", "Seq", "Seen" FROM "Messages"
                     WHERE "Partition" = b."Partition" AND ("Due", "Seq") > (b."AfterDue", b."AfterSeq") AND "Seq" <= b."Through"
                         AND "Due" <= {SqliteCommitDialect.MillisecondClock} AND {SqliteCohortWaitingWork}
-                    ORDER BY "Due", "Seq" LIMIT {"{5}"}) page
+                    ORDER BY "Due", "Seq" LIMIT {"{1}"}) page
             )) row
         ), tail AS (
             SELECT "Partition", "Due", "Seq", row_number() OVER (PARTITION BY "Partition" ORDER BY "Due" DESC, "Seq" DESC) AS "Ordinal"
@@ -47,5 +48,8 @@ public sealed partial class EfStore
         FROM bounds b LEFT JOIN tail t ON t."Partition" = b."Partition" AND t."Ordinal" = 1
         LEFT JOIN eligible e ON e."Partition" = b."Partition"
         /* sqlite-cohort-waiting */
-        """, Json.Write(partitions), Json.Write(epochs), Json.Write(afterDue), Json.Write(afterSeq), Json.Write(through), limit);
+        """, Json.Write(partitions.Select((partition, index) => new
+        {
+            Partition = partition, Epoch = epochs[index], AfterDue = afterDue[index], AfterSeq = afterSeq[index], Through = through[index]
+        }).ToArray()), limit);
 }

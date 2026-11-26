@@ -843,7 +843,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 if (SamplesAuthoredCohortWithholding(db))
                 {
                     var (actors, revisions) = await ReadWithheldCohortsAsync(db, [new(partition, epoch, 0)], limit, cancellationToken);
-                    args = db.UsesSqliteRootRuntime ? [.. args, Json.Write(actors), Json.Write(revisions)] : [.. args, actors, revisions];
+                    args = db.UsesSqliteRootRuntime ? [.. args, SqliteCohortDecisions(actors, revisions)] : [.. args, actors, revisions];
                 }
                 var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, args).ToListAsync(cancellationToken);
                 var result = ToGeneratedPoll(page, root, db);
