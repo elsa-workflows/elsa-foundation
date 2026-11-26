@@ -153,7 +153,7 @@ cancelled.
 3. **Given** a child that completes, faults or is cancelled, **When** the converted parent runs, **Then** the node on
    Elsa 3's `Done` runs in each case.
 4. **Given** an Execute Workflow node that captures `Result`, **When** it is converted, **Then** it is refused with
-   `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` and the guidance in FR-010.
+   `ELS3-ACTIVITY-MEMBER-SEMANTICS-CHANGED` and the guidance in FR-010.
 
 ---
 
@@ -220,7 +220,9 @@ faults.
   Elsa 3 value is literal false or bound, the warning MUST also say that Elsa 4 waits for a child that suspends where
   Elsa 3 continued.
 - **FR-009**: An Elsa 3 Execute Workflow's `Done` MUST map to `Completed`, `Faulted` and `Cancelled`.
-- **FR-010**: An Elsa 3 Execute Workflow `Result` capture MUST be refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`.
+- **FR-010**: An Elsa 3 Execute Workflow `Result` capture MUST be refused with `ELS3-ACTIVITY-MEMBER-SEMANTICS-CHANGED`.
+  Elsa 4 Dispatch Workflow has a `Result` output, but it means something else, so the generic lost-output message
+  ("has no such output") would be wrong. That code's guidance is HTTP-specific today, so it MUST become per-rule.
   - The message MUST say that Elsa 3's result wraps the child's output with its instance id and status, and that Elsa 4
     returns these separately.
   - The guidance MUST name both ways forward: replace the node in Elsa 3 with a Dispatch Workflow that waits for
@@ -238,7 +240,7 @@ faults.
   current core, including restart of a waiting parent, where the existing waited-dispatch tests already run.
 - **FR-013**: The S-15 ledger MUST be updated in the S-15 session, not in this PR.
   - The adjusted dispatch root no longer needs its `result` capture removed.
-  - The Execute Workflow root stays refused, now with the FR-010 guidance and the existing dynamic
+  - The Execute Workflow root stays refused, now with the FR-010 code and guidance and the existing dynamic
     `WorkflowDefinitionId` refusal.
   - Any new adjusted copy needs the coordinator's approval.
 
@@ -268,8 +270,9 @@ the current core but are refused or behave differently on the kernel:
 
 ### Measurable Outcomes
 
-- **SC-001**: The two Problem section examples convert. The awaited Dispatch Workflow converts with no diagnostic other
-  than existing ones, and the Execute Workflow capture is refused with the FR-010 guidance. Converter tests pin each
+- **SC-001**: For the two Problem section examples, the awaited Dispatch Workflow converts with no diagnostic other than
+  existing ones, and the Execute Workflow capture is refused with `ELS3-ACTIVITY-MEMBER-SEMANTICS-CHANGED` and the
+  FR-010 guidance. Converter tests pin each
   diagnostic.
 - **SC-002**: With the `result` capture restored in the adjusted S-15 dispatch root, every output assertion in
   `dispatch-workflow-awaitCompletion` and `dispatch-workflow-handling-input-output` passes on the default Workbench,
