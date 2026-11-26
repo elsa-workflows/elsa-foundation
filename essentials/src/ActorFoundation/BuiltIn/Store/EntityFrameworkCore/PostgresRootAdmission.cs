@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
+using static Kernel.EntityFramework.RootAdmissionWire;
 
 namespace Kernel.EntityFramework;
 
@@ -13,8 +13,6 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record StartWrite(bool Claimed, bool Enqueued);
-    private sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput, bool ExplicitZeroDue = false);
-    private const string CreatorPrefix = "!kernel-root/1:";
     // Bound the formatting and payload cost of a duplicate that loses the batched receipt claim.
     private const int BatchedStartInputCodeUnits = 8 * 1024;
     private const string ClaimReceiptSql = """
@@ -218,13 +216,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     private async Task<Receipt?> AdmitCoreAsync(string tenant, string operation, StartSpec spec, long? due,
         TimeSpan? keepFor, DirectReply? reply, CancellationToken cancellationToken)
     {
-        if (!FoundationMetadataLimits.IsOutsideMessageId(operation) || spec is { Parent: not null } or { Creation: not null } ||
-            spec.ParentCreation != 0 || !FoundationMetadataLimits.FitsName(spec.Model))
-            throw new ArgumentException("Invalid root creator metadata.");
-        FoundationMetadataLimits.RequireContent(spec.Definition, nameof(spec), FoundationMetadataLimits.TypeDataBytes);
-        FoundationMetadataLimits.RequireContent(spec.Input, nameof(spec), FoundationMetadataLimits.StartContentBytes);
-        var window = keepFor is { } requested && requested < deduplicationWindow ? requested : deduplicationWindow;
-        ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
+        RequireCreator(operation, spec);
+        var window = ReceiptWindow(deduplicationWindow, keepFor);
 
         var digest = FoundationRootCreator.OperationDigest(operation);
         var name = tenant + "_" + Guid.NewGuid().ToString("N");
@@ -255,15 +248,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
 
         var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, reply?.Address);
         var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
-        // Raw PostgreSQL text avoids JSON expansion for large quoted or international inputs. Only a
-        // value that PostgreSQL text cannot represent travels in the reversible JSON envelope.
-        var escaped = spec.Input is { } input && (input.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(input));
-        var payload = escaped ? null : spec.Input;
-        var storedSpec = escaped ? creator.Start! : creator.Start! with { Input = null };
-        var header = CreatorPrefix + DurableKeyJson.Write(new StoredRoot(creator.Id, storedSpec, escaped, due == 0));
-        const int contentLimit = 16 * 1024 * 1024 - 24 * 1024;
-        var fits = Encoding.UTF8.GetByteCount(header) + (payload is null ? 0 : Encoding.UTF8.GetByteCount(payload)) +
-            (reply is null ? 0 : Encoding.UTF8.GetByteCount(reply.Address)) <= contentLimit;
+        var (header, payload) = EncodeCreator(creator);
+        var fits = FitsEnvelope(header, payload, reply?.Address);
 
         // A live receipt wins even when the replay's encoded envelope is too large. When no receipt
         // wins, this transaction rolls back the claim if its creator cannot be stored.
@@ -292,7 +278,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             actor.Id, actor.Partition, creator.InboxKey.Id, fingerprint, fits, creator.Kind, creator.Due ?? 0,
             (fits ? payload : null)!, fits ? header : "", (reply?.Address)!).ToListAsync(cancellationToken)).Single();
         if (!write.Claimed) return await Replay();
-        if (!fits) throw new MetadataLimitExceeded(nameof(spec), contentLimit);
+        if (!fits) throw new MetadataLimitExceeded(nameof(spec), EfStore.RootContentBytes);
         if (!write.Enqueued)
             throw new InvalidOperationException("A generated root start must commit its creator with the receipt.");
         await transaction.CommitAsync(cancellationToken);
