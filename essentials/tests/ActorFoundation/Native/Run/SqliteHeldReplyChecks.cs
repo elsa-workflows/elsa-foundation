@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
@@ -105,8 +106,9 @@ internal static partial class SqliteHostLifetimeChecks
             var direct = await db.Messages.AsNoTracking().SingleAsync(row => row.ReplyTo != null, token);
             Require(direct.InboxScope == InboxKey.FoundationOccurrenceScope && direct.ReplyTo is not null &&
                 direct.Start?.StartsWith(RootAdmissionWire.HeldDirectPrefix, StringComparison.Ordinal) == true &&
-                !pendingEnd.IsCompleted && actor.AppliedEarlier,
-                "the worker applies the earlier input before handling the held occurrence");
+                !pendingEnd.IsCompleted && await db.Messages.AnyAsync(row => row.Kind == "earlier" && row.Done, token) &&
+                await reader.ReadFirstRootAsync(scope.Tenant, root.Id, token) is { Revision: 2, Status: InstanceStatus.Running },
+                "the worker commits the earlier input before entering the held turn alone");
             var duplicateEnd = await RequestAsync(scope, exact, "complete", "complete", 700);
             Require(duplicateEnd is { Error: "timeout", Status: Contract.ActorStatus.Running } &&
                 await db.Messages.CountAsync(row => row.ReplyTo != null && !row.Done, token) == 1, "a duplicate direct request times out with the committed live status");
@@ -115,7 +117,7 @@ internal static partial class SqliteHostLifetimeChecks
             Require(await pendingEnd is { Channel: Request.Response, Item: "direct", Error: null },
                 "the response arrives before the terminal notification from the same turn");
             var checkpoint = await reader.ReadFirstRootAsync(scope.Tenant, root.Id, token);
-            Require(checkpoint is { Status: InstanceStatus.Finished } && checkpoint.TerminalRevision == checkpoint.Revision &&
+            Require(checkpoint is { Status: InstanceStatus.Finished, Revision: 3, TerminalRevision: 3 } &&
                 await db.Messages.CountAsync(token) == 2 &&
                 await db.Messages.AllAsync(row => row.Done && row.ReplyTo == null && row.Start == null && row.Payload == null, token),
                 "the terminal checkpoint consumes the FIFO and clears the held route");
@@ -126,6 +128,10 @@ internal static partial class SqliteHostLifetimeChecks
             var expired = await RequestAsync(scope, exact, "late", "complete", -1);
             Require(expired is { Error: "timeout", Status: Contract.ActorStatus.Finished } &&
                 await db.Messages.CountAsync(token) == 2, "an expired call reports the committed terminal status without admission");
+
+            using var duplicateLifetime = CancellationTokenSource.CreateLinkedTokenSource(token);
+            var waitingDuplicate = RequestAsync(scope, exact, "complete", "complete", 20_000, duplicateLifetime.Token);
+            await Task.Delay(100, token);
             await resumed.StopAsync(token);
             Require(resumed.LastError is null, "the resumed SQLite reply owner stops cleanly");
 
@@ -137,6 +143,10 @@ internal static partial class SqliteHostLifetimeChecks
             replacement.ReleaseStart.TrySetResult();
             await using var recovery = OpenHost("replacement", replacement, null);
             await recovery.StartAsync(token);
+            Require(!waitingDuplicate.IsCompleted, "a long-lived duplicate caller does not keep the stopped owner's file lease");
+            duplicateLifetime.Cancel();
+            await ExpectFoundationFailureAsync<OperationCanceledException>(() => waitingDuplicate,
+                "the disconnected duplicate remains separately cancellable");
             var recovered = await replacement.StartEntered.Task.WaitAsync(token);
             await WaitForRootAsync(reader, scope.Tenant, recovered, 1, token);
             Require(await reader.ReadFirstRootAsync(scope.Tenant, recovered.Id, token) is { Status: InstanceStatus.Running } &&
@@ -144,19 +154,68 @@ internal static partial class SqliteHostLifetimeChecks
                 "a new owner commits the durable creator after the caller's reply registration has gone");
             await recovery.StopAsync(token);
             Require(recovery.LastError is null, "the replacement stops cleanly");
+
+            var peerDeadline = await replies.ReadClockAsync(token) + 20_000;
+            var beforePeer = ingress.RequestAsync(scope, exact, "complete", "complete", null, null, new(null, peerDeadline), token).AsTask();
+            await Task.Delay(100, token);
+            Require(!beforePeer.IsCompleted, "the prior process still has a duplicate caller waiting");
+            await CheckHeldReplyPeerAsync(path, fenceInBatch, token, async () =>
+            {
+                Require(await beforePeer.WaitAsync(TimeSpan.FromSeconds(5), token) is { Error: "lost" },
+                    "an outstanding caller receives a loss reply when a peer process takes the file");
+                await ExpectFoundationFailureAsync<SqliteHostLockException>(() =>
+                    ingress.RequestAsync(scope, exact, "new", "complete", null, null, new(null, peerDeadline), token).AsTask(),
+                    "new held admission still refuses a file owned by a peer process");
+            });
             return 0;
 
             SqliteEmbeddedHostedService OpenHost(string node, HeldReplyActor executor, SqliteEmbeddedHosting.SqliteDirectRequests? edge) =>
                 SqliteEmbeddedHostedService.ForFoundation(path, node, executor, reason => throw new InvalidOperationException(reason),
                     Loops, fenceInBatch, requests: edge);
 
-            async Task<Contract.Reply> RequestAsync(Contract.BoundScope tenant, Contract.Target target, string id, string kind, long remaining)
+            async Task<Contract.Reply> RequestAsync(Contract.BoundScope tenant, Contract.Target target, string id, string kind, long remaining,
+                CancellationToken? caller = null)
             {
                 var deadline = await replies.ReadClockAsync(token) + remaining;
-                return await ingress.RequestAsync(tenant, target, id, kind, null, null, new(null, deadline), token);
+                return await ingress.RequestAsync(tenant, target, id, kind, null, null, new(null, deadline), caller ?? token);
             }
         }
         finally { folder.Delete(recursive: true); }
+    }
+
+    private static async Task CheckHeldReplyPeerAsync(string path, bool fenceInBatch, CancellationToken token, Func<Task> whileOwned)
+    {
+        var start = new ProcessStartInfo("dotnet") { UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true };
+        start.ArgumentList.Add(typeof(SqliteHostLifetimeChecks).Assembly.Location);
+        start.ArgumentList.Add("sqlite-held-reply-peer");
+        start.ArgumentList.Add(path);
+        start.ArgumentList.Add(fenceInBatch ? "in-batch" : "checked");
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Cannot start the SQLite reply peer.");
+        try
+        {
+            Require(await process.StandardOutput.ReadLineAsync(token) == "ready", "a peer process takes the cleanly stopped SQLite file");
+            await whileOwned();
+            await process.StandardInput.WriteLineAsync("stop");
+            await process.WaitForExitAsync(token);
+            Require(process.ExitCode == 0, "the reply peer releases the file cleanly");
+        }
+        finally
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+        }
+    }
+
+    internal static async Task<int> RunHeldReplyPeerAsync(string path, bool fenceInBatch)
+    {
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var token = budget.Token;
+        await using var service = SqliteEmbeddedHostedService.ForFoundation(path, "reply-peer", new HeldReplyActor(),
+            reason => throw new InvalidOperationException(reason), Loops, fenceInBatch);
+        await service.StartAsync(token);
+        Console.WriteLine("ready");
+        if (await Console.In.ReadLineAsync(token) != "stop") return 1;
+        await service.StopAsync(token);
+        return service.LastError is null ? 0 : 1;
     }
 
     private sealed class HeldReplyActor : Contract.IActorType
@@ -166,7 +225,6 @@ internal static partial class SqliteHostLifetimeChecks
         internal TaskCompletionSource StartReturned { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource EndEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource ReleaseEnd { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal bool AppliedEarlier { get; private set; }
         public string Type => HeldReplyKind;
         public bool Withholds(Contract.ActorHeader header) => false;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
@@ -185,16 +243,13 @@ internal static partial class SqliteHostLifetimeChecks
                 StartReturned.TrySetResult();
                 return;
             }
-            var inbox = turn.Inbox;
-            if (inbox[0].Kind == "earlier")
+            if (turn.Inbox is [{ Kind: "earlier" }])
             {
-                AppliedEarlier = true;
                 turn.Record(new { Step = "earlier" });
-                if (inbox.Count == 1) return;
-                if (inbox.Count != 2) throw new InvalidOperationException("Expected exactly two FIFO items.");
+                return;
             }
-            if (!AppliedEarlier || inbox[^1].Kind != "complete")
-                throw new InvalidOperationException("The ordinary input must precede the direct request.");
+            if (turn.Inbox is not [{ Kind: "complete" }])
+                throw new InvalidOperationException("Expected exactly one direct input.");
             EndEntered.TrySetResult();
             await ReleaseEnd.Task.WaitAsync(token);
             turn.Emit(Request.Response, "direct");

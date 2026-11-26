@@ -81,6 +81,12 @@ internal sealed class HeldRootRequests : IReplyTransport
                 // The batch stays, ahead of whatever arrives meanwhile, and is delivered once the time can be read: no
                 // later reply (a turn's end) overtakes an earlier one (its response). A caller past its deadline then ends
                 // with a timeout on arrival.
+                batch.RemoveAll(reply => !requests.HasRegistration(reply.Request));
+                if (batch.Count == 0)
+                {
+                    backoff = TimeSpan.FromMilliseconds(25);
+                    continue;
+                }
                 await Task.Delay(backoff);
                 backoff = TimeSpan.FromMilliseconds(Math.Min(backoff.TotalMilliseconds * 2, 1_000));
                 continue;

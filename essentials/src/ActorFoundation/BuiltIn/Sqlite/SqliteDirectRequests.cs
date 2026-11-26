@@ -7,6 +7,8 @@ namespace Kernel.Foundation.Sqlite;
 
 public static partial class SqliteEmbeddedHosting
 {
+    // Share this edge with ingress and the running owner, including admissions made before it starts.
+    // A successor can recover durable work through a different edge. An earlier wait may then time out.
     internal static SqliteDirectRequests CreateRequests(string databasePath, string node, string actorType,
         TimeSpan? deduplicationWindow = null)
     {
@@ -52,8 +54,12 @@ public static partial class SqliteEmbeddedHosting
             Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
-            using var file = AcquireFile(path, requests: this);
-            return await edge.RequestAsync(scope, target, id, kind, payload, add, request, token);
+            using (AcquireFile(path, requests: this)) token.ThrowIfCancellationRequested();
+            try { return await edge.RequestAsync(scope, target, id, kind, payload, add, request, token); }
+            catch (SqliteHostLockException)
+            {
+                return new(null, null, Error: "lost");
+            }
         }
 
         private sealed class Admission(SqliteDirectRequests owner, string path, TimeSpan window) : IHeldRootAdmission
@@ -87,22 +93,21 @@ public static partial class SqliteEmbeddedHosting
                 // background operation its own leases so it can roll back after the caller has gone.
                 var write = Task.Run(async () =>
                 {
-                    using var file = AcquireFile(path, requests: owner);
-                    await file.ReplyWrites.WaitAsync(token);
-                    try
+                    while (true)
                     {
-                        var admission = ForFile(file);
-                        while (true)
+                        token.ThrowIfCancellationRequested();
+                        try
                         {
-                            token.ThrowIfCancellationRequested();
-                            try { return await admit(admission, token); }
-                            catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
-                            {
-                                await Task.Delay(25, token); // SQLITE_BUSY or SQLITE_LOCKED, with the original deadline.
-                            }
+                            using var file = AcquireFile(path, requests: owner);
+                            await file.ReplyWrites.WaitAsync(token);
+                            try { return await admit(ForFile(file), token); }
+                            finally { file.ReplyWrites.Release(); }
+                        }
+                        catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
+                        {
+                            await Task.Delay(25, token); // SQLITE_BUSY or SQLITE_LOCKED, with the original deadline.
                         }
                     }
-                    finally { file.ReplyWrites.Release(); }
                 }, token);
                 try { return await write.WaitAsync(token); }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
