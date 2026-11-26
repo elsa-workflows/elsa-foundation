@@ -87,8 +87,10 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   - `CarryOutput("Result", "Output")` with the wrapped-result marker.
   - Lowering rewrites every read of the captured variable: JavaScript member paths, Liquid member paths, a bare
     `getV()`, and a direct binding of `V`.
-  - Converter tests: one per FR-010 table row, in JavaScript and Liquid where both apply, and one per refusal (another
-    writer, not definite, an unknown member, a whole-value Liquid read).
+  - Converter tests: one per FR-010 table row in JavaScript, Liquid `.Output` and `.Output.X`, and one per refusal
+    (another writer, an unknown member, another Liquid read).
+  - One publish test: a read on a path where the dispatch may not have run is refused with
+    `ValueFlow/UnavailableProducer`.
   - Run-time tests: US3 scenario 4 with a child that completes and with one that faults. The whole-value read is
     checked against the Elsa 3 key set.
 - [ ] T010 Implement the `ExecuteWorkflowAsDispatch` rewrite (`ActivityMap/Rewrites/`) and register it in

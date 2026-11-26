@@ -10,7 +10,7 @@ status and safe diagnostics stay in the stored result as a member that is not an
 entries go. Then change three things in the Elsa 3 activity map:
 
 - An awaited Dispatch `Result` capture becomes an `Output` capture.
-- Execute Workflow always waits. Its `Result` capture is refused with guidance.
+- Execute Workflow always waits. Its `Result` capture converts, and every read of it is rewritten (D-3).
 - `Done` routes to `Completed` and `Faulted`, the way Elsa 3 continued after a child that finished or faulted.
 
 ## Technical Context
@@ -159,13 +159,14 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
        - `.Status` becomes `"Finished"`.
        - `.CorrelationId` and `.WorkflowDefinitionVersionId` become `null`.
        - A bare `getV()` becomes the object literal with Elsa 3's keys.
-     - **Liquid reads** (Fluid). It rewrites the same member paths. A whole-value Liquid read is refused.
+     - **Liquid reads** (Fluid). It rewrites `.Output` and `.Output.X` only, and refuses any other Liquid read of
+       `V`.
      - **A direct binding of `V`** into another activity's input is replaced by a JavaScript expression that builds the
        object literal.
      - **Refused reads** get the FR-010 per-read text, through an optional per-rule message and guidance on
-       `Elsa3MemberRule` that defaults to today's text:
-       - a parameter whose activity-result availability is not `Definite`;
-       - any other member of `V`.
+       `Elsa3MemberRule` that defaults to today's text. That covers any other member of `V`, and the other Liquid reads.
+     - **Availability is left to publish.** A read whose producer is not definite is refused at publish
+       (`ValueFlow/UnavailableProducer`), so the converter computes no availability.
    - `WaitForCompletion` becomes `Structure("WaitForCompletion", Elsa3MemberKind.Input)`. Implement the existing
      `ExecuteWorkflowAsDispatch` rewrite kind, which is declared but has no `IElsa3NodeRewrite` today, beside the other
      rewrites in `ActivityMap/Rewrites/`. Register it in `Elsa3MappingFeature` like the others. The rewrite must emit
@@ -204,7 +205,7 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
   - Checkpoint test: a waiting parent resumes after a restart with the same `Output`.
 - **Converter**: `extensions/Elsa3/tests/Mapping/Tests`.
   - Dispatch Workflow `Result` capture with literal true, literal false and a bound wait.
-  - Execute Workflow capture refused, with message and guidance asserted.
+  - Execute Workflow wrapped result: one test per FR-010 row and per refusal (T009).
   - Execute Workflow wait forced to literal true, with the warning text for false and for bound.
   - `Done` routing on both entries; no `Cancelled` routing.
   - The tests that pinned the old rules are updated (spec SC-004).

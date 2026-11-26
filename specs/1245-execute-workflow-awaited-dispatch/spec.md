@@ -361,23 +361,26 @@ faults.
     | the whole value in a script (`toJson(getV())`, passing `getV()` on) | an object built from the rows above, with Elsa 3's keys: `{ WorkflowDefinitionVersionId, WorkflowInstanceId, CorrelationId, Status, SubStatus, Output }` |
     | the whole value bound directly into another activity's input | that binding becomes a JavaScript expression that builds the same object |
 
-  - JavaScript and Liquid member reads both convert. A Liquid read of the whole value is refused, because Liquid cannot
-    build an object.
-  - Four cases are refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`. The lost-output rule takes per-rule text for
+  - JavaScript reads convert in every row. In Liquid only `.Output` and `.Output.X` convert: the Liquid rewrite edits
+    one member, and it has no inline form for the other rows.
+  - Three cases are refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`. The lost-output rule takes per-rule text for
     them, and the guidance names the read and the reason:
     - `V` has another writer, so its reads would see two shapes;
-    - a read happens where the dispatch has not definitely run before it (the activity-output parameter is not
-      definite). Elsa 3 read `V`'s earlier value there;
     - a read of any other member `X` of `V`. Elsa 3 had that only in its bare-dictionary shape, after a child that
       suspended, so the intent is ambiguous;
-    - a Liquid read of the whole value.
+    - a Liquid read of `V` other than `.Output` or `.Output.X`.
+  - A read where the dispatch has not definitely run before it is left to publish. The converter does not compute
+    availability, and publish already refuses an activity-output read whose producer is not definite
+    (`ValueFlow/UnavailableProducer`). Elsa 3 read `V`'s earlier value there.
 
 **Differences, tests and records**
 
 - **FR-011**: The converter MUST NOT raise a warning for the following accepted differences, because whether they apply
   depends on how the child runs or how a script reads the value, not on the converted node. They MUST be recorded in the
   converter's mapping documentation (`extensions/Elsa3/src/Mapping/README.md`):
-  - A faulted child's outputs are not carried (FR-002); Elsa 3 resumed the parent with them.
+  - A faulted child's outputs are not carried (FR-002); Elsa 3 resumed the parent with them. `V` keeps its earlier
+    value. When the node runs more than once, for example in a loop, that is the previous run's output. Meanwhile
+    `.SubStatus` reads this run's `"Faulted"`.
   - A cancelled child selects `Cancelled`, which ends a Flowchart branch and continues a Sequence; Elsa 3 left an awaited
     parent suspended.
   - A failed child start selects `DispatchFailed`, with the same Flowchart and Sequence behaviour; Elsa 3 faulted the
@@ -394,7 +397,7 @@ faults.
   - The Execute Workflow root's whole-value read converts (FR-010). The root also sets `workflowDefinitionId` from a
     script, which Elsa 4 refuses because it pins the child at publish.
   - On 2026-11-26 the coordinator approved an adjusted copy that sets the child id as a literal. No other edit is
-    needed.
+    needed in the root. The suite also waits on #5818.
   - Any other adjusted copy needs the coordinator's approval.
 
 ### Key Entities
@@ -438,7 +441,7 @@ the current core but are refused or behave differently on the kernel:
 - **SC-002**: With the `result` capture restored in the adjusted S-15 dispatch root, every output assertion in
   `dispatch-workflow-awaitCompletion` and `dispatch-workflow-handling-input-output` passes on the default Workbench,
   once #5818 is fixed. With the literal child id in the adjusted Execute Workflow root, every assertion in
-  `composition/execute-workflow` passes.
+  `composition/execute-workflow` passes, also once #5818 is fixed: its child has the same busy-wait script.
 - **SC-003**: 100% of the FR-001 to FR-004 cases pass on the current core with the real workflow output source and
   default diagnostics settings, including a waiting parent that resumes after a restart.
 - **SC-004**: No existing waited-dispatch, Dispatch Workflow contract or Elsa 3 converter test changes behaviour, except

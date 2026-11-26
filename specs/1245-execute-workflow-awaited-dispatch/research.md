@@ -80,6 +80,8 @@ Converter (`extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Ent
   `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`, in `Elsa3ActivityNormalizer` (lost-output handling).
 - `Elsa3NodeRewriteKind.ExecuteWorkflowAsDispatch` is declared on the Execute Workflow entry, but no rewrite implements
   it. The warning comes from the generic entry-warning path.
+- Elsa 3 Execute Workflow and Dispatch Workflow declare no outcome but `Done`: both end with a plain
+  `CompleteActivityAsync()`.
 - Lost-output text is generic today. `SemanticsChanged` was considered for Execute Workflow `Result` while Elsa 4 still
   had a `Result` output. With that output removed, `Lost` with per-rule text is the right rule.
 - Execute Workflow takes `WaitForCompletion` as a `DefaultFlip`, so a bound expression or a literal false is carried
@@ -117,7 +119,7 @@ The cause is that Elsa 3's `ExecuteWorkflowResult` wraps the output (`Result.Out
 
 | Option | Result | Verdict |
 |---|---|---|
-| A. Refuse the capture with guidance | No silent wrong read. The JTest Execute Workflow root stays refused, and unblocking it needs an adjusted copy. | **Recommended** (refuse over workaround) |
+| A. Refuse the capture with guidance | No silent wrong read. But an Elsa 3 user cannot prepare for it, because Execute Workflow has only `Done` and only `Result`, so the import is blocked. | Rejected by the coordinator, 2026-11-26 |
 | B. Capture `Output` instead | Every `Result.Output.X` read silently becomes `undefined` | Rejected |
-| C. Rewrite reads of the captured variable when every read is provably `.Output.…` | A complex script analysis for one activity. The JTest root reads the whole object (`toJson(getSubworkflowOutput())`), so it would still be refused. | Rejected |
+| C. Capture `Output`, and rewrite every read of the variable from the dispatch node's outputs (`ChildWorkflowExecutionId`, the new `Status`), rebuilding the whole value with Elsa 3's keys | It uses the converter's existing JavaScript and Liquid rewriters and activity-output parameters. The JTest root's whole-value read converts. | **Chosen** (coordinator, 2026-11-26): an Elsa 3 user cannot prepare, so this is a conversion, not a workaround |
 | D. An Elsa 4 output shaped like `ExecuteWorkflowResult` | Puts an Elsa 3 shape into the Elsa 4 core. The names and status values differ anyway (`Finished`/`SubStatus` against `Completed`). | Rejected |
