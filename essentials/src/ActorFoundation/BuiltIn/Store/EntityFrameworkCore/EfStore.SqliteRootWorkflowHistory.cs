@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kernel.EntityFramework;
@@ -45,21 +46,41 @@ public sealed partial class EfStore
             var encodedType = DurableKeyJson.Write(type);
             var encodedDefinition = definition is null ? null : DurableKeyJson.Write(new KeyValuePair<string, string>("definition", definition));
             var earliest = from ?? long.MinValue;
-            var latest = Math.Min(to ?? long.MaxValue, afterTime ?? long.MaxValue);
-            var rows = await db.Database.SqlQuery<SqliteWorkflowHistoryRow>($"""
-                /* sqlite-root-workflow-history */
-                SELECT h."Reference", l."Status", l."Header", h."UpdatedAt"
-                FROM "FoundationWorkflowHistory" h JOIN "FoundationActorList" l USING ("Tenant", "Reference")
-                WHERE h."Tenant" = {tenant} AND l."Type" COLLATE BINARY = {encodedType}
-                    AND ({encodedDefinition} IS NULL OR EXISTS (SELECT 1 FROM json_each(l."Labels") label
-                        WHERE label.value COLLATE BINARY = {encodedDefinition}))
-                    AND ({status} IS NULL OR l."Status" = {status})
-                    AND h."UpdatedAt" BETWEEN {earliest} AND {latest}
-                    AND ({afterTime} IS NULL OR h."UpdatedAt" < {afterTime} OR h."UpdatedAt" = {afterTime} AND h."Reference" > {afterRef})
-                ORDER BY h."UpdatedAt" DESC, h."Reference" LIMIT {limit}
-                """).ToListAsync(token);
+            var latest = to ?? long.MaxValue;
+            List<SqliteWorkflowHistoryRow> rows;
+            if (afterTime is { } time && time <= latest)
+            {
+                // A timestamp tie is a separate seek. An OR over time and reference would revisit earlier ties on every page.
+                rows = time >= earliest && afterRef is not null && limit > 0
+                    ? await ReadWindowAsync(time, time, limit, afterRef)
+                    : [];
+                if (rows.Count < limit && time > earliest)
+                    rows.AddRange(await ReadWindowAsync(earliest, time - 1, limit - rows.Count));
+            }
+            else
+                rows = await ReadWindowAsync(earliest, latest, limit);
+
             var items = rows.Select(row => new RootWorkflowHistoryItem(row.Reference, row.Status,
                 DurableKeyJson.Read<RootHeader>(row.Header).Labels.FirstOrDefault(label => label.Key == "definition").Value, row.UpdatedAt)).ToArray();
             return new RootWorkflowHistoryPage(items, at);
+
+            Task<List<SqliteWorkflowHistoryRow>> ReadWindowAsync(long lower, long upper, int take, string? reference = null)
+            {
+                var range = reference is not null
+                    ? """h."UpdatedAt" = {4} AND h."Reference" > {5}"""
+                    : """h."UpdatedAt" BETWEEN {4} AND {5}""";
+                var sql = """
+                    /* sqlite-root-workflow-history */
+                    SELECT h."Reference", l."Status", l."Header", h."UpdatedAt"
+                    FROM "FoundationWorkflowHistory" h JOIN "FoundationActorList" l USING ("Tenant", "Reference")
+                    WHERE h."Tenant" = {0} AND l."Type" COLLATE BINARY = {1}
+                        AND ({2} IS NULL OR EXISTS (SELECT 1 FROM json_each(l."Labels") label
+                            WHERE label.value COLLATE BINARY = {2}))
+                        AND ({3} IS NULL OR l."Status" = {3}) AND /* chronology */
+                    ORDER BY h."UpdatedAt" DESC, h."Reference" LIMIT {6}
+                    """.Replace("/* chronology */", range, StringComparison.Ordinal);
+                var query = FormattableStringFactory.Create(sql, tenant, encodedType, encodedDefinition, status, lower, reference ?? (object)upper, take);
+                return db.Database.SqlQuery<SqliteWorkflowHistoryRow>(query).ToListAsync(token);
+            }
         }, token);
 }

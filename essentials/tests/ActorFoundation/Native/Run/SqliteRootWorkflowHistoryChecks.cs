@@ -48,6 +48,17 @@ internal static partial class SqliteHostLifetimeChecks
                 (await HistoryAsync(scope: other)).Items is [{ Reference: var only }] && only == hidden.Id,
                 "workflow type and tenant both constrain history");
 
+            await ExpectFoundationFailureAsync<ArgumentOutOfRangeException>(() => HistoryAsync(limit: -1),
+                "SQLite workflow history refuses an unlimited negative page size");
+            Require((await HistoryAsync(limit: 0)).Items.Count == 0, "a zero history limit returns an empty page");
+
+            var tiedTime = baseline.Items.Max(row => row.UpdatedAt);
+            await using (var db = OpenFoundationDb(file, definitions))
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "FoundationWorkflowHistory" SET "UpdatedAt" = {tiedTime} - ("Reference" = {third.Id})
+                    WHERE "Tenant" = {tenant.Tenant}
+                    """, token);
+            baseline = await HistoryAsync();
             var paged = new List<EfStore.RootWorkflowHistoryItem>();
             EfStore.RootWorkflowHistoryItem? after = null;
             while ((await HistoryAsync(after: after, limit: 1)).Items is [var item])
@@ -64,9 +75,13 @@ internal static partial class SqliteHostLifetimeChecks
             var probe = new EfStore(() => OpenFoundationDb(file, definitions, observation), postgres: false, fenceInBatch);
             await probe.ReadRootWorkflowHistoryAsync(tenant.Tenant, ActorReadsKind, null, null,
                 1, null, paged[0].UpdatedAt, paged[0].Reference, 1, token);
+            await probe.ReadRootWorkflowHistoryAsync(tenant.Tenant, ActorReadsKind, null, null,
+                1, null, paged[0].UpdatedAt, paged[1].Reference, 1, token);
             Require(observation.Plan.Any(row => row.Contains("IX_FoundationWorkflowHistory_Chronology (Tenant=? AND UpdatedAt>? AND UpdatedAt<?)",
-                    StringComparison.Ordinal)) && observation.Plan.All(row => !row.Contains("TEMP B-TREE", StringComparison.Ordinal)),
-                "history seeks the tenant and bounded time window without a temporary sort");
+                    StringComparison.Ordinal)) && observation.Plan.Any(row => row.Contains(
+                    "IX_FoundationWorkflowHistory_Chronology (Tenant=? AND UpdatedAt=? AND Reference>?)", StringComparison.Ordinal)) &&
+                observation.Plan.All(row => !row.Contains("TEMP B-TREE", StringComparison.Ordinal)),
+                "history seeks both the tied reference suffix and older time window without a temporary sort");
 
             await TurnAsync(first, "silent", 2);
             await using (var db = OpenFoundationDb(file, definitions))
