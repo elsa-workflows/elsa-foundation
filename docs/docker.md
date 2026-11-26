@@ -18,16 +18,13 @@ The repo default `server/apps/Elsa.Workbench.Host/shells.json` (SQLite) is inten
 
 ## Run the reference stack
 
-From `docker/compose/`:
-
-```bash
-docker compose --profile studio up --build   # builds the Workbench and Studio images from this repo
-```
+Follow the [full-stack Compose quickstart](../docker/compose/README.md#3-full-stack--add-elsa-studio)
+to generate Studio's frontend assets and build the Workbench and Studio images.
 
 | Service      | URL                     | Notes                                   |
 |--------------|-------------------------|-----------------------------------------|
 | Elsa.Workbench  | http://localhost:13000  | Root path returns `{"status":"Healthy"}`|
-| Elsa Studio  | http://localhost:14000  | Management UI (Blazor WebAssembly). Sign in as `admin` / `Password123!`. |
+| Elsa Studio  | http://localhost:14000  | Management UI (React). Sign in as `admin` / `Password123!`. |
 | PostgreSQL   | localhost:5432          | user/pw/db: `elsa` / `elsa` / `elsa`    |
 
 Without the Studio image, run just the backend subset:
@@ -53,18 +50,12 @@ docker compose --profile studio down -v
 
 ## Connecting Elsa Studio
 
-Studio is built from this repository's `studio/` folder, with the repository root as build context. `docker compose --profile studio up --build` does that for you. To build it on its own, from `docker/compose/`:
-
-```bash
-docker build -f ../../studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local ../..
-```
+To build Studio on its own, follow the [Studio source build instructions](../studio/docs/docker.md#build-from-source).
 
 Studio wiring (see `docker-compose.yml`):
 
-- **`Studio__BackendBaseUrl` must be a host-reachable URL** (`http://localhost:13000`), **not** the
-  compose service name. Studio is a Blazor WebAssembly app: the browser downloads the client and
-  calls the backend directly, using the value surfaced at `GET /studio-runtime.js`. A compose
-  service name like `http://elsa-workbench:8080` is not resolvable from the browser.
+- **`Studio__BackendBaseUrl` must be reachable from the browser**, for example `http://localhost:13000`.
+  The Studio client reads it from `GET /studio-runtime.js` and uses it to call the backend.
 - **`Studio__BackendModuleManagementApiKey` must equal the server's `Elsa__ModuleManagement__ApiKey`.**
   This is the Elsa host management key, and it stays server-side in the Studio container — it is
   never published to the browser. Browser-facing host-control reads (module management, Extension

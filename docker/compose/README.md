@@ -168,7 +168,7 @@ Demo credentials and the demo-only warning are the same as the [table in section
   docker compose version
   ```
 
-- **For the full stack:** Studio is included under `studio/` in this same repository.
+- **For the full stack:** Node.js 22 and pnpm build the Studio frontend in this checkout.
 - **No credentials required.** All NuGet feeds used by the image builds are public, so the builds
   work on a clean machine with no `~/.nuget` setup.
 
@@ -210,10 +210,11 @@ continue to step 3.
 
 ## 3. Full stack — add Elsa Studio
 
-The Studio image is built from this repository, with the Foundation root as its build context.
-From `docker/compose`, bring up the whole stack with the `studio` profile:
+From `docker/compose`, generate the Studio frontend assets and build the stack with the `studio` profile.
 
 ```bash
+pnpm --dir ../../studio install --frozen-lockfile
+pnpm --dir ../../studio build
 docker compose --profile studio up --build
 ```
 
