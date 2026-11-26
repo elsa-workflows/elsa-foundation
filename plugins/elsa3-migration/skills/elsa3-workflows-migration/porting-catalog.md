@@ -94,6 +94,8 @@ public sealed record SendInvoiceResult(
    (case 04): the activity returns all its outputs at once. The property that holds Elsa 3's `Result` keeps that name
    with `[Output(Key = "Result")]`.
 3. Override `ExecuteAsync(ActivityExecutionContext context)` and return a transition (case 05).
+   The examples need `using Elsa.Activities.Runtime.Core.Attributes;` and `using Elsa.Activities.Runtime.Core.Models;`
+   (the attributes, including Elsa 4's own `[Required]`, and the base classes).
 4. An activity that waits for something from outside derives from a stateful base class instead (cases 08 and 09).
 
 ## Case 02: Type name and the exact-name rule
@@ -185,7 +187,8 @@ public string Currency { get; set; } = "EUR";
    there is no `.Get(context)`.
 2. Move `Description`, `DisplayName`, `Category`, `DefaultValue`, `UIHint` and `Options` onto `[ActivityInput]`. Give the
    property the same default in C# as in `DefaultValue`.
-3. Mark inputs the activity cannot run without with `[Required]`.
+3. Mark inputs the activity cannot run without with `[Required]` from `Elsa.Activities.Runtime.Core.Attributes`. The
+   .NET `System.ComponentModel.DataAnnotations.RequiredAttribute` compiles too but Elsa 4 ignores it.
 4. An Elsa 3 `UIHandler` or `DefaultValueProvider` becomes `OptionsProvider` on `[ActivityInput]`, or a static default.
    Decide per input.
 5. Keep the input names: the converted workflows bind values to them by name.
