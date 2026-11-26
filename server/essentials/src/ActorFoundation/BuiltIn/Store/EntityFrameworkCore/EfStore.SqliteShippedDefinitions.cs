@@ -118,7 +118,7 @@ public sealed partial class EfStore
 
     private static async Task SeedSqliteShippedAsync(KernelDb db, int partitions, CancellationToken token)
     {
-        var format = StoreFormat.RootShipped;
+        var format = db.RequiredFormat;
         var definitions = StoreDefinitionsRevision.Seed(db)!;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "KernelStoreVersions" ("Id", "StoreSchema", "MessageProtocol", "JournalCodec")
@@ -145,7 +145,7 @@ public sealed partial class EfStore
             switch (operation)
             {
                 case CreateTableOperation table:
-                    AddSqliteRootColumns(table);
+                    AddSqliteRootColumns(table, db.UsesRootParkArrivals);
                     // The qualified checkpoint's Id is its only row identity, including during SQLite conflict handling.
                     var options = table.Name == "Instances" ? " STRICT, WITHOUT ROWID" : " STRICT";
                     yield return new("table", table.Name, table.Name, Render(table) + options);
@@ -170,7 +170,7 @@ public sealed partial class EfStore
             .CommandText.TrimEnd().TrimEnd(';').ReplaceLineEndings("\n");
     }
 
-    private static void AddSqliteRootColumns(CreateTableOperation table)
+    private static void AddSqliteRootColumns(CreateTableOperation table, bool parkArrivals)
     {
         if (table.Name == "Instances")
         {
@@ -207,7 +207,9 @@ public sealed partial class EfStore
         if (table.Name == "Messages")
         {
             Add("FoundationKeptBy", "INTEGER");
-            Check("CK_Messages_FoundationKeptBy", """ "FoundationKeptBy" IS NULL OR ("FoundationKeptBy" = 0 AND "Done" = 1) """);
+            Check("CK_Messages_FoundationKeptBy", parkArrivals
+                ? """ "FoundationKeptBy" IS NULL OR ("FoundationKeptBy" IN (0, 1) AND "Done" = 1) """
+                : """ "FoundationKeptBy" IS NULL OR ("FoundationKeptBy" = 0 AND "Done" = 1) """);
             Check("CK_Messages_Done", """ "Done" IN (0, 1) """);
         }
 
@@ -289,7 +291,10 @@ public sealed partial class EfStore
             ("Partition", "Target", "Seq", "Id")
             WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND NOT "Done"
             """);
-        yield return Index("IX_FoundationRootInbox_Inspectable", "Messages", """
+        yield return Index("IX_FoundationRootInbox_Inspectable", "Messages", db.UsesRootParkArrivals ? """
+            ("Partition", "Target", "Seq", "Id")
+            WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND (NOT "Done" OR "FoundationKeptBy" IN (0, 1))
+            """ : """
             ("Partition", "Target", "Seq", "Id")
             WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND (NOT "Done" OR "FoundationKeptBy" = 0)
             """);

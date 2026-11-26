@@ -85,7 +85,7 @@ public sealed partial class EfStore
     {
         // Inspect stored direct and operator envelopes, including commands awaiting a later runtime stage.
         // Project size from the record header and validate reply framing without returning the address.
-        var rows = await db.Database.SqlQuery<SqliteInboxProjection>($"""
+        FormattableString query = $"""
             WITH page AS (
                 SELECT m."Seq", m."Id" AS "Occurrence", m."Kind",
                     CASE WHEN octet_length(m."Start") <= {MaxRootInboxHeaderBytes} THEN m."Start" END AS "Header",
@@ -100,7 +100,7 @@ public sealed partial class EfStore
                 JOIN "Messages" m ON m."Target" = b."Actor" AND m."Partition" = b."Partition"
                 WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
                     AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."EventMatch" IS NULL
-                    AND (NOT m."Done" OR m."FoundationKeptBy" = 0)
+                    AND (NOT m."Done" OR /*kept-reasons*/)
                     AND (NOT m."Done" OR i."FoundationParkAt" IS NOT NULL)
                     AND (m."Seq", m."Id") > ({afterSeq}, {afterOccurrence})
                 ORDER BY m."Seq", m."Id" LIMIT {limit}
@@ -127,7 +127,10 @@ public sealed partial class EfStore
                     AND ("Occurrence" NOT GLOB 'operator/*' OR NOT "Early")
                 ))) AS "SupportedShape"
             FROM normalized ORDER BY "Seq", "Occurrence"
-            """).ToListAsync(token);
+            """;
+        var kept = KeptReasons(db).Replace("\"FoundationKeptBy\"", "m.\"FoundationKeptBy\"", StringComparison.Ordinal).Trim();
+        var rows = await db.Database.SqlQuery<SqliteInboxProjection>(FormattableStringFactory.Create(
+            query.Format.Replace("/*kept-reasons*/", kept, StringComparison.Ordinal), query.GetArguments())).ToListAsync(token);
         return new RootInboxPage(rows.Select(Project).ToArray(), at);
 
         RootInboxEntry Project(SqliteInboxProjection row)

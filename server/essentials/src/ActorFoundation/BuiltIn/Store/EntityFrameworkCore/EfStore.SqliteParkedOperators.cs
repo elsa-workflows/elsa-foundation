@@ -82,7 +82,8 @@ public sealed partial class EfStore
         var kept = await ReadSqliteKeptAsync(db, root.Actor, root.Partition, clearing is null, token);
         var facts = kept.Select(row => row.Facts).ToArray();
         if (KeptSetDigest(facts) != digest || PageLength(facts) != count || ends != (count == facts.Length) ||
-            !await SettleSqliteRootInputsAsync(db, root.Reference, new(root.Actor, 1), [command.InboxKey], [command], suspended: true, token))
+            !await SettleSqliteRootInputsAsync(db, root.Reference, new(root.Actor, 1), [command.InboxKey], [command],
+                suspended: !db.UsesRootParkArrivals || clearing is not null, token, parked: true))
             return null;
         return kept.GetRange(0, count);
     }
@@ -153,8 +154,10 @@ public sealed partial class EfStore
         var command = refusal.Command;
         var mark = command.Operator?.RootParkMark;
         if (!await refusal.MatchesProtectionRefusalsAsync(db, token)) return false;
+        var suspended = !db.UsesRootParkArrivals ||
+            (await ReadSqliteParkMarkAsync(db, root.Actor, root.Partition, token))?.Clearing is not null;
         if (!await SettleSqliteRootInputsAsync(db, root.Reference, new(root.Actor, 1), [command.InboxKey],
-                [command], suspended: true, token)) return false;
+                [command], suspended, token, parked: true)) return false;
         if (await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Instances" SET "Revision" = {refusal.JournalRevision}, "FoundationWriteRevision" = {refusal.JournalRevision},
                 "FoundationParkClearing" = CASE WHEN {refusal.Stops} THEN NULL ELSE "FoundationParkClearing" END,
