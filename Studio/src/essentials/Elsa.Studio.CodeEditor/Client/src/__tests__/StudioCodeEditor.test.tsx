@@ -518,7 +518,7 @@ describe("StudioCodeEditor", () => {
     }
   }, 20000);
 
-  it("does not turn completion from typing into a keyboard request when the provider changes", async () => {
+  it("keeps typing-triggered completion separate from keyboard requests on provider refresh", async () => {
     const props = { document: codeDocument({ value: "" }), languageAdapter: javaScriptLanguageAdapter };
     const originalProvider = vi.fn(() => null);
     const refreshedProvider = (request: StudioCodeCompletionRequest) => request.explicit ? [{ label: "shortcutOnly" }] : null;
@@ -534,6 +534,35 @@ describe("StudioCodeEditor", () => {
 
       expect(completionStatus(view.state)).toBeNull();
     } finally {
+      unmount();
+    }
+  }, 20000);
+
+  it("clears pending completion when a provider refresh follows blur", async () => {
+    const source = "variables.customer.";
+    const props = { document: codeDocument({ value: source }), languageAdapter: javaScriptLanguageAdapter };
+    const originalProvider = vi.fn(() => null);
+    const refreshedProvider = vi.fn(() => [{ label: "newMember" }]);
+    const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: originalProvider });
+    const nextControl = document.createElement("button");
+    document.body.append(nextControl);
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const view = EditorView.findFromDOM(content)!;
+      view.dispatch({ selection: { anchor: source.length } });
+      content.focus();
+      key(content, " ", { code: "Space", ctrlKey: true });
+      nextControl.focus();
+      expect(document.activeElement).toBe(nextControl);
+      expect(completionStatus(view.state)).toBe("pending");
+
+      rerender({ ...props, completionProvider: refreshedProvider });
+
+      expect(completionStatus(view.state)).toBeNull();
+    } finally {
+      nextControl.remove();
       unmount();
     }
   }, 20000);

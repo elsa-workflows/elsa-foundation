@@ -342,6 +342,7 @@ function createEntryState(props: StudioCodeEditorEngineProps, entry: CodeMirrorS
             return false;
           },
           blur: () => {
+            entry.runtime.explicitCompletion = false;
             entry.runtime.tabEscapeArmed = false;
             entry.runtime.props.onBlur?.();
             return false;
