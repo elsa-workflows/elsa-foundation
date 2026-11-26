@@ -77,11 +77,20 @@ runtime diagnostics capture policy. Its default level for workflow outputs is a 
 value arrives in one of two forms:
 
 - a preview envelope, with strings over 256 characters truncated and objects cut at 32 properties;
-- redacted, when the output's name contains `token`, `password` or `secret`.
+- redacted, when the output's name looks sensitive (for example `token`), including the names of nested properties.
 
 That suits an inspection view, but it is not data. `Output` therefore holds the child's committed output values
-themselves, unaffected by any diagnostics setting. It leaves out only the outputs the projection can never disclose:
-outputs marked sensitive, and outputs not stored inline. `Result.outputs` stays as it is: the diagnostics view.
+themselves, unaffected by any diagnostics setting. `Result.outputs` stays as it is: the diagnostics view.
+
+A child's Set Output keeps the value protection policy of what it wrote. Two kinds of output are left out of `Output`:
+
+- an output whose policy protects it: marked sensitive, required to be encrypted, or carrying a redaction mode or a
+  retention policy;
+- an output that is not stored inline.
+
+Carrying these raw would put them in the resume intent, the bookmark stimulus and the parent's variable, where the
+child's policy no longer applies. Elsa 3 had no such policies, so no converted workflow loses a value by this rule.
+Applying the existing policy needs no new value-policy rule.
 
 No ADR or ADR amendment is needed. This adds an activity output and converter rules. It applies
 [ADR 0091](../../docs/adr/0091-json-data-passes-through-unchanged-and-every-serializer-derives-from-one-baseline.md):
@@ -117,8 +126,8 @@ parent that dispatches it with `WaitForCompletion` true, captures `Output` into 
 3. **Given** default diagnostics settings, and a child whose outputs are `Summary` (a 1,000-character string) and
    `token` (a string), **When** the parent captures `Output`, **Then** both values arrive unchanged. `Result.outputs`
    still shows its diagnostic view of them.
-4. **Given** a child output marked sensitive, or not stored inline, **When** the parent captures `Output`, **Then** that
-   output is left out of the object.
+4. **Given** a child output marked sensitive, or required to be encrypted, or carrying a redaction mode or a retention policy, or not stored inline, **When** the parent
+   captures `Output`, **Then** that output is left out of the object. There is one test per kind.
 5. **Given** a child that faults or is cancelled, **When** the dispatch resumes, **Then** `Output` is absent and a
    capture of it leaves its variable unchanged, as for any other output an activity does not produce.
 6. **Given** `WaitForCompletion` false, **When** the dispatch completes with `Dispatched`, **Then** `Output` is absent.
@@ -163,9 +172,10 @@ expression, each followed by a node on `Done`. Run each with a child that comple
 **Acceptance Scenarios**:
 
 1. **Given** any `WaitForCompletion` value, **When** an Execute Workflow node is converted, **Then** the Elsa 4 node has
-   `WaitForCompletion` literal true, and the existing warning `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` is raised.
-2. **Given** `WaitForCompletion` literal false or bound, **When** it is converted, **Then** the warning also says that
-   Elsa 4 waits where Elsa 3 continued past a child that suspended.
+   `WaitForCompletion` literal true, and the existing warning `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` is raised once.
+2. **Given** `WaitForCompletion` unset, null, literal false or bound, **When** it is converted, **Then** the warning also
+   says that Elsa 4 waits where Elsa 3 continued past a child that suspended. Elsa 3 ran an unset value as false. Only
+   a literal true omits the sentence.
 3. **Given** a child that completes or faults, **When** the converted parent runs, **Then** the node on Elsa 3's `Done`
    runs in both cases.
 4. **Given** an Execute Workflow node that captures `Result`, **When** it is converted, **Then** it is refused with
@@ -198,13 +208,22 @@ faults.
   a completed child (spec 099 FR-010), so a capture keeps its previous value. FR-011 records this as an accepted
   difference.
 - **A child is cancelled.** In Elsa 3 an awaited parent stayed suspended. In Elsa 4 the dispatch selects `Cancelled`.
-  No Elsa 3 port maps to `Cancelled`, so the branch ends there instead of hanging. This is an accepted difference
-  (FR-011).
+  No Elsa 3 port maps to it:
+  - in a Flowchart parent the branch ends there instead of hanging;
+  - in a Sequence parent, which continues after any outcome but Break, the next step runs.
+
+  This is an accepted difference (FR-011).
 - **The child reads `ParentInstanceId`.** Elsa 3 added `ParentInstanceId` to every child's input. Elsa 4 does not, so a
   converted child that reads it gets nothing. This is an accepted difference (FR-011). To keep it, pass it as an
   explicit input.
 - **The child start fails.** Elsa 3 threw and faulted the parent's activity. Elsa 4 selects `DispatchFailed`, which no
-  Elsa 3 port maps to, so the branch ends. This is unchanged by this specification.
+  Elsa 3 port maps to:
+  - in a Flowchart parent the branch ends;
+  - in a Sequence parent the next step runs.
+
+  This specification does not change that. It is an accepted difference (FR-011).
+- **A Sequence parent.** The `Done` mappings in FR-007 and FR-009 matter only in a Flowchart. A Sequence runs its next
+  step after any dispatch outcome, so a faulted child already continued there, as in Elsa 3.
 - **A blank `CorrelationId`.** Elsa 3 left the child uncorrelated. Elsa 4 gives it the parent's correlation id. This is
   unchanged (spec 236).
 - **The child version.** Elsa 3 ran the child's published version at run time. Elsa 4 pins the exact executable at
@@ -220,15 +239,16 @@ faults.
 
 **Elsa 4 runtime**
 
-- **FR-001**: Dispatch Workflow MUST declare a new output, `Output`. It is a JSON object with one property per output of
-  the completed child: the output's name, exactly as the child declares it, mapped to the child's committed value,
-  unchanged.
+- **FR-001**: Dispatch Workflow MUST declare a new output, `Output`, typed as a JSON object. It has one property per
+  output the completed child set: the output's name, exactly as the child declares it, mapped to the child's committed
+  value, unchanged. A converted Elsa 3 `Result` variable (`Object`, `ObjectDictionary`) MUST accept the capture at
+  publish.
 - **FR-002**: `Output` MUST be produced only when the dispatch waited and the child completed (`Completed`). It MUST be
   absent on `Dispatched`, `Faulted`, `Cancelled` and `DispatchFailed`. An absent output leaves a capture's variable
   unchanged.
 - **FR-003**: `Output` MUST be built from the child's committed workflow output values. It MUST NOT be built from the
   diagnostics capture policy or from `Result.outputs`, so no diagnostics setting changes it.
-  - An output marked sensitive, or not stored inline, MUST be left out.
+  - An output marked sensitive, or required to be encrypted, or carrying a redaction mode or a retention policy (its value protection policy), or not stored inline, MUST be left out.
   - A completed child with no outputs gives `{}`.
   - The values MUST be replay-stable: a resumed or retried parent gets the same `Output` (spec 099 FR-008).
 - **FR-004**: `Result` and `ChildWorkflowExecutionId` MUST keep their current shape and behaviour.
@@ -245,8 +265,8 @@ faults.
 
 - **FR-008**: An Elsa 3 Execute Workflow MUST convert to a Dispatch Workflow with `WaitForCompletion` literal true,
   whatever the Elsa 3 value. The existing `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` warning MUST be raised. When the
-  Elsa 3 value is literal false or bound, the warning MUST also say that Elsa 4 waits for a child that suspends where
-  Elsa 3 continued.
+  Elsa 3 value is anything but literal true (unset, null, literal false or bound), the warning MUST also say that Elsa 4
+  waits for a child that suspends where Elsa 3 continued.
 - **FR-009**: An Elsa 3 Execute Workflow's `Done` MUST map to `Completed` and `Faulted`.
 - **FR-010**: An Elsa 3 Execute Workflow `Result` capture MUST be refused with `ELS3-ACTIVITY-MEMBER-SEMANTICS-CHANGED`.
   Elsa 4 Dispatch Workflow has a `Result` output, but it means something else, so the generic lost-output message
@@ -269,7 +289,10 @@ faults.
   depends on how the child runs or how a script reads the value, not on the converted node. They MUST be recorded in the
   converter's mapping documentation (`extensions/Elsa3/src/Mapping/README.md`):
   - A faulted child's outputs are not carried (FR-002); Elsa 3 resumed the parent with them.
-  - A cancelled child ends the branch on `Cancelled`; Elsa 3 left an awaited parent suspended.
+  - A cancelled child selects `Cancelled`, which ends a Flowchart branch and continues a Sequence; Elsa 3 left an awaited
+    parent suspended.
+  - A failed child start selects `DispatchFailed`, with the same Flowchart and Sequence behaviour; Elsa 3 faulted the
+    parent's activity.
   - The child gets no `ParentInstanceId` input.
   - An output read must match the output name's case.
 - **FR-011a**: Spec 236's member map (`specs/236-elsa3-activity-map/member-map.md`) MUST be amended in place for the
@@ -285,8 +308,8 @@ faults.
 
 ### Key Entities
 
-- **Dispatch output object** (`Output`): the completed child's named outputs, name → JSON value, without redacted
-  entries. Its shape is the kernel's `DispatchResult.Output`.
+- **Dispatch output object** (`Output`): the completed child's named outputs, name → JSON value, without outputs whose
+  value policy protects them (FR-003). Its shape is the kernel's `DispatchResult.Output`.
 - **Dispatch result** (`Result`): unchanged. It holds the child execution id, the terminal status, the output entries
   with type and redaction, and diagnostics.
 

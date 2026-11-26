@@ -15,17 +15,23 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   children each give no `Output`. A variable that captures `Output` and holds `"before"` still holds `"before"` after
   each of them (FR-002, plan D-1).
 - [ ] T003 Policy-free read of a child's committed workflow outputs (plan D-2). It selects the same outputs as
-  `RuntimeWorkflowOutputStateProjection`, without `IRuntimePayloadCapturePolicy`, and leaves out sensitive-marked and
-  not-inline values. Add unit tests beside the existing projection tests.
+  `RuntimeWorkflowOutputStateProjection`, without `IRuntimePayloadCapturePolicy`. It leaves out values whose
+  `DurableValuePolicies.Read` is protected (sensitive, encryption, redaction mode, retention) and values not stored
+  inline. Add unit tests beside the existing projection tests, one per exclusion. Fix the stale "nothing writes it
+  yet" comment.
 - [ ] T003a `WorkflowDispatchCompletionEnricher` sets `WorkflowDispatchParentResumePayload.Output` for `Completed` from
-  T003, and payload equivalence includes it. Enricher tests: the value is replay-stable, a conflicting re-enrichment
-  fails closed, and `Result.outputs` is unchanged.
+  T003.
+  - The payload constructor rejects `Output` on any other status.
+  - `WorkflowDispatchDeliveryFailureProjector` passes null, and `DispatchWorkflowResumeGuard` reads the member.
+  - Update the "payload-safe" doc comment.
+  - Enricher tests: the value is replay-stable; a conflicting re-enrichment fails closed; a payload with `Output` on
+    `Faulted` is rejected; `Result.outputs` is unchanged.
 - [ ] T003b `DispatchWorkflow.ResumeAsync` copies `payload.Output` into the activity result for `Completed`. End-to-end
   tests:
   - A child with output `Decision = "approved"` gives `{ "Decision": "approved" }`.
   - A 1,000-character `Summary` and an output named `token` arrive unchanged, while `Result.outputs` shows the
     diagnostic view.
-  - A sensitive-marked output is left out.
+  - Outputs that are sensitive, encryption-required, redaction-moded or retention-governed are left out.
   - Two declared outputs with one set give one property.
   - A child with no outputs gives `{}`.
 - [ ] T004 [P] `DispatchWorkflowCheckpointTests`: a waiting parent resumed after a restart gives the same `Output`
@@ -50,10 +56,10 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   `Elsa3MappingFeature`, with a feature-registration test. `WaitForCompletion` becomes
   `Structure("WaitForCompletion", Elsa3MemberKind.Input)`, and the rewrite emits it with `SetProperty`, so
   `RemoveConsumedStructure` keeps it. The rewrite always emits literal `true` and raises
-  `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` once. The warning adds the suspended-child sentence when the Elsa 3 value is
-  literal false or bound (FR-008).
+  `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` once. The warning adds the suspended-child sentence unless the Elsa 3 value
+  is literal true (FR-008).
   - Tests: an unset value, literal true, literal false, a bound value and an explicit null. In each case the output is
-    literal true and there is exactly one warning.
+    literal true and there is exactly one warning. The sentence appears in all of them except literal true.
   - Update `A_null_ExecuteWorkflow_wait_keeps_spec_236s_mapping` and `Elsa3ConversionDiagnosticsTests` to the new
     rule.
 - [ ] T011 [P] Update `Elsa3ActivityMapCoverageTests` and the `elsa3-activity-surface.json` fixture to the new rules.
@@ -62,11 +68,12 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
 ## Phase 3: Integration and records
 
 - [ ] T012 Import integration (`DispatchWorkflowCallTests` with `dispatch-caller.json`): add an awaited Elsa 3 dispatch
-  that captures `Result` and reads a child output by name. Import, publish and run it on the import host, then assert
-  the value (SC-002 on the import path).
-- [ ] T013 [P] Converter README (`extensions/Elsa3/src/Mapping/README.md`): add the FR-006 to FR-011 rows, the four
-  accepted differences (a faulted child's outputs, a cancelled child, `ParentInstanceId`, output-name case), and
-  Execute Workflow's always-wait.
+  that captures `Result` into an `Object` variable and one into an `ObjectDictionary` variable, and reads a child output
+  by name. Import, publish and run it on the import host, then assert the value (FR-001 capture at publish, SC-002 on
+  the import path). Add one Sequence-parent case: a faulted child runs the next step.
+- [ ] T013 [P] Converter README (`extensions/Elsa3/src/Mapping/README.md`): add the FR-006 to FR-011 rows, the five
+  accepted differences (a faulted child's outputs, a cancelled child, a failed child start, `ParentInstanceId`,
+  output-name case) with their Flowchart and Sequence behaviour, and Execute Workflow's always-wait.
 - [ ] T013a [P] Amend spec 236's `member-map.md` rows for `DispatchWorkflow.Result`, the `Done` outcome and
   `ExecuteWorkflow` in place, citing spec 1245 (FR-011a).
 - [ ] T014 Set the spec's status to `Implemented` in the implementation PR (not in a separate PR). Tell the S-15 session

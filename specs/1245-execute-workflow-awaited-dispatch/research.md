@@ -47,8 +47,13 @@ coordinator chose an awaited dispatch over a reusable graph activity.
 - Outputs (`DispatchWorkflowActivityResult`): `ChildWorkflowExecutionId` and `Result`. `Result` is a
   `DispatchWorkflowResult` holding the child id, the status, `Outputs` as `{Name, Value, DeclaredType, IsRedacted}`
   entries (only a completed child carries them, spec 099 FR-010/FR-012) and diagnostic metadata.
-- A waited dispatch resumes through `ResumeAsync` with a `WorkflowDispatchParentResumePayload`. The payload already
-  carries the safe output entries, so FR-001 to FR-003 only reshape data the resume already has.
+- A waited dispatch resumes through `ResumeAsync` with a `WorkflowDispatchParentResumePayload`. Its output entries are
+  the diagnostics view (below), so `Output` needs a separate read without the policy (plan D-2).
+- A child's Set Output keeps the written value's protection policy on the durable row (`IsSensitive`,
+  `RequiresEncryption`, `RedactionMode`, `RetentionPolicy`; `WorkflowIntrinsicExecutor`). `DurableValuePolicies.Read`
+  reads it back.
+- A Sequence parent runs its next step after any child outcome except Break (`Sequence`). So outcome mapping matters only
+  in a Flowchart.
 
 Child outputs in `Result.outputs` come from `WorkflowOutputSource`, which projects them through
 `IRuntimePayloadCapturePolicy` (`RuntimeWorkflowOutputStateProjection.ProjectOne`). The default level for

@@ -43,15 +43,26 @@ compatibility shims.
    - `WorkflowDispatchCompletionEnricher.CreateIntent` builds `Result.outputs` from `IWorkflowOutputSource`, which runs
      the diagnostics capture policy (research R-2). `Output` needs the child's committed values instead.
    - Add a policy-free read of the child's workflow outputs: the same latest-per-name selection over the child's durable
-     values as `RuntimeWorkflowOutputStateProjection.Project`, with the same pending checkpoint changes. It leaves out
-     values marked sensitive (`RuntimeMetadataKeys.IsSensitive`) and values not stored inline, and it never consults
-     `IRuntimePayloadCapturePolicy`.
+     values as `RuntimeWorkflowOutputStateProjection.Project`, with the same pending checkpoint changes. It never
+     consults `IRuntimePayloadCapturePolicy`. It leaves out two kinds of value:
+     - a value whose `DurableValuePolicies.Read(row)` is protected: `IsSensitive`, `RequiresEncryption`, a
+       `RedactionMode` or a `RetentionPolicy`, the same test as `StepWorkflowState.Protected` plus retention;
+     - a value not stored inline.
+   - Raw values now reach three surfaces that held only policy-filtered snapshots before: the outbox intent payload,
+     the bookmark-resume stimulus input (`ParentResumeExecutor`) and the parent's activity result envelope. The
+     protected-value exclusion is what keeps those surfaces safe.
+   - Update the "payload-safe" doc comment on `WorkflowDispatchParentResumePayload` to say what `Output` carries. Fix
+     the stale "nothing writes it yet" comment in `RuntimeWorkflowOutputStateProjection`: Set Output writes it.
    - Expose that read as a separate method or contract beside the existing source, so the diagnostics read and the data
      read cannot be confused. Use the existing contracts in `Workflows.Runtime.Core`; no new pattern.
 4. The enricher puts that object on `WorkflowDispatchParentResumePayload` as a new `Output` (`JsonElement?`). It is set
    only for `Completed`, ordered by name, and is `{}` when the child has no outputs.
-   - Payload equivalence (`IsEquivalentTo`) and intent replay include it, so a re-enriched checkpoint that differs fails
-     closed, as `Result` does today (spec 099 FR-005, FR-008).
+   - The intent comparison already compares the whole payload as canonical JSON (`RuntimeCheckpointCommit`), so
+     `Output` is covered: a re-enriched checkpoint that differs fails closed (spec 099 FR-005, FR-008).
+   - The payload constructor gets an invariant: `Output` may be set only when `Result.Status` is `Completed`, as
+     `DispatchWorkflowResult` already does for its outputs.
+   - The other call site, `WorkflowDispatchDeliveryFailureProjector`, passes null. The deserializer,
+     `DispatchWorkflowResumeGuard`, reads the new member.
    - `Result` and `Result.outputs` are untouched (FR-004).
 5. `ResumeAsync` copies `payload.Output` into `DispatchWorkflowActivityResult.Output` for `Completed`. Every other path,
    including `Dispatched`, passes `null`, which D-1 leaves out of the serialized result.
@@ -76,7 +87,8 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
      name. It does two things:
      - It always emits `WaitForCompletion` literal `true`.
      - It raises `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` itself, adding the sentence "Elsa 4 waits for a child that
-       suspends, where Elsa 3 continued" when the Elsa 3 value is literal false or bound (FR-008).
+       suspends, where Elsa 3 continued" unless the Elsa 3 value is literal true. Elsa 3 ran an unset value as false
+       (FR-008).
 
      The entry-level warning moves into the rewrite, so the warning is not raised twice.
 
@@ -85,7 +97,7 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
    - `Catalog("ExecuteWorkflow", …, [Outcome("Done", "Completed", "Faulted")])`.
    - `Cancelled` stays unmapped. An Elsa 3 cancelled child never resumed its parent (FR-011).
 4. **Records.**
-   - `extensions/Elsa3/src/Mapping/README.md` gets the rows for FR-006 to FR-011, including the four accepted
+   - `extensions/Elsa3/src/Mapping/README.md` gets the rows for FR-006 to FR-011, including the five accepted
      differences.
    - Spec 236's `member-map.md` rows for `DispatchWorkflow.Result`, the `Done` outcome and `ExecuteWorkflow` are
      amended in place, citing spec 1245 (FR-011a).
@@ -98,7 +110,8 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
   - End-to-end tests run on the real `WorkflowOutputSource` with default diagnostics settings.
     - A completed child gives the object, including a 1,000-character string and an output named `token`, both
       unchanged.
-    - A sensitive-marked output is left out.
+    - An output with each protection kind (sensitive, encryption, redaction mode, retention) is left out, one test per
+      kind.
     - Faulted, cancelled and dispatch-failed children give no `Output`, and a capture keeps its previous value.
     - Fire-and-forget gives no `Output`.
   - Enricher test: the resume payload's `Output` is replay-stable, and a conflicting re-enrichment fails closed.
