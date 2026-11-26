@@ -21,26 +21,47 @@ export interface StudioCodeIntelligenceOptions {
 }
 
 const completionRequestSets = new WeakMap<EditorView, Set<AbortController>>();
+const setEmptyCompletion = StateEffect.define<boolean>();
+const emptyCompletion = StateField.define<boolean>({
+  create: () => false,
+  update(empty, transaction) {
+    if (transaction.docChanged || !transaction.startState.selection.eq(transaction.state.selection)) return false;
+    for (const effect of transaction.effects) if (effect.is(setEmptyCompletion)) return effect.value;
+    return empty;
+  }
+});
 
 /** Translates the public, engine-neutral intelligence contract into CodeMirror extensions. */
 export function createCodeMirrorCodeIntelligenceExtensions(options: StudioCodeIntelligenceOptions): Extension[] {
   const completionRequests = new Set<AbortController>();
   const completionSource = createCompletionSource(options, completionRequests);
   const extensions: Extension[] = [
+    emptyCompletion,
     autocompletion({
       override: [completionSource],
       positionInfo: (view, list, option, info, space) => positionCompletionInfo(view.textDirection === Direction.RTL, list, option, info,
         space, view.dom.querySelector<HTMLElement>(".cm-tooltip-autocomplete"))
     }),
     ViewPlugin.fromClass(class {
+      private readonly status = document.createElement("div");
+
       constructor(private readonly view: EditorView) {
         completionRequestSets.set(view, completionRequests);
+        this.status.className = "studio-code-editor-completion-status";
+        this.status.setAttribute("role", "status");
+        view.dom.append(this.status);
+      }
+
+      update(update: ViewUpdate) {
+        const empty = update.state.field(emptyCompletion);
+        if (empty !== update.startState.field(emptyCompletion)) this.status.textContent = empty ? "No suggestions" : "";
       }
 
       destroy() {
         for (const controller of completionRequests) controller.abort();
         completionRequests.clear();
         completionRequestSets.delete(this.view);
+        this.status.remove();
       }
     })
   ];
@@ -55,7 +76,7 @@ export function createCodeMirrorCodeIntelligenceExtensions(options: StudioCodeIn
           if (!hover || controller.signal.aborted || view.state.doc.toString() !== source) return null;
           const dom = document.createElement("div");
           dom.className = "studio-code-editor-hover";
-          dom.textContent = sanitizeStudioCodeMarkdown(hover.documentation.markdown);
+          appendDocumentationText(dom, sanitizeStudioCodeMarkdown(hover.documentation.markdown));
           return {
             pos: hover.range?.from ?? position,
             end: hover.range?.to ?? position,
@@ -171,7 +192,7 @@ function createKeyboardHoverPanel(hover: StudioCodeHover) {
     dom.setAttribute("role", "status");
     dom.setAttribute("aria-live", "polite");
     dom.setAttribute("aria-label", "Hover information");
-    dom.textContent = sanitizeStudioCodeMarkdown(hover.documentation.markdown);
+    appendDocumentationText(dom, sanitizeStudioCodeMarkdown(hover.documentation.markdown));
     return { dom, top: false };
   };
 }
@@ -243,7 +264,8 @@ function createSignaturePanel(signature: StudioCodeSignature) {
 /** Dismisses completion, keyboard-hover, or signature UI before Escape arms Tab-focus escape. */
 export function dismissCodeMirrorIntelligence(view: EditorView) {
   const completion = completionStatus(view.state);
-  if (completion) closeCompletion(view);
+  cancelPendingCodeMirrorCompletion(view);
+  if (completion === "active") closeCompletion(view);
   // A pending query has no visible UI to dismiss. Cancel it so it cannot reopen after Escape,
   // but still let this Escape arm keyboard focus exit.
   let dismissed = completion === "active";
@@ -259,6 +281,10 @@ export function dismissCodeMirrorIntelligence(view: EditorView) {
     signatureHelpRequests.delete(view);
   }
   const effects: StateEffect<unknown>[] = [];
+  if (view.state.field(emptyCompletion, false)) {
+    effects.push(setEmptyCompletion.of(false));
+    dismissed = true;
+  }
   if (view.state.field(keyboardHoverField, false)) {
     effects.push(setKeyboardHover.of(null));
     dismissed = true;
@@ -271,9 +297,26 @@ export function dismissCodeMirrorIntelligence(view: EditorView) {
   return dismissed;
 }
 
+export function clearCodeMirrorCompletionMessage(view: EditorView) {
+  if (view.state.field(emptyCompletion, false)) view.dispatch({ effects: setEmptyCompletion.of(false) });
+}
+
+export function cancelPendingCodeMirrorCompletion(view: EditorView) {
+  abortCodeMirrorCompletionRequests(view);
+  if (completionStatus(view.state) === "pending") {
+    closeCompletion(view);
+    // CodeMirror also tracks the running query while a provider promise settles.
+    view.dispatch({ selection: view.state.selection });
+  }
+}
+
+function abortCodeMirrorCompletionRequests(view: EditorView) {
+  for (const controller of completionRequestSets.get(view) ?? []) controller.abort();
+}
+
 /** Cancels every source-bearing request owned by a view before it is destroyed or revoked. */
 export function cancelCodeMirrorIntelligence(view: EditorView) {
-  for (const controller of completionRequestSets.get(view) ?? []) controller.abort();
+  abortCodeMirrorCompletionRequests(view);
   completionRequestSets.delete(view);
   if (completionStatus(view.state)) closeCompletion(view);
   keyboardHoverRequests.get(view)?.abort();
@@ -304,9 +347,13 @@ function createCompletionSource(
       signal: controller.signal
     }))
       .catch(() => options.completions)
-      .then(supplied => controller.signal.aborted || context.aborted
-        ? null
-        : toCompletionResult(supplied, word?.from ?? context.pos))
+      .then(supplied => {
+        if (controller.signal.aborted || context.aborted) return null;
+        if (context.explicit && supplied?.length === 0 && context.view?.hasFocus) {
+          context.view.dispatch({ effects: setEmptyCompletion.of(true) });
+        }
+        return toCompletionResult(supplied, word?.from ?? context.pos);
+      })
       .finally(() => completionRequests.delete(controller));
   };
 }
@@ -338,13 +385,23 @@ function renderCompletionDocumentation(markdown: string) {
   // Match whole delimiter runs so nested backticks remain literal.
   for (const match of markdown.matchAll(/(?<![\\`])(`+)(?!`)([^\n]+?)(?<!`)\1(?!`)/g)) {
     const prose = stripStudioCodeMarkdownMarkup(markdown.slice(from, match.index));
-    dom.append(from === 0 ? prose.trimStart() : prose);
+    appendDocumentationText(dom, from === 0 ? prose.trimStart() : prose);
     const code = document.createElement("code");
-    code.textContent = match[2]!;
+    appendDocumentationText(code, match[2]!);
     dom.append(code);
     from = match.index + match[0].length;
   }
   const tail = stripStudioCodeMarkdownMarkup(markdown.slice(from));
-  dom.append(from === 0 ? tail.trim() : tail.trimEnd());
+  appendDocumentationText(dom, from === 0 ? tail.trim() : tail.trimEnd());
   return dom;
+}
+
+function appendDocumentationText(dom: HTMLElement, text: string) {
+  let from = 0;
+  for (const boundary of text.matchAll(/[\p{ID_Continue}$]\.(?=[\p{ID_Start}$])/gu)) {
+    const end = boundary.index + boundary[0].length;
+    dom.append(text.slice(from, end), document.createElement("wbr"));
+    from = end;
+  }
+  dom.append(text.slice(from));
 }
