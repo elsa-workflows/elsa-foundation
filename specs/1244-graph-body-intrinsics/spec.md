@@ -84,8 +84,8 @@ Excluded:
   behaviour over; it is a deliberate Elsa 4 behaviour, not a gap. Publish keeps refusing it, and the import refuses it
   with its own code and guidance that explains why and what to do instead (FR-013). *(Decision Q2.)*
 - Merge and Reduce intrinsics in a body (Elsa 3 has no equivalent; no case needs them).
-- Body Set targets that need encryption or external storage: refused at publish (FR-015), as spec 1241 refuses them for
-  a step write (there at run time).
+- Body Set writes whose value needs encryption or external storage: refused at run time (FR-015), as spec 1241 refuses
+  them for a step write.
 - Background placement of a body intrinsic (ADR 0093 C9 unchanged).
 
 ## User Scenarios & Testing *(mandatory)*
@@ -194,7 +194,7 @@ Correlate; publish.
 - A reusable activity used inside another reusable activity: each Set reaches its own nearest body only; Correlate and
   Set Name still act on the running workflow.
 - A graph published with an older graph compiler: unchanged; pre-stable, it is republished, not migrated.
-- A body Set to a variable with external storage or encryption: refused at publish (FR-015).
+- A body Set whose value needs external storage or encryption: the step faults at run time (FR-015).
 
 ## Requirements *(mandatory)*
 
@@ -234,7 +234,8 @@ Correlate; publish.
 - **FR-012**: The readiness guide, the Elsa 3 mapping README, the converter's guidance strings (`Elsa3ReusableGuidance`,
   and every `Elsa3ExpressionRewriter` text that cites the retired code or #3023, including the script-state guidance that
   says closed reusable bodies cannot change running-workflow state), the graph authoring reference
-  (`docs/reference/activity-definition-authoring-composition.md`) and the extension-point catalogs MUST describe the new support and drop the #3023 workarounds.
+  (`docs/reference/activity-definition-authoring-composition.md`), `docs/runtime-variable-lifecycle.md` (its "not covered
+  yet" notes on intrinsic closed-scope writes and #3023) and the extension-point catalogs MUST describe the new support and drop the #3023 workarounds.
 - **FR-013**: The converter MUST refuse a reusable-body Finish with `ELS3-ACTIVITY-REUSABLE-FINISH-UNSUPPORTED`, listed in the
   readiness guide as an Elsa 4 behaviour (not a gap). Its guidance and the readiness guide MUST say: what Elsa 3 did (the
   activity ended the whole calling workflow, cutting off the caller's other branches, and the activity never completed
@@ -248,9 +249,9 @@ Correlate; publish.
   `EXTENSION_POINTS.md` rows that name the fingerprint updated. Graphs compiled before are republished, not migrated
   (pre-stable).
 
-- **FR-015**: Graph draft validation MUST refuse a body Set whose target variable declares external storage or requires
-  encryption, with `activity.graph.set-local-target-invalid` (a new check: no such publish check exists today). A workflow
-  Set may write external storage; a body Set does not, matching spec 1241's closed-scope rows.
+- **FR-015**: At run time a body Set whose value's combined policy requires encryption or external storage MUST fault
+  the step with a clear message and write nothing, as spec 1241's session write to a closed-scope row does. Publish does
+  not check it: a graph variable declares no encryption, and the policy is only known at run time.
 ### Key Entities
 
 - **Body intrinsic node**: a Set, Set Output, Correlate or Set Name node inside a graph body, compiled as a local
