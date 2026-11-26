@@ -362,6 +362,39 @@ describe("StudioCodeEditor", () => {
     unmount();
   }, 20000);
 
+  it("announces an empty keyboard completion and dismisses it on Escape or typing", async () => {
+    const completionProvider = vi.fn(() => []);
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: "variables.plain." }),
+      languageAdapter: javaScriptLanguageAdapter,
+      completionProvider
+    });
+    const message = () => [...container.querySelectorAll('[role="status"]')].find(node => node.textContent === "No suggestions");
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const view = EditorView.findFromDOM(content)!;
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+      content.focus();
+      key(content, " ", { code: "Space", ctrlKey: true });
+
+      await vi.waitFor(() => expect(message()).toBeDefined());
+      key(content, "Escape");
+      expect(message()).toBeUndefined();
+
+      key(content, " ", { code: "Space", ctrlKey: true });
+      await vi.waitFor(() => expect(message()).toBeDefined());
+      const end = view.state.doc.length;
+      view.dispatch({ changes: { from: end, insert: "x" }, selection: { anchor: end + 1 }, userEvent: "input.type" });
+
+      await vi.waitFor(() => expect(completionProvider).toHaveBeenLastCalledWith(expect.objectContaining({ explicit: false })));
+      expect(message()).toBeUndefined();
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
   it("shows and announces hover help from the keyboard before Escape arms focus exit", async () => {
     const { container, unmount } = renderEditor({
       document: codeDocument({ value: "formatTotal" }),

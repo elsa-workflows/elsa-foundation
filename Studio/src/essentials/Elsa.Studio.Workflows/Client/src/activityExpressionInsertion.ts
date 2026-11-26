@@ -1,5 +1,5 @@
 import type { StudioExpressionEditorSnapshot, StudioExpressionSourceInsertion } from "@elsa-workflows/studio-sdk";
-import { readPortableExpressionDefinition } from "./activityProperties";
+import { camelize, readPortableExpressionDefinition } from "./activityProperties";
 import { createPortableExpressionDefinition } from "./workflowInputArgumentBindings";
 import { readActivityDataParameterSource, sameParameterSource, type ActivityDataContextResult, type ActivityDataSourceFacts } from "./api/activityDataSelection";
 
@@ -36,6 +36,13 @@ function collectionKind(value: unknown): string | null {
   return typeof value === "string" && ["single", "array", "list", "hashset", "dictionary"].includes(value.toLowerCase()) ? value.toLowerCase() : null;
 }
 
+function variableArgumentName(displayName: string | null | undefined): string {
+  const [first, ...rest] = displayName?.normalize("NFKD").replace(/\p{M}/gu, "").match(/[a-zA-Z0-9]+/g) ?? [];
+  if (!first || !/^[a-zA-Z]/.test(first)) return "data";
+  const lowerFirst = first === first.toUpperCase() ? first.toLowerCase() : camelize(first);
+  return lowerFirst + rest.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join("");
+}
+
 /** Plans only: the caller applies source, owner payload and selection with the current editor controller. */
 export function planActivityExpressionInsertion({ value, syntax, snapshot, result, source, adapter }: {
   value: unknown; syntax: string; snapshot: StudioExpressionEditorSnapshot; result: ActivityDataContextResult;
@@ -58,8 +65,9 @@ export function planActivityExpressionInsertion({ value, syntax, snapshot, resul
   if (definition.resultType.alias !== target.alias || collectionKind(definition.resultType.collectionKind) !== collectionKind(target.collectionKind))
     return refuse("The portable result type does not match this input. The authored definition is preserved.");
   const candidates = Object.entries(definition.parameters).filter(([, binding]) => sameParameterSource(binding, parameter)).map(([alias]) => alias);
-  let nextAlias = "data", suffix = 2;
-  while (Object.prototype.hasOwnProperty.call(definition.parameters, nextAlias)) nextAlias = `data${suffix++}`;
+  const baseAlias = parameter.kind === "Variable" ? variableArgumentName(source.displayName) : "data";
+  let nextAlias = baseAlias, suffix = 2;
+  while (Object.prototype.hasOwnProperty.call(definition.parameters, nextAlias)) nextAlias = `${baseAlias}${suffix++}`;
   candidates.push(nextAlias);
   let lastReason = "This syntax cannot insert the selected reference at this position.";
   for (const alias of candidates) {

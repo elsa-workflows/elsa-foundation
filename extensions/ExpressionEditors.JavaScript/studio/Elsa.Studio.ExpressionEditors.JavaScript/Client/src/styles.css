@@ -65,6 +65,15 @@
   outline-offset: 2px;
 }
 
+.js-expression-expanded .studio-code-editor-rich .cm-editor:focus-within,
+.js-expression-expanded .studio-code-editor-input:focus {
+  outline: none;
+}
+
+.js-expression-expanded .studio-code-editor-diagnostics {
+  padding: 0 0.625rem 0.5rem;
+}
+
 .js-expression-help {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);

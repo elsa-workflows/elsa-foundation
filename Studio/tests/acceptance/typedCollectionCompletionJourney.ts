@@ -136,8 +136,15 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
     const alias = Object.entries(definition.parameters ?? {}).find(([, parameter]) => parameter.kind === "Variable" && parameter.variableKey === "orders")?.[0];
     return alias && definition.source === `${beforeInsert}args.${alias}` ? alias : null;
   };
-  await expect.poll(inserted, { message: "The whole orders list is inserted and saved as a parameter" }).not.toBeNull();
+  await expect.poll(inserted, { message: "The orders list is saved with a source-based parameter name" }).toBe("orders");
   await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
+  const summary = page.locator('.wf-sequence-step[data-id="consumer"] .wf-sequence-summary');
+  await expect(summary).toHaveText(`${beforeInsert}args.orders`);
+  await page.reload();
+  await s.canvas();
+  await expect(summary).toHaveText(`${beforeInsert}args.orders`);
+  await expect(summary).toBeVisible();
+  await expect.poll(inserted).toBe("orders");
   await capture(page, info, "collection-member-picker");
 }
 

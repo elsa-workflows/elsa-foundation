@@ -19,6 +19,7 @@ import { applyCodeMirrorDiagnostics } from "./codeMirrorDiagnostics";
 import { markCodeEditorReady } from "./markCodeEditorReady";
 import {
   cancelCodeMirrorIntelligence,
+  clearCodeMirrorCompletionMessage,
   createCodeMirrorCodeIntelligenceExtensions,
   dismissCodeMirrorIntelligence,
   requestCodeMirrorKeyboardHover
@@ -341,7 +342,8 @@ function createEntryState(props: StudioCodeEditorEngineProps, entry: CodeMirrorS
             entry.runtime.props.onFocus?.();
             return false;
           },
-          blur: () => {
+          blur: (_event, view) => {
+            clearCodeMirrorCompletionMessage(view);
             entry.runtime.explicitCompletion = false;
             entry.runtime.tabEscapeArmed = false;
             entry.runtime.props.onBlur?.();
@@ -429,6 +431,7 @@ function editabilityExtensions(readOnly: boolean, ariaLabel: string) {
 }
 
 function startExplicitCompletion(view: EditorView, runtime: CodeMirrorRuntime): boolean {
+  clearCodeMirrorCompletionMessage(view);
   const started = startCompletion(view);
   if (started) runtime.explicitCompletion = true;
   return started;

@@ -60,6 +60,7 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
       await expect(option.locator(".cm-completionDetail")).toHaveText("String");
     }
     await expect(page.locator(".cm-completionInfo")).toContainText(declaredNote);
+    await expect(page.locator(".cm-completionInfo wbr")).toHaveCount(connectionAlias.split(".").length - 1);
     await expectReadable(page.locator(".cm-completionInfo"), "Declared-type note");
     await expectUncovered(page.locator(".cm-completionInfo"), "Declared-type note");
     // The note box belongs to the completion popup; at narrow widths CodeMirror places it over the following options.
@@ -146,6 +147,7 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   const hover = page.locator(".cm-tooltip-hover .studio-code-editor-hover");
   await expect(hover).toContainText("connection: String");
   await expect(hover).toContainText(declaredNote);
+  await expect.poll(() => hover.locator("wbr").count()).toBeGreaterThan(0);
   await expectReadable(page.locator(".cm-tooltip-hover"), "Hover");
   await expectUncovered(page.locator(".cm-tooltip-hover"), "Hover");
   await capture(page, info, "typed-member-hover");
@@ -158,7 +160,7 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await expect.poll(source).toBe("variables.conn.connection + variables.plain.");
   await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
   await complete("variables.plain.");
-  await page.waitForTimeout(250); // CodeMirror applies a settled answer on its next update.
+  await expect(page.getByRole("status").filter({ hasText: /^No suggestions$/ })).toBeVisible();
   await expect(list()).toHaveCount(0);
   await capture(page, info, "untyped-no-members");
 
@@ -174,6 +176,13 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
   await complete(expandedSource);
   await expectConnectionMembers();
+  await expect(expanded.locator(".js-expression-expanded .studio-code-editor")).toHaveCSS("outline-style", "solid");
+  await expect(expanded.locator(".cm-editor")).toHaveCSS("outline-style", "none");
+  await expect.poll(() => expanded.locator(".studio-code-editor-diagnostics").evaluate(panel =>
+    parseFloat(getComputedStyle(panel).paddingInlineStart))).toBeGreaterThan(0);
+  const conversion = expanded.locator(".wf-conversion-caption");
+  await expect(conversion).toHaveText("Expression result → String");
+  await expectReadable(conversion, "Conversion caption");
   // A long line scrolls inside the editor; the dialog's own header and controls stay in place.
   const sideways = await expanded.evaluate(dialog => [dialog, ...dialog.querySelectorAll("*")]
     .filter(node => node.scrollLeft > 0 && !node.classList.contains("cm-scroller"))
@@ -193,6 +202,9 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   const variables = chooser.getByRole("listbox", { name: "Variables", exact: true });
   const variable = variables.getByRole("option", { name: `conn ${connectionAlias}`, exact: true });
   await expect(variable).toBeVisible();
+  const type = variable.locator(".wf-data-chooser-option-type");
+  await expect(type).toHaveText(connectionAlias);
+  await expectReadable(type, "Variable type");
   await expect(variables.getByRole("option", { name: "plain Object", exact: true })).toBeVisible();
   await capture(page, info, "chooser-typed-variable");
   await variable.press("Enter");
@@ -206,9 +218,9 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
     const alias = Object.entries(definition.parameters ?? {}).find(([, parameter]) => parameter.kind === "Variable" && parameter.variableKey === "conn")?.[0];
     return alias && definition.source === `${beforeInsert}args.${alias}` ? alias : null;
   };
-  await expect.poll(inserted, { message: "The whole conn variable is inserted and saved as a parameter" }).not.toBeNull();
+  await expect.poll(inserted, { message: "The conn variable is saved with a source-based parameter name" }).toBe("conn");
   await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
-  await expect(large).toHaveText(`${beforeInsert}args.${await inserted()}`);
+  await expect(large).toHaveText(`${beforeInsert}args.conn`);
   // The editor scrolls to the inserted reference, so its end is on screen at narrow widths too.
   await expect.poll(() => expanded.locator(".cm-scroller").evaluate(scroller => {
     const lines = scroller.querySelectorAll(".cm-line"), line = lines[lines.length - 1];

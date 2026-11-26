@@ -1,6 +1,6 @@
 import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode } from "./workflowTypes";
-import { getInputPropertyName, readWrappedInputValue } from "./activityProperties";
+import { getInputPropertyName, readPortableExpressionDefinition, readWrappedInputValue } from "./activityProperties";
 import { isTechnicalActivityLabel } from "./technicalActivityLabel";
 import { isMaskedInput, readSecretReference } from "./maskedInput";
 import { describeInferredSource } from "./conversionSource";
@@ -95,11 +95,8 @@ function formatExpression(expressionType: string, value: unknown): string | unde
 
   if (type === "variable" || type === "input") return describeInferredSource(type, value, "auto");
 
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed || undefined;
-  }
-  return undefined;
+  const source = typeof value === "string" ? value : readPortableExpressionDefinition(value, type)?.source;
+  return source?.trim() || undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
