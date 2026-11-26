@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-26
 
-**Status**: Draft
+**Status**: Approved (coordinator, 2026-11-26)
 
 **Input**: Issue [#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023), part of initiative
 [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052). A reusable (graph) activity body holds the engine
@@ -71,12 +71,13 @@ the one specs 265 and 1241 already apply.
   is the workflow that called the reusable activity. That is what Elsa 3 did ("Correlate, Set Name and Finish act on that
   calling workflow", readiness guide), and it is what spec 1234 already says these values are: they belong to the
   running workflow. The ADR 0090 correlation rule holds: existing waits keep the correlation they captured.
-  *(Open question Q1.)*
+  *(Decision Q1.)* Elsa 3 workflows that correlate inside a reusable activity therefore import unchanged.
 
 Excluded:
 
-- **Finish** in a body: it ends the whole calling workflow in Elsa 3. It stays refused, with today's guidance. *(Open
-  question Q2.)*
+- **Finish** in a body: in Elsa 3 it ends the whole calling workflow from inside an activity. Elsa 4 does not carry that
+  behaviour over; it is a deliberate Elsa 4 behaviour, not a gap. Publish keeps refusing it, and the import refuses it
+  with its own code and guidance that explains why and what to do instead (FR-013). *(Decision Q2.)*
 - Merge and Reduce intrinsics in a body (Elsa 3 has no equivalent; no case needs them).
 - Variables that need encryption or external storage: still refused, as for a step write (spec 1241).
 - Background placement of a body intrinsic (ADR 0093 C9 unchanged).
@@ -148,11 +149,12 @@ that call them.
 1. **Given** `Enrich`, **when** it is imported with its caller, **then** both publish and the caller reads `Result` with
    `checked = true`.
 2. **Given** a reusable Set Output that names an output the reusable workflow does not declare, **then** conversion
-   refuses it with a stable code and guidance (declare the output). It never becomes the caller's workflow output.
+   refuses it with `ELS3-REUSABLE-UNDECLARED-OUTPUT` and guidance (declare the output, or remove the Set Output). It
+   never becomes the caller's workflow output.
 3. **Given** a reusable body with an HTTP Endpoint whose Headers or Query String Data is captured, **then** the
    synthesized Set converts and the body variable holds the projection.
-4. **Given** a reusable body with Finish, **then** conversion still refuses it with `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`
-   and today's Finish guidance.
+4. **Given** a reusable body with Finish, **then** conversion refuses it with `ELS3-REUSABLE-UNSUPPORTED-FINISH`, and the
+   guidance explains why Elsa 4 does not support it and how to restructure (FR-013).
 5. **Given** the two S-15 definitions above, **then** they and their two root workflows publish (the JTest ledger
    records the run result; spec 1235 owns the acceptance count).
 
@@ -206,12 +208,20 @@ Correlate; publish.
 - **FR-008**: Placement of a reusable activity into a workflow MUST carry body intrinsics and remap a body Set's target
   to the placed boundary, as it does for captures.
 - **FR-009**: The Elsa 3 converter MUST stop refusing reusable-body Set Variable, Set Output, Correlate, Set Name and
-  HTTP Endpoint projections, and MUST keep refusing Finish with `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`.
+  HTTP Endpoint projections. `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED` is retired (pre-stable, no alias).
 - **FR-010**: The converter MUST convert a reusable Set Output that names a declared output to the graph's Set Output of
   that output, with no synthesized variable or output mapping (Q3), and MUST refuse one that names an undeclared output
-  with a stable code and guidance.
+  with `ELS3-REUSABLE-UNDECLARED-OUTPUT` and guidance.
 - **FR-011**: Studio's graph designer MUST offer Set Variable (with body targets only), Correlate and Set Name, and MUST
   focus their publish diagnostics on the node.
+- **FR-013**: The converter MUST refuse a reusable-body Finish with `ELS3-REUSABLE-UNSUPPORTED-FINISH`, listed in the
+  readiness guide as an Elsa 4 behaviour (not a gap). Its guidance and the readiness guide MUST say: what Elsa 3 did (the
+  activity ended the whole calling workflow, cutting off the caller's other branches, and the activity never completed
+  or returned its outputs); why Elsa 4 does not (an activity's effect on its caller is visible in the caller's own graph
+  through outcomes and outputs, so a caller can never be ended by something it cannot see); the supported approach
+  (replace Finish with a Complete that names a new declared outcome, for example `Finished`, and in each caller connect
+  that outcome to a Finish); and that moving the Finish into a workflow called by Dispatch or Execute Workflow is not
+  equivalent (it would end that called workflow, not the caller).
 - **FR-012**: The readiness guide, the Elsa 3 mapping README, the converter's guidance strings, the graph authoring
   reference and the extension-point catalogs MUST describe the new support and drop the #3023 workarounds.
 
@@ -245,16 +255,14 @@ Correlate; publish.
 - A storage driver an Elsa 3 variable names (the storage-drivers sub) is handled by #5683/#5698; this spec does not
   change it.
 
-## Open questions
+## Decisions (coordinator, 2026-11-26)
 
-1. **Q1 – Correlate and Set Name in a body act on the caller.** Support them, acting on the running workflow (the
-   caller), as Elsa 3 did? *Recommendation: yes.* It is Elsa 3 parity, the issue names it, ADR 0090 and spec 1234
-   already say the running workflow owns these values, and it removes a manual per-caller workaround. The alternative is
-   to keep refusing (no S-15 case needs it).
-2. **Q2 – Finish stays refused.** Keep Finish in a body out of scope, refused with today's guidance (replace it with a
-   declared outcome the caller connects to a Finish)? *Recommendation: yes.* Ending the whole caller from inside an
-   activity is a different decision, and no case needs it.
-3. **Q3 – Converter Set Output becomes the graph's native Set Output.** *Decided (coordinator, 2026-11-26): yes.* A
-   reusable Set Output converts to the graph Set Output intrinsic; the synthesized `output.{hash}` variable and output
-   mapping that `Elsa3ReusableOutputWriteRewrite` adds today are removed. The rewrite existed because Set Output could
-   not sit in a graph; now it can. Pre-stable, no shim.
+1. **Q1 – Correlate and Set Name in a body act on the caller: yes.** They change the running workflow's (the caller's)
+   correlation ID and instance name, as in Elsa 3. Real Elsa 3 workflows correlate inside reusable activities; they
+   import unchanged, and the per-caller workaround goes away.
+2. **Q2 – Finish stays refused, as an Elsa 4 behaviour: yes.** Ending the whole caller from inside an activity is not a
+   desirable behaviour. The import refuses it with its own code and guidance that is very clear about why and what to do
+   (FR-013).
+3. **Q3 – Converter Set Output becomes the graph's native Set Output: yes.** A reusable Set Output converts to the graph
+   Set Output intrinsic; the synthesized `output.{hash}` variable and output mapping that `Elsa3ReusableOutputWriteRewrite`
+   adds today are removed. Pre-stable, no shim.
