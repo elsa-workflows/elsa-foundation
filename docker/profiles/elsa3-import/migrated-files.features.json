@@ -1,0 +1,15 @@
+{
+  "JsonActivityReconciliation": {
+    "Options": {
+      "SourceId": "migrated-activities",
+      "FilePath": "/app/migrated/activities/activities.json"
+    }
+  },
+  "JsonWorkflowReconciliation": {
+    "Options": {
+      "SourceId": "migrated-workflows",
+      "FolderPath": "/app/migrated/workflows",
+      "PublishOnReconcile": true
+    }
+  }
+}
