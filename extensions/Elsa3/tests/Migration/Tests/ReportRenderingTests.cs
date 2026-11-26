@@ -82,9 +82,11 @@ public sealed class ReportRenderingTests
         Assert.Equal(hostile, parsed["definitions"]![0]!["name"]!.GetValue<string>());
     }
 
+    private static readonly Lazy<JsonSchema> Schema = new(() => JsonSchema.FromText(ReportJson.ReadSchema()));
+
     internal static void AssertValid(byte[] reportJson)
     {
-        var schema = JsonSchema.FromText(ReportJson.ReadSchema());
+        var schema = Schema.Value;
         using var document = JsonDocument.Parse(reportJson);
         var result = schema.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
 

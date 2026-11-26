@@ -6,6 +6,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa3.Activities.Design.Import.Integration.Tests" />
+    <InternalsVisibleTo Include="Elsa3.Migration.Tooling" />
+    <InternalsVisibleTo Include="Elsa3.Migration.Tests" />
   </ItemGroup>
 
   <ItemGroup>

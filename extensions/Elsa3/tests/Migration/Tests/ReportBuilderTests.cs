@@ -9,14 +9,14 @@ namespace Elsa3.Migration.Tests;
 public sealed class ReportBuilderTests
 {
     [Theory]
-    [InlineData("VF-IMP-005", FindingSeverity.Error, ReportBuilder.MustFix)]
-    [InlineData("ELS3-BEHAVIOUR-FOR-ZERO-STEP-FAULTS", FindingSeverity.Error, ReportBuilder.MustFix)]
-    [InlineData("ELS3-BEHAVIOUR-FOR-ZERO-STEP-FAULTS", FindingSeverity.Warning, ReportBuilder.Reconsider)]
-    [InlineData("ELS3-LITERAL-KEY-REWRITTEN", FindingSeverity.Warning, ReportBuilder.TakeIntoAccount)]
-    [InlineData("ELS3-BEHAVIOUR-FOR-ZERO-STEP-FAULTS", FindingSeverity.Info, ReportBuilder.TakeIntoAccount)]
-    [InlineData("ELSA4-UNKNOWN", FindingSeverity.Info, ReportBuilder.TakeIntoAccount)]
-    public void Category_follows_severity_and_the_behaviour_prefix(string code, FindingSeverity severity, string expected) =>
-        Assert.Equal(expected, ReportBuilder.Categorize(code, severity));
+    [InlineData("VF-IMP-005", "Error", ReportBuilder.MustFix)]
+    [InlineData("ELS3-BEHAVIOUR-FOR-ZERO-STEP-FAULTS", "Error", ReportBuilder.MustFix)]
+    [InlineData("ELS3-BEHAVIOUR-FOR-ZERO-STEP-FAULTS", "Warning", ReportBuilder.Reconsider)]
+    [InlineData("ELS3-LITERAL-KEY-REWRITTEN", "Warning", ReportBuilder.TakeIntoAccount)]
+    [InlineData("ELS3-BEHAVIOUR-FOR-ZERO-STEP-FAULTS", "Info", ReportBuilder.TakeIntoAccount)]
+    [InlineData("ELSA4-UNKNOWN", "Info", ReportBuilder.TakeIntoAccount)]
+    public void Category_follows_severity_and_the_behaviour_prefix(string code, string severity, string expected) =>
+        Assert.Equal(expected, ReportBuilder.Categorize(code, Enum.Parse<FindingSeverity>(severity)));
 
     public static TheoryData<string[], string> BucketCases => new()
     {
@@ -145,8 +145,8 @@ public sealed class ReportBuilderTests
             Definition("c"));
 
         Assert.Collection(report.Components,
-            component => Assert.Equal(("activity", "Acme.SendInvoice", new[] { "a", "b" }, 3), (component.Kind, component.Name, component.Definitions.ToArray(), component.Usages)),
-            component => Assert.Equal(("storage-driver", "Acme.BlobStorage", new[] { "a" }, 1), (component.Kind, component.Name, component.Definitions.ToArray(), component.Usages)));
+            component => Assert.Equal(("activity", "Acme.SendInvoice", "a,b", 3), (component.Kind, component.Name, string.Join(",", component.Definitions), component.Usages)),
+            component => Assert.Equal(("storage-driver", "Acme.BlobStorage", "a", 1), (component.Kind, component.Name, string.Join(",", component.Definitions), component.Usages)));
     }
 
     [Fact]

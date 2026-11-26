@@ -10,6 +10,7 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="JsonSchema.Net" />
+    <Using Include="Xunit" />
   </ItemGroup>
 
   <ItemGroup>
