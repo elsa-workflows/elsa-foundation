@@ -7,6 +7,8 @@ namespace Kernel.Foundation.Sqlite;
 
 public static partial class SqliteEmbeddedHosting
 {
+    // Share this edge with ingress and the running owner, including admissions made before it starts.
+    // A successor can recover durable work through a different edge. An earlier wait may then time out.
     internal static SqliteDirectRequests CreateRequests(string databasePath, string node, string actorType,
         TimeSpan? deduplicationWindow = null)
     {
@@ -48,9 +50,17 @@ public static partial class SqliteEmbeddedHosting
 
         void IReplyTransport.Send(string destination, Reply reply) => edge.Send(destination, reply);
 
-        internal ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind, string? payload,
-            Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken token) =>
-            edge.RequestAsync(scope, target, id, kind, payload, add, request, token);
+        internal async ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind, string? payload,
+            Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            using (AcquireFile(path, requests: this)) token.ThrowIfCancellationRequested();
+            try { return await edge.RequestAsync(scope, target, id, kind, payload, add, request, token); }
+            catch (SqliteHostLockException)
+            {
+                return new(null, null, Error: "lost");
+            }
+        }
 
         private sealed class Admission(SqliteDirectRequests owner, string path, TimeSpan window) : IHeldRootAdmission
         {

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
@@ -153,6 +154,19 @@ internal static partial class SqliteHostLifetimeChecks
                 "a new owner commits the durable creator after the caller's reply registration has gone");
             await recovery.StopAsync(token);
             Require(recovery.LastError is null, "the replacement stops cleanly");
+
+            var peerDeadline = await replies.ReadClockAsync(token) + 20_000;
+            var beforePeer = ingress.RequestAsync(scope, exact, "complete", "complete", null, null, new(null, peerDeadline), token).AsTask();
+            await Task.Delay(100, token);
+            Require(!beforePeer.IsCompleted, "the prior process still has a duplicate caller waiting");
+            await CheckHeldReplyPeerAsync(path, fenceInBatch, token, async () =>
+            {
+                Require(await beforePeer.WaitAsync(TimeSpan.FromSeconds(5), token) is { Error: "lost" },
+                    "an outstanding caller receives a loss reply when a peer process takes the file");
+                await ExpectFoundationFailureAsync<SqliteHostLockException>(() =>
+                    ingress.RequestAsync(scope, exact, "new", "complete", null, null, new(null, peerDeadline), token).AsTask(),
+                    "new held admission still refuses a file owned by a peer process");
+            });
             return 0;
 
             SqliteEmbeddedHostedService OpenHost(string node, HeldReplyActor executor, SqliteEmbeddedHosting.SqliteDirectRequests? edge) =>
@@ -167,6 +181,41 @@ internal static partial class SqliteHostLifetimeChecks
             }
         }
         finally { folder.Delete(recursive: true); }
+    }
+
+    private static async Task CheckHeldReplyPeerAsync(string path, bool fenceInBatch, CancellationToken token, Func<Task> whileOwned)
+    {
+        var start = new ProcessStartInfo("dotnet") { UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true };
+        start.ArgumentList.Add(typeof(SqliteHostLifetimeChecks).Assembly.Location);
+        start.ArgumentList.Add("sqlite-held-reply-peer");
+        start.ArgumentList.Add(path);
+        start.ArgumentList.Add(fenceInBatch ? "in-batch" : "checked");
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Cannot start the SQLite reply peer.");
+        try
+        {
+            Require(await process.StandardOutput.ReadLineAsync(token) == "ready", "a peer process takes the cleanly stopped SQLite file");
+            await whileOwned();
+            await process.StandardInput.WriteLineAsync("stop");
+            await process.WaitForExitAsync(token);
+            Require(process.ExitCode == 0, "the reply peer releases the file cleanly");
+        }
+        finally
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+        }
+    }
+
+    internal static async Task<int> RunHeldReplyPeerAsync(string path, bool fenceInBatch)
+    {
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var token = budget.Token;
+        await using var service = SqliteEmbeddedHostedService.ForFoundation(path, "reply-peer", new HeldReplyActor(),
+            reason => throw new InvalidOperationException(reason), Loops, fenceInBatch);
+        await service.StartAsync(token);
+        Console.WriteLine("ready");
+        if (await Console.In.ReadLineAsync(token) != "stop") return 1;
+        await service.StopAsync(token);
+        return service.LastError is null ? 0 : 1;
     }
 
     private sealed class HeldReplyActor : Contract.IActorType
