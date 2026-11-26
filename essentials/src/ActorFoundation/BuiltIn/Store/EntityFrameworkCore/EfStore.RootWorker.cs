@@ -399,9 +399,9 @@ public sealed partial class EfStore
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
         if (!postgres && (turn.OpensPark || turn.FoundationKept is not null ||
-            turn.FoundationRootOperator is { } sqliteCommand && (sqliteCommand.Kind != Kinds.Terminate ||
-                sqliteCommand.Operator is not { RootHeldReply: false, RootThenDelete: false, RootParkMark: null }) || turn.Delete))
-            throw new NotSupportedException("This SQLite root writer supports ordinary checkpoints, timed jobs and Terminate.");
+            turn.FoundationRootOperator is { } sqliteCommand && (sqliteCommand.Kind is not (Kinds.Terminate or Kinds.Delete) ||
+                sqliteCommand.Operator is not { RootHeldReply: false, RootParkMark: null })))
+            throw new NotSupportedException("This SQLite root writer supports ordinary checkpoints, timed jobs and one-way root operators.");
         if (turn.FoundationRootOperator is { Kind: Kinds.Recover }) return await PrepareRootParkRecoverAsync(root, turn, cancellationToken);
         // A delete, or a retired marker, of an ended Faulted root goes on to retirement below.
         if (turn is { FoundationRootOperator: not null, Row: { Status: InstanceStatus.Faulted or InstanceStatus.Cancelled, Retired: false },
@@ -436,6 +436,9 @@ public sealed partial class EfStore
             if (turn != ended || turn.Done.Count + turn.Consumed.Count == 0 || turn.Sent.Count != 0 ||
                 turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
                 !InputsMatch(root, turn, jobs: RootTimedJobSettlementEnabled)) throw RootShape();
+            if (!postgres && turn.Done is [var refused] && turn.Consumed.Count == 0 && PostgresRootAdmission.IsOperatorOccurrence(refused) &&
+                await PrepareSqliteLiveCompoundRefusalAsync(root, refused, cancellationToken) is { } liveRefusal)
+                return new(null, liveRefusal);
             // A job that was running when its root ended (a Terminate or a Faulted end settled it) finishes where nothing waits
             // for it: its ticket and deadline rows left with the end, so the job's own input settles nothing.
             var settled = turn.Consumed.Where(key => key.Scope > 0).Select(StoredJobId).ToArray();
@@ -547,8 +550,7 @@ public sealed partial class EfStore
                 return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
                     row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, operatorTermination: true,
                     jobState: settledJobs is null ? null : new(null, current.NextJobGeneration), settledJobs: settledJobs,
-                    withheldInputs: !postgres && _ordinaryRoots?.AuthoredWithholds?.Invoke(new(new(root.Reference), current.Model, root.Tenant,
-                        Contract.ActorStatus.Running, current.Fault, null, null, current.TypeData, current.Labels)) == true);
+                    withheldInputs: !postgres && AuthoredSqliteWithholding(root, current));
             }
             if (!db.UsesRootOperatorProtocol || row.Status != InstanceStatus.Running ||
                 row.Suspended != (command.Kind == Kinds.Suspend) || row.StateVersion != current.StateVersion || state != current.State ||
