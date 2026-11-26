@@ -30,7 +30,7 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   const orders = { referenceKey: "orders", name: "orders", type: { alias: customerAlias, collectionKind: "List" }, storageDriverType: null };
   const consumer = s.line(); consumer.inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: "" } }];
   const created = await s.seed("typed collection completion", s.root([consumer]), [], [orders]);
-  // Open on the backend this session is signed in to (activityDataSupport.open links a retired profile id, #5759).
+  // Open on the backend this session is signed in to.
   const backend = new URL(page.url()).searchParams.get("backend");
   await page.goto(`/workflows/definitions?definition=${created.definition.id}${backend ? `&backend=${encodeURIComponent(backend)}` : ""}`);
   await expect(page.locator('.wf-sequence-step[data-id="consumer"]')).toBeAttached();
@@ -150,7 +150,7 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   await editor.press("ControlOrMeta+a");
   await page.keyboard.insertText("variables.orders[0].display_name");
   await settled("variables.orders[0].display_name");
-  // Insert data still offers the list as a whole value: choosing it inserts the variable, with no member view.
+  // Insert data offers the whole list while the JavaScript editor provides advisory item members.
   await editor.press("ControlOrMeta+End");
   await page.keyboard.insertText(" + ");
   const beforeInsert = "variables.orders[0].display_name + ";
@@ -159,8 +159,7 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   const chooser = page.getByRole("dialog", { name: "Choose data for Text", exact: true });
   const variable = chooser.getByRole("listbox", { name: "Variables", exact: true }).getByRole("option").filter({ hasText: /^orders/ });
   await expect(variable).toHaveCount(1);
-  await variable.press("Enter");
-  await expect(chooser).toHaveCount(0);
+  await s.chooseWholeExpressionSource(created, variable);
   type Stored = { source: string; parameters: Record<string, { kind: string; variableKey?: string }> };
   const inserted = async () => {
     const value = (await s.stored(created))?.value;
@@ -169,8 +168,15 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
     const alias = Object.entries(definition.parameters ?? {}).find(([, parameter]) => parameter.kind === "Variable" && parameter.variableKey === "orders")?.[0];
     return alias && definition.source === `${beforeInsert}args.${alias}` ? alias : null;
   };
-  await expect.poll(inserted, { message: "The whole orders list is inserted and saved as a parameter" }).not.toBeNull();
+  await expect.poll(inserted, { message: "The orders list is saved with a source-based parameter name" }).toBe("orders");
   await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
+  const summary = page.locator('.wf-sequence-step[data-id="consumer"] .wf-sequence-summary');
+  await expect(summary).toHaveText(`${beforeInsert}args.orders`);
+  await page.reload();
+  await s.canvas();
+  await expect(summary).toHaveText(`${beforeInsert}args.orders`);
+  await expect(summary).toBeVisible();
+  await expect.poll(inserted).toBe("orders");
   await capture(page, info, "collection-member-picker");
 }
 

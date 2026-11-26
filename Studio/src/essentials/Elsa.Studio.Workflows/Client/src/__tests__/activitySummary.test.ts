@@ -53,6 +53,18 @@ describe("formatActivitySummary", () => {
     expect(summary).toBe("total > 100");
   });
 
+  it.each(["expanded", "wire"])("shows the portable expression source for a %s node after Insert data", shape => {
+    const definition = {
+      language: "JavaScript", source: "  args.orders.length  ", resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { orders: { kind: "Variable", declaringScopeNodeId: "workflow", variableKey: "orders" } },
+      options: {}, capabilityProfile: "binding-pure-v1"
+    };
+    const activity = shape === "expanded"
+      ? node({ text: wrapped("JavaScript", definition) })
+      : node({ inputs: [{ referenceKey: "text", value: { value: definition, expressionType: "JavaScript" } }] });
+    expect(formatActivitySummary(activity, catalog([textInput]))).toBe("args.orders.length");
+  });
+
   it("captions reference expressions rather than dumping the reference object", () => {
     expect(formatActivitySummary(node({ text: wrapped("Variable", { referenceKey: "x" }) }), catalog([textInput]))).toBe("Variable value");
     expect(formatActivitySummary(node({ text: wrapped("Input", { referenceKey: "y" }) }), catalog([textInput]))).toBe("Workflow input");

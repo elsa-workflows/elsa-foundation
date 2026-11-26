@@ -233,17 +233,17 @@ internal static class PostgresShippedFormatChecks
         await using var db = open();
         var sql = EfStore.RenderPostgresFirstRootGuards(db).ReplaceLineEndings("\n");
         var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
-        Require(fingerprint == "01952f871066ceecbfef28c303000a5651b13157c0f02323ed767c06a522b634",
+        Require(fingerprint == "1a773d5731f2f88f3ddf99c740161e89202bfc73fd9a4859de0f1fae2ab833e8",
             $"the complete emitted PostgreSQL guard installation batch matches its revision ({fingerprint})");
         var bodies = await db.Database.SqlQueryRaw<string>("""
             SELECT md5(p.prosrc) AS "Value"
             FROM pg_catalog.pg_proc p
             WHERE p.pronamespace = pg_catalog.current_schema()::regnamespace
-                AND p.proname IN ('kernel_require_root_checkpoint_writer', 'kernel_require_root_journal_revision')
+                AND p.proname IN ('kernel_require_root_checkpoint_writer', 'kernel_require_root_journal_revision', 'kernel_require_root_outcome_checkpoint')
             ORDER BY p.proname
             """).ToListAsync(token);
-        Require(bodies is ["c1c1b59c33a6d7089ec69286de2bbde8", "b8adb6d016ff58efc1a496a316309a74"],
-            "the installed PostgreSQL checkpoint and journal function bodies match their revision");
+        Require(bodies is ["8f840fde024cf884605c009541f29512", "dc59bbf4e6ab2ed76822721cdb89069a", "4422f56b0cd80c905e3d21e30a7cd610"],
+            "the installed PostgreSQL checkpoint, journal and deferred outcome function bodies match their revision");
     }
 
     private static async Task CheckDefinitionRevisionAsync(Func<KernelDb> open, EfStore store, CancellationToken token)
@@ -255,6 +255,8 @@ internal static class PostgresShippedFormatChecks
         await RequireMarkerRefusedAsync(db, "PostgreSQL treats an absent marker as legacy revision 1 and refuses it after the revision advances", token);
         db.StoreVersions.Add(expected);
         await db.SaveChangesAsync(token);
+        await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol - 1), token);
+        await RequireMarkerRefusedAsync(db, "PostgreSQL refuses the previous install-only definitions revision", token);
         await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol + 1), token);
         try
         {

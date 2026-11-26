@@ -1,5 +1,6 @@
 import { confirmNewResource } from "../newResourceDialog";
 import { expect, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
+import { studioBackendLink } from "./studioBackendLink";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 
@@ -19,12 +20,13 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
   const directoryReads: string[] = [];
   const watchDirectory = (sent: { url(): string }) => { if (new URL(sent.url()).pathname.endsWith("/runtime/user-task-targets")) directoryReads.push(sent.url()); };
   page.on("request", watchDirectory);
+  const signedInBackend = new URL(page.url()).searchParams.get("backend");
   const operate = page.locator(".sidebar").getByRole("navigation", { name: "Operate", exact: true });
   const operateToggle = operate.getByRole("button", { name: "Operate", exact: true });
   if (await operateToggle.getAttribute("aria-expanded") === "false") await operateToggle.click();
   await operate.getByRole("link", { name: "User tasks", exact: true }).click();
   await expect(page).toHaveURL(/\/user-tasks(?:\?|$)/);
-  expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
+  expect(new URL(page.url()).searchParams.get("backend")).toBe(signedInBackend);
   await expect(page.getByRole("heading", { name: "No tasks here", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "User tasks management", exact: true }).getByRole("complementary")).toHaveCount(0);
   await capture(page, info, "tasks-empty");
@@ -75,7 +77,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     const detail = page.getByRole("region", { name: title, exact: true });
     const note = detail.getByRole("textbox", { name: /^Note/ });
     await note.fill("Reviewed purchase request");
-    expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
+    expect(new URL(page.url()).searchParams.get("backend")).toBe(signedInBackend);
     const retainedNote = await note.elementHandle();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     const accessRefresh = page.waitForResponse(response => new URL(response.url()).pathname.endsWith("/runtime/user-task-identity"));
@@ -120,9 +122,9 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await expect(row).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "No matching tasks", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Clear search", exact: true })).toHaveCount(1);
-    expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
+    expect(new URL(page.url()).searchParams.get("backend")).toBe(signedInBackend);
     await capture(page, info, "tasks-return");
-    await page.goto(`/user-tasks/absent-${suffix}?backend=legacy`);
+    await page.goto(studioBackendLink(page, `/user-tasks/absent-${suffix}`));
     await expect(page.getByRole("heading", { name: "Task not found", exact: true })).toBeVisible();
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCount(0);
     // The missing task preserves the collection return path in the active shell.
@@ -130,7 +132,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await capture(page, info, "task-not-found");
     await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).last().click();
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toBeVisible();
-    await page.goto("/user-tasks/forms");
+    await page.goto(studioBackendLink(page, "/user-tasks/forms"));
     await expect(page.getByRole("table", { name: "Reusable task forms", exact: true }).getByText(form.id, { exact: true })).toBeVisible();
     const nextVersion = page.getByRole("button", { name: "Create next version", exact: true }).first();
     expect((await nextVersion.boundingBox())!.width).toBeGreaterThan(120);

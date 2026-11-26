@@ -1,4 +1,5 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
+import { studioBackendLink } from "./studioBackendLink";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 
@@ -30,7 +31,7 @@ export async function authoredActivityNamesJourney(page: Page, info: TestInfo, c
   });
   let runId: string | undefined;
   try {
-    await page.goto(`/workflows/definitions?backend=legacy&definition=${created.definition.id}`);
+    await page.goto(studioBackendLink(page, `/workflows/definitions?definition=${created.definition.id}`));
     const card = page.locator('.wf-sequence-step[data-id="named-0"]');
     await card.press("Enter");
     const expand = page.getByRole("button", { name: "Expand inspector panel", exact: true });
@@ -51,7 +52,7 @@ export async function authoredActivityNamesJourney(page: Page, info: TestInfo, c
     expect(version.definition.id).toBe(created.definition.id);
     expect(version.activityPresentation).toEqual(saved.activityPresentation);
     const published = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${version.id}/publish`, "POST", {});
-    await page.goto(`/workflows/executables/${published.artifactId}?backend=legacy&ref=${published.sourceReferenceId}`);
+    await page.goto(studioBackendLink(page, `/workflows/executables/${published.artifactId}?ref=${published.sourceReferenceId}`));
     const canvas = page.getByRole("region", { name: "Executable canvas", exact: true });
     for (const [index, name] of names.entries()) await expect(canvas.locator(`[data-id="named-${index}"] .wf-sequence-title`)).toHaveText(name);
     // A later draft rename must not overwrite the immutable publication/run names.
@@ -69,7 +70,7 @@ export async function authoredActivityNamesJourney(page: Page, info: TestInfo, c
       return run.instance.status;
     }).toBe("Completed");
     expect(executionId).toBeTruthy();
-    await page.goto(`/workflows/instances/${runId}?selected=${executionId}`);
+    await page.goto(studioBackendLink(page, `/workflows/instances/${runId}?selected=${executionId}`));
     await expect(page.locator(".wf-activity-overview-title h4")).toHaveText(names[0]);
     await capture(page, info, "authored-run");
   } finally {

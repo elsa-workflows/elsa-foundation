@@ -46,6 +46,8 @@ public sealed partial class EfStore
         var root = retire.Root;
         var current = retire.Current;
         var running = current.Status == InstanceStatus.Running;
+        var park = retire.Park;
+        var ending = running || park is not null;
         var scope = InboxKey.FoundationOccurrenceScope;
         // The owned immediate transaction holds the position and prevents a concurrent admission during retirement.
         if (!await db.Database.SqlQuery<bool>($"""
@@ -57,7 +59,7 @@ public sealed partial class EfStore
                     AND i."Status" = {(int)current.Status} AND NOT i."Retired" AND i."Suspended" = {current.Suspended}
                     AND i."FoundationTerminalRevision" IS NOT DISTINCT FROM {current.TerminalRevision}
                     AND i."FoundationTerminalAt" IS NOT DISTINCT FROM {current.TerminalAt}
-                    AND i."FoundationParkAt" IS NULL
+                    AND i."FoundationParkAt" IS NOT DISTINCT FROM {park?.Mark.At}
                     AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."Parent" IS NULL AND i."CustomHandles" IS NULL
                     AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = i."Id")
                     AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
@@ -65,19 +67,28 @@ public sealed partial class EfStore
             AS "Value"
             """).SingleAsync(token)) return false;
 
-        if (!await SettleSqliteRootInputsAsync(db, root.Reference, current.Actor, [retire.Command.InboxKey],
-            [retire.Command], running && (current.Suspended || retire.WithheldInputs), token)) return false;
+        if (park is null)
+        {
+            if (!await SettleSqliteRootInputsAsync(db, root.Reference, current.Actor, [retire.Command.InboxKey],
+                    [retire.Command], running && (current.Suspended || retire.WithheldInputs), token)) return false;
+        }
+        else
+        {
+            var page = await BindSqliteParkPageAsync(db, root, current.Revision, current.Suspended, park.Mark, park.Clearing,
+                park.Cleared, park.KeptDigest, park.Count, ends: true, retire.Command, token);
+            if (page is null || !await ClearSqliteParkPageAsync(db, root, page, retire.Command.Operator!.RootParkWindow!.Value, token)) return false;
+        }
 
         var revision = checked(current.Revision + 1);
-        var status = running ? InstanceStatus.Cancelled : current.Status;
-        var terminalRevision = running ? revision : current.TerminalRevision;
-        var terminalAt = running ? await db.Database.SqlQueryRaw<long>(
-            "SELECT " + SqliteCommitDialect.MillisecondClock + """ AS "Value" """).SingleAsync(token) : current.TerminalAt;
+        var status = running || park is not null && retire.Command.Operator?.RootThenDelete == true ? InstanceStatus.Cancelled : current.Status;
+        var terminalRevision = ending ? revision : current.TerminalRevision;
+        var terminalAt = ending ? await ReadSqliteParkClockAsync(db, token) : current.TerminalAt;
         if (await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Instances" SET "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL,
                 "Model" = '', "Definition" = '', "Fault" = NULL, "StateVersion" = 1, "History" = {(int)History.Minimal},
                 "NextJobGeneration" = NULL, "Suspended" = false, "Retired" = true, "Revision" = {revision},
                 "FoundationWriteRevision" = {revision}, "Status" = {(int)status},
+                "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL,
                 "FoundationTerminalRevision" = {terminalRevision}, "FoundationTerminalAt" = {terminalAt}
             WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" = {current.Revision}
             """, token) != 1) return false;
@@ -86,7 +97,7 @@ public sealed partial class EfStore
             message.Partition == root.Partition && !message.Done && message.ReplyTo != null).OrderBy(message => message.Seq).ToListAsync(token);
         foreach (var row in waiting)
         {
-            // Retirement ends every valid pending route, including later Park-selected routes that the staged poll withholds.
+            // Retirement ends every pending route, including a Park-selected command admitted before an earlier command settled.
             var message = PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
                 ? PostgresRootAdmission.DecodeOperator(row, root.Reference, terminations: true, retirements: true, terminateThenDelete: true,
                     retentionDeletes: true, operatorReplies: true, parkedTerminate: true)
@@ -101,20 +112,6 @@ public sealed partial class EfStore
             DELETE FROM "Journal" WHERE "Instance" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" > 0;
             """, token);
 
-        // The current stage may precede installation of the workflow-history read model.
-        if (await db.Database.SqlQueryRaw<bool>("""
-            SELECT EXISTS (SELECT 1 FROM main.sqlite_schema WHERE type = 'table' AND name = 'FoundationWorkflowHistory') AS "Value"
-            """).SingleAsync(token))
-        {
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                DELETE FROM "FoundationWorkflowHistory" WHERE "Tenant" = {root.Tenant} AND "Reference" = {root.Reference}
-                """, token);
-            if (await db.Database.SqlQuery<bool>($"""
-                SELECT EXISTS (SELECT 1 FROM "FoundationWorkflowHistory"
-                    WHERE "Tenant" = {root.Tenant} AND "Reference" = {root.Reference}) AS "Value"
-                """).SingleAsync(token)) return false;
-        }
-
         return await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "Journal" ("Instance", "Partition", "Position", "Revision", "Entries")
             SELECT {root.Actor}, {root.Partition}, {retire.Position}, -1, '["delete"]'
@@ -125,6 +122,7 @@ public sealed partial class EfStore
                 AND "FoundationHeader" IS NULL AND "FoundationStateWire" IS NULL
                 AND "FoundationTerminalRevision" = {terminalRevision} AND "FoundationTerminalAt" = {terminalAt})
                 AND NOT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {root.Tenant} AND "Reference" = {root.Reference})
+                AND NOT EXISTS (SELECT 1 FROM "FoundationWorkflowHistory" WHERE "Tenant" = {root.Tenant} AND "Reference" = {root.Reference})
                 AND NOT EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {root.Actor} AND "Partition" = {root.Partition})
                 AND NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition}
                     AND (NOT "Done" OR "Payload" IS NOT NULL OR "Start" IS NOT NULL OR "ReplyTo" IS NOT NULL))

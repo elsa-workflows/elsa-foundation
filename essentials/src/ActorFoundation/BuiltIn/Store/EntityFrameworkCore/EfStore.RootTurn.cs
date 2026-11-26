@@ -108,7 +108,8 @@ public sealed partial class EfStore
 
     // Both a model turn and a terminal no-turn disposition settle the same due FIFO prefix.
     private static async Task<bool> SettleRootInputsAsync(KernelDb db, string reference, CreationAddress actor, IReadOnlyList<InboxKey> expected,
-        Message[]? expectedEnvelopes, FoundationSelfIssuer? issue, bool suspended, CancellationToken cancellationToken)
+        Message[]? expectedEnvelopes, FoundationSelfIssuer? issue, bool suspended, CancellationToken cancellationToken,
+        bool includePrivateInputs = true)
     {
         if (db.UsesSqliteRootRuntime)
             return issue is null && await SettleSqliteRootInputsAsync(db, reference, actor, expected,
@@ -122,10 +123,10 @@ public sealed partial class EfStore
             ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter})""" : "";
         var rows = await db.Messages.FromSqlRaw($$"""
             SELECT * FROM {{source}} m WHERE "Target" = {0} AND "Partition" = {1}
-                AND "InboxScope" IN ({2}, {3}) AND "EventMatch" IS NULL
+                AND ("InboxScope" = {2} OR {5} AND "InboxScope" = {3}) AND "EventMatch" IS NULL
                 AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}} {{operatorOnly}} {{cohort}}
             ORDER BY "Seq" LIMIT {4} FOR UPDATE OF m
-            """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count).AsNoTracking().ToListAsync(cancellationToken);
+            """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count, includePrivateInputs).AsNoTracking().ToListAsync(cancellationToken);
         if (!db.UsesRootOperatorProtocol && rows.Any(row => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))))
             return false;
         var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue)).ToArray();
@@ -156,7 +157,7 @@ public sealed partial class EfStore
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
                 ? db.UsesSqliteRootRuntime
                     ? PostgresRootAdmission.DecodeOperator(row, reference, terminations: true, retirements: true,
-                        terminateThenDelete: true, retentionDeletes: true, operatorReplies: true)
+                        terminateThenDelete: true, retentionDeletes: true, operatorReplies: true, parkedTerminate: true)
                     : PostgresRootAdmission.DecodeOperator(db, row, reference)
                 : PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol)
         };

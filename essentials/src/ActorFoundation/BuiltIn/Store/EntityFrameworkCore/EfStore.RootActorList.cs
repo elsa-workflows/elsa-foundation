@@ -11,6 +11,7 @@ public sealed partial class EfStore
         string TypeData, IReadOnlyDictionary<string, string> Labels, long? ParkAt, string? ParkFault)
     {
         internal long? ParkRevision { get; init; }
+        internal string? ParkResolution { get; init; }
     }
     internal sealed record RootListPage(IReadOnlyList<RootListItem> Items, long AsOf);
 
@@ -241,8 +242,10 @@ public sealed partial class EfStore
     internal async Task<(RootListItem Item, long AsOf)?> ReadRootActorAsync(string tenant, string reference,
         CancellationToken cancellationToken)
     {
-        if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root actor reads require PostgreSQL.");
+        if (Engine is not null) throw new NotSupportedException("Qualified root actor reads require the local store.");
         await using var db = create();
+        if (!postgres && db.UsesSqliteRootRuntime) return await ReadSqliteRootActorAsync(db, tenant, reference, cancellationToken);
+        if (!postgres) throw new NotSupportedException("Qualified root actor reads require PostgreSQL or a shipped SQLite root store.");
         var expected = db.RequiredFormat;
         var projection = ActorListProjection.Of(db);
         var triggers = projection.ListTriggers;
@@ -292,8 +295,11 @@ public sealed partial class EfStore
     internal async Task<RootListPage> ReadRootActorListAsync(string tenant, string after, string? type, int? status,
         KeyValuePair<string, string>[] labels, long? endedBefore, bool? parked, int limit, CancellationToken cancellationToken)
     {
-        if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root actor lists require PostgreSQL.");
+        if (Engine is not null) throw new NotSupportedException("Qualified root actor lists require the local store.");
         await using var db = create();
+        if (!postgres && db.UsesSqliteRootRuntime)
+            return await ReadSqliteRootActorListAsync(db, tenant, after, type, status, labels, endedBefore, parked, limit, cancellationToken);
+        if (!postgres) throw new NotSupportedException("Qualified root actor lists require PostgreSQL or a shipped SQLite root store.");
         var expected = db.RequiredFormat;
         var projection = ActorListProjection.Of(db);
         var triggers = projection.ListTriggers;

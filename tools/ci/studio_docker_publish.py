@@ -19,7 +19,7 @@ WORKFLOW_PATH = ".github/workflows/ci.yml"
 STUDIO_FLAVORS: dict[str, dict[str, str]] = {
     "essentials": {
         "image": "elsaworkflows/elsa-studio",
-        "dockerfile": "Studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile",
+        "dockerfile": "Studio/docker/profiles/essentials/Dockerfile",
         "title": "Elsa Studio",
         "description": "Elsa 4 workflow studio (Studio Essentials) for elsaworkflows/elsa-essentials-host",
     },

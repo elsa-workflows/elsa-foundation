@@ -1,5 +1,6 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { readFileSync } from "node:fs";
+import { studioBackendLink } from "./studioBackendLink";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 type Node = { nodeId: string; activityVersionId: string; inputs: unknown[]; outputs: unknown[]; structure?: { kind: string; schemaVersion: string; payload: Record<string, unknown> } };
@@ -112,7 +113,11 @@ export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture
       }
       const saved = async () => host === "workflow" ? api<WorkflowDraft>(`/design/workflows/drafts/${draftId}`) : api<GraphDraft>(`/design/activities/drafts/${draftId}`);
       const body = (draft: WorkflowDraft | GraphDraft) => "state" in draft ? draft.state.rootActivity : draft.provider.payload.rootActivity;
-      await page.goto(host === "workflow" ? `/workflows/definitions?backend=legacy&definition=${definitionId}` : `/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`); await canvas();
+      const route = host === "workflow"
+        ? `/workflows/definitions?definition=${definitionId}`
+        : `/workflows/activity-definitions?definition=${definitionId}&section=editor&draft=${draftId}`;
+      await page.goto(studioBackendLink(page, route));
+      await canvas();
       if (host === "workflow") { await page.getByRole("button", { name: "Save", exact: true }).click(); await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved"); }
       else await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
       const undoAction = page.getByRole("button", { name: host === "workflow" ? "Undo" : "Undo Activity Graph edit", exact: true });
@@ -175,7 +180,7 @@ export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture
           await expect(refuse.getByRole("alert")).toBeVisible(); expect((await api<GraphDraft>(`/design/activities/drafts/${draftId}`)).provider).toEqual(changed.provider); await capture(page, info, "activity-bpmn-stale"); await refuse.getByRole("button", { name: "Cancel", exact: true }).click(); await page.reload(); await canvas();
           await publishActivity(await api(`/design/activities/drafts/${draftId}`), null);
           expect((await api<GraphDraft>(`/design/activities/drafts/${draftId}`)).status.toLowerCase()).toBe("published");
-          await page.goto(`/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`);
+          await page.goto(studioBackendLink(page, `/workflows/activity-definitions?definition=${definitionId}&section=editor&draft=${draftId}`));
           await expect(page.locator(".ad-save-state.is-published")).toContainText("read-only");
         } else {
           await page.getByRole("button", { name: "Save", exact: true }).click(); await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved"); await page.getByRole("button", { name: "Test Run", exact: true }).click();

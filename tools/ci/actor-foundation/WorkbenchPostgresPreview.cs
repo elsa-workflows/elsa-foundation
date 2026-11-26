@@ -21,7 +21,7 @@ using WorkflowActorType = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Elsa.Workbench.Qualification;
 
-internal static class WorkbenchPostgresPreview
+internal static partial class WorkbenchPostgresPreview
 {
     private const int JobTicketScope = -6;
     private const int TimedJobScope = -7;
@@ -676,7 +676,7 @@ internal static class WorkbenchPostgresPreview
         }
     }
 
-    private sealed class WorkbenchProcess(Process process, DirectoryInfo workspace, Task<string> log) : IDisposable
+    private sealed class WorkbenchProcess(Process process, DirectoryInfo workspace, Task<string> log, bool ownsWorkspace) : IDisposable
     {
         private readonly WorkbenchOutput output = new();
         private Task? stdout;
@@ -689,13 +689,14 @@ internal static class WorkbenchPostgresPreview
         internal Task<string> WaitForKernelServingAsync(CancellationToken token) =>
             WaitForOutputAsync(output.KernelServing.Task, "serving its publications on the kernel", token);
 
-        internal static WorkbenchProcess Start(string executable, string connection, bool enabled, string? profile, string? releaseFile)
+        internal static WorkbenchProcess Start(string executable, string connection, bool enabled, string? profile, string? releaseFile,
+            string? sqlitePath = null, DirectoryInfo? retainedWorkspace = null)
         {
             var binary = Path.GetFullPath(executable);
-            var workspace = Directory.CreateTempSubdirectory("elsa-workbench-core-preview-");
+            var workspace = retainedWorkspace ?? Directory.CreateTempSubdirectory("elsa-workbench-core-preview-");
             var source = Path.GetDirectoryName(binary)!;
             foreach (var file in new[] { "appsettings.json", "appsettings.Development.json", "shells.json", "shells.Development.json" })
-                if (File.Exists(Path.Combine(source, file)))
+                if (File.Exists(Path.Combine(source, file)) && !File.Exists(Path.Combine(workspace.FullName, file)))
                     File.Copy(Path.Combine(source, file), Path.Combine(workspace.FullName, file));
             workspace.CreateSubdirectory("packages");
             var start = new ProcessStartInfo(binary)
@@ -731,9 +732,14 @@ internal static class WorkbenchPostgresPreview
                 start.Environment["Elsa__CorePreview__TimedNativeJobs"] = "true";
             if (releaseFile is not null)
                 start.Environment["Elsa__CorePreview__TimedJobReleaseFile"] = releaseFile;
-            start.Environment["ConnectionStrings__KernelCorePreview"] = connection;
+            if (sqlitePath is null) start.Environment["ConnectionStrings__KernelCorePreview"] = connection;
+            else
+            {
+                start.Environment["Elsa__CorePreview__Provider"] = "SQLite";
+                start.Environment["Elsa__CorePreview__SqlitePath"] = sqlitePath;
+            }
             var process = Process.Start(start) ?? throw new InvalidOperationException("Workbench did not start.");
-            return new WorkbenchProcess(process, workspace, process.StandardError.ReadToEndAsync());
+            return new WorkbenchProcess(process, workspace, process.StandardError.ReadToEndAsync(), retainedWorkspace is null);
         }
 
         internal Task<string> ListeningAsync(CancellationToken token) => WaitForOutputAsync(output.Listening.Task, "listening", token);
@@ -796,7 +802,7 @@ internal static class WorkbenchPostgresPreview
                 process.WaitForExit();
             }
             process.Dispose();
-            workspace.Delete(recursive: true);
+            if (ownsWorkspace) workspace.Delete(recursive: true);
         }
     }
 

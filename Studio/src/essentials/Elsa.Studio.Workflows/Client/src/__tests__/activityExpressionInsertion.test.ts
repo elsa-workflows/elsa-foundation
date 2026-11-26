@@ -26,6 +26,33 @@ it("promotes source using the authoritative alias/collection shape and never a s
   const next = expressionValueFromHistory("left+" + planned.insert, planned.historyValue, "JavaScript")!.value as ReturnType<typeof definition>;
   expect(next).toMatchObject({ source: "left+REFERENCE(data)", language: "JavaScript", resultType: result.target!.type, parameters: { data: parameter }, options: {}, capabilityProfile: "binding-pure-v1" });
 });
+it("uses the variable's name and allocates a unique alias when that name is taken", () => {
+  const variable = { kind: "Variable" as const, declaringScopeNodeId: "workflow", variableKey: "orders" };
+  const choice: ActivityDataSourceFacts = {
+    ...source, id: "variable:orders", displayName: "Order Items", parameterSource: variable, parameterPath: []
+  };
+  const planned = plan(definition({ orderItems: { kind: "Literal", value: 2 } }), { ...result, sources: [choice] }, choice);
+  expect(planned).toMatchObject({ supported: true, alias: "orderItems2", insert: "REFERENCE(orderItems2)" });
+  if (planned.supported) {
+    const restored = expressionValueFromHistory("left+" + planned.insert, planned.historyValue, "JavaScript")?.value;
+    expect(restored).toMatchObject({ parameters: { orderItems: { kind: "Literal", value: 2 }, orderItems2: variable } });
+  }
+});
+
+it("uses a collision-free generic alias when the editor rejects the variable name", () => {
+  const variable = { kind: "Variable" as const, declaringScopeNodeId: "workflow", variableKey: "constructor-var" };
+  const choice: ActivityDataSourceFacts = {
+    ...source, id: "variable:constructor-var", displayName: "Constructor", parameterSource: variable, parameterPath: []
+  };
+  const renderer: StudioExpressionSourceInsertion = {
+    render: request => request.alias === "constructor"
+      ? { supported: false, reason: "This parameter name cannot be inserted safely in JavaScript." }
+      : adapter.render(request)
+  };
+  const planned = plan(definition({ data: { kind: "Literal", value: 2 } }), { ...result, sources: [choice] }, choice, renderer);
+  expect(planned).toMatchObject({ supported: true, alias: "data2", insert: "REFERENCE(data2)" });
+});
+
 it("reuses only a complete identical binding and preserves manual carrier fields", () => {
   const original = definition({ customer: parameter, manual: { kind: "Literal", value: 2 } });
   const planned = plan(original); expect(planned.supported).toBe(true);

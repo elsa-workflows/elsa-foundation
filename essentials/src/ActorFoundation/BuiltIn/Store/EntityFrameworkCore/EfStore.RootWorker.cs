@@ -399,9 +399,11 @@ public sealed partial class EfStore
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
         if (!postgres && (turn.FoundationKept is not null && !turn.OpensPark ||
-            turn.FoundationRootOperator is { } sqliteCommand && (sqliteCommand.Kind is not (Kinds.Terminate or Kinds.Delete) ||
-                sqliteCommand.Operator is not { RootParkMark: null })))
-            throw new NotSupportedException("This SQLite root writer supports ordinary checkpoints, timed jobs, Park opening and ordinary root operators.");
+            turn.FoundationRootOperator is { Kind: not (Kinds.Terminate or Kinds.Delete) }))
+            throw new NotSupportedException("This SQLite root writer supports ordinary checkpoints, timed jobs, Park opening and selected Terminate and Delete.");
+        if (turn is { Row.Status: InstanceStatus.Running, FoundationRootOperator: { Kind: Kinds.Terminate or Kinds.Delete,
+                Operator: { RootParkMark: not null, RootParkClear: false } } stale })
+            return await PrepareRecoveredParkRefusalAsync(root, turn, stale, cancellationToken);
         if (turn.FoundationRootOperator is { Kind: Kinds.Recover }) return await PrepareRootParkRecoverAsync(root, turn, cancellationToken);
         // A delete, or a retired marker, of an ended Faulted root goes on to retirement below.
         if (turn is { FoundationRootOperator: not null, Row: { Status: InstanceStatus.Faulted or InstanceStatus.Cancelled, Retired: false },
@@ -491,7 +493,7 @@ public sealed partial class EfStore
             RootTimedJobs && !RootTimedJobPreviewEnabled && turn.Expected is null && !RootJobTicket.StartsTimedPair(turn.Sent, root.Actor, row.Model)) throw RootShape();
         var wires = RootTimedJobs ? EncodeRootTimedSends(turn.Sent) :
             turn.Sent.Select((message, index) => RootJobsEnabled && message.Kind == Kinds.Job
-                ? EncodeRootJob(message, root, row.Model) : EncodeRootSelf(root, row.Revision, index, message)).ToArray();
+                ? EncodeRootJob(message, root, row.Model) : EncodeRootSelf(root.Actor, row.Revision, index, message)).ToArray();
         var jobState = RootJobsEnabled ? new RootJobState(row.Jobs, row.NextJobGeneration) : null;
         PreparedRoot WithSends(PreparedRoot prepared) => wires.Length == 0 ? prepared :
             prepared with { JournalTurn = prepared.JournalTurn! with { Sent = wires } };

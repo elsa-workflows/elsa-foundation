@@ -68,7 +68,7 @@ public sealed partial class EfStore
 
     // The shared predicate refers to the checkpoint as i and the journal entry as NEW.
     private static string SqliteParkedOutcomeCheckpoint(string journalAlias) =>
-        RenderSqliteOutcomePrefixes(RootParkedOutcomeCheckpoint)
+        RenderSqliteOutcomePrefixes(RootParkedOutcomeCheckpoint + StoppedParkOutcomeCheckpoint)
             .Replace("NEW.", journalAlias, StringComparison.Ordinal)
             .Replace("i.", "NEW.", StringComparison.Ordinal);
 }
