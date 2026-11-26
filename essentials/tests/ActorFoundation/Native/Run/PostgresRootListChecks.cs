@@ -66,6 +66,9 @@ internal static class PostgresRootListChecks
                 query.Labels!.All(label => point.Header.Labels[label.Key] == label.Value) && point.AsOf > 0 &&
                 await api.GetAsync(blue, new ActorRef("not a reference"), ct) is null,
                 "a cold point lookup reads committed metadata and the database clock with the owner lookup columns and journal unavailable");
+            Check(await Refused(blue, WithLabel("definition", "another-definition")) &&
+                await Refused(blue, WithLabel(NativeLabels.CorrelationId, "another-correlation")),
+                "a saved continuation rejects either changed label value with the same key set");
             Check(await Refused(blue, query with { Status = ActorStatus.Finished }) &&
                 await Refused(blue, query with { Labels = null }) && await Refused(blue, query with { EndedBefore = 10 }) &&
                 await Refused(blue, query with { Parked = null }) && await Refused(blue, query with { Type = null }),
@@ -172,6 +175,9 @@ internal static class PostgresRootListChecks
             (await api.ListAsync(blue, query with { Type = "wrong" }, cancellationToken: ct)).Items.Count == 0,
             "actor type and park state each restrict the list");
 
+        Check((await api.ListAsync(blue, WithLabel("definition", "another-definition"), cancellationToken: ct)).Items.Count == 0 &&
+            (await api.ListAsync(blue, WithLabel(NativeLabels.CorrelationId, "another-correlation"), cancellationToken: ct)).Items.Count == 0,
+            "a fresh page requires both label values");
         var ready = await api.ListAsync(blue, query, cancellationToken: ct);
         Check(ready is { Items.Count: 2, Next: not null }, "a ready list issues a continuation");
         await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_project_root_actor_list""", ct);
@@ -293,6 +299,11 @@ internal static class PostgresRootListChecks
         Console.WriteLine($"projection-bookmark {page.Next!.Value.Value}");
         Console.WriteLine($"passed projection birth {Environment.ProcessId}");
         return 0;
+
+        ActorQuery WithLabel(string name, string value) => query with
+        {
+            Labels = new Dictionary<string, string>(query.Labels!) { [name] = value }
+        };
 
         bool HasNativeStateVersion(ActorView view)
         {
