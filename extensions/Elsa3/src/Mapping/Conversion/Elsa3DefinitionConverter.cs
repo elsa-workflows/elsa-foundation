@@ -207,7 +207,29 @@ internal sealed class Elsa3DefinitionConverter(
         var jsonPaths = plan.JsonPaths;
         var inventory = await memoryReferenceGraph.CollectAsync(
             plan.Definition.Root, node => ContractOf(plan, node), jsonPaths, cancellationToken, plan.SourceName);
-        plan.Diagnostics.AddRange(valueFlowLowerer.Lower(plan, inventory, node => AncestorScopeNames(plan, node)));
+        plan.Diagnostics.AddRange(valueFlowLowerer.Lower(plan, inventory, node => AncestorScopeNames(plan, node), node => Elsa3AncestorScopeNames(plan, node)));
+    }
+
+    /// <summary>
+    /// The names an Elsa 3 script could read from <paramref name="node"/> other than the workflow's own variables, nearest
+    /// scope first (#5873): an enclosing container's variables and an enclosing loop's per-pass variables, each with the
+    /// node that declares it and, for a per-pass variable, the Elsa 4 loop variable that holds its value.
+    /// </summary>
+    private static IReadOnlyList<Elsa3ScopeName> Elsa3AncestorScopeNames(Elsa3ConversionPlan plan, Elsa3Activity node)
+    {
+        var names = new List<Elsa3ScopeName>();
+        var parent = plan.Find(node)?.Parent;
+        while (parent is not null && plan.Find(parent) is { } parentPlan)
+        {
+            var scopeNodeId = !string.IsNullOrWhiteSpace(parent.NodeId) ? parent.NodeId : parent.Id;
+            names.AddRange(parentPlan.Variables.Select(variable => new Elsa3ScopeName(variable.Name, scopeNodeId, null)));
+            if (parentPlan.Resolved?.ActivityTypeKey is { } typeKey &&
+                Elsa3LoopVariableReferencesRewrite.PassVariables.TryGetValue(typeKey, out var passVariables))
+                names.AddRange(passVariables.Select(pass => new Elsa3ScopeName(pass.Key, scopeNodeId, pass.Value)));
+            parent = parentPlan.Parent;
+        }
+
+        return names;
     }
 
     /// <summary>

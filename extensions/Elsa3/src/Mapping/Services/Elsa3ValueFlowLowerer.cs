@@ -35,7 +35,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             containerVariableIds, memoryAliases, isReusable, inputTypeOf, ancestorScopeNames, null, activityTypeKeyOf);
 
     internal IReadOnlyList<Elsa3MigrationDiagnostic> Lower(Elsa3ConversionPlan plan, Elsa3MemoryReferenceInventory inventory,
-        Func<Elsa3Activity, IReadOnlyList<(string Name, string ScopeNodeId)>> ancestorScopeNames) =>
+        Func<Elsa3Activity, IReadOnlyList<(string Name, string ScopeNodeId)>> ancestorScopeNames,
+        Func<Elsa3Activity, IReadOnlyList<Elsa3ScopeName>> elsa3ScopeNames) =>
         LowerCore(plan.Definition, inventory, plan.Request.DiagnosticMetadata, plan.JsonPaths, plan.SourceName,
             (node, property) => plan.Find(node)?.ScriptProperty is { } script && StringComparer.Ordinal.Equals(script, property),
             plan.Nodes.Values.SelectMany(node => node.Variables).Select(variable => variable.ReferenceKey).ToHashSet(StringComparer.Ordinal),
@@ -43,7 +44,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             (node, name) => plan.Find(node)?.Resolved?.Inputs
                 .FirstOrDefault(input => input.ReferenceKey.Equals(name, StringComparison.OrdinalIgnoreCase) ||
                                          input.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Type,
-            ancestorScopeNames, plan, node => plan.Find(node)?.Resolved?.ActivityTypeKey);
+            ancestorScopeNames, plan, node => plan.Find(node)?.Resolved?.ActivityTypeKey, elsa3ScopeNames);
 
     private IReadOnlyList<Elsa3MigrationDiagnostic> LowerCore(
         Elsa3WorkflowDefinition definition,
@@ -58,7 +59,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         Func<Elsa3Activity, string, TypeReference?>? inputTypeOf,
         Func<Elsa3Activity, IReadOnlyList<(string Name, string ScopeNodeId)>>? ancestorScopeNames,
         Elsa3ConversionPlan? plan,
-        Func<Elsa3Activity, string?>? activityTypeKeyOf)
+        Func<Elsa3Activity, string?>? activityTypeKeyOf,
+        Func<Elsa3Activity, IReadOnlyList<Elsa3ScopeName>>? elsa3ScopeNames = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(inventory);
@@ -85,6 +87,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         var accessors = new AccessorScope(isReusable, ActivityAccessorNames(definition.Root))
         {
             AncestorScopeNames = ancestorScopeNames ?? (_ => []),
+            Elsa3ScopeNames = elsa3ScopeNames ?? (_ => []),
             ObserveScriptOutcomes = plan is null ? null : (node, names, invalidDone, nativeCompletionAccess) =>
             {
                 if (plan.Find(node) is not { } script) return;
@@ -708,6 +711,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 return;
             }
 
+            if (RefusedComputedPassRead(input, property, accessors, diagnostics))
+                return;
+
             // A computed name inside a loop body can also reach the loop's own values, which Elsa 3 did not expose.
             var loopValues = accessors.AncestorScopeNames(property.Activity)
                 .Select(scope => scope.Name)
@@ -930,6 +936,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             return;
         }
 
+        if (rewrite.HasComputedVariableRead && RefusedComputedPassRead(input, property, accessors, diagnostics))
+            return;
+
         var resultCaptured = outputs.Any(output => output.ActivityNodeId.Equals(property.ActivityNodeId, StringComparison.Ordinal));
         if (rewrite.CompletionValueLost && resultCaptured)
         {
@@ -1106,62 +1115,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 };
             }
             case Elsa3AmbientReferenceKind.Variable:
-            {
-                var matches = definition.Variables
-                    .Where(value => value.Name.Equals(ambient.Name, StringComparison.OrdinalIgnoreCase) ||
-                                    value.Id.Equals(ambient.Name, StringComparison.Ordinal))
-                    .ToArray();
-                if (matches.Length == 1 &&
-                    outputs.FirstOrDefault(output => IsLoopVariable(output) &&
-                                                     output.MemoryReferenceId.Equals(matches[0].Id, StringComparison.Ordinal)) is { } loop)
-                {
-                    if (!IsCarriedValue(loop, consumer))
-                        return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
-                            Elsa3ActivityDiagnosticCodes.OutputNotRepresentable,
-                            $"Variable '{ambient.Name}' holds loop '{loop.ActivityNodeId}''s current value, which Elsa 4 keeps only inside the loop body.",
-                            "Read the value inside the loop, or copy it into another variable there."));
-
-                    var binding = new VariableExpressionParameterBinding(loop.ActivityNodeId, loop.StablePropertyKey);
-                    // The Elsa 3 variable the loop wrote declares what the current value was in a script (FR-016, FR-032).
-                    var loopKind = Elsa3ScriptValueKinds.Classify(matches[0].TypeName, matches[0].IsArray);
-                    if (!Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains(loop.StablePropertyKey))
-                        return Elsa3ExpressionParameterResolution.Success(binding, loopKind);
-
-                    // An Elsa 4 script reads a loop's current value as the loop's iteration value, by name, nearest scope
-                    // first (spec 1222 FR-004a). Inside a nested loop of the same kind the name reaches the inner loop's
-                    // value, not this one: refuse rather than read another value (FR-031).
-                    var nearest = accessors.AncestorScopeNames(consumer.Activity)
-                        .FirstOrDefault(scope => StringComparer.Ordinal.Equals(scope.Name, loop.StablePropertyKey));
-                    if (nearest.Name is not null && !StringComparer.Ordinal.Equals(nearest.ScopeNodeId, loop.ActivityNodeId))
-                        return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
-                            Elsa3ImportDiagnosticCodes.ResolutionDiffers,
-                            $"Variable '{ambient.Name}' holds loop '{loop.ActivityNodeId}''s current value, but the script runs inside the nested loop '{nearest.ScopeNodeId}', whose own '{loop.StablePropertyKey}' Elsa 4 would read instead.",
-                            "Copy the outer loop's current value into another variable inside the outer loop's body, and read that variable, before import."));
-
-                    return Elsa3ExpressionParameterResolution.SuccessVariable(binding, loop.StablePropertyKey, loopKind);
-                }
-
-                // Spec 1222 FR-031: Elsa 4 resolves the name nearest scope first, so an enclosing container's variable of
-                // the same name would be read instead of the workflow variable this conversion binds. Refuse rather than
-                // change what the script reads.
-                if (matches.Length == 1 &&
-                    accessors.AncestorScopeNames(consumer.Activity).Any(scope => StringComparer.Ordinal.Equals(scope.Name, matches[0].Name)))
-                {
-                    return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
-                        Elsa3ImportDiagnosticCodes.ResolutionDiffers,
-                        $"JavaScript reads workflow variable '{matches[0].Name}', but an enclosing container or loop also declares '{matches[0].Name}', which Elsa 4 would read instead (nearest scope first).",
-                        "Rename one of the two variables in the Elsa 3 workflow before import."));
-                }
-
-                return matches.Length switch
-                {
-                    1 => Elsa3ExpressionParameterResolution.SuccessVariable(
-                        new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, matches[0].Id), matches[0].Name,
-                        Elsa3ScriptValueKinds.Classify(matches[0].TypeName, matches[0].IsArray)),
-                    0 => MissingAmbient(ambient),
-                    _ => AmbiguousAmbient(ambient),
-                };
-            }
+                // #5873: an enclosing Elsa 3 loop's per-pass variable comes before every workflow variable.
+                return Elsa3LoopPassVariables.Owner(accessors.Elsa3ScopeNames(consumer.Activity), ambient.Name) is { } pass
+                    ? ResolvePassVariable(consumer, accessors, ambient.Name, pass)
+                    : ResolveDeclaredVariable(definition, consumer, outputs, accessors, ambient);
             case Elsa3AmbientReferenceKind.ActivityResult:
             {
                 var stableKey = ToStableKey(ambient.Name);
@@ -1207,6 +1164,121 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     }
 
     /// <summary>
+    /// A computed name (<c>getVariable(expr)</c>, <c>variables[expr]</c>, a computed <c>setVariable</c>) inside an Elsa 3
+    /// loop body could name the loop's per-pass variable, which the Elsa 4 run-time lookup does not know (#5873, spec 1243
+    /// FR-013): refused with guidance to use a literal name, which converts to the loop's own variable.
+    /// </summary>
+    private static bool RefusedComputedPassRead(
+        DiagnosticScope input,
+        ActivityProperty property,
+        AccessorScope accessors,
+        List<Elsa3MigrationDiagnostic> diagnostics)
+    {
+        var reachable = Elsa3LoopPassVariables.Reachable(accessors.Elsa3ScopeNames(property.Activity));
+        if (reachable.Count == 0)
+            return false;
+
+        var names = string.Join(", ", reachable.Select(pass => $"'{pass.Name}' of loop '{pass.ScopeNodeId}'"));
+        diagnostics.Add(CreateDiagnostic(
+            input,
+            property,
+            Elsa3ActivityDiagnosticCodes.ValueOutsideContract,
+            $"JavaScript reaches variables by a computed name inside a loop body, where Elsa 3 could also reach the per-pass variables {names}. Elsa 4's run-time lookup does not know these names.",
+            $"Use a literal name for the loop's per-pass value, such as getVariable('{reachable[0].Name}'), which converts to the loop's own variable, in the Elsa 3 workflow before import.",
+            $"{property.JsonPath}.expression.value"));
+        return true;
+    }
+
+    /// <summary>
+    /// A read of an Elsa 3 loop's per-pass variable (#5873): the loop's Elsa 4 variable, pinned to the loop node. Elsa 4
+    /// resolves that variable's name nearest scope first, so where a scope between the read and the loop declares the same
+    /// Elsa 4 name, the read is refused rather than reach that scope's value.
+    /// </summary>
+    private static Elsa3ExpressionParameterResolution ResolvePassVariable(
+        ActivityProperty consumer,
+        AccessorScope accessors,
+        string name,
+        Elsa3ScopeName pass)
+    {
+        var loopVariable = pass.LoopVariable!;
+        var nearest = accessors.AncestorScopeNames(consumer.Activity)
+            .FirstOrDefault(scope => StringComparer.Ordinal.Equals(scope.Name, loopVariable));
+        if (nearest.Name is not null && !StringComparer.Ordinal.Equals(nearest.ScopeNodeId, pass.ScopeNodeId))
+            return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.ResolutionDiffers,
+                $"JavaScript reads '{name}', loop '{pass.ScopeNodeId}''s per-pass value, which converts to its '{loopVariable}', but '{nearest.ScopeNodeId}' between the read and the loop also declares '{loopVariable}', which Elsa 4 would read instead (nearest scope first).",
+                $"Rename the variable '{loopVariable}' that '{nearest.ScopeNodeId}' declares in the Elsa 3 workflow before import."));
+
+        // Elsa 3 handed the script the pass's value untyped: a number for an index, the item as the collection held it.
+        return Elsa3ExpressionParameterResolution.SuccessVariable(
+            new VariableExpressionParameterBinding(pass.ScopeNodeId, loopVariable), loopVariable, Elsa3ScriptValueKinds.Classify(null));
+    }
+
+    /// <summary>A read of a variable the workflow declares, by name or id.</summary>
+    private static Elsa3ExpressionParameterResolution ResolveDeclaredVariable(
+        Elsa3WorkflowDefinition definition,
+        ActivityProperty consumer,
+        IReadOnlyList<Elsa3MemoryOccurrence> outputs,
+        AccessorScope accessors,
+        Elsa3AmbientReference ambient)
+    {
+        var matches = definition.Variables
+            .Where(value => value.Name.Equals(ambient.Name, StringComparison.OrdinalIgnoreCase) ||
+                            value.Id.Equals(ambient.Name, StringComparison.Ordinal))
+            .ToArray();
+        if (matches.Length == 1 &&
+            outputs.FirstOrDefault(output => IsLoopVariable(output) &&
+                                             output.MemoryReferenceId.Equals(matches[0].Id, StringComparison.Ordinal)) is { } loop)
+        {
+            if (!IsCarriedValue(loop, consumer))
+                return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ActivityDiagnosticCodes.OutputNotRepresentable,
+                    $"Variable '{ambient.Name}' holds loop '{loop.ActivityNodeId}''s current value, which Elsa 4 keeps only inside the loop body.",
+                    "Read the value inside the loop, or copy it into another variable there."));
+
+            var binding = new VariableExpressionParameterBinding(loop.ActivityNodeId, loop.StablePropertyKey);
+            // The Elsa 3 variable the loop wrote declares what the current value was in a script (FR-016, FR-032).
+            var loopKind = Elsa3ScriptValueKinds.Classify(matches[0].TypeName, matches[0].IsArray);
+            if (!Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains(loop.StablePropertyKey))
+                return Elsa3ExpressionParameterResolution.Success(binding, loopKind);
+
+            // An Elsa 4 script reads a loop's current value as the loop's iteration value, by name, nearest scope
+            // first (spec 1222 FR-004a). Inside a nested loop of the same kind the name reaches the inner loop's
+            // value, not this one: refuse rather than read another value (FR-031).
+            var nearest = accessors.AncestorScopeNames(consumer.Activity)
+                .FirstOrDefault(scope => StringComparer.Ordinal.Equals(scope.Name, loop.StablePropertyKey));
+            if (nearest.Name is not null && !StringComparer.Ordinal.Equals(nearest.ScopeNodeId, loop.ActivityNodeId))
+                return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.ResolutionDiffers,
+                    $"Variable '{ambient.Name}' holds loop '{loop.ActivityNodeId}''s current value, but the script runs inside the nested loop '{nearest.ScopeNodeId}', whose own '{loop.StablePropertyKey}' Elsa 4 would read instead.",
+                    "Copy the outer loop's current value into another variable inside the outer loop's body, and read that variable, before import."));
+
+            return Elsa3ExpressionParameterResolution.SuccessVariable(binding, loop.StablePropertyKey, loopKind);
+        }
+
+        // Spec 1222 FR-031: Elsa 4 resolves the name nearest scope first, so an enclosing container's variable of
+        // the same name would be read instead of the workflow variable this conversion binds. Refuse rather than
+        // change what the script reads.
+        if (matches.Length == 1 &&
+            accessors.AncestorScopeNames(consumer.Activity).Any(scope => StringComparer.Ordinal.Equals(scope.Name, matches[0].Name)))
+        {
+            return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.ResolutionDiffers,
+                $"JavaScript reads workflow variable '{matches[0].Name}', but an enclosing container or loop also declares '{matches[0].Name}', which Elsa 4 would read instead (nearest scope first).",
+                "Rename one of the two variables in the Elsa 3 workflow before import."));
+        }
+
+        return matches.Length switch
+        {
+            1 => Elsa3ExpressionParameterResolution.SuccessVariable(
+                new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, matches[0].Id), matches[0].Name,
+                Elsa3ScriptValueKinds.Classify(matches[0].TypeName, matches[0].IsArray)),
+            0 => MissingAmbient(ambient),
+            _ => AmbiguousAmbient(ambient),
+        };
+    }
+
+    /// <summary>
     /// Resolves <c>get{name}()</c> to the declaration Elsa 3 generated it for, in Elsa 3's registration order: an
     /// activity output accessor shadows everything (and is not lowered), then a workflow input (verbatim name; in a
     /// reusable run Elsa 3 declares inputs as variables instead), then a variable (Pascal-cased name). Spec 247 R-2.
@@ -1240,6 +1312,11 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 return Resolve(Elsa3AmbientReferenceKind.WorkflowRequest, inputs[0].Name);
         }
 
+        // #5873: Elsa 3 generated accessors for the variables in scope, nearest first, so an enclosing loop's per-pass
+        // variable comes before every workflow variable; a workflow input's accessor, registered later, replaced it.
+        if (Elsa3LoopPassVariables.Owner(accessors.Elsa3ScopeNames(consumer.Activity), declared => HasAccessor(declared, name)) is { } pass)
+            return ResolvePassVariable(consumer, accessors, pass.Name, pass);
+
         var variables = definition.Variables.Where(value => HasAccessor(value.Name, name)).ToArray();
         var inputVariables = accessors.IsReusable
             ? definition.Inputs.Where(value => HasAccessor(value.Name, name)).ToArray()
@@ -1247,7 +1324,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         if (variables.Length + inputVariables.Length > 1)
             return AmbiguousAmbient(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, name));
         if (variables.Length == 1)
-            return Resolve(Elsa3AmbientReferenceKind.Variable, variables[0].Id);
+            return ResolveDeclaredVariable(definition, consumer, outputs, accessors,
+                new Elsa3AmbientReference(Elsa3AmbientReferenceKind.Variable, variables[0].Id));
         if (inputVariables.Length == 1)
             return Resolve(Elsa3AmbientReferenceKind.WorkflowRequest, inputVariables[0].Name);
 
@@ -1272,6 +1350,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         AccessorScope accessors,
         string name)
     {
+        // #5873: the setter of an enclosing loop's per-pass variable wrote that variable, not a workflow variable.
+        if (Elsa3LoopPassVariables.Owner(accessors.Elsa3ScopeNames(consumer.Activity), declared => HasGeneratedAccessor(declared, name)) is { } pass)
+            return ResolvePassVariable(consumer, accessors, pass.Name, pass);
+
         var variables = definition.Variables.Where(value => HasGeneratedAccessor(value.Name, name)).ToArray();
         var inputVariables = accessors.IsReusable
             ? definition.Inputs.Where(value => HasGeneratedAccessor(value.Name, name)).ToArray()
@@ -1279,7 +1361,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         if (variables.Length + inputVariables.Length > 1)
             return AmbiguousAmbient(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedSetter, name));
         if (variables.Length == 1)
-            return ResolveAmbient(definition, consumer, outputs, nodeOrder, accessors,
+            return ResolveDeclaredVariable(definition, consumer, outputs, accessors,
                 new Elsa3AmbientReference(Elsa3AmbientReferenceKind.Variable, variables[0].Id));
         if (inputVariables.Length == 1)
             return ResolveAmbient(definition, consumer, outputs, nodeOrder, accessors,
@@ -1875,6 +1957,12 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         /// resolves a script's variable name nearest scope first, so such a name shadows a workflow variable.
         /// </summary>
         public Func<Elsa3Activity, IReadOnlyList<(string Name, string ScopeNodeId)>> AncestorScopeNames { get; init; } = _ => [];
+
+        /// <summary>
+        /// The names an Elsa 3 script read from a node besides the workflow's variables, nearest scope first: enclosing
+        /// containers' variables and enclosing loops' per-pass variables (#5873).
+        /// </summary>
+        public Func<Elsa3Activity, IReadOnlyList<Elsa3ScopeName>> Elsa3ScopeNames { get; init; } = _ => [];
         public Action<Elsa3Activity, IReadOnlyList<string>?, bool, bool>? ObserveScriptOutcomes { get; init; }
     }
 

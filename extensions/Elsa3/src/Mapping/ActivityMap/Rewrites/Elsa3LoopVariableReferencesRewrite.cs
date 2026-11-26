@@ -15,6 +15,24 @@ internal sealed class Elsa3LoopVariableReferencesRewrite : IElsa3NodeRewrite
         ["Elsa.Activities.ForEach.Activities.ForEach"] = "currentItem",
     };
 
+    /// <summary>
+    /// The per-pass variables an Elsa 3 loop declares on its body, by Elsa 4 loop type key: each Elsa 3 name with the Elsa 4
+    /// loop variable that holds the same value (#5873). Elsa 3 <c>ForEach</c> declares <c>CurrentValue</c> and
+    /// <c>CurrentIndex</c> (<c>ForEachT.cs:97-98</c> at 3.6.3); <c>For</c> declares <c>CurrentValue</c> only
+    /// (<c>For.cs:105-108</c>). Elsa 3 matches these names ordinally. A loop that converts to another Elsa 4 loop adds
+    /// its row here (spec 1243 FR-013 for <c>ParallelForEach</c>).
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> PassVariables =
+        new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal)
+        {
+            ["Elsa.Activities.For.Activities.For"] = new Dictionary<string, string>(StringComparer.Ordinal) { ["CurrentValue"] = "index" },
+            ["Elsa.Activities.ForEach.Activities.ForEach"] = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["CurrentValue"] = "currentItem",
+                ["CurrentIndex"] = "currentIndex",
+            },
+        };
+
     /// <summary>Every Elsa 4 loop variable a lowered reference may name.</summary>
     internal static readonly IReadOnlySet<string> LoopVariableKeys = new HashSet<string>(["index", "currentItem", "currentIndex"], StringComparer.Ordinal);
 

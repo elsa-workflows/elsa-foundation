@@ -165,8 +165,11 @@ public sealed class Elsa3VariableReadConversionTests
     [Fact]
     public async Task A_computed_read_inside_a_loop_warns_that_it_can_reach_the_loops_values()
     {
+        // The body declares its own CurrentValue, so no Elsa 3 per-pass variable is in reach (#5873 refuses that case).
+        var body = Sequence("body", Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "getVariable(['Ord', 'er'].join(''))"))));
+        body.AdditionalProperties["variables"] = JsonSerializer.SerializeToElement(new[] { new { id = "acme-body-value", name = "CurrentValue", typeName = "Object" } });
         var loop = Activity("loop", "Elsa.For", ("start", Literal("0", "Int32")), ("end", Literal("1", "Int32")));
-        loop.AdditionalProperties["body"] = Port(Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "getVariable(['Ord', 'er'].join(''))"))));
+        loop.AdditionalProperties["body"] = Port(body);
 
         var result = await ConvertAsync(Sequence("root", loop), Order);
 
