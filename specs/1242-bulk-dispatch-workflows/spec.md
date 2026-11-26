@@ -82,11 +82,18 @@ body, and `Done`, `Canceled` and `Completed` all connect to one `WaitAny` join.
   - There are no channels and no trace option. Activation channels are trigger slots, not dispatch queues.
 - `ForEach` is sequential. Its body is a single child slot that reads `currentItem` and `currentIndex`, and each pass is
   its own iteration frame, so it has its own activity execution.
-- There is no parallel loop yet. `docs/architecture/large-fan-out.md` plans one, and states that a body that starts a
-  child workflow per item is in its scope. Spec 1243 (#5832) defines it: input `Collection`, read once; every pass is
-  scheduled at start; each pass can suspend on its own bookmark; `Done` once all passes have completed; a faulted pass
-  faults the loop. The body reads `variables.currentItem` and `variables.currentIndex`. There is no parallelism setting
-  and no cap. That shape is proposed, not yet approved.
+- There is no parallel loop yet. Spec 1243 (#5832) defines one:
+  - input `Collection`, read once;
+  - every pass is scheduled at start, and each pass can suspend on its own bookmark;
+  - `Done` once all passes have completed;
+  - a faulted pass does not fault the loop, and the other passes keep running, as in `Sequence`;
+  - the body reads `variables.currentItem` and `variables.currentIndex`;
+  - there is no parallelism setting and no cap.
+
+  That shape is proposed, not yet approved.
+- `docs/architecture/large-fan-out.md` (decision 1) planned a different parallel ForEach: an `Items` input, a cap of
+  1,000 items, and `MaxDegreeOfParallelism` (default 16). Spec 1243 departs from that, and this spec follows spec 1243,
+  the newer and more specific source. If spec 1243's approval brings back a cap or a degree, FR-010 applies.
 - Background eligibility (ADR 0093, spec 1230) does not apply: dispatching fails criterion C6, waiting fails C2 and a
   loop fails C1.
 
@@ -107,16 +114,16 @@ child-completed and child-faulted slots.
 - If it waits, the loop is spec 1243's parallel ForEach around an awaited `DispatchWorkflow`, whose `Completed` and
   `Faulted` outcomes lead to the converted child branches.
 - Each pass has its own activity execution, so each child gets its own dispatch identity without any change.
-- A child that faults leads to its `ChildFaulted` branch, or to nothing, and its pass completes. The loop does not
-  fault, which matches Elsa 3 counting a faulted child toward completion.
+- A child that faults leads to its `ChildFaulted` branch, or to nothing, and its pass completes. That matches Elsa 3,
+  which counted a faulted child toward completion.
 - Every rule for one dispatch carries over as it is: pinning, input validation, audit, cancellation and recovery.
 
 **C. Keep refusing, with guidance** that tells the author to build the loop by hand.
 
 - The rewrite is mechanical and the gap is real, so C leaves work to every migrating team.
 
-**Recommendation: B.** Elsa 4's model for "one child per item" is a loop with a dispatch body; large-fan-out.md already
-plans for it. B adds no runtime surface, needs no ADR and no Studio work, and closes the gap once spec 1243 lands. The
+**Recommendation: B.** Elsa 4's model for "one child per item" is a loop with a dispatch body, as large-fan-out.md
+already describes. B adds no runtime surface, needs no ADR and no Studio work, and closes the gap once spec 1243 lands. The
 fire-and-forget path does not need spec 1243 at all.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -140,7 +147,7 @@ id, and continues without waiting.
 2. **Given** that conversion, **When** the workflow runs with 3 items, **Then** 3 children start, and the parent
    continues without waiting for them.
 3. **Given** the node has `ChildCompleted` or `ChildFaulted` branches, **When** it is converted, **Then** the branches
-   are dropped with an info diagnostic, because Elsa 3 never runs them without waiting.
+   are dropped with info `ELS3-BULK-DISPATCH-UNREACHABLE`, because Elsa 3 never runs them without waiting.
 
 ### User Story 2 - Waiting bulk dispatch converts and runs per-child branches (Priority: P1)
 
@@ -156,7 +163,7 @@ continues once both children have ended.
 
 **Acceptance Scenarios**:
 
-1. **Given** `WaitForCompletion` is literal true or an expression, **When** the node is converted, **Then** the result
+1. **Given** `WaitForCompletion` is missing, a literal true or an expression, **When** the node is converted, **Then** the result
    is a parallel ForEach over `Items`. Its body is a flowchart with a `DispatchWorkflow`, whose `WaitForCompletion`
    carries the Elsa 3 value. `Completed` leads to the converted `ChildCompleted` activity and `Faulted` to the
    converted `ChildFaulted` activity.
@@ -207,14 +214,19 @@ guidance.
 ### Edge Cases
 
 - `Items` is null or empty: the loop completes at once with `Done`, as in Elsa 3.
-- `Items` is not a collection, for example a string: Elsa 3 silently dispatched nothing. The Elsa 4 parallel ForEach
-  faults the activity; `ForEach` follows its own rule. The converter refuses a literal it can see with
-  `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, as spec 1243 does, and the documentation states the run-time difference.
-- A child whose dispatch fails (`DispatchFailed`, for example after delivery retries): Elsa 3 faulted the activity.
-  The body dispatch's `DispatchFailed` stays unconnected, so the pass ends. That is the rule the converter already
-  applies to Elsa 3 `DispatchWorkflow` (Q3 in the PR).
-- `CorrelationIdFunction` is absent or returns blank: the child inherits the parent's correlation id. This is Elsa 4's
-  existing `DispatchWorkflow` rule, the same rule the converter already applies to Elsa 3 `DispatchWorkflow`.
+- `Items` is not a collection, for example a string: Elsa 3 silently dispatched nothing. The same happened for a
+  collection of value types, such as `[1, 2, 3]` held as `int[]`, because Elsa 3 only enumerates `IEnumerable<object>`.
+  In Elsa 4, both `ForEach` and the parallel ForEach fault the activity on a value that is not a collection, and they
+  iterate value-type collections. The converter refuses a literal non-collection it can see with
+  `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, as spec 1243 does. The documentation states the run-time difference.
+- A child whose dispatch fails (`DispatchFailed`, for example after delivery retries): Elsa 3 faulted the activity. The
+  body dispatch's `DispatchFailed` stays unconnected, so the pass ends. That is the rule the converter already applies
+  to Elsa 3 `DispatchWorkflow`; see question Q3 on PR #5839.
+- `CorrelationIdFunction` is absent or returns blank: Elsa 3 gave the child no correlation id, while Elsa 4 gives it the
+  parent's. That is Elsa 4's existing `DispatchWorkflow` rule, and the converter already accepts the same difference
+  for Elsa 3 `DispatchWorkflow` without a diagnostic. This spec follows that and adds none.
+- `CorrelationIdFunction` in a language other than JavaScript or Literal, for example Liquid or C#, is handled by the
+  converter's existing expression rules, the same as any other input.
 - The child declares an input named `ParentInstanceId`: Elsa 4 does not fill it, because the parent link lives in the
   dispatch record. The converter warns.
 - Elsa 3 reused one `Input` dictionary across items, so the members of one map item could leak into later children.
@@ -230,12 +242,20 @@ guidance.
 **Shape**
 
 - **FR-001**: No new Elsa 4 activity is added. The Elsa 4 counterpart of `BulkDispatchWorkflows` is a loop with a
-  `DispatchWorkflow` body (option B). The activity map entry changes from `NoCounterpart` to a lowering, a node rewrite
-  in the spirit of `ExecuteWorkflowAsDispatch`.
-- **FR-002**: When `WaitForCompletion` is a literal false, the converter MUST emit a `ForEach` whose `Collection` is
-  the converted `Items` and whose body is one `DispatchWorkflow` with `WaitForCompletion` false.
-- **FR-003**: When `WaitForCompletion` is absent (Elsa 3's default is true), a literal true or an expression, the
-  converter MUST emit spec 1243's parallel ForEach. Its `Collection` is the converted `Items`, and its body is a flowchart
+  `DispatchWorkflow` body (option B). The activity map entry changes from `NoCounterpart` to a lowering, done by a node
+  rewrite that adds child nodes, as `Elsa3SwitchValueSynthesisRewrite` and `Elsa3HttpTriggerResponseModeRewrite`
+  already do.
+- **FR-002**: The converter reads `WaitForCompletion` the way Elsa 3 3.6.3 did:
+  - **Missing**: the property key is absent from the JSON. The constructor default applies, which is true.
+  - **Literal false**: `null`, a literal with no value, or a literal that parses as false. Elsa 3 reads a null input as
+    `false` (`GetOrDefault`). The parse ignores case, so the corpus literal `"False"` counts.
+  - **Literal true**: a literal that parses as true.
+  - **Expression**: anything else.
+
+  For a literal false, the converter MUST emit a `ForEach` whose `Collection` is the converted `Items` and whose body is
+  one `DispatchWorkflow` with `WaitForCompletion` false.
+- **FR-003**: When `WaitForCompletion` is missing, a literal true or an expression, the converter MUST emit spec 1243's
+  parallel ForEach. Its `Collection` is the converted `Items`, and its body is a flowchart
   holding a `DispatchWorkflow` whose `WaitForCompletion` carries the Elsa 3 value.
   - The dispatch's `Completed` outcome connects to the converted `ChildCompleted` activity, when there is one.
   - Its `Faulted` outcome connects to the converted `ChildFaulted` activity, when there is one.
@@ -248,7 +268,10 @@ guidance.
 - **FR-005**: `WorkflowDefinitionId` follows the existing `DispatchWorkflow` rule: literal only and required, pinned at
   publish.
 - **FR-006**: The body dispatch's `Inputs` MUST be built for each item.
-  - Start from the static `Input` map, checked with the existing dispatch-input rules from #5808.
+  - Start from the static `Input` map.
+    - A literal or Object-expression map is checked with the existing dispatch-input rules from #5808.
+    - A JavaScript map is embedded in the generated expression, after the existing JavaScript rewrite.
+    - A map in any other expression language is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
   - When the target workflow is published by the same import, add:
     - for a map item, each declared input the item has, in the declared spelling;
     - for any other item, `DefaultItemInputKey` with the item, when the target declares that name.
@@ -284,17 +307,25 @@ guidance.
 | Elsa 3 use | Elsa 4 result |
 |---|---|
 | `Done` connection | the loop's `Done` connection |
-| `Canceled` connection | dropped, with an info diagnostic: Elsa 3 never emits it |
-| `Completed` connection, wait a literal false | dropped, with info: never emitted |
-| `Completed` connection, wait a literal true or absent | becomes a `Done` connection (Elsa 3 emits both together) |
-| `Completed` connection, wait an expression, every target also reached from `Done` | dropped, with info: `Done` covers it |
-| `Completed` connection, wait an expression, a target `Done` does not reach | refused with new error `ELS3-ACTIVITY-BULK-DISPATCH-COMPLETED-ROUTE`. Guidance: connect the follow-up to `Done`, and test the wait value in a decision if it matters |
-| A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | refused with new error `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`. Guidance: the dispatch result is not carried over yet (#1152, the same gap as `DispatchWorkflow.Result`); remove the read or read what you need from the child another way |
+| `Canceled` connection | dropped, with info `ELS3-BULK-DISPATCH-UNREACHABLE`: Elsa 3 never emits it |
+| `Completed` connection, wait a literal false | dropped, with info `ELS3-BULK-DISPATCH-UNREACHABLE`: never emitted |
+| `Completed` connection, any other wait, every target also reached from `Done` | dropped, with info `ELS3-BULK-DISPATCH-UNREACHABLE`: `Done` covers it. No duplicate connection is emitted |
+| `Completed` connection, any other wait, a target that `Done` does not reach | refused with new error `ELS3-ACTIVITY-BULK-DISPATCH-COMPLETED-ROUTE`. Elsa 3 emitted `Completed` only when it waited and had items, and `Done` always. Guidance: connect the follow-up to `Done`; if it must not run for an empty collection or without waiting, test that in a decision |
+| `ChildCompleted` or `ChildFaulted` branch, wait a literal false | dropped, with info `ELS3-BULK-DISPATCH-UNREACHABLE`: Elsa 3 never runs it |
+| static `Input` in a language other than JavaScript, Literal or Object | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (FR-006) |
+| `DefaultItemInputKey` not a literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (FR-007) |
+| `Items` a literal that is not a collection | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (Edge Cases) |
+| A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | refused with new error `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`. Guidance: the branches get no child result in Elsa 4; remove the read; once spec 1245 (#5838) gives an awaited `DispatchWorkflow` an `Output`, the branch can read the body dispatch's `Output` |
 | `WorkflowDefinitionId` not a literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (FR-005) |
 | `ChannelName` or `StartNewTrace` bound | `ELS3-ACTIVITY-REMOVED-INPUT-BOUND` (FR-009) |
 
 - **FR-013**: Every new code MUST be added to `Elsa3ActivityDiagnosticCodes` and to the spec 236 diagnostic-code
-  contract. Each new error MUST carry guidance text.
+  contract:
+  - two errors: `ELS3-ACTIVITY-BULK-DISPATCH-COMPLETED-ROUTE` and `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`;
+  - one warning: `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`, plus `…-PARALLEL-LIMIT` only under FR-010;
+  - one info: `ELS3-BULK-DISPATCH-UNREACHABLE`.
+
+  Each new error MUST carry guidance text, and each info names what was dropped.
 
 **Documentation and evidence**
 
@@ -308,8 +339,11 @@ guidance.
   - The composition root needs an adjusted copy, for coordinator approval: a literal `WorkflowDefinitionId` and a
     cleared `ChannelName`, the same precedent as `composition-dispatch-root-workflow.json`. It then converts once spec
     1243 is implemented.
-  - The HTTP expectations of `…-await-completion` (Elsa 3's HTTP-context switch) follow the existing disposition of
-    `dispatch-workflow-awaitCompletion-tests.json`.
+  - In the wait dataset of `…-await-completion`, three expectations come from Elsa 3's HTTP-context switch:
+    `WriteHttpResponse` runs after the resume with no HTTP context, so it suspends, the root stays
+    `Running`/`Suspended`, and the caller gets 200. That is `WriteHttpResponse` behaviour, not bulk dispatch. The ledger
+    has no disposition for it yet. S-15 classifies the dataset against Elsa 4's response-after-resume behaviour, with
+    coordinator approval, as either an expectation change or an excluded dataset. This spec does not decide it.
 
 ### Key Entities
 
@@ -326,7 +360,7 @@ guidance.
   `Finished` on the Elsa 4 host.
 - **SC-002**: Once spec 1243 is implemented, the approved adjusted copy of `composition-bulk-dispatch-root-workflow.json`
   converts and publishes. The correlation-id, input, channels and on-completed-callbacks suites pass, as does the
-  no-wait case of await-completion.
+  no-wait dataset of await-completion. The wait dataset follows S-15's classification (FR-016).
 - **SC-003**: Every Elsa 3 use in FR-012 gives exactly the listed result in converter tests. Each refusal carries
   guidance that names the change.
 - **SC-004**: The Elsa 4 runtime, the activity catalog and Studio are unchanged. The work is limited to the converter,
@@ -335,7 +369,7 @@ guidance.
 ## Assumptions
 
 - Spec 1243 provides a parallel ForEach as its session described it on 2026-11-26: input `Collection`, a single body
-  slot whose passes can suspend, `Done` once every pass has completed, a faulted pass faults the loop, and the body
+  slot whose passes can suspend, `Done` once every pass has completed, a faulted pass does not fault the loop, and the body
   reads `variables.currentItem`. If spec 1243 changes when it is approved, FR-003, FR-008 and FR-010 follow it.
 - Each pass of a loop has its own activity execution, so `DispatchWorkflow`'s identity scheme yields one child per item
   without any change. This is true for `ForEach` today, and spec 1243 keeps it.
@@ -346,6 +380,7 @@ guidance.
 ## Out of Scope
 
 - A dedicated multi-dispatch activity (option A), dispatch channels and trace options.
-- Carrying the child result into the branches. That is the same gap as `DispatchWorkflow.Result` in #1152.
+- Mapping the branches' reads of the child result to the body dispatch's `Output` from spec 1245 (#5838). That is a
+  possible follow-up once spec 1245 is implemented; until then such reads are refused (FR-012).
 - Elsa 4's `WriteHttpResponse` behaviour after a resume (await-completion's HTTP expectations).
 - Editing the S-15 ledger or the adjusted JTest copies. S-15 owns them.
