@@ -44,7 +44,8 @@ coordinator chose an awaited dispatch over a reusable graph activity.
   `WaitForCompletion`, default false; `CancelChildOnParentCancellation`, default true; `CorrelationId`, which defaults
   to the parent's.
 - Outcomes: `Dispatched`, `Completed`, `Faulted`, `Cancelled` and `DispatchFailed`.
-- Outputs (`DispatchWorkflowActivityResult`): `ChildWorkflowExecutionId` and `Result`. `Result` is a
+- Outputs today (`DispatchWorkflowActivityResult`): `ChildWorkflowExecutionId` and `Result`. Spec 1245 removes
+  `Result` as an output. `Result` is a
   `DispatchWorkflowResult` holding the child id, the status, `Outputs` as `{Name, Value, DeclaredType, IsRedacted}`
   entries (only a completed child carries them, spec 099 FR-010/FR-012) and diagnostic metadata.
 - A waited dispatch resumes through `ResumeAsync` with a `WorkflowDispatchParentResumePayload`. Its output entries are

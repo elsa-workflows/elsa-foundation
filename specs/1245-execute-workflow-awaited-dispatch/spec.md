@@ -50,8 +50,11 @@ the same gap:
 
 The specification has two parts:
 
-- **Elsa 4 runtime.** Dispatch Workflow gains one output, `Output`: the completed child's named outputs as one JSON
-  object, holding the child's committed values unchanged.
+- **Elsa 4 runtime.** Dispatch Workflow gets one data output, `Output`: the completed child's named outputs as one
+  JSON object, holding the child's committed values unchanged. The `Result` output is removed. Its status repeats the
+  outcome, and its `outputs` were a diagnostics view of the same values, so an author would see two outputs holding
+  nearly the same thing. The terminal status and the safe diagnostics stay in the activity's stored result, for
+  inspection only.
 - **Converter.** The Elsa 3 converter carries an awaited Dispatch Workflow's `Result` to `Output`. It refuses an Execute
   Workflow `Result` capture with guidance, and it routes `Done` the way Elsa 3 did.
 
@@ -62,8 +65,9 @@ main's clean-slate execution-kernel program (#4229) already models this. Its Nat
 from the current activity (`NativeActivityShapes`) refuses a `Result` read because the two shapes differ. The refusal
 says to remove the read "until the shapes match".
 
-This specification gives the current activity the kernel's shape: an `Output` that is the child's named outputs. It
-leaves the current `Result` unchanged. Nothing about kernel dispatch is duplicated here. Four pieces belong to #4229,
+This specification gives the current activity the kernel's shape: an `Output` that is the child's named outputs, and
+no structured `Result`. The kernel's `Result` refusal then has nothing left to refuse. Nothing about kernel dispatch is
+duplicated here. Four pieces belong to #4229,
 and the coordinator raises them there (see [Raised with #4229](#raised-with-4229)).
 
 The default runtime is still the current core. On main, the Workbench refuses Dispatch Workflow at publish only when the
@@ -72,15 +76,16 @@ pass on the default Workbench.
 
 ### Data, not diagnostics
 
-`Output` cannot be built from `Result.outputs`. Those entries come from `IWorkflowOutputSource`, which applies the
-runtime diagnostics capture policy. Its default level for workflow outputs is a diagnostic snapshot, so by default each
+`Output` cannot be built from the entries that today's `Result.outputs` holds. Those come from `IWorkflowOutputSource`,
+which applies the runtime diagnostics capture policy. Its default level for workflow outputs is a diagnostic snapshot, so by default each
 value arrives in one of two forms:
 
 - a preview envelope, with strings over 256 characters truncated and objects cut at 32 properties;
 - redacted, when the output's name looks sensitive (for example `token`), including the names of nested properties.
 
 That suits an inspection view, but it is not data. `Output` therefore holds the child's committed output values
-themselves, unaffected by any diagnostics setting. `Result.outputs` stays as it is: the diagnostics view.
+themselves, unaffected by any diagnostics setting. The diagnostics-view entries are removed with `Result`. The child's
+outputs stay inspectable on the child's own execution.
 
 A child's Set Output keeps the value protection policy of what it wrote. Two kinds of output are left out of `Output`:
 
@@ -103,14 +108,14 @@ So the omission is visible in two ways:
 - **In each run.** When the dispatch resumes, it reports one execution warning that names every output it left out.
   The names are the child's declared contract names, not value data, so the warning carries names and never a value.
 
-`Result.outputs` is not that signal. It keeps every name, but today it carries a preview of a redaction-mode or
-retention-governed value. That existing gap is #5851, and it is not fixed here.
+Today's `Result.outputs` carries a preview of a redaction-mode or retention-governed value (#5851). Removing those
+entries closes that gap on the initiative branch.
 
 Elsa 3 had no such policies, so no converted workflow loses a value by this rule. A host that wants protected child
 outputs to reach a parent needs per-value policy propagation through captures. That is new ADR 0045 §9 work, and it is
 not built here: no one needs it yet.
 
-No ADR or ADR amendment is needed. This adds an activity output and converter rules. It applies
+No ADR or ADR amendment is needed. This changes an activity's outputs and converter rules. It applies
 [ADR 0091](../../docs/adr/0091-json-data-passes-through-unchanged-and-every-serializer-derives-from-one-baseline.md):
 JSON data passes through unchanged. It changes no rule in an ADR.
 
@@ -142,8 +147,7 @@ parent that dispatches it with `WaitForCompletion` true, captures `Output` into 
 2. **Given** a child that declares two outputs and sets only one, **When** the parent captures `Output`, **Then** the
    object holds the output the child set and nothing for the other.
 3. **Given** default diagnostics settings, and a child whose outputs are `Summary` (a 1,000-character string) and
-   `token` (a string), **When** the parent captures `Output`, **Then** both values arrive unchanged. `Result.outputs`
-   still shows its diagnostic view of them.
+   `token` (a string), **When** the parent captures `Output`, **Then** both values arrive unchanged.
 4. **Given** a child output marked sensitive, or required to be encrypted, or carrying a redaction mode or a retention policy, or not stored inline, **When** the parent
    captures `Output`, **Then** that output is left out of the object, and the dispatch reports one execution warning
    naming it, without its value. There is one test per kind; for encryption the value is an explicit null.
@@ -199,7 +203,7 @@ expression, each followed by a node on `Done`. Run each with a child that comple
 3. **Given** a child that completes or faults, **When** the converted parent runs, **Then** the node on Elsa 3's `Done`
    runs in both cases.
 4. **Given** an Execute Workflow node that captures `Result`, **When** it is converted, **Then** it is refused with
-   `ELS3-ACTIVITY-MEMBER-SEMANTICS-CHANGED` and the guidance in FR-010.
+   `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` and the guidance in FR-010.
 
 ---
 
@@ -267,7 +271,7 @@ faults.
   absent on `Dispatched`, `Faulted`, `Cancelled` and `DispatchFailed`. An absent output leaves a capture's variable
   unchanged.
 - **FR-003**: `Output` MUST be built from the child's committed workflow output values. It MUST NOT be built from the
-  diagnostics capture policy or from `Result.outputs`, so no diagnostics setting changes it.
+  diagnostics capture policy, so no diagnostics setting changes it.
   - An output marked sensitive, or required to be encrypted, or carrying a redaction mode or a retention policy (its value protection policy), or not stored inline, MUST be left out.
   - The `Output` contract description MUST state that protected and externally stored outputs are left out (ADR 0046
     V6: a declared loss).
@@ -278,9 +282,18 @@ faults.
     - no value.
   - A completed child with no outputs gives `{}`.
   - The values MUST be replay-stable: a resumed or retried parent gets the same `Output` (spec 099 FR-008).
-- **FR-004**: `Result` and `ChildWorkflowExecutionId` MUST keep their current shape and behaviour.
-- **FR-005**: The Dispatch Workflow designer surface MUST show `Output` as a capturable output, as it shows the existing
-  outputs.
+- **FR-004**: Dispatch Workflow MUST NOT declare a `Result` output. Its outputs are `ChildWorkflowExecutionId` and
+  `Output`, and the outcome carries the terminal status.
+  - The safe terminal result MUST stay in the activity's stored result for inspection, as a member that is not an
+    output: the status, the allow-listed fault and cancellation diagnostics (spec 100 FR-004 to FR-006), and the
+    child-control transport.
+  - It MUST no longer carry child output entries. The diagnostics-view outputs are removed, which closes #5851 on the
+    initiative branch.
+  - Specs 099 and 100 MUST be amended in place where they say the activity sets `Result`: spec 099 FR-011, FR-012,
+    FR-021 and User Story 2 scenario 4, and spec 100 FR-004 and FR-008. Each amendment cites spec 1245.
+- **FR-005**: The Dispatch Workflow designer surface MUST show `Output` as a capturable output and no longer show
+  `Result`. Every consumer that names the Dispatch `Result` output MUST be updated: the BPMN interchange, Studio, the e2e
+  scripts and the tests.
 
 **Converter: Dispatch Workflow**
 
@@ -295,9 +308,9 @@ faults.
   Elsa 3 value is anything but literal true (unset, null, literal false or bound), the warning MUST also say that Elsa 4
   waits for a child that suspends where Elsa 3 continued.
 - **FR-009**: An Elsa 3 Execute Workflow's `Done` MUST map to `Completed` and `Faulted`.
-- **FR-010**: An Elsa 3 Execute Workflow `Result` capture MUST be refused with `ELS3-ACTIVITY-MEMBER-SEMANTICS-CHANGED`.
-  Elsa 4 Dispatch Workflow has a `Result` output, but it means something else, so the generic lost-output message
-  ("has no such output") would be wrong. That code's guidance is HTTP-specific today, so it MUST become per-rule.
+- **FR-010**: An Elsa 3 Execute Workflow `Result` capture MUST be refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`.
+  Elsa 4 Dispatch Workflow has no `Result` output. The lost-output rule's message and guidance are generic today, so the
+  rule MUST take per-rule text.
   - The message MUST say that Elsa 3's result wraps the child's output with its instance id and status, and that Elsa 4
     returns these separately.
   - The guidance MUST name both ways forward: replace the node in Elsa 3 with a Dispatch Workflow that waits for
@@ -329,24 +342,25 @@ faults.
   current core, including restart of a waiting parent, where the existing waited-dispatch tests already run.
 - **FR-013**: The S-15 ledger MUST be updated in the S-15 session, not in this PR.
   - The adjusted dispatch root no longer needs its `result` capture removed.
-  - The Execute Workflow root stays refused, now with the FR-010 code and guidance and the existing dynamic
-    `WorkflowDefinitionId` refusal.
+  - The Execute Workflow root stays refused, with the FR-010 guidance and the existing dynamic `WorkflowDefinitionId`
+    refusal.
   - Any new adjusted copy needs the coordinator's approval.
 
 ### Key Entities
 
 - **Dispatch output object** (`Output`): the completed child's named outputs, name → JSON value, without outputs whose
   value policy protects them (FR-003). Its shape is the kernel's `DispatchResult.Output`.
-- **Dispatch result** (`Result`): unchanged. It holds the child execution id, the terminal status, the output entries
-  with type and redaction, and diagnostics.
+- **Terminal result** (stored, not an output): the child execution id, the terminal status, the allow-listed
+  diagnostics and the child-control transport. It holds no child output entries.
 
 ## Raised with #4229
 
 These pieces sit on the kernel path. This specification does not build them. Without them, the conversions here run on
 the current core but are refused or behave differently on the kernel:
 
-1. **Map `Output` to the Native result.** `NativeActivityShapes` maps the current Dispatch Workflow `Result` read to
-   a refusal. An `Output` read has the same shape as `Native.DispatchResult.Output`, so it can pass through. FR-002 also
+1. **Map `Output` to the Native result.** `NativeActivityShapes` refuses a Dispatch Workflow `Result` read. After this
+   spec the current activity has no `Result`, so that rule can go. An `Output` read has the same shape as
+   `Native.DispatchResult.Output`, so it can pass through. FR-002 also
    needs the Native `Output` to be absent, not null, unless the child finished normally. Today it is not:
    - `ChildDone.Output` is passed on for any status;
    - `Dispatched` completes with an explicit `null` (`DispatchResult(null, "Dispatched")`), which a capture writes.
@@ -364,16 +378,16 @@ the current core but are refused or behave differently on the kernel:
 ### Measurable Outcomes
 
 - **SC-001**: For the two Problem section examples, the awaited Dispatch Workflow converts with no diagnostic other than
-  existing ones, and the Execute Workflow capture is refused with `ELS3-ACTIVITY-MEMBER-SEMANTICS-CHANGED` and the
-  FR-010 guidance. Converter tests pin each
-  diagnostic.
+  existing ones, and the Execute Workflow capture is refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` and the FR-010
+  guidance. Converter tests pin each diagnostic.
 - **SC-002**: With the `result` capture restored in the adjusted S-15 dispatch root, every output assertion in
   `dispatch-workflow-awaitCompletion` and `dispatch-workflow-handling-input-output` passes on the default Workbench,
   once #5818 is fixed.
 - **SC-003**: 100% of the FR-001 to FR-004 cases pass on the current core with the real workflow output source and
   default diagnostics settings, including a waiting parent that resumes after a restart.
 - **SC-004**: No existing waited-dispatch, Dispatch Workflow contract or Elsa 3 converter test changes behaviour, except
-  the tests that pin the old `Lost("Result")` rule, the old `Done` mapping, the carried `WaitForCompletion` value of
+  the tests that read the removed `Result` output or its output entries, the tests that pin the old `Lost("Result")`
+  rule, the old `Done` mapping, the carried `WaitForCompletion` value of
   Execute Workflow, and the Execute Workflow durable-warning tests (the warning moves into the rewrite and gains a
   sentence).
 
@@ -381,9 +395,9 @@ the current core but are refused or behave differently on the kernel:
 
 - The default runtime on the initiative branch, and on main until #4229's K13 switch, is the current core. Its waited
   Dispatch Workflow reads the child's committed outputs when the child completes (spec 099 FR-009), so the values exist.
-  FR-003 only adds a read of the values themselves next to the policy-filtered view.
+  FR-003 replaces the policy-filtered read with a read of the values themselves.
 - An output that is absent leaves its capture's variable unchanged (`RuntimeOutputCaptureProjector`). Elsa 3 behaved
   the same way when it never set `Result`.
-- Pre-stable: the Dispatch Workflow contract gains an output with no compatibility work.
+- Pre-stable: the Dispatch Workflow contract gains `Output` and loses `Result` with no compatibility work.
 - Execute Workflow's in-process, synchronous run is not kept. The child is a durable dispatch (spec 236), and the
   existing behaviour warning says so.

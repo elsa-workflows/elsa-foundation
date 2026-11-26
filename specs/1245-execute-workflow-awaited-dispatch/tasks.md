@@ -11,6 +11,17 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   `[Output(Key = "Output", Path = "output", IsRequired = false)]`), left out of the serialized result when null (plan
   D-1). Contract test in `DispatchWorkflowContractTests`: the output is declared, it is optional, and the descriptor
   lists it.
+- [ ] T001a Remove the `Result` output (FR-004, FR-005).
+  - `DispatchWorkflowActivityResult.Result` becomes `Terminal`, which is not an output.
+    `IRuntimeChildControlCompletion` reads `Terminal?.Control`.
+  - `DispatchWorkflowResult` loses `Outputs`, and `DispatchWorkflowOutput` is deleted. The enricher stops reading
+    `IWorkflowOutputSource` for dispatch.
+  - Contract test: the outputs are exactly `ChildWorkflowExecutionId` and `Output`.
+  - Update every consumer that names the Dispatch `Result` output: the dispatch tests, the BPMN interchange tests, the
+    Studio client tests and `e2e-tests/composition/Test-DispatchWorkflowOutcomes.ps1`.
+  - Amend specs 099 (FR-011, FR-012, FR-021, User Story 2 scenario 4) and 100 (FR-004, FR-008) in place, citing spec
+    1245.
+  - Close #5851 when this lands.
 - [ ] T002 Test first, in `DispatchWorkflowEndToEndTests`, on the real `WorkflowOutputSource` with default diagnostics
   settings. Fire-and-forget, faulted, cancelled and dispatch-failed
   children each give no `Output`. A variable that captures `Output` and holds `"before"` still holds `"before"` after
@@ -32,7 +43,7 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   - `WorkflowDispatchDeliveryFailureProjector` passes null, and `DispatchWorkflowResumeGuard` reads the member.
   - Update the "payload-safe" doc comment.
   - Enricher tests: the value is replay-stable; a conflicting re-enrichment fails closed; a payload with `Output` on
-    `Faulted` is rejected; `Result.outputs` is unchanged.
+    `Faulted` is rejected; the terminal result keeps its status, diagnostics and control.
 - [ ] T003c Add `Warnings` (`IExecutionWarningSink?`) to `ActivityResumeContext<TState, TTrigger>`, copied from the
   attempt. Test that a warning reported in `ResumeAsync` is recorded on the activity execution. Update
   `EXTENSION_POINTS.md` if it lists context members.
@@ -40,8 +51,7 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   `dispatch.child-output-withheld` (Warning, `Details.outputs`) through T003c when `WithheldOutputs` is not empty. End-to-end
   tests:
   - A child with output `Decision = "approved"` gives `{ "Decision": "approved" }`.
-  - A 1,000-character `Summary` and an output named `token` arrive unchanged, while `Result.outputs` shows the
-    diagnostic view.
+  - A 1,000-character `Summary` and an output named `token` arrive unchanged.
   - Outputs that are sensitive, encryption-required, redaction-moded or retention-governed are left out. The dispatch
     reports one `dispatch.child-output-withheld` warning whose `outputs` detail lists their names in ordinal order. The
     warning contains no value.
@@ -60,9 +70,10 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
 - [ ] T007 Outcomes (FR-007, FR-009). Dispatch Workflow: `Done` goes to `Dispatched`, `Completed` and `Faulted`.
   Execute Workflow: `Done` goes to `Completed` and `Faulted`. `Cancelled` stays unmapped. Converter tests pin the
   emitted connections.
-- [ ] T008 Make `SemanticsChanged` message and guidance rule data, with the current HTTP text as the default.
-  `ParsedContent` tests stay unchanged.
-- [ ] T009 Execute Workflow: `SemanticsChanged("Result")` with the FR-010 message and guidance. A converter test
+- [ ] T008 Give `Lost` optional per-rule message and guidance on `Elsa3MemberRule`, with today's text as the default.
+  Existing lost-output tests stay unchanged.
+- [ ] T009 Execute Workflow: `Lost("Result")` with the FR-010 message and guidance
+  (`ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`). A converter test
   asserts the code, both ways forward, and the read mapping (`Result.Output.X` to `Output.X`, `WorkflowInstanceId` to
   `ChildWorkflowExecutionId`, status to outcome).
 - [ ] T010 Implement the `ExecuteWorkflowAsDispatch` rewrite (`ActivityMap/Rewrites/`) and register it in
