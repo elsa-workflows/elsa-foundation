@@ -34,7 +34,7 @@ public sealed partial class EfStore
                 FROM ({CohortSequenceRange(SqliteCohortSource, SqliteCohortWaitingWork)} LIMIT ({"{1}"} + 1)) page
             )) row
         ), {CohortPage("{1}")}, scanned AS MATERIALIZED (
-            SELECT s."Partition", s."Spare", s."Epoch", s."ReadyAt", row.value ->> 'target' AS "Target",
+            SELECT s."Partition", s."Spare", s."Epoch", s."ScanReadyAt", row.value ->> 'target' AS "Target",
                 row.value ->> 'seq' AS "Seq", row.value ->> 'due' AS "Due", row.value ->> 'seen' AS "Seen",
                 row.value ->> 'waiting' AS "Waiting"
             FROM spare s CROSS JOIN json_each((

@@ -11,7 +11,7 @@ public sealed partial class EfStore
             SELECT f.*, CASE WHEN f."Through" >= 0 THEN f."Through" ELSE coalesce((
                 SELECT m."Seq" FROM "Messages" m WHERE m."Partition" = f."Partition" ORDER BY m."Seq" DESC LIMIT 1
             ), 0) END AS "Ceiling",
-            CASE WHEN f."Through" >= 0 THEN f."ReadyThrough" ELSE {clock} END AS "ReadyAt"
+            CASE WHEN f."Through" >= 0 THEN f."ReadyThrough" ELSE {clock} END AS "ReadyAt", {clock} AS "ScanReadyAt"
             FROM fences f
         ), by_seen AS MATERIALIZED (
             SELECT b.*, (SELECT "Seen" FROM {source}
@@ -63,7 +63,7 @@ public sealed partial class EfStore
     private static string CohortOutput(string limit) => $"""
         scan_page AS MATERIALIZED (
             SELECT p.*, row_number() OVER (PARTITION BY "Partition" ORDER BY "Seq") AS "Ordinal"
-            FROM scanned p WHERE "Waiting" AND "Seen" < "Epoch" AND "Due" <= "ReadyAt"
+            FROM scanned p WHERE "Waiting" AND "Seen" < "Epoch" AND "Due" <= "ScanReadyAt"
         ), scan_tail AS (
             SELECT "Partition", max("Seq") AS "ScanTail" FROM scanned GROUP BY "Partition"
         ), accepted_tail AS (
@@ -95,7 +95,7 @@ public sealed partial class EfStore
                 {CohortSequenceRange("\"Messages\"", CohortWaitingWork)} LIMIT ({"{8}"} + 1)
             ) p
         ), {CohortPage("{8}")}, scanned AS MATERIALIZED (
-            SELECT s."Partition", s."Spare", s."Epoch", s."ReadyAt", p."Target", p."Seq", p."Due", p."Seen", p."Waiting"
+            SELECT s."Partition", s."Spare", s."Epoch", s."ScanReadyAt", p."Target", p."Seq", p."Due", p."Seen", p."Waiting"
             FROM spare s CROSS JOIN LATERAL (
                 {CohortSpareRange("\"Messages\"", CohortWaitingWork)} LIMIT ({"{8}"} + {CohortSpareReadAhead})
             ) p

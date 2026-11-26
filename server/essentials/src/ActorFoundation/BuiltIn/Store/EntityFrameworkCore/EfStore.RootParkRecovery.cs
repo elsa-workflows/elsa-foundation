@@ -130,10 +130,13 @@ public sealed partial class EfStore
         {
             var (epoch, previous) = sampled[page.Key];
             var row = page.First();
-            var scan = row is { DueGroup: not null, Spare: > 0 } ? row.ScanTail ?? 0 : previous.Epoch == epoch ? previous.ScanSeq : 0;
+            var scanned = row is { DueGroup: not null, Spare: > 0 };
+            var scan = scanned ? row.ScanTail ?? 0 : previous.Epoch == epoch ? previous.ScanSeq : 0;
+            // The sequence scan can finish even while later admissions keep creating empty due groups.
+            // Refresh the ceiling and clock once either scan has covered the old range.
             var next = row switch
             {
-                { SeenGroup: null } => new CohortSample(epoch),
+                _ when row.SeenGroup is null || scanned && row.ScanTail is null => new CohortSample(epoch),
                 { SeenGroup: { } seen, DueGroup: null } => new(epoch, row.Through, row.ReadyThrough, checked(seen + 1), ScanSeq: scan),
                 { SeenGroup: { } seen, DueGroup: { } due, Seq: { } last, More: true } =>
                     new(epoch, row.Through, row.ReadyThrough, seen, due, last, scan),

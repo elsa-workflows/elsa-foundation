@@ -1148,6 +1148,7 @@ internal static class PostgresRootParkedOperatorChecks
                         message.Target.Id == waiting.Actor.Id && message.Operator?.RootParkFacts is not null;
                 }
                 Check(found, "the sampler revisits the missed control despite observed controls, future controls and continued admissions");
+                await ProbeRefreshAsync();
 
                 await set.ExecuteAsync($"""
                     INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
@@ -1161,6 +1162,63 @@ internal static class PostgresRootParkedOperatorChecks
                 Check(loaded.Messages.Any(row => row.Message.Kind == Kinds.Terminate &&
                     row.Message.Target.Id == waiting.Actor.Id && row.Message.Operator?.RootParkFacts is not null),
                     "one loaded poll reaches a selected control behind many distinct due groups");
+
+                async Task ProbeRefreshAsync()
+                {
+                    var refresh = new EfStore(OpenSample, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
+                    await refresh.EnableRootJobsAsync(stop);
+                    refresh.BindWorkerNode(set.Probe.Withholds);
+                    var actor = waiting.Actor.Id;
+                    var original = await LastControlAsync();
+                    Check(await set.OperateAsync(withheld, "mature-after-sweep-start", Kinds.Terminate, set.Selections[withheld], dueAt: due),
+                        "a future control is admitted below the next sequence ceiling");
+                    var maturing = await LastControlAsync();
+                    await MarkReleasedAsync(0);
+                    Check((await refresh.PollAsync(partition, epoch, TimeSpan.Zero, 1, stop)).Messages is [{ Message.Kind: "withheld-cohort" }],
+                        "the first sampled page freezes before the released arrival takes its output slot");
+                    await MarkReleasedAsync(epoch);
+                    await MoveControlAsync(original, due);
+                    var tailActor = (await set.ImageAsync(tail)).Actor.Id;
+                    await set.ExecuteAsync($"""
+                        UPDATE "Messages" SET "Seen" = {epoch}
+                        WHERE "Target" = {tailActor} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                        """);
+                    Check(await set.OperateAsync(withheld, "admitted-after-sweep-start", Kinds.Terminate, set.Selections[withheld], dueAt: 0),
+                        "a ready control is admitted above the old ceiling");
+                    var newControl = await LastControlAsync();
+                    await set.ExecuteAsync($"""
+                        UPDATE "Messages" SET "Due" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint + 25
+                        WHERE "Id" = {maturing} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        """);
+                    await Task.Delay(50, stop);
+                    var remaining = new HashSet<string>(StringComparer.Ordinal) { maturing, newControl };
+                    for (var pass = 0; pass < 16 && remaining.Count != 0; pass++)
+                    {
+                        await set.ExecuteAsync($"""
+                            INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
+                            VALUES ({"operator/refresh-backdated-" + pass}, {InboxKey.FoundationOccurrenceScope}, {partition},
+                                'other-source', {Kinds.Terminate}, {100 + pass}, 0, 0, 0, false)
+                            """);
+                        var offered = await refresh.PollAsync(partition, epoch, TimeSpan.Zero, 1, stop);
+                        if (offered.Messages is [{ Message: { Kind: Kinds.Terminate } control }] &&
+                            control.Target.Id == actor && control.Operator is not null && remaining.Remove(control.InboxKey.Id))
+                            await MoveControlAsync(control.InboxKey.Id, due);
+                    }
+                    Check(remaining.Count == 0, "continued backdated admissions leave a newly due control and a post-ceiling admission offerable");
+                    await set.ExecuteAsync($"""
+                        DELETE FROM "Messages" WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                            AND "Id" IN ({maturing}, {newControl})
+                        """);
+                    await MoveControlAsync(original, 0);
+
+                    Task<string> LastControlAsync() => source.Messages.Where(row =>
+                            row.Target == actor && row.InboxScope == InboxKey.FoundationOccurrenceScope && row.Kind == Kinds.Terminate && !row.Done)
+                        .OrderByDescending(row => row.Seq).Select(row => row.Id).FirstAsync(stop);
+
+                    Task MoveControlAsync(string id, long at) => set.ExecuteAsync($"""
+                        UPDATE "Messages" SET "Due" = {at} WHERE "Id" = {id} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        """);
+                }
 
                 Task MarkReleasedAsync(long seen) => set.ExecuteAsync($"""
                     UPDATE "Messages" SET "Seen" = {seen} WHERE "Target" = {waiting.Actor.Id} AND "Kind" = 'withheld-cohort' AND NOT "Done"
