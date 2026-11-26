@@ -1,4 +1,4 @@
-import { acceptCompletion, completionStatus, startCompletion } from "@codemirror/autocomplete";
+import { acceptCompletion, completionStatus, currentCompletions, startCompletion } from "@codemirror/autocomplete";
 import { EditorView } from "@codemirror/view";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -480,6 +480,37 @@ describe("StudioCodeEditor", () => {
     expect(onChange.mock.lastCall?.[0]).toMatchObject({ value: "variables.customer.home.street + 1" });
     expect(getCompletions).toHaveBeenCalledWith(expect.anything(), expect.anything(), { line: 0, column: cursor }, expect.anything());
     unmount();
+  }, 20000);
+
+  it.each(["pending", "active"] as const)("refreshes %s completion after the provider changes", async status => {
+    const source = "variables.customer.";
+    const props = { document: codeDocument({ value: source }), languageAdapter: javaScriptLanguageAdapter };
+    const originalProvider = vi.fn(() => status === "pending"
+      ? new Promise<never>(() => {})
+      : [{ label: "oldMember" }]);
+    const refreshedProvider = vi.fn(() => [{ label: "newMember" }]);
+    const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: originalProvider });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      const view = EditorView.findFromDOM(content)!;
+      view.dispatch({ selection: { anchor: source.length } });
+      content.dispatchEvent(new KeyboardEvent("keydown", {
+        key: " ", code: "Space", ctrlKey: true, bubbles: true, cancelable: true
+      }));
+      await vi.waitFor(() => {
+        expect(originalProvider).toHaveBeenCalledOnce();
+        expect(completionStatus(view.state)).toBe(status);
+      });
+
+      rerender({ ...props, completionProvider: refreshedProvider });
+
+      await vi.waitFor(() => expect(currentCompletions(view.state).map(item => item.label)).toEqual(["newMember"]));
+      expect(refreshedProvider).toHaveBeenCalledOnce();
+    } finally {
+      unmount();
+    }
   }, 20000);
 
   it("cancels in-flight completion when authorization is revoked", async () => {

@@ -1,4 +1,4 @@
-import { acceptCompletion, closeCompletion, completionKeymap } from "@codemirror/autocomplete";
+import { acceptCompletion, closeCompletion, completionKeymap, startCompletion } from "@codemirror/autocomplete";
 import {
   defaultKeymap,
   history,
@@ -177,11 +177,13 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    closeCompletion(view);
+    const restartCompletion = closeCompletion(view);
     // Signature help is selection-driven. Re-dispatch the current selection when a delayed
     // authoring context replaces the initial local-only providers so the visible document can
     // immediately acquire the newly available signature.
     view.dispatch({ selection: view.state.selection });
+    // A provider refresh invalidates old suggestions but should preserve the author's completion request.
+    if (restartCompletion) startCompletion(view);
     // A reclaimed compact view starts at the left edge; a field the author scrolled sideways keeps its position.
     if (view.hasFocus && view.scrollDOM.scrollLeft === 0) keepCaretInEditorView(view);
   }, [props.completionProvider, props.completions, props.hoverProvider, props.signatureProvider]);
