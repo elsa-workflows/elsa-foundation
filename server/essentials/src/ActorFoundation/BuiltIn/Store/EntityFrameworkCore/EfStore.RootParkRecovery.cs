@@ -59,7 +59,7 @@ public sealed partial class EfStore
             AND m."FoundationReleasedBy" IS DISTINCT FROM i."FoundationParkGeneration")
         """;
 
-    private bool SamplesAuthoredCohortWithholding(KernelDb db) => db.UsesRootComposedParkRecovery && !db.UsesSqliteRootRuntime &&
+    private bool SamplesAuthoredCohortWithholding(KernelDb db) => db.UsesRootComposedParkRecovery &&
         _ordinaryRoots is { Discover: true, AuthoredWithholds: not null };
 
     private string RootPollCohortFilter(KernelDb db)
@@ -82,6 +82,17 @@ public sealed partial class EfStore
 
     private static readonly string CohortWaitingWork = $"""
         "EventMatch" IS NULL AND NOT "Done" AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" LIKE 'operator/%'
+        """;
+    private static readonly string CohortEligibleRoots = $"""
+        SELECT i."Partition", i."Id" AS "Actor", i."Revision", i."FoundationTenant" AS "Tenant", i."FoundationReference" AS "Reference",
+            i."FoundationHeader" AS "Header"
+        FROM (SELECT DISTINCT "Partition", "Target" FROM candidates WHERE "Seen" < "Epoch") w
+        JOIN "Instances" i ON i."Id" = w."Target" AND i."Partition" = w."Partition"
+        WHERE i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired"
+            AND i."FoundationReference" IS NOT NULL AND i."FoundationParkGeneration" > 0
+            AND EXISTS (SELECT 1 FROM "Messages" c
+                WHERE c."Partition" = i."Partition" AND c."Target" = i."Id" AND c."EventMatch" IS NULL AND NOT c."Done"
+                    AND c."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND c."FoundationReleasedBy" = i."FoundationParkGeneration")
         """;
 
     // Only roots with pending released inputs and waiting controls need an authored decision. The main poll accepts
@@ -114,7 +125,9 @@ public sealed partial class EfStore
             sampled.Add(fence.Partition, (fence.Epoch, sample));
         }
         if (partitions.Count == 0) return ([], []);
-        var candidates = await db.Database.SqlQuery<CohortCandidate>(System.Runtime.CompilerServices.FormattableStringFactory.Create(
+        var sql = db.UsesSqliteRootRuntime
+            ? SqliteCohortCandidates(partitions.ToArray(), epochs.ToArray(), afterDue.ToArray(), afterSeq.ToArray(), through.ToArray(), limit / width)
+            : System.Runtime.CompilerServices.FormattableStringFactory.Create(
             $"""
             WITH fences AS MATERIALIZED (
                 SELECT * FROM unnest({"{0}"}::integer[], {"{1}"}::bigint[], {"{2}"}::bigint[], {"{3}"}::bigint[], {"{4}"}::bigint[])
@@ -137,21 +150,14 @@ public sealed partial class EfStore
             ), tail AS (
                 SELECT DISTINCT ON ("Partition") "Partition", "Due", "Seq" FROM candidates ORDER BY "Partition", "Due" DESC, "Seq" DESC
             ), eligible AS (
-                SELECT i."Partition", i."Id" AS "Actor", i."Revision", i."FoundationTenant" AS "Tenant", i."FoundationReference" AS "Reference",
-                    i."FoundationHeader" AS "Header"
-                FROM (SELECT DISTINCT "Partition", "Target" FROM candidates WHERE "Seen" < "Epoch") w
-                JOIN "Instances" i ON i."Id" = w."Target" AND i."Partition" = w."Partition"
-                WHERE i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired"
-                    AND i."FoundationReference" IS NOT NULL AND i."FoundationParkGeneration" > 0
-                    AND EXISTS (SELECT 1 FROM "Messages" c
-                        WHERE c."Partition" = i."Partition" AND c."Target" = i."Id" AND c."EventMatch" IS NULL AND NOT c."Done"
-                            AND c."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND c."FoundationReleasedBy" = i."FoundationParkGeneration")
+                {CohortEligibleRoots}
             )
             SELECT b."Partition", b."Through", t."Due", t."Seq", e."Actor", e."Revision", e."Tenant", e."Reference", e."Header"
             FROM bounds b LEFT JOIN tail t ON t."Partition" = b."Partition"
             LEFT JOIN eligible e ON e."Partition" = b."Partition"
             /* root-cohort-waiting */
-            """, partitions.ToArray(), epochs.ToArray(), afterDue.ToArray(), afterSeq.ToArray(), through.ToArray(), limit / width)).ToArrayAsync(token);
+            """, partitions.ToArray(), epochs.ToArray(), afterDue.ToArray(), afterSeq.ToArray(), through.ToArray(), limit / width);
+        var candidates = await db.Database.SqlQuery<CohortCandidate>(sql).ToArrayAsync(token);
         foreach (var page in candidates.GroupBy(candidate => candidate.Partition))
         {
             var (epoch, previous) = sampled[page.Key];

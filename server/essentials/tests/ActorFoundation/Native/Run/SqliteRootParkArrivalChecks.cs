@@ -10,7 +10,7 @@ namespace Kernel.Native.Run;
 
 internal static partial class SqliteHostLifetimeChecks
 {
-    internal static async Task<int> RunParkArrivalsAsync(bool fenceInBatch, bool recovery = false)
+    internal static async Task<int> RunParkArrivalsAsync(bool fenceInBatch, bool recovery = false, bool authored = false)
     {
         const string fixture = "sqlite-park-arrivals";
         const string payload = """{"input":"retained"}""";
@@ -26,7 +26,11 @@ internal static partial class SqliteHostLifetimeChecks
             var observation = new ParkReadObservation();
             observation.Resume.TrySetResult();
             var rollback = new RecoverReleaseFailure();
-            var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connection).AddInterceptors(observation, rollback).Options;
+            var cohortPlan = new ParkReadObservation("/* sqlite-cohort-waiting */");
+            cohortPlan.Resume.TrySetResult();
+            var builder = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connection).AddInterceptors(observation, rollback);
+            if (authored) builder.AddInterceptors(cohortPlan);
+            var options = builder.Options;
             var definitions = new SqliteAdmissionDefinitions();
             KernelDb Open() => recovery ? KernelDb.ForSqliteParkRecoveryQualification(options, definitions)
                 : KernelDb.ForSqliteParkArrivalsQualification(options, definitions);
@@ -52,6 +56,11 @@ internal static partial class SqliteHostLifetimeChecks
             var executor = new SqliteArrivalActor(fixture);
             var adapter = new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode(executor.Withholds)), executor,
                 rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true);
+            if (authored)
+            {
+                await CheckAuthoredCohortAsync();
+                return 0;
+            }
             var actor = (await admission.StartAsync(scope.Tenant, "start", new(fixture, "{}"), null, null, token)).Actor!.Value;
             var requests = new Requests();
             HeldRootRequest Request(string id) => new(scope.Tenant, "caller",
@@ -206,6 +215,49 @@ internal static partial class SqliteHostLifetimeChecks
                 "the same owner settles the preadmitted held input after the Park ends without invoking the actor");
             return 0;
 
+            async Task CheckAuthoredCohortAsync()
+            {
+                var root = (await admission.StartAsync(scope.Tenant, "cohort-start", new(fixture, SqliteArrivalActor.Withheld), null, null, token)).Actor!.Value;
+                EfStore.RootImage restored;
+                long oldEpoch;
+                await using (var owner = await OwnAsync("authored-first"))
+                {
+                    await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running, Suspended: false });
+                    var running = (await reads.GetAsync(scope, root, token))!.Selection!;
+                    Require(await admission.OperateAsync(scope.Tenant, root, "cohort-fault", Kinds.Terminate, running, null, null, token) is
+                        { Outcome: Contract.AdmissionOutcome.Accepted }, "a running control reaches the actor with authored withholding");
+                    await DriveAsync(owner, root, row => row is { Revision: 2, Status: InstanceStatus.Faulted });
+                    Require(await admission.SendAsync(scope.Tenant, root, "cohort-arrival", "cohort-arrival", payload, null, null, token) is
+                        { Outcome: Contract.AdmissionOutcome.Accepted }, "the Park admits an ordinary arrival while authors still withhold");
+                    var kept = await DriveAsync(owner, root, row => row is { Revision: 3, Status: InstanceStatus.Faulted });
+                    var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                    Require(await admission.OperateAsync(scope.Tenant, root, "cohort-stale", Kinds.Terminate, selection,
+                            kept.AsOf + 120_000, null, token) is { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                        await admission.OperateAsync(scope.Tenant, root, "cohort-recover", Kinds.Recover, selection, null, null, token) is
+                            { Outcome: Contract.AdmissionOutcome.Accepted },
+                        "both the future selected control and immediate Recover have stored receipts");
+                    restored = await DriveAsync(owner, root, row => row is { Revision: >= 4, Status: InstanceStatus.Running, Suspended: false });
+                    oldEpoch = owner.Epoch;
+                }
+
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {restored.Actor.Id} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                    """, token);
+                await using var replacement = await OwnAsync("authored-next");
+                var settled = await DriveAsync(replacement, root, row => row.Revision > restored.Revision &&
+                    row is { Status: InstanceStatus.Running, Suspended: false });
+                var partition = new InstanceRef(settled.Actor.Id).Partition;
+                var journal = (await store.ReadJournalOfAsync(partition, settled.Actor.Id, 0, token)).Single(row => row.Revision == settled.Revision);
+                Require(replacement.Epoch > oldEpoch && replacement.Owns && executor.Order.Count == 0 &&
+                    journal.Entries.Contains("\"Reason\":\"selection\"", StringComparison.Ordinal) &&
+                    await db.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {settled.Actor.Id} AND "Kind" = 'cohort-arrival'
+                            AND NOT "Done" AND "FoundationKeptBy" IS NULL AND "FoundationReleasedBy" = 1 AND "Payload" = {payload}) AS "Value"
+                        """).SingleAsync(token), "a cold owner settles the stale control while the withheld arrival retains its released generation");
+                Require(cohortPlan.Plan.Any(step => step.Contains("IX_FoundationRootInbox_CohortWaiting", StringComparison.Ordinal) &&
+                    step.Contains("Partition=?", StringComparison.Ordinal)), "the SQLite cohort sampler seeks the waiting controls by partition");
+            }
+
             async Task CheckCreatorRecoverAsync(Worker owner)
             {
                 var spec = new StartSpec(fixture, SqliteArrivalActor.CreatorFault);
@@ -276,7 +328,11 @@ internal static partial class SqliteHostLifetimeChecks
                     if (await store.ReadFirstRootAsync(scope.Tenant, reference.Id, token) is { } row && ready(row)) return row;
                     await worker.WokenAsync(null, token);
                     await worker.RunAsync(token);
-                    if (!worker.Owns) throw new InvalidOperationException("The SQLite Park fixture lost ownership.");
+                    if (!worker.Owns)
+                    {
+                        var current = await store.ReadFirstRootAsync(scope.Tenant, reference.Id, token);
+                        throw new InvalidOperationException($"The SQLite Park fixture lost ownership at revision {current?.Revision}, status {current?.Status}.");
+                    }
                     await Task.Delay(15, token);
                 }
             }
@@ -333,12 +389,13 @@ internal static partial class SqliteHostLifetimeChecks
 
     private sealed class SqliteArrivalActor(string type) : Contract.IActorType
     {
+        internal const string Withheld = """{"Withholds":true}""";
         internal const string CreatorFault = """{"CreatorFault":true}""";
         internal int OrdinaryTurns { get; private set; }
         internal int HeldTurns { get; private set; }
         internal List<string> Order { get; } = [];
         string Contract.IActorType.Type => type;
-        public bool Withholds(Contract.ActorHeader header) => false;
+        public bool Withholds(Contract.ActorHeader header) => header.TypeData == Withheld;
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
@@ -348,11 +405,12 @@ internal static partial class SqliteHostLifetimeChecks
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             if (turn.Inbox.Any(message => message.Kind is "fail" or "repark-fault" ||
-                message.Kind == Contract.Kinds.Start && turn.Header.TypeData == CreatorFault))
+                message.Kind == Contract.Kinds.Start && turn.Header.TypeData == CreatorFault ||
+                message.Kind == Contract.Kinds.Terminate && turn.Header.TypeData == Withheld))
                 throw new InvalidOperationException("park arrival fixture fault");
             OrdinaryTurns += turn.Inbox.Count(message => message.Kind == "ordinary");
             HeldTurns += turn.Inbox.Count(message => message.Kind == "held");
-            Order.AddRange(turn.Inbox.Select(message => message.Kind).Where(kind => kind is "ordinary" or "held"));
+            Order.AddRange(turn.Inbox.Select(message => message.Kind).Where(kind => kind is "ordinary" or "held" or "cohort-arrival"));
             turn.State = """{"state":"last committed"}""";
             return default;
         }
