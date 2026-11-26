@@ -174,6 +174,18 @@ internal static class SqliteShippedInstallChecks
         await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
             DELETE FROM "Instances" WHERE "Id" = 'checkpoint'
             """, token), "the checkpoint guard refuses physical deletion of a qualified root");
+        await db.Database.OpenConnectionAsync(token);
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync("PRAGMA recursive_triggers = OFF", token);
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+                INSERT OR REPLACE INTO "Instances" SELECT * FROM "Instances" WHERE "Id" = 'checkpoint'
+                """, token), "an insert cannot replace a qualified checkpoint");
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+                UPDATE OR REPLACE "Instances" SET "Id" = 'checkpoint' WHERE "Id" = 'direct'
+                """, token), "a key move cannot replace a qualified checkpoint");
+        }
+        finally { await db.Database.CloseConnectionAsync(); }
         await RefusedAsync<SqliteException>(() => JournalAsync("checkpoint", revision: 4, "[]"),
             "the journal guard requires the next running checkpoint revision");
         await JournalAsync("checkpoint", revision: 2, "[]");

@@ -155,9 +155,19 @@ public sealed partial class EfStore
     // The explicit IS TRUE on the update matches PL/pgSQL's IF, which also refuses an indeterminate predicate.
     private static IEnumerable<SqliteDefinition> SqliteFirstRootGuards(KernelDb db)
     {
+        // SQLite can implicitly delete a row on a key conflict. Protect the target without relying on recursive triggers.
+        const string qualifiedTarget = """
+            EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Id" AND i."FoundationReference" IS NOT NULL)
+            """;
+        yield return new("trigger", "kernel_require_root_checkpoint_insert", "Instances", $$"""
+            CREATE TRIGGER kernel_require_root_checkpoint_insert BEFORE INSERT ON "Instances"
+            WHEN {{qualifiedTarget}}
+            BEGIN SELECT RAISE(ABORT, 'Qualified actor checkpoint requires a qualified update'); END
+            """);
         yield return new("trigger", "kernel_require_root_checkpoint_writer", "Instances", RenderSqlite($$"""
             CREATE TRIGGER kernel_require_root_checkpoint_writer BEFORE UPDATE ON "Instances"
-            WHEN OLD."FoundationReference" IS NOT NULL AND NOT (({{RootCheckpointWriteAllowed}}) IS TRUE)
+            WHEN (OLD."FoundationReference" IS NOT NULL AND NOT (({{RootCheckpointWriteAllowed}}) IS TRUE))
+                OR (NEW."Id" <> OLD."Id" AND {{qualifiedTarget}})
             BEGIN SELECT RAISE(ABORT, 'Qualified actor checkpoint requires a qualified update'); END
             """));
         yield return new("trigger", "kernel_require_root_checkpoint_delete", "Instances", """
