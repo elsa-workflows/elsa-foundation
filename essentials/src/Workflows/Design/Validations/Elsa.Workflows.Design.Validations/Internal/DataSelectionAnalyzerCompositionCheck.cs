@@ -9,8 +9,9 @@ internal sealed record DataSelectionComposition(IServiceCollection Services);
 
 /// <summary>
 /// Rejects a missing, duplicate or non-scoped data selection authority, a missing, duplicate or non-singleton
-/// write-order analyzer, a missing, duplicate or non-scoped script variable rename planner, and two script variable read
-/// analyzers for one language (spec 1222), after every feature has registered.
+/// write-order analyzer, a missing, duplicate or non-scoped script variable rename planner, script body write analyzer
+/// or step-write analyzer, and two script variable read analyzers for one language (spec 1222), after every feature has
+/// registered.
 /// </summary>
 internal sealed class DataSelectionAnalyzerCompositionCheck(DataSelectionComposition composition, IServiceProvider services) : IShellInitializer
 {
@@ -36,6 +37,11 @@ internal sealed class DataSelectionAnalyzerCompositionCheck(DataSelectionComposi
             descriptor.ServiceType == typeof(IScriptBodyWriteAnalyzer) && !descriptor.IsKeyedService).ToArray();
         if (writeAnalyzers.Length != 1 || writeAnalyzers[0].Lifetime != ServiceLifetime.Scoped)
             throw new InvalidOperationException("Exactly one scoped IScriptBodyWriteAnalyzer must be composed.");
+        // The step-write analyzer (spec 1241) is a replacement contract consumed by the graph provider: exactly one scoped.
+        var stepWriteAnalyzers = composition.Services.Where(descriptor =>
+            descriptor.ServiceType == typeof(IStepVariableWriteAnalyzer) && !descriptor.IsKeyedService).ToArray();
+        if (stepWriteAnalyzers.Length != 1 || stepWriteAnalyzers[0].Lifetime != ServiceLifetime.Scoped)
+            throw new InvalidOperationException("Exactly one scoped IStepVariableWriteAnalyzer must be composed.");
         // The read resolver refuses two analyzers of different types for one language; resolving it here makes that a
         // start-up failure rather than a failure of the first publish.
         using (var scope = services.CreateScope())

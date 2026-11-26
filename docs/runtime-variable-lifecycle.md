@@ -133,6 +133,17 @@ The variables of a closed scope (a graph activity's body) are rows, not a frame.
 carries its version, digest and writer, a body node's read records them, and a capture into a row is judged by the
 commit rule against them. A refused row write refuses the completion as a refused frame write does.
 
+A step in a body writes its body's variables through its variable session, as a step in a workflow writes workflow
+variables ([spec 1241](../specs/1241-closed-scope-step-writes/spec.md)): by a writable `VariableReference<T>`, by name
+from a type marked `[AccessesUndeclaredVariables]`, and from a script. The write is checked against the variable's
+declared type, commits with the step (with its suspension too), is judged by the commit rule against the row with the
+node's lost-update mode, and leaves a write record with source `SessionChange`. A step reaches only the variables of
+its own nearest body: never the caller's, an outer body's, or another activation's.
+
+The writes of one step into one row are judged in order, each against the row as the previous one left it: the step's
+session writes first, then its captures. A capture into a variable the step also wrote therefore wins without a
+conflict between the two, and two captures of one completion into one row get consecutive versions.
+
 ## Retry, re-execute, accept
 
 An operator recovers a faulted step that waits for intervention in one of three ways (ADR 0092 decision 8 as amended
@@ -302,21 +313,17 @@ lost updates. Values appear only through their states and the payload read.
   through a recorded lookup so only the variables actually read enter the read set
   ([spec 1222](../specs/1222-scripts-read-by-name/spec.md)). The inspector does not list an invocation's
   computed reads separately yet. Arbitrary host access is not tracked.
-- An intrinsic cannot write a closed scope's variables yet; only captures write rows. A step session cannot either: a
-  session write to a reusable activity's body variable faults the step.
+- An intrinsic cannot write a closed scope's variables yet; captures and step sessions write rows.
 - A step session cannot read or write a variable that requires encryption or is stored externally yet; it faults the
   step and names the variable.
-- A script inside a reusable activity's body cannot write the body's variables yet (closed scopes, above); graph bodies
-  are not checked for step writes at publish yet (#4805), so the Elsa 3 converter refuses a variable write in a
-  reusable workflow's script.
+- A step in a reusable activity's body cannot write the running workflow's state (outputs, correlation id, instance
+  name): a closed body has none (#3023).
 - A value snapshot is kept for captures of a leaf (on completion and on resume, including background results), for
-  step-session writes (on completion and on suspension) and for intrinsic writes to the root and container frames. Captures into closed-scope rows, captures made while a
-  composite completes and accepted overrides have their write record, but no value snapshot yet. (Loop iteration
-  frames are read-only to intrinsics.)
-- Two captures of one completion into the same closed-scope variable are both judged against the stored row; the
-  second does not see the first.
-- A closed-scope variable row carries no protection policy of its own, so its write record takes the protection of the
-  captured value.
+  step-session writes to the root and container frames (on completion and on suspension) and for intrinsic writes to the root and container frames. Captures and session writes into
+  closed-scope rows, captures made while a composite completes and accepted overrides have their write record, but no
+  value snapshot yet. (Loop iteration frames are read-only to intrinsics.)
+- A closed-scope variable row keeps no declared protection policy, only the protection minimum it was seeded or written
+  with; a write record takes the written value's protection combined with that minimum.
 - A record of a closed-scope row write has no frame revision; its `CommitOrder` is the version the write produced.
 - The committer remembers, per lease, the stamps of activities still in flight; an entry goes when the activity's
   terminal commit is persisted or the lease ends.

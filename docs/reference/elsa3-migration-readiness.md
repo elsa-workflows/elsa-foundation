@@ -52,7 +52,8 @@ differently.
 | Outcomes: each Complete names one or several literal outcomes, not `done` (several become the Elsa 4 Complete's `outcomes` list, spec 1208) | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 | End only in the workflow's root flowchart | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 
-What this means today: a reusable workflow imports as a reusable activity when its body sets no values and signals its
+What this means today: a reusable workflow imports as a reusable activity when its body uses none of the intrinsics above
+(its scripts may set its own variables, spec 1241) and signals its
 result through **outcomes**. Its body reads its own inputs, its variables and other activities' results, and captures
 outputs into its own variables, as in Elsa 3 (spec 265, [#3027](https://github.com/elsa-workflows/elsa-foundation/issues/3027);
 reading an input is proven end to end). It may wait in its body: a Delay, a mid-flow Event and a mid-flow HTTP
@@ -82,7 +83,7 @@ Its variables are its own, but Correlate, Set Name and Finish act on that callin
 
    | In the reusable body | Fix in Elsa 3 |
    |---|---|
-   | Set Variable | Nothing outside the body sees its variables. If nothing in the body reads the variable, delete the Set Variable. If a value only passes from one activity to the next, capture that activity's output into the variable instead. Otherwise wait for #3023, or make the workflow regular (below). |
+   | Set Variable | Nothing outside the body sees its variables. If nothing in the body reads the variable, delete the Set Variable. If a value only passes from one activity to the next, capture that activity's output into the variable instead, or set it from a Run JavaScript activity's script (`setVariable('name', value)`), which a reusable body supports (spec 1241). Otherwise wait for #3023, or make the workflow regular (below). |
    | Set Output | If no caller reads the output, delete it. If one does, wait for #3023, or make the workflow regular (below). |
    | Correlate | It sets the **caller's** correlation id. Delete it, and add a Correlate with the same value to each caller, directly before the activity. |
    | Set Name | It names the **caller's** instance. Delete it, and add a Set Name with the same value to each caller, directly before or after the activity. |
@@ -92,11 +93,15 @@ Its variables are its own, but Correlate, Set Name and Finish act on that callin
    Do not move Correlate, Set Name or Finish into a regular workflow called by Dispatch or Execute Workflow instead:
    there they would act on the called workflow, not the caller.
 
-   No JavaScript or Liquid assigns a value either (`setVariable`, `setOutput`, `setInput`, `setResult`, a generated
-   `set{Name}(...)`, `setCorrelationId`, `setWorkflowInstanceName`, `variables.x = ...`, Liquid `assign`): that is
-   refused in a reusable workflow (`VF-IMP-005`), and the Set, Correlate or Set Name activity its guidance points to is
-   not available in a reusable body yet. In a regular workflow, a RunJavaScript script's `setVariable`, generated
-   setters and member changes convert (spec 1231); see the Elsa 3 mapping README.
+   A RunJavaScript script changes the reusable workflow's own variables as in a regular workflow: `setVariable`,
+   generated setters and member changes convert (specs 1231 and 1241); see the Elsa 3 mapping README. A script that
+   sets one of the reusable workflow's inputs, which Elsa 3 held as a local variable, is refused (`VF-IMP-005`): declare
+   a variable, initialize it from the input, and set that variable. Where a variable and an input share a name (Elsa 3
+   declared the input as a variable too), a script that mentions that name, or that changes variables other than through
+   a generated setter, is refused (`VF-IMP-002`): rename one of the two. No input expression or Liquid assigns a value, and
+   no script sets the running workflow's state (`setOutput`, `setInput`, `setResult`, `setCorrelationId`,
+   `setWorkflowInstanceName`, Liquid `assign`): that is refused in a reusable workflow (`VF-IMP-005`), and the Set,
+   Correlate or Set Name activity its guidance points to is not available in a reusable body yet.
 3. **Reading values.** A body reads its own values as in Elsa 3 (spec 265): `getInput(...)`, a generated `get{Name}()`
    accessor, `getVariable(...)`, `variables.x`, a property bound to a variable or to another activity's output, and an
    output captured into one of its variables. These convert to the same bindings as in a regular workflow; Liquid
@@ -192,6 +197,6 @@ runs the same import, so every check on this page applies, and it also publishes
 Spec 1234 adds the three direct workflow-state body setters and pending correlation/name getters documented in the
 [converter's supported body contract](../../Extensions/Elsa3/src/Mapping/README.md#workflow-state-in-supported-script-bodies-spec-1234).
 This narrows the historical setter-refusal inventory for supported inline bodies only. Input-expression writes,
-`setInput`/`setResult`, structural/background sessions, and the broader graph/reusable acceptance tracked by
-[#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023) and
-[#4805](https://github.com/elsa-workflows/elsa-foundation/issues/4805) remain excluded.
+`setInput`/`setResult`, structural/background sessions, and running-workflow state in a reusable body, tracked by
+[#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023), remain excluded. A reusable body's script sets its
+own variables (spec 1241).

@@ -898,6 +898,25 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             return;
         }
 
+        // Spec 1241 FR-010a: Elsa 3 declared a reusable workflow's inputs as variables too, so a name a variable and an input
+        // share named two variables there. In such a workflow a script is refused rather than guessed (VF-IMP-002) when its
+        // source mentions that name in any letter case, or when the write analysis finds it may write variables other than
+        // through a generated setter (setVariable, a member change, a helper, a computed name, dynamic code).
+        if (accessors.IsReusable && SharedVariableInputNames(definition) is { Count: > 0 } sharedNames)
+        {
+            var mentioned = sharedNames.FirstOrDefault(name => expression.Value.Contains(name, StringComparison.OrdinalIgnoreCase));
+            if (mentioned is not null ||
+                expressionRewriter.ScriptMayWriteVariables(expression.Value, ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient)))
+            {
+                var shared = mentioned ?? sharedNames[0];
+                diagnostics.Add(CreateDiagnostic(input, property, Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                    $"This reusable workflow has both a variable and an input named '{shared}', and the script uses that name or may write variables; Elsa 3 declared the input as a variable too, so the script could reach either.",
+                    $"Rename the variable or the input '{shared}' in the Elsa 3 workflow before import.",
+                    $"{property.JsonPath}.expression.value"));
+                return;
+            }
+        }
+
         var possibleOutcomes = PossibleOutcomesKey(property.Activity);
         var rewrite = expressionRewriter.Rewrite(
             "JavaScript",
@@ -906,7 +925,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient),
             Elsa3JavaScriptMode.Script,
             new Elsa3ScriptOutcomeContext(possibleOutcomes is null ? [] : PossibleOutcomeItems(property.Activity.AdditionalProperties[possibleOutcomes])),
-            scriptWritesVariables: !accessors.IsReusable);
+            reusableWorkflow: accessors.IsReusable);
         if (!rewrite.Succeeded)
         {
             foreach (var issue in rewrite.Issues)
@@ -1732,6 +1751,15 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
     private static JsonElement CreateArgument(JsonElement original, string expressionType, JsonElement expressionValue)
         => Elsa3TypedValues.WithExpression(original, expressionType, expressionValue, removeMemoryReference: true);
+
+    /// <summary>The names a variable and an input of the workflow share, compared as the converter resolves both.</summary>
+    private static IReadOnlyList<string> SharedVariableInputNames(Elsa3WorkflowDefinition definition) =>
+        definition.Variables
+            .Select(variable => variable.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name) &&
+                           definition.Inputs.Any(input => string.Equals(input.Name, name, StringComparison.OrdinalIgnoreCase)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
     private static Elsa3MigrationDiagnostic CreateDiagnostic(
         DiagnosticScope input,
