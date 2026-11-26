@@ -194,12 +194,14 @@ public sealed partial class EfStore
             BEGIN SELECT RAISE(ABORT, 'Qualified actor journal requires the next running checkpoint revision'); END
             """));
 
-        string RenderSqlite(string template) => PostgresOutcomePrefix.Replace(
-            RenderRootGuards(db, template).Replace("ROW(", "(", StringComparison.Ordinal),
-            static match => $"{match.Groups["column"].Value} GLOB '{{{match.Groups["prefix"].Value}*'");
+        string RenderSqlite(string template) => RenderSqliteOutcomePrefixes(
+            RenderRootGuards(db, template).Replace("ROW(", "(", StringComparison.Ordinal));
     }
+
+    private static string RenderSqliteOutcomePrefixes(string sql) => PostgresOutcomePrefix.Replace(sql,
+        static match => $"{match.Groups["column"].Value}{match.Groups["negation"].Value} GLOB '{{{match.Groups["prefix"].Value}*'");
 
     // Only literal outcome prefixes appear in the shared predicates. GLOB keeps their PostgreSQL case sensitivity.
     private static readonly Regex PostgresOutcomePrefix = new(
-        """(?<column>(?:[A-Za-z_][A-Za-z0-9_]*\.)?"Entries") LIKE '\{\{(?<prefix>[^'%]*)%'""", RegexOptions.CultureInvariant);
+        """(?<column>(?:[A-Za-z_][A-Za-z0-9_]*\.)?"Entries")(?<negation> NOT)? LIKE '\{\{(?<prefix>[^'%]*)%'""", RegexOptions.CultureInvariant);
 }
