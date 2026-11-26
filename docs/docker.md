@@ -54,7 +54,7 @@ docker compose --profile studio down -v
 Studio is built from this repository's `studio/` folder, with the repository root as build context. `docker compose --profile studio up --build` does that for you. To build it on its own, from `docker/compose/`:
 
 ```bash
-docker build -f ../../Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local ../..
+docker build -f ../../studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local ../..
 ```
 
 Studio wiring (see `docker-compose.yml`):
