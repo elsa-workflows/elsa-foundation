@@ -152,10 +152,14 @@ public sealed partial class EfStore
         var root = refusal.Root;
         var command = refusal.Command;
         var mark = command.Operator?.RootParkMark;
+        if (!await refusal.MatchesProtectionRefusalsAsync(db, token)) return false;
         if (!await SettleSqliteRootInputsAsync(db, root.Reference, new(root.Actor, 1), [command.InboxKey],
                 [command], suspended: true, token)) return false;
         if (await db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE "Instances" SET "Revision" = {refusal.JournalRevision}, "FoundationWriteRevision" = {refusal.JournalRevision}
+            UPDATE "Instances" SET "Revision" = {refusal.JournalRevision}, "FoundationWriteRevision" = {refusal.JournalRevision},
+                "FoundationParkClearing" = CASE WHEN {refusal.Stops} THEN NULL ELSE "FoundationParkClearing" END,
+                "FoundationParkClearingKind" = CASE WHEN {refusal.Stops} THEN NULL ELSE "FoundationParkClearingKind" END,
+                "FoundationParkCleared" = CASE WHEN {refusal.Stops} THEN NULL ELSE "FoundationParkCleared" END
             WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" = {refusal.Expected}
                 AND "Status" = {(int)InstanceStatus.Faulted} AND NOT "Retired" AND "Suspended" = {refusal.Suspended}
                 AND "FoundationParkAt" > 0 AND "FoundationParkRevision" > 0 AND "Fault" IS NOT NULL
@@ -164,14 +168,9 @@ public sealed partial class EfStore
                 AND (NOT {refusal.Retries} OR "FoundationParkClearing" = {command.Id} AND "FoundationParkClearingKind" = {command.Kind}
                     AND "FoundationParkAt" = {mark?.At} AND "FoundationParkRevision" = {mark?.Revision})
             """, token) != 1) return false;
-        if (!refusal.Retries) return true;
-        var entry = Json.Write(new { Outcome = "refused", Operation = command.Id, Reason = "unavailable" });
-        var previous = await db.Database.SqlQuery<int>($"""
-            SELECT count(*) AS "Value" FROM "Journal" WHERE "Instance" = {root.Actor} AND "Partition" = {root.Partition}
-                AND "Entries" = {entry} AND "Revision" < {refusal.JournalRevision}
-            """).SingleAsync(token);
-        return await EnqueueSqliteParkControlAsync(db, root, command, mark!, command.Operator!.RootParkWindow!.Value,
-            ParkRetryDelay(previous), token);
+        return refusal.ProtectionRefusals is not { } previous || refusal.Stops ||
+            await EnqueueSqliteParkControlAsync(db, root, command, mark!, command.Operator!.RootParkWindow!.Value,
+                ParkRetryDelay(previous), token);
     }
 
     private static async Task<bool> EnqueueSqliteParkControlAsync(KernelDb db, WorkerRoot root, Message command,

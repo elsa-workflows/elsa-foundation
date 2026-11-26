@@ -88,6 +88,14 @@ internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arr
     internal string? Clearing { get; init; }
     internal long Cleared { get; init; }
     internal int Page { get; init; }
+    internal const int MaxProtectionRefusals = 5;
+    internal long ProtectionRefusals { get; init; }
+
+    internal bool StopsForUnreadableProtection => ProtectionRefusals >= MaxProtectionRefusals - 1;
+    internal static string ProtectionRefusal(string operation) => Json.Write(new { Outcome = "refused", Operation = operation, Reason = "unavailable" });
+    internal static string ProtectionStopped(string operation, long cleared) =>
+        Json.Write(new { Outcome = "clearing-stopped", Operation = operation, Reason = "unavailable", Cleared = cleared });
+
     // S5b-2: the store marks the root's pending inputs unseen in a clearing's Open (EfStore.ClearsParkInPages), so the owner
     // forgets the copies it read ahead and the poll withholds them until the end.
     internal bool ClearsInPages { get; init; }
