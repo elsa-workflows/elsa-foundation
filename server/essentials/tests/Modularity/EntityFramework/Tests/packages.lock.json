@@ -535,7 +535,7 @@
           "Elsa.Modularity.Core": "[4.0.0-dev, )",
           "Elsa.Specifications.PackageManifests": "[0.0.1-preview.8, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
-          "Nuplane.Admin": "[1.0.1, )"
+          "Nuplane.Admin": "[0.0.15, )"
         }
       },
       "elsa.persistence.core": {

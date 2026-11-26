@@ -48,7 +48,10 @@ writeFileSync(join(root, "appsettings.json"), JSON.stringify({
   ConnectionStrings: { Elsa: connection },
   Elsa: { DataProtection: { ApplicationName: "elsa-3579-owned-workbench", EntityFrameworkCore: { Enabled: true,
     Provider: "Sqlite", ConnectionString: `Data Source=${join(root, "keys.db")};Pooling=False` } } },
-  Nuplane: { Setup: { AutomaticReconciliation: false, Feeds: [{ Name: "local-packages", DirectoryPath: "packages", IncludePatterns: ["*"], Directory: { Watch: false } }] } }
+  Nuplane: {
+    Reconciliation: { EnableAutomaticReconciliation: false },
+    Setup: { Feeds: [{ Name: "local-packages", Trust: "Trusted", DirectoryPath: "packages", IncludePatterns: ["*"], Directory: { Watch: false } }] }
+  }
 }), { mode: 0o600 });
 const log = openSync(join(root, "workbench.log"), "w", 0o600);
 const environment = { ...process.env, ASPNETCORE_ENVIRONMENT: "Development", DOTNET_ENVIRONMENT: "Development" };

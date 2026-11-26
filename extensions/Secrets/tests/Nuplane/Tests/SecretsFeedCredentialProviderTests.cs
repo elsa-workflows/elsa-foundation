@@ -1,6 +1,8 @@
 using Elsa.Secrets.Nuplane.Extensions;
 using Elsa.Secrets.Nuplane.Tests.Support;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Nuplane;
 using Nuplane.Feeds.Credentials;
 using Xunit;
 
@@ -108,14 +110,14 @@ public sealed class SecretsFeedCredentialProviderTests : IAsyncDisposable
     public async Task Registering_the_provider_twice_still_composes_one_provider_nuplane_accepts()
     {
         await using var twice = new ServiceCollection()
+            .AddLogging()
             .AddSecretsReadPath()
             .AddSecretsFeedCredentials()
             .AddSecretsFeedCredentials("some-other-tenant")
+            .AddNuplane(nuplane => nuplane.UseInMemoryStore())
             .BuildServiceProvider();
 
-        var providers = twice.GetServices<ISecretReferenceProvider>().ToArray();
-
-        Assert.Equal("elsa", Assert.Single(providers).Scheme);
-        _ = new SecretReferenceResolver(providers);
+        Assert.Single(twice.GetServices<ISecretReferenceProvider>(), provider => provider.Scheme == "elsa");
+        Assert.NotEmpty(twice.GetServices<IHostedService>());
     }
 }

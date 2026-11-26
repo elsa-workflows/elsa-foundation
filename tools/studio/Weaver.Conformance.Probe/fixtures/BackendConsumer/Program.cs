@@ -24,10 +24,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Nuplane;
+using Nuplane.Abstractions;
 using Nuplane.Admin;
 using Nuplane.Builder;
 using Nuplane.Feeds.Configuration;
-using Nuplane.Loading.Hosting.Builder;
+using Nuplane.Loading;
 using Nuplane.Reconciliation;
 using Nuplane.Reconciliation.Configuration;
 using Nuplane.Reconciliation.LockFile;
@@ -67,7 +68,12 @@ builder.Services.AddNuplane(builder.Configuration.GetSection("Nuplane"), nuplane
         options.EnableAutomaticReconciliation = false;
         options.StartupFailurePolicy = StartupFailurePolicy.FailHost;
     });
-    nuplane.AddDirectoryFeed("weaver-backend", "runtime-feed", feed => { feed.Watch = false; feed.IncludeAll(); });
+    nuplane.AddDirectoryFeed("weaver-backend", "runtime-feed", feed =>
+    {
+        feed.Trust = FeedTrustLevel.Trusted;
+        feed.Watch = false;
+        feed.IncludeAll();
+    });
     nuplane.AutoloadPackages(builder.Configuration.GetSection("Nuplane:Loading"), loading => {
         foreach (var assembly in contracts) {
             var identity = assembly.GetName(); var token = identity.GetPublicKeyToken();

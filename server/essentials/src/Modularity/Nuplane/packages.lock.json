@@ -38,12 +38,12 @@
       },
       "Nuplane.Admin": {
         "type": "Direct",
-        "requested": "[1.0.1, )",
-        "resolved": "1.0.1",
-        "contentHash": "7zz4M7YO1pc2URX0fUO+yuJzSRUJ9mOdKCEQ4IGe6/En+KG3HIeiWPSM68Gm/izUKebvMcEIeAbtcheVaFKxXw==",
+        "requested": "[0.0.15, )",
+        "resolved": "0.0.15",
+        "contentHash": "rn5LhqpTOc6CSW+rL5aTmrT44/49580nR6nAV9BCuXe1i+jfeFTMNd0SGECLMJBEeq6OnQ4CItcxAHsBrShRCQ==",
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.3",
-          "Nuplane": "1.0.1"
+          "Nuplane": "0.0.15"
         }
       },
       "Humanizer.Core": {

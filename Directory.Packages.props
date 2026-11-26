@@ -128,6 +128,8 @@
     <PackageVersion Include="RabbitMQ.Client" Version="7.2.0" />
     <PackageVersion Include="Nuplane" Version="1.0.1" />
     <PackageVersion Include="Nuplane.Admin" Version="1.0.1" />
+    <!-- The shared modularity adapter uses the common Admin API and is also consumed by the Studio 0.0.15 host. -->
+    <PackageVersion Update="Nuplane.Admin" Version="0.0.15" Condition="'$(MSBuildProjectName)' == 'Elsa.Modularity.Nuplane'" />
     <PackageVersion Include="Nuplane.Loading" Version="1.0.1" />
     <PackageVersion Include="Nuplane.Loading.Abstractions" Version="1.0.1" />
     <!-- The CLI worker still supports hosts that carry the legacy directory module. -->
