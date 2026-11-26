@@ -39,7 +39,7 @@ public sealed partial class EfStore
                 EXECUTE FUNCTION kernel_require_root_outcome_checkpoint();
             """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal)
             .Replace("/*composed-waiting-index*/", db.UsesRootComposedParkRecovery ? $"""
-                CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortWaiting" ON "Messages" ("Partition", "Due", "Seq")
+                CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortWaiting" ON "Messages" ("Partition", "Seq")
                     WHERE {CohortWaitingWork};
                 """ : "", StringComparison.Ordinal)
             .Replace("/*parked-operator-outcomes*/",
@@ -74,8 +74,8 @@ public sealed partial class EfStore
         return $"""AND (i."FoundationParkAt" IS NOT NULL {withheld} OR {NoEarlierReleasedCohort})""";
     }
 
-    private sealed record CohortSample(long Epoch, long Due, long Seq);
-    private sealed record CohortCandidate(long Due, long Seq, string? Actor, long? Revision, string? Tenant, string? Reference, string? Header);
+    private sealed record CohortSample(long Epoch, long Through, long Seq, bool NewSweep = false);
+    private sealed record CohortCandidate(long Seq, string? Actor, long? Revision, string? Tenant, string? Reference, string? Header);
     private readonly ConcurrentDictionary<int, CohortSample> _cohortSamples = new();
 
     private static readonly string CohortWaitingWork = $"""
@@ -83,38 +83,42 @@ public sealed partial class EfStore
         """;
 
     // Only roots with pending released inputs and waiting controls need an authored decision. The main poll accepts
-    // each decision at the same revision. A bounded keyset window advances even when every sampled root is offerable.
+    // each decision at the same revision. A sweep fixes a sequence ceiling so new admissions cannot prevent a wrap.
     private async Task<(string[] Actors, long[] Revisions)> ReadWithheldCohortsAsync(KernelDb db, int partition, long epoch,
         int limit, CancellationToken token)
     {
-        var after = _cohortSamples.TryGetValue(partition, out var sample) && sample.Epoch == epoch
-            ? sample : new CohortSample(epoch, long.MinValue, long.MinValue);
+        var sample = _cohortSamples.GetOrAdd(partition, _ => new(epoch, 0, 0, NewSweep: true));
+        if (sample.Epoch > epoch) return ([], []);
+        var after = sample.Epoch == epoch && !sample.NewSweep
+            ? sample : new CohortSample(epoch, await ReadCohortSweepCeilingAsync(db, partition, token), long.MinValue);
         var candidates = await db.Database.SqlQuery<CohortCandidate>(System.Runtime.CompilerServices.FormattableStringFactory.Create(
             $"""
             WITH candidates AS MATERIALIZED (
-                SELECT "Target", "Due", "Seq" FROM "Messages"
-                WHERE "Partition" = {"{0}"} AND "Seen" <> {"{1}"} AND "Due" <= floor(extract(epoch from statement_timestamp()) * 1000)::bigint
-                    AND ("Due", "Seq") > ({"{3}"}, {"{4}"})
+                SELECT "Target", "Due", "Seq", "Seen" FROM "Messages"
+                WHERE "Partition" = {"{0}"} AND "Seq" > {"{3}"} AND "Seq" <= {"{4}"}
                     AND {CohortWaitingWork}
-                ORDER BY "Due", "Seq" LIMIT {"{2}"}
+                ORDER BY "Seq" LIMIT {"{2}"}
             ), tail AS (
-                SELECT "Due", "Seq" FROM candidates ORDER BY "Due" DESC, "Seq" DESC LIMIT 1
+                SELECT "Seq" FROM candidates ORDER BY "Seq" DESC LIMIT 1
             ), eligible AS (
                 SELECT i."Id" AS "Actor", i."Revision", i."FoundationTenant" AS "Tenant", i."FoundationReference" AS "Reference",
                     i."FoundationHeader" AS "Header"
-                FROM (SELECT DISTINCT "Target" FROM candidates) w JOIN "Instances" i ON i."Id" = w."Target"
+                FROM (SELECT DISTINCT "Target" FROM candidates
+                    WHERE "Seen" < {"{1}"} AND "Due" <= floor(extract(epoch from statement_timestamp()) * 1000)::bigint
+                ) w JOIN "Instances" i ON i."Id" = w."Target"
                 WHERE i."Partition" = {"{0}"} AND i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired"
                     AND i."FoundationReference" IS NOT NULL AND i."FoundationParkGeneration" > 0
                     AND EXISTS (SELECT 1 FROM "Messages" c
                         WHERE c."Partition" = i."Partition" AND c."Target" = i."Id" AND c."EventMatch" IS NULL AND NOT c."Done"
                             AND c."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND c."FoundationReleasedBy" = i."FoundationParkGeneration")
             )
-            SELECT tail."Due", tail."Seq", e."Actor", e."Revision", e."Tenant", e."Reference", e."Header"
+            SELECT tail."Seq", e."Actor", e."Revision", e."Tenant", e."Reference", e."Header"
             FROM tail LEFT JOIN eligible e ON true
             /* root-cohort-waiting */
-            """, partition, epoch, limit, after.Due, after.Seq)).ToArrayAsync(token);
-        _cohortSamples[partition] = candidates.Length == 0 ? new(epoch, long.MinValue, long.MinValue)
-            : new(epoch, candidates[0].Due, candidates[0].Seq);
+            """, partition, epoch, limit, after.Seq, after.Through)).ToArrayAsync(token);
+        var next = candidates.Length == 0 ? new CohortSample(epoch, 0, 0, NewSweep: true)
+            : after with { Seq = candidates[0].Seq };
+        _cohortSamples.AddOrUpdate(partition, next, (_, current) => current.Epoch < epoch || ReferenceEquals(current, sample) ? next : current);
         var actors = new List<string>();
         var revisions = new List<long>();
         foreach (var candidate in candidates)
@@ -129,6 +133,11 @@ public sealed partial class EfStore
         }
         return (actors.ToArray(), revisions.ToArray());
     }
+
+    private static Task<long> ReadCohortSweepCeilingAsync(KernelDb db, int partition, CancellationToken token) =>
+        db.Database.SqlQuery<long>($"""
+            SELECT coalesce((SELECT "Seq" FROM "Messages" WHERE "Partition" = {partition} ORDER BY "Seq" DESC LIMIT 1), 0) AS "Value"
+            """).SingleAsync(token);
 
     // The kept envelope digest: the fields a restore keeps, read the same way when polled and when bound. The envelope
     // digest leaves out KeepUntil, which a restore sets to the ordinary window from now.

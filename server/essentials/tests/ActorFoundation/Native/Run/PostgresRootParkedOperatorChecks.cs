@@ -975,12 +975,16 @@ internal static class PostgresRootParkedOperatorChecks
             KernelDb OpenSample() => KernelDb.ForUnshippedComposition(sampleOptions, protocol, capabilities);
             await using var set = new Set("bounded-cohort-sample", OpenSample, owned, inBatch, tenant, stop)
             {
-                UsesAuthoredWithholding = true, PollLimit = 1
+                UsesAuthoredWithholding = true, PollLimit = 1, PartitionCount = 2
             };
             await set.InstallAsync(createTables: true);
             await set.OwnAsync();
-            var offerable = await set.StartAsync("offerable");
             var withheld = await set.StartAsync("withheld", Probe.WithheldBody);
+            var partition = new InstanceRef((await set.ImageAsync(withheld)).Actor.Id).Partition;
+            var offerable = await StartInPartitionAsync("offerable");
+            var tail = await StartInPartitionAsync("tail");
+            Check(set.Owner is Worker sampledOwner && sampledOwner.ClaimedPartitions().Order().SequenceEqual(new[] { 0, 1 }),
+                "the bounded cohort fixture polls under an owned set of two partitions");
             set.Probe.FailsOn.Add((withheld.Id, Contract.Kinds.Terminate));
             Check(await set.SendAsync(offerable, "offerable-fault", "fail") && await set.TerminateAsync(withheld, "withholding-fault"),
                 "two roots open their Parks under different withholding decisions");
@@ -1008,6 +1012,7 @@ internal static class PostgresRootParkedOperatorChecks
                     UPDATE "Messages" SET "Due" = 0
                     WHERE "Target" IN ({older.Actor.Id}, {younger.Actor.Id}) AND "Kind" = {Kinds.Terminate} AND NOT "Done"
                     """);
+                await ProbeSweepAsync(younger);
                 observation.ObserveCohortPlan = true;
                 await set.DriveAsync(withheld, row => row is { Revision: 6, Status: InstanceStatus.Running });
                 set.Answered("younger-control", "StaleSelection");
@@ -1022,6 +1027,49 @@ internal static class PostgresRootParkedOperatorChecks
             finally { set.Probe.ReleaseCohort.TrySetResult(); }
             await set.DriveAsync(offerable, row => row is { Revision: 6, Status: InstanceStatus.Running });
             set.Answered("older-control", "StaleSelection");
+
+            async Task<Contract.ActorRef> StartInPartitionAsync(string prefix)
+            {
+                for (var attempt = 0; attempt < 32; attempt++)
+                {
+                    var started = await set.StartAsync($"{prefix}-{attempt}");
+                    if (new InstanceRef((await set.ImageAsync(started)).Actor.Id).Partition == partition) return started;
+                }
+                throw new InvalidOperationException("The fixture did not place a root in the sampled partition.");
+            }
+
+            async Task ProbeSweepAsync(EfStore.RootImage waiting)
+            {
+                await using var source = OpenSample();
+                var fences = await source.Partitions.AsNoTracking().OrderBy(row => row.Id)
+                    .Select(row => new PartitionFence(row.Id, row.Epoch, row.Position)).ToArrayAsync(stop);
+                var epoch = fences.Single(fence => fence.Partition == partition).Epoch;
+                var sampler = new EfStore(OpenSample, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
+                await sampler.EnableRootJobsAsync(stop);
+                sampler.BindWorkerNode(set.Probe.Withholds);
+                await MarkReleasedAsync(0);
+                for (var pass = 0; pass < 2; pass++)
+                {
+                    var offered = await sampler.PollAsync(fences, TimeSpan.Zero, 1, stop);
+                    Check(offered.Messages is [{ Message.Kind: "withheld-cohort" }],
+                        "a released input takes the only output slot before the waiting control");
+                }
+                await MarkReleasedAsync(epoch);
+                var found = false;
+                for (var pass = 0; pass < 4 && !found; pass++)
+                {
+                    Check(await set.TerminateAsync(tail, $"new-tail-{pass}"),
+                        "another control is admitted while the bounded candidate window advances");
+                    var offered = await sampler.PollAsync(fences, TimeSpan.Zero, 1, stop);
+                    found = offered.Messages is [{ Message: { Kind: Kinds.Terminate } message }] &&
+                        message.Target.Id == waiting.Actor.Id && message.Operator?.RootParkFacts is not null;
+                }
+                Check(found, "the two-partition sampler revisits the missed control despite continued new admissions");
+
+                Task MarkReleasedAsync(long seen) => set.ExecuteAsync($"""
+                    UPDATE "Messages" SET "Seen" = {seen} WHERE "Target" = {waiting.Actor.Id} AND "Kind" = 'withheld-cohort' AND NOT "Done"
+                    """);
+            }
         }
 
         async Task CheckProtectionCeilingAsync(Set set, Contract.ActorRef root, EfStore.RootImage park, int cleared)
@@ -2589,7 +2637,7 @@ internal static class PostgresRootParkedOperatorChecks
             if (createTables)
                 await using (var created = open()) await created.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(stop);
             Cold = Store();
-            await Cold.CreateAsync(1);
+            await Cold.CreateAsync(PartitionCount);
             Admission = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
             await Admission.InstallAsync(stop);
             _cursor = await Admission.OpenJournalCursorAsync(stop);
@@ -2606,6 +2654,7 @@ internal static class PostgresRootParkedOperatorChecks
         internal Func<Polled, Task>? HoldPoll { get; set; }
         internal bool UsesAuthoredWithholding { get; init; }
         internal int PollLimit { get; init; } = new WorkerOptions().PollLimit;
+        internal int PartitionCount { get; init; } = 1;
 
         internal async Task<IScopeActivation> OwnAsync()
         {
@@ -2636,8 +2685,8 @@ internal static class PostgresRootParkedOperatorChecks
                 kernel = observed;
             }
             // One heartbeat covers the whole fixture: the default ten-second lease can lapse on a loaded machine.
-            var host = new DurableHost([new Worker(name, 0, kernel, adapter,
-                new WorkerOptions { Partitions = 1, Lease = FixtureLease, Transport = _replies, PollLimit = PollLimit })]);
+            var host = new DurableHost([new Worker(name, Enumerable.Range(0, PartitionCount).ToArray(), kernel, adapter,
+                new WorkerOptions { Partitions = PartitionCount, Lease = FixtureLease, Transport = _replies, PollLimit = PollLimit })]);
             await host.HeartbeatAsync(FixtureLease, stop);
             return _owner = await host.ActivateAsync(0, stop) ?? throw new InvalidOperationException("The fixture owner could not take its partition.");
         }
