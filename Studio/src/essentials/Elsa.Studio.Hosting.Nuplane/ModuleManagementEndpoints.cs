@@ -179,15 +179,29 @@ internal static class ModuleManagementEndpoints
             {
                 var setup = ManagementConfigurationStore.Object(ManagementConfigurationStore.Object(document, "Nuplane"), "Setup");
                 var existing = setup["Feeds"];
-                if (existing is not (null or JsonArray or JsonObject { Count: 0 }))
+                var feeds = existing switch
+                {
+                    JsonArray array => array,
+                    // Nuplane treats configuration keys made up entirely of ASCII digits as array entries.
+                    JsonObject keyed when keyed.All(entry => entry.Key.Length > 0 && entry.Key.All(char.IsAsciiDigit)) =>
+                        new JsonArray(keyed.OrderBy(entry => entry.Key, ConfigurationKeyComparer.Instance)
+                            .Select(entry => entry.Value?.DeepClone()).ToArray()),
+                    null => new JsonArray(),
+                    _ => null
+                };
+                if (feeds is null)
                 {
                     result = ReadOnlyConfiguration("Studio feed management requires feeds to be configured as a JSON array.");
                     return false;
                 }
-                var feeds = existing as JsonArray;
-                if (feeds is null) setup["Feeds"] = feeds = new JsonArray();
+
                 result = mutate(feeds);
-                return result is IStatusCodeHttpResult { StatusCode: >= 200 and < 300 };
+                if (result is not IStatusCodeHttpResult { StatusCode: >= 200 and < 300 })
+                    return false;
+
+                if (existing is not JsonArray)
+                    setup["Feeds"] = feeds;
+                return true;
             }, token);
             return result;
         }

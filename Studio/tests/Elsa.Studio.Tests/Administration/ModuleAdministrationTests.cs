@@ -230,6 +230,39 @@ public sealed class ModuleAdministrationTests
     }
 
     [Fact]
+    public async Task Numeric_feed_keys_are_converted_in_configuration_order_after_a_successful_edit()
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """
+                {
+                  "Nuplane": { "Setup": { "Feeds": {
+                    "10": { "Name": "later", "DirectoryPath": "cache-later", "Directory": { "Watch": false, "Role": "Cache" } },
+                    "2": { "Name": "earlier", "DirectoryPath": "cache-earlier", "Directory": { "Watch": false, "Role": "Cache" } }
+                  } } }
+                }
+                """));
+        var configuration = Path.Combine(host.Root, "nuplane-management.json");
+        var before = await File.ReadAllBytesAsync(configuration);
+        var registry = await Registry(host);
+        Assert.True((bool)registry["capabilities"]!["canManageFeeds"]!);
+
+        using var missing = await host.Client.DeleteAsync(Prefix + "/feeds/missing");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal(before, await File.ReadAllBytesAsync(configuration));
+
+        using var add = await host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("local", "uploads"));
+        add.EnsureSuccessStatusCode();
+        var original = JsonNode.Parse(before)!["Nuplane"]!["Setup"]!["Feeds"]!;
+        var document = JsonNode.Parse(await File.ReadAllTextAsync(configuration))!;
+        var feeds = document["Nuplane"]!["Setup"]!["Feeds"]!.AsArray();
+        Assert.Collection(feeds,
+            earlier => Assert.True(JsonNode.DeepEquals(original["2"], earlier)),
+            later => Assert.True(JsonNode.DeepEquals(original["10"], later)),
+            added => Assert.Equal("local", (string?)added!["Name"]));
+    }
+
+    [Fact]
     public async Task A_configured_cache_cannot_be_named_as_the_upload_feed()
     {
         await Assert.ThrowsAsync<StudioHostingException>(async () =>
