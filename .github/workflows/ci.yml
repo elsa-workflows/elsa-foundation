@@ -110,7 +110,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
             if ! changed=$(git diff --name-only "$GITHUB_SHA^1" "$GITHUB_SHA"); then
               kernel=true
-            elif grep -Eq '^(prototypes/kernel-model/|apps/Elsa\.Workbench\.Host/CorePreview/|tools/ci/actor-foundation/WorkbenchPostgresPreview\.cs$|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts|WorkflowActor)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|tools/architecture/check-kernel-model-references\.targets$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+            elif grep -Eq '^(prototypes/kernel-model/|apps/Elsa\.Workbench\.Host/CorePreview/|tools/ci/actor-foundation/(WorkbenchPostgresPreview\.cs|check-sqlite-shipped\.sh)$|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts|WorkflowActor)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|tools/architecture/check-kernel-model-references\.targets$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
               kernel=true
             fi
           fi
@@ -1820,7 +1820,7 @@ jobs:
       # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
       - name: Build
         run: |
-          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/Workflows/Runtime/Native/Migration/Run ../../essentials/tests/Workflows/Runtime/Statecharts/Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/Workflows/Runtime/Native/Migration/Run ../../essentials/tests/Workflows/Runtime/Statecharts/Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1922,6 +1922,9 @@ jobs:
       # K1b slice 5b: `semantic` runs the loop-yield, fixed-host and watchdog checks first; the filter keeps two cases.
       - name: Runtime checks and placement
         run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic placement
+
+      - name: SQLite shipped foundation
+        run: bash ../../tools/ci/actor-foundation/check-sqlite-shipped.sh "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
 
       - name: Graph engine corpus
         run: dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build
@@ -2078,30 +2081,7 @@ jobs:
           $NAT cost sqlite
           $NAT sqlite-host-lifetime checked
           $NAT sqlite-host-lifetime in-batch
-          $NAT sqlite-host-lifetime checked shipped
-          $NAT sqlite-host-lifetime in-batch shipped
-          $NAT sqlite-shipped-install
-          $NAT sqlite-root-ingress
-          $NAT sqlite-root-timed-jobs checked
-          $NAT sqlite-root-timed-jobs in-batch
-          $NAT sqlite-root-held-replies checked
-          $NAT sqlite-root-held-replies in-batch
-          $NAT sqlite-root-terminate checked
-          $NAT sqlite-root-terminate in-batch
-          $NAT sqlite-root-retirement checked
-          $NAT sqlite-root-retirement in-batch
-          $NAT sqlite-root-held-operators checked
-          $NAT sqlite-root-held-operators in-batch
-          $NAT sqlite-root-park-opening checked
-          $NAT sqlite-root-park-opening in-batch
-          $NAT sqlite-root-park-inspection checked
-          $NAT sqlite-root-park-inspection in-batch
-          $NAT sqlite-root-parked-operators checked
-          $NAT sqlite-root-parked-operators in-batch
-          $NAT sqlite-root-actor-reads checked
-          $NAT sqlite-root-actor-reads in-batch
-          $NAT sqlite-root-workflow-history checked
-          $NAT sqlite-root-workflow-history in-batch
+          bash ../../tools/ci/actor-foundation/check-sqlite-shipped.sh "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
 
       - name: Graph engine corpus
         run: dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build

@@ -15,6 +15,20 @@ namespace Kernel.Foundation.Sqlite;
 /// <summary>Starts one Embedded node against an installed SQLite kernel qualification store.</summary>
 public static partial class SqliteEmbeddedHosting
 {
+    /// <summary>Installs or verifies a dedicated shipped SQLite file for one Embedded owner.</summary>
+    /// <remarks>The parent directory must exist. An existing file must be empty or carry this build's shipped definitions.</remarks>
+    public static async Task InstallShippedAsync(string databasePath, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        cancellationToken.ThrowIfCancellationRequested();
+        var path = Path.GetFullPath(databasePath);
+        // Create a missing file without opening SQLite or changing an existing store before acquiring the host lock.
+        using (new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite)) { }
+        using var file = AcquireFile(path, forRuntime: true);
+        await using var db = KernelDb.ForSqliteRootShipped(file.Options);
+        await EfStore.InstallSqliteShippedAsync(db, partitions: 1, cancellationToken);
+    }
+
     // A fault or kill may leave work running. Its runtime lease remains held through process exit.
     private static readonly object FileGate = new();
     private static readonly Dictionary<string, ActiveFile> ActiveFiles = new(StringComparer.Ordinal);

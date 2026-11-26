@@ -5,10 +5,12 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
+using Kernel.Foundation.Sqlite;
 using Kernel.Native;
 using Kernel.Native.Preview;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Contract = Kernel.Foundation.Contracts;
 using WorkflowActor = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Elsa.Workbench.CorePreview;
@@ -20,6 +22,9 @@ internal static class WorkbenchCorePreview
     /// the kernel: it serves each published definition on the preview node, so a published workflow starts on the kernel.
     /// </summary>
     internal const string PublicationsKey = "Elsa:CorePreview:Publications";
+
+    internal const string ProviderKey = "Elsa:CorePreview:Provider";
+    internal const string SqlitePathKey = "Elsa:CorePreview:SqlitePath";
 
     /// <summary>
     /// The tenant the Core Preview's HTTP edge starts workflows in. Unset, it is <c>Elsa:CorePreview:ReadsTenant</c>, or
@@ -98,11 +103,19 @@ internal static class WorkbenchCorePreview
         if (!configuration.GetValue<bool>("Elsa:CorePreview:Enabled"))
             return;
 
-        var connection = configuration.GetConnectionString("KernelCorePreview");
-        if (string.IsNullOrWhiteSpace(connection))
+        var useSqlite = configuration[ProviderKey]?.Trim().ToLowerInvariant() switch
+        {
+            null or "postgresql" => false,
+            "sqlite" => true,
+            _ => throw new InvalidOperationException($"Use PostgreSQL or SQLite for {ProviderKey}.")
+        };
+        var sqlitePath = useSqlite ? configuration[SqlitePathKey] : null;
+        if (useSqlite && (string.IsNullOrWhiteSpace(sqlitePath) || sqlitePath == ":memory:" || sqlitePath.StartsWith("file:", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException($"{SqlitePathKey} must name a dedicated local SQLite file.");
+        var connection = useSqlite ? null : configuration.GetConnectionString("KernelCorePreview");
+        if (!useSqlite && string.IsNullOrWhiteSpace(connection))
             throw new InvalidOperationException("The core preview requires its own ConnectionStrings:KernelCorePreview.");
-
-        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        var postgresOptions = useSqlite ? null : new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         var nativeJobs = configuration.GetValue<bool>("Elsa:CorePreview:NativeJobs");
         var timedJobs = configuration.GetValue<bool>("Elsa:CorePreview:TimedNativeJobs");
         if (nativeJobs && timedJobs)
@@ -110,16 +123,18 @@ internal static class WorkbenchCorePreview
         // With publications on, the kernel's serving state is shared by this host's node and the default shell, which publishes:
         // the node runs the registry it serves into. Registered by instance, so each shell resolves this one.
         var publications = configuration.GetValue<bool>(PublicationsKey);
-        // The release profile: publications run on the shipped format 25, which carries Native jobs with timed settlement,
+        if (useSqlite && !publications)
+            throw new InvalidOperationException($"SQLite runs the shipped Core Preview. Enable {PublicationsKey}.");
+        // The release profile: publications run on the shipped store, which carries Native jobs with timed settlement,
         // held replies, selected operators and workflow history. A database on an earlier preview format is recreated.
         if (publications && (nativeJobs || timedJobs))
             throw new InvalidOperationException(
                 "With Elsa:CorePreview:Publications on, the Core Preview runs on the shipped format, which carries Native jobs: leave NativeJobs and TimedNativeJobs off.");
-        // Format 25 runs no schedule actor, timers or child workflows yet, and the edge serves no wait routes: serving refuses
+        // The shipped store runs no schedule actor, timers or child workflows yet, and the edge serves no wait routes: serving refuses
         // a Timer, Cron, Delay, Dispatch Workflow and an HTTP Endpoint that waits where it maps them. Whether the node takes
         // self-sends is the store format's to say; without them a burst runs on to its next wait.
         var capabilities = new KernelHostCapabilities(Schedules: false, Timers: false, Children: false,
-            SelfSends: PostgresPreviewHosting.TakesSelfSends(Open), HttpWaits: false);
+            SelfSends: !useSqlite && PostgresPreviewHosting.TakesSelfSends(OpenPostgres), HttpWaits: false);
         string? waitProbeRefusal = null;
         var serving = publications ? new KernelServing(CronosCalendar.Error, capabilities) : null;
         if (serving is not null)
@@ -160,10 +175,11 @@ internal static class WorkbenchCorePreview
         var scripts = new JintNativeScripts(Elsa.Expressions.JavaScript.Jint.Services.JintScriptEvaluators.Create(javaScript));
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
         // On the shipped format the node answers held callers: the held requests of this host's edge.
-        var requests = publications ? PostgresPreviewHosting.CreateRequests(Open, node, WorkflowActor.ActorType) : null;
+        var sqlite = sqlitePath is null ? null : new SqliteEmbeddedFoundation(sqlitePath, node, WorkflowActor.ActorType);
+        var postgresRequests = publications && !useSqlite ? PostgresPreviewHosting.CreateRequests(OpenPostgres, node, WorkflowActor.ActorType) : null;
         var (edgeTenant, readsTenantOrNull) = Tenants(configuration[TenantKey], configuration[ReadsTenantKey]);
         KernelHttpEdgeHost? edge = null;
-        if (requests is not null)
+        if (publications)
         {
             var timeout = configuration.GetValue<TimeSpan?>(KernelHttpEdgeHost.TimeoutKey) ?? KernelHttpEdgeHost.DefaultTimeout;
             if (timeout <= TimeSpan.Zero)
@@ -171,14 +187,13 @@ internal static class WorkbenchCorePreview
             var maxBody = configuration.GetValue<long?>(KernelHttpEdgeHost.MaxRequestBodyBytesKey) ?? KernelHttpEdgeHost.DefaultMaxRequestBodyBytes;
             if (maxBody <= 0)
                 throw new InvalidOperationException($"{KernelHttpEdgeHost.MaxRequestBodyBytesKey} must be a positive number of bytes; it is {maxBody}.");
-            services.AddSingleton(requests);
-            edge = new KernelHttpEdgeHost(serving!, Open, requests, EmbeddedTenant.Bind(edgeTenant),
+            if (postgresRequests is not null) services.AddSingleton(postgresRequests);
+            edge = new KernelHttpEdgeHost(serving!, OpenFoundationAsync,
+                sqlite is null ? postgresRequests!.ReadClockAsync : sqlite.ReadClockAsync, EmbeddedTenant.Bind(edgeTenant),
                 KernelHttpEdgeHost.NormalizeBasePath(configuration[KernelHttpEdgeHost.BasePathKey]), timeout, maxBody);
             services.AddSingleton(edge);
             // The kernel shell's Runs list reads the kernel's runs of this tenant through the edge's foundation.
-            var runsEdge = edge;
-            services.AddSingleton(new KernelRuns(EmbeddedTenant.Bind(edgeTenant),
-                async token => await runsEdge.FoundationAsync(token)));
+            services.AddSingleton(new KernelRuns(EmbeddedTenant.Bind(edgeTenant), edge.ReadsAsync));
         }
         services.AddHostedService(provider =>
         {
@@ -207,17 +222,22 @@ internal static class WorkbenchCorePreview
                 ResolveWorkflow = serving is null ? null : (workflow, token) => ResolveWorkflowAsync(shells, shellName, workflow, token),
             });
             // The node starts once the default shell is active, so its first turns find the evaluator.
-            var logger = provider.GetRequiredService<ILogger<PostgresPreviewHostedService>>();
+            var actor = new WorkflowActor([model]);
+            var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(WorkbenchCorePreview).FullName!);
             if (waitProbeRefusal is not null) logger.LogInformation("The Core Preview refuses its HTTP wait probe: {Reason}", waitProbeRefusal);
-            return new ShellGatedHostedService(new PostgresPreviewHostedService(Open, node, new WorkflowActor([model]), Environment.FailFast,
-                    logger: logger, requests: requests),
+            IHostedService owner = sqlite is null
+                ? new PostgresPreviewHostedService(OpenPostgres, node, actor, Environment.FailFast,
+                    logger: provider.GetRequiredService<ILogger<PostgresPreviewHostedService>>(), requests: postgresRequests)
+                : sqlite.CreateHostedService(actor, Environment.FailFast, logger: provider.GetRequiredService<ILogger<SqliteEmbeddedHostedService>>());
+            return new ShellGatedHostedService(owner,
                 // Once the default shell is active, its HTTP base path must be the edge's, or Studio would show addresses the
                 // edge does not serve: the node does not start, and the process ends.
                 async token =>
                 {
                     // The release profile installs its format in an empty database and starts on one already installed; any
                     // other database is refused with what to do, and the process ends before its node starts.
-                    if (publications) await PostgresPreviewHosting.InstallShippedAsync(options, token);
+                    if (sqlitePath is not null) await SqliteEmbeddedHosting.InstallShippedAsync(sqlitePath, token);
+                    else if (publications) await PostgresPreviewHosting.InstallShippedAsync(postgresOptions!, token);
                     edge?.StoreInstalled();
                     await shells.GetOrActivateAsync(shellName, token);
                     if (edge is not null) await RequireEdgeBasePathAsync(shells, shellName, edge);
@@ -227,11 +247,27 @@ internal static class WorkbenchCorePreview
                 starting: serving is null ? null : token => ServeActiveSlotsAsync(shells, shellName, logger, token));
         });
         if (readsTenantOrNull is { } readsTenant)
-            services.AddSingleton(new WorkbenchCorePreviewReads(Open, EmbeddedTenant.Bind(readsTenant)));
+            services.AddSingleton(new WorkbenchCorePreviewReads(OpenPreviewReadsAsync, EmbeddedTenant.Bind(readsTenant)));
 
-        KernelDb Open() => publications ? PostgresPreviewHosting.CreateShippedContext(options) :
-            timedJobs ? PostgresPreviewHosting.CreateTimedNativeJobContext(options) :
-            nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(options) : new(options);
+        KernelDb OpenPostgres() => publications ? PostgresPreviewHosting.CreateShippedContext(postgresOptions!) :
+            timedJobs ? PostgresPreviewHosting.CreateTimedNativeJobContext(postgresOptions!) :
+            nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(postgresOptions!) : new(postgresOptions!);
+
+        async ValueTask<(Contract.IIngress, Contract.IActorReads)> OpenFoundationAsync(CancellationToken token)
+        {
+            if (sqlite is not null) return (await sqlite.OpenIngressAsync(token), sqlite.CreateReads());
+            var postgres = await PostgresPreviewHosting.OpenFoundationAsync(OpenPostgres, WorkflowActor.ActorType, postgresRequests,
+                cancellationToken: token);
+            return (postgres, postgres);
+        }
+
+        async ValueTask<Contract.IActorReads> OpenPreviewReadsAsync(int pageSize, CancellationToken token)
+        {
+            if (sqlite is null)
+                return await new EfStore(OpenPostgres, postgres: true).OpenPreviewRootReadsAsync(pageSize, token);
+            await edge!.WaitForStoreAsync(token);
+            return sqlite.CreateReads(pageSize);
+        }
     }
 
     /// <summary>
