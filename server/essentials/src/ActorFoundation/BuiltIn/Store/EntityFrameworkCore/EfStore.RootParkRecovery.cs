@@ -39,7 +39,7 @@ public sealed partial class EfStore
                 EXECUTE FUNCTION kernel_require_root_outcome_checkpoint();
             """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal)
             .Replace("/*composed-waiting-index*/", db.UsesRootComposedParkRecovery ? $"""
-                CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortWaiting" ON "Messages" ("Partition", "Seq")
+                CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortWaiting" ON "Messages" ("Partition", "Due", "Seq")
                     WHERE {CohortWaitingWork};
                 """ : "", StringComparison.Ordinal)
             .Replace("/*parked-operator-outcomes*/",
@@ -74,8 +74,8 @@ public sealed partial class EfStore
         return $"""AND (i."FoundationParkAt" IS NOT NULL {withheld} OR {NoEarlierReleasedCohort})""";
     }
 
-    private sealed record CohortSample(long Epoch, long Through = -1, long Seq = 0);
-    private sealed record CohortCandidate(int Partition, long Through, long? Seq, string? Actor, long? Revision,
+    private sealed record CohortSample(long Epoch, long Through = -1, long Due = long.MinValue, long Seq = 0);
+    private sealed record CohortCandidate(int Partition, long Through, long? Due, long? Seq, string? Actor, long? Revision,
         string? Tenant, string? Reference, string? Header);
     private readonly ConcurrentDictionary<int, CohortSample> _cohortSamples = new();
     private int _cohortPartitionWindow;
@@ -97,7 +97,8 @@ public sealed partial class EfStore
             (int)((uint)(Interlocked.Add(ref _cohortPartitionWindow, width) - width) % ordered.Length);
         var partitions = new List<int>(width);
         var epochs = new List<long>(width);
-        var after = new List<long>(width);
+        var afterDue = new List<long>(width);
+        var afterSeq = new List<long>(width);
         var through = new List<long>(width);
         var sampled = new Dictionary<int, (long Epoch, CohortSample Previous)>(width);
         for (var index = 0; index < width; index++)
@@ -107,7 +108,8 @@ public sealed partial class EfStore
             if (sample.Epoch > fence.Epoch) continue;
             partitions.Add(fence.Partition);
             epochs.Add(fence.Epoch);
-            after.Add(sample.Epoch == fence.Epoch ? sample.Seq : 0);
+            afterDue.Add(sample.Epoch == fence.Epoch ? sample.Due : long.MinValue);
+            afterSeq.Add(sample.Epoch == fence.Epoch ? sample.Seq : 0);
             through.Add(sample.Epoch == fence.Epoch ? sample.Through : -1);
             sampled.Add(fence.Partition, (fence.Epoch, sample));
         }
@@ -115,45 +117,45 @@ public sealed partial class EfStore
         var candidates = await db.Database.SqlQuery<CohortCandidate>(System.Runtime.CompilerServices.FormattableStringFactory.Create(
             $"""
             WITH fences AS MATERIALIZED (
-                SELECT * FROM unnest({"{0}"}::integer[], {"{1}"}::bigint[], {"{2}"}::bigint[], {"{3}"}::bigint[])
-                    AS f("Partition", "Epoch", "After", "Through")
+                SELECT * FROM unnest({"{0}"}::integer[], {"{1}"}::bigint[], {"{2}"}::bigint[], {"{3}"}::bigint[], {"{4}"}::bigint[])
+                    AS f("Partition", "Epoch", "AfterDue", "AfterSeq", "Through")
             ), bounds AS MATERIALIZED (
-                SELECT f."Partition", f."Epoch", f."After",
+                SELECT f."Partition", f."Epoch", f."AfterDue", f."AfterSeq",
                     CASE WHEN f."Through" >= 0 THEN f."Through" ELSE coalesce(last."Seq", 0) END AS "Through"
                 FROM fences f LEFT JOIN LATERAL (
                     SELECT "Seq" FROM "Messages" WHERE f."Through" < 0 AND "Partition" = f."Partition"
-                        AND {CohortWaitingWork} ORDER BY "Seq" DESC LIMIT 1
+                    ORDER BY "Seq" DESC LIMIT 1
                 ) last ON true
             ), candidates AS MATERIALIZED (
                 SELECT b."Partition", b."Epoch", m."Target", m."Due", m."Seq", m."Seen"
                 FROM bounds b CROSS JOIN LATERAL (
                     SELECT "Target", "Due", "Seq", "Seen" FROM "Messages"
-                    WHERE "Partition" = b."Partition" AND "Seq" > b."After" AND "Seq" <= b."Through"
-                        AND {CohortWaitingWork} ORDER BY "Seq" LIMIT {"{4}"}
+                    WHERE "Partition" = b."Partition" AND ("Due", "Seq") > (b."AfterDue", b."AfterSeq") AND "Seq" <= b."Through"
+                        AND "Due" <= floor(extract(epoch from statement_timestamp()) * 1000)::bigint AND {CohortWaitingWork}
+                    ORDER BY "Due", "Seq" LIMIT {"{5}"}
                 ) m
             ), tail AS (
-                SELECT "Partition", max("Seq") AS "Seq" FROM candidates GROUP BY "Partition"
+                SELECT DISTINCT ON ("Partition") "Partition", "Due", "Seq" FROM candidates ORDER BY "Partition", "Due" DESC, "Seq" DESC
             ), eligible AS (
                 SELECT i."Partition", i."Id" AS "Actor", i."Revision", i."FoundationTenant" AS "Tenant", i."FoundationReference" AS "Reference",
                     i."FoundationHeader" AS "Header"
-                FROM (SELECT DISTINCT "Partition", "Target" FROM candidates
-                    WHERE "Seen" < "Epoch" AND "Due" <= floor(extract(epoch from statement_timestamp()) * 1000)::bigint
-                ) w JOIN "Instances" i ON i."Id" = w."Target" AND i."Partition" = w."Partition"
+                FROM (SELECT DISTINCT "Partition", "Target" FROM candidates WHERE "Seen" < "Epoch") w
+                JOIN "Instances" i ON i."Id" = w."Target" AND i."Partition" = w."Partition"
                 WHERE i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired"
                     AND i."FoundationReference" IS NOT NULL AND i."FoundationParkGeneration" > 0
                     AND EXISTS (SELECT 1 FROM "Messages" c
                         WHERE c."Partition" = i."Partition" AND c."Target" = i."Id" AND c."EventMatch" IS NULL AND NOT c."Done"
                             AND c."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND c."FoundationReleasedBy" = i."FoundationParkGeneration")
             )
-            SELECT b."Partition", b."Through", t."Seq", e."Actor", e."Revision", e."Tenant", e."Reference", e."Header"
+            SELECT b."Partition", b."Through", t."Due", t."Seq", e."Actor", e."Revision", e."Tenant", e."Reference", e."Header"
             FROM bounds b LEFT JOIN tail t ON t."Partition" = b."Partition"
             LEFT JOIN eligible e ON e."Partition" = b."Partition"
             /* root-cohort-waiting */
-            """, partitions.ToArray(), epochs.ToArray(), after.ToArray(), through.ToArray(), limit / width)).ToArrayAsync(token);
+            """, partitions.ToArray(), epochs.ToArray(), afterDue.ToArray(), afterSeq.ToArray(), through.ToArray(), limit / width)).ToArrayAsync(token);
         foreach (var page in candidates.GroupBy(candidate => candidate.Partition))
         {
             var (epoch, previous) = sampled[page.Key];
-            var next = page.First() is { Seq: { } last } row ? new CohortSample(epoch, row.Through, last) : new(epoch);
+            var next = page.First() is { Due: { } due, Seq: { } last } row ? new CohortSample(epoch, row.Through, due, last) : new(epoch);
             _cohortSamples.AddOrUpdate(page.Key, next, (_, current) => current.Epoch < epoch || ReferenceEquals(current, previous) ? next : current);
         }
         var actors = new List<string>();

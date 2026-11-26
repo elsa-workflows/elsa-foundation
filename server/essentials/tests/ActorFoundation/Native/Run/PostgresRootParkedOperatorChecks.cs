@@ -998,6 +998,9 @@ internal static class PostgresRootParkedOperatorChecks
             var olderSelection = await set.ParkSelectionAsync(offerable, 2);
             var youngerSelection = await set.ParkSelectionAsync(withheld, 2);
             var due = younger.AsOf + 120_000;
+            for (var pass = 0; pass < 8; pass++)
+                Check(await set.OperateAsync(tail, $"future-tail-{pass}", Kinds.Terminate, set.Selections[tail], dueAt: due),
+                    "the shared partition has an earlier scheduled control that is still in the future");
             Check(await set.OperateAsync(offerable, "older-control", Kinds.Terminate, olderSelection, reply: true, dueAt: due) &&
                 await set.OperateAsync(withheld, "younger-control", Kinds.Terminate, youngerSelection, reply: true, dueAt: due) &&
                 await set.OperateAsync(offerable, "older-recover", Kinds.Recover, olderSelection) &&
@@ -1096,7 +1099,7 @@ internal static class PostgresRootParkedOperatorChecks
                     found = offered.Messages is [{ Message: { Kind: Kinds.Terminate } message }] &&
                         message.Target.Id == waiting.Actor.Id && message.Operator?.RootParkFacts is not null;
                 }
-                Check(found, "the two-partition sampler revisits the missed control despite continued new admissions");
+                Check(found, "the sampler revisits the missed control despite earlier future controls and continued new admissions");
 
                 Task MarkReleasedAsync(long seen) => set.ExecuteAsync($"""
                     UPDATE "Messages" SET "Seen" = {seen} WHERE "Target" = {waiting.Actor.Id} AND "Kind" = 'withheld-cohort' AND NOT "Done"
@@ -3112,7 +3115,7 @@ internal static class PostgresRootParkedOperatorChecks
             if (command is NpgsqlCommand cohort &&
                 cohort.CommandText.Contains("/* root-cohort-waiting */", StringComparison.Ordinal))
             {
-                CohortWindows.Add(((int[])cohort.Parameters[0].Value!, (int)cohort.Parameters[4].Value!));
+                CohortWindows.Add(((int[])cohort.Parameters[0].Value!, (int)cohort.Parameters[5].Value!));
                 if (!ObserveCohortPlan) return result;
                 ObserveCohortPlan = false;
                 var planOptions = new NpgsqlConnectionStringBuilder(connection) { Options = "-c enable_seqscan=off" };
