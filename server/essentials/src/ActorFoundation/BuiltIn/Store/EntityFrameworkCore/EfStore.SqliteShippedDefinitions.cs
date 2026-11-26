@@ -151,6 +151,12 @@ public sealed partial class EfStore
                     yield return new("table", table.Name, table.Name, Render(table) + options);
                     break;
                 case CreateIndexOperation index:
+                    // The deletion index also bounds each shipped actor's journal continuation.
+                    if (index.Table == "Journal" && index.Columns.SequenceEqual(["Partition", "Instance"], StringComparer.Ordinal))
+                    {
+                        index.Name = "IX_Journal_Partition_Instance_Position";
+                        index.Columns = ["Partition", "Instance", "Position"];
+                    }
                     yield return new("index", index.Name, index.Table, Render(index));
                     break;
                 case InsertDataOperation { Table: StoreVersionEntity.Table }:
