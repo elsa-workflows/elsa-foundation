@@ -71,7 +71,7 @@ public sealed class Elsa3ScriptResultIntoTypedInputTests
     [Fact]
     public async Task A_boolean_script_result_into_a_flow_decision_imports()
     {
-        var result = await ConvertAsync("x > 1");
+        var result = await ConvertAsync("var x = 2; return x > 1;");
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }

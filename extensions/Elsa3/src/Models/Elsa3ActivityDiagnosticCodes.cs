@@ -18,6 +18,12 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>A converted date may show a different clock or date from the Elsa 3 host.</summary>
     public const string LiteralDateWallClock = "ELS3-LITERAL-DATE-WALL-CLOCK";
 
+    /// <summary>Info: the null and undefined policies the converted workflow records (DefaultOnNull, UndefinedAsNull) or that it keeps Elsa 4's native rules.</summary>
+    public const string NullPolicies = "ELS3-NULL-POLICIES";
+
+    /// <summary>An optional workflow input whose type has no supported implicit default: refused.</summary>
+    public const string InputDefaultRequired = "ELS3-INPUT-DEFAULT-REQUIRED";
+
     /// <summary>The node's type is not in the built-in map, not claimed by a replaced-type alias and not a catalog key.</summary>
     public const string UnmappedType = "ELS3-ACTIVITY-UNMAPPED-TYPE";
 

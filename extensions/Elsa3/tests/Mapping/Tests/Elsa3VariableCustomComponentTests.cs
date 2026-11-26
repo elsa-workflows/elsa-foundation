@@ -31,6 +31,7 @@ public sealed class Elsa3VariableCustomComponentTests
         Assert.Equal(Elsa3MigrationDiagnosticSeverity.Info, info.Severity);
         Assert.Equal("$.variables[0]", info.Path);
         Assert.Equal("order", info.Metadata["VariableName"]);
+        Assert.Equal("Acme.Orders.OrderDto, Acme.Orders", info.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
         Assert.Contains("Variable 'order'", info.Message);
         Assert.Contains("'Acme.Orders.OrderDto, Acme.Orders'", info.Message);
         Assert.Contains("its Elsa 4 type is Any", info.Message);
@@ -49,6 +50,7 @@ public sealed class Elsa3VariableCustomComponentTests
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var info = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.VariableTypeUnregistered);
         Assert.Equal(Elsa3MigrationDiagnosticSeverity.Info, info.Severity);
+        Assert.Equal("Acme.Orders.OrderDto, Acme.Orders", info.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
         Assert.Contains("Variable 'local'", info.Message);
     }
 
@@ -107,6 +109,7 @@ public sealed class Elsa3VariableCustomComponentTests
         else
         {
             Assert.NotNull(notice);
+            Assert.Equal(unregistered, notice.Metadata![Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
             Assert.Contains($"'{typeName}'", notice.Message);
             if (typeName != unregistered)
                 Assert.Contains($"whose element type '{unregistered}'", notice.Message);

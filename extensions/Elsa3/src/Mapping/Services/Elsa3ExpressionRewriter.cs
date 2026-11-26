@@ -8,6 +8,7 @@ using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa3.Mapping.Conversion;
 using Elsa3.Mapping.Internal;
+using Elsa3.Models;
 using Fluid;
 
 namespace Elsa3.Mapping.Services;
@@ -196,6 +197,9 @@ public sealed class Elsa3ExpressionRewriter(
                 "Rewrite the expression in the Elsa 3 workflow with JavaScript or an Elsa 4 built-in function, before import.")));
         }
 
+        if (analyzer.MissingGlobals.Count > 0)
+            return Elsa3ExpressionRewriteResult.Failure(analyzer.MissingGlobals);
+
         return result.WithConversionNotes(analyzer.Warnings, analyzer.AppliedDateInterpretation, analyzer.MayAccessNativeCompletion);
     }
 
@@ -243,7 +247,7 @@ public sealed class Elsa3ExpressionRewriter(
                 ReusableVariableWriteGuidance));
         analyzer.Visit(script);
         if (analyzer.Issues.Count > 0)
-            return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues);
+            return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues.Concat(analyzer.MissingGlobals));
 
         // Elsa 4 reserves 'complete' in every JavaScript surface, setter or not: a script or expression that declares it
         // would import and then fail draft validation (Scripts/ReservedName, JavaScript/ReservedName), so the import
@@ -980,6 +984,16 @@ public sealed class Elsa3ExpressionRewriter(
         /// <summary>Replaced globals already refused for a non-call reference, so each is reported once (#5691).</summary>
         private readonly HashSet<string> _reportedReplacedReferences = new(StringComparer.Ordinal);
 
+        /// <summary>Undeclared custom globals already refused for a value reference, so each is reported once.</summary>
+        private readonly HashSet<string> _reportedMissingGlobals = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The refusals of undeclared custom globals read as values (spec 1237 FR-016a). They are reported after the
+        /// script's other refusals, and only where the script parses in strict mode and uses no .NET member: a with
+        /// statement's names and a .NET type are not custom globals.
+        /// </summary>
+        public List<Elsa3ExpressionRewriteIssue> MissingGlobals { get; } = [];
+
         /// <summary>The local functions the rewritten source calls, one per line, or empty.</summary>
         public string Prelude =>
             string.Concat(_helpers.Select(helper => InlineHelpers[helper].Declaration + "\n")) +
@@ -1563,6 +1577,14 @@ public sealed class Elsa3ExpressionRewriter(
                         return;
                     }
 
+                    // No variable or input has this getter: a custom global, unless no host function may take the name over.
+                    if (resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor)) is { NoSource: true, Issue: { } missing } &&
+                        missing.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing && !CanBeMatched(callee.Name))
+                    {
+                        Issues.Add(missing with { Code = Elsa3ImportDiagnosticCodes.ForbiddenCapability, Metadata = null });
+                        return;
+                    }
+
                     AddResolvedEdit(call, Elsa3AmbientReferenceKind.GeneratedAccessor, accessor);
                     return;
                 }
@@ -1608,8 +1630,9 @@ public sealed class Elsa3ExpressionRewriter(
                     resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, setter)) is
                         { Succeeded: true, Binding: WorkflowRequestExpressionParameterBinding })
                 {
-                    Issues.Add(new Elsa3ExpressionRewriteIssue(
-                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                    // Elsa 3 generated no setter for an input, so a call that ran there was a custom global: a component.
+                    Issues.Add(Elsa3ExpressionRewriteIssue.HostFunctionMissing(
+                        callee.Name,
                         $"JavaScript calls '{callee.Name}', but '{setter}' is a workflow input, which is read-only: Elsa 3 generated no setter for it.",
                         "Copy the input into a declared variable and set that variable in the Elsa 3 workflow before import. " +
                         RebuiltFunctionGuidance(callee.Name)));
@@ -1672,19 +1695,18 @@ public sealed class Elsa3ExpressionRewriter(
                 if (RefusedHostFunctions.TryGetValue(callee.Name, out var refused))
                 {
                     // A refused Elsa 3 built-in a host function may take over says so (#5664); one it may not does not.
-                    var guidance = CanBeMatched(callee.Name)
-                        ? $"{refused.Guidance} {RebuiltFunctionGuidance(callee.Name)}"
-                        : refused.Guidance;
-                    Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, refused.Message, guidance));
+                    Issues.Add(CanBeMatched(callee.Name)
+                        ? Elsa3ExpressionRewriteIssue.HostFunctionMissing(callee.Name, refused.Message, $"{refused.Guidance} {RebuiltFunctionGuidance(callee.Name)}")
+                        : new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, refused.Message, refused.Guidance));
                     return;
                 }
 
                 if (!PureGlobalCalls.Contains(callee.Name))
                 {
-                    Issues.Add(new Elsa3ExpressionRewriteIssue(
-                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                        $"JavaScript calls unknown or unapproved host function '{callee.Name}'.",
-                        CanBeMatched(callee.Name) ? UndeclaredFunctionGuidance(callee.Name) : UnmatchableFunctionGuidance));
+                    var message = $"JavaScript calls unknown or unapproved host function '{callee.Name}'.";
+                    Issues.Add(CanBeMatched(callee.Name)
+                        ? Elsa3ExpressionRewriteIssue.HostFunctionMissing(callee.Name, message, UndeclaredFunctionGuidance(callee.Name))
+                        : new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, message, UnmatchableFunctionGuidance));
                     return;
                 }
             }
@@ -1837,6 +1859,23 @@ public sealed class Elsa3ExpressionRewriter(
                         $"to {string.Join(" or ", replacedBy.Select(name => $"'{name}'"))}.",
                         $"Call '{replacedValue.Name}' directly in the Elsa 3 script before import, for example " +
                         $"'items.map(item => {replacedValue.Name}(item))' instead of 'items.map({replacedValue.Name})'."));
+                }
+                return;
+            }
+
+            // Any other undeclared global read as a value (passed as a callback, aliased, read) is an Elsa 3 custom global
+            // a host function could provide (spec 1237 FR-016a). Without one it names nothing in Elsa 4. A write to the name
+            // is reported as an undeclared write instead.
+            if (node is Identifier customGlobal && !IsDeclared(customGlobal.Name) && !IsWriteTarget(customGlobal) &&
+                !TryGetAmbientKind(customGlobal.Name, out _) && !customGlobal.Name.Equals("args", StringComparison.Ordinal) &&
+                !customGlobal.Name.Equals(Elsa4CompleteName, StringComparison.Ordinal) && CanBeMatched(customGlobal.Name))
+            {
+                if (_reportedMissingGlobals.Add(customGlobal.Name))
+                {
+                    MissingGlobals.Add(Elsa3ExpressionRewriteIssue.HostFunctionMissing(
+                        customGlobal.Name,
+                        $"JavaScript uses '{customGlobal.Name}', which neither the script, Elsa 4 nor a registered host function declares.",
+                        UndeclaredFunctionGuidance(customGlobal.Name)));
                 }
                 return;
             }
@@ -3073,7 +3112,21 @@ public sealed class Elsa3ExpressionParameterResolution
     internal static Elsa3ExpressionParameterResolution NotFound(Elsa3ExpressionRewriteIssue issue) => new(null, issue) { NoSource = true };
 }
 
-public sealed record Elsa3ExpressionRewriteIssue(string Code, string Message, string Guidance);
+/// <summary>
+/// Why an expression does not convert, or what changed when it did: a stable code, a message, guidance and, for a
+/// component issue, its metadata (<see cref="Elsa3MigrationDiagnosticMetadataKeys.ComponentName"/>), which the diagnostic
+/// built from it carries.
+/// </summary>
+public sealed record Elsa3ExpressionRewriteIssue(string Code, string Message, string Guidance, IReadOnlyDictionary<string, string>? Metadata = null)
+{
+    /// <summary>
+    /// A call or value reference of a global a registered host function could provide (spec 1237 FR-016a): an undeclared
+    /// custom Elsa 3 global, or a refused Elsa 3 built-in a host function may take over. It names the function as data.
+    /// </summary>
+    internal static Elsa3ExpressionRewriteIssue HostFunctionMissing(string functionName, string message, string guidance) =>
+        new(Elsa3ImportDiagnosticCodes.HostFunctionMissing, message, guidance,
+            new Dictionary<string, string>(StringComparer.Ordinal) { [Elsa3MigrationDiagnosticMetadataKeys.ComponentName] = functionName });
+}
 
 public sealed class Elsa3ExpressionRewriteResult
 {
@@ -3232,4 +3285,13 @@ public static class Elsa3ImportDiagnosticCodes
     /// function directly.
     /// </summary>
     public const string ReplacedFunctionReference = "ELS3-REPLACED-FUNCTION-REFERENCE";
+
+    /// <summary>
+    /// A script calls, or uses as a value, a global no Elsa 4 built-in and no registered host function provides, and that a
+    /// host function could provide (an undeclared Elsa 3 custom global, or a refused Elsa 3 built-in a host function may
+    /// take over; spec 1237 FR-016a): refused until the host registers a host function of that member name. Metadata:
+    /// ComponentName (the function name). Calls a host function cannot take over and forbidden capabilities keep
+    /// <see cref="ForbiddenCapability"/>.
+    /// </summary>
+    public const string HostFunctionMissing = "ELS3-JS-HOST-FUNCTION-MISSING";
 }

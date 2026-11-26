@@ -673,7 +673,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                     issue.Code,
                     issue.Message,
                     issue.Guidance,
-                    $"{property.JsonPath}.expression.value"));
+                    $"{property.JsonPath}.expression.value",
+                    metadata: issue.Metadata));
             }
             return;
         }
@@ -842,7 +843,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         foreach (var warning in rewrite.Warnings)
         {
             diagnostics.Add(CreateDiagnostic(input, property, warning.Code, warning.Message, warning.Guidance,
-                $"{property.JsonPath}.expression.value", null, Elsa3MigrationDiagnosticSeverity.Warning));
+                $"{property.JsonPath}.expression.value", null, Elsa3MigrationDiagnosticSeverity.Warning, warning.Metadata));
         }
 
         // Every workflow whose JavaScript was converted under an interpretation that assumes something records it once;
@@ -907,7 +908,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         if (!rewrite.Succeeded)
         {
             foreach (var issue in rewrite.Issues)
-                diagnostics.Add(CreateDiagnostic(input, property, issue.Code, issue.Message, issue.Guidance, $"{property.JsonPath}.expression.value"));
+                diagnostics.Add(CreateDiagnostic(input, property, issue.Code, issue.Message, issue.Guidance, $"{property.JsonPath}.expression.value", metadata: issue.Metadata));
             return;
         }
 
@@ -1232,8 +1233,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         if (inputVariables.Length == 1)
             return Resolve(Elsa3AmbientReferenceKind.WorkflowRequest, inputVariables[0].Name);
 
-        return Elsa3ExpressionParameterResolution.NotFound(new Elsa3ExpressionRewriteIssue(
-            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+        return Elsa3ExpressionParameterResolution.NotFound(Elsa3ExpressionRewriteIssue.HostFunctionMissing(
+            $"get{name}",
             $"JavaScript calls unknown or unapproved host function 'get{name}'.",
             $"If it reads a variable or workflow input, declare that variable or input before import. {Elsa3ExpressionRewriter.UndeclaredFunctionGuidance($"get{name}")}"));
 
@@ -1266,8 +1267,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             return ResolveAmbient(definition, consumer, outputs, nodeOrder, accessors,
                 new Elsa3AmbientReference(Elsa3AmbientReferenceKind.WorkflowRequest, inputVariables[0].Name));
 
-        return Elsa3ExpressionParameterResolution.NotFound(new Elsa3ExpressionRewriteIssue(
-            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+        return Elsa3ExpressionParameterResolution.NotFound(Elsa3ExpressionRewriteIssue.HostFunctionMissing(
+            $"set{name}",
             $"JavaScript calls unknown or unapproved host function 'set{name}'.",
             Elsa3ExpressionRewriter.UndeclaredFunctionGuidance($"set{name}")));
     }
@@ -1738,7 +1739,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         string guidance,
         string path,
         string? memoryReferenceId = null,
-        Elsa3MigrationDiagnosticSeverity severity = Elsa3MigrationDiagnosticSeverity.Error) =>
+        Elsa3MigrationDiagnosticSeverity severity = Elsa3MigrationDiagnosticSeverity.Error,
+        IReadOnlyDictionary<string, string>? metadata = null) =>
         CreateDiagnostic(
             input,
             property.ActivityNodeId,
@@ -1749,7 +1751,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             guidance,
             path,
             memoryReferenceId,
-            severity);
+            severity,
+            metadata);
 
     private static Elsa3MigrationDiagnostic CreateDiagnostic(
         DiagnosticScope input,
@@ -1780,9 +1783,13 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         string guidance,
         string path,
         string? memoryReferenceId,
-        Elsa3MigrationDiagnosticSeverity severity = Elsa3MigrationDiagnosticSeverity.Error)
+        Elsa3MigrationDiagnosticSeverity severity = Elsa3MigrationDiagnosticSeverity.Error,
+        IReadOnlyDictionary<string, string>? extra = null)
     {
         var metadata = input.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        // A component issue names its component as data (spec 1237 FR-016a); the location keys below are the lowerer's own.
+        foreach (var (key, value) in extra ?? new Dictionary<string, string>())
+            metadata[key] = value;
         metadata["DefinitionId"] = input.DefinitionId;
         metadata["ActivityNodeId"] = activityNodeId;
         metadata["ActivityPath"] = activityPath;

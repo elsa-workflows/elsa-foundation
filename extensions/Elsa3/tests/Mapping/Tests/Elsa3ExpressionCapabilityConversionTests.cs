@@ -424,6 +424,16 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [InlineData("streamToBase64(x)")]
     [InlineData("getConfig('Key')")]
     [InlineData("getConfiguration('Key')")]
+    public async Task Functions_a_host_function_may_provide_are_missing_host_functions(string expression)
+    {
+        var result = await ConvertAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing &&
+            diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName] == expression[..expression.IndexOf('(')]);
+    }
+
+    [Theory]
     [InlineData("crypto.randomUUID()")]
     [InlineData("DateTime.Now")]
     [InlineData("new Guid('6F9619FF-8B86-D011-B42D-00CF4FC964FF')")]

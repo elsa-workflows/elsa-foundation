@@ -14,8 +14,11 @@ namespace Elsa3.Mapping.Conversion;
 /// <summary>Why a variable is refused, and how to fix it in the Elsa 3 workflow; <paramref name="Code"/> is the diagnostic code.</summary>
 internal sealed record Elsa3VariableRefusal(string Message, string Guidance, string Code = Elsa3ActivityDiagnosticCodes.VariableValueUnconvertible);
 
-/// <summary>Something a migrator should know about a variable that converts: what changed, and what to do about it.</summary>
-internal sealed record Elsa3VariableNotice(string Message, string Guidance);
+/// <summary>
+/// Something a migrator should know about a variable that converts: what changed, what to do about it and, for a
+/// component notice, the component it names (<see cref="Elsa3MigrationDiagnosticMetadataKeys.ComponentName"/>).
+/// </summary>
+internal sealed record Elsa3VariableNotice(string Message, string Guidance, IReadOnlyDictionary<string, string>? Metadata = null);
 
 /// <summary>
 /// Maps an Elsa 3 variable declaration to an Elsa 4 <see cref="VariableDefinition"/> (spec 264). Elsa 3 stored a
@@ -79,7 +82,8 @@ internal static class Elsa3VariableMapper
         return new(
             $"Variable '{source.Name}' has the Elsa 3 type '{typeName}', {which} is not registered in Elsa 4, so its Elsa 4 type is Any. It stays Any until an Elsa 4 feature registers the type and the workflow is converted again.",
             "To keep the type, have an Elsa 4 feature register its CLR type (module types take dotted aliases), then convert the workflow again. " +
-            "The converter looks the Elsa 3 name up in Elsa 4's type registry, as an alias or as the full name of a registered type, and otherwise loads it as an assembly-qualified CLR name.");
+            "The converter looks the Elsa 3 name up in Elsa 4's type registry, as an alias or as the full name of a registered type, and otherwise loads it as an assembly-qualified CLR name.",
+            new Dictionary<string, string>(StringComparer.Ordinal) { [Elsa3MigrationDiagnosticMetadataKeys.ComponentName] = unregistered });
     }
 
     /// <summary>Maps <paramref name="source"/>, or returns <c>false</c> with the refusal when it cannot be converted: a resource type, or a starting value that cannot start as it did in Elsa 3.</summary>
