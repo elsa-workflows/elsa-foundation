@@ -131,7 +131,7 @@ internal sealed class Elsa3TerminalPlacementRewrite : IElsa3NodeRewrite
         if (names is null)
         {
             context.Error(UnsupportedMode,
-                $"The outcomes '{text}' cannot be read as a list of outcome names.",
+                "The outcomes cannot be read as a list of outcome names.",
                 "Name one outcome, or a JSON list of outcome names.",
                 property);
             return false;

@@ -273,7 +273,7 @@ internal sealed class Elsa3DefinitionConverter(
         return new Elsa3MigrationDiagnostic(
             Elsa3MigrationDiagnosticSeverity.Error,
             Elsa3MigrationDiagnosticCodes.DefinitionMappingFailed,
-            $"Elsa 3 workflow definition '{definitionId}' could not be mapped: {exception.Message}",
+            $"Elsa 3 workflow definition '{definitionId}' could not be mapped: the converter failed with {exception.GetType().Name}.",
             guidance: "Review the Elsa 3 definition and installed Elsa 4 activity catalog before retrying import.",
             metadata: metadata);
     }

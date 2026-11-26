@@ -402,7 +402,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             if (notes.Any(note => note.Code == Elsa3ActivityDiagnosticCodes.LiteralDateInterpreted) &&
                 diagnostics.All(note => note.Code != Elsa3ImportDiagnosticCodes.DateInterpretationApplied))
                 diagnostics.Add(CreateDiagnostic(input, property, Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
-                    $"The workflow's date literals were converted with {options.DateInterpretation}" + (options.SourceTimeZone is null ? "." : $" '{options.SourceTimeZone}'."),
+                    options.SourceTimeZone is null
+                        ? $"The workflow's date literals were converted with {options.DateInterpretation}."
+                        : $"The workflow's date literals were converted with {options.DateInterpretation}, in the configured source time zone.",
                     "Keep the same date interpretation when converting this workflow again.", property.JsonPath, null, Elsa3MigrationDiagnosticSeverity.Info));
             var rewritten = Elsa3TypedValues.WithExpression(property.Value, kind, converted, removeMemoryReference: true);
             property.Activity.AdditionalProperties[property.PropertyName] = rewritten;
@@ -856,7 +858,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
         diagnostics.Add(CreateDiagnostic(input, property, Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
             interpretation == Elsa3DateInterpretation.SourceTimeZone
-                ? $"The workflow's scripts were converted with the date interpretation SourceTimeZone '{expressionRewriter.SourceTimeZone}': each use of Elsa 3 local time names that zone in the converted code."
+                ? "The workflow's scripts were converted with the date interpretation SourceTimeZone: each use of Elsa 3 local time names the configured source time zone in the converted code."
                 : $"The workflow's scripts were converted with the date interpretation {interpretation}.",
             "Keep the same date interpretation when this workflow is converted again.",
             $"{property.JsonPath}.expression.value", null, Elsa3MigrationDiagnosticSeverity.Info));

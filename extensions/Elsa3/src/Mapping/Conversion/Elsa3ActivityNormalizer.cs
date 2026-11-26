@@ -183,8 +183,9 @@ internal sealed partial class Elsa3ActivityNormalizer(
         if (notes.Any(note => note.Code == LiteralDateInterpreted) && plan.Diagnostics.All(note => note.Code != Elsa3ImportDiagnosticCodes.DateInterpretationApplied))
             plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Info,
                 Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
-                $"The workflow's starting values were converted with {conversionOptions.Value.DateInterpretation}" +
-                (conversionOptions.Value.SourceTimeZone is null ? "." : $" '{conversionOptions.Value.SourceTimeZone}'."),
+                conversionOptions.Value.SourceTimeZone is null
+                    ? $"The workflow's starting values were converted with {conversionOptions.Value.DateInterpretation}."
+                    : $"The workflow's starting values were converted with {conversionOptions.Value.DateInterpretation}, in the configured source time zone.",
                 "Keep the same date interpretation when converting this workflow again.", path));
         return success;
     }
@@ -857,7 +858,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
                         return value;
                     if (Enum.TryParse<HttpStatusCode>(literal, ignoreCase: true, out var status))
                         return Elsa3TypedValues.WithLiteral(value, ((int)status).ToString(CultureInfo.InvariantCulture));
-                    return Outside($"must be an HTTP status code, but is '{literal}'", "Use a numeric status code.");
+                    return Outside("must be an HTTP status code, but its literal is neither a number nor an HTTP status name", "Use a numeric status code.");
                 }
                 if (alias is "Int32" or "Int64" or "Int16")
                     return value;
@@ -875,8 +876,10 @@ internal sealed partial class Elsa3ActivityNormalizer(
             case Elsa3ValueContract.HttpMethodSupported:
                 if (isLiteral && literal?.Trim().ToUpperInvariant() is "PATCH" or "OPTIONS")
                 {
+                    // The method named is the converter's own spelling of the two it refuses, never the input text.
+                    var method = literal.Trim().ToUpperInvariant() == "PATCH" ? "PATCH" : "OPTIONS";
                     context.Error(NoCounterpart,
-                        $"HTTP method '{literal}' has no Elsa 4 counterpart; Elsa 4 sends GET, POST, PUT, DELETE and HEAD.",
+                        $"HTTP method {method} has no Elsa 4 counterpart; Elsa 4 sends GET, POST, PUT, DELETE and HEAD.",
                         "Use a supported method.",
                         propertyName);
                     return null;
@@ -1107,7 +1110,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         }
         catch (JsonException exception)
         {
-            context.Error(UnknownMember, $"The container's variables could not be read: {exception.Message}", "Fix the variable declarations.", property);
+            context.Error(UnknownMember, $"The container's variables could not be read as Elsa 3 variable declarations ({exception.GetType().Name}).", "Fix the variable declarations.", property);
         }
     }
 
@@ -1224,7 +1227,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         catch (JsonException exception)
         {
             plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Error(plan, parent, UnknownMember,
-                $"A child activity at '{jsonPath}' could not be read: {exception.Message}",
+                $"A child activity at '{jsonPath}' could not be read as an Elsa 3 activity ({exception.GetType().Name}).",
                 "Fix the child activity's JSON before converting."));
             parent.Failed = true;
             return null;

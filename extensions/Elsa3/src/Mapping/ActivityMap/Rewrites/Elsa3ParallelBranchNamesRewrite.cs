@@ -51,7 +51,7 @@ internal sealed class Elsa3ParallelBranchNamesRewrite : IElsa3NodeRewrite
                 break;
             default:
                 context.Error(UnsupportedMode,
-                    $"Fork join mode '{mode ?? joinMode.GetRawText()}' has no Elsa 4 counterpart.",
+                    "The fork join mode is neither WaitAll nor WaitAny, so it has no Elsa 4 counterpart.",
                     "Use WaitAll or WaitAny.",
                     property);
                 break;

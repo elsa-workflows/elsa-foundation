@@ -183,8 +183,8 @@ public sealed class Elsa3VariableStartingValueTests
     {
         // Elsa 3 started this one as 0, the type's default, without a warning; it is refused as an authoring mistake.
         { "Int32", "abc", "cannot be converted to its type 'Int32'", "a valid Int32 value" },
-        // No comma parsing: the refusal shows the JSON array the author most likely meant.
-        { "List<String>", "a, b", "is not a JSON array", """for example ["a","b"]""" },
+        // No comma parsing: the refusal shows a fixed JSON array example, never one built from the value (spec 1237 FR-019).
+        { "List<String>", "a, b", "is not a JSON array", """for example ["a", "b"]""" },
         { "List<Int32>", "1, 2", "is not a JSON array", "for example [1, 2]" },
         { "List<Int32>", """["a"]""", "items cannot be converted to 'Int32'", "for example [1, 2]" },
         // Elsa 3 could not read a number from a string either: it started the variable empty with a warning.
@@ -269,7 +269,7 @@ public sealed class Elsa3VariableStartingValueTests
         var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
         Assert.Equal(Elsa3ActivityDiagnosticCodes.VariableValueUnconvertible, refusal.Code);
         Assert.Equal("$.variables[2]", refusal.Path);
-        Assert.Contains("""["a","b"]""", refusal.Guidance);
+        Assert.Contains("""["a", "b"]""", refusal.Guidance);
         Assert.Equal("names", refusal.Metadata["VariableName"]);
     }
 
