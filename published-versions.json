@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "c97fcbac340bf65223aa98f5a0d19f6bd066d649",
+  "last_publish_commit": "41c32a4bafb8f349743718052eb0e5b42e3a94ca",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -919,23 +919,23 @@
     },
     {
       "package_id": "Elsa.Studio.Dashboard.Api",
-      "version": "4.0.2-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.3-preview",
+      "commit": "41c32a4bafb8f349743718052eb0e5b42e3a94ca"
     },
     {
       "package_id": "Elsa.Studio.Dashboard.Core",
-      "version": "4.0.3-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.4-preview",
+      "commit": "41c32a4bafb8f349743718052eb0e5b42e3a94ca"
     },
     {
       "package_id": "Elsa.Studio.Dashboard.Management",
-      "version": "4.0.2-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.3-preview",
+      "commit": "41c32a4bafb8f349743718052eb0e5b42e3a94ca"
     },
     {
       "package_id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
-      "version": "4.0.2-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.3-preview",
+      "commit": "41c32a4bafb8f349743718052eb0e5b42e3a94ca"
     },
     {
       "package_id": "Elsa.Studio.Preferences.Api",
@@ -989,8 +989,8 @@
     },
     {
       "package_id": "Elsa.Weaver.Dashboard",
-      "version": "4.0.2-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.3-preview",
+      "commit": "41c32a4bafb8f349743718052eb0e5b42e3a94ca"
     },
     {
       "package_id": "Elsa.Weaver.GitHubCopilot",
@@ -1024,8 +1024,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Dashboard.Queries",
-      "version": "4.0.4-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.5-preview",
+      "commit": "41c32a4bafb8f349743718052eb0e5b42e3a94ca"
     },
     {
       "package_id": "Elsa.Workflows.Design.Api",
