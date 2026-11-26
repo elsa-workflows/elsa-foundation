@@ -242,6 +242,26 @@ public sealed class Elsa3InputFreeMessageTests
     }
 
     [Fact]
+    public async Task The_non_json_content_type_message_quotes_no_content_type()
+    {
+        var response = Activity("response", "Elsa.WriteHttpResponse",
+            ("content", Expression("JavaScript", "return { id: 42 };", "Object")),
+            ("contentType", Literal($"text/{Sentinel}")));
+
+        var result = await ConvertAsync(Sequence("root", response));
+
+        AssertRefusedWithout(result, Elsa3ActivityDiagnosticCodes.ValueOutsideContract, Sentinel);
+    }
+
+    [Fact]
+    public async Task The_clr_namespace_refusal_quotes_no_script()
+    {
+        var result = await ConvertExpressionAsync("JavaScript", $"System.Environment.GetEnvironmentVariable('{Sentinel}')");
+
+        AssertRefusedWithout(result, Elsa3ImportDiagnosticCodes.DotNetMemberUsage, Sentinel);
+    }
+
+    [Fact]
     public async Task The_http_method_message_names_the_method_in_the_converters_spelling_only()
     {
         var request = Activity("request", "Elsa.SendHttpRequest", ("url", Literal("https://example.org")), ("method", Literal(" pAtCh ")));

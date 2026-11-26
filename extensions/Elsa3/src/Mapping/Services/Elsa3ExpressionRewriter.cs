@@ -177,27 +177,36 @@ public sealed class Elsa3ExpressionRewriter(
         Elsa3ScriptOutcomeContext? scriptOutcomes,
         bool reusableWorkflow)
     {
-        var result = CheckStrictMode(RewriteJavaScript(source, resultType, resolve, mode, scriptOutcomes, reusableWorkflow, out var analyzer), mode);
-        if (!result.Succeeded || analyzer is null)
-            return result;
+        var rewritten = RewriteJavaScript(source, resultType, resolve, mode, scriptOutcomes, reusableWorkflow, out var analyzer);
+        if (analyzer is null)
+            return rewritten;
+
+        // Every refusal also lists the undeclared custom globals the script uses (spec 1237 FR-016a), filtered: not the
+        // names it writes itself, and none under a with statement.
+        var result = CheckStrictMode(rewritten, mode);
+        if (!result.Succeeded)
+            return Elsa3ExpressionRewriteResult.Failure(result.Issues.Concat(analyzer.ReportableMissingGlobals));
 
         // Spec 1223 FR-016 to FR-018: the converted source, with the values that were live .NET objects in Elsa 3.
+        // A .NET type read as a global (new Uri(…)) is .NET usage, not a custom global, so this refusal stands alone.
         var usages = dotNetUsage.Analyze(
             result.Definition!.Source,
             scriptBody: mode == Elsa3JavaScriptMode.Script,
             new JavaScriptDotNetUsageContext(analyzer.KnownDotNetValues));
         if (usages is { Count: > 0 })
         {
-            // The analyzer's own message quotes the script, so the refusal names the cause and the position only (spec 1237 FR-019).
-            return Elsa3ExpressionRewriteResult.Failure(usages.Select(usage => new Elsa3ExpressionRewriteIssue(
+            // The analyzer's own message quotes the script, and its position is one in the converted source, not the
+            // Elsa 3 one, so the refusal names the cause only (spec 1237 FR-019).
+            return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
                 Elsa3ImportDiagnosticCodes.DotNetMemberUsage,
                 "JavaScript uses a member of a value that was a live .NET object in Elsa 3, a .NET type or a .NET-style member " +
-                $"(line {usage.Range.Start.Line + 1}, column {usage.Range.Start.Character + 1} of the converted script). Elsa 4 values are JSON and have no .NET members.",
-                "Rewrite the expression in the Elsa 3 workflow with JavaScript or an Elsa 4 built-in function, before import.")));
+                "in the script. Elsa 4 values are JSON and have no .NET members.",
+                "Rewrite the expression in the Elsa 3 workflow with JavaScript or an Elsa 4 built-in function, before import."));
         }
 
-        if (analyzer.MissingGlobals.Count > 0)
-            return Elsa3ExpressionRewriteResult.Failure(analyzer.MissingGlobals);
+        var missing = analyzer.ReportableMissingGlobals.ToArray();
+        if (missing.Length > 0)
+            return Elsa3ExpressionRewriteResult.Failure(missing);
 
         return result.WithConversionNotes(analyzer.Warnings, analyzer.AppliedDateInterpretation, analyzer.MayAccessNativeCompletion);
     }
@@ -239,9 +248,10 @@ public sealed class Elsa3ExpressionRewriter(
         };
         analyzerUsed = analyzer;
         analyzer.CollectReassignedNames(script);
+        analyzer.CollectBlockFunctions(script);
         analyzer.Visit(script);
         if (analyzer.Issues.Count > 0)
-            return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues.Concat(analyzer.ReportableMissingGlobals));
+            return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues);
 
         // Elsa 4 reserves 'complete' in every JavaScript surface, setter or not: a script or expression that declares it
         // would import and then fail draft validation (Scripts/ReservedName, JavaScript/ReservedName), so the import
@@ -379,14 +389,18 @@ public sealed class Elsa3ExpressionRewriter(
                 new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript($"(() => {{ {source} }})()", strict: true);
             return result;
         }
-        catch (ParseErrorException exception)
+        catch (ParseErrorException)
         {
+            // The parse error's position is one in the converted, wrapped source, not the Elsa 3 one, so it is not named.
             return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
                 Elsa3ImportDiagnosticCodes.UnsupportedShape,
-                $"JavaScript only works in Elsa 3's sloppy mode; Elsa 4 runs it in strict mode, where it does not parse (line {exception.Error.LineNumber}, column {exception.Error.Column}).",
-                "Rewrite it in the Elsa 3 workflow without sloppy-mode syntax: no with statement, no legacy octal literal such as 010 (write 0o10 or 8), no duplicate parameter names, no delete of a variable, and no reserved word such as let, static or yield as a name, before import."));
+                "JavaScript only works in Elsa 3's sloppy mode; Elsa 4 runs it in strict mode, where it does not parse.",
+                SloppyModeGuidance));
         }
     }
+
+    private const string SloppyModeGuidance =
+        "Rewrite it in the Elsa 3 workflow without sloppy-mode syntax: no with statement, no legacy octal literal such as 010 (write 0o10 or 8), no duplicate parameter names, no delete of a variable, and no reserved word such as let, static or yield as a name, before import.";
 
     private static bool IsLiquidIdentifier(string value) =>
         value.Length > 0 && (char.IsLetter(value[0]) || value[0] == '_') &&
@@ -836,6 +850,34 @@ public sealed class Elsa3ExpressionRewriter(
             return scope;
         }
 
+        /// <summary>
+        /// Collects the function declarations inside a block (Annex B): any not directly in the script body or a function
+        /// body. A use outside the block is refused as such, not as a custom global.
+        /// </summary>
+        public void CollectBlockFunctions(Node root) => Collect(root, topLevel: true);
+
+        private void Collect(Node node, bool topLevel)
+        {
+            foreach (var child in node.ChildNodes)
+            {
+                if (child is FunctionDeclaration { Id: { } id } && !topLevel)
+                    _blockFunctions.Add(id.Name);
+                if (child is IFunction function)
+                {
+                    foreach (var part in child.ChildNodes)
+                    {
+                        if (ReferenceEquals(part, function.Body) && part is BlockStatement)
+                            Collect(part, topLevel: true);
+                        else
+                            Collect(part, topLevel: false);
+                    }
+                    continue;
+                }
+
+                Collect(child, topLevel: false);
+            }
+        }
+
         public void CollectReassignedNames(Node root)
         {
             var scopes = new List<HashSet<string>>();
@@ -992,9 +1034,10 @@ public sealed class Elsa3ExpressionRewriter(
         private readonly HashSet<string> _reportedMissingGlobals = new(StringComparer.Ordinal);
 
         /// <summary>
-        /// The refusals of undeclared custom globals read as values (spec 1237 FR-016a). They are reported after the
-        /// script's other refusals, and only where the script parses in strict mode and uses no .NET member: a with
-        /// statement's names and a .NET type are not custom globals.
+        /// The refusals of undeclared custom globals, called or read as values (spec 1237 FR-016a): each names a component
+        /// the user must build. They are collected apart from <see cref="Issues"/> because a write that makes the name the
+        /// script's own can come after the use; <see cref="ReportableMissingGlobals"/> filters them once the visit is done.
+        /// A refusal for .NET usage stands alone: a .NET type read as a global is not a custom global.
         /// </summary>
         public List<Elsa3ExpressionRewriteIssue> MissingGlobals { get; } = [];
 
@@ -1005,9 +1048,22 @@ public sealed class Elsa3ExpressionRewriter(
         private bool _usesWith;
 
         /// <summary>
-        /// <see cref="MissingGlobals"/> without the names the script writes itself and, under a with statement, without any:
-        /// next to the script's other refusals, where the strict-mode check that would refuse a with statement or an
-        /// implicit global does not run, those names are no custom globals (spec 1237 FR-016a).
+        /// Function declarations inside a block (not at the top of the script or of a function body). Elsa 3's sloppy mode
+        /// also made each a variable of the enclosing function (Annex B); Elsa 4's strict mode scopes it to its block, so a
+        /// use outside the block names nothing.
+        /// </summary>
+        private readonly HashSet<string> _blockFunctions = new(StringComparer.Ordinal);
+
+        /// <summary>Block-scoped functions already refused for a use outside their block, so each is reported once.</summary>
+        private readonly HashSet<string> _reportedBlockFunctions = new(StringComparer.Ordinal);
+
+        /// <summary>Whether a .NET namespace root or importNamespace was already refused.</summary>
+        private bool _reportedClrNamespace;
+
+        /// <summary>
+        /// <see cref="MissingGlobals"/> without the names the script writes itself (an implicit global it creates, refused
+        /// as an undeclared write) and, under a with statement (refused itself), without any: a with statement's names
+        /// resolve against its object first, so none of them is known to be a custom global (spec 1237 FR-016a).
         /// </summary>
         public IEnumerable<Elsa3ExpressionRewriteIssue> ReportableMissingGlobals => _usesWith
             ? []
@@ -1043,6 +1099,32 @@ public sealed class Elsa3ExpressionRewriter(
         };
 
         /// <summary>
+        /// The CLR namespace roots and the namespace import Elsa 3 put into the engine when CLR access was on. A use is
+        /// .NET usage (VF-IMP-012), never a custom global.
+        /// </summary>
+        private static readonly HashSet<string> ClrNamespaceRoots = new(StringComparer.Ordinal)
+        {
+            "System", "Microsoft", "importNamespace",
+        };
+
+        private static Elsa3ExpressionRewriteIssue ClrNamespaceUsage() => new(
+            Elsa3ImportDiagnosticCodes.DotNetMemberUsage,
+            "JavaScript uses a .NET namespace (System or Microsoft) or importNamespace, which Elsa 3 provided when CLR access was on. " +
+            "Elsa 4 values are JSON and expressions have no .NET types.",
+            "Rewrite the expression in the Elsa 3 workflow with JavaScript or an Elsa 4 built-in function, or move the .NET call into an activity, before import.");
+
+        private static Elsa3ExpressionRewriteIssue BlockFunctionUse(string name) => new(
+            Elsa3ImportDiagnosticCodes.UnsupportedShape,
+            $"JavaScript uses '{name}' outside the block that declares it as a function. Elsa 3's sloppy mode made the function visible " +
+            "outside its block; Elsa 4 runs in strict mode, where it is not.",
+            $"Declare '{name}' at the top of the script or of the enclosing function, outside any block, in the Elsa 3 workflow before import.");
+
+        private static readonly Elsa3ExpressionRewriteIssue WithStatementUse = new(
+            Elsa3ImportDiagnosticCodes.UnsupportedShape,
+            "JavaScript uses a with statement, which only works in Elsa 3's sloppy mode; Elsa 4 runs it in strict mode, where it does not parse.",
+            SloppyModeGuidance);
+
+        /// <summary>
         /// Standard JavaScript globals: Elsa 3 ran them natively, so a host function that happens to carry one as its member
         /// name did not replace them.
         /// </summary>
@@ -1076,7 +1158,7 @@ public sealed class Elsa3ExpressionRewriter(
                 .Concat(["toJson", "setOutcome", "setOutcomes", "Date", "getVariable", "setVariable", "getInput", "getOutputFrom"])
                 .Concat(StateSetters).Concat(StateGetters).Concat(SetterCalls)
                 .Concat(InlineHelpers.Keys).Concat(InstanceMembers.Keys)
-                .Concat(ElsaThreeGlobals).Concat(NativeJavaScriptGlobals).Concat(JavaScriptBuiltInFunctions.ReadRoots),
+                .Concat(ElsaThreeGlobals).Concat(ClrNamespaceRoots).Concat(NativeJavaScriptGlobals).Concat(JavaScriptBuiltInFunctions.ReadRoots),
             StringComparer.Ordinal);
 
         private static Elsa3ExpressionRewriteIssue UnavailableGlobal(string name) => new(
@@ -1427,6 +1509,18 @@ public sealed class Elsa3ExpressionRewriter(
         public List<SourceEdit> Edits { get; } = [];
         public List<Elsa3ExpressionRewriteIssue> Issues { get; } = [];
 
+        /// <summary>
+        /// Adds a refusal: a missing host function goes to <see cref="MissingGlobals"/>, filtered once the visit is done
+        /// (spec 1237 FR-016a), any other to <see cref="Issues"/>.
+        /// </summary>
+        private void Report(Elsa3ExpressionRewriteIssue issue)
+        {
+            if (issue.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing)
+                MissingGlobals.Add(issue);
+            else
+                Issues.Add(issue);
+        }
+
         private void VisitNode(Node node)
         {
             if (node is AssignmentExpression assignment && ContainsAmbientRoot(assignment.Left) ||
@@ -1460,8 +1554,13 @@ public sealed class Elsa3ExpressionRewriter(
 
             // Elsa 3's sloppy mode turned a write to an undeclared name into a global; Elsa 4's strict mode throws
             // (spec 262 R-4). The parse cannot see it, so the scopes decide.
-            if (node is WithStatement)
+            // A with statement is refused itself, as its own issue, so the refusal never hangs on the strict-mode parse
+            // that runs only when the visit finds nothing else.
+            if (node is WithStatement && !_usesWith)
+            {
                 _usesWith = true;
+                Issues.Add(WithStatementUse);
+            }
             foreach (var written in WrittenNames(node).Where(name => !IsDeclared(name)))
             {
                 _undeclaredWrites.Add(written);
@@ -1472,6 +1571,15 @@ public sealed class Elsa3ExpressionRewriter(
             // A function the script declares itself is a local call, not an Elsa 3 host function.
             if (node is CallExpression call && call.Callee is Identifier callee && !IsDeclared(callee.Name))
             {
+                // A function declared in a block, called outside it, or a .NET namespace import: neither is a custom global.
+                if (_blockFunctions.Contains(callee.Name) || ClrNamespaceRoots.Contains(callee.Name))
+                {
+                    Visit(callee);
+                    foreach (var argument in call.Arguments)
+                        Visit(argument);
+                    return;
+                }
+
                 if (StateSetters.Contains(callee.Name) || ConvertsWorkflowState && StateGetters.Contains(callee.Name))
                 {
                     ConvertWorkflowState(call, callee);
@@ -1654,7 +1762,7 @@ public sealed class Elsa3ExpressionRewriter(
                 // Elsa 3 generated the setter but it does not resolve to one variable (two variables of the name, a capture).
                 if (setterResolution is { Succeeded: false, NoSource: false })
                 {
-                    Issues.Add(setterResolution.Issue!);
+                    Report(setterResolution.Issue!);
                     return;
                 }
 
@@ -1664,7 +1772,7 @@ public sealed class Elsa3ExpressionRewriter(
                         { Succeeded: true, Binding: WorkflowRequestExpressionParameterBinding })
                 {
                     // Elsa 3 generated no setter for an input, so a call that ran there was a custom global: a component.
-                    Issues.Add(Elsa3ExpressionRewriteIssue.HostFunctionMissing(
+                    MissingGlobals.Add(Elsa3ExpressionRewriteIssue.HostFunctionMissing(
                         callee.Name,
                         $"JavaScript calls '{callee.Name}', but '{setter}' is a workflow input, which is read-only: Elsa 3 generated no setter for it.",
                         "Copy the input into a declared variable and set that variable in the Elsa 3 workflow before import. " +
@@ -1728,7 +1836,7 @@ public sealed class Elsa3ExpressionRewriter(
                 if (RefusedHostFunctions.TryGetValue(callee.Name, out var refused))
                 {
                     // A refused Elsa 3 built-in a host function may take over says so (#5664); one it may not does not.
-                    Issues.Add(CanBeMatched(callee.Name)
+                    Report(CanBeMatched(callee.Name)
                         ? Elsa3ExpressionRewriteIssue.HostFunctionMissing(callee.Name, refused.Message, $"{refused.Guidance} {RebuiltFunctionGuidance(callee.Name)}")
                         : new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, refused.Message, refused.Guidance));
                     return;
@@ -1737,9 +1845,31 @@ public sealed class Elsa3ExpressionRewriter(
                 if (!PureGlobalCalls.Contains(callee.Name))
                 {
                     var message = $"JavaScript calls unknown or unapproved host function '{callee.Name}'.";
-                    Issues.Add(CanBeMatched(callee.Name)
+                    Report(CanBeMatched(callee.Name)
                         ? Elsa3ExpressionRewriteIssue.HostFunctionMissing(callee.Name, message, UndeclaredFunctionGuidance(callee.Name))
                         : new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, message, UnmatchableFunctionGuidance));
+                    return;
+                }
+            }
+
+            if (node is Identifier used && !IsDeclared(used.Name) && !IsWriteTarget(used) && !IsTypeOfOperand(used))
+            {
+                // Annex B: Elsa 3 ran a block's function declaration as a function-wide variable too, Elsa 4 does not.
+                if (_blockFunctions.Contains(used.Name))
+                {
+                    if (_reportedBlockFunctions.Add(used.Name))
+                        Issues.Add(BlockFunctionUse(used.Name));
+                    return;
+                }
+
+                // Elsa 3 exposed the CLR namespaces and importNamespace when CLR access was on: .NET usage, no component.
+                if (ClrNamespaceRoots.Contains(used.Name))
+                {
+                    if (!_reportedClrNamespace)
+                    {
+                        _reportedClrNamespace = true;
+                        Issues.Add(ClrNamespaceUsage());
+                    }
                     return;
                 }
             }
@@ -2302,13 +2432,14 @@ public sealed class Elsa3ExpressionRewriter(
             return names;
         }
 
+        /// <summary>Whether the identifier being visited is the operand of typeof, which reads no binding of an undeclared name.</summary>
+        private bool IsTypeOfOperand(Identifier identifier) =>
+            _syntaxParents.Count >= 2 && _syntaxParents[^2] is UnaryExpression { Operator: Operator.TypeOf } unary && ReferenceEquals(unary.Argument, identifier);
+
         /// <summary>
         /// Whether the identifier being visited is a name an assignment, update or for-in/of loop writes, directly or
         /// through a destructuring target (<c>[x] = …</c>, <c>({ a: x } = …)</c>); <see cref="WrittenNames"/> reports those.
         /// </summary>
-        private bool IsTypeOfOperand(Identifier identifier) =>
-            _syntaxParents.Count >= 2 && _syntaxParents[^2] is UnaryExpression { Operator: Operator.TypeOf } unary && ReferenceEquals(unary.Argument, identifier);
-
         private bool IsWriteTarget(Identifier identifier)
         {
             Node child = identifier;
@@ -2346,7 +2477,7 @@ public sealed class Elsa3ExpressionRewriter(
             var resolution = resolve(new Elsa3AmbientReference(kind, name));
             if (!resolution.Succeeded)
             {
-                Issues.Add(resolution.Issue!);
+                Report(resolution.Issue!);
                 return;
             }
 

@@ -932,7 +932,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
                 Warn(context, HttpResponseJsonVariant, propertyName);
                 return value;
             }
-            return Outside($"is declared as '{alias}', but content type '{mediaType}' is not JSON; Elsa 3 sent the value's type name as text",
+            // The content type is input text, so the refusal names the cause without it (spec 1237 FR-019).
+            return Outside($"is declared as '{alias}', but its literal ContentType is not a JSON media type; Elsa 3 sent the value's type name as text",
                 "Return a string, or set ContentType to application/json.");
         }
         return Outside($"is declared as '{alias}', and its content type is computed by an expression; Elsa 3 sent JSON only when the run-time content type was exactly a JSON type",

@@ -91,7 +91,10 @@ internal sealed class Elsa3ActivityResolver(
             Elsa3ActivityDiagnosticCodes.UnmappedType,
             $"Elsa 3 activity type '{type}' is not mapped to an Elsa 4 activity, not claimed by a replaced-type alias and not an Elsa 4 catalog key.",
             "Rebuild the activity for Elsa 4 and mark it [ReplacesActivityType(\"" + type + "\")], or remove the node before converting.",
-            new Dictionary<string, string>(StringComparer.Ordinal) { [Elsa3MigrationDiagnosticMetadataKeys.ComponentName] = type ?? string.Empty });
+            // A node without a type names no component to build, so the metadata carries no ComponentName then.
+            string.IsNullOrWhiteSpace(type)
+                ? null
+                : new Dictionary<string, string>(StringComparer.Ordinal) { [Elsa3MigrationDiagnosticMetadataKeys.ComponentName] = type });
     }
 
     private async ValueTask<Elsa3Resolution> ResolveEntryAsync(Elsa3ActivityMapEntry entry, CancellationToken cancellationToken)

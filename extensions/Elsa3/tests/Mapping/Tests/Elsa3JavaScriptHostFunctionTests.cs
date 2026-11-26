@@ -400,6 +400,114 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.Equal("foo", diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
     }
 
+    /// <summary>A name the script writes itself is an implicit global it creates, not a missing host function, for calls too, wherever the write is.</summary>
+    [Theory]
+    [InlineData("(() => { helper = function () { return 1; }; return helper(); })()")]
+    [InlineData("(() => { const r = helper(); helper = function () { return 1; }; return r; })()")]
+    [InlineData("(() => { getConfig = () => 1; return getConfig(); })()")]
+    public async Task A_called_name_the_script_writes_itself_is_no_missing_host_function(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape &&
+                                                          diagnostic.Message.Contains("never declares", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+    }
+
+    /// <summary>Under a with statement no name is known to be a custom global, and the with statement itself is the refusal.</summary>
+    [Theory]
+    [InlineData("(() => { with ({ fmt: (v) => v }) { return fmt(1); } })()")]
+    [InlineData("(() => { with ({ fmt: 1 }) { return fmt; } })()")]
+    [InlineData("(() => { with ({ a: 1 }) { return lookupCustomer(a) + DateTime.Now; } })()")]
+    public async Task A_with_statement_is_refused_and_reports_no_missing_host_function(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape &&
+                                                          diagnostic.Message.Contains("with statement", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+    }
+
+    /// <summary>Elsa 3's CLR namespaces and importNamespace are .NET usage, never a component to build.</summary>
+    [Theory]
+    [InlineData("System.Environment.MachineName")]
+    [InlineData("new System.Text.StringBuilder().ToString()")]
+    [InlineData("Microsoft.VisualBasic.Strings.Left('abc', 1)")]
+    [InlineData("(() => { const io = importNamespace('System.IO'); return io.Path.GetTempPath(); })()")]
+    [InlineData("(() => { const sys = System; return sys.Environment.MachineName; })()")]
+    public async Task A_dotnet_namespace_is_dotnet_usage_not_a_missing_host_function(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
+        Assert.DoesNotContain(expression, refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Environment", refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+    }
+
+    [Fact]
+    public async Task A_script_declaring_its_own_System_is_no_dotnet_usage()
+    {
+        var result = await ConvertTextAsync("(() => { const System = { name: 'local' }; return System.name; })()");
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    /// <summary>A refusal on another ground still lists the custom globals the script reads, so the report names every component.</summary>
+    [Theory]
+    [InlineData("(() => { const f = lookupCustomer; var complete = 1; return f; })()", Elsa3ImportDiagnosticCodes.ForbiddenCapability)]
+    [InlineData("(() => { const n = 010; return lookupCustomer; })()", Elsa3ImportDiagnosticCodes.UnsupportedShape)]
+    [InlineData("const f = lookupCustomer; if (f) { 1 }", Elsa3ImportDiagnosticCodes.DynamicAccessor)]
+    [InlineData("(() => { const n = 010; return lookupCustomer(n); })()", Elsa3ImportDiagnosticCodes.UnsupportedShape)]
+    public async Task A_read_custom_global_is_reported_next_to_any_other_refusal(string expression, string otherCode)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == otherCode);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("lookupCustomer", missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+    }
+
+    /// <summary>
+    /// Annex B: Elsa 3's sloppy mode made a block's function declaration visible in the whole function; Elsa 4's strict mode
+    /// scopes it to the block. A use outside the block is refused with the move, never as a component.
+    /// </summary>
+    [Theory]
+    [InlineData("if (true) { function helper() { return 1; } } return helper();")]
+    [InlineData("if (true) { function helper() { return 1; } } return [1].map(helper);")]
+    [InlineData("(function () { { function helper() { return 1; } } return helper(); })()")]
+    public async Task A_block_function_used_outside_its_block_is_refused_with_the_move(string script)
+    {
+        var expression = script.StartsWith("(function", StringComparison.Ordinal) ? script : $"(() => {{ {script} }})()";
+
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape);
+        Assert.Contains("'helper'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("top of the script", refusal.Guidance, StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+    }
+
+    /// <summary>Declared locals, parameters, catch parameters and functions, including a block function used inside its block, are no custom globals.</summary>
+    [Theory]
+    [InlineData("(() => { const helper = () => 1; return helper() + helper; })()")]
+    [InlineData("((helper) => helper() + 1)(() => 1)")]
+    [InlineData("(() => { try { throw () => 1; } catch (helper) { return helper(); } })()")]
+    [InlineData("(() => { function helper() { return 1; } return [1].map(helper).length + helper(); })()")]
+    [InlineData("(() => { if (true) { function helper() { return 1; } return helper(); } return 0; })()")]
+    [InlineData("(() => { var helper; helper = function () { return 1; }; return helper(); })()")]
+    public async Task Declared_names_are_no_missing_host_functions(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
     // ---- #5664: an Elsa 3 custom function rebuilt as a prefixed Elsa 4 host function ----
 
     private static readonly JavaScriptHostFunctionDeclaration LookupCustomer =

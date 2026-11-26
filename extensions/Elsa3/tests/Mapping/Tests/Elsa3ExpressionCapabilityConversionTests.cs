@@ -466,9 +466,11 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
         Assert.False(result.Succeeded);
         var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
         Assert.Equal(Elsa3ImportDiagnosticCodes.DotNetMemberUsage, refusal.Code);
-        // Spec 1237 FR-019: the refusal names the cause and its position, never the script text.
+        // Spec 1237 FR-019: the refusal names the cause, never the script text, and no position of the converted script,
+        // which differs from the Elsa 3 one.
         Assert.DoesNotContain(quoted, refusal.Message, StringComparison.Ordinal);
-        Assert.Contains("line ", refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("line ", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("in the script", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("JSON", refusal.Message, StringComparison.Ordinal);
     }
 
