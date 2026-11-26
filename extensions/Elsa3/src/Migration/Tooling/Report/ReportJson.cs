@@ -14,7 +14,7 @@ internal static class ReportJson
         ArgumentNullException.ThrowIfNull(report);
 
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true, Encoder = JsonBaseline.Options.Encoder }))
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true, NewLine = "\n", Encoder = JsonBaseline.Options.Encoder }))
             JsonSerializer.Serialize(writer, report, JsonBaseline.Options);
 
         buffer.WriteByte((byte)'\n');

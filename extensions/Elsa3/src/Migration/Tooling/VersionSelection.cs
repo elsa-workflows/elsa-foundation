@@ -91,9 +91,11 @@ internal static class VersionSelection
             Elsa3MigrationToolingCodes.NoPublishedVersion, null);
 
     /// <summary>
-    /// The versions a definition's reusable references pin, read as the collection analyzer reads them: an exact
-    /// <c>workflowDefinitionVersionId</c>, or a definition id (from <c>workflowDefinitionId</c> or the activity type) with
-    /// the activity's version. A reference that pins nothing resolves to the selected version, which is already in.
+    /// The versions a definition's reusable references pin, read and resolved as the collection analyzer does: only
+    /// reusable (<c>UsableAsActivity</c>) targets; an exact <c>workflowDefinitionVersionId</c>, which must agree with a
+    /// <c>workflowDefinitionId</c> when both are given; otherwise a definition id (from <c>workflowDefinitionId</c> or the
+    /// activity type) with the activity's version. A reference the analyzer would refuse pins nothing, so the refusal
+    /// stays the import's. A reference without a version resolves to the selected version, which is already in.
     /// </summary>
     private static IEnumerable<ExportItem> PinnedTargets(
         Elsa3WorkflowDefinition definition,
@@ -106,24 +108,28 @@ internal static class VersionSelection
                 continue;
 
             var versionId = ReadString(activity.AdditionalProperties, "workflowDefinitionVersionId");
+            var definitionId = ReadString(activity.AdditionalProperties, "workflowDefinitionId");
             if (!string.IsNullOrWhiteSpace(versionId))
             {
-                if (byVersionId.TryGetValue(versionId, out var exact))
+                if (byVersionId.TryGetValue(versionId, out var exact) && IsReusable(exact)
+                    && (string.IsNullOrWhiteSpace(definitionId) || StringComparer.Ordinal.Equals(definitionId, exact.Definition.DefinitionId)))
                     yield return exact;
                 continue;
             }
 
-            var definitionId = ReadString(activity.AdditionalProperties, "workflowDefinitionId");
-            if (string.IsNullOrWhiteSpace(definitionId) && byDefinition.ContainsKey(activity.Type))
+            if (string.IsNullOrWhiteSpace(definitionId) && byDefinition.TryGetValue(activity.Type, out var typed) && typed.Any(IsReusable))
                 definitionId = activity.Type;
 
             if (string.IsNullOrWhiteSpace(definitionId) || activity.Version is not { } version || !byDefinition.TryGetValue(definitionId, out var versions))
                 continue;
 
-            foreach (var match in versions.Where(item => item.Definition.Version == version))
-                yield return match;
+            var matches = versions.Where(item => IsReusable(item) && item.Definition.Version == version).ToArray();
+            if (matches.Length == 1)
+                yield return matches[0];
         }
     }
+
+    private static bool IsReusable(ExportItem item) => item.Definition.Options?.UsableAsActivity == true;
 
     private static IEnumerable<Elsa3Activity> EnumerateActivities(Elsa3Activity? root)
     {

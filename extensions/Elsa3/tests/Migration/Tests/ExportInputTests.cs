@@ -76,12 +76,15 @@ public sealed class ExportInputTests : IDisposable
         Assert.StartsWith("elsa3-migration: refused: input-empty: ", refusal!.ToLine(), StringComparison.Ordinal);
     }
 
-    internal static string Definition(string definitionId, int version, bool published = true, string? versionId = null, string rootActivities = "") =>
-        $$$"""
+    internal static string Definition(string definitionId, int version, bool published = true, string? versionId = null, string rootActivities = "", bool reusable = false)
+    {
+        var options = reusable ? "{\"usableAsActivity\":true}" : "{}";
+        return $$$"""
           {"id":"{{{versionId ?? definitionId + "-v" + version}}}","definitionId":"{{{definitionId}}}","name":"{{{definitionId}}}","version":{{{version}}},
-           "isPublished":{{{(published ? "true" : "false")}}},"isLatest":true,"options":{},
+           "isPublished":{{{(published ? "true" : "false")}}},"isLatest":true,"options":{{{options}}},
            "root":{"id":"root","nodeId":"root","type":"Elsa.Flowchart","activities":[{{{rootActivities}}}]}}
           """;
+    }
 
     private void Write(string relative, string content)
     {
@@ -129,7 +132,7 @@ public sealed class VersionSelectionTests
             ("app", 1, true, """{"id":"r","nodeId":"r","type":"lib","version":1}"""));
         // lib v1 pins inner v1 by its version id.
         items = items.Select(item => item.Definition.Id == "lib-v1"
-            ? Parse(item.File, ExportInputTests.Definition("lib", 1, rootActivities: """{"id":"q","nodeId":"q","type":"Elsa.Whatever","version":1,"workflowDefinitionVersionId":"inner-v1"}"""))
+            ? Parse(item.File, ExportInputTests.Definition("lib", 1, reusable: true, rootActivities: """{"id":"q","nodeId":"q","type":"Elsa.Whatever","version":1,"workflowDefinitionVersionId":"inner-v1"}"""))
             : item).ToArray();
 
         var result = VersionSelection.Select(items, allVersions: false);
@@ -173,9 +176,25 @@ public sealed class VersionSelectionTests
         Assert.Empty(result.NotConverted);
     }
 
+    [Fact]
+    public void References_the_analyzer_would_refuse_pin_nothing()
+    {
+        var items = Items(("plain", 1, true, null), ("plain", 2, true, null), ("lib", 1, true, null), ("lib", 2, true, null),
+            ("app", 1, true, """
+                {"id":"a","nodeId":"a","type":"plain","version":1},
+                {"id":"b","nodeId":"b","type":"Elsa.Whatever","version":1,"workflowDefinitionId":"other","workflowDefinitionVersionId":"lib-v1"}
+                """));
+
+        var result = VersionSelection.Select(items, allVersions: false);
+
+        Assert.Equal(["app-v1", "lib-v2", "plain-v2"], result.Selected.Select(item => item.Definition.Id).Order(StringComparer.Ordinal));
+    }
+
+    private static readonly HashSet<string> Reusable = new(StringComparer.Ordinal) { "lib", "inner" };
+
     private static ExportItem[] Items(params (string Id, int Version, bool Published, string? Activities)[] definitions) =>
         definitions.Select((definition, index) => Parse($"f{index}.json",
-            ExportInputTests.Definition(definition.Id, definition.Version, definition.Published, rootActivities: definition.Activities ?? ""))).ToArray();
+            ExportInputTests.Definition(definition.Id, definition.Version, definition.Published, rootActivities: definition.Activities ?? "", reusable: Reusable.Contains(definition.Id)))).ToArray();
 
     private static ExportItem Parse(string file, string json) =>
         new(file, ExportInputReader.Parse(Encoding.UTF8.GetBytes(json), out _)!.Single());

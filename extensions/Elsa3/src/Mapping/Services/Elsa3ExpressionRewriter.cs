@@ -249,7 +249,7 @@ public sealed class Elsa3ExpressionRewriter(
                 ReusableVariableWriteGuidance));
         analyzer.Visit(script);
         if (analyzer.Issues.Count > 0)
-            return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues.Concat(analyzer.MissingGlobals));
+            return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues.Concat(analyzer.ReportableMissingGlobals));
 
         // Elsa 4 reserves 'complete' in every JavaScript surface, setter or not: a script or expression that declares it
         // would import and then fail draft validation (Scripts/ReservedName, JavaScript/ReservedName), so the import
@@ -996,6 +996,23 @@ public sealed class Elsa3ExpressionRewriter(
         /// </summary>
         public List<Elsa3ExpressionRewriteIssue> MissingGlobals { get; } = [];
 
+        /// <summary>Undeclared names the script writes: sloppy-mode implicit globals it creates itself, not custom globals.</summary>
+        private readonly HashSet<string> _undeclaredWrites = new(StringComparer.Ordinal);
+
+        /// <summary>Whether the script has a with statement, whose names resolve against an object, not the globals.</summary>
+        private bool _usesWith;
+
+        /// <summary>
+        /// <see cref="MissingGlobals"/> without the names the script writes itself and, under a with statement, without any:
+        /// next to the script's other refusals, where the strict-mode check that would refuse a with statement or an
+        /// implicit global does not run, those names are no custom globals (spec 1237 FR-016a).
+        /// </summary>
+        public IEnumerable<Elsa3ExpressionRewriteIssue> ReportableMissingGlobals => _usesWith
+            ? []
+            : MissingGlobals.Where(issue => issue.Metadata is null
+                || !issue.Metadata.TryGetValue(Elsa3MigrationDiagnosticMetadataKeys.ComponentName, out var name)
+                || !_undeclaredWrites.Contains(name));
+
         /// <summary>The local functions the rewritten source calls, one per line, or empty.</summary>
         public string Prelude =>
             string.Concat(_helpers.Select(helper => InlineHelpers[helper].Declaration + "\n")) +
@@ -1434,8 +1451,13 @@ public sealed class Elsa3ExpressionRewriter(
 
             // Elsa 3's sloppy mode turned a write to an undeclared name into a global; Elsa 4's strict mode throws
             // (spec 262 R-4). The parse cannot see it, so the scopes decide.
+            if (node is WithStatement)
+                _usesWith = true;
             foreach (var written in WrittenNames(node).Where(name => !IsDeclared(name)))
+            {
+                _undeclaredWrites.Add(written);
                 Issues.Add(UndeclaredWrite(written));
+            }
             CheckThisAndArguments(node);
 
             // A function the script declares itself is a local call, not an Elsa 3 host function.
@@ -1868,7 +1890,8 @@ public sealed class Elsa3ExpressionRewriter(
             // Any other undeclared global read as a value (passed as a callback, aliased, read) is an Elsa 3 custom global
             // a host function could provide (spec 1237 FR-016a). Without one it names nothing in Elsa 4. A write to the name
             // is reported as an undeclared write instead.
-            if (node is Identifier customGlobal && !IsDeclared(customGlobal.Name) && !IsWriteTarget(customGlobal) &&
+            // A typeof operand is feature detection: Elsa 3 and Elsa 4 both evaluate it without a ReferenceError.
+            if (node is Identifier customGlobal && !IsDeclared(customGlobal.Name) && !IsWriteTarget(customGlobal) && !IsTypeOfOperand(customGlobal) &&
                 !TryGetAmbientKind(customGlobal.Name, out _) && !customGlobal.Name.Equals("args", StringComparison.Ordinal) &&
                 !customGlobal.Name.Equals(Elsa4CompleteName, StringComparison.Ordinal) && CanBeMatched(customGlobal.Name))
             {
@@ -2197,6 +2220,9 @@ public sealed class Elsa3ExpressionRewriter(
         /// Whether the identifier being visited is a name an assignment, update or for-in/of loop writes, directly or
         /// through a destructuring target (<c>[x] = …</c>, <c>({ a: x } = …)</c>); <see cref="WrittenNames"/> reports those.
         /// </summary>
+        private bool IsTypeOfOperand(Identifier identifier) =>
+            _syntaxParents.Count >= 2 && _syntaxParents[^2] is UnaryExpression { Operator: Operator.TypeOf } unary && ReferenceEquals(unary.Argument, identifier);
+
         private bool IsWriteTarget(Identifier identifier)
         {
             Node child = identifier;

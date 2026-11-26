@@ -369,6 +369,37 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.DoesNotContain("deterministic", diagnostic.Guidance, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("(() => { x = 1; return x; })()")]
+    [InlineData("(() => { for (x of [1]) {} return x; })()")]
+    [InlineData("(() => { with ({ a: 1 }) { return a + DateTime.Now; } })()")]
+    public async Task Names_the_script_creates_or_scopes_itself_are_no_missing_host_functions(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+    }
+
+    [Theory]
+    [InlineData("typeof foo === 'undefined' ? 1 : 2")]
+    [InlineData("typeof foo")]
+    public async Task A_typeof_operand_is_feature_detection_not_a_read(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Fact]
+    public async Task A_typeof_guarded_read_still_reports_the_read()
+    {
+        var result = await ConvertTextAsync("typeof foo === 'undefined' ? 1 : foo");
+
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("foo", diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+    }
+
     // ---- #5664: an Elsa 3 custom function rebuilt as a prefixed Elsa 4 host function ----
 
     private static readonly JavaScriptHostFunctionDeclaration LookupCustomer =

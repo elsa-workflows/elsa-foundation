@@ -68,17 +68,14 @@ public static class PayloadCatalogFile
         ArgumentNullException.ThrowIfNull(models);
         ArgumentNullException.ThrowIfNull(serializer);
 
-        // The serializer's own options, indented. Re-formatting its compact output instead would also re-indent
-        // embedded opaque JSON (a raw JsonElement such as an activity descriptor), which the serializer
-        // writes verbatim; opaque JSON must stay verbatim so read(write(x)) serializes exactly as x does.
-        var options = new JsonSerializerOptions(serializer.GetOptions())
-        {
-            WriteIndented = true,
-            NewLine = "\n",
-        };
-
+        // The serializer's own options, written through an indented writer: the options stay what the serializer
+        // carries (no WriteIndented deviation from the baseline, ADR 0091), and embedded opaque JSON (a raw
+        // JsonElement such as an activity descriptor) still goes through the serializer's raw converter verbatim,
+        // so read(write(x)) serializes exactly as x does.
+        var options = serializer.GetOptions();
         var buffer = new ArrayBufferWriter<byte>();
-        buffer.Write(JsonSerializer.SerializeToUtf8Bytes(models.ToArray(), typeof(TModel[]), options));
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true, NewLine = "\n", Encoder = options.Encoder }))
+            JsonSerializer.Serialize(writer, models.ToArray(), typeof(TModel[]), options);
         buffer.Write("\n"u8);
 
         var directory = Path.GetDirectoryName(Path.GetFullPath(path));

@@ -47,6 +47,7 @@ public sealed class ReportRenderingTests
         var second = ReportJson.Serialize(SampleReports().Last());
 
         Assert.Equal(first, second);
+        Assert.DoesNotContain((byte)13, first);
     }
 
     [Fact]
