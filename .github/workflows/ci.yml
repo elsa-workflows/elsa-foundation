@@ -2086,6 +2086,8 @@ jobs:
           $NAT sqlite-root-timed-jobs in-batch
           $NAT sqlite-root-held-replies checked
           $NAT sqlite-root-held-replies in-batch
+          $NAT sqlite-root-terminate checked
+          $NAT sqlite-root-terminate in-batch
 
       - name: Graph engine corpus
         run: dotnet test ../../server/essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build

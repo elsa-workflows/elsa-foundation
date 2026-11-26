@@ -15,8 +15,14 @@ public static partial class SqliteEmbeddedHosting
         CancellationToken cancellationToken = default) =>
         OpenFoundationCoreAsync(databasePath, actorType, requests, requests.DeduplicationWindow, cancellationToken);
 
+    internal static Task<Contract.IIngress> OpenFoundationWithOperatorsAsync(string databasePath, string actorType,
+        Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorizeOperator, SqliteDirectRequests? requests = null,
+        CancellationToken cancellationToken = default) =>
+        OpenFoundationCoreAsync(databasePath, actorType, requests, requests?.DeduplicationWindow, cancellationToken, authorizeOperator);
+
     private static async Task<Contract.IIngress> OpenFoundationCoreAsync(string databasePath, string actorType, SqliteDirectRequests? requests,
-        TimeSpan? deduplicationWindow, CancellationToken cancellationToken)
+        TimeSpan? deduplicationWindow, CancellationToken cancellationToken,
+        Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         RequireFoundationActorType(actorType);
@@ -28,7 +34,7 @@ public static partial class SqliteEmbeddedHosting
         requests?.RequireBinding(file.Path, actorType);
         var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
         await admission.VerifyAsync(cancellationToken);
-        return new Ingress(file.Path, actorType, window, requests);
+        return new Ingress(file.Path, actorType, window, requests, authorizeOperator);
     }
 
     private static void RequireFoundationActorType(string actorType)
@@ -38,7 +44,8 @@ public static partial class SqliteEmbeddedHosting
             throw new ArgumentException("Invalid SQLite root actor type.", nameof(actorType));
     }
 
-    private sealed class Ingress(string path, string actorType, TimeSpan window, SqliteDirectRequests? requests) : Contract.IIngress
+    private sealed class Ingress(string path, string actorType, TimeSpan window, SqliteDirectRequests? requests,
+        Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator) : Contract.IIngress
     {
         public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
             string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
@@ -48,7 +55,23 @@ public static partial class SqliteEmbeddedHosting
             ArgumentNullException.ThrowIfNull(id);
             ArgumentNullException.ThrowIfNull(kind);
             cancellationToken.ThrowIfCancellationRequested();
-            if (Contract.Kinds.IsCommand(kind)) return new(Contract.AdmissionOutcome.Refused);
+            if (Contract.Kinds.IsCommand(kind))
+            {
+                if (kind != Contract.Kinds.Terminate || target is not Contract.Target.Ref exact ||
+                    !FoundationRootCreator.IsGeneratedReference(exact.Actor.Id) || authorizeOperator?.Invoke(scope, exact.Actor, kind) != true ||
+                    payload is not { Length: > 0 and <= 2_048 })
+                    return new(Contract.AdmissionOutcome.Refused);
+                var command = RootAdmissionWire.ReadOperatorCommand(payload);
+                if (command is not { Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null, ThenDelete: false })
+                    return new(Contract.AdmissionOutcome.Refused);
+                if (command.ExpectedTarget is { } expected && expected != exact.Actor)
+                    return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
+                if (command.Selection is not { Length: > 0 } selection)
+                    return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
+                using var write = AcquireFile(path);
+                var operators = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(write.Options), window, write.AdmissionDefinitions);
+                return await operators.TerminateAsync(scope.Tenant, exact.Actor, id, selection, options?.DueAt, options?.KeepFor, cancellationToken);
+            }
 
             using var file = AcquireFile(path);
             var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);

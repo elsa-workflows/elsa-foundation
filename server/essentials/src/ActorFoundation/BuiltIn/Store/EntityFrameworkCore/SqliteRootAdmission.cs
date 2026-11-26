@@ -5,7 +5,7 @@ using static Kernel.EntityFramework.RootAdmissionWire;
 
 namespace Kernel.EntityFramework;
 
-internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow, SqliteAdmissionDefinitions definitions)
+internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow, SqliteAdmissionDefinitions definitions)
 {
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record Target(string Actor, int Partition, bool HasCheckpoint, int? Status, bool Terminal, bool Pending);

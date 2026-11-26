@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
 
@@ -32,6 +33,8 @@ public sealed partial class EfStore
         internal bool KeepsParkArrivals { get; set; }
         internal bool RecoversPark { get; set; }
         internal bool RefusesParkedOperators { get; set; }
+        internal bool SettlesEndedMailbox { get; init; }
+        internal Func<Contract.ActorHeader, bool>? AuthoredWithholds { get; init; }
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
         private readonly Dictionary<string, WorkerRoot> _actors = roots.ToDictionary(r => r.Actor, StringComparer.Ordinal);
         private readonly Dictionary<string, WorkerRoot> _references = roots.ToDictionary(r => r.Reference, StringComparer.Ordinal);
@@ -64,6 +67,7 @@ public sealed partial class EfStore
         public bool KeepsParkArrivals => roots.KeepsParkArrivals;
         public bool RecoversPark => roots.RecoversPark;
         public bool RefusesParkedOperators => roots.RefusesParkedOperators;
+        public bool SettlesEndedMailbox => roots.SettlesEndedMailbox;
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
             throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
@@ -394,8 +398,10 @@ public sealed partial class EfStore
 
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
-        if (!postgres && (turn.OpensPark || turn.FoundationKept is not null || turn.FoundationRootOperator is not null || turn.Delete))
-            throw new NotSupportedException("The staged SQLite root worker supports ordinary checkpoints.");
+        if (!postgres && (turn.OpensPark || turn.FoundationKept is not null ||
+            turn.FoundationRootOperator is { } sqliteCommand && (sqliteCommand.Kind != Kinds.Terminate ||
+                sqliteCommand.Operator is not { RootHeldReply: false, RootThenDelete: false, RootParkMark: null }) || turn.Delete))
+            throw new NotSupportedException("This SQLite root writer supports ordinary checkpoints, timed jobs and Terminate.");
         if (turn.FoundationRootOperator is { Kind: Kinds.Recover }) return await PrepareRootParkRecoverAsync(root, turn, cancellationToken);
         // A delete, or a retired marker, of an ended Faulted root goes on to retirement below.
         if (turn is { FoundationRootOperator: not null, Row: { Status: InstanceStatus.Faulted or InstanceStatus.Cancelled, Retired: false },
@@ -540,7 +546,9 @@ public sealed partial class EfStore
                     row.StateVersion != current.StateVersion || turn.Journal is null) throw RootShape();
                 return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
                     row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, operatorTermination: true,
-                    jobState: settledJobs is null ? null : new(null, current.NextJobGeneration), settledJobs: settledJobs);
+                    jobState: settledJobs is null ? null : new(null, current.NextJobGeneration), settledJobs: settledJobs,
+                    withheldInputs: !postgres && _ordinaryRoots?.AuthoredWithholds?.Invoke(new(new(root.Reference), current.Model, root.Tenant,
+                        Contract.ActorStatus.Running, current.Fault, null, null, current.TypeData, current.Labels)) == true);
             }
             if (!db.UsesRootOperatorProtocol || row.Status != InstanceStatus.Running ||
                 row.Suspended != (command.Kind == Kinds.Suspend) || row.StateVersion != current.StateVersion || state != current.State ||
