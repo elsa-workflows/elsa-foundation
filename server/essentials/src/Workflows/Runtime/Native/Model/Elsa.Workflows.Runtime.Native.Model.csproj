@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Kernel.Native</RootNamespace>
+    <AssemblyName>Kernel.Native</AssemblyName>
+    <PackageId>Elsa.Workflows.Runtime.Native.Model</PackageId>
+    <Description>The Native Elsa execution model for structured workflows and Flowchart.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <KernelContractOnly>true</KernelContractOnly>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
+    <ProjectReference Include="../../../../ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
+    <ProjectReference Include="../../Graph/Elsa.Workflows.Runtime.Graph.csproj" />
+    <ProjectReference Include="../Activities/Elsa.Workflows.Runtime.Native.Activities.csproj" />
+  </ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Kernel.Native.Scopes.Run" /><InternalsVisibleTo Include="Kernel.Native.Recovery.Run" /><InternalsVisibleTo Include="Kernel.Statecharts.Native" /><InternalsVisibleTo Include="Kernel.Statecharts.Run" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Kernel.Native.Legacy" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Elsa.Workflows.Runtime.Native.Migration.Run" /></ItemGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+  <Import Project="../../../../../../../tools/architecture/check-kernel-model-references.targets" />
+</Project>

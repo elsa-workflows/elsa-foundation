@@ -8,11 +8,11 @@
 
 | File | What it is |
 |---|---|
-| `apps/Elsa.Workbench.Host/Dockerfile` | The image: multi-stage, `net10.0`, non-root, port 8080 |
+| `server/apps/Elsa.Workbench.Host/Dockerfile` | The image: multi-stage, `net10.0`, non-root, port 8080 |
 | `docker/compose/docker-compose.yml` | The reference stack |
 | `docker/compose/elsa-workbench.shells.json` | The curated demo composition the stack mounts |
 
-The repo default `apps/Elsa.Workbench.Host/shells.json` (SQLite) is intentionally left untouched; the compose stack mounts its own `shells.json` instead.
+The repo default `server/apps/Elsa.Workbench.Host/shells.json` (SQLite) is intentionally left untouched; the compose stack mounts its own `shells.json` instead.
 
 ## Run the reference stack
 
@@ -51,7 +51,7 @@ docker compose --profile studio down -v
 
 ## Connecting Elsa Studio
 
-Studio is built from this repository's `Studio/` folder, with the repository root as build context. `docker compose --profile studio up --build` does that for you. To build it on its own, from `docker/compose/`:
+Studio is built from this repository's `studio/` folder, with the repository root as build context. `docker compose --profile studio up --build` does that for you. To build it on its own, from `docker/compose/`:
 
 ```bash
 docker build -f ../../Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local ../..
@@ -98,7 +98,7 @@ The build context **must be the repository root** — the project references spa
 tree and the build needs repo-root `Directory.Packages.props`, the `.slnx`, and a NuGet config.
 
 ```bash
-docker build -f apps/Elsa.Workbench.Host/Dockerfile -t elsa-workbench:local .
+docker build -f server/apps/Elsa.Workbench.Host/Dockerfile -t elsa-workbench:local .
 docker run --rm -p 13000:8080 \
   -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
   -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=Password123!' \
@@ -126,7 +126,7 @@ base64-encoded as `.github/workflows/docker.yml`'s `versions` job encodes the fi
 ```bash
 dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- \
   plan --ref refs/heads/main --commit HEAD --output /tmp/elsa-versions
-docker build -f apps/Elsa.Workbench.Host/Dockerfile -t elsa-workbench:local \
+docker build -f server/apps/Elsa.Workbench.Host/Dockerfile -t elsa-workbench:local \
   --build-arg ELSA_PACKAGE_VERSIONS="$(gzip -9n < /tmp/elsa-versions/package-versions.props | base64 | tr -d '\n')" .
 ```
 

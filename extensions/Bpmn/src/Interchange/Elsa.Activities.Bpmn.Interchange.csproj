@@ -15,14 +15,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Design\Elsa.Activities.Bpmn.Design.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Api\Capabilities\Core\Elsa.Api.Capabilities.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Api\Capabilities\Core\Elsa.Api.Capabilities.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

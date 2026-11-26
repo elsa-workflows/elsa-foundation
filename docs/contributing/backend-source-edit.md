@@ -2,7 +2,7 @@
 
 This short exercise changes a disposable checkout, proves the change with a focused test, then observes it in a running workflow. It is a learning exercise, not a product feature or a real contribution PR. Start with the [backend source quickstart](backend-source-quickstart.md) and use a fresh disposable checkout to contain its SQLite data and temporary edits.
 
-From the repository root, open `Essentials/tests/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs`. In `WriteLine_hydrates_plain_text_without_an_argument_or_memory_wrapper`, change only the captured-output assertion to:
+From the repository root, open `server/essentials/tests/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs`. In `WriteLine_hydrates_plain_text_without_an_argument_or_memory_wrapper`, change only the captured-output assertion to:
 
 ```csharp
 Assert.Equal("Onboarding: Hello World!", output.Trim());
@@ -11,10 +11,10 @@ Assert.Equal("Onboarding: Hello World!", output.Trim());
 Keep the following `writeLine.Text` assertion at `Hello World!`; this exercise changes output formatting, not the activity input. Run the focused test in locked mode:
 
 ```bash
-dotnet test Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --filter FullyQualifiedName~WriteLineBoundInputExecutionTests -p:RestoreLockedMode=true
+dotnet test server/essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --filter FullyQualifiedName~WriteLineBoundInputExecutionTests -p:RestoreLockedMode=true
 ```
 
-It should fail because the activity still writes `Hello World!`. Now, in `Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Activities/WriteLine.cs`, change:
+It should fail because the activity still writes `Hello World!`. Now, in `server/essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Activities/WriteLine.cs`, change:
 
 ```csharp
 Console.WriteLine(Text);
@@ -29,13 +29,13 @@ Console.WriteLine($"Onboarding: {Text}");
 Run the same locked-mode focused test again. It should pass. Build the default Workbench:
 
 ```bash
-dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
+dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
 ```
 
 Start the HTTP profile in one terminal and wait for readiness as shown in the quickstart:
 
 ```bash
-dotnet run --no-build --project apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --launch-profile http
+dotnet run --no-build --project server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --launch-profile http
 ```
 
 In a second terminal, check readiness and submit a one-child Sequence workflow. The script verifies the actual run result: one completed Sequence root, one completed WriteLine child, matching activity counts, and zero reported or returned incidents. The server terminal must separately show the exact line `Onboarding: Contributor exercise`.
@@ -59,7 +59,7 @@ The script's echoed input is not proof of activity output. Stop only the Workben
 Finally, undo just the two exercise edits. Inspect `git diff --` for those paths and confirm both are back to their original contents; do not discard unrelated work. Rerun the focused test without the temporary expectation and confirm it passes. The Workbench build output still contains the exercise edit until rebuilt, so restore the original host output before reusing this checkout:
 
 ```bash
-dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
+dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
 ```
 
 The hosted [backend source platform workflow](../../.github/workflows/ci.yml) replays the same exercise on Ubuntu 24.04 with PowerShell 7 and Windows Server 2025 with Windows PowerShell 5.1. It classifies the expected-red test from its TRX result and assertion text, restores both files byte-for-byte even on failure, reruns the original focused test, and rebuilds the original Workbench output. This is automated command replay; it does not claim an interactive human trial.

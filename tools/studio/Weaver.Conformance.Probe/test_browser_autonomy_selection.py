@@ -22,7 +22,7 @@ class BrowserAutonomySelectionTests(unittest.TestCase):
 import assert from "node:assert/strict";
 import {createServer} from "node:http";
 import {createRequire} from "node:module";
-const require=createRequire(new URL("../../../Studio/package.json",import.meta.url));
+const require=createRequire(new URL("../../../studio/package.json",import.meta.url));
 const {chromium,expect:baseExpect}=require("@playwright/test");
 const expect=baseExpect.configure({timeout:1500});
 const SCENARIO=SCENARIO_VALUE;

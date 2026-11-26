@@ -655,7 +655,7 @@ class CopyAssetOwnershipTests(unittest.TestCase):
 
 class CompositionTests(unittest.TestCase):
     def setUp(self):
-        self.shells = json.loads((acceptance.ROOT / 'apps/Elsa.Workbench.Host/shells.json').read_text(encoding='utf-8-sig'))
+        self.shells = json.loads((acceptance.ROOT / 'server/apps/Elsa.Workbench.Host/shells.json').read_text(encoding='utf-8-sig'))
         self.features = self.shells['CShells']['Shells']['default']['Features']
 
     def test_subset_lists_name_only_currently_configured_features(self):
@@ -790,21 +790,21 @@ class OrchestrationTests(unittest.TestCase):
             # These commands are mocked: keep their simulated fixture build entirely in an owned source copy.
             source = Path(temporary) / 'source'
             for relative in (
-                'apps/Elsa.Workbench.Host/appsettings.json',
-                'apps/Elsa.Workbench.Host/shells.json',
-                'Studio/src/apps/Elsa.Studio.Workbench.Host/appsettings.json',
-                'Studio/src/apps/Elsa.Studio.Workbench.Host/shells.json',
+                'server/apps/Elsa.Workbench.Host/appsettings.json',
+                'server/apps/Elsa.Workbench.Host/shells.json',
+                'studio/src/apps/Elsa.Studio.Workbench.Host/appsettings.json',
+                'studio/src/apps/Elsa.Studio.Workbench.Host/shells.json',
                 'e2e-tests/activity-data-selection/fixtures/fixture.targets',
                 'e2e-tests/activity-data-selection/fixtures/CustomerFixture.cs',
             ):
                 target = source / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes((acceptance.ROOT / relative).read_bytes())
-            workflow_module = source / 'Studio/src/essentials/Elsa.Studio.Workflows'
+            workflow_module = source / 'studio/src/essentials/Elsa.Studio.Workflows'
             for relative in acceptance.COPY_SOURCE_PATHS:
                 target = workflow_module / 'Client/src' / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes((acceptance.ROOT / 'Studio/src/essentials/Elsa.Studio.Workflows/Client/src' / relative).read_bytes())
+                target.write_bytes((acceptance.ROOT / 'studio/src/essentials/Elsa.Studio.Workflows/Client/src' / relative).read_bytes())
             assets = workflow_module / 'wwwroot/studio/modules/workflows'
             assets.mkdir(parents=True)
             (assets / 'copy-current.js').write_bytes(b'synthetic compiled copy module')
@@ -843,7 +843,7 @@ class OrchestrationTests(unittest.TestCase):
                     }))
                     return
                 if log.name == 'fixture-cleanup-build.log':
-                    dll = source / 'apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll'
+                    dll = source / 'server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll'
                     dll.parent.mkdir(parents=True, exist_ok=True)
                     dll.write_bytes(b'fixture-free default host')
                     return
@@ -953,8 +953,8 @@ class OrchestrationTests(unittest.TestCase):
 
             with patch.object(acceptance, 'prepare_host', prepare), patch.object(acceptance, 'host', failing_host):
                 with self.assertRaisesRegex(RuntimeError, 'Unsupported host readiness failed'), ExitStack() as stack:
-                    acceptance.playback_profiles(stack, data, acceptance.ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj',
-                        acceptance.ROOT / 'Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj', data, {}, processes, pids, profiles)
+                    acceptance.playback_profiles(stack, data, acceptance.ROOT / 'server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj',
+                        acceptance.ROOT / 'studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj', data, {}, processes, pids, profiles)
             expected = {f'playback-{name}-{kind}' for name in ('disabled', 'uncaptured') for kind in ('backend', 'studio')}
             self.assertEqual(expected, set(pids))
             self.assertEqual(expected, set(processes))
@@ -1110,7 +1110,7 @@ class SourcePairTests(unittest.TestCase):
                 root = Path(directory); output = root / 'evidence'
                 fixture = root / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
                 fixture.parent.mkdir(parents=True); fixture.write_text('test import'); fixture.with_name('CustomerFixture.cs').write_text('test fixture')
-                dll = root / 'apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll'
+                dll = root / 'server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll'
                 dll.parent.mkdir(parents=True)
                 def command(_args, log, **_kwargs):
                     if log.name == 'backend-build.log': raise RuntimeError('primary build failure')
@@ -1161,10 +1161,10 @@ class SourcePairTests(unittest.TestCase):
             with patch.object(acceptance, "source_state", side_effect=state), patch.object(acceptance, "command", side_effect=command):
                 with self.assertRaisesRegex(RuntimeError, "build selection"):
                     acceptance.run(output, 'existing home widgets and layout defaults', studio)
-            self.assertEqual(studio / "Studio", calls[1][1])
-            self.assertEqual(studio / "Studio", calls[2][1])
+            self.assertEqual(studio / "studio", calls[1][1])
+            self.assertEqual(studio / "studio", calls[2][1])
             self.assertIn("tests/browser/playwright.outlined-fields.config.ts", calls[2][0])
-            self.assertIn(str(studio / "Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj"), calls[3][0])
+            self.assertIn(str(studio / "studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj"), calls[3][0])
             report = json.loads((output / "report.json").read_text())
             self.assertEqual("backend-head", report["sourceSha"])
             self.assertEqual("frontend-head", report["studioSourceSha"])

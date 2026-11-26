@@ -5,7 +5,7 @@
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <ProjectReference Include="../Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 </Project>

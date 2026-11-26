@@ -19,19 +19,19 @@ WORKFLOW_PATH = ".github/workflows/ci.yml"
 STUDIO_FLAVORS: dict[str, dict[str, str]] = {
     "essentials": {
         "image": "elsaworkflows/elsa-studio",
-        "dockerfile": "Studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile",
+        "dockerfile": "studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile",
         "title": "Elsa Studio",
         "description": "Elsa 4 workflow studio (Studio Essentials) for elsaworkflows/elsa-essentials-host",
     },
     "workbench": {
         "image": "elsaworkflows/elsa-studio-workbench",
-        "dockerfile": "Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile",
+        "dockerfile": "studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile",
         "title": "Elsa Studio Workbench",
         "description": "Elsa 4 workflow studio with every module compiled in for elsaworkflows/elsa-workbench",
     },
     "foundation": {
         "image": "elsaworkflows/elsa-studio-foundation",
-        "dockerfile": "Studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile",
+        "dockerfile": "studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile",
         "title": "Elsa Studio Foundation",
         "description": "The bare Elsa 4 Studio shell; every module comes from the Nuplane feed",
     },

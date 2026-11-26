@@ -10,6 +10,6 @@
     <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
-    <ProjectReference Include="../../../../Studio/src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
+    <ProjectReference Include="../../../../studio/src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
   </ItemGroup>
 </Project>

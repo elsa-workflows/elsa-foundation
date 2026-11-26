@@ -3,7 +3,7 @@
 Status: proposed (2026-10-12, numbers revised 2026-10-13 after #2585). Low priority by owner decision on #2564.
 
 Program: Runtime Efficiency, epic [#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564). Evidence:
-the measurement report posted on #2564, produced by `Essentials/tests/Activities/Http/CommandCost/Tests`. Constrained by
+the measurement report posted on #2564, produced by `server/essentials/tests/Activities/Http/CommandCost/Tests`. Constrained by
 [ADR 0080 D2](0080-elsa-4-simplification-decisions.md#d2--persistence-modes-balanced-by-default) (persistence modes),
 [ADR 0032](0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md) (semantic boundaries),
 [ADR 0020](0020-runtime-checkpoint-commit-post-commit-work.md) (commit and post-commit work) and

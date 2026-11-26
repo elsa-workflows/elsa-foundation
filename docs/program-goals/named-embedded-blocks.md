@@ -12,7 +12,7 @@ Authors organize existing logic into named embedded blocks, safely extract suppo
 
 On 3 November the owner selected Block terminology, bounded extraction, BPMN extraction, safe promotion analysis and review → publish → replace, then instructed: “Update the plan to include that durable breakdown, then go ahead and deliver the program end to end as your stated goal.” This authorizes implementation, normal scoped PR/review/merge delivery and resulting-main qualification. Establishment is not product completion.
 
-Sequencing: run beside active programs, displace none, preserve consolidation's priority one, coordinate shared Studio/runtime paths and reactivate no parked backlog. Reuse native composition/value boundaries; no new execution-model program, release, deployment, private activity catalog or optional bpmn-js prerequisite.
+Sequencing: run beside active programs, displace none, preserve consolidation's priority one, coordinate shared studio/runtime paths and reactivate no parked backlog. Reuse native composition/value boundaries; no new execution-model program, release, deployment, private activity catalog or optional bpmn-js prerequisite.
 
 ## Milestones
 

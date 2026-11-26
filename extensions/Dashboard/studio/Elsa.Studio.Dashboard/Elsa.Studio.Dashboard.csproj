@@ -9,5 +9,5 @@
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
-  <ItemGroup><ProjectReference Include="..\..\..\..\Studio\src\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="..\..\..\..\studio\src\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" /></ItemGroup>
 </Project>

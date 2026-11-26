@@ -5,7 +5,7 @@
     <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
+    <ProjectReference Include="../../../../server/essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

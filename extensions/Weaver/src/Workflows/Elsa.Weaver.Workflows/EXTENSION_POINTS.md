@@ -22,7 +22,7 @@ This is the accepted M1 workflow subset. The [76ec independent package witness](
 The module reads two owning domains through their `.Core` contracts only, and registers no fallback for either:
 
 - **Activity catalog.** `workflow.catalog` schema `1` (origin `AuthoritativeRead`, no target, no tool scopes) is the
-  [`IActivityAuthoringCatalog`](../../../../../essentials/src/Activities/Design/Api/EXTENSION_POINTS.md#iactivityauthoringcatalog-contract--elsaactivitiesdesigncore)
+  [`IActivityAuthoringCatalog`](../../../../../server/essentials/src/Activities/Design/Api/EXTENSION_POINTS.md#iactivityauthoringcatalog-contract--elsaactivitiesdesigncore)
   answer for the request actor and tenant: every entry the designer lists, addable or not, with its `available` flag and
   reason, activity type and exact version identity, and declared inputs with `isRequired`, `isSensitive`,
   `isCredential`, `uiHint` and `isMasked` (what the designer masks: sensitive, a credential or hinted `password`; slice D,
@@ -141,7 +141,7 @@ revision and the client binding. No persisted revision is read in its place.
   module identity with `resourceModuleIds: ["Elsa.Studio.Workflows"]`. The designer-history Undo and the live saved
   state ("Persisted by your explicit save") are Studio Workflows' result control `workflows.weaver.batch-undo`
   (`api.weaver.resultControls`), which the host renders after the renderer. Preparation and the applier share one case
-  file, `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowBatchConformance.json`, run by
+  file, `studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowBatchConformance.json`, run by
   `WorkflowBatchConformanceTests` and `workflowBatchConformance.test.ts`.
 
 **SemVer: Minor.** A new tool contract, result kind and optional snapshot fields; nothing existing changes meaning.
@@ -212,7 +212,7 @@ says so.
   texts name only registered tools and kinds; the Weaver Workflows Vitest `registeredReferences.test.tsx` composes both
   Workflows Studio packages and checks every prompt, starter, renderer, result control and client tool contract against
   it, and each contribution's module identity. Studio's snapshot and the server's admission share
-  `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowExplainSnapshot.json`.
+  `studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowExplainSnapshot.json`.
 - **Studio side.** `Elsa.Studio.Weaver.Workflows` no longer registers the `workflows.proposal` renderer (no tool
   produced that kind, and it was registered under the Workflows module's identity), the explain-executable prompt (it
   named a `get-executable-detail` tool that was never registered; slice F restores it against `workflow_read_executable`)
@@ -392,7 +392,7 @@ no save, publish or effect replay is introduced. Generic failure/deadline/proven
 [Weaver foundation](../../Elsa.Weaver/EXTENSION_POINTS.md#context-and-result-disclosure-3439-under-qualification).
 
 Concrete context/history/results additionally require the owner domain's
-[`IWorkflowDefinitionAuthorizer`](../../../../../essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md#iworkflowdefinitionauthorizer-contract--elsaworkflowsdesigncore).
+[`IWorkflowDefinitionAuthorizer`](../../../../../server/essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md#iworkflowdefinitionauthorizer-contract--elsaworkflowsdesigncore).
 The workflow contribution references its Core contract; native API resource and identity implementation
 types remain in Workflow Design's API adapter. Missing or multiple owner implementations refuse access.
 Null-target supplemental caller metadata and public guidance retain their existing generic actor/read

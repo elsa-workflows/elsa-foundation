@@ -9,7 +9,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const repo = resolve(import.meta.dirname, "../../..");
-const { request } = await import(pathToFileURL(join(repo, "Studio/node_modules/@playwright/test/index.mjs")));
+const { request } = await import(pathToFileURL(join(repo, "studio/node_modules/@playwright/test/index.mjs")));
 const { ExternalAuthenticationClient, connectionChanges } = await import(pathToFileURL(join(repo,
   "extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/wwwroot/studio/sdk/external-authentication/sdk.js")));
 const sqlite = process.argv.includes("--sqlite"); const managed = !process.argv.includes("--baseline");

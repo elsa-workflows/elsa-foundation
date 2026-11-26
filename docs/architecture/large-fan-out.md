@@ -21,13 +21,13 @@ Built, in `prototypes/kernel-model` at main `433c79341`:
 
 | Piece | Where | Relevance |
 |---|---|---|
-| `Start(spec, Placement.WithParent \| Placement.Spread)` | [Contracts.cs](../../essentials/tests/ActorFoundation/Legacy/Workflows/Contracts.cs) | A child goes to its parent's partition by default; `Spread` places it by hash. |
+| `Start(spec, Placement.WithParent \| Placement.Spread)` | [Contracts.cs](../../server/essentials/tests/ActorFoundation/Legacy/Workflows/Contracts.cs) | A child goes to its parent's partition by default; `Spread` places it by hash. |
 | A child's terminal notice to its parent (`ChildFinished`, with status and output) | `WorkflowInstance`, the notice id from `CreationProtocol.TerminalNoticeId` | One message per child. A generation-tracked parent takes each notice in a turn of its own (`WorkflowInstance.SingleMessage`, `SelectsAlone`). |
 | The parent's registry of children still running (`InstanceRow.Children`) | `ChildRegistry`, `WorkflowInstance` | One entry per outstanding child in the parent's row, removed when its notice is consumed. |
 | Forced termination of a tree | `WorkflowInstance` (terminate) | A terminate goes to every child the instance started that has not finished; it recurses. |
-| Native `Parallel` with a threshold join and fault counting | [Activities.cs](../../essentials/src/Workflows/Runtime/Native/Model/Activities.cs) | The join and fault rules a combiner reuses. |
-| Native `ForEach`, sequential only; it copies its items into its state | [Activities.cs](../../essentials/src/Workflows/Runtime/Native/Model/Activities.cs), NATIVE.md | No parallel ForEach exists in the prototype. Elsa 4 on main has none either (Elsa 3's `ParallelForEach` maps to "no counterpart", `extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Entries.cs`). |
-| Effect keys `{instance origin}/{node}/{iteration path}/{attempt}`; ForEach's iteration is the body's `currentIndex` | [EffectKey.cs](../../essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs), `ForEach.IterationOf`, [ownership and fencing](ownership-and-fencing.md#side-effects) | The key every leaf effect carries. |
+| Native `Parallel` with a threshold join and fault counting | [Activities.cs](../../server/essentials/src/Workflows/Runtime/Native/Model/Activities.cs) | The join and fault rules a combiner reuses. |
+| Native `ForEach`, sequential only; it copies its items into its state | [Activities.cs](../../server/essentials/src/Workflows/Runtime/Native/Model/Activities.cs), NATIVE.md | No parallel ForEach exists in the prototype. Elsa 4 on main has none either (Elsa 3's `ParallelForEach` maps to "no counterpart", `extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Entries.cs`). |
+| Effect keys `{instance origin}/{node}/{iteration path}/{attempt}`; ForEach's iteration is the body's `currentIndex` | [EffectKey.cs](../../server/essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs), `ForEach.IterationOf`, [ownership and fencing](ownership-and-fencing.md#side-effects) | The key every leaf effect carries. |
 | **The ETL fan-out spike:** a combiner tree with fanout 64 and credit 8, children spread over 4 partitions, against a direct baseline with the same credit | `models/Etl/EtlModel.cs`, `models/Etl.Run`, [ETL.md](../../prototypes/kernel-model/models/Etl/ETL.md) | The measured evidence below. In-memory store, real `Worker` and `WorkflowInstance`. |
 
 ## What one parent costs without the pattern

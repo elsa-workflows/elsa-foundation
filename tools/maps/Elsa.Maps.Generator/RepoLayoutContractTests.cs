@@ -6,7 +6,7 @@ public static class RepoLayoutContractTests
     public static void Run()
     {
         var repo = RepoContext.Discover();
-        var roots = new[] { "essentials/src", "apps", "essentials/tests" }
+        var roots = new[] { "server/essentials/src", "server/apps", "server/essentials/tests" }
             .Concat(ExtensionRoots(repo.Root, "src", "tests"))
             .Where(root => Directory.Exists(repo.Absolute(root)))
             .ToArray();
@@ -48,8 +48,8 @@ public static class RepoLayoutContractTests
                 $"Found {templateProjects.Length} template projects and included {includedTemplates.Length}.");
 
         var sourceFiles = RepoLayout.SourceFiles(repo);
-        if (!sourceFiles.Any(path => path.StartsWith("essentials/src/", StringComparison.Ordinal)) ||
-            !sourceFiles.Any(path => path.StartsWith("apps/", StringComparison.Ordinal)) ||
+        if (!sourceFiles.Any(path => path.StartsWith("server/essentials/src/", StringComparison.Ordinal)) ||
+            !sourceFiles.Any(path => path.StartsWith("server/apps/", StringComparison.Ordinal)) ||
             !sourceFiles.Any(RepoLayout.IsExtensionSourcePath) ||
             sourceFiles.Any(path => !RepoLayout.IsModulePath(path) || path.Contains("/studio/", StringComparison.Ordinal)))
             throw new InvalidOperationException("Backend source pathspecs missed a product root or included a non-backend/Studio source path.");
@@ -62,11 +62,11 @@ public static class RepoLayoutContractTests
         if (expectedCatalogs.Count == 0 || !expectedCatalogs.SetEquals(actualCatalogs))
             throw new InvalidOperationException("Catalog selectors must cover exactly backend EXTENSION_POINTS.md files, never ordinary README or Studio files.");
 
-        if (!RepoLayout.IsTestPath("essentials/tests/Architecture/Tests/Example.cs") ||
+        if (!RepoLayout.IsTestPath("server/essentials/tests/Architecture/Tests/Example.cs") ||
             !RepoLayout.IsTestProjectPath("extensions/Weaver/tests/Tests/Example.csproj") ||
             !RepoLayout.IsTestPath("extensions/Agent/src/tests/Example.cs") ||
             RepoLayout.IsModulePath("extensions/Agent/src/tests/Example.cs") ||
-            RepoLayout.IsModulePath("essentials/tests/Architecture/Tests/Example.cs") ||
+            RepoLayout.IsModulePath("server/essentials/tests/Architecture/Tests/Example.cs") ||
             RepoLayout.IsModulePath("extensions/Weaver/tests/Tests/Example.cs") ||
             RepoLayout.IsTestProjectPath("extensions/Agent/studio/tests/Example.Tests.csproj") ||
             RepoLayout.IsModulePath("extensions/Agent/studio/Elsa.Studio.Agent/Example.cs"))

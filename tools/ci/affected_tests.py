@@ -48,11 +48,11 @@ SHARED_SUFFIXES = (".sln", ".slnx", ".globalconfig", ".ruleset")
 # A spec's published contracts (change_scope EXCLUDE). The one test that reads one, ManagementApiOperationInventoryTests,
 # is in Architecture guards.
 CONTRACTS = "specs/*/contracts/**"
-# The Studio tree is its own solution (Studio/Elsa.Studio.slnx), built and tested by the Studio jobs, and the
+# The Studio tree is its own solution (studio/Elsa.Studio.slnx), built and tested by the Studio jobs, and the
 # tools/studio probes outside a project are run only by the Studio, Weaver and published-image jobs. No server project
 # imports or references them, so such a path no test claims has no server test to select. Their shared build inputs
-# (Studio/Directory.*, Studio/NuGet.config) still select everything: the Extensions' Studio projects import them.
-SEPARATE_TREES = ("Studio/", "tools/studio/")
+# (studio/Directory.*, studio/NuGet.config) still select everything: the Extensions' Studio projects import them.
+SEPARATE_TREES = ("studio/", "tools/studio/")
 PROTOTYPES = "prototypes/"
 
 # A relative path inside an MSBuild file: `../x`, `$(MSBuildThisFileDirectory)../x`, `$(MSBuildProjectDirectory)/../x`.
@@ -132,7 +132,7 @@ class Graph:
     references: dict[str, set[str]]
     # (path, consuming project, places): a consumer reads that file, or the files under that directory, from outside
     # its own directory. A claim on a file, or on a directory that holds no project, places the paths it covers: they
-    # select the consumer instead of everything. A broader claim (`essentials/src`, `specs`) adds the consumer but never
+    # select the consumer instead of everything. A broader claim (`server/essentials/src`, `specs`) adds the consumer but never
     # stops a path it covers from selecting everything.
     claims: list[tuple[str, str, bool]]
     shared_imports: set[str]
@@ -194,7 +194,7 @@ def _resolve(base_dir: str, token: str) -> str | None:
 
 
 def _cs_claims(text: str, file_dir: str, top_level: set[str], tree: Tree) -> set[str]:
-    """Repository paths a C# file builds: `Path.Combine(root, "specs", "1017-x", ...)`, a literal "Studio/src/...",
+    """Repository paths a C# file builds: `Path.Combine(root, "specs", "1017-x", ...)`, a literal "studio/src/...",
     or a `../../src/x` relative to the source file. Only paths that exist in the tree count."""
     found = set()
 
@@ -477,7 +477,7 @@ def fixture_tree() -> Tree:
         "Elsa.Server.slnx": "".join(f'<Project Path="{p}" />' for p in (
             "src/Core/Core.csproj", "src/Leaf/Leaf.csproj", "src/Mid/Mid.csproj", "src/Orphan/Orphan.csproj",
             "tests/Core/Core.Tests.csproj", "tests/Leaf/Leaf.Tests.csproj", "tests/Mid/Mid.Tests.csproj",
-            "tests/Arch/Arch.Tests.csproj", "apps/Host/Host.csproj")),
+            "tests/Arch/Arch.Tests.csproj", "server/apps/Host/Host.csproj")),
         "Elsa.Server.Core.slnf": json.dumps({"solution": {"projects": ["src\\Core\\Core.csproj"]}}),
         "src/Core/Core.csproj": _csproj(),
         "src/Core/Thing.cs": "",
@@ -489,9 +489,9 @@ def fixture_tree() -> Tree:
         "src/Mid/Mid.cs": "",
         "src/Orphan/Orphan.csproj": _csproj(),
         "src/Orphan/Orphan.cs": "",
-        "apps/Shared.targets": "<Project />",
-        "apps/Host/Host.csproj": _csproj("../../src/Mid/Mid.csproj", extra=(
-            '<Compile Include="../../e2e/Probe.cs" />'
+        "server/apps/Shared.targets": "<Project />",
+        "server/apps/Host/Host.csproj": _csproj("../../../src/Mid/Mid.csproj", extra=(
+            '<Compile Include="../../../e2e/Probe.cs" />'
             '<Import Project="$(MSBuildThisFileDirectory)../Shared.targets" />')),
         "e2e/Probe.cs": "",
         "e2e/run.ps1": "",
@@ -499,10 +499,10 @@ def fixture_tree() -> Tree:
         "tests/Leaf/Leaf.Tests.csproj": _csproj("../../src/Leaf/Leaf.csproj", extra=(
             '<None Include="../../specs/9-x/evidence/*.json" CopyToOutputDirectory="PreserveNewest" />')),
         "tests/Mid/Mid.Tests.csproj": _csproj("../../src/Mid/Mid.csproj"),
-        "tests/Mid/Reads.cs": 'var p = Path.Combine(root, "Studio", "src", "fixture.json");',
+        "tests/Mid/Reads.cs": 'var p = Path.Combine(root, "studio", "src", "fixture.json");',
         "tests/Host/Host.Tests.csproj": _csproj(extra=(
             '<PropertyGroup><HostProject>$([System.IO.Path]::GetFullPath(\'$(MSBuildProjectDirectory)/'
-            '../../apps/Host/Host.csproj\'))</HostProject></PropertyGroup>')),
+            '../../server/apps/Host/Host.csproj\'))</HostProject></PropertyGroup>')),
         "tests/Arch/Arch.Tests.csproj": _csproj("../../src/Core/Core.csproj"),
         "tests/Etl/Etl.Tests.csproj": _csproj(extra='<Compile Include="../Shared/*.cs" />'),
         "tests/Shared/Reader.cs": 'var db = Path.Combine(FindRoot(),\n    "fixtures", "etl", "v1.db");',
@@ -511,11 +511,11 @@ def fixture_tree() -> Tree:
         "specs/9-x/evidence/a.json": "",
         "specs/9-x/spec.md": "",
         "docs/guide.md": "",
-        "Studio/src/fixture.json": "",
-        "Studio/src/Studio.Core/Studio.Core.csproj": _csproj(),
-        "Studio/src/Studio.Core/Page.razor": "",
-        "Studio/package.json": "",
-        "Studio/Directory.Build.props": "<Project />",
+        "studio/src/fixture.json": "",
+        "studio/src/Studio.Core/Studio.Core.csproj": _csproj(),
+        "studio/src/Studio.Core/Page.razor": "",
+        "studio/package.json": "",
+        "studio/Directory.Build.props": "<Project />",
         "tools/ci/test-tiers.json": "{}",
         "tools/bpmn/restore_evidence.py": "",
         "README.md": "",
@@ -556,22 +556,22 @@ def self_test() -> int:
     d = run("src/Core/Thing.cs")
     check("core: every dependent, backslash references included",
           not d.everything and {"tests/Core/Core.Tests.csproj", "tests/Leaf/Leaf.Tests.csproj", "tests/Mid/Mid.Tests.csproj",
-                                "tests/Host/Host.Tests.csproj", "apps/Host/Host.csproj"} <= d.affected)
+                                "tests/Host/Host.Tests.csproj", "server/apps/Host/Host.csproj"} <= d.affected)
     d = run("src/Mid/Mid.cs")
     check("a path property to a project is a reference", "tests/Host/Host.Tests.csproj" in d.affected)
     d = run("specs/9-x/evidence/a.json", "src/Leaf/Leaf.cs")
     check("glob evidence maps to its consumer", not d.everything and "tests/Leaf/Leaf.Tests.csproj" in d.affected)
     d = run("e2e/Probe.cs")
-    check("a linked Compile item is placed in its consumer", not d.everything and "apps/Host/Host.csproj" in d.affected
+    check("a linked Compile item is placed in its consumer", not d.everything and "server/apps/Host/Host.csproj" in d.affected
           and "tests/Host/Host.Tests.csproj" in d.affected)
-    d = run("apps/Shared.targets")
-    check("an imported .targets maps to its importer", not d.everything and "apps/Host/Host.csproj" in d.affected)
-    d = run("Studio/src/fixture.json")
+    d = run("server/apps/Shared.targets")
+    check("an imported .targets maps to its importer", not d.everything and "server/apps/Host/Host.csproj" in d.affected)
+    d = run("studio/src/fixture.json")
     check("a C# Path.Combine reader is a consumer", not d.everything and "tests/Mid/Mid.Tests.csproj" in d.affected)
-    d = run("Studio/package.json", "Studio/src/Studio.Core/Page.razor")
+    d = run("studio/package.json", "studio/src/Studio.Core/Page.razor")
     check("the Studio tree selects no server test", not d.everything and not (d.affected & {
         "tests/Core/Core.Tests.csproj", "tests/Leaf/Leaf.Tests.csproj", "tests/Mid/Mid.Tests.csproj"}))
-    for path in ("Directory.Build.props", "VersionLines.props", "Studio/Directory.Build.props", "global.json",
+    for path in ("Directory.Build.props", "VersionLines.props", "studio/Directory.Build.props", "global.json",
                  "NuGet.config", "Elsa.Server.slnx", "tools/ci/test-tiers.json",
                  ".github/workflows/ci.yml", "tools/maps/x.cs", "tools/bpmn/restore_evidence.py", "packages.lock.json",
                  ".editorconfig"):

@@ -6,4 +6,4 @@ The module contributes a `decision-version` property editor for ordinary workflo
 
 The same contribution implements optional `collectDraftValidation` so Evaluate Decision extras (`InputMembership`), stored-kind mismatches (`InputTypeMismatch`), empty required scalars (`InvalidValue`), and unpublished `@latest` pins appear on the workflow canvas validation footer and block Review & publish in Studio. Server publication preflight still does not evaluate those engine codes; that remains a host/engine gap.
 
-The supported profile and lifecycle are documented in [spec 1195](../../../../specs/1195-business-decisions/contracts/). Public Studio extension contracts live in [module UI](../../../../Studio/docs/module-ui.md); the module adds no shell-wide editor or execution contracts.
+The supported profile and lifecycle are documented in [spec 1195](../../../../specs/1195-business-decisions/contracts/). Public Studio extension contracts live in [module UI](../../../../studio/docs/module-ui.md); the module adds no shell-wide editor or execution contracts.

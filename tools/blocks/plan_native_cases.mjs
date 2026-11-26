@@ -18,9 +18,9 @@ if (git("status", "--porcelain")) throw new Error("Commit the complete source be
 const inputBytes = await readFile(resolve(inputPath));
 const input = JSON.parse(inputBytes);
 if (input.source !== source || !Array.isArray(input.catalog) || !Array.isArray(input.cases) || !input.cases.length) throw new Error("Expected cases and the actual catalog from the current committed source");
-const require = createRequire(resolve(repository, "Studio/package.json"));
+const require = createRequire(resolve(repository, "studio/package.json"));
 const { createServer } = await import(pathToFileURL(require.resolve("vite")).href);
-const client = resolve(repository, "Studio/src/essentials/Elsa.Studio.Workflows/Client");
+const client = resolve(repository, "studio/src/essentials/Elsa.Studio.Workflows/Client");
 const plannerPath = resolve(client, "src/graph-authoring/nativeBlocks.ts");
 const server = await createServer({ root: client, configFile: false, optimizeDeps: { noDiscovery: true }, server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");

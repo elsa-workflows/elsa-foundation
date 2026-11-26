@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 const repo=process.cwd();
-const { chromium, expect }=await import(pathToFileURL(path.join(repo,'Studio/node_modules/@playwright/test/index.mjs')).href);
+const { chromium, expect }=await import(pathToFileURL(path.join(repo,'studio/node_modules/@playwright/test/index.mjs')).href);
 const { signInThroughStudio }=await import(pathToFileURL(path.join(repo,'tools/bpmn/studio_ready.mjs')).href);
 if(!process.argv[2])throw new Error('Usage: node tools/bpmn/drive_direct_etl_studio.mjs OUTPUT');
 const resuming=process.argv.includes('--resume-after-restored');

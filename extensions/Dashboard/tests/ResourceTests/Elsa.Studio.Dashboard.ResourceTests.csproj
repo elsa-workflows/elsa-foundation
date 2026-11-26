@@ -18,7 +18,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Api/Elsa.Studio.Dashboard.Api.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
     <ProjectReference Include="../../src/Management/Elsa.Studio.Dashboard.Management.csproj" />
     <ProjectReference Include="../../src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>

@@ -16,9 +16,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Connections.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Expressions\Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Expressions\Core\Elsa.Expressions.Core.csproj" />
   </ItemGroup>
 
 </Project>

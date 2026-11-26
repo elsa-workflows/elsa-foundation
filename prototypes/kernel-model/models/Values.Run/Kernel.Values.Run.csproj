@@ -3,6 +3,6 @@
   <ItemGroup>
     <ProjectReference Include="../Values/Kernel.Values.csproj" />
     <!-- Reuse the existing provider command/transaction counter in this measurement host. -->
-    <ProjectReference Include="../../../../essentials/tests/ActorFoundation/Native/Run/Elsa.ActorFoundation.Native.Run.csproj" />
+    <ProjectReference Include="../../../../server/essentials/tests/ActorFoundation/Native/Run/Elsa.ActorFoundation.Native.Run.csproj" />
   </ItemGroup>
 </Project>

@@ -13,7 +13,7 @@
     <PackageReference Include="CShells.Abstractions" Version="__CSHELLS_VERSION__" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" Version="__CSHELLS_VERSION__" />
     <ProjectReference Include="__REPO_ROOT__/extensions/Weaver/src/Core/Elsa.Weaver.Core.csproj" />
-    <ProjectReference Include="__REPO_ROOT__/essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="__REPO_ROOT__/server/essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="nuplane.json" Pack="true" PackagePath="/" />

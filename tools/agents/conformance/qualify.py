@@ -85,7 +85,7 @@ def main():
             bundle.extractall(producer, filter="data")
         report["sourceArchiveSha256"] = sha(archive)
         fixtures = producer / "tools/agents/conformance"
-        projects = {p.stem: p for area in ["essentials/src", "extensions"] for p in (producer / area).rglob("*.csproj")}
+        projects = {p.stem: p for area in ["server/essentials/src", "extensions"] for p in (producer / area).rglob("*.csproj")}
         selected, seen = [], set()
 
         def visit(project):

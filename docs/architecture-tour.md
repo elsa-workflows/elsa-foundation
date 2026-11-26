@@ -50,11 +50,11 @@ Every domain documents what you can replace, what you can contribute, and which 
 
 | Folder | What is in it |
 |---|---|
-| `Essentials/apps/` | Runnable hosts. `Elsa.Workbench` is the reference server and the process entry point. |
-| `Essentials/src/` | The core libraries and default implementations. |
-| `Essentials/tests/` | Focused tests for that behaviour. |
+| `server/essentials/apps/` | Runnable hosts. `Elsa.Workbench` is the reference server and the process entry point. |
+| `server/essentials/src/` | The core libraries and default implementations. |
+| `server/essentials/tests/` | Focused tests for that behaviour. |
 | `Extensions/` | Optional modules, including `Elsa.Integrations.Sdk`. |
-| `Studio/` | The Studio front end. |
+| `studio/` | The Studio front end. |
 | `docs/` | Lookup knowledge: glossary, skills, maps, reports, reference docs and programme goals. |
 | `docs/program-goals/` | The shared backlog, the registry of mid-term goal buckets, and roadmap notes. |
 | `specs/` | Work units and feature plans written with **Speckit**, the spec-driven planning tool this repo uses. |

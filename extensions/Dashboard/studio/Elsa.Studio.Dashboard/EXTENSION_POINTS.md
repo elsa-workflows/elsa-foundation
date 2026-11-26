@@ -1,6 +1,6 @@
 # Studio Dashboard contributions
 
-`Client/src/module.tsx` registers this module through the public `ElsaStudioModuleApi`. It contributes no Home widgets or sections: Home and its widget area belong to the Studio shell ([Home catalog](../../../../Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md#home-widgets-and-sections-sdk--elsastudiohosting)). This module introduces no replaceable host service or global dataset registry.
+`Client/src/module.tsx` registers this module through the public `ElsaStudioModuleApi`. It contributes no Home widgets or sections: Home and its widget area belong to the Studio shell ([Home catalog](../../../../studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md#home-widgets-and-sections-sdk--elsastudiohosting)). This module introduces no replaceable host service or global dataset registry.
 
 ## Record deep-links
 

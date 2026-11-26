@@ -9,8 +9,8 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
     <ProjectReference Include="../../../../src/Persistence/EntityFrameworkCore/Elsa.Connections.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../src/Elsa.Connections/Elsa.Connections.csproj" />
-    <ProjectReference Include="../../../../../../essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../../../../essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
+    <ProjectReference Include="../../../../../../server/essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../../server/essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
     <ProjectReference Include="../RestartProbe/Elsa.Connections.Persistence.EntityFrameworkCore.RestartProbe.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <ItemGroup>

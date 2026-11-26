@@ -66,7 +66,7 @@ def main():
             project = project.resolve()
             if project in projects:
                 return
-            if not project.is_relative_to(producer / "essentials/src"):
+            if not project.is_relative_to(producer / "server/essentials/src"):
                 raise RuntimeError("candidate reference is outside the owned source graph")
             projects.add(project)
             for edge in ET.parse(project).findall(".//ProjectReference"):

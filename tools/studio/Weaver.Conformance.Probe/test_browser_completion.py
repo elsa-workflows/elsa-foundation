@@ -18,7 +18,7 @@ class BrowserCompletionTests(unittest.TestCase):
 import assert from "node:assert/strict";
 import {createServer} from "node:http";
 import {createRequire} from "node:module";
-const require=createRequire(new URL("../../../Studio/package.json",import.meta.url));
+const require=createRequire(new URL("../../../studio/package.json",import.meta.url));
 const {chromium,expect:baseExpect}=require("@playwright/test");
 const expect=baseExpect.configure({timeout:1200});
 const deferred=()=>{let resolve;const promise=new Promise(value=>{resolve=value;});return {promise,resolve};};

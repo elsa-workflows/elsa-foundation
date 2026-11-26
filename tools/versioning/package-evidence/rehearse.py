@@ -11,7 +11,7 @@ import zipfile
 from collect import collect
 
 root = Path(__file__).resolve().parents[3]
-project = Path("essentials/src/Caching/Memory/Elsa.Caching.Memory.csproj")
+project = Path("server/essentials/src/Caching/Memory/Elsa.Caching.Memory.csproj")
 commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
 fingerprint = "sha256:" + hashlib.sha256(b"package evidence rehearsal").hexdigest()
 with tempfile.TemporaryDirectory() as temporary:

@@ -20,7 +20,7 @@ runs:
       with:
         artifact-ids: ${{ inputs.artifact-id }}
         merge-multiple: true
-        path: Studio/packages
+        path: studio/packages
     - shell: bash
       working-directory: ${{ github.workspace }}
       env:
@@ -29,5 +29,5 @@ runs:
         VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
-        printf '%s  %s\n' "$RECEIPT_SHA" "Studio/packages/$KIND/$KIND-subjects.json" | sha256sum -c
-        python3 tools/versioning/package-evidence/studio_archives.py "Studio/packages/$KIND" --check "$KIND" --signed-retry
+        printf '%s  %s\n' "$RECEIPT_SHA" "studio/packages/$KIND/$KIND-subjects.json" | sha256sum -c
+        python3 tools/versioning/package-evidence/studio_archives.py "studio/packages/$KIND" --check "$KIND" --signed-retry

@@ -19,5 +19,5 @@ inside that transaction before replacing payload and secret references. Delete/r
 merely because its numeric revision repeats. An incarnation conflict rolls the reserved revision back too.
 
 See the [registration and ownership examples](README.md), shared
-[EF policy](../../../../../essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md), and
+[EF policy](../../../../../server/essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md), and
 [connection manager contracts and known limits](../../Elsa.Connections/EXTENSION_POINTS.md).

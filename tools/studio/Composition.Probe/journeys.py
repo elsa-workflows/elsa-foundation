@@ -200,7 +200,7 @@ def missing_asset_control(p):
 def stream_client(p):
     source = p.root / "stream-client-source"
     source.mkdir()
-    version = next(node.attrib["Version"] for node in ET.parse(REPO / "Studio/Directory.Packages.props").getroot().iter("PackageVersion")
+    version = next(node.attrib["Version"] for node in ET.parse(REPO / "studio/Directory.Packages.props").getroot().iter("PackageVersion")
                    if node.attrib.get("Include") == "Microsoft.AspNetCore.SignalR.Client")
     (source / "StreamClient.csproj").write_text((FIXTURES / "StreamClient.csproj.in").read_text().replace("__SIGNALR_VERSION__", version))
     shutil.copy2(FIXTURES / "StreamClient.cs.in", source / "Program.cs")

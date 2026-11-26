@@ -1,7 +1,7 @@
 # Workflow Releases and Environment Promotion
 
 - **Status:** Active for owner-authorized end-to-end delivery, 5 November 2026; resumed in reviewable slices on 12 November 2026.
-- **Area:** Workflows.Publishing coordination, owner-managed dependency artifacts and runtime bindings; Studio/API/CLI.
+- **Area:** Workflows.Publishing coordination, owner-managed dependency artifacts and runtime bindings; studio/API/CLI.
 - **Steward:** Sipke. One active implementation slice at a time.
 - **Canonical request/program:** [#3590](https://github.com/elsa-workflows/elsa-foundation/issues/3590).
 - **Authorization:** [owner receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3590#issuecomment-6671598586), recorded in [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus).
@@ -26,7 +26,7 @@ sessions. Unsupported dependencies must fail visibly rather than disappear from 
 | M1 — immutable releases | Reproducible multi-root bundle, complete supported closure, exact identity-preserving offline import/export and explicit retention | Shared reusable dependency round-trip, corruption/cycle/identity/unsupported controls and package consumer proof |
 | M2 — target readiness | Authenticated target capability/resource discovery, immutable mapping capture and equivalent fresh preview/apply validation | Two owned target environments with different mappings; denied/tenant/missing/drift/stale controls |
 | M3 — durable promotion | Existing-owner coordinated activation, per-run mappings, retries/concurrency, interruption recovery and explicit rollback | Real composed-host partial/unknown/superseded recovery and long-running pin/binding continuity |
-| M4 — integrated delivery | Complete Studio/API/packaged CLI journeys, evidence/history/diagnostics, operator/integrator docs and examples | Current-commit downloadable composed UI evidence, independent UX acceptance, meaningful regressions, reviewed green merge and resulting-main qualification |
+| M4 — integrated delivery | Complete studio/API/packaged CLI journeys, evidence/history/diagnostics, operator/integrator docs and examples | Current-commit downloadable composed UI evidence, independent UX acceptance, meaningful regressions, reviewed green merge and resulting-main qualification |
 
 Studio design begins in M0 and its journeys develop with the vertical slices. M4 is integrated acceptance,
 not permission to leave the UI as an isolated fixture until the end. Keep passed/failed/skipped/cancelled/

@@ -50,6 +50,6 @@ for their respective verified source checkpoints.
 
 `Elsa.Studio.Etl` contributes to Studio-owned surfaces only through the public SDK: the `etl-published-selection`
 property editor for `RunEtl.Pipeline`, and `etl-native-run` in the
-[workflow run related-links slot](../../../../Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md#workflow-run-related-links-sdk--elsastudiohosting).
+[workflow run related-links slot](../../../../studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md#workflow-run-related-links-sdk--elsastudiohosting).
 Neither adds an ETL branch to Workflows Studio. Both are offered only when the selected backend advertises the
 required ETL capabilities.

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { hasExactUrlMultimap } from "../../Studio/tests/acceptance/exactUrl.mjs";
+import { hasExactUrlMultimap } from "../../studio/tests/acceptance/exactUrl.mjs";
 
 // Tiny non-browser causal controls; no host, Playwright, product runtime or network.
 const controls = {

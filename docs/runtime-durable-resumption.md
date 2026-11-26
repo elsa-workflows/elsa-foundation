@@ -277,7 +277,7 @@ sweep that lists the execution delivers it to that mailbox, usually within `Swee
 sweep's own waits for local work or failure backoff can make it later, and one sent while the owner hands the execution
 off takes effect on the next owner, or on a fresh mailbox on the owner when a sweep that overlaps the stop path's
 hand-off already leased it. The sweep does not wait for the running drain (see the
-[distributed delivery contract](../Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/README.md#delivery-contract)).
+[distributed delivery contract](../server/essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/README.md#delivery-contract)).
 The yield signal is internal to the default in-process provider: a custom actor provider that wraps the registered
 `InProcessWorkflowExecutionActorProvider` keeps the handoff, and an independent provider does not get it.
 
@@ -409,9 +409,9 @@ The two nested-invoke handlers are the exception: their commits go through a dyn
 | Composition | `RuntimeCoreServiceCollectionExtensions.AddWorkflowRuntime(this IServiceCollection)` |
 | Log events | `RuntimePostCommitClaimLost`, `WorkflowTestScopeCleanupFailed`, `RuntimeResumptionPauseCheckFailed`, `RuntimeResumptionFirstPageBacklogDiscovery`, `RuntimePostCommitDeliveryFailedFinal` (68103) |
 
-Folders: `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/` (engine), `Essentials/src/Workflows/Runtime/Resumption/` (pump), `Essentials/src/Workflows/Runtime/Core/` (contracts and models), `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/` (database stores).
+Folders: `server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/` (engine), `server/essentials/src/Workflows/Runtime/Resumption/` (pump), `server/essentials/src/Workflows/Runtime/Core/` (contracts and models), `server/essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/` (database stores).
 
-Related: [Elsa glossary](glossary/elsa.md) · [Runtime extension points](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) · [Resumption extension points](../Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) · [How a workflow executes](how-a-workflow-executes.md) · [Durable timers](runtime-durable-timers.md)
+Related: [Elsa glossary](glossary/elsa.md) · [Runtime extension points](../server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) · [Resumption extension points](../server/essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) · [How a workflow executes](how-a-workflow-executes.md) · [Durable timers](runtime-durable-timers.md)
 
 ## Design history
 

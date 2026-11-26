@@ -1,0 +1,108 @@
+# Extension points — Workflows Publishing API (transport + activity-draft)
+
+This catalog covers the extension points owned by the **transport** feature `Elsa.Workflows.Publishing.Api`:
+the HTTP endpoint surface, transport authorization, and the activity-draft publish/test-run seams. The
+auth-free **publish + compile engine** — the executable compiler, the publication authority stores, policy /
+preflight / activation, the compilation fan-in, and the activity-template provider
+registries — moved to `Elsa.Workflows.Publishing`, which this feature obtains by `DependsOn` composition. For
+those seams see [the engine extension-point catalog](../Elsa.Workflows.Publishing/EXTENSION_POINTS.md).
+
+Contracts live in `Elsa.Workflows.Publishing.Core`. The authority and failure invariants are owned by
+[ADR 0043](../../../../../../docs/adr/0043-publication-slots-define-start-authority.md); shared terms remain in the
+[Elsa glossary](../../../../../../docs/glossary/elsa.md) and [root glossary](../../../../../../docs/glossary/root.md).
+
+## Incident strategy discovery
+
+`GET publishing/incident-strategies` is the permission-protected authoring discovery surface. It returns the
+descriptor-only `IIncidentStrategyCatalog` in deterministic order together with the exact effective publishing
+default. It never constructs scoped strategy implementations and never exposes CLR type names. Contribute a
+strategy through Runtime's atomic `AddIncidentStrategy<TStrategy>(descriptor)` or attributed overload; the
+compiler validates and pins the selected alias/version into each executable.
+
+## Overridable contracts (transport + activity-draft)
+
+| Contract | Built-in default | Replace when |
+|---|---|---|
+| `IActivityPublishingAuthorizationContext` | `HttpContextActivityPublishingAuthorizationContext` (scoped) | A host authenticates activity publish/test-run requests through another transport. Authorization is a transport concern; the engine neither registers nor depends on this contract. |
+| `IWorkflowTestRunStore` | `InMemoryWorkflowTestRunStore` (singleton) | Test-run projections need shared/durable retention. Runtime owns the matching scope lifecycle; expiry opens an operation scope and closes Runtime before removing the projection. |
+| `IActivityDraftTestRunStore` | `InMemoryActivityDraftTestRunStore` (singleton) | Activity draft Test Run receipts, idempotency, and status lookup must survive restart. The Publishing EF Core package replaces this default. |
+| `IActivityDraftTestRunCancellationPolicy` | `DefaultActivityDraftTestRunCancellationPolicy` (singleton) | A host needs to suppress or further constrain cancellation while advertising the effective capability truthfully. |
+| `IActivitySourceVersionPublisher` *(Design Core contract, cross-domain contribution)* | `SourceOwnedActivityVersionPublisher` (scoped) | A host closes source-owned catalog versions into publications another way. Content whose provider key a registered `IActivityTemplateProviderCompiler` owns is judged as a Studio draft is: `IActivityDraftValidator`, the template compiler (which runs the provider's own gates, such as a model capability check), and storage and runtime readiness. The validator, compiler and readiness name the version with the subject kind `ActivitySourceVersion`; diagnostics the provider itself reports are sanitized as in Studio and name the provider instead, so they are keyed by version id where they are recorded. A refused version is not written and comes back as `ActivitySourceVersionPublicationResult.Refused` with its diagnostics; so does content with activity dependencies, which a source-owned commit cannot record. Content whose provider key no registered compiler owns (such as `elsa.clr-activity`, from CLR scanning or a JSON entry) keeps the single-node root from `ExecutableNodeCompiler.CompileSourceOwnedRoot`. |
+
+Register replacements before the feature's `TryAdd` defaults, or use `services.Replace(...)`.
+
+## Contract obligations
+
+### Transport authorization
+
+`IActivityPublishingAuthorizationContext` resolves the caller's tenant/authorization scope from the active
+transport (the default reads `HttpContext`). The engine is authorization-free and introduces no neutral
+default, so this contract and the activity-draft services that consume it are registered only by this API
+feature. A replacement must supply the same tenant/scope facts the activity-draft publish/test-run flow expects.
+
+Known decorator: `Elsa3JsonReconciliation` (spec 235) wraps the registered context so its startup task can publish
+imported Elsa 3 reusables in its persistence scope's tenant (and rows with no tenant), inside its own operation scope only; every other call
+reaches the decorated context unchanged.
+
+### Activity draft Test Runs
+
+- `IActivityDraftTestRunStore` owns one receipt per deterministic `(OperationScope, DraftId, IdempotencyKey)`
+  identity. Each tenant has a distinct durable operation scope and the explicit tenantless operation scope is
+  distinct from every tenant scope. Operation ownership is derived from the caller tenant, independently of the
+  resource tenant, so global activity drafts do not share receipts across tenant callers. Implementations must
+  preserve the original request fingerprint, compare-and-swap receipt revisions, retain only the key hash, and
+  keep the receipt beyond source-reference expiry so terminal and retention facts remain discoverable.
+- `IActivityDraftTestRunCancellationPolicy` evaluates the durable receipt together with current Runtime Evidence.
+  Replacements must distinguish whether cancellation is advertised from whether it is currently allowed. A
+  denied or already-terminal request must not enqueue a Runtime command.
+- Template preparation qualifies the exact selected executable/reference stores through the
+  [template writer capability](../../Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iexecutableactivitytemplatestore-core--elsaworkflowsruntimecore)
+  before atomic admission; a mixed composition creates no hidden root. Immutable material remains content-addressed,
+  while each durable Test Run owns a stable expiring template reference derived from its run identity and template
+  hash. Preparation uses the persisted winning reference; it cannot borrow a prior run's expiry/layout or restore
+  retirement. Legacy hash-only references are left intact, and already-prepared receipts retain their existing
+  artifact/source identities on resume.
+- Wrapper preparation also preflights the selected source writer's executable-root capability before template
+  writes. After immutable material save it reads and validates the actual winner's full payload/provenance,
+  allowing independent producer attribution and creation time only. Each invocation uses a distinct renewable
+  root-lease identity; the source provider atomically validates its current full-closure grants and returns the
+  persisted source winner with fixed receipt expiry. The original 20-argument constructor remains (built-in
+  coordinator/default lease options); DI uses the additive selected-coordinator constructor. New wrapper IO,
+  database, JSON, contextual provider/coordination and unrequested cancellation failures carry a catchable
+  Publishing Core `ActivityDraftTestRunStorageException` with Test Run ID and the complete original cause
+  (including aggregate failures); requested cancellation propagates. Native and SQLite service controls qualify
+  material/source/receipt preparation and retry, including fresh contexts, committed source acknowledgement loss
+  and ordinary zero-grace GC. Their compiler is fixed and dispatch/execution-state ports do not execute a workflow;
+  qualified default cohort GC, old-writer exclusion and actual upgraded-host/Studio proof remain unfinished.
+- Dispatch, retry, and cancellation use stable Runtime idempotency keys. An ambiguous acknowledgement may be
+  retried, but must resolve to the same Test Run and workflow execution identity.
+- Status projection may expose safe codes and diagnostics, immutable artifact/source identities, and the eventual
+  outer activity execution identity. It must not expose synthetic wrapper/provider payloads or raw Runtime
+  exception messages.
+
+## HTTP endpoint surface
+
+The endpoint surface is documented in the [module README](README.md#http-endpoint-surface). The public
+`WorkflowsPublishingApi.MapWorkflowsPublishingApi` mapper contributes standard ASP.NET Core endpoints;
+authorization is expressed through Foundation Identity permission policies and endpoint metadata. Hosts may
+apply ordinary route-group conventions such as API-prefixing, CORS, rate limiting, filters, and OpenAPI.
+
+## Persistence-provider notes
+
+`Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore`'s `AddPublishingEntityFrameworkCore(...)` composes durable
+implementations for **both** the engine's authority stores (documented in the
+[engine persistence checklist](../Elsa.Workflows.Publishing/EXTENSION_POINTS.md#persistence-provider-checklist)) and this feature's
+`IActivityDraftTestRunStore`. A durable activity-draft receipt store must:
+
+- own one receipt per opaque hashed `(OperationScope, DraftId, IdempotencyKey)` identity;
+- preserve the original request fingerprint and compare-and-swap receipt revisions;
+- retain the receipt beyond source-reference expiry; and
+- prove same-request replay, different-request rejection, stale-review no-write, and receipt rollback with the
+  other publication documents.
+
+## References
+
+- Module behavior and endpoint surface: [README](README.md).
+- Engine seams (compiler, authority stores, policy/preflight/activation, compilation fan-in): [engine catalog](../Elsa.Workflows.Publishing/EXTENSION_POINTS.md).
+- Publication authority decision: [ADR 0043](../../../../../../docs/adr/0043-publication-slots-define-start-authority.md).
+- Repo-wide index: [root extension-point index](../../../../../../EXTENSION_POINTS.md).

@@ -10,7 +10,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="CShells.Abstractions" />
-    <ProjectReference Include="../../../../Studio/src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
+    <ProjectReference Include="../../../../studio/src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
     <None Update="nuplane.json" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

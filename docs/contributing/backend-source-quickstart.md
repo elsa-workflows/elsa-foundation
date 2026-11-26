@@ -53,7 +53,7 @@ steps and file allowlist are below.
 From the Foundation repository root, build the focused backend project:
 
 ```bash
-dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
+dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
 ```
 
 The build still performs its normal restore when needed, but locked mode keeps that restore aligned with the
@@ -63,7 +63,7 @@ the [NuGet lock-file instructions](../reference/nuget-lock-files.md#updating-loc
 Start the HTTP launch profile in one terminal and leave it running:
 
 ```bash
-dotnet run --no-build --project apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --launch-profile http
+dotnet run --no-build --project server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --launch-profile http
 ```
 
 This Development/SQLite profile listens at `http://localhost:5095`. If that port is occupied, leave the
@@ -112,7 +112,7 @@ nested paths and journal files.
 **macOS/Linux (Bash):**
 
 ```bash
-find apps/Elsa.Workbench.Host -type f \( -name '*.db' -o -name '*.db-*' -o -name '*.sqlite*' -o -name '*-journal' \) -print
+find server/apps/Elsa.Workbench.Host -type f \( -name '*.db' -o -name '*.db-*' -o -name '*.sqlite*' -o -name '*-journal' \) -print
 ```
 
 **Windows PowerShell:**
@@ -124,7 +124,7 @@ Get-ChildItem -LiteralPath ./apps/Elsa.Workbench.Host -Recurse -File -Force |
 ```
 
 Review every result before deleting anything. The only allowed paths are these six files directly under
-`apps/Elsa.Workbench.Host/`: `elsa.db`, `elsa.db-wal`, `elsa.db-shm`, `elsa-diagnostics.db`,
+`server/apps/Elsa.Workbench.Host/`: `elsa.db`, `elsa.db-wal`, `elsa.db-shm`, `elsa-diagnostics.db`,
 `elsa-diagnostics.db-wal`, and `elsa-diagnostics.db-shm`. If configuration points to a database elsewhere,
 or the listing shows another database, a nested path, or any journal file, stop and identify its owner; do not
 widen this list or delete it. When the inventory contains only the allowed files, remove those exact names
@@ -134,12 +134,12 @@ using the command for your shell.
 
 ```bash
 rm -f -- \
-  apps/Elsa.Workbench.Host/elsa.db \
-  apps/Elsa.Workbench.Host/elsa.db-wal \
-  apps/Elsa.Workbench.Host/elsa.db-shm \
-  apps/Elsa.Workbench.Host/elsa-diagnostics.db \
-  apps/Elsa.Workbench.Host/elsa-diagnostics.db-wal \
-  apps/Elsa.Workbench.Host/elsa-diagnostics.db-shm
+  server/apps/Elsa.Workbench.Host/elsa.db \
+  server/apps/Elsa.Workbench.Host/elsa.db-wal \
+  server/apps/Elsa.Workbench.Host/elsa.db-shm \
+  server/apps/Elsa.Workbench.Host/elsa-diagnostics.db \
+  server/apps/Elsa.Workbench.Host/elsa-diagnostics.db-wal \
+  server/apps/Elsa.Workbench.Host/elsa-diagnostics.db-shm
 ```
 
 **Windows PowerShell:**
@@ -177,7 +177,7 @@ use. Do not stop a process you do not own. After the build above, start on this 
 the first terminal:
 
 ```bash
-dotnet run --no-build --project apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
+dotnet run --no-build --project server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
 ```
 
 In a second terminal at the repository root, check readiness and then run the smoke test with the same
@@ -204,8 +204,8 @@ build/test filters and the full-solution completion gate, see
 
 ## Pair with Studio
 
-Studio's source lives in `Studio/` in this repository. Follow the
-[Studio source quickstart](../../Studio/docs/contributing/studio-source-quickstart.md)
+Studio's source lives in `studio/` in this repository. Follow the
+[Studio source quickstart](../../studio/docs/contributing/studio-source-quickstart.md)
 for Node.js, Corepack/pnpm, the Studio install and build, and the browser pairing walkthrough. Do not
 clone `elsa-workflows/elsa-foundation-studio` for current `main`.
 

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const repo=process.cwd();
-const { chromium, request, expect }=await import(pathToFileURL(path.join(repo,'Studio/node_modules/@playwright/test/index.mjs')).href);
+const { chromium, request, expect }=await import(pathToFileURL(path.join(repo,'studio/node_modules/@playwright/test/index.mjs')).href);
 const { signInThroughStudio }=await import(pathToFileURL(path.join(repo,'tools/bpmn/studio_ready.mjs')).href);
 if (!process.argv[2]) throw new Error('Usage: node tools/bpmn/drive_claims_studio.mjs OUTPUT [INPUT_BPMN]');
 const output=path.resolve(process.argv[2]);

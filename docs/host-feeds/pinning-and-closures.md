@@ -64,7 +64,7 @@ The reverse direction is kept in step by this repository instead. A shared assem
 the host's copy, whatever version the feed package was built against within the entry's major, so each host's
 `appsettings.json` also declares, under `Nuplane:HostProvidedPackages`, the package of every assembly it
 lists in `Nuplane:Loading:SharedAssemblies` — restating Nuplane's two defaults, because a configured list
-replaces them. `HostProvidedPackagesGuardTests` (`Essentials/tests/Architecture`) fails the build when a
+replaces them. `HostProvidedPackagesGuardTests` (`server/essentials/tests/Architecture`) fails the build when a
 shared assembly's package is neither declared nor exempted by name. The declaration is what makes the
 version check apply: a feed package that needs a newer version of a declared package than the host's
 `deps.json` carries is refused at reconciliation (see [What fails loudly](failure-modes.md#what-fails-loudly)) instead of
@@ -75,7 +75,7 @@ An entry takes effect only when Nuplane's matcher takes it, on the assembly's na
 assembly's `AssemblyVersion` is its line's major, `4.0.0.0` in a source build and a computed one alike
 ([ADR 0067](../adr/0067-package-versioning-uses-two-lines-with-computed-patch.md),
 [#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150)), so every Elsa entry declares
-`"MajorVersion": 4`. `SharedAssemblyMajorVersionGuardTests` (`Essentials/tests/Architecture`) binds each host's
+`"MajorVersion": 4`. `SharedAssemblyMajorVersionGuardTests` (`server/essentials/tests/Architecture`) binds each host's
 entries with Nuplane's own code and fails the build when one would not take the reference a package built
 against either build carries. A feed package that carries its own copy of a shared assembly, in its own files
 or acquired into its graph, then binds the host's copy (since Nuplane `0.0.11-preview.94`,
@@ -110,7 +110,7 @@ the computed production file differs from the committed one in anything but that
 Sharing is also closed under Elsa project dependencies. A shared assembly's dependencies are not shared
 with it. A feed-loaded feature gets its own private copy of any Elsa dependency the host does not also
 share, so the types it exchanges with the shared assembly do not match the host's, and it fails at runtime.
-`SharedAssemblyClosureGuardTests` (`Essentials/tests/Architecture`) fails the build when a host shares an
+`SharedAssemblyClosureGuardTests` (`server/essentials/tests/Architecture`) fails the build when a host shares an
 assembly built from a project under `src/` without sharing every Elsa project it references, directly or
 transitively. That is why `Elsa.Workbench` shares `Elsa.Events.Core`, `Elsa.Pipelines.Core` and
 `Elsa.Workflows.Design.Validations.Core`, and it shares `Elsa.Attention.Core` because that assembly is a
@@ -186,7 +186,7 @@ by naming them. The engines' driver closures (`Microsoft.Data.Sqlite*`, `SQLiteP
 them out of your roots; see [Generating the closure](#generating-the-closure). The engine package itself may stay, since
 the `ef-provider` selection injects it as a root anyway.
 
-`FeedLoadedEfModuleTests` (`Essentials/tests/Cluster/EntityFrameworkCore/Tests`) proves each direction on both hosts'
+`FeedLoadedEfModuleTests` (`server/essentials/tests/Cluster/EntityFrameworkCore/Tests`) proves each direction on both hosts'
 configured shares, as Nuplane binds and matches them, a module carrying its own copy of `Elsa.Persistence.EntityFramework`
 included. `FoundationHostBootTests` (same project) boots the built `Elsa.Foundation.Host` as a child process over a
 directory feed of the packed fixture, plus a second, resolve-only `closure` feed holding EF Core and the Sqlite engine's

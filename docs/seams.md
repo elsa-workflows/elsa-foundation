@@ -212,10 +212,10 @@ These are sections of the Elsa constitution (`.specify/memory/constitution.md`):
 
 ## Where this lives in the code
 
-- The worked bridge: `Essentials/src/Workflows/Publishing/Api/`
-- CLR activation: `ClrActivityActivator` in `Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Activation/ClrActivityActivator.cs`
-- Graph activation: `GraphActivityActivationStrategy`, registered in `Essentials/src/Activities/Graph/Runtime/GraphActivitiesRuntimeFeature.cs`
-- Consumer keys `elsa.clr-activity` / `elsa.graph-activity`: `Essentials/src/Activities/Runtime/Core/Models/RuntimeActivityDescriptor.cs`
+- The worked bridge: `server/essentials/src/Workflows/Publishing/Api/`
+- CLR activation: `ClrActivityActivator` in `server/essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Activation/ClrActivityActivator.cs`
+- Graph activation: `GraphActivityActivationStrategy`, registered in `server/essentials/src/Activities/Graph/Runtime/GraphActivitiesRuntimeFeature.cs`
+- Consumer keys `elsa.clr-activity` / `elsa.graph-activity`: `server/essentials/src/Activities/Runtime/Core/Models/RuntimeActivityDescriptor.cs`
 - Current value-flow design: [`specs/095-value-flow-redesign/`](../specs/095-value-flow-redesign) and [ADR 0045](adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md)
 
 Related: [Elsa glossary](glossary/elsa.md) · [Architecture tour](architecture-tour.md) · [How a workflow executes](how-a-workflow-executes.md)

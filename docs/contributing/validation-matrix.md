@@ -5,7 +5,7 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 ## Existing merge gates
 
 - **Foundation:** the [Merge Gate](../skills/catalog.md#merge-gate) still requires the solution build, affected whole test projects, architecture guard, generated-maps check (the committed solution filters), diff review, a green `Build & test` check on the PR head, and a PR evidence comment. A behavioral claim also requires the gate's red-then-green bite-proof. Follow the applicable [rebuilt-server E2E guidance](task-paths.md#backend-e2e-tests).
-- **Studio:** use the [Studio contribution guide](../../Studio/CONTRIBUTING.md#local-checks-and-hosted-checks) and current PR branch rules. Its CI jobs are described there; the Packages workflow does not run on pull requests.
+- **Studio:** use the [Studio contribution guide](../../studio/CONTRIBUTING.md#local-checks-and-hosted-checks) and current PR branch rules. Its CI jobs are described there; the Packages workflow does not run on pull requests.
 
 ## By change area
 
@@ -21,8 +21,8 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 
 ### Studio UI
 
-- **Inner loop:** use the Node.js and pinned pnpm versions in the Studio contribution guide. Run `pnpm install --frozen-lockfile` from `Studio/`, then the affected package's existing test, typecheck, or build script; for example, `pnpm --filter @elsa-workflows/studio-workflows test`. See the [Studio guide](../../Studio/CONTRIBUTING.md#local-checks-and-hosted-checks) for root checks and Foundation [CI](../../.github/workflows/ci.yml) for browser-test setup.
-- **Evidence:** Foundation PR CI runs Studio lint, typecheck, workspace tests and bundle-budget checks when Studio changed, inside `Build & test`. The Chromium browser tests, Studio .NET build and composed UX acceptance run in `CI`'s nightly schedule and on `gh workflow run ci.yml --ref <branch> -f suite=studio`; dispatch them before merging a change that needs browser proof. The three extra shuffled Workflows test passes run nightly and on demand (`-f suite=studio-order`). For a visible paired source change, use the [Studio source quickstart](../../Studio/docs/contributing/studio-source-quickstart.md) and record the exact checkout revision and browser result.
+- **Inner loop:** use the Node.js and pinned pnpm versions in the Studio contribution guide. Run `pnpm install --frozen-lockfile` from `studio/`, then the affected package's existing test, typecheck, or build script; for example, `pnpm --filter @elsa-workflows/studio-workflows test`. See the [Studio guide](../../studio/CONTRIBUTING.md#local-checks-and-hosted-checks) for root checks and Foundation [CI](../../.github/workflows/ci.yml) for browser-test setup.
+- **Evidence:** Foundation PR CI runs Studio lint, typecheck, workspace tests and bundle-budget checks when Studio changed, inside `Build & test`. The Chromium browser tests, Studio .NET build and composed UX acceptance run in `CI`'s nightly schedule and on `gh workflow run ci.yml --ref <branch> -f suite=studio`; dispatch them before merging a change that needs browser proof. The three extra shuffled Workflows test passes run nightly and on demand (`-f suite=studio-order`). For a visible paired source change, use the [Studio source quickstart](../../studio/docs/contributing/studio-source-quickstart.md) and record the exact checkout revision and browser result.
 
 ### Persistence
 
@@ -36,5 +36,5 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 
 ### Cross-repository change
 
-- **Inner loop:** run the relevant checks in each changed repository. When the behavior depends on a Studio/Workbench pair, follow both source quickstarts and record both exact revisions.
+- **Inner loop:** run the relevant checks in each changed repository. When the behavior depends on a studio/Workbench pair, follow both source quickstarts and record both exact revisions.
 - **Evidence:** each PR's CI checks its own repository head; there is no general paired-branch CI job. Provide an exact-pair result for a claim that depends on the pair. Two independent green CI runs do not prove that combined behavior.

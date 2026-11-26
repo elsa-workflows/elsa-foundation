@@ -223,7 +223,7 @@ public sealed partial class WorkflowExplainContextTests
     private static JsonObject StudioSnapshot([CallerFilePath] string source = "")
     {
         var root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(source)!, "..", "..", "..", ".."));
-        var path = Path.Combine(root, "Studio", "src", "essentials", "Elsa.Studio.Workflows", "Client", "src", "__tests__", "workflowExplainSnapshot.json");
+        var path = Path.Combine(root, "studio", "src", "essentials", "Elsa.Studio.Workflows", "Client", "src", "__tests__", "workflowExplainSnapshot.json");
         return JsonNode.Parse(File.ReadAllText(path))!.AsObject();
     }
 

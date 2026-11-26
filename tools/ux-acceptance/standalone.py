@@ -25,7 +25,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES_ROOT = ROOT
 def harness_inputs():
-    acceptance = ROOT / 'Studio/tests/acceptance'
+    acceptance = ROOT / 'studio/tests/acceptance'
     return sorted({Path(__file__).resolve(), ROOT / 'tools/ux-acceptance/run.py',
         acceptance / 'playwright.config.ts', acceptance / 'tsconfig.json',
         *acceptance.glob('standalone*.ts'),
@@ -363,7 +363,7 @@ class OwnedBackend:
             raise ValueError('Concurrent qualification requires one running owned primary and its selected source boundary')
         directory = self.concurrent_directory
         if not directory.exists():
-            prepare_host(ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj', directory)
+            prepare_host(ROOT / 'server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj', directory)
         settings = json.loads((self.directory / 'appsettings.json').read_text())
         connection = f'Data Source={self.directory / "elsa.db"}'
         settings['ConnectionStrings']['Elsa'] = connection
@@ -821,16 +821,16 @@ def run(output, suite='standalone-triggers', journey=None, studio_shape='coordin
         report['executionSuite'] = execution_suite
         if dirty:
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
-        backend_project = ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
+        backend_project = ROOT / 'server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
         if studio_shape not in {'application', 'coordinated-sdk'}:
             raise ValueError('Unknown owned Studio composition')
-        application_project = ROOT / 'Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
+        application_project = ROOT / 'studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
         studio_project = application_project if studio_shape == 'application' else ROOT / 'tools/ux-acceptance/StudioConsumer/Acme.TriggerStudioConsumer.csproj'
         studio_dll = studio_project.stem + '.dll'
         report['studioConsumer'] = {'project': str(studio_project.relative_to(ROOT)), 'assembly': studio_dll,
             'coordinatedStore': studio_shape == 'coordinated-sdk', 'publishedPackageCompatibility': False}
         command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '-p:BuildInParallel=false', '/nr:false'], output / 'backend-build.log')
-        command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'Studio')
+        command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'studio')
         command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '-p:BuildInParallel=false', '/nr:false'], output / 'studio-build.log')
         setup_dll = None
         if execution_suite != 'existing':
@@ -838,7 +838,7 @@ def run(output, suite='standalone-triggers', journey=None, studio_shape='coordin
             command(['dotnet', 'build', str(setup_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '-p:BuildInParallel=false', '/nr:false'], output / 'access-setup-build.log')
             setup_dll = setup_project.parent / 'bin/Debug/net10.0/Elsa.UxAcceptance.Setup.dll'
             command(['pnpm', 'exec', 'tsc', '--project', str(FIXTURES_ROOT / 'tools/ux-acceptance/extensions/TriggerEditor/tsconfig.json')],
-                    output / 'extension-consumer-types.log', cwd=ROOT / 'Studio')
+                    output / 'extension-consumer-types.log', cwd=ROOT / 'studio')
             extension_feed = output / 'extension-feed'
             extension_feed.mkdir()
             for name, package in [('TriggerAuthoring', 'Acme.TriggerAuthoring'), ('TriggerFaults', 'Acme.TriggerFaults'), ('TriggerEditor', 'Acme.TriggerEditor')]:
@@ -924,10 +924,10 @@ def run(output, suite='standalone-triggers', journey=None, studio_shape='coordin
                                        ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
                                        UX_HOST_CONTROL=str(owned_backend.mailbox), UX_HOST_CONTROL_TOKEN=owned_backend.token,
                                        UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_ACCEPTANCE_SUITE=execution_suite)
-                    browser_command = ['pnpm', 'exec', 'playwright', 'test', '--max-failures=1', '--config', str(FIXTURES_ROOT / 'Studio/tests/acceptance/playwright.config.ts')]
+                    browser_command = ['pnpm', 'exec', 'playwright', 'test', '--max-failures=1', '--config', str(FIXTURES_ROOT / 'studio/tests/acceptance/playwright.config.ts')]
                     if journey:
                         browser_command.extend(['--grep', re.escape(journey).replace(r'\ ', ' ')])
-                    command(browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
+                    command(browser_command, output / 'journeys.log', cwd=ROOT / 'studio', env=browser_env)
                     playwright_report = json.loads((output / 'playwright.json').read_text())
         end_sha = subprocess.check_output(['git', '-c', 'core.fsmonitor=false', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         end_dirty = subprocess.check_output(['git', '-c', 'core.fsmonitor=false', 'status', '--porcelain'], cwd=ROOT, text=True).strip()

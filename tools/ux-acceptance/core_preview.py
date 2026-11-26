@@ -266,11 +266,11 @@ def run(output, journey=None):
     try:
         if dirty:
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
-        backend_project = ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
-        studio_project = ROOT / 'Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
+        backend_project = ROOT / 'server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
+        studio_project = ROOT / 'studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
         build = ['-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '-p:BuildInParallel=false', '/nr:false']
         command(['dotnet', 'build', str(backend_project), *build], output / 'backend-build.log')
-        command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'Studio')
+        command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'studio')
         command(['dotnet', 'build', str(studio_project), *build], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-core-preview-') as temporary:
             data = Path(temporary)
@@ -306,7 +306,7 @@ def run(output, journey=None):
                         browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
                         if journey:
                             browser_command.extend(['--grep', r'(?:^|\s)' + re.escape(journey) + '$'])
-                        command(browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
+                        command(browser_command, output / 'journeys.log', cwd=ROOT / 'studio', env=browser_env)
                 report['stubRequests'] = stub.recorded()
             report['postgres']['containerRemoved'] = container_gone(report['postgres']['container'])
             report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, selected)

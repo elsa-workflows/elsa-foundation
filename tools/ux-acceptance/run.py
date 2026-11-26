@@ -68,7 +68,7 @@ CAPTURES = {
     'complete typed collection items in JavaScript': ['reference', 'collection-item-completion', 'collection-item-applied', 'collection-item-hover', 'collection-member-picker'],
     'preserve expression data without optional modules': ['reference', 'missing-javascript', 'missing-javascript-reopened', 'missing-liquid', 'missing-liquid-reopened', 'missing-native-control', 'missing-320'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
-    # Supplementary journeys (Studio/tests/acceptance/supplements.spec.ts) run once per their own project.
+    # Supplementary journeys (studio/tests/acceptance/supplements.spec.ts) run once per their own project.
     'coarse pointer grouped navigation': ['touch-groups-open', 'touch-group-collapsed', 'touch-local-views', 'touch-settings-runtime', 'touch-top-group-open', 'touch-top-search', 'touch-search-no-match', 'touch-search-outside-dismissed', 'touch-keyboard-recovery'],
     'restricted principal settings access': ['restricted-appearance', 'restricted-features-settings-denied', 'restricted-features-bookmark-denied', 'restricted-runtime-readonly', 'restricted-keyboard-recovery'],
     'activity availability load failures and recovery': ['availability-loading', 'availability-settled', 'availability-abort-error', 'availability-abort-recovered', 'availability-client-500-error', 'availability-client-500-recovered'],
@@ -1091,7 +1091,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
     coverage_profiles = 'recorded activity playback coverage and access' in selected
     fixture_built = False
     owned_processes = {}
-    backend_project = ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
+    backend_project = ROOT / 'server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
     report = {'sourceSha': sha, 'headSha': head, 'dirty': bool(dirty),
               'kind': 'composed-source', 'studioSourceSha': studio_sha, 'studioDirty': bool(studio_dirty), 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review',
@@ -1101,7 +1101,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         if not (supplies_pr_head(ROOT, sha, head) or supplies_pr_head(studio_root, studio_sha, head)):
             raise ValueError('The claimed PR head supplied neither observed source tree nor a verified CI merge parent')
-        studio_project = studio_root / 'Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
+        studio_project = studio_root / 'studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
         backend_command = ['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=true', '-m:1', '-nr:false', '-v:q', '-nologo']
         if selected & (DATA_JOURNEYS | PROOF_TYPE_JOURNEYS):
             fixture = ROOT / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
@@ -1110,22 +1110,22 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                                  for file in (fixture, fixture.with_name('CustomerFixture.cs'))}
             fixture_built = True
         command(backend_command, output / 'backend-build.log')
-        command(['pnpm', 'build'], output / 'frontend-build.log', cwd=studio_root / 'Studio')
-        workflow_module = studio_root / 'Studio/src/essentials/Elsa.Studio.Workflows'
+        command(['pnpm', 'build'], output / 'frontend-build.log', cwd=studio_root / 'studio')
+        workflow_module = studio_root / 'studio/src/essentials/Elsa.Studio.Workflows'
         workflow_assets = fingerprints(workflow_module / 'wwwroot/studio/modules/workflows')
         report['workflowSourceAssets'] = workflow_assets
         copy_assets = {}
         if selected & COPY_JOURNEYS:
             diagnostics = output / 'copy-asset-diagnostics'
             command(['pnpm', '--filter', '@elsa-workflows/studio-workflows', 'exec', 'vite', 'build', '--sourcemap', 'hidden', '--outDir', str(diagnostics)],
-                    output / 'copy-asset-diagnostics.log', cwd=studio_root / 'Studio')
+                    output / 'copy-asset-diagnostics.log', cwd=studio_root / 'studio')
             copy_assets = copy_implementation_assets(workflow_module / 'Client/src', workflow_module / 'wwwroot/studio/modules/workflows', diagnostics)
             report['copyImplementationAssets'] = copy_assets
         report['stage'] = 'isolated-field-gallery'
         gallery = output / 'outlined-gallery'
         gallery_port = free_port()
         command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/browser/playwright.outlined-fields.config.ts'],
-                output / 'outlined-gallery.log', cwd=studio_root / 'Studio', env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery), OUTLINED_PORT=str(gallery_port), DEBUG="vite:deps,vite:transform"))
+                output / 'outlined-gallery.log', cwd=studio_root / 'studio', env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery), OUTLINED_PORT=str(gallery_port), DEBUG="vite:deps,vite:transform"))
         gallery_report = json.loads((gallery / 'playwright.json').read_text())
         gallery_url = gallery_report.get('config', {}).get('metadata', {}).get('outlinedBaseURL')
         report['isolatedFieldGallery'] = {'executed': field_gallery_verdict(gallery_report, gallery, gallery_port),
@@ -1244,7 +1244,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                 if journey is not None:
                     # Playwright greps project/file/title together; anchor the exact final title.
                     browser_command.extend(['--grep', r'(?:^|\s)(?:' + '|'.join(re.escape(name) for name in sorted(selected)) + ')$'])
-                command(browser_command, output / 'journeys.log', cwd=studio_root / 'Studio', env=browser_env, pump=restart.pump if restart is not None else None)
+                command(browser_command, output / 'journeys.log', cwd=studio_root / 'studio', env=browser_env, pump=restart.pump if restart is not None else None)
                 report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, selected, composition)
         report['hostExitCodes'] = {key: process.returncode for key, process in owned_processes.items()}
         report['ownedRootRemoved'] = not data.exists()

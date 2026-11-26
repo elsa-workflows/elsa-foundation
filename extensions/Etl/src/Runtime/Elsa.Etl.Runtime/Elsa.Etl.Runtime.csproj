@@ -11,7 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../Core/Elsa.Etl.Core.csproj" />
-    <ProjectReference Include="../../../../../essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="../../../../../server/essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="../../../../Connections/src/Core/Elsa.Connections.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Etl.Tests" />
     <InternalsVisibleTo Include="Elsa.Etl.Persistence.ProviderTests" />

@@ -5,15 +5,15 @@ import { createRequire } from "node:module";
 import { URL, fileURLToPath } from "node:url";
 import process from "node:process";
 
-const require = createRequire(new URL("../../Studio/package.json", import.meta.url));
+const require = createRequire(new URL("../../studio/package.json", import.meta.url));
 const ts = require("typescript");
-const sourcePath = process.env.CLEANUP_RECEIPT_SOURCE ?? fileURLToPath(new URL("../../Studio/tests/acceptance/journeys.spec.ts", import.meta.url));
+const sourcePath = process.env.CLEANUP_RECEIPT_SOURCE ?? fileURLToPath(new URL("../../studio/tests/acceptance/journeys.spec.ts", import.meta.url));
 const toastControls = {};
-const toastSource = readFileSync(new URL("../../Studio/tests/acceptance/toastPlacementControl.ts", import.meta.url), "utf8");
+const toastSource = readFileSync(new URL("../../studio/tests/acceptance/toastPlacementControl.ts", import.meta.url), "utf8");
 new Function("exports", ts.transpileModule(toastSource, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
 }).outputText)(toastControls);
-const dashboardSourcePath = new URL("../../Studio/tests/acceptance/dashboardJourneySupport.ts", import.meta.url);
+const dashboardSourcePath = new URL("../../studio/tests/acceptance/dashboardJourneySupport.ts", import.meta.url);
 const dashboardSource = ts.createSourceFile(String(dashboardSourcePath), readFileSync(dashboardSourcePath, "utf8"), ts.ScriptTarget.Latest, true);
 const dashboardParts = dashboardSource.statements.filter(node =>
   ts.isVariableStatement(node) && node.declarationList.declarations.some(item => item.name.getText(dashboardSource) === "pendingDashboardCleanup") ||

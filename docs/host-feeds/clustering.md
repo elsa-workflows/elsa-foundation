@@ -29,7 +29,7 @@ Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="Host=db;Databa
   `PostgreSql` or `MySql`; default `Sqlite`), `ConnectionString`, or `ConnectionName` naming an entry under
   `ConnectionStrings` (with `ConnectionStrings:Elsa` as the fallback), `Schema`, `Pooling` and `CleanupPeriod` (10 min;
   it must exceed the expiry period plus the skew allowance). `ClusterMembershipConfigurationExtensions` in
-  `Essentials/src/Cluster/EntityFrameworkCore` is the reference.
+  `server/essentials/src/Cluster/EntityFrameworkCore` is the reference.
 - **The host id.** It is required once the provider is enabled: a host without one refuses to start, naming
   `Elsa:Cluster:Membership:HostId` (FR-003a). Give each host its own and keep it across restarts; two live processes
   under one id are refused rather than allowed to displace each other (FR-004b). A host restarted after a crash under
@@ -45,10 +45,10 @@ Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="Host=db;Databa
   start once the durable provider is enabled, naming both ways out: the database lock, or a `LocksFolderPath` every host
   shares. SQLite has no database lock, so a SQLite composition keeps the file-system lock and is single-node by
   definition: several processes on that machine share one explicit `LocksFolderPath`. What a lock guarantees to a
-  `[SingleNodeTask]` is one at a time, at shell start, and no more; see `Essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md`.
+  `[SingleNodeTask]` is one at a time, at shell start, and no more; see `server/essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md`.
   The git workflow export takes no lock at all: every Writer node exports, and the fast-forward-only push keeps one
   writer per branch (#2197; see the section "Several Writer nodes of one catalog" in
-  `Essentials/src/Workflows/Design/Reconciliation/Git/README.md`).
+  `server/essentials/src/Workflows/Design/Reconciliation/Git/README.md`).
 - **Migrations.** The membership table is an EF module of its own (`Cluster.Membership`). Under the default policy the
   first host to start creates it; under `Elsa:Persistence:EntityFramework:Migrate:Policy=Validate` a host refuses to start
   until `dotnet elsa persistence apply` has created it, like any other module.
@@ -128,7 +128,7 @@ The running host reports the same blockers itself: a feature that needs the pend
 `schema-version-not-finalized`, and the Modularity API's Attention items carry the reason (spec 182). There is no separate
 status endpoint on `Elsa.Foundation.Host`; the CLI is the operator's view before and beside a running host.
 
-`FoundationHostClusterBootTests` (`Essentials/tests/Cluster/EntityFrameworkCore/Tests`) runs this whole sequence on two
+`FoundationHostClusterBootTests` (`server/essentials/tests/Cluster/EntityFrameworkCore/Tests`) runs this whole sequence on two
 built hosts over one SQLite database, and `PostgreSqlFoundationHostClusterTests` (`.../ProviderTests`, in a container) on
 one PostgreSQL database.
 

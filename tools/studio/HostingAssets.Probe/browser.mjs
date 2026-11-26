@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { writeFile } from "node:fs/promises";
 
-const require = createRequire(new URL("../../../Studio/package.json", import.meta.url));
+const require = createRequire(new URL("../../../studio/package.json", import.meta.url));
 const { chromium } = require("@playwright/test");
 const base = process.env.STUDIO_HOSTING_ASSET_BASE;
 const browser = await chromium.launch({ headless: true });

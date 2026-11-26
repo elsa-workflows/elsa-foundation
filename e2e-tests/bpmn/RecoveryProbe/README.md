@@ -7,8 +7,8 @@ Build two separate Workbench outputs outside the checkout. The fault feature is 
 ```powershell
 $probe = '/absolute/private/probe'
 $normal = '/absolute/private/normal'
-dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -c Release --artifacts-path $probe -p:ElsaBpmnRecoveryProbe=true -p:RestoreLockedMode=true
-dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -c Release --artifacts-path $normal -p:ElsaBpmnRecoveryProbe=false -p:RestoreLockedMode=true
+dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -c Release --artifacts-path $probe -p:ElsaBpmnRecoveryProbe=true -p:RestoreLockedMode=true
+dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -c Release --artifacts-path $normal -p:ElsaBpmnRecoveryProbe=false -p:RestoreLockedMode=true
 dotnet build tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj -p:RestoreLockedMode=true
 ./e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1 `
   -ProbeAssembly "$probe/bin/Elsa.Workbench.Host/release/Elsa.Workbench.Host.dll" `

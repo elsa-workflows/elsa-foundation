@@ -9,7 +9,7 @@ published server use a restricted PATH with failing node/npm/pnpm/npx shims.
 From the repository root, build the actual shell, its dependencies and Dashboard:
 
 ```sh
-(cd Studio && pnpm install --frozen-lockfile && pnpm --filter "@elsa-workflows/studio-web..." --filter "@elsa-workflows/studio-dashboard..." build)
+(cd studio && pnpm install --frozen-lockfile && pnpm --filter "@elsa-workflows/studio-web..." --filter "@elsa-workflows/studio-dashboard..." build)
 python3 tools/studio/AssetDelivery.Probe/qualify.py
 python3 tools/studio/AssetDelivery.Probe/qualify.py --omit-published-vendor
 python3 tools/studio/AssetDelivery.Probe/qualify.py

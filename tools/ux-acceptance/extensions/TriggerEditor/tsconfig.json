@@ -1,5 +1,5 @@
 {
-  "extends": "../../../../Studio/tsconfig.base.json",
+  "extends": "../../../../studio/tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -12,10 +12,10 @@
     "skipLibCheck": true,
     "paths": {
       "@elsa-workflows/studio-sdk": [
-        "../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk/src/index.ts"
+        "../../../../studio/src/essentials/Elsa.Studio.Hosting/StudioSdk/src/index.ts"
       ],
       "react": [
-        "../../../../Studio/node_modules/@types/react/index.d.ts"
+        "../../../../studio/node_modules/@types/react/index.d.ts"
       ]
     }
   },

@@ -12,8 +12,8 @@ case "${PG_PREVIEW_PROFILE:-}" in
 esac
 root=$(git -c core.fsmonitor=false rev-parse --show-toplevel)
 cd "$root"
-app=apps/Elsa.Workbench.Host
-runner=essentials/tests/ActorFoundation/Native/Run
+app=server/apps/Elsa.Workbench.Host
+runner=server/essentials/tests/ActorFoundation/Native/Run
 dotnet restore --locked-mode "$app"
 dotnet restore --locked-mode "$runner"
 dotnet build -c "$configuration" --no-restore "$app"

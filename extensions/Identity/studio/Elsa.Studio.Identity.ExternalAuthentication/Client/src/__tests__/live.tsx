@@ -5,7 +5,7 @@ import "@elsa-workflows/studio-ui/tokens.css";
 import "@elsa-workflows/studio-ui/styles.css";
 // Qualification uses the real host's Classic light defaults, rather than a separate fixture palette.
 // Production module code consumes only the public UI/token contract.
-import "../../../../../../../Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
+import "../../../../../../../studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../styles.css";
 import { ExternalAuthenticationPage } from "../ExternalAuthenticationPage";
 import { UserAccessPage } from "../UserAccessPage";

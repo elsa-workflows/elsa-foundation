@@ -19,11 +19,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Diagnostics.StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\tests\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\tests\Testing\Elsa.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\tests\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\tests\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
 </Project>

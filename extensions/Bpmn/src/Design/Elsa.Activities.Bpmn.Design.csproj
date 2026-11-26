@@ -11,8 +11,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Core/Elsa.Activities.Bpmn.Core.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
   </ItemGroup>
 </Project>

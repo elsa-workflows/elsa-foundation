@@ -7,7 +7,7 @@ The owner selected explicit workflow inputs on 14 Nov. The original four runtime
 Build and run from the repository root with Python 3 and **PowerShell 7.3+ (`pwsh`)** available. Keep the normal `dotnet` build-slot wrapper on PATH. This folder is an explicit exception to the general Windows PowerShell 5.1 invocation: `ConvertFrom-Json -AsHashtable` preserves empty literal property names, and 7.3+ preserves ordered JSON dictionaries for stable fingerprint comparison; the refusal probe also uses `-SkipHttpErrorCheck`. All entry scripts enforce this with `#requires`. Windows PowerShell 5.1 is unsupported for this lane; Windows execution has not been qualified. Local exploratory checks used the official portable macOS ARM64 PowerShell 7.7.0 release; tool provenance/hash is retained with the private proof receipts. No global installation or common runner change is required.
 
 ```sh
-DOTNET_PROCESSOR_COUNT=2 dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj \
+DOTNET_PROCESSOR_COUNT=2 dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj \
   -p:RestoreLockedMode=true -m:1 /nr:false \
   -p:CustomAfterMicrosoftCommonTargets="$PWD/e2e-tests/activity-data-selection/fixtures/fixture.targets"
 python3 -m unittest discover -s e2e-tests/activity-data-selection -p 'test_*.py' -v

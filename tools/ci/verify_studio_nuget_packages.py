@@ -33,7 +33,7 @@ def _child_text(parent: ElementTree.Element, name: str) -> str | None:
 
 
 def _studio_projects(root: Path) -> set[str]:
-    paths = set((root / "Studio").rglob("*.csproj"))
+    paths = set((root / "studio").rglob("*.csproj"))
     paths.update(path for extension in (root / "extensions").glob("*/studio") for path in extension.rglob("*.csproj"))
     return {path.relative_to(root).as_posix() for path in paths}
 
@@ -49,8 +49,8 @@ def _verify_extension_studio_props(root: Path, project: Path) -> None:
     expression = imports[0].attrib.get("Project", "")
     prefix = wrapper.parent.as_posix() + "/"
     resolved = Path(expression.replace("$(MSBuildThisFileDirectory)", prefix)).resolve()
-    if resolved != (root / "Studio/Directory.Build.props").resolve():
-        raise ValueError(f"{wrapper.relative_to(root)} does not import Studio/Directory.Build.props.")
+    if resolved != (root / "studio/Directory.Build.props").resolve():
+        raise ValueError(f"{wrapper.relative_to(root)} does not import studio/Directory.Build.props.")
     overrides = {"PackageId", "AssemblyName", "PackageIcon", "PackageLicenseExpression"}
     if any(_local_name(node.tag) in overrides for node in document.iter()):
         raise ValueError(f"{wrapper.relative_to(root)} overrides shared Studio package metadata.")
@@ -58,7 +58,7 @@ def _verify_extension_studio_props(root: Path, project: Path) -> None:
 
 def _normalize_layout_target(target: str) -> str:
     root, separator, remainder = target.partition("/")
-    if root in {"Essentials", "Extensions"}:
+    if root in {"Essentials", "Extensions", "Studio"}:
         root = root.lower()
     return root + separator + remainder
 
@@ -144,14 +144,14 @@ def verify_project_inventory(root: Path) -> dict:
         if item in non_packable and properties.get("IsPackable", "").lower() != "false":
             raise ValueError(f"Non-packable Studio project {item['project']} must explicitly set IsPackable=false.")
 
-    studio_props = ElementTree.parse(root / "Studio/Directory.Build.props").getroot()
+    studio_props = ElementTree.parse(root / "studio/Directory.Build.props").getroot()
     studio_properties = {
         _local_name(node.tag): (node.text or "").strip()
         for node in studio_props.iter()
         if _local_name(node.tag) in {"PackageId", "AssemblyName", "PackageIcon", "PackageLicenseExpression"}
     }
     if "PackageId" in studio_properties or "AssemblyName" in studio_properties:
-        raise ValueError("Studio/Directory.Build.props overrides SDK-default package identity values.")
+        raise ValueError("studio/Directory.Build.props overrides SDK-default package identity values.")
     if studio_properties.get("PackageLicenseExpression") != inventory["package_license_expression"]:
         raise ValueError("Studio package license metadata does not match the package identity manifest.")
     if studio_properties.get("PackageIcon") != inventory["package_icon"]:
@@ -163,13 +163,13 @@ def verify_project_inventory(root: Path) -> dict:
         and node.attrib.get("PackagePath") == ""
         for node in none_items
     ):
-        raise ValueError("Studio/Directory.Build.props must pack its shared icon.png at the package root.")
+        raise ValueError("studio/Directory.Build.props must pack its shared icon.png at the package root.")
     for item in packable:
         if item["project"].startswith("extensions/"):
             _verify_extension_studio_props(root, Path(item["project"]))
-    icon = root / "Studio" / inventory["package_icon"]
+    icon = root / "studio" / inventory["package_icon"]
     if not icon.is_file():
-        raise ValueError(f"Studio package icon source is missing: Studio/{inventory['package_icon']}.")
+        raise ValueError(f"Studio package icon source is missing: studio/{inventory['package_icon']}.")
     return inventory
 
 
@@ -217,7 +217,7 @@ def _dependency_contract(root: Path, item: dict, version: str) -> tuple[str, dic
     if not target or "$" in target:
         raise ValueError(f"Expected one literal TargetFramework for {item['id']}.")
     pins = {node.attrib["Include"]: node.attrib["Version"]
-            for node in ElementTree.parse(root / "Studio/Directory.Packages.props").getroot().iter()
+            for node in ElementTree.parse(root / "studio/Directory.Packages.props").getroot().iter()
             if _local_name(node.tag) == "PackageVersion" and "Include" in node.attrib and "Version" in node.attrib}
     dependencies, frameworks = {}, set()
     for group in project:

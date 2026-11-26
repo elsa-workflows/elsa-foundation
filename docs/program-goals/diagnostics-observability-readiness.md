@@ -53,7 +53,7 @@ proof are active under #1681.
 - [Diagnostics storage workload](../reports/diagnostics-storage-workload.md) - historical Groundwork
   capability evidence and the domain inventory carried into EF Core Persistence issue #1681.
 - Source: `elsa-core @ 8e20386a28f5754cc4e3b7f02e2fec5c8f676bdc`; `elsa-studio @ fb5e371febe37146a84679f7cc11b5461851f11a`.
-- Existing console streaming: `Essentials/apps/Elsa.Server/Program.cs` (`ConsoleLogStreaming`), `elsa-foundation-studio:src/Elsa.Studio.ConsoleStream`.
+- Existing console streaming: `server/essentials/apps/Elsa.Server/Program.cs` (`ConsoleLogStreaming`), `elsa-foundation-studio:src/Elsa.Studio.ConsoleStream`.
 
 ## Current Roadmap Notes
 

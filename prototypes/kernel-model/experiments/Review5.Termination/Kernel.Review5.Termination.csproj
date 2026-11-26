@@ -9,7 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Kernel.Workflows brings Kernel.Durable and Kernel.Runtime. -->
-    <ProjectReference Include="../../../../essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
+    <ProjectReference Include="../../../../server/essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

@@ -3,7 +3,7 @@
 Status: **built and measured on PostgreSQL, SQL Server, SQLite and MySQL; the default commit writer on all four.** The
 owner's decision of 16 November: replace EF's commit path with a commit the store writes itself, on all four engines,
 while EF keeps the schema, the migrations and the cold paths (reads, admin, bootstrap). The code is
-[`EfStore.Owned.cs`](../../essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/EfStore.Owned.cs) (the shape of the commit, the same on every engine) and `CommitDialect.cs`,
+[`EfStore.Owned.cs`](../../server/essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/EfStore.Owned.cs) (the shape of the commit, the same on every engine) and `CommitDialect.cs`,
 `SqliteCommitDialect.cs`, `MySqlCommitDialect.cs` (what differs per engine). `CommitSql.EntityFramework` keeps the old
 path as the reference (`commit=ef` in `EngineRun`, `--ef-commit` in the conformance runner). Nothing above the store
 changed: `IKernelStore`, the turn contract and layer 3 see the same `CommitBatch` and `Committed`.

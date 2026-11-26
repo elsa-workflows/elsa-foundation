@@ -6,7 +6,7 @@
     <PackageReference Include="MongoDB.Driver" Version="3.9.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../essentials/src/ActorFoundation/BuiltIn/Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/ActorFoundation/BuiltIn/Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

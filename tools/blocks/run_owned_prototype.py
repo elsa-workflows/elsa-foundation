@@ -7,7 +7,7 @@ import argparse
 
 REPO = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(
-    description="Own a fresh normal Studio/Workbench pair for block qualification; accepts restart/finish commands in its output directory."
+    description="Own a fresh normal studio/Workbench pair for block qualification; accepts restart/finish commands in its output directory."
 )
 parser.add_argument("--output", type=Path, required=True)
 OUT = parser.parse_args().output.resolve()
@@ -39,9 +39,9 @@ reader = (
 )
 assemblies = {
     "workbench": REPO
-    / "apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll",
+    / "server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll",
     "studio": REPO
-    / "Studio/src/apps/Elsa.Studio.Workbench.Host/bin/Debug/net10.0/Elsa.Studio.Workbench.Host.dll",
+    / "studio/src/apps/Elsa.Studio.Workbench.Host/bin/Debug/net10.0/Elsa.Studio.Workbench.Host.dll",
 }
 products = {
     role: json.loads(
@@ -63,7 +63,7 @@ if any(p["sourceCommit"] != source for p in products.values()):
     raise ValueError("Host products are from different source")
 assets = {
     str(p.relative_to(REPO)): h.digest(p)
-    for root in list((REPO / "Studio/src/essentials").glob("*/wwwroot"))
+    for root in list((REPO / "studio/src/essentials").glob("*/wwwroot"))
     + list((REPO / "extensions").glob("*/studio/*/wwwroot"))
     for p in root.rglob("*")
     if p.is_file()

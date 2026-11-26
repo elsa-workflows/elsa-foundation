@@ -229,12 +229,12 @@ SQLite allows one writer, and at its default `synchronous=FULL` each commit is a
 
 ## Where this lives in the code
 
-All paths are relative to the repository root, under `Essentials/`.
+All paths are relative to the repository root, under `server/essentials/`.
 
 | Topic | Type(s) | Path |
 |---|---|---|
-| Entry point | `Program` | `apps/Elsa.Workbench.Host/Program.cs` |
-| Shell and feature list | — | `apps/Elsa.Workbench.Host/shells.json` |
+| Entry point | `Program` | `server/apps/Elsa.Workbench.Host/Program.cs` |
+| Shell and feature list | — | `server/apps/Elsa.Workbench.Host/shells.json` |
 | Runtime API feature | `WorkflowsRuntimeApiFeature` | `src/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs` |
 | Activities runtime feature | `ActivitiesRuntimeFeature` | `src/Activities/Runtime/Elsa.Activities.Runtime/ActivitiesRuntimeFeature.cs` |
 | EF Core runtime feature | `RuntimeEntityFrameworkCoreFeature` | `src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeEntityFrameworkCoreFeature.cs` |
@@ -260,7 +260,7 @@ All paths are relative to the repository root, under `Essentials/`.
 | Command kinds | `WorkflowExecutionCommandKind` | `src/Workflows/Runtime/Core/Models/WorkflowExecutionCommand.cs` |
 | Checkpoint model | `RuntimeCheckpointCommit` | `src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs` |
 | Committer | `RuntimeCheckpointCommitter` | `src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs` |
-| Commit stores | `IRuntimeCheckpointCommitStore`, `InMemoryRuntimeCheckpointCommitStore`, `EfRuntimeCheckpointCommitStore` | `src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs`, `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/`, `src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/` |
+| Commit stores | `IRuntimeCheckpointCommitStore`, `InMemoryRuntimeCheckpointCommitStore`, `EfRuntimeCheckpointCommitStore` | `src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs`, `server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/`, `src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/` |
 | SQLite cost budgets | — | `tests/Activities/Http/IntegrationTests/CommandBudgets/ef-command-budgets.json` |
 | Bookmark model | `BookmarkState` | `src/Workflows/Runtime/Core/Models/BookmarkState.cs` |
 | Stimulus endpoint | `Endpoint` | `src/Workflows/Runtime/Api/Endpoints/Stimuli/Dispatch/Endpoint.cs` |

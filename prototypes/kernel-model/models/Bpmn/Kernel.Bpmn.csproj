@@ -7,7 +7,7 @@
     <PackageReference Include="Bpmn.Semantics" Version="0.5.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
+    <ProjectReference Include="../../../../server/essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

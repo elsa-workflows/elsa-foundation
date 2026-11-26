@@ -9,7 +9,7 @@ if (process.env.DECISIONS_OWNED_HOSTS !== '1' || !out || !ownedRoot || !database
 if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname)) throw Error('Owned loopback host required');
 const relative = path.relative(fs.realpathSync(ownedRoot), fs.realpathSync(database));
 if (relative.startsWith('..') || path.isAbsolute(relative)) throw Error('Only the existing owned host store is permitted');
-const { request } = createRequire(path.join(repo, 'Studio/package.json'))('@playwright/test');
+const { request } = createRequire(path.join(repo, 'studio/package.json'))('@playwright/test');
 fs.mkdirSync(out, { recursive: true });
 const privatePath = path.join(out, 'actors.private.json'), reportPath = path.join(out, 'permissions.json');
 let state = fs.existsSync(privatePath) ? JSON.parse(fs.readFileSync(privatePath)) : null;

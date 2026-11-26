@@ -1,0 +1,134 @@
+# Extension points — Activities.Design.Reconciliation.Clr
+
+A reconciliation **source** module (§2.6.1). It contributes to the activity catalog reconciliation
+lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalog of its own.
+
+---
+
+## Contributions to other domains
+
+### `IActivityReconciliationSource` *(Core contract — `Elsa.Activities.Design.Core`)*
+- **Implementation:** `ClrActivityReconciliationSource` (`SourceKind => "CLR"`).
+- **What it does:** scans `ClrReconciliationOptions.FolderPath` via `ClrAssemblyScanner` and returns
+  one `ActivityVersionReconciliationModel` per discovered `IActivity` implementation.
+- **Register:** `services.AddScoped<IActivityReconciliationSource, ClrActivityReconciliationSource>()`
+  (done by `ClrActivityReconciliationFeature`).
+- **Consumed by:** `CollectActivityVersions` in `Elsa.Activities.Design.Reconciliation`,
+  which injects every `IActivityReconciliationSource` and reconciles the returned versions.
+- **Stable identity:** emits provider key `elsa.clr-activity`, provider schema `1`, consumer key
+  `elsa.clr-activity`, and consumer schema `1`; the CLR descriptor type is only a consumer-owned payload
+  implementation detail.
+- **Publication bridge:** when the Publishing API feature is present, its single
+  `IActivitySourceVersionPublisher` commits the source-owned catalog and immutable runtime artifacts as
+  one persistence operation. Reconciliation remains usable without Publishing for isolated catalog tests.
+  Nodes reconciling the same source converge (#2189). When another node publishes the version first, the
+  commit finds it already published (`ActivityVersionAlreadyPublishedException`), and it counts as published
+  if the stored publication is identical. Identical means every persisted member is equal apart from the
+  clock fields, row number and lifecycle status; the code lists them once, in
+  `SourceOwnedActivityVersionPublisher.MembersNotCompared`. A commit that loses a concurrency or uniqueness
+  race does not take that as the version being published: the activity management projection's checkpoint
+  sequence is global, so the winner may be another node publishing a different activity. The EF commit runs
+  again with fresh reads, up to three attempts, and reports the version published only if a read finds it.
+  A commit that loses every attempt fails the pass with the lost race, an `InvalidOperationException`, as
+  does any other commit failure. CLR content has no provider compiler, so it keeps the single-node source-owned
+  root; provider-backed content is compiled and refused per version instead (see the reconciliation catalog).
+- **Catalog:** [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
+
+---
+
+## Serialized-shape contribution
+
+### Serialized read shapes
+
+- **Kind:** Enumerable contributor (`IActivitySerializedShapeSource`); multiple matching owners are refused.
+
+`IActivitySerializedShapeSource` (`Elsa.Activities.Design.Core`) contributes immutable outgoing shape
+facts for an already admitted source contract. The CLR feature registers one scoped contribution.
+The source matches the configured CLR source identity and exact catalog version/projection, including
+typed whole `$result` when no named Output rows exist. Boundary and scoped-value types use the actual
+activated `IVariableTypeDescriptorCatalog` and the host's resolved `IActivityContractCapabilityCatalog`;
+an authored alias never opens arbitrary CLR types or the runtime alias registry.
+
+Type admission alone does not establish the actual serialized profile of a Workflow input, variable or
+current item. For an admitted type whose members the metadata reader can read, and for a List, Array, HashSet
+or Dictionary of one, the CLR contribution returns `Declared` with `activity.shape.declared-type`: the type's
+members under the activity-value profile (on the collection's `Element` or the map's `MapValue`), as advisory
+names for authoring help. A member path below a collection keeps the unbound answer. Validation and the Activity Data picker
+treat `Declared` as Unknown. Every other case returns Unknown with
+`activity.shape.serialization-profile-unbound`: an admitted whole type can be retained, but a nonempty
+literal path has no asserted selected type. Request seeding preserves caller JSON or default
+System.Text.Json keys; expression and activity writers also differ. No value is normalized or
+case-folded. Those sources retain literal reads with deferred fit; an actual owner with authoritative
+schema/profile facts can contribute the same port later.
+
+The feature supplies the same pure default type-capability projection as the API with `TryAdd` for
+endpoint-free hosts. A host replacement wins, and API and headless consumers resolve the same configured
+catalog instance. The base Expressions feature supplies selectable type contracts; no expression
+language is required. The new implementation reference is to Expressions Core only.
+
+Admitted activity-result queries read metadata only. They retain literal serialized member names, outgoing nullability ReadState,
+conditional member omission and collection kind, with one global returned-member budget and bounded
+depth. A member-path subtree retains conservative nullable/optional prefix facts. Converters,
+including a type-level converter on `Nullable<T>`'s underlying type, polymorphism, extension data,
+unsupported inclusion/platform codecs and unavailable assets remain unknown or unavailable. A
+nullable enum without a type-level converter stays a Known scalar. No DTO, getter, attribute or converter is constructed or invoked. Scanner
+MetadataLoadContext isolation and existing input WriteState contracts remain unchanged.
+
+Profile, admitted source contract and consulted metadata assets have separate revisions. They do not
+change existing catalog fields or hashes. Resource/disclosure authorization and selection of exactly
+one matching contribution belong to the scoped analysis owner; these facts do not grant write access.
+After exact source/version/metadata checks, `activity.shape.no-typed-result` means no atomic typed result
+exists. Asset/schema/profile failures remain uncertainty, with final publication admission owned by the compiler.
+
+### Reconciliation collaborators
+
+Every collaborator is registered against a contract and injected as that contract (§2.5), so an
+inheriting feature can replace one in isolation: call `base.ConfigureServices(services)` and
+re-register just the contract afterwards. All three are **scoped** — they execute logic rather than
+holding application-wide static state (§2.5.1).
+
+- **`IActivityTypeVersionResolver` → `ActivityTypeVersionResolver`** — resolves an activity's
+  author-controlled SemVer. Re-register to change the version-precedence policy; the default (FR-020:
+  `[Version]` → `AssemblyInformationalVersion` → 4-part assembly version) is the sanctioned rule.
+- **`IActivityTypeCategoryResolver` → `ActivityTypeCategoryResolver`** — resolves an activity's catalog
+  category. The default takes the last dot-separated segment of the declaring assembly's simple name
+  (e.g. `Elsa.Runtime.Activities.Primitives` → `Primitives`). Re-register for a different scheme
+  (e.g. a type-level `[Category]` attribute).
+- **`IClrAssemblyScanner` → `ClrAssemblyScanner`** — the reflection-only folder scanner that produces
+  one `ActivityVersionReconciliationModel` per discovered `IActivity`. Re-register to change the
+  scanning strategy without touching `ClrActivityReconciliationSource`, which depends only on the
+  contract. The scanner is where a credential input declaration (`[ActivityInput(IsCredential = true)]`) is
+  checked to be bindable to a secret reference (spec 188, FR-006), so a replacement that copies the declaration
+  into the catalog must refuse the same unbindable declarations: a default value, a property that is not a
+  `string`, an input named in `[RefusesSecretBinding]`, and a checkpoint participant. A valid
+  `[Activity(Icon = …)]` is copied onto an `elsa.activity-icon` design facet (`ActivityIconName`); an
+  unknown or unsafe value is dropped. The facet is presentation only and is excluded from the
+  descriptor hash, so adding or changing an icon does not throw `ActivityVersionHashMismatchException`.
+  `[ReplacesActivityType]` declarations on the class itself are copied onto an `elsa.replaced-activity-types`
+  design facet (`ClrAssemblyScanner.ReplacedActivityTypesFacetKind`, schema `1`, `{ "typeNames": [...] }`). Unlike the
+  icon, this facet is content: it is part of the version hash, so a replacement scanner must emit it identically or
+  change existing versions' hashes.
+
+---
+
+## Options
+
+- **`ClrReconciliationOptions.FolderPath`** — the folder scanned for activity-bearing assemblies.
+- **`ClrReconciliationOptions.SourceId`** — recorded as `SourceId` on every contributed row; defaults
+  to the normalised `FolderPath` (R3).
+
+---
+
+## Events
+
+This module declares no `IEvent` types. It handles none directly; its source is pulled by the
+reconciliation feature's handler.
+
+---
+
+## Cross-references
+
+- Reconciliation lifecycle + the source contract: [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
+- Activity abstractions + `[Version]`: `Elsa.Activities.Runtime.Core`.
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../../../EXTENSION_POINTS.md).
+- Constitutional basis: §2.6.1 (DI-source), §E2.2 (Design→Runtime edge), §E2.8 (author semver).

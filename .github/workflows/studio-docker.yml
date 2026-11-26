@@ -178,7 +178,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: elsa-foundation-studio-nuget-packages
-          path: Studio/packages/nuget
+          path: studio/packages/nuget
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ steps.source.outputs.run_id }}
@@ -209,7 +209,7 @@ jobs:
           from studio_docker_publish import read_repository_preview_floor, require_preview_above_floor
           from verify_studio_nuget_packages import verify_packages
 
-          artifact = Path("Studio/packages/nuget")
+          artifact = Path("studio/packages/nuget")
           manifest_path = artifact / "studio-package-build.json"
           if not manifest_path.is_file():
               raise SystemExit("Studio package provenance manifest is missing from the selected artifact.")
@@ -279,22 +279,22 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          package_json_file: Studio/package.json
+          package_json_file: studio/package.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: Studio/pnpm-lock.yaml
+          cache-dependency-path: studio/pnpm-lock.yaml
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
-        working-directory: Studio
+        working-directory: studio
 
       - name: Build frontend assets
         run: pnpm build
-        working-directory: Studio
+        working-directory: studio
 
       - name: Verify Studio frontend assets
         run: python3 tools/ci/verify-studio-assets.py

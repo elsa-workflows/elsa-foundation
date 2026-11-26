@@ -25,9 +25,9 @@
     <ProjectReference Include="..\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <!-- The DiagnosticsOpenTelemetry feature this feature depends on, so a feed install brings it along. -->
     <ProjectReference Include="..\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
     <!-- WorkflowEngineTelemetry's source, span and tag names. -->
-    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
 </Project>

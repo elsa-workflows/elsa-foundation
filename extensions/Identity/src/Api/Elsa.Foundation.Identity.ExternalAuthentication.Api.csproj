@@ -8,7 +8,7 @@
     <PackageReference Include="ValenceWorks.MinimalEndpoints" />
     <ProjectReference Include="../Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj" />
     <ProjectReference Include="../Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj" />
   </ItemGroup>
 </Project>

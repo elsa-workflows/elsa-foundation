@@ -6,7 +6,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../Core/Acme.Processing.Core.csproj" />
     <ProjectReference Include="../../../../Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj" />
-    <ProjectReference Include="../../../../../essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="../../../../../server/essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />

@@ -90,7 +90,7 @@ function Start-OwnedStudioServer {
     }
     Assert-OwnableAddress -BaseUrl $BaseUrl
 
-    $studioProjectDirectory = (Resolve-Path "$PSScriptRoot/../../Studio/src/apps/Elsa.Studio.Workbench.Host").Path
+    $studioProjectDirectory = (Resolve-Path "$PSScriptRoot/../../studio/src/apps/Elsa.Studio.Workbench.Host").Path
     $dll = Join-Path $studioProjectDirectory 'bin/Debug/net10.0/Elsa.Studio.Workbench.Host.dll'
     if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) {
         throw "Studio host DLL not found at $dll; build Elsa.Studio.Workbench.Host with ETL enabled first."
@@ -173,8 +173,8 @@ $fixture = $null
 $journeyFailure = $null
 try {
     $repoRoot = (Resolve-Path "$PSScriptRoot/../..").Path
-    $workbenchDll = Join-Path $repoRoot 'apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll'
-    $studioProjectDirectory = Join-Path $repoRoot 'Studio/src/apps/Elsa.Studio.Workbench.Host'
+    $workbenchDll = Join-Path $repoRoot 'server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll'
+    $studioProjectDirectory = Join-Path $repoRoot 'studio/src/apps/Elsa.Studio.Workbench.Host'
     $studioDll = Join-Path $studioProjectDirectory 'bin/Debug/net10.0/Elsa.Studio.Workbench.Host.dll'
     if (-not (Test-Path -LiteralPath $workbenchDll -PathType Leaf)) {
         throw "Workbench host DLL not found at $workbenchDll; build Elsa.Workbench with ETL enabled first."

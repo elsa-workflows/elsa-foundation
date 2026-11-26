@@ -35,12 +35,12 @@ class MaterializationTests(unittest.TestCase):
     def real_pin_run(directory, backend_di, studio_di):
         root = Path(directory)
         repo = root / "repo"
-        (repo / "Studio").mkdir(parents=True)
+        (repo / "studio").mkdir(parents=True)
         common = '<PackageVersion Include="CShells.Abstractions" Version="1.0.0"/><PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1"/>'
         def declaration(versions):
             return ''.join(f'<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="{version}"/>' for version in versions)
         (repo / "Directory.Packages.props").write_text('<Project><ItemGroup>' + common + declaration(backend_di) + '</ItemGroup></Project>')
-        (repo / "Studio/Directory.Packages.props").write_text('<Project><ItemGroup>' + declaration(studio_di) + '</ItemGroup></Project>')
+        (repo / "studio/Directory.Packages.props").write_text('<Project><ItemGroup>' + declaration(studio_di) + '</ItemGroup></Project>')
         run = ConformanceRun.__new__(ConformanceRun)
         run.root = root / "output"
         run.root.mkdir()

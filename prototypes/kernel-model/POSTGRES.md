@@ -280,7 +280,7 @@ Use a fresh database for each of the four `inline|reference` and `reused|changin
 `SSL Mode=Disable`, then run from `prototypes/kernel-model`.
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Native/Run -- pg-root-value-volume reference reused pad=4096 turns=64
+dotnet run -c Release --project ../../server/essentials/tests/ActorFoundation/Native/Run -- pg-root-value-volume reference reused pad=4096 turns=64
 ```
 
 ## Partitioned inbox: fit report

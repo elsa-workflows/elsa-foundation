@@ -3,7 +3,7 @@ import type { ElsaStudioModuleApi, StudioWeaverRegistry } from "@elsa-workflows/
 import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 // The Workflows module's own registration, composed beside this package's as the Studio host composes both.
-import { registerWorkflowWeaver } from "../../../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowWeaver";
+import { registerWorkflowWeaver } from "../../../../../../../studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowWeaver";
 import server from "./workflowWeaverRegistrations.json";
 
 // Spec 1193 SC-007 (FR-019): over the composed Studio contributions of both Workflows packages and the server registrations

@@ -1,8 +1,8 @@
 # Extensions
 
-Optional modules live here. Backend essentials are in [`../essentials/src`](../essentials/src),
-deployable backend hosts in [`../apps`](../apps), and the Studio shell in
-[`../Studio`](../Studio).
+Optional modules live here. Backend essentials are in [`../server/essentials/src`](../server/essentials/src),
+deployable backend hosts in [`../server/apps`](../server/apps), and the Studio shell in
+[`../studio`](../studio).
 
 The tooling that enumerates modules was taught about this folder before any module moved into it, so
 that each move is a pure move rather than a move plus a set of silent tooling regressions. See
@@ -62,7 +62,7 @@ site already covers `extensions/`, and this is the complete list:
 |---|---|---|
 | `.github/workflows/packages.yml` | nothing itself: it packs the dependency map's packable projects, which `RepoLayout.cs` below enumerates | the version calculator refuses a map that misses a project, so packing fails |
 | `.github/workflows/ci.yml` | container-free test projects | the module's tests stop running, job still green |
-| `apps/Elsa.Workbench.Host/Dockerfile` | restore inputs and the source copy | image build fails (the one that fails loudly) |
+| `server/apps/Elsa.Workbench.Host/Dockerfile` | restore inputs and the source copy | image build fails (the one that fails loudly) |
 | `.dockerignore` | what reaches the build context | extension tests bloat the context |
 | `tools/ef/generate-module-migrations.sh` | EF modules and model snapshots | finds no module, generates nothing |
 | `tools/maps/Elsa.Maps.Generator/RepoLayout.cs` | projects, sources and catalogs for every map | the module vanishes from every map |
@@ -74,10 +74,10 @@ fail silently in the same way, but they do have to move with the module, and the
 | Site | What it names |
 |---|---|
 | `.github/workflows/ci.yml`, the `ef-container-suites` matrix | one `.csproj` path per container suite |
-| `essentials/tests/Architecture/Tests/ArchitectureGuardTests.cs` | the name-to-path convention, which has a branch per root |
-| `essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs` | the admitted-EF-path allowlist |
-| `essentials/tests/Architecture/Tests/EndpointSecurityTests.cs` | the directory scanned per endpoint group |
-| `essentials/tests/Architecture/Tests/ReusableActivityArchitectureTests.cs` | project and directory paths, and a path-prefix assertion |
+| `server/essentials/tests/Architecture/Tests/ArchitectureGuardTests.cs` | the name-to-path convention, which has a branch per root |
+| `server/essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs` | the admitted-EF-path allowlist |
+| `server/essentials/tests/Architecture/Tests/EndpointSecurityTests.cs` | the directory scanned per endpoint group |
+| `server/essentials/tests/Architecture/Tests/ReusableActivityArchitectureTests.cs` | project and directory paths, and a path-prefix assertion |
 | `EXTENSION_POINTS.md` | the root index of extension-point catalogs |
 
 This second list was **missing when stage 0 described the first one as complete**; it was found by
@@ -109,7 +109,7 @@ Adding a project root to the repository means auditing both lists again.
 ## Rules
 
 - **Core never references an extension.** Enforced by `ExtensionBoundaryTests` in
-  `essentials/tests/Architecture/ExtensionBoundary/Tests`, which fails and names the offending edge.
+  `server/essentials/tests/Architecture/ExtensionBoundary/Tests`, which fails and names the offending edge.
 - **An extension may reference another extension only when the edge is declared** in that same guard's
   allowlist. Undeclared extension-to-extension edges fail the same way.
 - **Every project belongs to exactly one bucket.** No project sits inside another project's directory

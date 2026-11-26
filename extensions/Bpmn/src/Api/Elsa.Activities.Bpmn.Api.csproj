@@ -11,9 +11,9 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Core/Elsa.Activities.Bpmn.Core.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
   </ItemGroup>
 </Project>

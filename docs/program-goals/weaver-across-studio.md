@@ -14,9 +14,9 @@ can add context, tools, guidance, review UI and supported actions without changi
 Studio host or provider adapters. Contexts include screens, lists and filters, resources, selections,
 unsaved editors, activities, expressions, exact execution occurrences, diagnostics and module surfaces.
 
-Use the existing [Slots and Contributions decision](../../Studio/docs/adr/0001-use-slots-and-contributions-for-studio-extensibility.md)
-and [resource-agnostic Weaver decision](../../Studio/docs/adr/0003-make-weaver-tools-and-proposals-resource-agnostic.md).
-The [Studio domain context](../../Studio/CONTEXT.md) and [Elsa glossary](../glossary/elsa.md) own meanings;
+Use the existing [Slots and Contributions decision](../../studio/docs/adr/0001-use-slots-and-contributions-for-studio-extensibility.md)
+and [resource-agnostic Weaver decision](../../studio/docs/adr/0003-make-weaver-tools-and-proposals-resource-agnostic.md).
+The [Studio domain context](../../studio/CONTEXT.md) and [Elsa glossary](../glossary/elsa.md) own meanings;
 the Program issue owns the acceptance matrix and current evidence. Candidate API signatures remain
 subject to demonstrated journeys and normal architecture review. The independent M1 minimum is accepted and verified; later lifecycle changes require their own qualification.
 

@@ -78,7 +78,7 @@ Moved to [Running several hosts as a cluster](host-feeds/clustering.md).
 
 ## Where this lives in the code
 
-- `Essentials/apps/Elsa.Foundation.Host/` — the host, its `appsettings.json` and the module-management endpoints.
+- `server/essentials/apps/Elsa.Foundation.Host/` — the host, its `appsettings.json` and the module-management endpoints.
 - `Nuplane:*` configuration — feeds, capabilities, lock file (Nuplane package).
 - `Elsa:Shells:*` configuration — shell reload behaviour (CShells).
 

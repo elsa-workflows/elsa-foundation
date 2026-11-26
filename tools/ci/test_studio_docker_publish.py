@@ -477,7 +477,7 @@ class StudioDockerPublishTests(unittest.TestCase):
             text = output.read_text()
             self.assertIn("flavor=essentials\n", text)
             self.assertIn(f"image={IMAGE}\n", text)
-            self.assertIn("dockerfile=Studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile\n", text)
+            self.assertIn("dockerfile=studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile\n", text)
         for flavor in ("", "web", "Essentials"):
             with self.subTest(flavor=flavor), tempfile.TemporaryDirectory() as directory:
                 output = Path(directory) / "github-output"
@@ -490,9 +490,9 @@ class StudioDockerPublishTests(unittest.TestCase):
     def test_flavor_table_follows_the_owner_image_decision(self) -> None:
         self.assertEqual(
             {
-                "essentials": ("elsaworkflows/elsa-studio", "Studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile"),
-                "workbench": ("elsaworkflows/elsa-studio-workbench", "Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile"),
-                "foundation": ("elsaworkflows/elsa-studio-foundation", "Studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile"),
+                "essentials": ("elsaworkflows/elsa-studio", "studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile"),
+                "workbench": ("elsaworkflows/elsa-studio-workbench", "studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile"),
+                "foundation": ("elsaworkflows/elsa-studio-foundation", "studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile"),
             },
             {flavor: (values["image"], values["dockerfile"]) for flavor, values in publish.STUDIO_FLAVORS.items()},
         )
@@ -512,7 +512,7 @@ class StudioDockerPublishTests(unittest.TestCase):
                 app = dockerfile.parent.name
                 text = dockerfile.read_text()
                 self.assertIn(f'ENTRYPOINT ["dotnet", "{app}.dll"]', text)
-                self.assertIn(f"dotnet publish Studio/src/apps/{app}/{app}.csproj", text)
+                self.assertIn(f"dotnet publish studio/src/apps/{app}/{app}.csproj", text)
 
     def test_the_docker_workflow_builds_every_flavor_and_nothing_else(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/studio-docker.yml").read_text()
@@ -520,7 +520,7 @@ class StudioDockerPublishTests(unittest.TestCase):
         self.assertIsNotNone(match, "studio-docker.yml has no flavor matrix.")
         self.assertEqual(sorted(publish.STUDIO_FLAVORS), sorted(item.strip() for item in match.group(1).split(",")))
         # The image and Dockerfile come only from resolve-flavor, never from a literal in the workflow.
-        self.assertNotIn("Studio/src/apps/", workflow)
+        self.assertNotIn("studio/src/apps/", workflow)
 
     def test_invalid_source_cli_fails_without_writing_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

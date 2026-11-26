@@ -89,7 +89,7 @@ def reviewed_host_template():
         for node in group.iter('ProjectReference'):
             if node.get('Condition') or group.get('Condition'):
                 raise ValueError('The dedicated host requires unconditional reviewed dependencies')
-    base = ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
+    base = ROOT / 'server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
     expected = {(base.parent / item.attrib['Include'].replace('\\', '/')).resolve()
                 for item in ET.parse(base).iter('ProjectReference')}
     expected.add(ROOT / 'extensions/Examples/src/Acme.Processing/Module/Acme.Processing.csproj')
@@ -109,7 +109,7 @@ def materialize(output):
     host.mkdir()
     project = host / f'{HOST_NAME}.csproj'
     project.write_text(reviewed_host_template())
-    program = (ROOT / 'apps/Elsa.Workbench.Host/Program.cs').read_text()
+    program = (ROOT / 'server/apps/Elsa.Workbench.Host/Program.cs').read_text()
     hook = 'builder.Services.AddHostedService(services => services.GetRequiredService<DashboardQualificationBootstrap>());'
     program = replace_once(program, hook, hook + '\nvar liveDashboardCounters = new DashboardLiveCounters();\nbuilder.Services.AddSingleton(liveDashboardCounters);\nvar dashboardStartClock = new DashboardQualificationStartClock();\nbuilder.Services.AddSingleton(dashboardStartClock);')
     hook = '            typeof(WeaverGitHubCopilotFeature).Assembly,'
@@ -147,7 +147,7 @@ def materialize(output):
     inputs = {'hostTemplate': sha(HERE / 'live/Host.csproj.in'),
               'observer': sha(HERE / 'live/DashboardLiveQualification.cs'),
               'startClock': sha(HERE / 'live/DashboardQualificationStartClock.cs'),
-              'nativeProgram': sha(ROOT / 'apps/Elsa.Workbench.Host/Program.cs'),
+              'nativeProgram': sha(ROOT / 'server/apps/Elsa.Workbench.Host/Program.cs'),
               'generatedProgram': sha(host / 'Program.cs')}
     (output / 'source-inputs.json').write_text(json.dumps(inputs, indent=2) + '\n')
     return project, owned, seeded
@@ -160,7 +160,7 @@ def build_options(output, hook):
 
 def build(output, project, hook, seeded, native):
     options = build_options(output, hook)
-    studio = ROOT / 'Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
+    studio = ROOT / 'studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
     for label, target in [('backend', project), ('studio', studio)]:
         command(native, ['dotnet', 'restore', str(target), *options], output / f'{label}-restore.log', cwd=ROOT, env=native.clean_environment())
     changed = [Path(path).name for path, digest in seeded.items() if sha(Path(path)) != digest]
@@ -173,10 +173,10 @@ def build(output, project, hook, seeded, native):
     command(native, ['dotnet', 'restore', str(observer_tests), *options], output / 'observer-restore.log', cwd=ROOT, env=native.clean_environment())
     command(native, ['dotnet', 'restore', str(observer_tests), '--locked-mode', *options], output / 'observer-locked-restore.log', cwd=ROOT, env=native.clean_environment())
     command(native, ['dotnet', 'test', str(observer_tests), '--no-restore', *options], output / 'observer-tests.log', cwd=ROOT, env=native.clean_environment())
-    if (ROOT / 'Studio/node_modules').is_symlink():
+    if (ROOT / 'studio/node_modules').is_symlink():
         raise ValueError('Live host builds require this checkout\'s own frozen frontend installation, not another checkout\'s toolchain symlink')
-    command(native, ['pnpm', 'install', '--frozen-lockfile'], output / 'frontend-install.log', cwd=ROOT / 'Studio', env=native.clean_environment())
-    command(native, ['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'Studio', env=native.clean_environment())
+    command(native, ['pnpm', 'install', '--frozen-lockfile'], output / 'frontend-install.log', cwd=ROOT / 'studio', env=native.clean_environment())
+    command(native, ['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'studio', env=native.clean_environment())
     command(native, ['dotnet', 'build', str(studio), '--no-restore', *options], output / 'studio-build.log', cwd=ROOT, env=native.clean_environment())
 
 
@@ -570,8 +570,8 @@ def execute_live(output, options, native, report):
         backend, studio = data / 'backend', data / 'studio'
         copy_runtime(output / 'artifacts/bin' / HOST_NAME / 'debug', backend)
         copy_runtime(output / 'artifacts/bin/Elsa.Studio.Workbench.Host/debug', studio)
-        backend_source = ROOT / 'apps/Elsa.Workbench.Host'
-        studio_source = ROOT / 'Studio/src/apps/Elsa.Studio.Workbench.Host'
+        backend_source = ROOT / 'server/apps/Elsa.Workbench.Host'
+        studio_source = ROOT / 'studio/src/apps/Elsa.Studio.Workbench.Host'
         for target, source in [(backend, backend_source), (studio, studio_source)]:
             for name in ('appsettings.json', 'shells.json'):
                 shutil.copy2(source / name, target / name)
@@ -612,7 +612,7 @@ def execute_live(output, options, native, report):
                              studio_env) as first_studio:
                 report['stage'] = 'actual-live-journeys'
                 journey_env = dict(browser_env, UX_DASHBOARD_NATIVE_EDGES='1') if edges else dict(browser_env, UX_DASHBOARD_UNSUPPORTED='1') if unsupported else browser_env
-                command(native, browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=journey_env)
+                command(native, browser_command, output / 'journeys.log', cwd=ROOT / 'studio', env=journey_env)
                 report['executed'] = native_edge_verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha']) if edges else unsupported_verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha']) if unsupported else accessibility_verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha']) if getattr(options, 'keyboard', False) else verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha'])
         lifetimes = [{'phase': 'authoring', 'backendPid': first_backend.pid, 'studioPid': first_studio.pid,
                       'backendExit': first_backend.poll(), 'studioExit': first_studio.poll()}]
@@ -640,7 +640,7 @@ def execute_live(output, options, native, report):
         report['stage'] = 'native-real-host-restart'
         with native.host(backend, 'Elsa.Workbench.Host.dll', backend_url, '/__qualification/ready', output / 'backend-restart.log', restart_env) as second_backend:
             with native.host(studio, 'Elsa.Studio.Workbench.Host.dll', studio_url, '/studio-runtime.js', output / 'studio-restart.log', studio_env) as second_studio:
-                command(native, browser_command, output / 'restart-journey.log', cwd=ROOT / 'Studio',
+                command(native, browser_command, output / 'restart-journey.log', cwd=ROOT / 'studio',
                         env=dict(browser_env, UX_DASHBOARD_RESTART='1'))
         lifetimes.append({'phase': 'provider-disabled-restart', 'backendPid': second_backend.pid, 'studioPid': second_studio.pid,
                           'backendExit': second_backend.poll(), 'studioExit': second_studio.poll(),

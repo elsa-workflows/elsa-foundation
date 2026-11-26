@@ -8,7 +8,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="../Core/Elsa.Weaver.Core.csproj" />
     <ProjectReference Include="../Elsa.Weaver/Elsa.Weaver.csproj" />
   </ItemGroup>

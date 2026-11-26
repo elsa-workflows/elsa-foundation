@@ -6,9 +6,9 @@ import { createRequire } from "node:module";
 import { URL, fileURLToPath } from "node:url";
 
 // Compare the tests Playwright discovers with run.py's verdict inventory without starting browsers or hosts.
-const require = createRequire(new URL("../../Studio/package.json", import.meta.url));
+const require = createRequire(new URL("../../studio/package.json", import.meta.url));
 const ts = require("typescript");
-const acceptance = new URL("../../Studio/tests/acceptance/", import.meta.url);
+const acceptance = new URL("../../studio/tests/acceptance/", import.meta.url);
 const configSource = readFileSync(new URL("playwright.config.ts", acceptance), "utf8");
 const compiled = ts.transpileModule(configSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } });
 const env = {
@@ -23,7 +23,7 @@ const config = module.exports.default;
 function discoveredProjects(composition) {
   const report = JSON.parse(execFileSync(process.execPath, [require.resolve("@playwright/test/cli"),
     "test", "--list", "--reporter=json", "--config", fileURLToPath(new URL("playwright.config.ts", acceptance))], {
-    cwd: fileURLToPath(new URL("../../Studio/", import.meta.url)),
+    cwd: fileURLToPath(new URL("../../studio/", import.meta.url)),
     env: { ...process.env, ...env, UX_ACTIVITY_DATA_COMPOSITION: composition },
     encoding: "utf8"
   }));

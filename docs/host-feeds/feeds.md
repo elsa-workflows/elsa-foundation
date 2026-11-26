@@ -50,7 +50,7 @@ Add `Credentials` for a private feed — a *reference* to its secret, never the 
 A relative `DirectoryPath` is resolved against the host's **content root** — the same directory this
 `appsettings.json` was read from — because the host passes
 `nuplane.UseBasePath(builder.Environment.ContentRootPath)` where it composes Nuplane
-(`Essentials/apps/Elsa.Foundation.Host/Program.cs`, and the same call in `Elsa.Workbench`). Without that call
+(`server/essentials/apps/Elsa.Foundation.Host/Program.cs`, and the same call in `Elsa.Workbench`). Without that call
 Nuplane resolves such a path against the *process's current directory* instead, and the two are the same
 place only when the host is started from its own directory. A deployment that sets the content root
 independently of where the process is launched — `ASPNETCORE_CONTENTROOT`, a systemd unit, a container

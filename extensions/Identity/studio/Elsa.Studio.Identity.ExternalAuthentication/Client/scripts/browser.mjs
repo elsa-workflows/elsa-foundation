@@ -13,8 +13,8 @@ const recovery = await import(pathToFileURL(join(repo, "tools/identity/ExternalA
 const sourceSha = execFileSync("git", ["-c", "core.fsmonitor=false", "rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
 const sourceDirty = Boolean(execFileSync("git", ["-c", "core.fsmonitor=false", "status", "--porcelain"], { cwd: repo, encoding: "utf8" }).trim());
 let uiEvidence;
-const { createServer } = await import(pathToFileURL(join(repo, "Studio/node_modules/vite/dist/node/index.js")));
-const { chromium, expect: baseExpect } = await import(pathToFileURL(join(repo, "Studio/node_modules/@playwright/test/index.mjs")));
+const { createServer } = await import(pathToFileURL(join(repo, "studio/node_modules/vite/dist/node/index.js")));
+const { chromium, expect: baseExpect } = await import(pathToFileURL(join(repo, "studio/node_modules/@playwright/test/index.mjs")));
 const expect = baseExpect.configure({ timeout: 30_000 });
 const ownedRoot = process.env.ELSA_EXTERNAL_AUTH_PROBE_ROOT ?? mkdtempSync(join(tmpdir(), "elsa-3579-browser-"));
 const marker = join(ownedRoot, ".elsa-3579-owned-probe");
@@ -68,8 +68,8 @@ async function confirmStudio(page, title, label = title) {
 const server = await createServer({ configFile: false, root: clientRoot, cacheDir: join(ownedRoot, "vite-cache"),
   server: { host: "127.0.0.1", port: 0, hmr: false, fs: { allow: [repo] } },
   resolve: { dedupe: ["react", "react-dom"], alias: [
-    { find: /^@elsa-workflows\/studio-sdk$/, replacement: join(repo, "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts") },
-    { find: /^@elsa-workflows\/studio-ui$/, replacement: join(repo, "Studio/src/essentials/Elsa.Studio.Hosting/StudioUi/src/index.ts") }
+    { find: /^@elsa-workflows\/studio-sdk$/, replacement: join(repo, "studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts") },
+    { find: /^@elsa-workflows\/studio-ui$/, replacement: join(repo, "studio/src/essentials/Elsa.Studio.Hosting/StudioUi/src/index.ts") }
   ] }
 });
 await server.listen();
@@ -181,7 +181,7 @@ try {
   expect(new URL(page.url()).searchParams.has("externalPreviewHandle")).toBe(false);
   await expect(page.getByLabel("Reader", { exact: true })).toBeVisible();
   if (settings.uiRecovery) await capture(page, "preview-recovery-succeeded", { action: "successful-preview-after-denial" });
-  await page.addScriptTag({ path: join(repo, "Studio/node_modules/axe-core/axe.min.js") });
+  await page.addScriptTag({ path: join(repo, "studio/node_modules/axe-core/axe.min.js") });
   const accessibility = await page.evaluate(async () => {
     const result = await globalThis.axe.run(globalThis.document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } });
     return result.violations.map(violation => ({ id: violation.id, impact: violation.impact,
@@ -363,7 +363,7 @@ try {
     await expect(page.getByText("Loading user access…", { exact: true })).toHaveCount(0);
     retainedDraft = true;
   }
-  await page.addScriptTag({ path: join(repo, "Studio/node_modules/axe-core/axe.min.js") });
+  await page.addScriptTag({ path: join(repo, "studio/node_modules/axe-core/axe.min.js") });
   const accessAccessibility = await page.evaluate(async () => {
     const result = await globalThis.axe.run(globalThis.document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } });
     return result.violations.map(item => ({ id: item.id, impact: item.impact, nodes: item.nodes.map(node => ({ target: node.target, explanation: node.failureSummary })) }));

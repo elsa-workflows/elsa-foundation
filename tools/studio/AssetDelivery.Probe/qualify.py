@@ -105,11 +105,11 @@ def main() -> None:
     dotnet = shutil.which("dotnet")
     node = shutil.which("node")
     check(dotnet is not None and node is not None, "Producer/browser automation needs dotnet and node on PATH.")
-    subprocess.run(["git", "diff", "--exit-code", "HEAD", "--", "Studio", "extensions"], cwd=REPO, check=True)
-    check(not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all", "--", "Studio", "extensions"], cwd=REPO, text=True).strip(), "Commit frontend input changes before archive qualification")
+    subprocess.run(["git", "diff", "--exit-code", "HEAD", "--", "studio", "extensions"], cwd=REPO, check=True)
+    check(not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all", "--", "studio", "extensions"], cwd=REPO, text=True).strip(), "Commit frontend input changes before archive qualification")
     source_revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     inputs = {
-        "Hosting": (REPO / "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot", "/"),
+        "Hosting": (REPO / "studio/src/essentials/Elsa.Studio.Hosting/wwwroot", "/"),
         "Dashboard": (REPO / "extensions/Dashboard/studio/Elsa.Studio.Dashboard/wwwroot", "_content/Elsa.Studio.Dashboard"),
     }
     check((inputs["Hosting"][0] / "studio/vendor/react.js").is_file(), "Build the actual Hosting browser shell first.")
@@ -279,7 +279,7 @@ app.Run();
         victim.write_bytes(expected["/studio/vendor/react.js"])
         check(len(verify()) == len(rows), "Restored publish did not pass")
         browser_env = dict(env, STUDIO_ASSET_PROBE_BASE=base, STUDIO_ASSET_PROBE_IMPORTS=json.dumps(imports), STUDIO_ASSET_PROBE_OUTPUT=str(root / "browser.json"))
-        run([node, str(Path(__file__).with_name("browser.mjs"))], root / "browser.log", browser_env, REPO / "Studio")
+        run([node, str(Path(__file__).with_name("browser.mjs"))], root / "browser.log", browser_env, REPO / "studio")
         check(not audit.exists(), "Published host invoked a frontend tool")
         check(process.poll() is None, "Owned published host stopped during verification")
         with serve(dotnet, optout_published, root, isolated, "optout-server.log") as (custom_base, custom_process):
@@ -293,7 +293,7 @@ app.Run();
         check(not audit.exists(), "Custom-frontend consumer invoked a frontend tool")
         evidence = {"status": "passed", "sourceRevision": source_revision, "sdk": subprocess.check_output([dotnet, "--version"], text=True).strip(),
                     "probeSha256": digest(Path(__file__).read_bytes()), "browserProbeSha256": digest(Path(__file__).with_name("browser.mjs").read_bytes()),
-                    "frontendLockSha256": digest((REPO / "Studio/pnpm-lock.yaml").read_bytes()), "archives": archives, "httpAssets": rows, "consumerGraph": list(assets["libraries"]),
+                    "frontendLockSha256": digest((REPO / "studio/pnpm-lock.yaml").read_bytes()), "archives": archives, "httpAssets": rows, "consumerGraph": list(assets["libraries"]),
                     "frontendInvocations": 0, "hiddenInputs": ["producers", "consumer", "override-consumer", "optout-consumer", "cache", "feed"],
                     "override": "duplicate studio/index.html rejected by SDK; separately named custom fallback document coexists", "negativeControl": "missing published react.js fails; restoring bytes passes",
                     "customFrontend": {"excludedAssets": ["build", "buildTransitive"], "retainedDotNetApiExecuted": True, "consumerIndexSha256": digest(own_bytes), "bundledAssetsAbsent": True, "moduleAssetsRetained": True},

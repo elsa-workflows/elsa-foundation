@@ -32,7 +32,7 @@ def digest(data):
 
 
 def pinned_version(name):
-    return next(node.attrib["Version"] for node in ET.parse(REPO / "Studio/Directory.Packages.props").getroot().iter("PackageVersion")
+    return next(node.attrib["Version"] for node in ET.parse(REPO / "studio/Directory.Packages.props").getroot().iter("PackageVersion")
                 if node.attrib.get("Include") == name)
 
 
@@ -112,12 +112,12 @@ class Artifacts:
                     shutil.copytree(original, producer / relative, dirs_exist_ok=True)
                     generated.update({str(path.relative_to(REPO)): digest(path.read_bytes()) for path in original.rglob("*") if path.is_file()})
             properties = ["-p:Version=" + self.version, "-p:SourceRevisionId=" + self.source]
-            self.run("producer-build", [self.dotnet, "build", "Studio/Elsa.Studio.slnx", "-c", "Release", *properties], producer)
-            self.run("producer-pack", [self.dotnet, "pack", "Studio/Elsa.Studio.slnx", "-c", "Release", "--no-build", *properties, "-o", str(self.feed)], producer)
+            self.run("producer-build", [self.dotnet, "build", "studio/Elsa.Studio.slnx", "-c", "Release", *properties], producer)
+            self.run("producer-pack", [self.dotnet, "pack", "studio/Elsa.Studio.slnx", "-c", "Release", "--no-build", *properties, "-o", str(self.feed)], producer)
             self.run("producer-inventory", ["python3", "tools/ci/verify_studio_nuget_packages.py", "--packages", str(self.feed), "--version", self.version], producer)
             for item in inventory["support_projects"]:
                 self.run("producer-support-" + item["id"], [self.dotnet,"pack",item["project"],"-c","Release",*properties,"-o",str(self.feed)],producer)
-            self.run("reference-web-publish", [self.dotnet, "publish", "Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj", "-c", "Release", "--no-build", *properties, "-o", str(self.root / "reference-web-published")], producer)
+            self.run("reference-web-publish", [self.dotnet, "publish", "studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj", "-c", "Release", "--no-build", *properties, "-o", str(self.root / "reference-web-published")], producer)
             self.report.update(producer="owned committed source snapshot and actual production projects", producerSource=self.source,
                                generatedInputHashes=generated, referenceWebPublished=True)
         for path in self.feed.glob("*.nupkg"):

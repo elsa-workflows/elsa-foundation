@@ -31,7 +31,7 @@ unauthenticated API call is rejected with `401`. A host-chosen `DefaultScheme` a
 
 ## Development / demo defaults
 
-The checked-in `apps/Elsa.Workbench.Host/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
+The checked-in `server/apps/Elsa.Workbench.Host/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
 intended **only** for local development and demos:
 
 ```jsonc
@@ -236,7 +236,7 @@ deployment still read each other's payloads when they share a key ring, wherever
   every user signs in again, and a form open across the upgrade is posted again. Changing `ApplicationName` later has
   the same effect.
 
-`Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md` is the reference; Docker deployments
+`server/essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md` is the reference; Docker deployments
 are covered in [Docker: Data Protection keys](../docker.md#data-protection-keys).
 
 ### No API kill-switch
@@ -279,7 +279,7 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
     ```bash
     dotnet ef database update \
       --context OpenIddictIdentityPostgreSqlDbContext \
-      --project essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore \
+      --project server/essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore \
       -- --connectionString "<connection string>"
     ```
 
@@ -329,7 +329,7 @@ by the owning API; registration alone does not enable managed sign-in.
 
 Durable selected-session and exact-link validation applies across ordinary cookies, access and refresh tokens.
 The [qualification runners](../../tools/identity/ExternalAuthentication.Probe/README.md) distinguish controlled
-provider, Keycloak, full Studio/reference Workbench and separate-process native SQLite/PostgreSQL evidence.
+provider, Keycloak, full studio/reference Workbench and separate-process native SQLite/PostgreSQL evidence.
 Managed and deployment-only backend modes share their configured Data Protection ring/application name and
 first-party signing key across nodes; the SQLite profile runs on one machine. See the
 [profile evidence](../../specs/1212-external-authentication/evidence.md) for historical modes and limits; the prepared split has no current-source qualification.

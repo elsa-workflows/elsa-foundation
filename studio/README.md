@@ -1,0 +1,239 @@
+# Elsa Foundation Studio
+
+Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The standard browser source and prebuilt `/studio` assets belong to `src/essentials/Elsa.Studio.Hosting`. Three Studio apps ship from `src/apps`: `Elsa.Studio.Workbench.Host` compiles in every Studio module, `Elsa.Studio.Essentials.Host` compiles in the modules the Essentials server serves, and `Elsa.Studio.Foundation.Host` is the bare shell whose modules all arrive from a Nuplane feed. All three compose the same host wiring from `src/essentials/Elsa.Studio.Hosting.Distribution`. Package consumers use Hosting without copying frontend source or running a frontend build. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
+
+For a runnable package-only starting point, supported optional capabilities and migration from copied Web infrastructure, see [custom Studio hosting](docs/custom-hosting.md).
+
+For a current map of the host, shell, modules, routing, API boundaries, and authentication flow, see the [architecture tour](docs/architecture-tour.md).
+
+For operator guidance on current run health and following incidents to exact runtime evidence, see [Workflow run incidents](docs/workflow-run-incidents.md).
+
+These repositories develop the Elsa 4 preview. Elsa 3 uses the separate [elsa-core](https://github.com/elsa-workflows/elsa-core) and [elsa-studio](https://github.com/elsa-workflows/elsa-studio) repositories.
+
+- **Try Elsa 4:** [run Workbench and Studio from published Docker images](https://github.com/elsa-workflows/elsa-foundation/blob/main/docker/compose/README.md#quick-start--published-images-no-clone-or-build).
+- **Contribute to the server:** follow the [Elsa Foundation contribution guide](https://github.com/elsa-workflows/elsa-foundation/blob/main/CONTRIBUTING.md).
+- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](CONTRIBUTING.md).
+
+The host is composed from independently enabled Studio capabilities:
+
+- `Elsa.Studio.Core` defines manifests, diagnostics, and the manifest collection event.
+- `Elsa.Studio.Api` exposes `GET /_elsa/studio/modules`.
+- `Elsa.Studio.Hosting` serves the prebuilt root-mounted browser; `Elsa.Studio.Hosting.Distribution` composes it with backend profiles, Nuplane add-ons and the Theme Store for the shipped apps.
+- `Elsa.Studio.Workbench.Host` selects every Studio module; [`Elsa.Studio.Essentials.Host`](src/apps/Elsa.Studio.Essentials.Host/README.md) pairs with `Elsa.Essentials.Host`; [`Elsa.Studio.Foundation.Host`](src/apps/Elsa.Studio.Foundation.Host/README.md) is the bare shell that pairs with `Elsa.Foundation.Host`.
+- `Elsa.Studio.Hosting` also owns Home (`/`, `/dashboard`, `/overview`) and its widget area: the frames, loading, refresh, the saved layout and the empty state. Every Studio flavor has it.
+- `Elsa.Studio.Dashboard` adds saved questions and named dashboards (`/questions`, `/dashboards`); it needs the backend's `elsa.api.studio-dashboard` capability and leaves Home to the shell.
+- `Elsa.Studio.Attention` contributes the ordinary wide/full Attention widget.
+- `Elsa.Studio.Workflows.Dashboard` contributes the workflow task group and workflow widgets on Home: Get started, Quick actions, Recent workflows, Recent runs, Needs attention, Tasks, portfolio and run health.
+- `Elsa.Studio.Samples.WeatherForecast` contributes a frontend route and deterministic sample endpoint.
+- `Elsa.Studio.Decisions` contributes the Decisions collection, table authoring, cases, explanations and published-version workflow selector; see its [module guide](../extensions/Decisions/studio/Elsa.Studio.Decisions/README.md).
+- `Elsa.Studio.ConsoleStream` demonstrates a backend-scoped console stream module.
+- `Elsa.Studio.ExtensionBuilder` is an optional module: the Extension Builder page plus its bridge relay to the backend's `/_elsa/extension-builder` surface. It is not part of the default composition (see below).
+
+The shell UX is adapted from [`elsa-workflows/elsa-foundation-designer`](https://github.com/elsa-workflows/elsa-foundation-designer) main at `2a04fdb`, without importing its Next.js runtime or product feature modules.
+
+## Modular features (CShells)
+
+Studio is a modular monolith built on [CShells](https://www.cshells.io/). Each module is a class library exposing a CShells feature (`IShellFeature` / `IWebShellFeature`). The application chooses its feature assemblies and enables feature IDs per shell in the configured `shells.json`; public Hosting/addon calls compose the common infrastructure:
+
+```json
+{
+  "CShells": {
+    "Shells": {
+      "Default": {
+        "Features": {
+          "StudioApi": {},
+          "ConsoleStream": {},
+          "DashboardStudio": {},
+          "AttentionStudio": {},
+          "WorkflowsDashboardStudio": {},
+          "WeatherForecastSample": {}
+        },
+        "Configuration": {
+          "WebRouting": { "Path": "" }
+        }
+      }
+    }
+  }
+}
+```
+
+Removing a feature key (or setting the shell up differently) turns the corresponding module — its services, manifest contribution, and endpoints — on or off without code changes. `WebRouting:Path` of `""` mounts the shell's endpoints at the application root.
+
+Backend-targeted Studio modules should use the runtime backend base URL instead of the shell origin. The shell exposes it through `/studio-runtime.js` and the frontend SDK surfaces it as `api.backend.http`. If `Studio:BackendBaseUrl` is unset, the backend client falls back to the shell origin.
+
+Features ship in:
+
+| Feature name | Library | Contract |
+|---|---|---|
+| `StudioApi` | `Elsa.Studio.Api` | `IWebShellFeature` |
+| `DecisionsStudio` | `Elsa.Studio.Decisions` | `IShellFeature` |
+| `ConsoleStream` | `Elsa.Studio.ConsoleStream` | `IWebShellFeature` |
+| `DashboardStudio` | `Elsa.Studio.Dashboard` | `IShellFeature` |
+| `AttentionStudio` | `Elsa.Studio.Attention` | `IShellFeature` |
+| `WorkflowsDashboardStudio` | `Elsa.Studio.Workflows.Dashboard` | `IShellFeature` |
+| `WeatherForecastSample` | `Elsa.Studio.Samples.WeatherForecast` | `IWebShellFeature` |
+| `ExtensionBuilderStudio` | `Elsa.Studio.ExtensionBuilder` | `IWebShellFeature` (opt-in, not in the default `shells.json`) |
+
+The Workbench host discovers in-box features only in the assemblies listed in `StudioFeatureAssemblies` (in `Elsa.Studio.Workbench.Host`), plus installed Nuplane packages. CShells stops scanning host assemblies once that list is registered, so every new in-box feature needs its assembly added there, opt-in features such as `ExtensionBuilderStudio` included. Otherwise CShells skips the feature with a startup warning when `shells.json` enables it, and Feature Management cannot enable it. `WeatherForecastSample` is the exception: the host does not reference it, and it activates once its package (`artifacts/packages/Elsa.Studio.Samples.WeatherForecast.*.nupkg`) is installed into the `packages` feed. Until then, the startup warning for it is expected.
+
+### Opting into Extension Builder
+
+Extension Builder is not enabled by default: a default Studio has no Extension Builder navigation item, route or
+bridge endpoints. To enable it, add its feature key to the Default shell in `src/apps/Elsa.Studio.Workbench.Host/shells.json`
+(or the mounted copy in a deployment):
+
+```json
+{
+  "CShells": {
+    "Shells": {
+      "Default": {
+        "Features": {
+          "ExtensionBuilderStudio": {}
+        }
+      }
+    }
+  }
+}
+```
+
+The page relays every operation through the Studio management bridge (`/_elsa/studio/backend-management/extension-builder/*`),
+so the host needs `Studio:BackendServerBaseUrl` (or `Studio:BackendBaseUrl`) and `Studio:BackendModuleManagementApiKey`
+configured, and the backend must expose the Extension Builder surface. Against a backend without it, the page shows its
+explicit "backend management unavailable" state.
+
+### Theme source selection
+
+`Themes:ThemesMode` controls the theme picker and default selection:
+
+| Mode | Selectable definitions |
+|---|---|
+| `AddToBuiltIns` (default) | Built-ins, configured directory themes and managed custom themes |
+| `BuiltInsOnly` | Built-ins |
+| `DirectoryOnly` | Themes currently supplied by `Themes:ThemesDirectory` |
+
+`ThemesDirectory` accepts a JSON collection file or a directory of JSON collection files, relative
+to the host content root or absolute. Directory definitions win over managed definitions with the
+same ID; built-in IDs remain reserved. Definitions must also be enabled and published to be selectable.
+An unavailable configured or saved default falls back to the first selectable theme in the browser.
+If none is selectable, the picker is empty and Studio renders with its safe Classic palette.
+
+The Theme Builder retains the full inventory in every mode. Changing modes does not remove managed
+themes or change directory files. Managed state stays in `studio-theme-store.json`; source policy and
+directory provenance come from configuration, not that file. Mode names are case-insensitive; invalid
+values fail host startup with a `Themes:ThemesMode` configuration error.
+
+## Build
+
+> **Source setup status:** The central `ConsoleLogStreaming.AspNetCore` pin now uses `1.1.0`.
+> [Studio #579](https://github.com/elsa-workflows/elsa-foundation-studio/issues/579) records a restore with isolated package-cache, HTTP-cache, and CLI-home paths, a Studio.Web build, and affected console-stream/host tests for this correction.
+> The complete source-development and paired browser journey remains tracked in [Studio #566](https://github.com/elsa-workflows/elsa-foundation-studio/issues/566).
+> The `.NET` commands below are existing developer commands; the scoped checks do not establish a complete fresh-machine setup or source-edit journey.
+
+```bash
+cd studio
+pnpm install
+pnpm build
+dotnet build Elsa.Studio.slnx
+dotnet test Elsa.Studio.slnx
+```
+
+## Run
+
+```bash
+cd studio
+dotnet run --project src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj
+```
+
+Open:
+
+- `/`
+- `/dashboard`
+- `/weather`
+- `/diagnostics/modules`
+- `/_elsa/studio/modules`
+- `/_elsa/studio/diagnostics/console-logs/recent`
+- `/_elsa/studio/diagnostics/console-logs/sources`
+- `/_elsa/studio/diagnostics/console-logs/hub`
+- `/_elsa/studio/samples/weather-forecast`
+
+When `Studio:BackendBaseUrl` points at an Elsa Server backend, the console panel expects that backend to expose its own console stream under:
+
+- `/_elsa/server/diagnostics/console-logs/recent`
+- `/_elsa/server/diagnostics/console-logs/sources`
+- `/_elsa/server/diagnostics/console-logs/hub`
+
+## Consuming Studio packages in your own app
+
+The Studio front-end ships four npm packages you can use in any host app —
+React or not. See runnable examples under [`examples/`](./examples): `react-host` (Vite + React)
+and `vanilla-host` (framework-free, no JSX).
+
+```bash
+npm install @elsa-workflows/studio-ui @elsa-workflows/studio-code-editor \
+            @elsa-workflows/studio-sdk @elsa-workflows/studio-workflows
+```
+
+| Package | What it gives you |
+| --- | --- |
+| `@elsa-workflows/studio-sdk` | Contribution/registry types and runtime helpers for building an `ElsaStudioModuleApi`. |
+| `@elsa-workflows/studio-ui` | Host-agnostic UI primitives (`DataGrid`, `StatusChip`, `Toolbar`, `Tabs`, `Field`, `Inspector`, page/collection patterns, feedback states) + `styles.css` and `tokens.css`. |
+| `@elsa-workflows/studio-code-editor` | `StudioCodeEditor` component + `javaScriptLanguageAdapter`. |
+| `@elsa-workflows/studio-workflows` | The workflows module: `register(api)` + helpers, plus `style.css`. |
+
+**Peer dependencies:** `react` & `react-dom` (`^18`/`^19`) for all; `@tanstack/react-query` (`^5`)
+and `@xyflow/react` (`^12`) additionally for `@elsa-workflows/studio-workflows`.
+
+**Styles:** the same public CSS imports work in the workspace and in a consuming application.
+
+```ts
+import "@elsa-workflows/studio-ui/styles.css";     // tokens, defaults and shared component rules
+import "@elsa-workflows/studio-code-editor/style.css"; // only if using the editor
+import "./theme.css";                            // optional theme overrides
+import "@xyflow/react/dist/style.css";             // only if using studio-workflows
+import "@elsa-workflows/studio-workflows/style.css";
+```
+
+The Studio host loads shared UI styles once. A module installed in Studio imports components from
+the public package and inherits the active theme. A standalone host imports `styles.css` once;
+`tokens.css` remains available for consumers that need only the token layer. No copied component
+CSS is required. See [building module UIs](docs/module-ui.md) for composition and examples.
+
+Preview builds (`4.0.0-preview.<n>`) publish to the elsa-4 feedz.io npm feed on every push to
+`main`; published GitHub Releases ship the tagged version to npmjs.org (see
+`.github/workflows/packages.yml`).
+
+## Docker
+
+Each Studio app has a Dockerfile, and `.github/workflows/studio-docker.yml` publishes three images to Docker Hub:
+
+| Image | Studio app | Pairs with |
+| --- | --- | --- |
+| `elsaworkflows/elsa-studio` | `Elsa.Studio.Essentials.Host` | `elsaworkflows/elsa-essentials-host` |
+| `elsaworkflows/elsa-studio-workbench` | `Elsa.Studio.Workbench.Host` | `elsaworkflows/elsa-workbench` |
+| `elsaworkflows/elsa-studio-foundation` | `Elsa.Studio.Foundation.Host` | The bare `Elsa.Foundation.Host` |
+
+In the images, an add-on's browser files answer 503 until
+[valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands, so screens of modules installed from
+the feed do not load there yet. Build an image from the repository root (the build context must be the repo root); the
+Essentials and Foundation Dockerfiles sit beside their projects in the same way:
+
+```bash
+pnpm --dir studio install --frozen-lockfile
+pnpm --dir studio build
+docker build -f studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local .
+docker run --rm -p 8080:8080 \
+  -e Studio__BackendBaseUrl=https://your-elsa-server:443 \
+  elsa-studio-web:local
+```
+
+See [`docs/docker.md`](docs/docker.md) for the full runtime configuration surface
+(environment variables, `shells.json` mounting, the optional `packages/` feed volume, and
+a compose snippet).
+
+## License
+
+Elsa-owned material in this repository is licensed under the MIT License; see [LICENSE](LICENSE).
+Third-party code, assets, and dependencies retain their respective license terms and notices.
+
+For white-label hosts, see [Brand Studio and sign-in](docs/branding.md) and the
+[branded host example](examples/branded-host/README.md).

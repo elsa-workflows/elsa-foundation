@@ -41,7 +41,7 @@ elif [[ "$filter" == --* || $# -gt 1 ]]; then
 fi
 tooling="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj"
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
-module_roots=(essentials/src)
+module_roots=(server/essentials/src)
 for capability in extensions/*/src; do
   [[ -d "$capability" ]] && module_roots+=("$capability")
 done

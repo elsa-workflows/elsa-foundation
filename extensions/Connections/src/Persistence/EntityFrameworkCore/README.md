@@ -14,7 +14,7 @@ Npgsql PostgreSQL or Oracle MySQL. This package carries EF Core and Relational A
 
 Each provider has its own context and committed Initial migration. The module binds its migration
 assembly by object and derives its history table from the `Connections` EF declaration. It uses the
-shared [migration lifecycle](../../../../../essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md): shell
+shared [migration lifecycle](../../../../../server/essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md): shell
 activation/reload and ordinary host startup honor `Elsa:Persistence:EntityFramework:Migrate:Policy`.
 Named connections, schema selection and optional context pooling use the same shared binding.
 `ConnectionsEfModule` exposes the built-in history identity and canonical schema chain for host and

@@ -31,6 +31,6 @@
 
   <ItemGroup>
     <!-- Excludes the finalization tables every module maps from own-table assertions. -->
-    <Compile Include="..\..\..\..\..\..\essentials\tests\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestFilter.cs" Link="EfSchemaFinalizationTestFilter.cs" />
+    <Compile Include="..\..\..\..\..\..\server\essentials\tests\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestFilter.cs" Link="EfSchemaFinalizationTestFilter.cs" />
   </ItemGroup>
 </Project>

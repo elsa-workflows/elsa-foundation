@@ -2,7 +2,7 @@
 name: "elsa-ux-qa"
 description: "Run one pass of the recurring UX QA routine: build and start the Workbench and Studio from main, walk the golden path, explore one rotating area through one user lens in a real browser, have each finding refuted by a fresh agent, then file at most three defects and two proposals in elsa-foundation and append the run to the ux-qa-ledger issue. Use when the UX QA routine fires or a user asks for one QA pass."
 argument-hint: "Optional area and lens override"
-compatibility: "Requires an elsa-foundation checkout (Studio lives under Studio/), gh CLI, the .NET SDK, Node 22+ and network access for the Chromium download"
+compatibility: "Requires an elsa-foundation checkout (Studio lives under studio/), gh CLI, the .NET SDK, Node 22+ and network access for the Chromium download"
 metadata:
   author: "elsa-foundation"
   source: "docs/skills/catalog.md#ux-qa-routine"

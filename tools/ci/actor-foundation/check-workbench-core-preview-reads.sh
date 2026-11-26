@@ -8,8 +8,8 @@ esac
 root=$(git -c core.fsmonitor=false rev-parse --show-toplevel)
 cd "$root"
 export MSBUILDDISABLENODEREUSE=1 DOTNET_CLI_USE_MSBUILD_SERVER=0
-app=apps/Elsa.Workbench.Host
-runner=essentials/tests/ActorFoundation/Native/Run
+app=server/apps/Elsa.Workbench.Host
+runner=server/essentials/tests/ActorFoundation/Native/Run
 dotnet build "$app" -c "$configuration" -p:RestoreLockedMode=true -p:WarningsNotAsErrors=NU1603 -p:ElsaDashboardQualification=true -m:3
 dotnet build "$runner" -c "$configuration" -p:RestoreLockedMode=true -m:3
 
