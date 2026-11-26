@@ -39,7 +39,8 @@ public sealed partial class EfStore
                 EXECUTE FUNCTION kernel_require_root_outcome_checkpoint();
             """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal)
             .Replace("/*composed-waiting-index*/", db.UsesRootComposedParkRecovery ? $"""
-                CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortWaiting" ON "Messages" ("Partition", "Due", "Seq")
+                CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortGroups" ON "Messages" ("Partition", "Seen", "Due", "Seq")
+                    INCLUDE ("Target")
                     WHERE {CohortWaitingWork};
                 """ : "", StringComparison.Ordinal)
             .Replace("/*parked-operator-outcomes*/",
@@ -74,9 +75,12 @@ public sealed partial class EfStore
         return $"""AND (i."FoundationParkAt" IS NOT NULL {withheld} OR {NoEarlierReleasedCohort})""";
     }
 
-    private sealed record CohortSample(long Epoch, long Through = -1, long Due = long.MinValue, long Seq = 0);
-    private sealed record CohortCandidate(int Partition, long Through, long? Due, long? Seq, string? Actor, long? Revision,
-        string? Tenant, string? Reference, string? Header);
+    private sealed record CohortSample(long Epoch, long Through = -1, long ReadyThrough = 0, long Seen = 0,
+        long Due = long.MinValue, long Seq = 0, long ScanSeq = 0, bool ScanFirst = false);
+    private sealed record CohortFence(int Partition, long Epoch, long Through, long ReadyThrough, long Seen, long Due, long Seq, long ScanSeq,
+        bool ScanFirst);
+    private sealed record CohortCandidate(int Partition, long Through, long ReadyThrough, long? SeenGroup, long? DueGroup,
+        long? Seq, bool More, int Spare, long? ScanTail, string? Actor, long? Revision, string? Tenant, string? Reference, string? Header);
     private readonly ConcurrentDictionary<int, CohortSample> _cohortSamples = new();
     private int _cohortPartitionWindow;
 
@@ -86,7 +90,7 @@ public sealed partial class EfStore
     private static readonly string CohortEligibleRoots = $"""
         SELECT i."Partition", i."Id" AS "Actor", i."Revision", i."FoundationTenant" AS "Tenant", i."FoundationReference" AS "Reference",
             i."FoundationHeader" AS "Header"
-        FROM (SELECT DISTINCT "Partition", "Target" FROM candidates WHERE "Seen" < "Epoch") w
+        FROM (SELECT DISTINCT "Partition", "Target" FROM candidates) w
         JOIN "Instances" i ON i."Id" = w."Target" AND i."Partition" = w."Partition"
         WHERE i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired"
             AND i."FoundationReference" IS NOT NULL AND i."FoundationParkGeneration" > 0
@@ -96,7 +100,8 @@ public sealed partial class EfStore
         """;
 
     // Only roots with pending released inputs and waiting controls need an authored decision. The main poll accepts
-    // each decision at the same revision. A sweep fixes a sequence ceiling so new admissions cannot prevent a wrap.
+    // each decision at the same revision. Select an unseen epoch and ready due group with separate index seeks.
+    // Inside that group, the sequence ceiling keeps later admissions outside the bounded page.
     private async Task<(string[] Actors, long[] Revisions)> ReadWithheldCohortsAsync(KernelDb db, IReadOnlyCollection<PartitionFence> fences,
         int limit, CancellationToken token)
     {
@@ -106,62 +111,45 @@ public sealed partial class EfStore
         if (width == 0) return ([], []);
         var offset = width == ordered.Length ? 0 :
             (int)((uint)(Interlocked.Add(ref _cohortPartitionWindow, width) - width) % ordered.Length);
-        var partitions = new List<int>(width);
-        var epochs = new List<long>(width);
-        var afterDue = new List<long>(width);
-        var afterSeq = new List<long>(width);
-        var through = new List<long>(width);
+        var windows = new List<CohortFence>(width);
         var sampled = new Dictionary<int, (long Epoch, CohortSample Previous)>(width);
         for (var index = 0; index < width; index++)
         {
             var fence = ordered[(offset + index) % ordered.Length];
             var sample = _cohortSamples.GetOrAdd(fence.Partition, _ => new(fence.Epoch));
             if (sample.Epoch > fence.Epoch) continue;
-            partitions.Add(fence.Partition);
-            epochs.Add(fence.Epoch);
-            afterDue.Add(sample.Epoch == fence.Epoch ? sample.Due : long.MinValue);
-            afterSeq.Add(sample.Epoch == fence.Epoch ? sample.Seq : 0);
-            through.Add(sample.Epoch == fence.Epoch ? sample.Through : -1);
+            var cursor = sample.Epoch == fence.Epoch ? sample : new(fence.Epoch);
+            windows.Add(new(fence.Partition, fence.Epoch, cursor.Through, cursor.ReadyThrough, cursor.Seen, cursor.Due, cursor.Seq,
+                cursor.ScanSeq, cursor.ScanFirst));
             sampled.Add(fence.Partition, (fence.Epoch, sample));
         }
-        if (partitions.Count == 0) return ([], []);
+        if (windows.Count == 0) return ([], []);
         var sql = db.UsesSqliteRootRuntime
-            ? SqliteCohortCandidates(partitions.ToArray(), epochs.ToArray(), afterDue.ToArray(), afterSeq.ToArray(), through.ToArray(), limit / width)
-            : System.Runtime.CompilerServices.FormattableStringFactory.Create(
-            $"""
-            WITH fences AS MATERIALIZED (
-                SELECT * FROM unnest({"{0}"}::integer[], {"{1}"}::bigint[], {"{2}"}::bigint[], {"{3}"}::bigint[], {"{4}"}::bigint[])
-                    AS f("Partition", "Epoch", "AfterDue", "AfterSeq", "Through")
-            ), bounds AS MATERIALIZED (
-                SELECT f."Partition", f."Epoch", f."AfterDue", f."AfterSeq",
-                    CASE WHEN f."Through" >= 0 THEN f."Through" ELSE coalesce(last."Seq", 0) END AS "Through"
-                FROM fences f LEFT JOIN LATERAL (
-                    SELECT "Seq" FROM "Messages" WHERE f."Through" < 0 AND "Partition" = f."Partition"
-                    ORDER BY "Seq" DESC LIMIT 1
-                ) last ON true
-            ), candidates AS MATERIALIZED (
-                SELECT b."Partition", b."Epoch", m."Target", m."Due", m."Seq", m."Seen"
-                FROM bounds b CROSS JOIN LATERAL (
-                    SELECT "Target", "Due", "Seq", "Seen" FROM "Messages"
-                    WHERE "Partition" = b."Partition" AND ("Due", "Seq") > (b."AfterDue", b."AfterSeq") AND "Seq" <= b."Through"
-                        AND "Due" <= floor(extract(epoch from statement_timestamp()) * 1000)::bigint AND {CohortWaitingWork}
-                    ORDER BY "Due", "Seq" LIMIT {"{5}"}
-                ) m
-            ), tail AS (
-                SELECT DISTINCT ON ("Partition") "Partition", "Due", "Seq" FROM candidates ORDER BY "Partition", "Due" DESC, "Seq" DESC
-            ), eligible AS (
-                {CohortEligibleRoots}
-            )
-            SELECT b."Partition", b."Through", t."Due", t."Seq", e."Actor", e."Revision", e."Tenant", e."Reference", e."Header"
-            FROM bounds b LEFT JOIN tail t ON t."Partition" = b."Partition"
-            LEFT JOIN eligible e ON e."Partition" = b."Partition"
-            /* root-cohort-waiting */
-            """, partitions.ToArray(), epochs.ToArray(), afterDue.ToArray(), afterSeq.ToArray(), through.ToArray(), limit / width);
+            ? SqliteCohortCandidates(windows, limit / width)
+            : PostgresCohortCandidates(windows, limit / width);
         var candidates = await db.Database.SqlQuery<CohortCandidate>(sql).ToArrayAsync(token);
         foreach (var page in candidates.GroupBy(candidate => candidate.Partition))
         {
             var (epoch, previous) = sampled[page.Key];
-            var next = page.First() is { Due: { } due, Seq: { } last } row ? new CohortSample(epoch, row.Through, due, last) : new(epoch);
+            var row = page.First();
+            var cursor = previous.Epoch == epoch ? previous : new(epoch);
+            var scanned = row is { DueGroup: not null, Spare: > 0 };
+            var scan = scanned ? row.ScanTail ?? 0 : cursor.ScanSeq;
+            // SQLite can reuse a swept high sequence. A full grouped page yields its next turn to the
+            // sequence scan, where newer admissions cannot overtake a still-pending lower sequence.
+            var useScanNext = row.Spare == 0;
+            // The sequence scan can finish even while later admissions keep creating empty due groups.
+            // Refresh the ceiling and clock once either scan has covered the old range.
+            var next = row switch
+            {
+                _ when row.SeenGroup is null || scanned && row.ScanTail is null => new CohortSample(epoch),
+                { SeenGroup: { } seen, DueGroup: null } => new(epoch, row.Through, row.ReadyThrough, checked(seen + 1), ScanSeq: scan),
+                _ when cursor.ScanFirst => cursor with { ScanSeq = scan, ScanFirst = false },
+                { SeenGroup: { } seen, DueGroup: { } due, Seq: { } last, More: true } =>
+                    new(epoch, row.Through, row.ReadyThrough, seen, due, last, scan, useScanNext),
+                _ => new(epoch, row.Through, row.ReadyThrough, row.SeenGroup!.Value, checked(row.DueGroup!.Value + 1),
+                    ScanSeq: scan, ScanFirst: useScanNext)
+            };
             _cohortSamples.AddOrUpdate(page.Key, next, (_, current) => current.Epoch < epoch || ReferenceEquals(current, previous) ? next : current);
         }
         var actors = new List<string>();

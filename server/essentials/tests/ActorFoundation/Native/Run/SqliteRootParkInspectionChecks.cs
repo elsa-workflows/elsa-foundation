@@ -174,6 +174,7 @@ internal static partial class SqliteHostLifetimeChecks
         public TaskCompletionSource ClockSampled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Resume { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public List<string> Plan { get; } = [];
+        public int PlanReads { get; private set; }
 
         public override async ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command, CommandExecutedEventData eventData,
             DbDataReader result, CancellationToken cancellationToken = default)
@@ -187,6 +188,7 @@ internal static partial class SqliteHostLifetimeChecks
             CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
             if (!command.CommandText.Contains(planMarker, StringComparison.Ordinal)) return result;
+            PlanReads++;
             await using var explain = command.Connection!.CreateCommand();
             explain.Transaction = command.Transaction;
             explain.CommandText = "EXPLAIN QUERY PLAN " + command.CommandText;
