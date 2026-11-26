@@ -14,7 +14,7 @@ public sealed partial class EfStore
         NEW."FoundationWriteRevision" = OLD."Revision" + 1
                 AND NEW."Revision" = NEW."FoundationWriteRevision"
                 AND NEW."FoundationReference" = OLD."FoundationReference" AND NEW."FoundationTenant" = OLD."FoundationTenant"
-                AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired" /*root-park-generation*/
+                AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired" /*root-park-generation*/ /*pinned-result-write*/
                 AND (/*park-clearing-stop-write*/ ((OLD."Status" = 0 AND NOT NEW."Retired") OR /*root-park-continues*/ OR /*root-park-recover*/ OR /*root-parked-terminate*/ OR
                     (/*root-retirement*/ AND NEW."Retired" AND NEW."State" = 'null' AND NEW."FoundationHeader" IS NULL /*root-retirement-wire*/ /*root-retirement-footprint*/
                         AND ((OLD."Status" <> 0 AND NEW."Status" = OLD."Status"
@@ -32,7 +32,7 @@ public sealed partial class EfStore
                 AND NOT (/*root-park-journal*/ OR (/*root-retirement*/ AND i."Retired" AND i."Partition" = NEW."Partition" AND NEW."Revision" = -1
                     AND NEW."Entries" = '["delete"]' AND NOT EXISTS (
                         SELECT 1 FROM "Journal" j WHERE j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j."Revision" = -1))))
-        /*park-clearing-stop-journal*/
+        /*park-clearing-stop-journal*/ /*invalid-recovered-journal*/
         """;
 
     private const string PostgresFirstRootGuards = """
@@ -56,7 +56,6 @@ public sealed partial class EfStore
         BEGIN
             IF /*journal-write-refused*/
             THEN RAISE EXCEPTION 'Qualified actor journal requires the next running checkpoint revision' USING ERRCODE = '23514'; END IF;
-            /*root-park-recovered-journal*/
             RETURN NEW;
         END
         $fn$;
@@ -122,6 +121,14 @@ public sealed partial class EfStore
             .Replace(" /*old-clearing*/", db.UsesRootComposedParkRecovery
                 ? """, OLD."FoundationParkClearing", OLD."FoundationParkClearingKind", OLD."FoundationParkCleared" """ : "", StringComparison.Ordinal)
             : db.UsesRootParkedOperators ? ParkedRefusalRow(db) : "", StringComparison.Ordinal)
+        .Replace("/*pinned-result-write*/", RecordsConsumedRootJob(db) ? $"""
+            AND (NEW."FoundationParkJobResult" IS NOT DISTINCT FROM OLD."FoundationParkJobResult"
+                OR (OLD."Status" = 0 AND NEW."Status" = 2 AND NOT NEW."Retired" AND OLD."FoundationParkJobResult" IS NULL
+                    AND NEW."FoundationParkAt" IS NOT NULL AND NEW."FoundationParkRevision" = NEW."Revision"
+                    AND NEW."Jobs" IS NOT NULL AND NEW."Jobs" = OLD."Jobs" AND NEW."NextJobGeneration" = OLD."NextJobGeneration"
+                    AND {ConsumedParkJobExists("NEW")})
+                OR (OLD."Status" = 2 AND NEW."Status" = 0 AND NEW."FoundationParkJobResult" IS NULL))
+            """ : "", StringComparison.Ordinal)
         .Replace("/*root-park-recover*/", db.UsesRootParkRecovery ? """
             (OLD."Status" = 2 AND NEW."Status" = 0 AND NOT NEW."Retired" AND NOT OLD."Suspended" AND NOT NEW."Suspended"
                 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 /*park-recover-footprint*/
@@ -133,7 +140,7 @@ public sealed partial class EfStore
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
                     AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/ AND j."Entries" LIKE '{{"Outcome":"recovered",%'))
             """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
-            .Replace("/*park-recover-footprint*/", RootRecoverFootprint(db, "OLD"), StringComparison.Ordinal)
+            .Replace("/*park-recover-footprint*/", RootRecoverFootprint(db, "OLD", journaling: false), StringComparison.Ordinal)
             .Replace("/*sqlite-recover-footprint*/", db.UsesSqliteRootRuntime ? """
 
                 AND NEW."FoundationStateWire" IS NOT DISTINCT FROM OLD."FoundationStateWire"
@@ -144,13 +151,13 @@ public sealed partial class EfStore
                 """ : "", StringComparison.Ordinal)
             : "false", StringComparison.Ordinal)
         // A recovered entry is journaled only on the parked root it resolves.
-        .Replace("/*root-park-recovered-journal*/", db.UsesRootParkRecovery ? """
-            IF NEW."Entries" LIKE '{{"Outcome":"recovered",%' AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance"
-                AND i."FoundationReference" IS NOT NULL AND NOT (i."Status" = 2 AND NOT i."Retired" AND NOT i."Suspended"
+        .Replace("/*invalid-recovered-journal*/", db.UsesRootParkRecovery ? """
+            OR (NEW."Entries" LIKE '{{"Outcome":"recovered",%' AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance"
+                AND i."FoundationReference" IS NOT NULL AND NOT ((i."Status" = 2 AND NOT i."Retired" AND NOT i."Suspended"
                     AND i."Partition" = NEW."Partition" AND NEW."Revision" = i."Revision" + 1
-                    AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0 /*park-recover-footprint*/))
-            THEN RAISE EXCEPTION 'A recovered journal entry requires the parked checkpoint it resolves' USING ERRCODE = '23514'; END IF;
-            """.Replace("/*park-recover-footprint*/", RootRecoverFootprint(db, "i"), StringComparison.Ordinal) : "", StringComparison.Ordinal)
+                    AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0 /*park-recover-footprint*/) IS TRUE)))
+            """.Replace("/*park-recover-footprint*/", RootRecoverFootprint(db, "i", journaling: true), StringComparison.Ordinal) : "",
+            StringComparison.Ordinal)
         .Replace("/*root-park-recover-journal*/", db.UsesRootParkRecovery
             // The raw command is formatted, so the literal brace is doubled.
             ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'""" +
@@ -181,14 +188,43 @@ public sealed partial class EfStore
         .Replace("/*root-retirement-footprint*/", db.UsesRootRetirement ? RootRetirementFootprint : "", StringComparison.Ordinal)
         .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal);
 
-    private static string RootRecoverFootprint(KernelDb db, string actor) => !db.UsesRootComposedParkRecovery ? "" : $"""
-        AND {actor}."FoundationParkClearing" IS NULL
-        AND ({actor}."Jobs" IS NULL OR ({(db.UsesRootTimedJobSettlement ? "true" : "false")} AND EXISTS (
-            SELECT 1 FROM "Messages" m WHERE m."Target" = {actor}."Id" AND m."Partition" = {actor}."Partition"
-                AND m."InboxScope" = {RootTimedJobScope} AND m."Kind" = '{Kinds.JobFinished}' AND m."EventMatch" IS NULL AND m."Done"
+    private static string RootRecoverFootprint(KernelDb db, string actor, bool journaling)
+    {
+        if (!db.UsesRootComposedParkRecovery) return "";
+        if (!RecordsConsumedRootJob(db)) return $"""AND {actor}."FoundationParkClearing" IS NULL AND {actor}."Jobs" IS NULL""";
+
+        // The Park binds the retained result by its storage key. Journal before removing it, then write the
+        // running checkpoint only after the key and its pin have been cleared in the same transaction.
+        var retained = journaling ? ConsumedParkJobExists(actor) : $"""
+            NEW."FoundationParkJobResult" IS NULL AND NOT EXISTS (
+                SELECT 1 FROM "Messages" m WHERE m."Id" = OLD."FoundationParkJobResult" AND m."InboxScope" = {RootTimedJobScope})
+            AND NOT EXISTS (SELECT 1 FROM "Messages" m
+                WHERE m."Partition" = OLD."Partition" AND m."Target" = OLD."Id" AND m."JobGeneration" = OLD."NextJobGeneration" - 1
+                    AND {IsRecordedJobResult("m.")})
+            """;
+        var jobless = journaling ? "" : """AND NEW."FoundationParkJobResult" IS NULL""";
+        return $"""
+            AND {actor}."FoundationParkClearing" IS NULL
+            AND (({actor}."Jobs" IS NULL AND {actor}."FoundationParkJobResult" IS NULL {jobless})
+                OR ({actor}."Jobs" IS NOT NULL AND {actor}."FoundationParkJobResult" IS NOT NULL AND {retained}))
+            """;
+    }
+
+    private static string IsRecordedJobResult(string prefix = "") =>
+        $"""{prefix}"InboxScope" = {RootTimedJobScope} AND {prefix}"Kind" = '{Kinds.JobFinished}'""";
+
+    private static readonly string RecordedJobResultIndex = $"""
+        ("Partition", "Target", "JobGeneration") WHERE {IsRecordedJobResult()}
+        """;
+
+    private static string ConsumedParkJobExists(string actor) => $"""
+        EXISTS (SELECT 1 FROM "Messages" m
+            WHERE m."Id" = {actor}."FoundationParkJobResult" AND {IsRecordedJobResult("m.")}
+                AND m."Target" = {actor}."Id" AND m."Partition" = {actor}."Partition"
+                AND m."EventMatch" IS NULL AND m."Done"
                 AND m."FoundationKeptBy" = {(short)ParkKeepReason.Consumed} AND m."JobGeneration" = {actor}."NextJobGeneration" - 1
                 AND m."Due" = 0 AND m."Start" IS NULL AND m."Payload" IS NOT NULL AND m."Sender" = {actor}."Id"
-                AND m."ReplyTo" IS NULL AND m."KeepUntil" IS NULL)))
+                AND m."ReplyTo" IS NULL AND m."KeepUntil" IS NULL)
         """;
 
     // Match the retirement lock's preconditions against the previous checkpoint and its persisted inputs.

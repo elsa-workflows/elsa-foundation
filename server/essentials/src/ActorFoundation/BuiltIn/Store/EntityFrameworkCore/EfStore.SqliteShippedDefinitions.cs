@@ -145,7 +145,7 @@ public sealed partial class EfStore
             switch (operation)
             {
                 case CreateTableOperation table:
-                    AddSqliteRootColumns(table, db.UsesRootParkArrivals, db.UsesRootParkRecovery);
+                    AddSqliteRootColumns(table, db);
                     // The qualified checkpoint's Id is its only row identity, including during SQLite conflict handling.
                     var options = table.Name == "Instances" ? " STRICT, WITHOUT ROWID" : " STRICT";
                     yield return new("table", table.Name, table.Name, Render(table) + options);
@@ -170,8 +170,10 @@ public sealed partial class EfStore
             .CommandText.TrimEnd().TrimEnd(';').ReplaceLineEndings("\n");
     }
 
-    private static void AddSqliteRootColumns(CreateTableOperation table, bool parkArrivals, bool parkRecovery)
+    private static void AddSqliteRootColumns(CreateTableOperation table, KernelDb db)
     {
+        var parkArrivals = db.UsesRootParkArrivals;
+        var parkRecovery = db.UsesRootParkRecovery;
         if (table.Name == "Instances")
         {
             Add("FoundationReference", "TEXT");
@@ -206,6 +208,7 @@ public sealed partial class EfStore
                 });
                 Check("CK_Instances_FoundationParkGeneration", """ "FoundationParkGeneration" >= 0 """);
             }
+            if (RecordsConsumedRootJob(db)) Add("FoundationParkJobResult", "TEXT");
             Check("CK_FoundationParkClearing", $"""
                 ("FoundationParkClearing" IS NULL) = ("FoundationParkCleared" IS NULL)
                 AND ("FoundationParkClearing" IS NULL) = ("FoundationParkClearingKind" IS NULL)
@@ -317,6 +320,8 @@ public sealed partial class EfStore
         yield return Index("IX_FoundationRootInbox_Kept", "Messages", """
             ("Partition", "Target", "Seq", "Id", "InboxScope") WHERE "FoundationKeptBy" IS NOT NULL
             """);
+        if (RecordsConsumedRootJob(db))
+            yield return Index("IX_FoundationRootInbox_RecordedJobResult", "Messages", RecordedJobResultIndex);
         if (db.UsesRootParkRecovery)
         {
             yield return Index("IX_FoundationRootInbox_Released", "Messages", $"""

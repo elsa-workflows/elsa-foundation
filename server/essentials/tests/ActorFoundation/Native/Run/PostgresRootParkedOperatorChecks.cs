@@ -741,6 +741,11 @@ internal static class PostgresRootParkedOperatorChecks
             EfStore.RootImage after;
             if (recovery)
             {
+                if (validPlan)
+                {
+                    await using var guards = OpenResult();
+                    await RecordedJobRecoveryChecks.AssertInstalledGuardsAsync(guards, parked, Check, stop);
+                }
                 const string operation = "recover-recorded-result-park";
                 Check(await set.OperateAsync(root, operation, Contract.Kinds.Recover, selection),
                     "the recovery composition admits Recover for the Park with the retained job registration");

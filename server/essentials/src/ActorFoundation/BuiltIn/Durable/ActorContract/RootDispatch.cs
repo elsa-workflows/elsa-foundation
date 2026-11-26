@@ -238,8 +238,10 @@ internal sealed partial class ActorAdapter
             var plan = actor.RestoreWaits(RootHeader(row), row.State);
             if (plan is not { Timers.Count: 0, Subscriptions.Count: 0 }) return false;
             var registered = Durable.JobRegistry.Read(row.Jobs);
-            return registered.Count == plan.Jobs.Count && registered.Select(job => job.Key).ToHashSet(StringComparer.Ordinal)
-                .SetEquals(plan.Jobs.Select(job => job.Key));
+            return registered.Count == 0 ? plan.Jobs.Count == 0 :
+                registered is [var job] && plan.Jobs is [var recipe] && job.Key == recipe.Key &&
+                job.Generation >= 0 && job.Generation < (row.NextJobGeneration ?? 1) &&
+                Durable.InMemoryStore.FitsSingleParkJobRecipe(row, new(recipe.Key, recipe.Arguments, recipe.Deadline));
         }
         catch (Exception) { return false; }
     }

@@ -122,16 +122,18 @@ public sealed partial class EfStore
             FormattableString write = $"""
                 UPDATE "Instances" SET "Status" = {(int)InstanceStatus.Faulted}, "Fault" = {EncodedFault},
                     "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision}, "FoundationParkAt" = {parkAt}
-                    /*open-revision*/
+                    /*open-revision*/ /*park-job-result*/
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                 """;
             if (db.RecordsRootParkRevision)
                 write = FormattableStringFactory.Create(
                     write.Format.Replace("/*open-revision*/", $$""", "FoundationParkRevision" = {{{write.ArgumentCount}}}""", StringComparison.Ordinal),
                     [.. write.GetArguments(), openRevision]);
-            if (await db.Database.ExecuteSqlInterpolatedAsync(write, cancellationToken) != 1) return false;
-
             var keys = Inputs.Select(input => recorded ? StoredJobId(input.InboxKey) : input.InboxKey.Id).ToArray();
+            var pinsResult = recorded && RecordsConsumedRootJob(db);
+            write = WithParkJobResult(db, write, pinsResult ? keys[0] : null);
+            if (!pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, cancellationToken) != 1) return false;
+
             // A different input can mature between dispatch and Park. Lock the dispatched identities.
             var pending = await db.Messages.FromSqlInterpolated($"""
                 SELECT * FROM "Messages" WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
@@ -150,7 +152,8 @@ public sealed partial class EfStore
                 WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "InboxScope" = {scope} AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationKeptBy" IS NULL
                 """, cancellationToken);
-            if (kept != keys.Length || Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
+            if (kept != keys.Length || pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, cancellationToken) != 1) return false;
+            if (Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Seen" = 0
                 WHERE "Id" = ANY({Returned}) AND "Id" LIKE 'operator/%' AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"

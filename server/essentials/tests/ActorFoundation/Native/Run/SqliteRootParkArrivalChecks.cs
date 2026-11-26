@@ -231,10 +231,21 @@ internal static partial class SqliteHostLifetimeChecks
                             AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {Kinds.JobFinished} AND "Done"
                             AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}) AS "Value"
                         """).SingleAsync(token), "a faulting job result remains consumed beside its registration");
+                await RecordedJobRecoveryChecks.AssertInstalledGuardsAsync(db, park, Require, token);
                 var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                executor.RecordedJobArguments = new string('\0', 4 * 1024 * 1024);
+                Require(await admission.OperateAsync(scope.Tenant, root, "oversized-recorded-recipe", Kinds.Recover, selection, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the fixture admits Recover before checking its authored recipe");
+                var refused = await DriveAsync(owner, root, row => row is { Revision: 5, Status: InstanceStatus.Faulted });
+                var refusal = (await store.ReadJournalOfAsync(partition, park.Actor.Id, 0, token))[^1];
+                Require(refused.Jobs == park.Jobs && refused.ParkAt == park.ParkAt &&
+                    refusal.Entries.Contains("\"Reason\":\"plan\"", StringComparison.Ordinal),
+                    "Recover refuses an oversized encoded recipe while preserving the registration and Park");
+
+                executor.RecordedJobArguments = null;
                 Require(await admission.OperateAsync(scope.Tenant, root, "resume-recorded", Kinds.Recover, selection, null, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted }, "the selected recorded-result Park accepts Recover");
-                var recovered = await DriveAsync(owner, root, row => row is { Revision: 5, Status: InstanceStatus.Running });
+                var recovered = await DriveAsync(owner, root, row => row is { Revision: 6, Status: InstanceStatus.Running });
                 Require(recovered is { Jobs: null, NextJobGeneration: 1, ParkAt: null } && recovered.State == park.State &&
                     executor.RecordedJobs == 1 && executor.RecordedResults == 1 &&
                     !await db.Messages.AnyAsync(row => row.Target == park.Actor.Id && row.InboxScope == EfStore.RootTimedJobScope, token),
@@ -426,8 +437,10 @@ internal static partial class SqliteHostLifetimeChecks
         internal List<string> Order { get; } = [];
         string Contract.IActorType.Type => type;
         public bool Withholds(Contract.ActorHeader header) => header.TypeData == Withheld;
+        internal string? RecordedJobArguments { get; set; }
+
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
-            header.TypeData == RecordedPlan ? new([], [new(RecordedJob, null)], []) : new([], [], []);
+            header.TypeData == RecordedPlan ? new([], [new(RecordedJob, RecordedJobArguments)], []) : new([], [], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
