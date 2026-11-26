@@ -112,8 +112,7 @@ The dispatch's `Inputs` is bound to a generated JavaScript expression over the c
   `Object.entries(item).filter(...).map(...)` and `Object.fromEntries`, as `Elsa3HttpTriggerResponseModeRewrite` does.
   There is no `item[name]`: computed member access by name on anything but `variables`/`args` is workflow-state access
   to the read analysis (`JavaScriptVariableReadAnalyzer`), and publish refuses it with VF-STATE-002.
-- **Target unknown**: the expression spreads the map item, or emits `{[key]: item}`, and raises the existing
-  `DispatchInputNames` warning.
+- **Target unknown**: refused with `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` (FR-006).
 - A literal or Object-expression static `Input` goes through the existing `Elsa3ValueContract.DispatchInputs` check
   first, so literal undeclared keys stay `ELS3-ACTIVITY-DISPATCH-INPUT-UNDECLARED`. A JavaScript `Input` is rewritten
   by the existing JavaScript rewrite and embedded as the first operand of the generated object. Any other language is

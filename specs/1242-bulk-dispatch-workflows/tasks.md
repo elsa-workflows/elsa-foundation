@@ -35,7 +35,8 @@ for spec 1243's parallel ForEach.
 ## Phase 2: Members (US3, US4)
 
 - [ ] T006 [US3] Per-item `Inputs` expression (FR-006, plan §3):
-  - for a known target and for an unknown target;
+  - for a known target, and a refusal with `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` (added here) for an unknown
+    target;
   - with a static `Input` that is a literal, an Object expression or JavaScript, and a refusal for any other language;
   - with warning `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS` (FR-011). Add that code to `Elsa3ActivityDiagnosticCodes`
     and to `raisedByRewrites` in `Elsa3ActivityMapCoverageTests` here.

@@ -301,9 +301,11 @@ guidance.
     treats as workflow-state access (VF-STATE-002). Tests check it through publish validation, not only the
     evaluator.
   - The item wins over `Input` on a name clash, as in Elsa 3.
-  - When the target is not in the import, the item is passed the Elsa 3 way (every member, or the item under the key),
-    with the existing `ELS3-BEHAVIOUR-DISPATCH-INPUT-NAMES` warning. A member the child does not declare then fails
-    Elsa 4's input check at run time and the pass faults; the warning says so (Q2 on PR #5839).
+  - When the target is not in the import, the node is refused with new error
+    `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`. Guidance: import the target workflow in the same run. Without the
+    target's declarations, every item member would be passed, and Elsa 4's input check would refuse an undeclared one
+    at run time. On the `ForEach` path that fault stops the whole loop at that item, because `ForEach` has no
+    child-fault handler, so later children are never dispatched. This is Q2 on PR #5839; the alternative is a warning.
   - `ParentInstanceId` is not passed.
 - **FR-007**: `DefaultItemInputKey` MUST be a literal, or null or absent; null and absent mean `Item`, as in Elsa 3.
   Any other binding is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. `Items` null maps to an unbound
@@ -354,11 +356,13 @@ guidance.
 | `Items` any non-null literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. Guidance: Elsa 3 read it as text and dispatched no child (Edge Cases) |
 | A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable (`getChildInstanceId()` or `getVariable("ChildInstanceId")`), or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | refused with new error `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised where the rewrite resolves those names, so it replaces the generic unknown-name diagnostic. Guidance: the branches get no child result in Elsa 4; remove the read; once spec 1245 (#5838) gives an awaited `DispatchWorkflow` an `Output`, the branch can read the body dispatch's `Output` |
 | `WorkflowDefinitionId` not a literal | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (FR-005) |
+| Target workflow not in the import | `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` (FR-006) |
 | `ChannelName` or `StartNewTrace` bound | `ELS3-ACTIVITY-REMOVED-INPUT-BOUND` (FR-009) |
 
 - **FR-013**: Every new code MUST be added to `Elsa3ActivityDiagnosticCodes` and to the spec 236 diagnostic-code
   contract:
-  - two errors: `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` and `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`;
+  - three errors: `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`, `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ` and
+    `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`;
   - one warning: `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`. FR-010 reuses spec 1243's code.
 
   Dropped dead connections and branches reuse `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. Each new error MUST carry
@@ -374,8 +378,8 @@ guidance.
 - **FR-016**: The JTest effect MUST be handed to S-15 rather than edited on this branch, because the ledger lives on the
   S-15 branch. The hand-over has three parts.
   - `performance-concurrency.json` converts as it is, provided its child `simple-write-hello-world.json` is in the same
-    import. That child declares no inputs, so the scalar item is not passed. If the child were not in the import,
-    `{Item: n}` would be passed under the unknown-target rule, and Elsa 4 would refuse it at run time.
+    import. That child declares no inputs, so the scalar item is not passed. Without the child in the import, the node
+    is refused (FR-006).
   - The composition root needs an adjusted copy, for coordinator approval: a literal `WorkflowDefinitionId` and a
     cleared `ChannelName`, the same precedent as `composition-dispatch-root-workflow.json`. It then converts once spec
     1243 is implemented.
