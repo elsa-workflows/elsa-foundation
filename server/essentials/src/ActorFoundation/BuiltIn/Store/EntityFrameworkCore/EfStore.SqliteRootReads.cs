@@ -54,12 +54,10 @@ public sealed partial class EfStore
 
     private static RootListItem ToSqliteRootListItem(SqliteActorProjection row)
     {
-        if (row.ParkAt is not null && row.ParkRevision is not > 0 ||
-            row.ParkAt is null && row.ParkResolution is not null ||
-            row.ParkResolution is not (null or "terminating" or "deleting"))
-            throw new StoreFormatException("The SQLite actor projection has an incomplete Park mark or resolution.");
+        if (row.ParkAt is not null && row.ParkRevision is not > 0)
+            throw new StoreFormatException("The SQLite actor projection has an incomplete Park mark.");
         return ToRootListItem(row.Reference, row.Status, row.EndedAt, row.TerminalRevision, row.Header,
-            qualified: true, row.ParkAt, row.ParkFault, row.ParkRevision) with { ParkResolution = row.ParkResolution };
+            qualified: true, row.ParkAt, row.ParkFault, row.ParkRevision, row.ParkResolution);
     }
 
     private static Task<RootJournalPage> ReadSqliteRootJournalAsync(KernelDb db, string tenant, string reference,

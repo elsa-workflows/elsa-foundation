@@ -210,10 +210,10 @@ public sealed partial class EfStore
         string Row(string side) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal);
         var keptScope = db.UsesSqliteShippedInstall ? "" : """k."InboxScope" = -4 AND """;
-        var pageKind = db.UsesSqliteShippedInstall ? """ AND NEW."FoundationParkClearingKind" = OLD."FoundationParkClearingKind" """ : "";
+        const string pageKind = """ AND NEW."FoundationParkClearingKind" = OLD."FoundationParkClearingKind" """;
         string End(string ended, string kind, string entries) => $$$"""
             ({{{ended}}} AND NOT NEW."Retired"
-                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 AND OLD."FoundationTerminalRevision" IS NULL{{{SqliteClearingKindMatches(db, $"'{kind}'")}}}
+                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 AND OLD."FoundationTerminalRevision" IS NULL{{{ClearingKindMatches($"'{kind}'")}}}
                 AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
                 AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
                 AND NEW."Jobs" IS NULL AND NEW."Children" IS NULL AND NEW."CustomHandles" IS NULL AND OLD."Fault" IS NOT NULL
@@ -266,9 +266,7 @@ public sealed partial class EfStore
         const string atRevision = """j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id" AND j."Revision" = NEW."Revision" """;
         // Repeat the partial index's predicate so the probe seeks to this revision of the actor, including on ordinary turns.
         var stopped = atRevision + $"AND j.{RootOutcomeEntry} " + """AND j."Entries" LIKE '{{"Outcome":"clearing-stopped",%' """;
-        var kind = db.UsesSqliteShippedInstall
-            ? $""" AND OLD."FoundationParkClearingKind" = '{Kinds.Delete}' AND NEW."FoundationParkClearingKind" IS NULL """
-            : "";
+        var kind = $""" AND OLD."FoundationParkClearingKind" = '{Kinds.Delete}' AND NEW."FoundationParkClearingKind" IS NULL """;
         return $$$"""
             CASE WHEN EXISTS (SELECT 1 FROM "Journal" j WHERE {{{stopped}}}) THEN
                 OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
@@ -288,6 +286,8 @@ public sealed partial class EfStore
     private const string ParkedClearingPinned = """
         AND ROW(NEW."FoundationParkClearing", NEW."FoundationParkCleared") IS NOT DISTINCT FROM ROW(OLD."FoundationParkClearing", OLD."FoundationParkCleared")
         """;
+    private static string ParkedClearingUnchanged(KernelDb db) => ParkedClearingPinned + (db.UsesSqliteShippedInstall ? "" :
+        """ AND NEW."FoundationParkClearingKind" IS NOT DISTINCT FROM OLD."FoundationParkClearingKind" """);
     private const string ParkedClearingKeeps = """
         AND (OLD."FoundationParkClearing" IS NULL OR EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition"
             AND j."Instance" = NEW."Id" AND j."Revision" = NEW."Revision" AND j."Entries" LIKE '{{"Outcome":"refused",%'))
@@ -310,11 +310,11 @@ public sealed partial class EfStore
     // S5b-3b: a Delete retires it the same way, still Faulted; a Terminate-then-delete needs its capability.
     private static string ParkedRetirementCheckpoint(KernelDb db) => ParkedRetirementSql
         .Replace("/*retired-status*/", db.UsesRootTerminateThenDelete ? "IN (2, 3)" : "= 2", StringComparison.Ordinal)
-        .Replace("/*retired-clearing-kind*/", SqliteClearingKindMatches(db,
+        .Replace("/*retired-clearing-kind*/", ClearingKindMatches(
             $"""CASE WHEN NEW."Status" = 3 THEN '{Kinds.Terminate}' ELSE '{Kinds.Delete}' END"""), StringComparison.Ordinal);
 
-    private static string SqliteClearingKindMatches(KernelDb db, string kind) => db.UsesSqliteShippedInstall
-        ? $""" AND (OLD."FoundationParkClearingKind" IS NULL OR OLD."FoundationParkClearingKind" = {kind})""" : "";
+    private static string ClearingKindMatches(string kind) =>
+        $""" AND (OLD."FoundationParkClearingKind" IS NULL OR OLD."FoundationParkClearingKind" = {kind})""";
 
     private static readonly string ParkedRetirementSql = """
         (OLD."Status" = 2 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationTerminalRevision" IS NULL/*retired-clearing-kind*/
@@ -345,7 +345,7 @@ public sealed partial class EfStore
             .Replace("/*park-revision*/", db.RecordsRootParkRevision ? $""", {side}."FoundationParkRevision" """ : "", StringComparison.Ordinal)
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal)
             .Replace("/*clearing*/", $""", {side}."FoundationParkClearing", {side}."FoundationParkCleared" """ +
-                (db.UsesSqliteShippedInstall ? $""", {side}."FoundationParkClearingKind" """ : ""), StringComparison.Ordinal);
+                $""", {side}."FoundationParkClearingKind" """, StringComparison.Ordinal);
         // The raw command is formatted, so the literal brace is doubled.
         return $$$"""
             AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
@@ -394,15 +394,18 @@ public sealed partial class EfStore
     // S5b-2: an open clearing on the parked root: the Terminate's operation and the rows cleared so far. Both are set only on a
     // Faulted row with its Park mark.
     internal static Task InstallRootParkClearingAsync(KernelDb db, CancellationToken token) =>
-        db.Database.ExecuteSqlRawAsync("""
+        db.Database.ExecuteSqlRawAsync($$"""
             ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkClearing" text COLLATE "C",
+                ADD COLUMN IF NOT EXISTS "FoundationParkClearingKind" text COLLATE "C",
                 ADD COLUMN IF NOT EXISTS "FoundationParkCleared" bigint;
             ALTER TABLE "Instances" DROP CONSTRAINT IF EXISTS "CK_FoundationParkClearing";
             ALTER TABLE "Instances" ADD CONSTRAINT "CK_FoundationParkClearing" CHECK (("FoundationParkClearing" IS NULL) = ("FoundationParkCleared" IS NULL)
-                AND ("FoundationParkClearing" IS NULL OR "Status" = 2 AND "FoundationParkAt" IS NOT NULL AND "FoundationParkCleared" > 0));
+                AND ("FoundationParkClearing" IS NULL) = ("FoundationParkClearingKind" IS NULL)
+                AND ("FoundationParkClearing" IS NULL OR "Status" = 2 AND "FoundationParkAt" IS NOT NULL AND "FoundationParkCleared" > 0
+                    AND "FoundationParkClearingKind" IN ('{{Kinds.Terminate}}', '{{Kinds.Delete}}')));
             """, token);
 
-    private sealed record LockedParkedRoot(long At, string Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion, bool Clearing);
+    private sealed record LockedParkedRoot(long At, string Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion, string? ClearingKind);
 
     private sealed record RootParkedRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended, long? ProtectionRefusals)
         : QualifiedRootCheckpoint(checked(Expected + 1))
@@ -421,7 +424,7 @@ public sealed partial class EfStore
             var locked = await db.Database.SqlQuery<LockedParkedRoot>($"""
                 SELECT i."FoundationParkAt" AS "At", i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
                     sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion",
-                    i."FoundationParkClearing" IS NOT NULL AS "Clearing"
+                    i."FoundationParkClearingKind" AS "ClearingKind"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
@@ -430,6 +433,7 @@ public sealed partial class EfStore
                     AND i."Fault" IS NOT NULL AND i."FoundationTerminalRevision" IS NULL
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                     AND (NOT {Retries} OR i."FoundationParkClearing" = {Command.Id}
+                        AND i."FoundationParkClearingKind" = {Command.Kind}
                         AND i."FoundationParkAt" = {Command.Operator?.RootParkMark?.At} AND i."FoundationParkRevision" = {Command.Operator?.RootParkMark?.Revision})
                 FOR UPDATE OF i
                 """).ToListAsync(token);
@@ -437,10 +441,11 @@ public sealed partial class EfStore
             // Without Park arrivals, or while its Park is being cleared, the parked root withholds its ordinary inputs, so the
             // settled prefix is its operator rows. The envelope comparison binds a held command's exact reply address.
             if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
-                    suspended: !db.UsesRootParkArrivals || prior.Clearing, token, includePrivateInputs: false)) return false;
+                    suspended: !db.UsesRootParkArrivals || prior.ClearingKind is not null, token, includePrivateInputs: false)) return false;
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "FoundationParkClearing" = CASE WHEN {Stops} THEN NULL ELSE "FoundationParkClearing" END,
+                    "FoundationParkClearingKind" = CASE WHEN {Stops} THEN NULL ELSE "FoundationParkClearingKind" END,
                     "FoundationParkCleared" = CASE WHEN {Stops} THEN NULL ELSE "FoundationParkCleared" END
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                 """, token) != 1) return false;
@@ -461,12 +466,13 @@ public sealed partial class EfStore
                         AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision}
                         AND "Status" = {(int)InstanceStatus.Faulted} AND "Suspended" = {Suspended} AND "Fault" = {prior.Fault}
                         AND "FoundationParkAt" = {prior.At} AND "FoundationTerminalRevision" IS NULL AND "StateVersion" = {prior.StateVersion}
-                        AND (NOT {Stops} OR "FoundationParkClearing" IS NULL AND "FoundationParkCleared" IS NULL)
+                        AND (NOT {Stops} OR "FoundationParkClearing" IS NULL AND "FoundationParkClearingKind" IS NULL AND "FoundationParkCleared" IS NULL)
                         AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
                         AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest})
                     AND (NOT {db.UsesRootParkInspection} OR EXISTS (SELECT 1 FROM "FoundationActorList"
                         WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference} AND "Status" = {(int)InstanceStatus.Faulted}
-                            AND "ParkAt" = {prior.At} AND "ParkFault" = {prior.Fault}))
+                            AND "ParkAt" = {prior.At} AND "ParkFault" = {prior.Fault}
+                            AND "ParkResolution" IS NOT DISTINCT FROM {ParkResolutionFor(Stops ? null : prior.ClearingKind)}::text))
                 AS "Value"
                 """).SingleAsync(token);
         }
@@ -485,7 +491,7 @@ public sealed partial class EfStore
             var locked = await db.Database.SqlQuery<LockedParkedRoot>($"""
                 SELECT i."FoundationParkAt" AS "At", i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
                     sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion",
-                    i."FoundationParkClearing" IS NOT NULL AS "Clearing"
+                    i."FoundationParkClearingKind" AS "ClearingKind"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
@@ -494,6 +500,7 @@ public sealed partial class EfStore
                     AND i."FoundationParkRevision" = {Mark.Revision} AND i."Fault" IS NOT NULL AND i."FoundationTerminalRevision" IS NULL
                     AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."CustomHandles" IS NULL
                     AND i."FoundationParkClearing" IS NOT DISTINCT FROM {Clearing}::text
+                    AND ({Clearing}::text IS NULL OR i."FoundationParkClearingKind" = {Command.Kind})
                     AND coalesce(i."FoundationParkCleared", 0) = {Cleared}
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
@@ -507,7 +514,7 @@ public sealed partial class EfStore
             // multi-page Open the page count stays the same, so the digest is the only check there.
             if (KeptSetDigest(kept) != KeptDigest || page.Length != Count || Ends != (page.Length == kept.Count) ||
                 !await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
-                    suspended: !db.UsesRootParkArrivals || prior.Clearing, token, includePrivateInputs: false)) return false;
+                    suspended: !db.UsesRootParkArrivals || prior.ClearingKind is not null, token, includePrivateInputs: false)) return false;
             var window = Command.Operator!.RootParkWindow!.Value;
             var cleared = page.Select(row => row.Id).ToArray();
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -523,14 +530,15 @@ public sealed partial class EfStore
             FormattableString end = $"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "Status" = {(int)status}, "Suspended" = {discards} AND "Suspended", "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL,
-                    "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL, "FoundationTerminalRevision" = {JournalRevision},
+                    "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL,
+                    "FoundationTerminalRevision" = {JournalRevision},
                     "FoundationTerminalAt" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                     AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Root.Actor})
                 """;
             FormattableString advance = $"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
-                    "FoundationParkClearing" = {Command.Id}, "FoundationParkCleared" = {total}
+                    "FoundationParkClearing" = {Command.Id}, "FoundationParkClearingKind" = {Command.Kind}, "FoundationParkCleared" = {total}
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                 """;
             if (await db.Database.ExecuteSqlInterpolatedAsync(Ends ? end : advance, token) != 1) return false;
@@ -562,6 +570,7 @@ public sealed partial class EfStore
                         AND "Fault" = {prior.Fault} AND "FoundationParkAt" IS NOT DISTINCT FROM {(Ends ? null : Mark.At)}::bigint
                         AND "FoundationParkRevision" IS NOT DISTINCT FROM {(Ends ? null : Mark.Revision)}::bigint
                         AND "FoundationParkClearing" IS NOT DISTINCT FROM {(Ends ? null : Command.Id)}::text
+                        AND "FoundationParkClearingKind" IS NOT DISTINCT FROM {(Ends ? null : Command.Kind)}::text
                         AND "FoundationParkCleared" IS NOT DISTINCT FROM {(Ends ? null : total)}::bigint
                         AND "FoundationTerminalRevision" IS NOT DISTINCT FROM {(Ends ? JournalRevision : null)}::bigint
                         AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
@@ -573,6 +582,7 @@ public sealed partial class EfStore
                     AND (NOT {db.UsesRootParkInspection} OR EXISTS (SELECT 1 FROM "FoundationActorList"
                         WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference}
                             AND "Status" = {(int)status}
+                            AND "ParkResolution" IS NOT DISTINCT FROM {ParkResolutionFor(Ends ? null : Command.Kind)}::text
                             AND ("ParkAt" IS NULL) = {Ends} AND ("EndedAt" IS NOT NULL) = {Ends}))
                 AS "Value"
                 """).SingleAsync(token);
