@@ -15,8 +15,13 @@ Paths are relative to `src/modules/Elsa.Workflows.Runtime`.
 - Otherwise the activity bookmarks on `ExecuteWorkflowStimulus`. `Handlers/ResumeExecuteWorkflowActivity.cs` resumes it
   on `WorkflowExecuted` with the child's `Output` dictionary as workflow input. The resume callback then sets `Result`
   to that bare dictionary (`ExecuteWorkflow.cs:126-130`), so `Result` has two shapes.
-- Faulted and Cancelled sub-statuses count as `Finished`. The parent continues on `Done` and nothing checks the
-  sub-status.
+- A Faulted sub-status counts as `Finished` (`WorkflowRunner` raises `WorkflowExecuted`), so the parent continues on
+  `Done` and nothing checks the sub-status.
+- A cancelled child raises `WorkflowCancelled` (`Services/WorkflowCanceler.cs`). No resume handler listens to it, so an
+  awaited parent stays suspended.
+- Both activities add `ParentInstanceId` to the child's input (`ExecuteWorkflow.cs:103`, `DispatchWorkflow.cs:123`).
+- The output dictionary the parent resumes with ignores case (`WorkflowExecutionContext` input), so a read with other
+  casing also worked.
 
 **Dispatch Workflow** (`Activities/DispatchWorkflow.cs`) is an `Activity<object>`.
 
@@ -25,7 +30,7 @@ Paths are relative to `src/modules/Elsa.Workflows.Runtime`.
 - With `WaitForCompletion` true it always bookmarks on `DispatchWorkflowStimulus`. The resume handler, a copy of the
   Execute Workflow one, sets `Result` to the child's output dictionary.
 - With `WaitForCompletion` false the activity completes at once and `Result` is never set.
-- Fault and cancel behave as for Execute Workflow.
+- Faults and cancellations behave as for Execute Workflow.
 
 **Workflow-definition activity** (`Elsa.Workflows.Management/Activities/WorkflowDefinitionActivity`) runs the child
 graph inline in the parent's instance, with typed outputs. Execute Workflow is a separate instance. That is why the
@@ -45,6 +50,17 @@ coordinator chose an awaited dispatch over a reusable graph activity.
 - A waited dispatch resumes through `ResumeAsync` with a `WorkflowDispatchParentResumePayload`. The payload already
   carries the safe output entries, so FR-001 to FR-003 only reshape data the resume already has.
 
+Child outputs in `Result.outputs` come from `WorkflowOutputSource`, which projects them through
+`IRuntimePayloadCapturePolicy` (`RuntimeWorkflowOutputStateProjection.ProjectOne`). The default level for
+`WorkflowOutput` is `DiagnosticSnapshot` (`DefaultRuntimePayloadCapturePolicy`, `RuntimeDiagnosticsSettings`).
+
+- By default each value is a preview envelope (`DefaultDiagnosticSnapshotFactory`), with strings cut at 256 characters
+  and objects at 32 properties, depth 6 or 16 KB.
+- A name containing `token`, `password` or `secret` is redacted.
+
+`Result.outputs` is therefore a diagnostics view, and `Output` must read the committed values (plan D-2). The existing
+dispatch tests use stub output sources, so nothing showed this.
+
 Output projection (`ActivityCompletionProjector`):
 
 - A result path that is missing gives an absent projection. `RuntimeOutputCaptureProjector` skips an absent capture, so
@@ -63,7 +79,8 @@ Converter (`extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Ent
 - Execute Workflow takes `WaitForCompletion` as a `DefaultFlip`, so a bound expression or a literal false is carried
   over. Elsa 3's inline-run semantics are then lost: a false makes the Elsa 4 dispatch fire-and-forget.
 - The outcome maps are `Done → Dispatched, Completed` (Dispatch Workflow) and `Done → Completed` (Execute Workflow). A
-  faulted or cancelled child therefore ends the branch.
+  faulted child therefore ends the branch, where Elsa 3 continued.
+- The converter always emits `CancelChildOnParentCancellation` false (spec 236). The kernel refuses that value.
 
 ## R-3 main's execution kernel (#4229), not yet on the initiative branch
 
