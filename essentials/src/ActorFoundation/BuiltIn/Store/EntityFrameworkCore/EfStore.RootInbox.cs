@@ -19,6 +19,8 @@ public sealed partial class EfStore
         int limit, CancellationToken cancellationToken)
     {
         await using var db = create();
+        if (!postgres && Engine is null && db.UsesSqliteRootRuntime)
+            return await ReadSqliteRootInboxAsync(db, tenant, reference, afterSeq, afterOccurrence, limit, cancellationToken);
         // A composed Park set inspects its direct and operator rows beside self-sends and jobs, which it never lists.
         if (!postgres || Engine is not null || !db.Database.IsNpgsql() ||
             (db.UsesRootSelfProtocol || db.UsesRootJobProtocol) && !db.UsesRootParkInspection)
