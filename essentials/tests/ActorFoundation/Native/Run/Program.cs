@@ -61,6 +61,11 @@ if (args is [var chartMode and ("pg-cluster-statechart" or "pg-cluster-statechar
 if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flowchart-peer"), var flowSize] && int.TryParse(flowSize, out var flowPartitions))
     return await PostgresClusterChecks.RunAsync(flowPartitions, flowClusterMode == "pg-cluster-flowchart-peer", flowchart: true);
 if (args is ["pg-preview-host-lifetime"]) return await PostgresPreviewLifetimeChecks.RunAsync();
+if (args is ["sqlite-host-lifetime", var sqliteFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunAsync(sqliteFence == "in-batch");
+if (args is ["sqlite-host-lifetime-peer", var sqliteMode and ("refused" or "start" or "kill" or "dispose" or "fault" or "stuck" or "recover"), var sqlitePath,
+    var peerFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunPeerAsync(sqliteMode, sqlitePath, peerFence == "in-batch");
 if (args is ["pg-preview-host-watchdog"]) return await PostgresPreviewHostChecks.RunAsync();
 if (args is [var clusterMode and ("pg-cluster-roots" or "pg-cluster-peer" or "pg-cluster-crash"), var size] && int.TryParse(size, out var clusterPartitions))
     return await PostgresClusterChecks.RunAsync(clusterPartitions, clusterMode == "pg-cluster-peer", clusterMode == "pg-cluster-crash");

@@ -1263,6 +1263,13 @@
       "elsa.actorfoundation.builtin.runtime": {
         "type": "Project"
       },
+      "elsa.actorfoundation.builtin.sqlite": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore": "[4.0.0-dev, )"
+        }
+      },
       "elsa.actorfoundation.builtin.store.entityframeworkcore": {
         "type": "Project",
         "dependencies": {
