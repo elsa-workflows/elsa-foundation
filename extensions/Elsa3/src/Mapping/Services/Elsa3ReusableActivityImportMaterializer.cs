@@ -336,23 +336,30 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
     internal static JsonElement BuildGraphManifest(Elsa3ConvertedDefinition converted)
     {
         var state = converted.State;
-        var variables = state.Variables.Select(variable => new
+        var variables = state.Variables.Select(variable =>
         {
-            referenceKey = variable.ReferenceKey,
-            name = variable.Name,
-            type = new
+            var node = JsonSerializer.SerializeToNode(new
             {
-                alias = variable.Type.Alias,
-                // The graph manifest reads the exact CollectionKind name (Single, Array, ...).
-                collectionKind = variable.Type.CollectionKind.ToString()
-            },
-            storageDriverKey = variable.StorageDriverType ?? "elsa.json",
-            initialValue = variable.Default is null ? null : new
-            {
-                syntax = variable.Default.ExpressionType ?? "Literal",
-                value = variable.Default.Value
-            }
-        });
+                referenceKey = variable.ReferenceKey,
+                name = variable.Name,
+                type = new
+                {
+                    alias = variable.Type.Alias,
+                    // The graph manifest reads the exact CollectionKind name (Single, Array, ...).
+                    collectionKind = variable.Type.CollectionKind.ToString()
+                },
+                storageDriverKey = variable.StorageDriverType ?? "elsa.json"
+            }, JsonOptions)!.AsObject();
+            // A variable without a value has no initial value: the manifest's initialValue is optional and an explicit
+            // null is refused as a malformed expression (#5850), so the property is left out.
+            if (variable.Default is not null)
+                node["initialValue"] = JsonSerializer.SerializeToNode(new
+                {
+                    syntax = variable.Default.ExpressionType ?? "Literal",
+                    value = variable.Default.Value
+                }, JsonOptions);
+            return node;
+        }).ToArray();
         return JsonSerializer.SerializeToElement(new
         {
             rootActivity = state.RootActivity,

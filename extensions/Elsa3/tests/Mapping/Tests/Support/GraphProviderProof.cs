@@ -92,7 +92,7 @@ internal static class GraphProviderProof
     private sealed class ConvertedTypeCapabilities : IActivityContractCapabilityCatalog
     {
         public IReadOnlyCollection<ActivityContractTypeCapability> Types { get; } =
-            new[] { "Object", "String", "Int32", "Int64", "Boolean", "Decimal", "Double", "DateTime", "DateTimeOffset", "TimeSpan", "Guid", "JsonElement" }
+            new[] { "Any", "Object", "String", "Int32", "Int64", "Boolean", "Decimal", "Double", "DateTime", "DateTimeOffset", "TimeSpan", "Guid", "JsonElement" }
                 .Select(alias => new ActivityContractTypeCapability(
                     alias,
                     alias,

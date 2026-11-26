@@ -224,12 +224,38 @@ public sealed class Elsa3ReusableTerminalTests
         Assert.Empty(result.Value.OutputMappings);
     }
 
+    /// <summary>
+    /// #5850: a workflow variable without a value has no initial value, so the graph manifest leaves
+    /// <c>initialValue</c> out (the manifest refuses an explicit <c>null</c>), and the graph provider accepts and compiles it.
+    /// </summary>
+    [Theory]
+    [InlineData("Object")]
+    [InlineData("String")]
+    public async Task A_variable_without_a_value_has_no_initial_value_in_the_graph_manifest(string typeName)
+    {
+        var catalog = RealActivityCatalog.Create();
+        var definition = Reusable(
+            Sequence("root", Activity("write", "Elsa.WriteLine", ("text", Literal("x")))),
+            variables: [new Elsa3Variable { Id = "state", Name = "state", TypeName = typeName }]);
+
+        var result = await ConversionServices.ConvertAsync(catalog, definition, isReusable: true);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var variable = Assert.Single(Elsa3.Mapping.Services.Elsa3ReusableActivityImportMaterializer.BuildGraphManifest(result.Value!)
+            .GetProperty("variables").EnumerateArray());
+        Assert.Equal("state", variable.GetProperty("referenceKey").GetString());
+        Assert.False(variable.TryGetProperty("initialValue", out _));
+        Assert.Empty(Errors(await GraphProviderProof.ValidateAsync(catalog, result.Value!)));
+        GraphProviderProof.AssertCompiled(await GraphProviderProof.CompileAsync(catalog, result.Value!));
+    }
+
     private static Elsa3WorkflowDefinition Reusable(
         Elsa3Activity root,
         IEnumerable<string>? outcomes = null,
-        IEnumerable<Elsa3WorkflowArgumentDefinition>? outputs = null)
+        IEnumerable<Elsa3WorkflowArgumentDefinition>? outputs = null,
+        IEnumerable<Elsa3Variable>? variables = null)
     {
-        var definition = ConversionServices.Definition(root, outputs: outputs);
+        var definition = ConversionServices.Definition(root, variables: variables, outputs: outputs);
         definition.Options = new Elsa3WorkflowOptions { UsableAsActivity = true };
         definition.Outcomes = (outcomes ?? []).ToList();
         return definition;
