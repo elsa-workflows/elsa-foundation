@@ -4,229 +4,158 @@
 
 ## Summary
 
-The Elsa 3 converter stops refusing `BulkDispatchWorkflows` and lowers it to a loop with a `DispatchWorkflow` body
-(spec option B):
+Add an Elsa 4 structural activity, `BulkDispatchWorkflows`, to the DispatchWorkflow activity package. For each item it
+schedules one ordinary `DispatchWorkflow` child execution, with its own iteration id and item scope. It runs
+`ChildCompleted` or `ChildFaulted` per child while waiting, and completes with `Done`.
 
-- A literal-false wait becomes a `ForEach`. This part does not depend on spec 1243.
-- Any other wait becomes spec 1243's parallel ForEach, with the child branches wired from the dispatch's `Completed` and
-  `Faulted` outcomes. This part is gated on spec 1243.
-
-Item inputs are built for each pass from the child's declared inputs. `get{DefaultItemInputKey}()` in the correlation
-function reads the loop's current item. One new warning and two new errors cover the behaviour differences and the refusals;
-dropped dead edges reuse `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. The work is limited to the converter, its tests and the docs: the runtime, Studio and the catalog are
-unchanged.
+Because each child dispatch is its own activity execution, the whole dispatch subsystem is reused unchanged: identity,
+stager, resume, cancellation, audit, test-run scope and recovery. The Elsa 3 converter maps its activity to the new one
+one to one.
 
 ## Technical Context
 
-**Language/Version**: C# / .NET 10.
+**Language/Version**: C# / .NET 10; Studio (TypeScript) only through generic slot rendering.
 
-**Primary Dependencies**: none new. The waiting path needs spec 1243's parallel ForEach in the activity catalog.
+**Primary Dependencies**: none new.
 
-**Storage**: none.
+**Storage**: none new. The dispatch records, intents and bookmarks are the existing ones, one set per child.
 
-**Testing**: xunit only, in `extensions/Elsa3/tests/Mapping` (converter) and the existing Elsa 3 import tests. The
-JTest effect is checked by S-15.
+**Testing**: xunit only. Runtime tests next to the existing DispatchWorkflow runtime tests; converter tests in
+`extensions/Elsa3/tests/Mapping`.
 
-**Project Type**: converter rule inside existing services (`extensions/Elsa3/src/Mapping`).
+**Project Type**: a new activity in `essentials/src/Activities/DispatchWorkflow/Runtime` (plus a structure handler on
+the design side), and converter rules.
 
-**Constraints**:
-
-- Pre-stable, so there is no shim.
-- No new extension point.
-- The lowering is a node rewrite. Node rewrites are already a named strategy (framework §2.24.2 Strategy,
-  `IElsa3NodeRewrite`), so the lowering introduces no new pattern.
+**Constraints**: pre-stable, so no shims. No author-facing degree, batch or channel input.
 
 ## Constitution Check
 
-- **Sanctioned patterns only**: the lowering is a new `Elsa3NodeRewriteKind` with its own `IElsa3NodeRewrite`,
-  registered in `Elsa3MappingFeature` next to the seven existing rewrites. Like `Elsa3SwitchValueSynthesisRewrite`
-  (`context.AddChild`) and `Elsa3HttpTriggerResponseModeRewrite` (node insertion), it adds nodes. Pass.
-- **No runtime knob for authors**: the lowering adds no input to any activity and sets none. The parallel ForEach's
-  `MaxDegreeOfParallelism` is the approved owner decision in large-fan-out.md, owned by spec 1243; the converter leaves
-  it at the default. Pass.
-- **Refuse over workaround**: three things are refused with guidance instead of emulated: channels, the child result in
-  branches, and `Completed` routes that a run-time wait value would change. The Elsa 3 defects (input leak, shared
-  bookmark counter) are not emulated. Pass.
-- **ADR needed?** No. Option B uses existing activities and spec 1243's loop. Spec 1243 follows large-fan-out.md decision 1 (cap 1,000,
-  degree 16). Option A, if chosen
-  instead, would need an ADR for the multi-child dispatch identity.
+- **Sanctioned patterns only**: the activity is a structural activity with a structure handler, as `If` and `ForEach`
+  are. The converter change is a map entry and existing rule kinds. Pass.
+- **No runtime knob for authors**: no degree, batch or channel input. The cap is fixed (FR-007). Pass.
+- **Refuse over workaround**: the converter refuses what it cannot map faithfully (spec FR-019), and Elsa 3 defects
+  (the shared bookmark counter, the leaking `Input` dictionary) are not reproduced. Pass.
+- **ADR needed?** No. Each child keeps "one dispatch per activity execution" (spec 096 FR-012). Per-item iteration ids
+  and scopes follow ADR 0028. Concurrent passes of one node follow `docs/architecture/large-fan-out.md` (release 1,
+  cap 1,000). The rejected option B would have needed one.
 
 ## Design
 
-### 1. Map entry and rewrite kind
+### 1. Activity
 
-- In `Elsa3BuiltInActivityMap.Entries.cs`, replace `NoCounterpart("BulkDispatchWorkflows", …)` with a catalog entry
-  whose target is `ForEach`, and whose rewrite is a new `Elsa3NodeRewriteKind.BulkDispatchAsLoop`.
-  - The rewrite picks between `ForEach` and the parallel ForEach (FR-002, FR-003).
-  - The entry classifies every Elsa 3 member exactly once, as `Every_elsa3_activity_and_member_is_classified_exactly_once`
-    requires: `Items` → `Collection` (`NullUnbound`). The other inputs are `Structure` (R7) on the entry, because
-    `ForEach` has no such inputs, and the keys are checked against the real catalog by
-    `Every_targeted_elsa4_key_slot_and_outcome_exists_in_the_real_catalog`.
-  - `ChildCompleted` and `ChildFaulted` are `[Port]` members in 3.6.3, but the Elsa 3 surface fixture
-    (`extensions/Elsa3/tests/Mapping/Tests/Fixtures/elsa3-activity-surface.json`) lists only the 8 inputs. The fixture
-    gets the two ports (kind `port`), following its "corrected per spec 236 research R-4" precedent, and the entry
-    classifies them with `kind: Elsa3MemberKind.Port`, as `ParallelForEach.Body` is.
-  - The rewrite applies `LiteralOnly` (`WorkflowDefinitionId`), `DispatchInputs` (`Input`), `Removed` (`StartNewTrace`,
-    `ChannelName`) and the synthetic `CancelChildOnParentCancellation` to the body dispatch node itself.
-  - The entry's `Outcome` rules map `Done` → `Done`; plan §5 covers `Completed` and `Canceled`.
-- While the parallel ForEach type key is not in the catalog, the rewrite raises `NoCounterpart` for the waiting path,
-  with guidance naming spec 1243 (FR-003). Phases 1–3 ship with that gate; phase 4 (T014–T018) adds the waiting
-  shape once spec 1243 is in the catalog.
+- **Placement**: `BulkDispatchWorkflows : StructuralActivity, IRuntimeStructuralActivity,
+  IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler` in
+  `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/`, with type key `Elsa.BulkDispatchWorkflows`.
+- **Inputs**: the members of spec FR-002. `WorkflowDefinitionId` carries the same `[RefusesSecretBinding(…,
+  FixedAtPublish)]` as `DispatchWorkflow`.
+- **Visible slots**: `ChildCompleted` and `ChildFaulted`, `[ActivityChildSlot(… Single)]`, both optional.
+- **Hidden dispatch node**:
+  - `BulkDispatchWorkflowsStructureHandler`, an `IActivityStructureHandler` modelled on `IfStructureHandler`, keeps a
+    `DispatchWorkflow` node in the authored structure under a slot the facets do not declare. That is the BPMN
+    importer's precedent (`BpmnDocumentImporter`, `BpmnElement`).
+  - Its inputs are bound from the bulk node's inputs when the structure is compiled.
+  - `DispatchPinSource` already walks every descendant `DispatchWorkflow` and pins it.
 
-Research item R-1 (mostly answered): a rewrite runs "after the member rules, before descending into children", and can
-add children through `Elsa3RewriteContext.AddChild` (used by `Elsa3SwitchValueSynthesisRewrite`) or insert nodes
-(`Elsa3HttpTriggerResponseModeRewrite`). What is left to confirm in code: that a rewrite can change the node's own
-target type, from the Elsa 3 node to `ForEach` or the parallel ForEach, and give it a synthesized body child. If it
-cannot, the lowering moves into `Elsa3FlowchartGraphBuilder`. A rewrite cannot see the parent flowchart's connections
-(`Elsa3RewriteContext` exposes only its node, properties, children and ancestors), so the outcome handling lives in the
-graph builder either way (§5). Record the outcome in the PR.
+Research item R-1: confirm that `CompileExecutableStructure` can bind the hidden node's `Inputs` and `CorrelationId` to
+the bulk node's expressions, and resolve them per pass inside the iteration scope. Also confirm that `WaitForCompletion`
+can be bound to the value the bulk node evaluated once. The candidate is a scope value set by the bulk node, read by
+the hidden node. If a binding cannot cross, the hidden node holds the expressions itself and the bulk node's inputs are
+a projection of them for the designer. Record the outcome in the PR.
 
-### 2. Body
+### 2. Scheduling and completion
 
-- **Loop members**: `Items` → `Collection` with null left unbound (`NullUnbound`, not ForEach's `NullRefused`), and
-  any non-null literal refused. `DefaultItemInputKey` null or absent means `Item`.
-- **Without waiting**: the body is the `DispatchWorkflow` node itself, in `ForEach.Body`.
-- **Missing wait**: the body dispatch gets a literal true `WaitForCompletion` (Elsa 4 defaults to false).
-- **Branches without waiting**: the `ChildCompleted`/`ChildFaulted` branches are nested port activities, not
-  connections, so the rewrite drops them itself, by not calling `AddChild`, and raises
-  `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` from there.
-- **With waiting**: the body is a `Flowchart` holding the dispatch.
-  - The dispatch's `Completed` and `Faulted` outcomes connect to the converted `ChildCompleted` and `ChildFaulted`
-    activities, when they exist.
-  - Those activities keep their Elsa 3 ids (FR-004).
-  - An empty branch converts to no node.
-- **Ids**: the dispatch node and the body flowchart get ids derived from the Elsa 3 node id with the converter's
-  existing synthesized-id scheme, `{nodeId}.{suffix}` (as `{nodeId}.http-{suffix}` in
-  `Elsa3HttpTriggerResponseModeRewrite`): `{nodeId}.bulk-dispatch` and `{nodeId}.bulk-body`. That keeps conversions
-  deterministic.
+- **Start**: evaluate `Items`, refusing a value that is not a collection as `ForEach` does, and `WaitForCompletion`.
+  Check the cap (FR-007). Then schedule the hidden dispatch node once per item, each with
+  `IterationId = StructuredExecutionIdentity.Iteration(aeid, index)` and a `LoopIterationScopeRequest` carrying
+  `currentItem` and `currentIndex`, all in the same turn (FR-005).
+- **State**: the item count and the number of passes ended, kept in the activity's state. The children are counted
+  through `ListAllByParentAsync`, as `Parallel` does, so a recount after recovery is exact.
+- **`OnChildCompletedAsync`**:
+  - For the hidden dispatch node, read the outcome.
+    - Without waiting (`Dispatched`): mark the pass ended.
+    - With waiting: `Completed` schedules `ChildCompleted` in the same iteration scope. `Faulted`, `Cancelled` and
+      `DispatchFailed` schedule `ChildFaulted`. With no slot, the pass ends.
+  - For a slot child: mark the pass ended.
+  - When every pass has ended, complete with `Done`.
+- **`OnChildFaultedAsync`**: a hidden dispatch node that faults (an input refused at dispatch) is handled like
+  `DispatchFailed`, so `ChildFaulted` runs. A slot child that faults faults the bulk activity (FR-008).
+- **Concurrent same-node scheduling**: this is the runtime piece shared with spec 1243 (FR-024). If spec 1243 lands
+  first, use its scheduler. Otherwise build it here, in the scheduler-facing code, so 1243 can reuse it. Research item
+  R-2: confirm that `ScheduleChildActivity` accepts the same child node several times in one turn with distinct
+  iteration ids, and that nothing keys on (parent, child node) alone.
 
-### 3. Per-item inputs (FR-006)
+### 3. Converter
 
-The dispatch's `Inputs` is bound to a generated JavaScript expression over the current item.
+- **Map entry**: `Elsa3BuiltInActivityMap.Entries.cs` replaces `NoCounterpart("BulkDispatchWorkflows")` with a
+  `Catalog` entry targeting `Elsa.BulkDispatchWorkflows`.
+  - Members (spec FR-012–FR-016): reuse the `DispatchMembers` rules for the shared members, plus `Items` (`Carry`,
+    `NullUnbound`, a non-null literal refused), `WaitForCompletion` (`DefaultFlip` to true, a case-insensitive
+    literal, null as false), and `ChildCompleted`/`ChildFaulted` as `Port` members mapped to the slots.
+  - `CorrelationIdFunction`, `DefaultItemInputKey` and `Input` are handled by a node rewrite
+    (`Elsa3NodeRewriteKind.BulkDispatchInputs`) that builds the per-item `Inputs` and `CorrelationId` expressions.
+  - The surface fixture `elsa3-activity-surface.json` gets the two ports (kind `port`).
+- **Item read**: the rewrite registers `get{DefaultItemInputKey}` and `args.<camelKey>` as ambient names for the
+  correlation function. `Elsa3ValueFlowLowerer` resolves them to `VariableExpressionParameterBinding(bulkNodeId,
+  "currentItem")`, except where a workflow input or variable of that name wins (`ResolveGeneratedAccessor` order),
+  as in Elsa 3.
+- **Inputs script**: the declared names appear as literals. Item members are reached via
+  `Object.entries`/`filter`/`Object.fromEntries`, never `item[name]` (VF-STATE-002). The static `Input` follows the
+  #5808 rules (literal or Object) or is embedded (JavaScript). A target outside the import is refused
+  (`…-TARGET-UNKNOWN`).
+- **Outcomes** (spec FR-017): in `Elsa3FlowchartGraphBuilder.DropDeadEdges`, before `MapPorts` and `CheckJoins`. The
+  node rewrite cannot see connections.
+- **Child-result reads** (spec FR-019): resolved to `…-CHILD-RESULT-READ` in name resolution for nodes inside the
+  converted slots, before the generic missing-name failures.
+- **Codes**: 3 errors and 2 warnings in `extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs`. The warnings
+  are added to `raisedByRewrites` in `Elsa3ActivityMapCoverageTests`.
 
-- **Target declarations known** (`Elsa3ConversionRequest.DispatchTargetInputs`): the expression is a pick. For each
-  declared name `n` it reads the item member whose name matches `n` regardless of case, and emits it under the declared
-  spelling `n`; that is the #5808 rule. When the item is not a map, it emits `{[key]: item}`, but only when the target
-  declares `key`. Static `Input` entries come first, so the item wins.
-- **Script form**: the declared names and the key appear as string literals. Item members are reached only through
-  `Object.entries(item).filter(...).map(...)` and `Object.fromEntries`, as `Elsa3HttpTriggerResponseModeRewrite` does.
-  There is no `item[name]`: computed member access by name on anything but `variables`/`args` is workflow-state access
-  to the read analysis (`JavaScriptVariableReadAnalyzer`), and publish refuses it with VF-STATE-002.
-- **Target unknown**: refused with `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` (FR-006).
-- A literal or Object-expression static `Input` goes through the existing `Elsa3ValueContract.DispatchInputs` check
-  first, so literal undeclared keys stay `ELS3-ACTIVITY-DISPATCH-INPUT-UNDECLARED`. A JavaScript `Input` is rewritten
-  by the existing JavaScript rewrite and embedded as the first operand of the generated object. Any other language is
-  refused (FR-006).
-- The generated script must pass the spec 1223 script rules and the strict-mode rules of spec 262. Converter tests run
-  the emitted script through the Elsa 4 evaluator for map, scalar, null and array items.
+### 4. Docs
 
-### 4. Correlation id (FR-008)
-
-- The rewrite registers the lowered loop as a scope whose `currentItem` the body reads, and registers the generated
-  accessor `get{DefaultItemInputKey}`, and the `args.<camelKey>` member Elsa 3 also set
-  (`JavaScriptExpressionHandler` camelizes every evaluator argument into `args`), as ambient names for the correlation
-  function only. Without that, the rewrite refuses `args` with ForbiddenCapability and guidance that points to
-  `getVariable`/`getInput`, which would read the wrong value. Name resolution
-  (`Elsa3ValueFlowLowerer`, the ambient resolver) resolves that accessor to
-  `VariableExpressionParameterBinding(loopNodeId, "currentItem")`, unless a workflow input or variable has the
-  accessor's name. Then the existing `ResolveGeneratedAccessor` order (inputs, then variables) wins, because Elsa 3's
-  `EvaluatingJavaScript` handler overwrote the argument getter with that input or variable's getter. Otherwise the
-  JavaScript rewrite emits
-  `variables.currentItem` with a pinned binding. A text replacement before the rewrite would not work: a
-  pre-substituted `variables.currentItem` resolves as an Elsa 3 variable named `currentItem` (MissingAmbient), and a
-  left-over `getItem()` fails as an unknown host function.
-  - This is not an entry in `Elsa3LoopVariableReferencesRewrite`. That table maps an Elsa 3 `CurrentValue` output
-    memory reference to a loop variable, and `getItem()` is a Jint argument getter, not a memory reference.
-  - Registering the scope also makes the existing nested-loop check (`ResolutionDiffers`) fire for a read of an
-    enclosing loop's current value inside the lowered body (FR-012).
-- A literal function becomes a literal `CorrelationId`.
-
-### 5. Outcomes (FR-012)
-
-The outgoing connections are handled in `Elsa3FlowchartGraphBuilder.Build`, where they are visible: a node rewrite
-cannot reach them. The rewrite records the wait classification on the node plan; a bulk-dispatch step in
-`DropDeadEdges` (which already raises `DeadConnectionRemoved` as a warning) reads it before `MapPorts`:
-
-- `Done` → the loop's `Done` (the entry's `Outcome` rule).
-- `Canceled` → dropped with `DeadConnectionRemoved`, unless it leads to a `WaitAll` join (refused).
-- `Completed` → handled by the FR-012 rows: dropped with `DeadConnectionRemoved` when the wait is a literal false;
-  dropped silently when `Done` reaches every target; refused when it leads to a `WaitAll` join or to a target `Done`
-  does not reach.
-
-Without that step a `Completed` or `Canceled` edge whose source now has only `Done` ends at `GraphOutcomeUnmapped`. The
-step runs before `CheckJoins`, so it does the `WaitAll` check itself. For the corpus root (Done, Canceled and Completed into one `WaitAny` join), the join is left with one
-inbound edge and collapses (`ConcurrentPair` needs two).
-
-The check "every target also reached from `Done`" compares the direct target sets. No duplicate connection is
-emitted.
-
-### 6. Diagnostics (FR-010–FR-013)
-
-New constants in `Elsa3ActivityDiagnosticCodes` (FR-010 reuses spec 1243's `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED`):
-
-| Constant | Code | Level |
-|---|---|---|
-| `BulkDispatchItemInputs` | `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS` | warning |
-| `BulkDispatchOutcomeRoute` | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` | error |
-| `BulkDispatchChildResultRead` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ` | error |
-
-- The child-result read check runs inside name resolution (`Elsa3ValueFlowLowerer`), for nodes inside a lowered
-  branch. A generated accessor or `getVariable` read of `ChildInstanceId`, or an input read of `WorkflowOutput`,
-  `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus`, resolves to `BulkDispatchChildResultRead` before the
-  generic missing-variable or unknown-function failure (lines around 1160 and 1255) is reached.
-- `ITEM-INPUTS` is added to `raisedByRewrites` in `Elsa3ActivityMapCoverageTests`.
-- Any non-null literal `Items` is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, because Elsa 3 read it as text. The converter cannot see a
-  run-time value; the documentation describes the difference.
-
-### 7. Docs
-
-- `extensions/Elsa3/src/Mapping/README.md`: the lowering, the member table and the refusals.
-- `specs/236-elsa3-activity-map/member-map.md` and `contracts/diagnostic-codes.md`: the BulkDispatchWorkflows row moves
-  from R6 to the lowering, and the new codes are added.
-- `essentials/src/Activities/DispatchWorkflow/Runtime/README.md`: a "one child per item" section (FR-015).
+- A README section for the activity in `essentials/src/Activities/DispatchWorkflow/Runtime/README.md`: cap, batching,
+  branches.
+- `EXTENSION_POINTS.md` in the same project, if the structure handler is a catalogued extension.
+- `extensions/Elsa3/src/Mapping/README.md`.
+- `specs/236-elsa3-activity-map/member-map.md` and `contracts/diagnostic-codes.md`.
 
 ## Test scope
 
-- `Elsa3BulkDispatchLoweringTests` (new):
-  - each FR-012 row;
-  - the ForEach and parallel ForEach shapes;
-  - kept ids;
-  - inputs for a known and an unknown target;
-  - correlation rewrite with `Item` and with a custom key;
-  - `WaitForCompletion` missing, `null`, a valueless literal, `"False"`, `"true"` and an expression;
-  - a static `Input` as literal, Object, JavaScript and another language;
-  - the 1243 gate.
-- `Elsa3ConversionDiagnosticsTests`: drop BulkDispatchWorkflows from the no-counterpart cases. Keep ParallelForEach
-  until 1243.
-- `Elsa3ActivityMapCoverageTests`: the new codes are used.
-- An end-to-end conversion of a synthetic `acme.*` bulk-dispatch definition modelled on the corpus shape: no wait,
-  wait, and an expression wait.
+- **Runtime** (`BulkDispatchWorkflows` tests next to the DispatchWorkflow runtime tests):
+  - N children start in one turn, each with distinct dispatch identities;
+  - the wait and no-wait completion;
+  - each branch routing (Completed, Faulted, Cancelled, DispatchFailed, a dispatch input fault);
+  - an empty or null `Items`;
+  - the cap fault;
+  - a slot fault faults the activity;
+  - parent cancellation cancels the waiting children;
+  - publish pins the hidden node;
+  - recovery recount.
+- **Converter** (`Elsa3BulkDispatchConversionTests`): every member rule; each FR-017 and FR-019 row; the item-read
+  resolution, including the variable-wins case and `args.item`; the inputs script through publish validation; kept
+  slot ids.
+- **Coverage tests**: the map coverage and the surface fixture.
 
 ## Coordination
 
-- **Spec 1243** (#5832): its session confirmed on 2026-11-26 that the shape fits: `Collection`,
-  `variables.currentItem`, `Done` after all passes; since then 1243 adopted large-fan-out.md's cap (1,000) and degree
-  (16, a `MaxDegreeOfParallelism` input) with `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED`. A child fault routed inside
-  the body is a completed pass. It is not yet approved; if 1243 changes, FR-003, FR-008 and FR-010 follow it.
-- **S-15**: the hand-over in FR-016 goes to the S-15 session's notes after approval.
+- **Spec 1243**: the shared concurrent same-node scheduling (FR-024), and the same `currentItem`/`currentIndex` scope.
+- **Spec 1245**: the per-child `Output`, for a later follow-up that exposes it to branches.
+- **S-15**: the hand-over of FR-022 after approval.
 
 ## Project Structure
 
 ```text
-specs/1242-bulk-dispatch-workflows/
-├── spec.md
-├── plan.md
-├── tasks.md
-└── checklists/requirements.md
-
+essentials/src/Activities/DispatchWorkflow/
+├── Runtime/Activities/BulkDispatchWorkflows.cs          (new)
+├── Runtime/Constants/…                                  (type key, outcome, cap)
+├── Runtime/README.md
+└── Design/Services/BulkDispatchWorkflowsStructureHandler.cs (new; placement per R-1)
 extensions/Elsa3/src/Mapping/
-├── ActivityMap/Elsa3BuiltInActivityMap.Entries.cs     (entry)
-├── ActivityMap/Elsa3NodeRewriteKind.cs                (new kind)
-├── ActivityMap/Rewrites/Elsa3BulkDispatchAsLoopRewrite.cs (new)
-├── Elsa3MappingFeature.cs                             (register the rewrite)
+├── ActivityMap/Elsa3BuiltInActivityMap.Entries.cs
+├── ActivityMap/Elsa3NodeRewriteKind.cs
+├── ActivityMap/Rewrites/Elsa3BulkDispatchInputsRewrite.cs (new)
+├── Conversion/Elsa3FlowchartGraphBuilder.cs             (outcome step)
+├── Services/Elsa3ValueFlowLowerer.cs                    (item read, child-result reads)
 └── README.md
-extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs (3 codes)
-extensions/Elsa3/tests/Mapping/Tests/Elsa3BulkDispatchLoweringTests.cs (new)
+extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs (5 codes)
 ```
 
 ## Complexity Tracking
