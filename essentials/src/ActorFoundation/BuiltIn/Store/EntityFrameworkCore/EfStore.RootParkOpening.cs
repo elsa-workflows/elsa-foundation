@@ -18,13 +18,17 @@ public sealed partial class EfStore
         var split = parkedOperators && opening && turn.Done.Any(PostgresRootAdmission.IsOperatorOccurrence);
         string[] returned = split ? turn.Done.Where(PostgresRootAdmission.IsOperatorOccurrence).Select(key => key.Id).ToArray() : [];
         if (split) turn = WithoutOperators(turn);
+        // A recorded timed result is already durably published. If its actor callback faults,
+        // keep that exact result beside the same job registration in SQLite's Park commit.
+        var recorded = !postgres && opening && RootTimedJobSettlementEnabled && turn.Row is { } resultTarget &&
+            turn.FoundationRootParkInputs is [var result] && RootJobTicket.IsRecordedResult(result, resultTarget);
         // A Park keeps the row's Suspended flag, as the in-memory reference does. Only a composed set with operators can
         // suspend a root, so only there can a Park open or continue on a suspended one.
         if (turn.Row is not { Status: InstanceStatus.Faulted, Fault: { } fault } row || row.Suspended && !parkedOperators ||
             turn.Expected is not > 0 || opening && reason != ParkKeepReason.Consumed || turn.Done.Count == 0 && !split ||
             turn.FoundationKept is not { } kept || kept.Count != turn.Done.Count ||
             turn.FoundationRootParkInputs is not { } envelopes || !SameInputs(envelopes, turn.Done) ||
-            turn.Done.Any(key => key.Scope != InboxKey.FoundationOccurrenceScope || !root.Owns(key) ||
+            turn.Done.Any(key => (!recorded && key.Scope != InboxKey.FoundationOccurrenceScope) || !root.Owns(key) ||
                 PostgresRootAdmission.IsOperatorOccurrence(key) || !kept.TryGetValue(key, out var actual) ||
                 actual != reason) || turn.Done.Distinct().Count() != kept.Count ||
             turn.Consumed.Count != 0 || turn.Sent.Count != 0 || turn.Subscribed.Count != 0 ||
@@ -50,7 +54,7 @@ public sealed partial class EfStore
 
         var journal = turn.Journal is null ? null : new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal);
         return new(journal, new RootParkOpening(root, current.Revision, opening, reason, DurableKeyJson.Write(fault), envelopes, returned,
-            row.Suspended));
+            row.Suspended, current.Jobs, current.NextJobGeneration));
     }
 
     private static TurnCommit WithoutOperators(TurnCommit turn)
@@ -78,7 +82,7 @@ public sealed partial class EfStore
     private sealed record LockedParkCheckpoint(long At, long? ParkAt, long? OpenRevision, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
 
     private sealed record RootParkOpening(WorkerRoot Root, long Expected, bool Opening, ParkKeepReason Reason, string EncodedFault,
-        IReadOnlyList<Message> Inputs, string[] Returned, bool Suspended)
+        IReadOnlyList<Message> Inputs, string[] Returned, bool Suspended, string? Jobs, long? NextJobGeneration)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)

@@ -30,12 +30,15 @@ public sealed partial class EfStore
     {
         if (!park.Opening || park.Reason != ParkKeepReason.Consumed) return false;
         var root = park.Root;
-        var ids = park.Inputs.Select(input => input.InboxKey.Id).ToArray();
+        var recorded = park.Inputs is [{ FoundationJobResult: true }];
+        var scope = recorded ? RootTimedJobScope : InboxKey.FoundationOccurrenceScope;
+        var ids = park.Inputs.Select(input => recorded ? StoredJobId(input.InboxKey) : input.InboxKey.Id).ToArray();
         var at = await db.Database.SqlQueryRaw<long>($"SELECT {SqliteCommitDialect.MillisecondClock} AS \"Value\"").SingleAsync(token);
         var pending = await db.Messages.AsNoTracking().Where(row => row.Target == root.Actor && row.Partition == root.Partition &&
-            row.InboxScope == InboxKey.FoundationOccurrenceScope && row.EventMatch == null && !row.Done && row.Due <= at && ids.Contains(row.Id))
+            row.InboxScope == scope && row.EventMatch == null && !row.Done && row.Due <= at && ids.Contains(row.Id))
             .OrderBy(row => row.Seq).ToArrayAsync(token);
-        if (!pending.Select(row => DecodeRootInput(db, row, root.Reference, issue: null)).SequenceEqual(park.Inputs)) return false;
+        var inputs = recorded ? pending.Select(DecodeRootTimedRow) : pending.Select(row => DecodeRootInput(db, row, root.Reference, issue: null));
+        if (!inputs.SequenceEqual(park.Inputs)) return false;
 
         var revision = park.JournalRevision;
         if (await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -45,10 +48,11 @@ public sealed partial class EfStore
                 AND "Status" = {(int)InstanceStatus.Running} AND NOT "Retired" AND "Suspended" = {park.Suspended}
                 AND "FoundationParkAt" IS NULL AND "FoundationParkRevision" IS NULL AND "FoundationParkClearing" IS NULL
                 AND "FoundationTerminalAt" IS NULL AND "FoundationTerminalRevision" IS NULL
+                AND "Jobs" IS NOT DISTINCT FROM {park.Jobs} AND "NextJobGeneration" IS NOT DISTINCT FROM {park.NextJobGeneration}
                 AND "FoundationTenant" = {root.Tenant} AND "FoundationReference" = {root.Reference}
                 AND EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Actor" = {root.Actor} AND "Partition" = {root.Partition}
                     AND "Tenant" = {root.Tenant} AND "Reference" = {root.Reference} AND "Creation" = 1 AND "Fingerprint" = {root.Fingerprint})
-            """, token) != 1 || !await KeepSqliteParkInputsAsync(db, root.Actor, root.Partition, InboxKey.FoundationOccurrenceScope, ids, token))
+            """, token) != 1 || !await KeepSqliteParkInputsAsync(db, root.Actor, root.Partition, scope, ids, token))
             return false;
 
         if (park.Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync(WithSqliteOperatorPredicate($"""
