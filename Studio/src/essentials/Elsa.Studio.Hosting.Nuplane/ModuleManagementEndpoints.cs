@@ -149,7 +149,9 @@ internal static class ModuleManagementEndpoints
         {
             var index = IndexOf(feeds, name);
             if (index < 0) return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
-            feeds[index] = FeedJson(feed, name, feeds[index] as JsonObject);
+            var existing = feeds[index] as JsonObject;
+            if (IsCacheOnlyFeed(existing)) return ReadOnlyFeed(name);
+            feeds[index] = FeedJson(feed, name, existing);
             return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate registration changes."));
         });
     }
@@ -159,6 +161,7 @@ internal static class ModuleManagementEndpoints
         {
             var index = IndexOf(feeds, name);
             if (index < 0) return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
+            if (IsCacheOnlyFeed(feeds[index] as JsonObject)) return ReadOnlyFeed(name);
             feeds.RemoveAt(index);
             return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate registration changes."));
         });
@@ -171,14 +174,20 @@ internal static class ModuleManagementEndpoints
             await store.MutateIfAsync(FeedPrefix, document =>
             {
                 var setup = ManagementConfigurationStore.Object(ManagementConfigurationStore.Object(document, "Nuplane"), "Setup");
-                var feeds = setup["Feeds"] as JsonArray;
+                var existing = setup["Feeds"];
+                if (existing is not null and not JsonArray)
+                {
+                    result = ReadOnlyConfiguration("Studio feed management requires feeds to be configured as a JSON array.");
+                    return false;
+                }
+                var feeds = existing as JsonArray;
                 if (feeds is null) setup["Feeds"] = feeds = new JsonArray();
                 result = mutate(feeds);
                 return result is IStatusCodeHttpResult { StatusCode: >= 200 and < 300 };
             }, token);
             return result;
         }
-        catch (ConfigurationReadOnlyException error) { return Results.Conflict(new { Error = error.Message, Code = "configuration-read-only" }); }
+        catch (ConfigurationReadOnlyException error) { return ReadOnlyConfiguration(error.Message); }
         catch (StudioHostingException error) { return Results.Json(new { Error = error.Message }, statusCode: StatusCodes.Status503ServiceUnavailable); }
     }
 
@@ -214,6 +223,16 @@ internal static class ModuleManagementEndpoints
             if (string.Equals((string?)feeds[index]?["Name"], name, StringComparison.OrdinalIgnoreCase)) return index;
         return -1;
     }
+
+    private static bool IsCacheOnlyFeed(JsonObject? feed) =>
+        !string.IsNullOrWhiteSpace((string?)feed?["DirectoryPath"]) &&
+        feed?["Directory"] is JsonObject directory && StudioNuplaneSettings.IsCacheRole(directory["Role"]?.ToString());
+
+    private static IResult ReadOnlyFeed(string name) =>
+        ReadOnlyConfiguration($"Cache-only feed '{name}' is read-only.");
+
+    private static IResult ReadOnlyConfiguration(string error) =>
+        Results.Conflict(new { Error = error, Code = "configuration-read-only" });
 
     private static string? FeedError(ModuleManagementFeed feed)
     {

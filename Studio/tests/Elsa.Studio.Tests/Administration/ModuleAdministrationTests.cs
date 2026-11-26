@@ -121,6 +121,109 @@ public sealed class ModuleAdministrationTests
         Assert.False(File.Exists(expected));
     }
 
+    [Fact]
+    public async Task A_configured_cache_is_read_only_and_does_not_compete_with_an_editable_upload_feed()
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """
+                {
+                  "Nuplane": { "Setup": { "Feeds": [
+                    { "Name": "baked", "DirectoryPath": "baked", "Directory": { "Watch": false, "Role": "Cache" } },
+                    { "Name": "local", "DirectoryPath": "uploads", "IncludeAll": true, "Directory": { "Watch": false } }
+                  ] } }
+                }
+                """));
+        var configuration = Path.Combine(host.Root, "nuplane-management.json");
+        var before = await File.ReadAllBytesAsync(configuration);
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/BAKED", Feed("baked", "replacement"));
+        using var delete = await host.Client.DeleteAsync(Prefix + "/feeds/baked");
+        Assert.Equal(HttpStatusCode.Conflict, edit.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, delete.StatusCode);
+        Assert.Equal("configuration-read-only", (string?)JsonNode.Parse(await edit.Content.ReadAsStringAsync())!["code"]);
+        Assert.Equal(before, await File.ReadAllBytesAsync(configuration));
+
+        using var addEditable = await host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("other", "other"));
+        using var editEditable = await host.Client.PutAsJsonAsync(Prefix + "/feeds/other", Feed("other", "updated"));
+        using var deleteEditable = await host.Client.DeleteAsync(Prefix + "/feeds/other");
+        addEditable.EnsureSuccessStatusCode();
+        editEditable.EnsureSuccessStatusCode();
+        deleteEditable.EnsureSuccessStatusCode();
+        var feeds = (await Registry(host))["feeds"]!.AsArray();
+        Assert.Equal(2, feeds.Count);
+        Assert.Contains(feeds, feed => (string?)feed!["name"] == "baked" && (string?)feed["directoryPath"] == "baked");
+        Assert.Contains(feeds, feed => (string?)feed!["name"] == "local");
+
+        const string archive = "Acme.StudioUpload.1.0.0.nupkg";
+        using var upload = await Upload(host, archive, Package());
+        upload.EnsureSuccessStatusCode();
+        Assert.True(File.Exists(Path.Combine(host.Root, "uploads", archive)));
+        Assert.False(File.Exists(Path.Combine(host.Root, "baked", archive)));
+    }
+
+    [Fact]
+    public async Task Configured_cache_only_feeds_leave_the_writable_fallback_available()
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"Nuplane":{"Setup":{"Feeds":[{"Name":"baked","DirectoryPath":"baked","Directory":{"Watch":false,"Role":"Cache"}}]}}}"""));
+        const string archive = "Acme.StudioUpload.1.0.0.nupkg";
+        using var upload = await Upload(host, archive, Package());
+        upload.EnsureSuccessStatusCode();
+        Assert.True(File.Exists(Path.Combine(host.Root, "packages", archive)));
+        Assert.False(File.Exists(Path.Combine(host.Root, "baked", archive)));
+    }
+
+    [Fact]
+    public async Task A_keyed_cache_preserves_configuration_and_leaves_the_writable_fallback_available()
+    {
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"Nuplane":{"Setup":{"Feeds":{"baked":{"DirectoryPath":"baked","Directory":{"Watch":false,"Role":"Cache"}}}}}}"""));
+        var configuration = Path.Combine(host.Root, "nuplane-management.json");
+        var before = await File.ReadAllBytesAsync(configuration);
+
+        using var add = await host.Client.PostAsJsonAsync(Prefix + "/feeds", Feed("other", "other"));
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/baked", Feed("baked", "replacement"));
+        using var delete = await host.Client.DeleteAsync(Prefix + "/feeds/baked");
+        foreach (var response in new[] { add, edit, delete })
+        {
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Equal("configuration-read-only", (string?)JsonNode.Parse(await response.Content.ReadAsStringAsync())!["code"]);
+        }
+        Assert.Equal(before, await File.ReadAllBytesAsync(configuration));
+
+        const string archive = "Acme.StudioUpload.1.0.0.nupkg";
+        using var upload = await Upload(host, archive, Package());
+        upload.EnsureSuccessStatusCode();
+        Assert.True(File.Exists(Path.Combine(host.Root, "packages", archive)));
+        Assert.False(File.Exists(Path.Combine(host.Root, "baked", archive)));
+    }
+
+    [Fact]
+    public async Task A_configured_cache_cannot_be_named_as_the_upload_feed()
+    {
+        await Assert.ThrowsAsync<StudioHostingException>(async () =>
+        {
+            await using var host = await AdministrationHost.StartAsync(
+                beforeStudio: builder => File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                    """{"Nuplane":{"Setup":{"Feeds":[{"Name":"baked","DirectoryPath":"baked","Directory":{"Watch":false,"Role":"Cache"}}]}}}"""),
+                configureAdministration: options => options.DirectoryFeedName = "BAKED");
+        });
+    }
+
+    [Fact]
+    public async Task The_fallback_cannot_share_a_configured_cache_path()
+    {
+        var error = await Assert.ThrowsAsync<StudioHostingException>(async () =>
+        {
+            await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+                File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                    """{"Nuplane":{"Setup":{"Feeds":[{"Name":"baked","DirectoryPath":"packages/","Directory":{"Watch":false,"Role":"Cache"}}]}}}"""));
+        });
+        Assert.Contains("separate from configured cache-only feeds", error.Message);
+    }
+
     [Theory]
     [InlineData("package.zip")]
     [InlineData("package.dll")]
