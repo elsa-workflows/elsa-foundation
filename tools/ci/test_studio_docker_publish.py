@@ -567,30 +567,53 @@ class StudioDockerPublishTests(unittest.TestCase):
         workflow = (REPO_ROOT / ".github/workflows/studio-docker.yml").read_text()
         start = workflow.index("      - name: Qualify the exact Studio Essentials image")
         end = workflow.index("      - name: Retain Studio Essentials image qualification evidence", start)
-        environment, script = workflow[start:end].split("        run: |\n")
-        self.assertRegex(
-            environment,
-            r"PROFILE_INDEX_DIGEST: \$\{\{ .*fromJSON\(steps\.profile_build\.outputs\.metadata\)"
-            r"\.profile\['containerimage\.digest'\].* \}\}",
-        )
-        self.assertEqual(1, environment.count("steps.profile_build.outputs.metadata"))
+        header, script = workflow[start:end].split("        run: |\n")
+        expression = "${{ toJSON(steps.profile_build.outputs.metadata) }}"
+        self.assertNotIn("steps.profile_build.outputs.metadata", header)
+        self.assertEqual(1, script.count(expression))
+        self.assertIn("if: matrix.flavor == 'essentials'", header)
 
         digest = "sha256:" + "a" * 64
-        cases = [("false", "", True), ("true", digest, True), ("true", "", False), ("true", "sha256:invalid", False)]
-        for publish, index, succeeds in cases:
-            with self.subTest(publish=publish, index=index):
-                env = dict(os.environ, PUBLISH_IMAGE=publish, PROFILE_INDEX_DIGEST=index,
+        # The result must work beyond Linux's per-string environment limit, and
+        # metadata that resembles a shell command or delimiter must stay data.
+        large_metadata = json.dumps({
+            "profile": {"containerimage.digest": digest},
+            "provenance": ("x" * 135_312) + "\nBAKE_METADATA\n$(echo unexpected)\n",
+        }, indent=2)
+        cases = [
+            ("local", "false", "", []),
+            ("large metadata", "true", large_metadata, ["--index", digest]),
+            ("missing output", "true", "", None),
+            ("invalid JSON", "true", "{", None),
+            ("missing digest", "true", '{"profile":{}}', None),
+            ("invalid digest", "true", '{"profile":{"containerimage.digest":"sha256:invalid"}}', None),
+            ("digest with trailing newline", "true",
+             json.dumps({"profile": {"containerimage.digest": digest + "\n"}}), None),
+        ]
+        for case, publish, metadata, index_arguments in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                env = dict(os.environ, PUBLISH_IMAGE=publish,
                            STUDIO_IMAGE_VALIDATORS="/validators", STUDIO_PROFILE_ROOT="/output",
                            STUDIO_PROFILE_PACKAGES="/packages", STUDIO_PROFILE_TAG="studio:test",
                            SOURCE_SHA=SHA, STUDIO_VERSION="4.0.0-preview.1")
-                probe = 'python3() { printf "%s\\n" "$@"; }\n' + dedent(script)
-                result = subprocess.run(["bash", "-c", probe], env=env, capture_output=True, text=True)
-                self.assertEqual(succeeds, result.returncode == 0, result.stderr)
-                arguments = result.stdout.splitlines()
-                if publish == "true" and succeeds:
-                    self.assertEqual(digest, arguments[arguments.index("--index") + 1])
+                probe = Path(directory) / "qualify.sh"
+                rendered = dedent(script).replace(expression, json.dumps(metadata))
+                probe.write_text('python3() { printf "%s\\n" "$@"; }\n' + rendered)
+                result = subprocess.run(["bash", str(probe)], env=env, capture_output=True, text=True)
+                if index_arguments is None:
+                    self.assertEqual(1, result.returncode)
+                    self.assertEqual("", result.stdout)
+                    self.assertIn("Studio Essentials Bake metadata is missing or has an invalid profile index digest.",
+                                  result.stderr)
                 else:
-                    self.assertNotIn("--index", arguments)
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertEqual([
+                        "/validators/studio_profile_release.py", "qualify",
+                        "--profile", "/validators/profile", "--output", "/output",
+                        "--packages", "/packages", "--image", "studio:test",
+                        "--source", SHA, "--version", "4.0.0-preview.1",
+                        *index_arguments,
+                    ], result.stdout.splitlines())
 
     def test_manual_archive_payload_verification_follows_frontend_build(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/studio-docker.yml").read_text()
