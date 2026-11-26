@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Elsa.ActorFoundation.Hosting;
+using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -87,6 +88,7 @@ internal static partial class SqliteHostLifetimeChecks
 
             await service.StopAsync(token);
             Require(service.LastError is null, "the timed job host stops cleanly");
+            await CheckTimedTakeoverAsync(Path.Combine(directory.FullName, "takeover.db"), scope, fenceInBatch, token);
             return 0;
 
             async Task<Contract.ActorRef> StartAsync(string definition)
@@ -114,6 +116,124 @@ internal static partial class SqliteHostLifetimeChecks
                     message.InboxScope == EfStore.RootTimedJobScope, token), "settlement leaves no physical ticket, deadline or result");
         }
         finally { directory.Delete(recursive: true); }
+    }
+
+    private static async Task CheckTimedTakeoverAsync(string path, Contract.BoundScope scope, bool fenceInBatch, CancellationToken token)
+    {
+        await InstallFoundationAsync(path, token);
+        var ingress = await SqliteEmbeddedHosting.OpenFoundationAsync(path, TimedJobKind, cancellationToken: token);
+        var receipt = await ingress.SendAsync(scope, new Contract.Target.Start(new(TimedJobKind, "takeover")),
+            "takeover", Contract.Kinds.Start, cancellationToken: token);
+        Require(receipt is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "the takeover fixture admits a timed root");
+        var reference = receipt.Actor!.Value.Id;
+        await using var db = OpenFoundationDb(path);
+        var definitions = new SqliteAdmissionDefinitions();
+        var firstActor = new TimedJobActor();
+        var oldSamples = new ConcurrentQueue<long>();
+        var latePublications = 0;
+        var first = NewStore();
+        await using var old = await TakeAsync(first, "first", firstActor, oldSamples, () => Interlocked.Increment(ref latePublications));
+        await DriveAsync(old, () => Task.FromResult(firstActor.TakeoverEntered.Task.IsCompleted));
+        var before = (await first.ReadFirstRootAsync(scope.Tenant, reference, token))!;
+        var rows = await JobRowsAsync(before.Actor.Id);
+        var ticket = rows.Single(row => row.Kind == Kinds.Job);
+        var issued = Json.Read<JobTicket>(ticket.Payload!);
+        var deadline = issued.Deadline!.Value;
+        var priorFence = old.Fences.Single();
+        var lateCallback = old.JobCompletion(before.Actor.Id, issued.Key, 1)!;
+        var image = (await first.LoadAsync([before.Actor.Id], token)).Single();
+        var timeoutResult = RootJobTicket.RecordedResult(image.Id, issued.Key, 0, Json.Write(new JobFinished(issued.Key, null, "timeout")));
+        var timeoutTurn = new TurnCommit(image.Id, image with { Revision = 2 }, 1,
+            [InboxKey.Issued(issued.Timer!), InboxKey.Ticket(image.Id, issued.Key, 1, 0)], [], [timeoutResult], [], [], null);
+        Require(await first.ReadRootTimedJobPublicationTimeAsync(token) < deadline &&
+            !(await CommitTimeoutAsync(priorFence)).Landed && (await JobRowsAsync(image.Id)).Count == 2,
+            "a current fence cannot settle a deadline before the SQLite clock reaches it");
+
+        await ExpireAsync("first");
+        var secondActor = new TimedJobActor();
+        var successor = NewStore();
+        await using var next = await TakeAsync(successor, "successor", secondActor);
+        var takeoverFence = next.Fences.Single();
+        Require(takeoverFence.Epoch > priorFence.Epoch && takeoverFence.Position == priorFence.Position,
+            $"the successor takes the same position at a new epoch ({priorFence} to {takeoverFence})");
+        await DriveAsync(next, () => Task.FromResult(secondActor.TakeoverEntered.Task.IsCompleted));
+        var currentFence = next.Fences.Single();
+        var claimed = (await JobRowsAsync(image.Id)).Single(row => row.Kind == Kinds.Job);
+        var expectedAttempts = ticket.Attempts + (ticket.Trial == priorFence.Epoch ? 1 : 0);
+        Require(claimed.Id == ticket.Id && claimed.Seq == ticket.Seq && claimed.Trial == currentFence.Epoch &&
+            claimed.Attempts == expectedAttempts,
+            "the successor claims and runs the same persisted ticket under its own epoch");
+
+        var currentCallback = next.JobCompletion(image.Id, issued.Key, 1)!;
+        secondActor.ReleaseTakeover.TrySetResult("successor");
+        await currentCallback.WaitAsync(token);
+        Require(await successor.ReadRootTimedJobPublicationTimeAsync(token) < deadline, "the successor publishes its callback before the deadline");
+        while (await successor.ReadRootTimedJobPublicationTimeAsync(token) < deadline) await Task.Delay(25, token);
+        Require(!(await CommitTimeoutAsync(priorFence)).Landed && (await JobRowsAsync(image.Id)).Count == 2,
+            "a displaced fence cannot settle the due deadline while both inputs still exist");
+        firstActor.ReleaseTakeover.TrySetResult("late");
+        await lateCallback.WaitAsync(token);
+        Require(oldSamples.Count == 1 && oldSamples.Single() >= deadline && Volatile.Read(ref latePublications) == 0,
+            "the displaced callback observes the deadline on the SQLite clock and does not publish");
+
+        await DriveAsync(next, async () => (await successor.ReadFirstRootAsync(scope.Tenant, reference, token))?.Revision >= 2);
+        var result = (await JobRowsAsync(image.Id)).Single();
+        Require(result.Kind == Kinds.JobFinished && Json.Read<JobFinished>(result.Payload!) is { Error: null, Result: "\"successor\"" },
+            "settlement replaces the pair with the successor's pre-deadline result");
+
+        await ExpireAsync("successor");
+        var finalActor = new TimedJobActor();
+        var applier = NewStore();
+        await using var final = await TakeAsync(applier, "applier", finalActor);
+        await DriveAsync(final, async () => (await applier.ReadFirstRootAsync(scope.Tenant, reference, token))?.Revision == 3);
+        var finished = await applier.ReadFirstRootAsync(scope.Tenant, reference, token);
+        Require(final.Fences.Single().Epoch > currentFence.Epoch && finished is { Status: InstanceStatus.Finished, TerminalRevision: 3 } &&
+            finalActor.TakeoverApplied == 1 && !finalActor.TakeoverEntered.Task.IsCompleted && (await JobRowsAsync(image.Id)).Count == 0,
+            "a third owner applies the recorded result once without rerunning the job");
+
+        EfStore NewStore() => new(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
+
+        async Task<Worker> TakeAsync(EfStore store, string name, TimedJobActor executor, ConcurrentQueue<long>? samples = null,
+            Action? onPublished = null)
+        {
+            await store.EnableRootJobsAsync(token);
+            var headers = new EfStore.RootHeaders(store.BindSqliteWorkerNode());
+            var adapter = new ActorAdapter(headers, executor, rootJobHandle: store.RootJobHandle, rootTimedJobClock: async ct =>
+            {
+                var now = await store.ReadRootTimedJobPublicationTimeAsync(ct);
+                samples?.Enqueue(now);
+                return now;
+            });
+            // The fixture expires the database owners explicitly. Keep their local callback guards live through the deadline.
+            var worker = new Worker(name, 0, store, adapter, new WorkerOptions
+            {
+                Lease = TimeSpan.FromSeconds(40), PassTurnBudget = 1, AfterJobPublication = onPublished
+            });
+            if (await new DurableHost([worker]).ActivateAsync(0, token) == worker) return worker;
+            await worker.DisposeAsync();
+            throw new InvalidOperationException("The timed fixture could not take its partition.");
+        }
+
+        async Task DriveAsync(Worker worker, Func<Task<bool>> reached)
+        {
+            while (!await reached())
+            {
+                await worker.WokenAsync(null, token);
+                await worker.RunAsync(token);
+                if (!worker.Owns) throw new InvalidOperationException("The timed fixture lost its current fence.");
+                await Task.Delay(20, token);
+            }
+        }
+
+        Task<List<MessageEntity>> JobRowsAsync(string actor) => db.Messages.AsNoTracking()
+            .Where(message => message.Target == actor && message.InboxScope == EfStore.RootTimedJobScope)
+            .OrderBy(message => message.Seq).ToListAsync(token);
+
+        Task<int> ExpireAsync(string name) => db.Nodes.Where(node => node.Id == name)
+            .ExecuteUpdateAsync(update => update.SetProperty(node => node.LeaseUntil, 0L), token);
+
+        ValueTask<Committed> CommitTimeoutAsync(PartitionFence fence) => first.CommitAsync(
+            new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [timeoutTurn], [], []), token);
     }
 
     private static async Task SeedPreJobCheckpointAsync(KernelDb db, string tenant, string reference, CancellationToken token)
@@ -154,8 +274,11 @@ internal static partial class SqliteHostLifetimeChecks
         internal TaskCompletionSource TimeoutCancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource InterruptedEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource InterruptedCancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource TakeoverEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource<string> ReleaseTakeover { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal ConcurrentQueue<string> ChainedApplied { get; } = new();
         internal int TimeoutApplied { get; private set; }
+        internal int TakeoverApplied { get; private set; }
 
         public string Type => TimedJobKind;
         public bool Withholds(Contract.ActorHeader header) => false;
@@ -168,7 +291,8 @@ internal static partial class SqliteHostLifetimeChecks
             if (turn.StartSettings is not null)
             {
                 var key = turn.Header.TypeData;
-                turn.StartJob(key, timeout: TimeSpan.FromSeconds(key is "timeout" or "fault-on-timeout" ? 4 : 20));
+                var seconds = key switch { "timeout" or "fault-on-timeout" => 4, "takeover" => 8, _ => 20 };
+                turn.StartJob(key, timeout: TimeSpan.FromSeconds(seconds));
                 turn.State = "\"waiting\"";
                 return ValueTask.CompletedTask;
             }
@@ -205,6 +329,10 @@ internal static partial class SqliteHostLifetimeChecks
                     case { Key: "legacy", Error: null, Result: "\"success\"" }:
                         turn.End(Contract.ActorStatus.Finished);
                         break;
+                    case { Key: "takeover", Error: null, Result: "\"successor\"" }:
+                        TakeoverApplied++;
+                        turn.End(Contract.ActorStatus.Finished);
+                        break;
                     default:
                         throw new InvalidOperationException("The recorded result did not match the active job.");
                 }
@@ -224,6 +352,9 @@ internal static partial class SqliteHostLifetimeChecks
                     throw new InvalidOperationException("test failure");
                 case "legacy":
                     return "success";
+                case "takeover":
+                    TakeoverEntered.TrySetResult();
+                    return await ReleaseTakeover.Task.WaitAsync(token);
                 case "timeout":
                 case "fault-on-timeout":
                     return await WaitForCancellationAsync(TimeoutCancelled, token);
