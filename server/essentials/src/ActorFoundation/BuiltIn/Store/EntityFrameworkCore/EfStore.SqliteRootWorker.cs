@@ -25,7 +25,15 @@ public sealed partial class EfStore
     }
 
     // The discovered birth join already limits creators to their exact tenant/reference envelope.
-    private static string SqliteRootPollScope(bool includeParkArrivals, bool recovery) => $"""
+    private static string SqliteRootPollScope(bool includeParkArrivals, bool recovery, bool authoredCohort)
+    {
+        var withheld = authoredCohort ? $"""
+            OR (m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" GLOB 'operator/*' AND {SqliteCohortDecision})
+            """ : "";
+        var cohort = recovery
+            ? $"""AND (i."FoundationParkAt" IS NOT NULL {withheld} OR {NoEarlierReleasedCohort})"""
+            : "";
+        return $"""
         AND m."EventMatch" IS NULL AND (m."InboxScope" = 0 OR (
             m."InboxScope" IN ({RootTimedJobScope}, {InboxKey.FoundationOccurrenceScope}) AND EXISTS (
                 SELECT 1 FROM "Instances" i
@@ -34,9 +42,10 @@ public sealed partial class EfStore
                     AND NOT i."Retired" AND (i."FoundationParkAt" IS NULL OR
                         m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND (m."Id" GLOB 'operator/*'
                             {(includeParkArrivals ? """OR (i."FoundationParkClearing" IS NULL AND m."ReplyTo" IS NULL)""" : "")}))
-                    {(recovery ? $"""AND (i."FoundationParkAt" IS NOT NULL OR {NoEarlierReleasedCohort})""" : "")})
+                    {cohort})
             AND (m."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("m.", recovery)}))))
         """;
+    }
 
     // Unsupported stored operator kinds stay pending and do not block the current operator FIFO.
     private static string SqliteSupportedOperator(string columnPrefix, bool recovery = false)
