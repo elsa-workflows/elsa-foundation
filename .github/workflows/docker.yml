@@ -403,7 +403,8 @@ jobs:
           cp "$RUNNER_TEMP/locks/$PROFILE/"*.lock.json "docker/profiles/$PROFILE/"
           docker build --platform "$PLATFORM" --build-arg FOUNDATION_IMAGE --build-arg PROFILE_BUILDER_IMAGE \
             -t "$IMAGE" "docker/profiles/$PROFILE"
-          python3 tools/docker-profiles/smoke.py "$IMAGE" --variant "$PROFILE" --timeout 300
+          python3 tools/docker-profiles/smoke.py "$IMAGE" --variant "$PROFILE" --timeout 300 > "$RUNNER_TEMP/profile-smoke.jsonl"
+          cat "$RUNNER_TEMP/profile-smoke.jsonl"
       - name: Export the tested image and its build inputs
         shell: bash
         env:
@@ -411,7 +412,11 @@ jobs:
         run: |
           bundle="$RUNNER_TEMP/profile-image"
           mkdir "$bundle"
+          image_id=$(docker image inspect --format '{{.Id}}' "$IMAGE")
+          cp "$RUNNER_TEMP/profile-smoke.jsonl" "$bundle/smoke.jsonl"
+          jq -se --arg id "$image_id" 'length > 0 and all(.[]; .imageId == $id)' "$bundle/smoke.jsonl" > /dev/null
           docker save "$IMAGE" | gzip -1 > "$bundle/image.tar.gz"
+          archive_digest=$(sha256sum "$bundle/image.tar.gz" | cut -d ' ' -f 1)
           cp "docker/profiles/$PROFILE/"{Dockerfile,packages.txt,packages.lock.json,nuplane.lock.json,shells.json} "$bundle/"
           if [ "$PROFILE" = essentials-curated ]; then
             cp -r "docker/profiles/$PROFILE/settings" "$bundle/"
@@ -421,8 +426,9 @@ jobs:
           builder_id=$(docker image inspect --format '{{.Id}}' "$PROFILE_BUILDER_IMAGE")
           jq -n --arg profile "$PROFILE" --arg image "$IMAGE" --arg base "$FOUNDATION_IMAGE" \
             --arg builder "$PROFILE_BUILDER_IMAGE" --arg builderId "$builder_id" \
-            --arg platform "$PLATFORM" --arg commit "$GITHUB_SHA" \
-            '{profile: $profile, image: $image, foundationImage: $base, builderImage: $builder, builderId: $builderId, platform: $platform, commit: $commit}' \
+            --arg platform "$PLATFORM" --arg commit "$GITHUB_SHA" --arg imageId "$image_id" \
+            --arg archiveSha256 "$archive_digest" \
+            '{profile: $profile, image: $image, imageId: $imageId, archiveSha256: $archiveSha256, foundationImage: $base, builderImage: $builder, builderId: $builderId, platform: $platform, commit: $commit}' \
             > "$bundle/build.json"
       - uses: actions/upload-artifact@v4
         with:
@@ -459,8 +465,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: ${{ matrix.image }}-*-${{ github.run_number }}
-          path: ${{ runner.temp }}/artifacts
+          name: ${{ matrix.image }}-amd64-${{ github.run_number }}
+          path: ${{ runner.temp }}/artifacts/amd64
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.image }}-arm64-${{ github.run_number }}
+          path: ${{ runner.temp }}/artifacts/arm64
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -470,7 +480,17 @@ jobs:
           foundation_label='org.opencontainers.image.base.name'
           if [ "$ARTIFACT" = elsa-profile-builder ]; then foundation_label='io.elsaworkflows.profile.foundation-image'; fi
           for arch in amd64 arm64; do
-            archive="$RUNNER_TEMP/artifacts/$ARTIFACT-$arch-$GITHUB_RUN_NUMBER/image.tar.gz"
+            bundle="$RUNNER_TEMP/artifacts/$arch"
+            archive="$bundle/image.tar.gz"
+            if [ "$ARTIFACT" != elsa-profile-builder ]; then
+              archive_digest=$(sha256sum "$archive" | cut -d ' ' -f 1)
+              image_id=$(jq -er --arg image "$IMAGE" --arg base "$FOUNDATION_IMAGE" --arg platform "linux/$arch" \
+                --arg commit "$GITHUB_SHA" --arg archiveSha256 "$archive_digest" '
+                select(.image == $image and .foundationImage == $base and .platform == $platform and
+                       .commit == $commit and .archiveSha256 == $archiveSha256) |
+                .imageId | select(test("^sha256:[0-9a-f]{64}$"))' "$bundle/build.json")
+              jq -se --arg id "$image_id" 'length > 0 and all(.[]; .imageId == $id)' "$bundle/smoke.jsonl" > /dev/null
+            fi
             docker load -i "$archive"
             test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$IMAGE")" = "linux/$arch"
             test "$(docker image inspect "$IMAGE" | jq -r --arg label "$foundation_label" '.[0].Config.Labels[$label]')" = "$FOUNDATION_IMAGE"
