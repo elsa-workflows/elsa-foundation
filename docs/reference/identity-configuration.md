@@ -317,8 +317,8 @@ a throwaway local demo, run the container with `ASPNETCORE_ENVIRONMENT=Developme
 ## Optional managed external connections
 
 For deployment-baseline/explicit-override connection settings, Secrets references and programmable provisioning,
-use the [managed Identity module](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/README.md).
-Its optional [HTTP API](../../Essentials/src/Foundation/Identity/ExternalAuthentication/Api/README.md) documents the
+use the [managed Identity module](../../extensions/Identity/src/Elsa.Foundation.Identity.ExternalAuthentication/README.md).
+Its optional [HTTP API](../../extensions/Identity/src/Api/README.md) documents the
 feature composition, trusted public callback base, existing themed chooser, correlation/antiforgery protocol and
 administrator preview. Its artifact store and Data Protection keys must be shared for the corresponding deployment
 mode. The reference Workbench registers the optional `FoundationIdentityExternalAuthentication`,

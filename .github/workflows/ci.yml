@@ -309,8 +309,8 @@ jobs:
           if not isinstance(runs, list):
               raise RuntimeError("Expected the shard's recorded run list")
           projects = {
-              "essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
-              "essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+              "extensions/Bpmn/tests/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
+              "extensions/Bpmn/tests/Tests/Elsa.Activities.Bpmn.Tests.csproj",
               "essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj",
           }
           seen = set()

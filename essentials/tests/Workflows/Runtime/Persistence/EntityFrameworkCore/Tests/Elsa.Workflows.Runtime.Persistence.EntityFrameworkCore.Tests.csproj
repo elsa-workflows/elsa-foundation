@@ -25,7 +25,7 @@
   </ItemGroup>
   <ItemGroup>
     <!-- Use the same authored BPMN fixture builders for old-writer and EF restart witnesses. -->
-    <Compile Include="../../../../../Activities/Bpmn/Tests/BpmnRuntimeFixture.cs" Link="Fixtures/BpmnRuntimeFixture.cs" />
+    <Compile Include="../../../../../../../extensions/Bpmn/tests/Tests/BpmnRuntimeFixture.cs" Link="Fixtures/BpmnRuntimeFixture.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- Built as a real child host; the tests drive its Kestrel endpoints and private fixture control pipe. -->
@@ -56,8 +56,8 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
-    <ProjectReference Include="../../../../../../src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\extensions\Bpmn\src\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
+    <ProjectReference Include="../../../../../../../extensions/Bpmn/src/Design/Elsa.Activities.Bpmn.Design.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
     <!-- RecordingLogger, for the crash-repair contract's leaked-reference errors (#2251). -->

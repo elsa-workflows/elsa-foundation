@@ -1,7 +1,7 @@
 import * as keyboardUi from "./dashboardKeyboard";
 import { readFileSync, writeFileSync } from "node:fs";
 import { chromium, expect, request as playwrightRequest, type Browser, type BrowserContext, type Locator, type Page, type Request, type TestInfo } from "@playwright/test";
-import type { QuestionDefinition, QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
+import type { QuestionDefinition, QueryResult } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/types";
 import { attachDashboardJson, canonicalDashboardDefinition, dashboardBackend, signInDashboardReader, tag, type Backend, type Capture, type Resource } from "./dashboardJourneySupport";
 
 import { executeTrendRun, seedWorkflowTrend, workflowTrendOracle, type TrendSeed } from "./liveWorkflowTrendSupport";

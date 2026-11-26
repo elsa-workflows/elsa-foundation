@@ -19,13 +19,13 @@ extensions/
     tests/   the module's test projects
 ```
 
-`<Name>` is the capability bucket, not a project name. Agent, Elsa3, ExtensionBuilder and Integrations retain their
-existing backend classification. Studio components occupy their named capability buckets; the two
-Weaver projects share `Weaver/studio/`. This consolidation does not reclassify all optional backend
-features or move backend essentials merely because a Studio component has a matching name.
+`<Name>` is the capability bucket. Connections, managed external authentication, OpenTelemetry,
+structured logs, and console streaming keep their backend and Studio projects in the same bucket.
+The shared diagnostics persistence library lives under `Diagnostics/`. BPMN lives under `Bpmn/`,
+and the standalone Studio Dashboard lives under `Dashboard/studio/`.
 
-The five backend extension test projects stay beside their capabilities under `tests/`. This is the
-final placement for #2579 and supersedes the intermediate `tests/extensions/` move in closed PR #2620.
+Capability-specific backend tests live alongside their modules under `tests/`. Cross-capability
+tests can remain in a shared suite, such as managed external sign-in coverage in the Identity suite.
 
 ## Extensions a host composes at its root
 
