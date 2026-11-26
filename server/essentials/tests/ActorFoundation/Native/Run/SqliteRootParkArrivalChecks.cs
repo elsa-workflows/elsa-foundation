@@ -345,7 +345,7 @@ internal static partial class SqliteHostLifetimeChecks
                 if (!publishFirst) executor.ReleaseLiveJob.TrySetResult();
                 var ended = await DriveAsync(owner, root, row => row is { Status: InstanceStatus.Finished });
                 Require(ended is { Jobs: null, NextJobGeneration: 1 } && executor.LiveResults == previousResults + 1 &&
-                    (!publishFirst || executor.LiveInvocations == previousInvocations + 1) && (await ReadTimedRowsAsync()).Count == 0,
+                    executor.LiveInvocations == previousInvocations + 1 && (await ReadTimedRowsAsync()).Count == 0,
                     "the recovered actor applies the held timed outcome once and clears the existing generation");
 
                 async Task<IReadOnlyList<(string Id, string Kind, long Seq, long Due, long JobGeneration, string? Payload)>> ReadTimedRowsAsync()

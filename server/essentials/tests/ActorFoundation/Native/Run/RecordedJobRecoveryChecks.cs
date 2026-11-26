@@ -68,25 +68,51 @@ internal static class RecordedJobRecoveryChecks
                 "the installed checkpoint guard requires the pending job registration to stay unchanged");
             await write.RollbackAsync(token);
         }
-        await using (var write = await db.Database.BeginTransactionAsync(token))
-        {
-            var removed = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                DELETE FROM "Messages" WHERE "Target" = {actor} AND "Partition" = {partition}
-                    AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {(published ? Kinds.JobFinished : Kinds.JobDeadline)}
-                """, token);
-            check(removed == 1, "the guard fixture removes one required timed row inside its test transaction");
-            await ExpectRefusalAsync(check, InsertRecoverAsync, "the installed journal guard requires the complete live job footprint");
-            await write.RollbackAsync(token);
-        }
+        var kind = published ? Kinds.JobFinished : Kinds.Job;
+        await RefuseChangeAsync(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM "Messages" WHERE "Target" = {actor} AND "Partition" = {partition}
+                AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {kind}
+            """, token), "the installed guard retains the required live timed row");
+        await RefuseChangeAsync(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Messages" SET "Id" = 'different-pending-job'
+            WHERE "Target" = {actor} AND "Partition" = {partition}
+                AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {kind}
+            """, token), "the installed guard preserves the exact live job storage identity");
+        await RefuseChangeAsync(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Messages" SET "Payload" = 'null'
+            WHERE "Target" = {actor} AND "Partition" = {partition}
+                AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {kind}
+            """, token), "the installed guard preserves the pending timed envelope body");
+        if (db.Database.IsSqlite())
+            await RefuseChangeAsync(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT OR REPLACE INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Seq", "Due", "Seen",
+                    "Attempts", "Trial", "Done", "JobGeneration")
+                SELECT "Id", "InboxScope", "Partition", 'different-target', "Kind", "Seq", "Due", "Seen", "Attempts", "Trial", "Done", "JobGeneration"
+                FROM "Messages" WHERE "Target" = {actor} AND "Partition" = {partition}
+                    AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {kind}
+                """, token), "a SQLite key conflict also preserves the live timed row");
+        if (!published)
+            await RefuseChangeAsync(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Messages" SET "Due" = "Due" + 1 WHERE "Target" = {actor} AND "Partition" = {partition}
+                    AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {Kinds.JobDeadline}
+                """, token), "the installed guard preserves the original deadline after journaling Recover");
 
         Task<int> InsertRecoverAsync() => InsertRecoverEntryAsync(db, actor, partition, revision, entries, token);
+
+        async Task RefuseChangeAsync(Func<Task<int>> update, string description)
+        {
+            await using var write = await db.Database.BeginTransactionAsync(token);
+            await InsertRecoverAsync();
+            await ExpectRefusalAsync(check, update, description);
+            await write.RollbackAsync(token);
+        }
     }
 
     private static Task<int> BindWithoutRegistrationAsync(KernelDb db, string actor, int partition, long revision, CancellationToken token) =>
         db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision},
                 "Status" = {(int)InstanceStatus.Running}, "Fault" = NULL, "Jobs" = NULL,
-                "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkJobResult" = NULL,
+                "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkJobResult" = NULL, "FoundationParkLiveJob" = NULL,
                 "FoundationParkGeneration" = "FoundationParkGeneration" + 1
             WHERE "Id" = {actor} AND "Partition" = {partition}
             """, token);

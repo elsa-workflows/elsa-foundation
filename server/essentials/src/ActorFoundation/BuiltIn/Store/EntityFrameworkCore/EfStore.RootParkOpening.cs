@@ -53,7 +53,7 @@ public sealed partial class EfStore
 
         var journal = turn.Journal is null ? null : new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal);
         return new(journal, new RootParkOpening(root, current.Revision, opening, reason, DurableKeyJson.Write(fault), envelopes, returned,
-            row.Suspended, current.Jobs, current.NextJobGeneration));
+            row.Suspended, current.Jobs, current.NextJobGeneration, row.Model));
     }
 
     private static TurnCommit WithoutOperators(TurnCommit turn)
@@ -81,7 +81,7 @@ public sealed partial class EfStore
     private sealed record LockedParkCheckpoint(long At, long? ParkAt, long? OpenRevision, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
 
     private sealed record RootParkOpening(WorkerRoot Root, long Expected, bool Opening, ParkKeepReason Reason, string EncodedFault,
-        IReadOnlyList<Message> Inputs, string[] Returned, bool Suspended, string? Jobs, long? NextJobGeneration)
+        IReadOnlyList<Message> Inputs, string[] Returned, bool Suspended, string? Jobs, long? NextJobGeneration, string Model)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
@@ -122,7 +122,7 @@ public sealed partial class EfStore
             FormattableString write = $"""
                 UPDATE "Instances" SET "Status" = {(int)InstanceStatus.Faulted}, "Fault" = {EncodedFault},
                     "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision}, "FoundationParkAt" = {parkAt}
-                    /*open-revision*/ /*park-job-result*/
+                    /*open-revision*/ /*park-job-result*/ /*park-live-job*/
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                 """;
             if (db.RecordsRootParkRevision)
@@ -131,7 +131,9 @@ public sealed partial class EfStore
                     [.. write.GetArguments(), openRevision]);
             var keys = Inputs.Select(input => recorded ? StoredJobId(input.InboxKey) : input.InboxKey.Id).ToArray();
             var pinsResult = recorded && RecordsConsumedRootJob(db);
-            write = WithParkJobResult(db, write, pinsResult ? keys[0] : null);
+            var live = Opening && !recorded && Jobs is not null
+                ? await ReadLiveRootJobAsync(db, Root.Actor, Root.Partition, Model, Jobs, cancellationToken) : null;
+            write = WithLiveParkJob(db, WithParkJobResult(db, write, pinsResult ? keys[0] : null), live?.Proof);
             if (!pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, cancellationToken) != 1) return false;
 
             // A different input can mature between dispatch and Park. Lock the dispatched identities.

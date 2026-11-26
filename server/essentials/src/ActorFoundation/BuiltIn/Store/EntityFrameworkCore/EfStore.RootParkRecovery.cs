@@ -42,9 +42,11 @@ public sealed partial class EfStore
             """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal)
             .Replace("/*consumed-job-result-definitions*/", RecordsConsumedRootJob(db)
                 ? $"""
-                    ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkJobResult" text;
+                    ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkJobResult" text,
+                        ADD COLUMN IF NOT EXISTS "FoundationParkLiveJob" text;
                     CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_RecordedJobResult" ON "Messages" {RecordedJobResultIndex};
                     CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_LiveJob" ON "Messages" {LiveRootJobIndex};
+                    {PostgresParkLiveJobGuards()}
                     """ : "", StringComparison.Ordinal)
             .Replace("/*composed-waiting-index*/", db.UsesRootComposedParkRecovery ? $"""
                 CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortGroups" ON "Messages" ("Partition", "Seen", "Due", "Seq")
@@ -191,7 +193,7 @@ public sealed partial class EfStore
     private sealed record KeptRow(string Id, short KeptBy, string Digest, string Envelope, long Bytes);
 
     private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding, bool Residue, string? Clearing, long? Cleared,
-        string? Jobs, string? ParkJobResult);
+        string? Header, string? Jobs, string? ParkJobResult, string? ParkLiveJob);
 
     // A pending row other than a direct input: the parked retirement branch and the Park facts share it, and the C# retirement
     // lock (EfStore.RootRetirement.cs) states the same condition with the direct scope as a parameter.
@@ -251,6 +253,7 @@ public sealed partial class EfStore
             var clearing = RereadsParkFacts(db) ? """ "FoundationParkClearing" AS "Clearing", "FoundationParkCleared" AS "Cleared" """
                 : """ NULL::text AS "Clearing", NULL::bigint AS "Cleared" """;
             var jobPin = RecordsConsumedRootJob(db) ? """ "FoundationParkJobResult" """ : "NULL::text";
+            var livePin = RecordsConsumedRootJob(db) ? """ "FoundationParkLiveJob" """ : "NULL::text";
             var park = db.UsesSqliteRootRuntime
                 ? await ReadSqliteParkMarkAsync(db, message.Target.Id, message.Target.Partition, token)
                 : await db.Database.SqlQueryRaw<ParkMarkRow>($"""
@@ -259,7 +262,7 @@ public sealed partial class EfStore
                         OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding",
                     EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = "Instances"."Id" AND m."Partition" = "Instances"."Partition"
                         AND {PendingResidue}) AS "Residue",
-                    {clearing}, "Jobs", {jobPin} AS "ParkJobResult" FROM "Instances"
+                    {clearing}, "FoundationHeader" AS "Header", "Jobs", {jobPin} AS "ParkJobResult", {livePin} AS "ParkLiveJob" FROM "Instances"
                 WHERE "Id" = {"{0}"} AND "Partition" = {"{1}"} AND NOT "Retired"
                 """, message.Target.Id, message.Target.Partition).SingleOrDefaultAsync(token);
             // A clearing's control reads only the next page and one more row: nothing is kept while a clearing is open.
@@ -280,7 +283,8 @@ public sealed partial class EfStore
                 ? await ReadParkProtectionRefusalsAsync(db, message.Target.Id, message.Target.Partition, message.Id, long.MaxValue, token) : 0;
             // Check the registered footprint even if the arrivals exceed one page, so a valid plan is refused for page size.
             var job = message.Kind == Kinds.Recover && park is { At: not null, Clearing: null, Jobs: { } registry }
-                ? await ReadRecoverableRootJobAsync(db, message.Target.Id, message.Target.Partition, registry, park.ParkJobResult, token)
+                ? await ReadRecoverableRootJobAsync(db, message.Target.Id, message.Target.Partition, park.Header, registry, park.ParkJobResult,
+                    park.ParkLiveJob, token)
                 : null;
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived),
@@ -327,7 +331,7 @@ public sealed partial class EfStore
     }
 
     private sealed record LockedRecover(long? At, long? Revision, long Generation, string? Fault, byte[] StateDigest, byte[] HeaderDigest,
-        int StateVersion, long? NextJobGeneration, string? ParkJobResult);
+        int StateVersion, long? NextJobGeneration, string? Header, string? ParkJobResult, string? ParkLiveJob);
 
     // One fenced commit: the root becomes Running with its Park mark cleared, the arrivals return to the inbox as the
     // next generation's cohort, and the fault input stays settled. A refusal moves only the revision and settles the command.
@@ -343,8 +347,8 @@ public sealed partial class EfStore
             FormattableString query = $"""
                 SELECT i."FoundationParkAt" AS "At", i."FoundationParkRevision" AS "Revision", i."FoundationParkGeneration" AS "Generation",
                     i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
-                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion", i."NextJobGeneration",
-                    /*park-job-result*/ AS "ParkJobResult"
+                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion", i."NextJobGeneration", i."FoundationHeader" AS "Header",
+                    /*park-job-result*/ AS "ParkJobResult", /*park-live-job*/ AS "ParkLiveJob"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
@@ -354,7 +358,7 @@ public sealed partial class EfStore
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
                 """;
-            var locked = await db.Database.SqlQuery<LockedRecover>(SelectParkJobResult(db, FormattableStringFactory.Create(
+            var locked = await db.Database.SqlQuery<LockedRecover>(SelectParkJobPins(db, FormattableStringFactory.Create(
                 query.Format.Replace("/*clearing*/", db.UsesRootComposedParkRecovery ? """AND i."FoundationParkClearing" IS NULL""" : "",
                     StringComparison.Ordinal), query.GetArguments()))).ToListAsync(token);
             if (locked is not [var prior] || (prior.At is null) != (Prior == InstanceStatus.Running)) return false;
@@ -362,7 +366,8 @@ public sealed partial class EfStore
             if (Recovered && (facts.Mark != new FoundationParkMark(prior.Revision ?? 0, prior.At ?? 0) || KeptSetDigest(kept) != facts.KeptDigest))
                 return false;
             var footprint = Recovered
-                ? await ReadRecoverableRootJobAsync(db, Root.Actor, Root.Partition, facts.RecoverableJobRegistry, prior.ParkJobResult, token)
+                ? await ReadRecoverableRootJobAsync(db, Root.Actor, Root.Partition, prior.Header, facts.RecoverableJobRegistry, prior.ParkJobResult,
+                    prior.ParkLiveJob, token)
                 : new RecoverableRootJob();
             if (footprint is not { } job || Recovered && (job.KeepsRegistration != facts.KeepsRegisteredJob ||
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed) + (job.ConsumedId is null ? 0 : 1) != facts.Consumed)) return false;
@@ -375,7 +380,7 @@ public sealed partial class EfStore
             if (!await BindRecoverableRootJobAsync(db, Root.Actor, Root.Partition, job, token)) return false;
 
             var generation = Recovered ? checked(prior.Generation + 1) : prior.Generation;
-            var update = ClearParkJobResult(db, $"""
+            var update = ClearParkJobPins(db, $"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "Status" = CASE WHEN {Recovered} THEN {(int)InstanceStatus.Running} ELSE "Status" END,
                     "Fault" = CASE WHEN {Recovered} THEN NULL ELSE "Fault" END,
