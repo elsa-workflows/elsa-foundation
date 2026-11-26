@@ -398,11 +398,17 @@
   </Folder>
   <Folder Name="/extensions/Git/src/">
     <Project Path="extensions/Git/src/Elsa.Git/Elsa.Git.csproj" />
+  </Folder>
+  <Folder Name="/extensions/Git/src/Workflows/Design/Reconciliation/">
     <Project Path="extensions/Git/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.Git.csproj" />
   </Folder>
-  <Folder Name="/extensions/Http/src/">
+  <Folder Name="/extensions/Http/src/Activities/">
     <Project Path="extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
+  </Folder>
+  <Folder Name="/extensions/Http/src/Workflows/Runtime/">
     <Project Path="extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />
+  </Folder>
+  <Folder Name="/extensions/Http/src/">
     <Project Path="extensions/Http/src/Core/Elsa.Http.Core.csproj" />
     <Project Path="extensions/Http/src/Elsa.Http/Elsa.Http.csproj" />
     <Project Path="extensions/Http/src/JavaScript/Elsa.Http.JavaScript.csproj" />
