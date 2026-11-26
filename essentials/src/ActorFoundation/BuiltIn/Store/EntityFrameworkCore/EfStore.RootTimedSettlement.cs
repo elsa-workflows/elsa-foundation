@@ -7,12 +7,16 @@ public sealed partial class EfStore
 {
     internal const string TimedJobPublicationClockQuery = "root-timed-job-publication-clock";
 
+    private static string TimedJobClock(KernelDb db) =>
+        db.UsesSqliteRootRuntime ? SqliteCommitDialect.MillisecondClock : RootClockMilliseconds;
+
     internal async ValueTask<long> ReadRootTimedJobPublicationTimeAsync(CancellationToken token)
     {
         await using var db = create();
         if (!RootTimedJobSettlementEnabled || !db.UsesRootTimedJobSettlement) throw RootShape();
+        await RequireSqliteOperationalFormatAsync(db, token);
         return await db.Database.SqlQueryRaw<long>($"""
-            SELECT {RootClockMilliseconds} AS "Value" /* {TimedJobPublicationClockQuery} */
+            SELECT {TimedJobClock(db)} AS "Value" /* {TimedJobPublicationClockQuery} */
             """).SingleAsync(token);
     }
 
@@ -112,18 +116,28 @@ public sealed partial class EfStore
         if (!db.UsesRootTimedJobSettlement) return false;
         var ids = expected.Select(message => StoredJobId(message.InboxKey)).ToArray();
         var home = new InstanceRef(actor.Id).Partition;
-        var rows = await db.Messages.FromSqlInterpolated($"""
+        var pending = db.UsesSqliteRootRuntime ? SqlitePendingRootTimedInputs(db, actor, ids) : null;
+        var rows = pending is not null ? await pending.AsNoTracking().OrderBy(message => message.Seq).ToListAsync(token)
+            : await db.Messages.FromSqlInterpolated($"""
             SELECT * FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
                 AND "InboxScope" = {RootTimedJobScope} AND "Id" = ANY({ids}) AND NOT "Done"
             ORDER BY "Seq" FOR UPDATE
             """).AsNoTracking().ToListAsync(token);
         if (!rows.Select(DecodeRootTimedRow).SequenceEqual(expected)) return false;
         if (expected is [{ Due: { } deadline }, _] && completion is null &&
-            !await db.Database.SqlQueryRaw<bool>($"""SELECT {RootClockMilliseconds} >= {"{0}"} AS "Value" """, deadline).SingleAsync(token))
+            !await db.Database.SqlQueryRaw<bool>($"""SELECT {TimedJobClock(db)} >= {"{0}"} AS "Value" """, deadline).SingleAsync(token))
             return false;
+        if (pending is not null) return await pending.ExecuteDeleteAsync(token) == expected.Length;
         return await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
                 AND "InboxScope" = {RootTimedJobScope} AND "Id" = ANY({ids}) AND NOT "Done"
             """, token) == expected.Length;
+    }
+
+    private static IQueryable<MessageEntity> SqlitePendingRootTimedInputs(KernelDb db, CreationAddress actor, string[] ids)
+    {
+        var home = new InstanceRef(actor.Id).Partition;
+        return db.Messages.Where(message => message.Target == actor.Id && message.Partition == home &&
+            message.InboxScope == RootTimedJobScope && !message.Done && ids.Contains(message.Id));
     }
 }
