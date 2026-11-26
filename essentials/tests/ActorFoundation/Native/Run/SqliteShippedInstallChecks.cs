@@ -34,6 +34,11 @@ internal static class SqliteShippedInstallChecks
             Require(initialKey.SequenceEqual(reinstalledKey) && await db.Partitions.CountAsync(token) == 2,
                 "a clean SQLite shipped install and its reinstall keep one issuer and the requested partitions");
 
+            const string invalidTenant = "tenant\0invalid";
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "FoundationRootBirths" ("Reference", "Tenant", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
+                VALUES ('tenant-test', {invalidTenant}, 'tenant-test', 0, 1, 'creator', 'fingerprint')
+                """, token), "SQLite refuses an embedded NUL in a tenant name", CheckConstraint);
             await CheckRetirementAndGenerationAsync(db, token);
             var staged = new EfStore(() => New(), postgres: false);
             var ordinary = new EfStore(() => new KernelDb(Options()), postgres: false);

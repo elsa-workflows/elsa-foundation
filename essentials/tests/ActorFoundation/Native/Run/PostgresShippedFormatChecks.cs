@@ -261,10 +261,11 @@ internal static class PostgresShippedFormatChecks
             INSERT INTO "KernelStoreVersions" ("Id", "StoreSchema", "MessageProtocol", "JournalCodec")
             VALUES ({expected.Id}, {expected.StoreSchema}, {expected.MessageProtocol + 1}, {expected.JournalCodec})
             """, token);
+        var blocker = ((NpgsqlConnection)advancing.Database.GetDbConnection()).ProcessID;
         var waiting = store.PartitionCountAsync(token).AsTask();
-        while (!waiting.IsCompleted && !await db.Database.SqlQueryRaw<bool>("""
+        while (!waiting.IsCompleted && !await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS (SELECT 1 FROM pg_stat_activity
-                WHERE datname = current_database() AND pid <> pg_backend_pid() AND wait_event_type = 'Lock') AS "Value"
+                WHERE datname = current_database() AND {blocker} = ANY(pg_blocking_pids(pid))) AS "Value"
             """).SingleAsync(token))
             await Task.Delay(20, token);
         Require(!waiting.IsCompleted, "the operation waits for the shared PostgreSQL marker lock");

@@ -196,7 +196,8 @@ public sealed partial class EfStore
             """);
         yield return Table("FoundationRootBirths", """
             "Reference" TEXT NOT NULL PRIMARY KEY,
-            "Tenant" TEXT NOT NULL CHECK (length("Tenant") BETWEEN 1 AND 64 AND "Tenant" NOT GLOB '*[^a-z0-9-]*'),
+            "Tenant" TEXT NOT NULL CHECK (length("Tenant") BETWEEN 1 AND 64 AND instr("Tenant", char(0)) = 0
+                AND "Tenant" NOT GLOB '*[^a-z0-9-]*'),
             "Actor" TEXT NOT NULL,
             "Partition" INTEGER NOT NULL REFERENCES "Partitions" ("Id"),
             "Creation" INTEGER NOT NULL,
