@@ -64,6 +64,21 @@ internal static partial class SqliteHostLifetimeChecks
             Require((await ListAsync(tenant, new(Type: ActorReadsKind.ToUpperInvariant()))).Count == 0,
                 "the actor type filter uses ordinal equality");
 
+            var parkPlan = new ParkReadObservation("/* sqlite-root-actor-list */");
+            parkPlan.Resume.TrySetResult();
+            var parkProbe = new EfStore(() => OpenFoundationDb(file, definitions, parkPlan), postgres: false, fenceInBatch);
+            await parkProbe.ReadRootActorListAsync(tenant.Tenant, "", ActorReadsKind, null, [], null, true, 1, token);
+            Require(parkPlan.Plan.Any(row => row.Contains("IX_FoundationActorList_Parked", StringComparison.Ordinal)),
+                "the parked-only list uses the tenant and reference seek on the partial index");
+
+            var journalPlan = new ParkReadObservation("/* sqlite-root-journal */");
+            journalPlan.Resume.TrySetResult();
+            var journalProbe = new EfStore(() => OpenFoundationDb(file, definitions, journalPlan), postgres: false, fenceInBatch);
+            await journalProbe.ReadRootJournalAsync(tenant.Tenant, first.Id, 5, 1, token);
+            Require(journalPlan.Plan.Any(row => row.Contains("IX_Journal_Partition_Instance_Position (Partition=? AND Instance=? AND Position>?)",
+                    StringComparison.Ordinal)) && journalPlan.Plan.All(row => !row.Contains("TEMP B-TREE", StringComparison.Ordinal)),
+                "the journal seeks its actor and position without scanning or sorting sibling entries");
+
             var journal = await reads.TailAsync(tenant, first, cancellationToken: token);
             Require(journal is { Items.Count: 1, Next: not null, AsOf: > 0 }, "the actor journal returns one entry and a cursor within the checkpoint");
             await ExpectFoundationFailureAsync<ArgumentException>(() => reads.TailAsync(other, first, journal.Next, token).AsTask(),
