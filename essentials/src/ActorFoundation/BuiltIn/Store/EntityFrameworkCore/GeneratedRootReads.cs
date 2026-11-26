@@ -6,7 +6,7 @@ using Bookmark = Kernel.Durable.FoundationJournalPaging.Bookmark;
 
 namespace Kernel.EntityFramework;
 
-internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor cursor, int pageSize) : IActorReads
+internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, int pageSize, string provider) : IActorReads
 {
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
@@ -29,7 +29,7 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
         var labels = query.Labels?.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray() ?? [];
         var context = Encoding.UTF8.GetBytes(DurableKeyJson.Write(new
         {
-            Read = "postgres-actor-list/1", scope.Tenant, query.Type, query.Status, Labels = labels, query.EndedBefore, query.Parked
+            Read = $"{provider}-actor-list/1", scope.Tenant, query.Type, query.Status, Labels = labels, query.EndedBefore, query.Parked
         }));
         Span<byte> bookmark = stackalloc byte[64];
         if (from is { } token && !cursor.TryOpen(context, token.Value, bookmark))
@@ -93,7 +93,7 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        var context = Encoding.UTF8.GetBytes(DurableKeyJson.Write(new { Read = "postgres-root-inbox/1", scope.Tenant, Actor = actor.Id }));
+        var context = Encoding.UTF8.GetBytes(DurableKeyJson.Write(new { Read = $"{provider}-root-inbox/1", scope.Tenant, Actor = actor.Id }));
         // The longest form is operator/ plus the reference, operation digest and occurrence GUID.
         const int occurrenceBytes = 9 + 64 + 1 + 64 + 1 + 32;
         var bookmark = new byte[sizeof(long) + occurrenceBytes];
@@ -124,6 +124,9 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
         return new(page, next, snapshot.AsOf);
     }
 }
+
+internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor cursor, int pageSize)
+    : GeneratedRootReads(store, cursor, pageSize, "postgres");
 
 public sealed partial class EfStore
 {
