@@ -3652,11 +3652,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (unit.Consumed is [{ Message.Operator.RootParkFacts.ClearsInPages: true }] &&
             unit.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true && unit.Slot is { } opened)
         {
-            // S5b-2: a clearing's Open withholds the root's direct inputs until its end; one read ahead of the Open must not be
-            // kept mid-clearing. The Open's commit marked them unseen, so the next poll reads them again under the clearing's
-            // filter, and a poll in flight brings none of the root's rows in.
-            foreach (var item in opened.Inbox.Where(item => item.Durable && !item.Taken && item.Message.Operator is null &&
-                         item.Message.InboxScope == InboxKey.FoundationOccurrenceScope).ToArray()) Forget(item);
+            // The store marks every withheld input unseen at Open. Drop the local copies and any poll response
+            // still in flight, so ordinary deliveries and private continuations are sampled again under the clearing.
+            foreach (var item in opened.Inbox.Where(item => item.Durable && !item.Taken && item.Message.Operator is null).ToArray())
+                Forget(item);
             if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
             _caughtUp = false;
             _woken = true;

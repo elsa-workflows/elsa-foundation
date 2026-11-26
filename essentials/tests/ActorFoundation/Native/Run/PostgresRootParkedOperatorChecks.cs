@@ -531,7 +531,7 @@ internal static class PostgresRootParkedOperatorChecks
             var clearingHold = new RaceHook(clearingConnection);
             var clearingOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(clearingConnection).AddInterceptors(clearingHold).Options;
             var clearingCapabilities = RootProfiles.Formats[StoreFormat.RootParkArrivals] | RootProfiles.Formats[StoreFormat.RootTerminalSelection] |
-                RootCapabilities.OperatorReplies;
+                RootProfiles.Formats[StoreFormat.RootTimers] | RootCapabilities.OperatorReplies;
             KernelDb OpenClearing() => KernelDb.ForUnshippedComposition(clearingOptions, ComposedClearing, clearingCapabilities);
             EfStore? frozen = null;
             var pageChecked = false;
@@ -718,6 +718,8 @@ internal static class PostgresRootParkedOperatorChecks
                     Outcomes(await set.Cold.ReadJournalOfAsync(0, aheadPark.Actor.Id, 0, stop)) is [_, """{"Outcome":"terminated","Operation":"ahead-terminate","Cleared":202}"""],
                 "the input read ahead and due mid-clearing was never kept, the owner did not stand down, and it settled after the end outside Cleared");
 
+            await PrivateReadAheadAsync();
+
             // A clearing control's header names a Park; one that names none is refused at decode.
             var decoded = PostgresRootAdmission.DecodeOperator(ControlRow(true), between.Id, true, true, true, operatorReplies: true, parkedTerminate: true);
             Check(decoded.Operator is { RootParkClear: true, RootParkMark: not null }, "a clearing control's header decodes as a control that names its Park");
@@ -731,6 +733,103 @@ internal static class PostgresRootParkedOperatorChecks
                 Check(true, "a clearing control header without a Park is refused at decode");
             }
             return;
+
+            async Task PrivateReadAheadAsync()
+            {
+                var root = await set.StartAsync("private-read-ahead");
+                Check(await set.SendAsync(root, "private-fail", "fail"), "the private read-ahead fixture admits its Park-opening fault");
+                var parked = await set.DriveAsync(root, row => row is { Revision: 2, Status: InstanceStatus.Faulted });
+                Check(await set.SendAsync(root, "private-copy", "ordinary"), "the parked root admits an arrival to size the kept set");
+                await set.SettledInputsAsync(root);
+                var copies = Enumerable.Range(1, 170).Select(n => $"{root.Id}/{FoundationRootCreator.OperationDigest($"p{n:D3}")}/{Guid.NewGuid():N}").ToArray();
+                await set.ExecuteAsync($"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Payload", "Due", "KeepUntil",
+                        "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
+                    SELECT m."InboxScope", d.id, m."Partition", m."Target", m."Kind", m."Start", m."Payload", m."Due", m."KeepUntil",
+                        true, 0, 0, 0, 0, 1
+                    FROM "Messages" m, unnest({copies}::text[]) WITH ORDINALITY d(id, n)
+                    WHERE m."Target" = {parked.Actor.Id} AND m."FoundationKeptBy" = 1 ORDER BY d.n
+                    """);
+                var owner = (Worker)set.Owner;
+                var fence = owner.Fences.Single();
+                await set.Cold.EnableRootSelfSendsAsync(stop);
+                var issuer = set.Cold.RootSelfIssuer!;
+                var timerAt = (await set.ImageAsync(root)).AsOf + 5_000;
+                await SeedAsync(0, "private-self", null);
+                await SeedAsync(1, "private-timer", timerAt);
+                Check(await set.TerminateAsync(root, "private-terminate", await set.ParkSelectionAsync(root, 2)),
+                    "the fixture admits a paged Terminate after the private deliveries");
+
+
+                async Task SeedAsync(int ordinal, string kind, long? due)
+                {
+                    // Seed qualified private envelopes without adding authored timer support to this fixture's actor.
+                    var handle = FoundationSelfSend.Issue(issuer.Handle, CreationProtocol.Origin(parked.Actor.Id, 1), 1, ordinal, due);
+                    var sent = FoundationSelfSend.Create(parked.Actor.Id, 1, handle, kind, null, due);
+                    var wire = set.Cold.EncodeRootSelf(parked.Actor.Id, 1, ordinal, sent);
+                    await set.ExecuteAsync($"""
+                        INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Sender", "Payload", "Due",
+                            "Done", "Seen", "Attempts", "Trial", "JobGeneration")
+                        VALUES ({wire.InboxScope}, {wire.Id}, 0, {wire.Target.Id}, {wire.Kind}, {wire.Sender}, {wire.Payload},
+                            {wire.Due ?? 0}, false, 0, 0, 0, 0)
+                        """);
+                }
+
+                await owner.PollAsync(stop);
+                Check(owner.InboxCountOf(parked.Actor.Id) == 3, "the owner read the Terminate, immediate self-send and future timer before Open");
+                await owner.FlushAsync(stop);
+                owner.RunTurn(parked.Actor.Id);
+                await set.ExecuteAsync($"""
+                    UPDATE "Messages" SET "Seen" = 0
+                    WHERE "Target" = {parked.Actor.Id} AND "InboxScope" = {EfStore.RootSelfScope} AND NOT "Done"
+                    """);
+                var held = false;
+                set.HoldPoll = async answer =>
+                {
+                    var inputs = answer.Messages.Where(item => item.Message.Target.Id == parked.Actor.Id).ToArray();
+                    Check(inputs.Select(item => item.Message.Kind).Where(kind => kind != Kinds.Terminate)
+                        .SequenceEqual(new[] { "private-self", "private-timer" }) &&
+                        inputs.Single(item => item.Message.Kind == "private-timer").Message.Due > answer.Now,
+                        "a poll in flight samples the immediate self-send and still-future timer before Open");
+                    await set.ExecuteAsync($"""
+                        UPDATE "Messages" SET "Seen" = {fence.Epoch}, "Trial" = {fence.Epoch}
+                        WHERE "Target" = {parked.Actor.Id} AND "InboxScope" = {EfStore.RootSelfScope} AND NOT "Done"
+                        """);
+                    await owner.FlushAsync(stop);
+                    Check(await set.ClearingAsync(root) is { Clearing: "private-terminate", Cleared: 170 } &&
+                        (await set.ImageAsync(root)).AsOf < timerAt,
+                        "Open commits before the timer is due and with the older poll answer still held");
+                    Check(owner.InboxCountOf(parked.Actor.Id) == 0, "Open forgets every private delivery read ahead");
+                    held = true;
+                };
+                await owner.PollAsync(stop);
+                set.HoldPoll = null;
+                Check(held && owner.InboxCountOf(parked.Actor.Id) == 0, "the old poll response adds no input back to the open clearing");
+                await using (var read = OpenClearing())
+                {
+                    var privateRows = await read.Messages.Where(m => m.Target == parked.Actor.Id && m.InboxScope == EfStore.RootSelfScope)
+                        .OrderBy(m => m.Seq).ToListAsync(stop);
+                    Check(privateRows is [{ Seen: 0, Trial: 0, Done: false }, { Seen: 0, Trial: 0, Done: false }],
+                        "the Open commit resets both private delivery marks without consuming either row");
+                    var elapsed = Math.Max(0, privateRows[^1].Due - (await set.ImageAsync(root)).AsOf);
+                    await Task.Delay(TimeSpan.FromMilliseconds(elapsed + 30), stop);
+                    await owner.PollAsync(stop);
+                    Check(owner.InboxCountOf(parked.Actor.Id) == 1, "only the clearing control polls after the private deliveries mature");
+                }
+                await set.DriveAsync(root, row => row is { Status: InstanceStatus.Cancelled });
+                for (var pass = 0; pass < 100; pass++)
+                {
+                    await using var read = OpenClearing();
+                    if (!await read.Messages.AnyAsync(m => m.Target == parked.Actor.Id && m.InboxScope == EfStore.RootSelfScope, stop)) break;
+                    await owner.WokenAsync(null, stop);
+                    await owner.RunAsync(stop);
+                    await Task.Delay(20, stop);
+                }
+                await using (var read = OpenClearing())
+                    Check(!await read.Messages.AnyAsync(m => m.Target == parked.Actor.Id && m.InboxScope == EfStore.RootSelfScope, stop) &&
+                        !set.Probe.Saw(root, "private-self") && !set.Probe.Saw(root, "private-timer") && !set.StoodDown,
+                        "both private deliveries are consumed only after the end without entering the actor or losing the owner");
+            }
 
             MessageEntity ControlRow(bool park)
             {
@@ -1789,10 +1888,13 @@ internal static class PostgresRootParkedOperatorChecks
 
         // Sees every commit an owner of the set writes, with that owner's store.
         internal Func<EfStore, CommitBatch, CancellationToken, ValueTask<Committed>>? Write { get; set; }
+        internal Func<Polled, Task>? HoldPoll { get; set; }
 
         internal async Task<IScopeActivation> OwnAsync()
         {
             var store = Store();
+            await using (var profile = open())
+                if (profile.UsesRootSelfProtocol) await store.EnableRootSelfSendsAsync(stop);
             var scope = (await ShippedComposition.BindWorkerPartitionAsync(store, open, 0, stop)).Scope;
             // A set with direct held replies dispatches held inputs, as PostgresPreviewHosting wires its owner.
             bool heldReplies;
@@ -1804,6 +1906,12 @@ internal static class PostgresRootParkedOperatorChecks
                 var observed = System.Reflection.DispatchProxy.Create<IKernelStore, PostgresRootParkOpeningChecks.ObservedCommit>();
                 var proxy = (PostgresRootParkOpeningChecks.ObservedCommit)(object)observed;
                 (proxy.Store, proxy.Write) = (store, (batch, token) => write(store, batch, token));
+                proxy.Poll = async (partition, epoch, horizon, limit, token) =>
+                {
+                    var answer = await store.PollAsync(partition, epoch, horizon, limit, token);
+                    if (HoldPoll is { } hold) await hold(answer);
+                    return answer;
+                };
                 kernel = observed;
             }
             // One heartbeat covers the whole fixture: the default ten-second lease can lapse on a loaded machine.
