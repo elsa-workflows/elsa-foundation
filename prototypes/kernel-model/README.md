@@ -347,8 +347,11 @@ checks the installed format before registering an owner. Run one Workbench proce
 the preview database. Existing workflow and Studio endpoints still use their current runtime.
 
 Set `Elsa__CorePreview__Publications=true`, beside `Elsa__CorePreview__Enabled=true`, to run the default shell's
-publications on the kernel (K10). The one switch composes both sides. It is the release profile: the preview database runs
-on the shipped format 24 (operators, Native jobs with timed settlement, held replies, Park opening and inspection, and
+publications on the kernel (K10). Before its node starts, the Workbench installs the shipped format in an empty database
+(`PostgresPreviewHosting.InstallShippedAsync`), completes a first install that was cut short, and refuses any other
+database, naming what it holds, with the advice to recreate it empty. The one switch composes both sides. It is the
+release profile: the preview database runs
+on the shipped format 25 (operators, Native jobs with timed settlement, held replies, Park opening and inspection, and
 workflow history), and `NativeJobs` and `TimedNativeJobs` stay off. A database created on an earlier preview format (2, 6
 or 18) is refused and recreated, not migrated. The host shares one `KernelServing` between the
 preview node, which runs the registry it serves into, and the default shell. The default shell enables the
@@ -359,6 +362,10 @@ version no slot serves any more loads that version from the default shell's exec
 toolbox in the default shell hides the activities the kernel does not run (`kernel-unsupported`). The HTTP edge, and
 the limits that stand, each with its own slice coming:
 
+- **Runs list.** Studio's Runs page lists the kernel's runs (`WorkflowsRuntimeKernelApi`, composed into the kernel
+  shell): those of the bound tenant (`Elsa:CorePreview:Tenant`, `default` when unset, the seeded administrator's), with
+  their status, workflow, start and end. Old-core runs, Studio's test runs among them, are not listed there. Preview
+  limit: each request reads all of the tenant's runs. Run details and the activity timeline still read the old core.
 - **HTTP edge.** A published workflow's HTTP endpoint is served on the kernel at `Elsa:CorePreview:HttpBasePath`
   (default `/workflows/http`, the address Studio shows; the Workbench does not start when it differs from the default
   shell's HTTP base path), within `Elsa:CorePreview:HttpTimeout` (default 30 s; past it the caller gets 504 and the
@@ -371,13 +378,13 @@ the limits that stand, each with its own slice coming:
   core's standalone HTTP triggers still serve under the same base path, ahead of the edge. Studio's HTTP test run
   (`/workflows/test-runs`) still runs on the old core (slice 8). `Elsa:CorePreview:HttpProbe` serves probes at
   `{base}/core-preview/probe` and `{base}/core-preview/echo` for the Workbench check.
-- **No schedule actor, timers, child workflows or self-sends on format 24 yet.** The Workbench says so in its
+- **No schedule actor, timers, child workflows or self-sends on format 25 yet.** The Workbench says so in its
   `KernelHostCapabilities`, so a publish with a Timer or Cron, a Delay or a Dispatch Workflow is refused where it is
   mapped (`definition_unsupported`), naming the node and what to change. Without self-sends the Native model does not
   split a burst at the activity cap: it runs on to the next wait, bounded by the state and history size limits and by
   10,000 activities (with a 30 s backstop that keeps a turn from holding its node), past which the workflow faults with `native.burst.limit` (`pg-held-callers` finishes a ForEach
-  over 1,200 items and faults a `While(true)` on format 24).
-- **A Faulted end commits on format 24** (profiles 9, 18 and 24): its held callers get the Faulted end, and a job issued
+  over 1,200 items and faults a `While(true)` on format 25).
+- **A Faulted end commits on format 25** (profiles 9, 18 and 25): its held callers get the Faulted end, and a job issued
   in the same turn is dropped. A timed job still registered at any end, a cancelled one included, is settled in the
   terminal commit. On profiles 2, 6, 10 and 17 a Faulted end still stalls the node, as before.
 

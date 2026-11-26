@@ -29,7 +29,7 @@ internal static class WorkbenchPostgresPreview
     private sealed record Receipt(string Actor, string Bookmark, string Frame, string StateHash, string JournalHash, long Epoch, int Process);
     private sealed record Checkpoint(long Revision, string State, long Epoch, string? Owner)
     {
-        // The stable body of a profile that keeps it apart (the shipped format 24): the state itself, in its own column.
+        // The stable body of a profile that keeps it apart (the shipped format 25): the state itself, in its own column.
         public byte[]? Wire { get; init; }
     }
     private sealed record ActiveJob(long Epoch, string Owner, string State, string Registry,
@@ -40,7 +40,7 @@ internal static class WorkbenchPostgresPreview
 
     internal static async Task RunAsync(string[] arguments, string? executable = null)
     {
-        if (arguments is not [var phase and ("birth" or "restart" or "disabled"), var receiptPath, .. var profileArguments] ||
+        if (arguments is not [var phase and ("birth" or "restart" or "disabled" or "install-empty" or "install-partial" or "install-foreign"), var receiptPath, .. var profileArguments] ||
             profileArguments is not ([] or ["jobs" or "timed" or "timeout" or "takeover" or "takeover-complete" or "publications"]))
             throw new ArgumentException("Expected birth, restart or disabled, a receipt file and optional jobs, timed, timeout, takeover, takeover-complete or publications profile.");
         var profile = profileArguments.SingleOrDefault();
@@ -53,8 +53,10 @@ internal static class WorkbenchPostgresPreview
         var nativeJobs = profile is not (null or "publications");
         var ticketScope = timed ? TimedJobScope : JobTicketScope;
 
-        if ((phase == "disabled" || takeover) && executable is null)
-            throw new ArgumentException("The disabled and takeover checks require a Workbench executable.");
+        if ((phase is "disabled" or "install-empty" or "install-partial" or "install-foreign" || takeover) && executable is null)
+            throw new ArgumentException("The disabled, install and takeover checks require a Workbench executable.");
+        if (phase is "install-empty" or "install-partial" or "install-foreign" && !publications)
+            throw new ArgumentException("The install checks run the publications profile, which installs its own format.");
 
         var releaseFile = completesTakeover ? Path.GetFullPath(receiptPath + ".release") : null;
         if (releaseFile is not null && File.Exists(releaseFile))
@@ -73,11 +75,17 @@ internal static class WorkbenchPostgresPreview
             settings.SslMode != SslMode.Disable || settings.GssEncryptionMode != GssEncryptionMode.Disable)
             throw new ArgumentException("Use an explicit plaintext loopback PostgreSQL database and port for the wire meter.");
 
-        var scope = EmbeddedTenant.Bind("workbench-preview");
+        // The publications profile runs in the tenant of the Workbench's seeded administrator, whose Runs list the check reads.
+        var scope = EmbeddedTenant.Bind(publications ? "default" : "workbench-preview");
         var observationOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings.ConnectionString).Options;
         KernelDb OpenObservation() => OpenProfile(observationOptions, profile);
         var wire = Wire.Start("postgres", $"Host={settings.Host};Port={settings.Port}");
         settings.Port = wire.LocalPort;
+        if (phase is "install-empty" or "install-partial" or "install-foreign")
+        {
+            await CheckWorkbenchInstallAsync(executable!, settings.ConnectionString, OpenObservation, phase["install-".Length..], scope, token);
+            return;
+        }
         if (phase == "disabled")
         {
             if (completesTakeover) await CheckEntryBeforeListeningAsync();
@@ -428,8 +436,9 @@ internal static class WorkbenchPostgresPreview
                 JsonSerializer.Serialize(new CompositeSignal(frame, "approve", person)), cancellationToken: token)).Outcome;
 
         // Finished runs of the Core Preview's HTTP probe in this check's tenant.
-        async Task<int> ProbeRunsAsync() => (await reads.ListAsync(scope, new Contract.ActorQuery(Kernel.WorkflowActor.WorkflowActor.ActorType,
-            Contract.ActorStatus.Finished, new Dictionary<string, string> { ["definition"] = "core-preview-http-probe" }), cancellationToken: token)).Items.Count;
+        async Task<IReadOnlyList<string>> ProbeRunsAsync() => (await reads.ListAsync(scope, new Contract.ActorQuery(Kernel.WorkflowActor.WorkflowActor.ActorType,
+            Contract.ActorStatus.Finished, new Dictionary<string, string> { ["definition"] = "core-preview-http-probe" }), cancellationToken: token)).Items
+            .Select(view => view.Header.Ref.Id).ToArray();
 
         async Task<Checkpoint?> Read(Contract.ActorRef actor)
         {
@@ -494,8 +503,57 @@ internal static class WorkbenchPostgresPreview
         }
     }
 
+    // With publications on, the Workbench installs the shipped format before its node starts: in an empty database, and over
+    // a first install that was cut short (the store's marker seeded, the rest not). It refuses a database that holds
+    // something else, ending before its node starts.
+    private static async Task CheckWorkbenchInstallAsync(string executable, string connection, Func<KernelDb> openObservation, string start,
+        Contract.BoundScope scope, CancellationToken token)
+    {
+        var foreign = start == "foreign";
+        await using (var db = openObservation())
+        {
+            Require(await PostgresFixtureDatabase.IsEmptyAsync(db, token), "the install check starts from an empty database");
+            if (foreign) await db.Database.ExecuteSqlRawAsync("CREATE TABLE someone_elses_orders (id integer PRIMARY KEY)", token);
+        }
+        if (start == "partial") await new EfStore(openObservation, postgres: true).CreateAsync();
+        using var workbench = WorkbenchProcess.Start(executable, connection, enabled: true, "publications", null);
+        if (foreign)
+        {
+            var (exitCode, error) = await workbench.WaitForExitAsync(token);
+            await using var db = openObservation();
+            var tables = await db.Database.SqlQueryRaw<string>(
+                "SELECT tablename AS \"Value\" FROM pg_catalog.pg_tables WHERE schemaname = pg_catalog.current_schema()").ToListAsync(token);
+            Require(exitCode != 0 && error.Contains("Recreate this database empty", StringComparison.Ordinal) &&
+                    tables.SequenceEqual(["someone_elses_orders"]),
+                $"a Workbench with publications on refuses a database that holds something else, installs nothing, and says to recreate it (exit {exitCode})");
+            return;
+        }
+        try
+        {
+            await workbench.WaitReadyAsync(token);
+            Contract.IActorReads? reads = null;
+            async Task<IReadOnlyList<string>> ProbeRunsAsync()
+            {
+                reads ??= await new EfStore(openObservation, postgres: true).OpenPreviewRootReadsAsync(64, token);
+                return (await reads.ListAsync(scope, new Contract.ActorQuery(Kernel.WorkflowActor.WorkflowActor.ActorType, Contract.ActorStatus.Finished,
+                    new Dictionary<string, string> { ["definition"] = "core-preview-http-probe" }), cancellationToken: token)).Items
+                    .Select(view => view.Header.Ref.Id).ToArray();
+            }
+            await RequireKernelServingAsync(workbench, ProbeRunsAsync, token);
+            await using var db = openObservation();
+            await EfStore.RequireStoreVersionsAsync(db, token);
+            Require(true, start == "partial"
+                ? "a Workbench with publications on completes a first install that was cut short, starts and serves"
+                : "a Workbench with publications on installs the shipped format in an empty database, starts and serves");
+        }
+        finally
+        {
+            await workbench.StopAsync();
+        }
+    }
+
     // With publications on, the default shell composes the kernel's coordinator, which serves its active slots before the node runs.
-    private static async Task RequireKernelServingAsync(WorkbenchProcess workbench, Func<Task<int>> probeRuns, CancellationToken token)
+    private static async Task RequireKernelServingAsync(WorkbenchProcess workbench, Func<Task<IReadOnlyList<string>>> probeRuns, CancellationToken token)
     {
         Require(workbench.KernelComposed is { } composed && composed.Contains("into shell default", StringComparison.Ordinal),
             "the Core Preview composes the kernel's feature into the default shell");
@@ -509,17 +567,35 @@ internal static class WorkbenchPostgresPreview
         // The kernel's HTTP edge takes /workflows/http/**, and the old core keeps /workflows/test-runs.
         var address = (await workbench.ListeningAsync(token)).TrimEnd('/');
         using var client = new HttpClient();
-        var before = await probeRuns();
+        var before = (await probeRuns()).Count;
         using (var probe = await client.PostAsync($"{address}/workflows/http/core-preview/probe",
                    new StringContent("""{"name":"Ada"}""", System.Text.Encoding.UTF8, "application/json"), token))
             Require(probe.StatusCode == System.Net.HttpStatusCode.OK && await probe.Content.ReadAsStringAsync(token) == "Ada",
                 "a request to a kernel-served route under /workflows/http is answered by the kernel workflow");
-        for (var attempt = 0; await probeRuns() != before + 1; attempt++)
+        for (var attempt = 0; (await probeRuns()).Count != before + 1; attempt++)
         {
             if (attempt == 100) throw new InvalidOperationException("the kernel-served request left no Finished run");
             await Task.Delay(50, token);
         }
         Require(true, "the kernel-served request leaves one Finished run");
+        // Studio's Runs list on the kernel shell: the runtime API lists the kernel's runs, the probe's among them, as Completed.
+        using (var session = new HttpClient(new HttpClientHandler { CookieContainer = new System.Net.CookieContainer(), AllowAutoRedirect = false }))
+        {
+            using (var login = await session.PostAsync($"{address}/_elsa/identity/login",
+                       new StringContent("""{"username":"admin","password":"Password123!"}""", System.Text.Encoding.UTF8, "application/json"), token))
+                Require(login.IsSuccessStatusCode, $"the check signs in to the Workbench as its seeded administrator ({(int)login.StatusCode})");
+            var expected = await probeRuns();
+            using var listed = await session.GetAsync($"{address}/runtime/workflows/instances/page?definitionId=core-preview-http-probe&status=Completed&take=100", token);
+            var body = await listed.Content.ReadAsStringAsync(token);
+            Require(listed.IsSuccessStatusCode, $"the runtime API lists runs on the kernel shell ({(int)listed.StatusCode})");
+            using var page = JsonDocument.Parse(body);
+            var items = page.RootElement.GetProperty("items").EnumerateArray().ToArray();
+            var ids = items.Select(item => item.GetProperty("workflowExecutionId").GetString()).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+            Require(ids.SequenceEqual(expected.OrderBy(id => id, StringComparer.Ordinal)) &&
+                    items.All(item => item.GetProperty("status").GetString() == "Completed" &&
+                        item.GetProperty("definitionId").GetString() == "core-preview-http-probe" && item.GetProperty("createdAt").ValueKind == JsonValueKind.String),
+                $"Studio's Runs list on the kernel shell lists the probe's kernel runs, Completed, with their start ({ids.Length} of {expected.Count})");
+        }
         using (var unknown = await client.PostAsync($"{address}/workflows/http/no-such-route", new StringContent(""), token))
             Require(unknown.StatusCode == System.Net.HttpStatusCode.NotFound &&
                     await unknown.Content.ReadAsStringAsync(token) == "no workflow serves this route",
@@ -649,7 +725,7 @@ internal static class WorkbenchPostgresPreview
             {
                 start.Environment["Elsa__CorePreview__Publications"] = "true";
                 start.Environment["Elsa__CorePreview__HttpProbe"] = "true";
-                start.Environment["Elsa__CorePreview__Tenant"] = "workbench-preview";
+                start.Environment["Elsa__CorePreview__Tenant"] = "default";
             }
             if (profile is "timed" or "timeout" or "takeover" or "takeover-complete")
                 start.Environment["Elsa__CorePreview__TimedNativeJobs"] = "true";
@@ -687,6 +763,15 @@ internal static class WorkbenchPostgresPreview
             await process.WaitForExitAsync(token);
             if (stdout is not null) await stdout.WaitAsync(token);
             Require(process.ExitCode != 0, "the entered owner exited abruptly");
+        }
+
+        /// <summary>The exit code and standard error of a Workbench that ends on its own.</summary>
+        internal async Task<(int ExitCode, string Error)> WaitForExitAsync(CancellationToken token)
+        {
+            var read = stdout ??= output.ReadAsync(process.StandardOutput);
+            await process.WaitForExitAsync(token);
+            await read.WaitAsync(token);
+            return (process.ExitCode, await log.WaitAsync(token));
         }
 
         internal async Task StopAsync()
@@ -762,7 +847,7 @@ internal static class WorkbenchPostgresPreview
     {
         "timed" or "timeout" or "takeover" or "takeover-complete" => PostgresPreviewHosting.CreateTimedNativeJobContext(options),
         "jobs" => PostgresPreviewHosting.CreateNativeJobContext(options),
-        // The release profile: publications run on the shipped format 24.
+        // The release profile: publications run on the shipped format 25.
         "publications" => PostgresPreviewHosting.CreateShippedContext(options),
         _ => new(options)
     };
@@ -778,7 +863,7 @@ internal static class WorkbenchPostgresPreview
 
     private static NativeState Native(Checkpoint checkpoint, string? profile)
     {
-        // The profile's root state family: the timed-job family on 18, the composed one on the shipped format 24.
+        // The profile's root state family: the timed-job family on 18, the composed one on the shipped format 25.
         var prefix = OpenProfile(new DbContextOptionsBuilder<KernelDb>().UseNpgsql("Host=state-family.invalid").Options, profile).RootStateFamily.Prefix;
         Require(checkpoint.State.StartsWith(prefix, StringComparison.Ordinal), "the state uses the expected preview framing");
         return JsonSerializer.Deserialize<NativeState>(checkpoint.State[prefix.Length..])!;

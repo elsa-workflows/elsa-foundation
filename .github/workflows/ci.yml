@@ -2333,7 +2333,7 @@ jobs:
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
 
       # The S2 and S3 composition guards (#4229): each lane on its own new database; a failed lane fails the step at the end.
-      # S7: each lane also runs against the shipped format 24's capability set ("shipped").
+      # S7: each lane also runs against the shipped format 25's capability set ("shipped").
       - name: Root state family, all lanes
         if: ${{ !cancelled() }}
         env:
@@ -2387,8 +2387,8 @@ jobs:
           done
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
 
-      # S7: the shipped format 24 hosted as a host runs it, and the S5a parked-operator guard on its capability set.
-      - name: Shipped format 24
+      # S7: the shipped format 25 hosted as a host runs it, and the S5a parked-operator guard on its capability set.
+      - name: Shipped format 25
         if: ${{ !cancelled() }}
         env:
           PG_PORT: ${{ job.services.postgres.ports[5432] }}

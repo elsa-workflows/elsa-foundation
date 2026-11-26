@@ -8,7 +8,10 @@ namespace Kernel.Foundation.Postgres;
 
 /// <summary>Runs one PostgreSQL Core Preview node for the lifetime of its application host.</summary>
 /// <param name="logger">Each fault the node or this service records about its stop is logged once, at Error: a lost
-/// fence or a drain fault, a dispose that returned at its bound, a fault after a kill, and a fault of the shutdown itself.</param>
+/// fence or a drain fault, a dispose that returned at its bound, and a fault of the shutdown itself. Once a deadline has
+/// killed the drain, an error recorded later (by an operation the kill interrupted, possibly after the stop returned) is
+/// logged at Warning, beside the kill's own Warning. A <see cref="StopAsync"/> that joins a stop already under way kills
+/// nothing: its deadline ends only its own wait.</param>
 /// <param name="requests">The held callers the node answers, on a store with held replies (<see cref="PostgresPreviewHosting.StartAsync"/>).</param>
 public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor,
     Action<string> endProcess, LoopOptions? options = null, ILogger<PostgresPreviewHostedService>? logger = null,
@@ -18,20 +21,33 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
     private Exception? _shutdownFault;
 
     // One Error entry per fault, whether the node recorded it or the shutdown around it raised it.
-    private void Fault(Exception fault)
+    private void Fault(Exception fault) => Log(fault, again: false);
+
+    // The node's own reports: it reports each stop fault once, and a loop error again once its window has passed, with
+    // the repeats it suppressed, also when the loop rethrows the same instance. Each is logged as reported.
+    internal void NodeFault(Exception fault) => Log(fault, again: true);
+
+    private void Log(Exception fault, bool again)
     {
-        if (!_logged.TryAdd(fault, fault)) return;
-        if (fault is AggregateException aggregate)
+        if (!_logged.TryAdd(fault, fault) && !again) return;
+        if (fault is AggregateException { InnerExceptions.Count: > 0 } aggregate)     // an empty one is logged as itself
         {
             // The node has logged an aggregate's inner exceptions already: log only those that are not, never the aggregate.
-            foreach (var inner in aggregate.InnerExceptions) Fault(inner);
+            foreach (var inner in aggregate.InnerExceptions) Log(inner, again);
             return;
         }
         // The phase the node was in: a loop error on a running node is no stop fault.
         var phase = Volatile.Read(ref _shutdown) is null ? "running" : "stopping";
-        var repeats = fault.Data["SuppressedRepeats"] is long suppressed ? suppressed : 0;
-        logger?.LogError(fault, "The PostgreSQL preview node {Node} recorded an error while {Phase} ({Repeats} earlier repeats not logged).",
-            node, phase, repeats);
+        var repeats = fault.Data?["SuppressedRepeats"] is long suppressed ? suppressed : 0;
+        // Once the node is killed, what the kill interrupted may end with an error the kill caused (its store torn down,
+        // say): a Warning beside the kill's own, still with the error, which LastError keeps too. An error the node recorded
+        // before the kill (its drain's fault, recorded when the drain throws it) was logged at Error then.
+        if (Volatile.Read(ref _startup) is { IsCompletedSuccessfully: true } started && started.Result.Killed)
+            logger?.LogWarning(fault, "The PostgreSQL preview node {Node} recorded an error after the deadline killed its drain ({Repeats} earlier repeats not logged).",
+                node, repeats);
+        else
+            logger?.LogError(fault, "The PostgreSQL preview node {Node} recorded an error while {Phase} ({Repeats} earlier repeats not logged).",
+                node, phase, repeats);
     }
 
     private readonly Action<string> _endProcess = endProcess ?? throw new ArgumentNullException(nameof(endProcess));
@@ -57,12 +73,17 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         }
     }
 
+    /// <summary>Starts the node in place of the PostgreSQL hosting, given the node's fault callback and the startup token;
+    /// for witnesses of what this service logs around a node of their own.</summary>
+    internal Func<Action<Exception>, CancellationToken, Task<RuntimeNode>>? StartNode { get; init; }
+
     private async Task<RuntimeNode> StartNodeAsync(CancellationToken cancellationToken)
     {
         using var startup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancelStartup.Token);
+        if (StartNode is { } start) return await start(NodeFault, startup.Token);
         Kernel.Durable.IReplyTransport? replies = _requests;
         if (replies is not null && ObserveReplies is { } observe) replies = observe(replies);
-        return await PostgresPreviewHosting.StartAsync(create, node, actor, Escalate, options, startup.Token, Fault, replies);
+        return await PostgresPreviewHosting.StartAsync(create, node, actor, Escalate, options, startup.Token, NodeFault, replies);
     }
 
     /// <summary>
@@ -74,8 +95,15 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         ? started.Result.LastError
         : null);
 
-    /// <param name="cancellationToken">The application's shutdown deadline (<c>HostOptions.ShutdownTimeout</c>). It also bounds
-    /// the node's drain: at the deadline the stop becomes a kill, nothing renews, and what is still owned runs out by its lease.</param>
+    /// <summary>
+    /// Stops the node. Only the caller that starts the stop owns it: its deadline kills the drain, and if the killed stop has
+    /// not ended after <see cref="KillGrace"/> the process policy runs. A call that joins a stop already under way kills
+    /// nothing: its deadline ends only its own wait. <see cref="DisposeAsync"/> kills at its own deadline whoever owns the
+    /// stop. An owner with no deadline, and a <see cref="LoopOptions.DisposeDeadline"/> that is infinite, never kill or escalate.
+    /// </summary>
+    /// <param name="cancellationToken">The application's shutdown deadline (<c>HostOptions.ShutdownTimeout</c>). For the call
+    /// that starts the stop it also bounds the node's drain: at the deadline the stop becomes a kill, nothing renews, and what
+    /// is still owned runs out by its lease.</param>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         // It throws its own outcome: the stop's fault (also recorded on the node, LastError) or the deadline's cancellation.
@@ -83,8 +111,13 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         try { await shutdown.WaitAsync(cancellationToken).ConfigureAwait(false); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            if (started) DeadlineKilled("application shutdown");     // a stop that joined another's stop kills nothing
-            await EscalateUnlessStoppedAsync(shutdown, "The PostgreSQL preview node did not stop within the application shutdown deadline.");
+            // A stop that joined another's stop kills nothing: its deadline ends only its own wait, and the caller that
+            // owns the stop decides whether it is killed and the process policy runs.
+            if (started)
+            {
+                DeadlineKilled("application shutdown");
+                await EscalateUnlessStoppedAsync(shutdown, "The PostgreSQL preview node did not stop within the application shutdown deadline.");
+            }
             throw;
         }
     }
@@ -123,7 +156,7 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
     /// A stop bounded by <see cref="LoopOptions.DisposeDeadline"/>, for a host disposed without <see cref="StopAsync"/>
     /// (a later service failed to start): at the deadline the stop becomes a kill, also when a stop was already under way,
     /// and the process policy runs if it still has not finished after <see cref="KillGrace"/>. It never throws the stop's
-    /// fault, which the node records (<see cref="LastError"/>).
+    /// fault, which the node records (<see cref="LastError"/>). With an infinite dispose deadline it neither kills nor escalates.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
@@ -177,7 +210,13 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
                 await ((Task)startup).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
                 // The caller's deadline and a dispose deadline both end the drain as a kill.
                 using var stop = CancellationTokenSource.CreateLinkedTokenSource(deadline, _killNode.Token);
-                if (startup.IsCompletedSuccessfully) await startup.Result.StopAsync(stop.Token);
+                if (startup.IsCompletedSuccessfully)
+                {
+                    // A kill whose stop then completed inside the kill's own callback is seen by no deadline's wait: it is
+                    // warned of here (once, whichever path sees it first).
+                    try { await startup.Result.StopAsync(stop.Token); }
+                    finally { if (startup.Result.Killed) DeadlineKilled(_killNode.IsCancellationRequested ? "dispose" : "application shutdown"); }
+                }
                 AfterNodeStop?.Invoke();
             }
         }

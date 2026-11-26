@@ -62,9 +62,11 @@ public sealed class WorkbenchCorePreviewKernelShellTests
         var shell = WorkbenchCorePreview.ComposeKernelShell(configuration);
 
         Assert.Equal("default", shell);
-        var feature = Assert.Single(configuration.GetSection("CShells:Shells:default:Features").GetChildren());
-        Assert.Equal((WorkflowsRuntimeKernelFeature.FeatureName, null), (feature.Key, feature.Value));
-        Assert.Empty(feature.GetChildren());
+        // The kernel serves the shell's publications, and the kernel's run list serves its runtime API's Runs list.
+        var features = configuration.GetSection("CShells:Shells:default:Features").GetChildren().ToArray();
+        Assert.Equal([WorkflowsRuntimeKernelFeature.FeatureName, Elsa.Workflows.Runtime.KernelApi.WorkflowsRuntimeKernelApiFeature.FeatureName],
+            features.Select(feature => feature.Key).Order(StringComparer.Ordinal));
+        Assert.All(features, feature => Assert.True(feature.Value is null && !feature.GetChildren().Any()));
     }
 
     [Fact]
