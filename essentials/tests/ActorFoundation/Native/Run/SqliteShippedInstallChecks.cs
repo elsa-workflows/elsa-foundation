@@ -223,6 +223,23 @@ internal static class SqliteShippedInstallChecks
             await write.CommitAsync(token);
         }
 
+        await SeedAsync("first-bind", InstanceStatus.Running, qualified: false);
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("first-bind", revision: 2, refused);
+            await RefusedAsync<SqliteException>(() => BindAsync("first-bind", InstanceStatus.Running),
+                "binding a fresh root refuses an outcome for the wrong checkpoint revision");
+            await write.RollbackAsync(token);
+        }
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("first-bind", revision: 1, refused);
+            await BindAsync("first-bind", InstanceStatus.Running);
+            await write.CommitAsync(token);
+        }
+        Require(await db.Journal.AnyAsync(entry => entry.Instance == "first-bind" && entry.Revision == 1, token),
+            "binding a fresh root commits its matching journal outcome");
+
         await SeedAsync("projected", InstanceStatus.Running);
         var initial = await ReadProjectionAsync("projected");
         Require(initial is { Status: InstanceStatus.Running, EndedAt: null, TerminalRevision: null, ParkAt: null, ParkFault: null, ParkRevision: null }
@@ -287,7 +304,7 @@ internal static class SqliteShippedInstallChecks
         {
             await JournalAsync("projected", revision: 4, terminated);
             await JournalAsync("projected", revision: 4, discarded);
-            Require(await EndParkAsync(InstanceStatus.Cancelled) == 1, "the terminated outcome admits the matching checkpoint update");
+            Require(await EndParkAsync("projected", 4, InstanceStatus.Cancelled) == 1, "the terminated outcome admits the matching checkpoint update");
             await RefusedAsync<SqliteException>(() => write.CommitAsync(token),
                 "the paired revision cannot commit an additional protected outcome with the wrong terminal disposition", ForeignKeyConstraint);
             await write.RollbackAsync(token);
@@ -299,12 +316,22 @@ internal static class SqliteShippedInstallChecks
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
             await JournalAsync("projected", revision: 4, discarded);
-            Require(await EndParkAsync(InstanceStatus.Faulted) == 1, "the protected discard admits its Faulted terminal checkpoint");
+            Require(await EndParkAsync("projected", 4, InstanceStatus.Faulted) == 1, "the protected discard admits its Faulted terminal checkpoint");
             await write.CommitAsync(token);
         }
         Require(await ReadProjectionAsync("projected") is { Status: InstanceStatus.Faulted, EndedAt: 300, TerminalRevision: 4,
             ParkAt: null, ParkRevision: null, ParkFault: null },
             "the protected discard projects the terminal mark and clears the Park metadata");
+        await SeedAsync("terminated", InstanceStatus.Faulted);
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("terminated", revision: 2, terminated);
+            Require(await EndParkAsync("terminated", 2, InstanceStatus.Cancelled) == 1,
+                "a standalone terminated outcome admits its Cancelled checkpoint");
+            await write.CommitAsync(token);
+        }
+        Require(await ReadProjectionAsync("terminated") is { Status: InstanceStatus.Cancelled, EndedAt: 300, TerminalRevision: 2, ParkAt: null },
+            "the terminated outcome commits the Cancelled projection and terminal mark");
         Require(!await db.Database.SqlQueryRaw<bool>("""
             SELECT EXISTS (SELECT 1 FROM "FoundationRootPendingOutcomes") AS "Value"
             """).SingleAsync(token), "successful outcome commits leave no pending rows");
@@ -323,11 +350,11 @@ internal static class SqliteShippedInstallChecks
             FROM "FoundationActorList" WHERE "Tenant" = 'tenant' AND "Reference" = {reference}
             """).SingleAsync(token);
 
-        Task<int> EndParkAsync(InstanceStatus status) => db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE "Instances" SET "Status" = {(int)status}, "Revision" = 4, "FoundationWriteRevision" = 4,
-                "FoundationTerminalRevision" = 4, "FoundationTerminalAt" = 300, "FoundationParkAt" = NULL,
+        Task<int> EndParkAsync(string id, long revision, InstanceStatus status) => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Instances" SET "Status" = {(int)status}, "Revision" = {revision}, "FoundationWriteRevision" = {revision},
+                "FoundationTerminalRevision" = {revision}, "FoundationTerminalAt" = 300, "FoundationParkAt" = NULL,
                 "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL
-            WHERE "Id" = 'projected'
+            WHERE "Id" = {id}
             """, token);
 
         Task<int> RetireAsync(string id) => db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -352,10 +379,15 @@ internal static class SqliteShippedInstallChecks
             db.Instances.Add(new InstanceEntity
             {
                 Id = id, Partition = 0, Model = "model", Definition = "definition", State = "null",
-                Status = status, Revision = 1, NextJobGeneration = 1, Jobs = jobs
+                Status = status, Revision = 1, NextJobGeneration = 1, Jobs = jobs,
+                Fault = status == InstanceStatus.Faulted ? "seeded fault" : null
             });
             await db.SaveChangesAsync(token);
-            if (!qualified) return;
+            if (qualified) await BindAsync(id, status);
+        }
+
+        async Task BindAsync(string id, InstanceStatus status)
+        {
             var parkedAt = status == InstanceStatus.Faulted ? (long?)100 : null;
             var parkRevision = parkedAt.HasValue ? (long?)1 : null;
             var terminalRevision = status == InstanceStatus.Finished ? (long?)1 : null;
