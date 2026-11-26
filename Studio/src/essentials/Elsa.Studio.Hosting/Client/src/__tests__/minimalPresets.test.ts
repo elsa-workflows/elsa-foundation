@@ -39,11 +39,12 @@ describe("minimal Studio theme definitions", () => {
     const wire = JSON.parse(JSON.stringify(custom));
     wire.typography.display = null;
     wire.shape.radiusSm = null;
+    wire.shape.radius = "13px";
     const normalized = normalizeThemeStore({ themes: [wire] }).themes.find(theme => theme.id === custom.id)!;
     expect(normalized.typography?.display).toBeUndefined();
     expect(normalized.typography?.sans).toBe(custom.typography?.sans);
     expect(normalized.shape?.radiusSm).toBeUndefined();
-    expect(normalized.shape?.radius).toBe("8px");
+    expect(normalized.shape?.radius).toBe("13px");
     expect(validateThemeDefinition(normalized).valid).toBe(true);
     const invalid = { ...normalized, typography: { ...normalized.typography, display: "bad; font" } };
     expect(validateThemeDefinition(invalid).issues.some(issue => issue.path === "typography.display" && issue.severity === "error")).toBe(true);

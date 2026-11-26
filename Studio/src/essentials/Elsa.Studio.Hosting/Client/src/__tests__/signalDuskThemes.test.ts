@@ -18,9 +18,8 @@ describe("Signal", () => {
     }
   });
 
-  it("is an instrument panel: a bright lime accent on Dark, tight corners and a mono display face", () => {
+  it("keeps a bright lime accent on Dark and a mono display face", () => {
     expect(parseOklch(getThemeModeDefinition(signal, "dark")!.primary).lightness).toBeGreaterThan(0.8);
-    expect(parseInt(signal.shape!.radius!, 10)).toBeLessThanOrEqual(3);
     expect(signal.typography?.display).toContain("JetBrains Mono");
     expect(signal.layout).toBe("classic");
   });

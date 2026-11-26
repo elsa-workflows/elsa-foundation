@@ -9,6 +9,11 @@ html[data-workspace-style] :is(.wf-panel-title, .wf-canvas-tabs, .wf-breadcrumb)
   background: transparent;
 }
 
+/* Let the parent surface continue behind the tabs and adjacent panel actions. */
+html[data-workspace-style] :is(.wf-panel-title > .studio-tabs, .wf-canvas-tabs .studio-tabs, .wf-inspector-tabs.studio-tabs) {
+  background: transparent;
+}
+
 html[data-workspace-style] .wf-panel-title { padding-inline: 16px; }
 
 html[data-workspace-style] .wf-palette-activity {

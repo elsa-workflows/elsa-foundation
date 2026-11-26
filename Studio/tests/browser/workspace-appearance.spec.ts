@@ -39,6 +39,24 @@ for (const style of styles) for (const scheme of ["linen", "classic", "drift"]) 
   });
 }
 
+for (const mode of ["light", "dark", "high-contrast"]) {
+  test(`Linen ${mode} lets editor tab strips inherit their panel surfaces`, async ({ page }) => {
+    await open(page, "linen", "linen", mode);
+
+    for (const name of ["Activities panel tabs", "Editor view tabs", "Inspector panel tabs", "Activity inspector sections"]) {
+      const tabs = page.getByRole("tablist", { name, exact: true });
+      await expect(tabs).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(tabs.getByRole("tab", { selected: true })).not.toHaveCSS("box-shadow", "none");
+    }
+
+    const editorTabs = page.getByRole("tablist", { name: "Editor view tabs", exact: true });
+    await editorTabs.getByRole("tab", { name: "Designer" }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(editorTabs.getByRole("tab", { name: "Code", selected: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Collapse inspector panel", exact: true })).toBeVisible();
+  });
+}
+
 for (const style of styles) {
   test(`${style} preserves the semantic fill of danger and primary confirmations`, async ({ page }) => {
     await open(page, style, "classic", "light", "dialogs");

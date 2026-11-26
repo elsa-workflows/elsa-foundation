@@ -65,17 +65,18 @@ The nine signature themes offer all four modes (Light, Dark, Dim and High contra
 - `"classic"` - The Elsa 3 Studio look: sky-blue primary, pale tinted sidebar, hairline cards
 - `"meridian"` - Crisp, neutral precision with an indigo accent
 - `"drift"` - Soft, rounded floating surfaces with a jade accent
-- `"schematic"` - Engineering workbench: squared corners, blueprint neutrals, signal orange
+- `"schematic"` - Engineering workbench: blueprint neutrals and signal orange
 - `"atelier"` - Warm editorial calm: paper neutrals, serif titles, plum accent
 - `"elsa-cloud"` - The Elsa Cloud console look: near-black surfaces, hot-pink accent, mono eyebrow labels
-- `"signal"` - Instrument panel: hairline borders, tight corners, mono legends, one phosphor-lime accent
+- `"signal"` - Instrument panel: hairline borders, mono legends and a phosphor-lime accent
 - `"dusk"` - Dim-first violet slate with an amber highlight, for long low-light sessions
 - `"space"` - Soft blue-teal gradients, a faint grid and sparse point-like stars along the desktop sidebar, with calmer slate tones in Dark and Dim
 
 The Space color scheme adds a few token-colored pinprick stars to open workspace margins in Light, Dark and Dim. The shared shell owns this backdrop; ordinary module page frames may use `--studio-workspace-frame-bg` to let it show through while cards, tables and controls keep their normal surfaces. Workflow editor and run/inspection route roots set `data-studio-workspace-backdrop="none"` to opt out, as do High contrast and forced-colors mode.
 
 These nine signature themes, Linen and the three minimal workspace presets make up the thirteen
-built-in themes. Their IDs are reserved: a custom or directory theme that reuses one (`"classic"`,
+built-in themes. They share Linen’s default corner radii. Explicit workspace styles and custom
+theme shape definitions can supply their own radii. The built-in IDs are reserved: a custom or directory theme that reuses one (`"classic"`,
 `"meridian"`, `"space"`, …) is rejected on save and skipped on load, with a
 warning, so the built-in wins. Retired IDs — most recently `"black-glass"`, `"stone"`,
 `"blueprint"` and `"brass-instrument"` — are treated like any unknown ID: a configured or persisted
