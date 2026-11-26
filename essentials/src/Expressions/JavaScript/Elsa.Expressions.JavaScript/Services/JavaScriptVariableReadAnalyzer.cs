@@ -77,6 +77,7 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         var correlation = false;
         var instanceName = false;
         var invalid = false;
+        var referencesCapability = false;
         string[] roots = ["workflowState", "eval", "Function", "globalThis", "Object", "Reflect"];
         int DeclaredBindings(Node scope, Node? owner)
         {
@@ -100,6 +101,7 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
             if (!IsShadowed("workflowState") && node is Identifier { Name: "workflowState" } identifier && IsReference(identifier, parent))
             {
                 access = true;
+                referencesCapability = true;
                 if (parent is not MemberExpression { Object: Identifier { Name: "workflowState" }, Computed: false })
                     opaque = true;
             }
@@ -155,7 +157,7 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         }
         Visit(parsed, null, 0);
         return new ScriptWorkflowStateEffects { AccessesState = access, OutputNames = names.Order(StringComparer.Ordinal).ToArray(),
-            WritesCorrelationId = correlation, WritesInstanceName = instanceName, Conservative = opaque, HasInvalidLiteralCall = invalid };
+            WritesCorrelationId = correlation, WritesInstanceName = instanceName, Conservative = opaque, HasInvalidLiteralCall = invalid, ReferencesCapability = referencesCapability };
     }
 
     // Track lexical ownership of the capability root and conservative globals; local lookalikes are ordinary data.

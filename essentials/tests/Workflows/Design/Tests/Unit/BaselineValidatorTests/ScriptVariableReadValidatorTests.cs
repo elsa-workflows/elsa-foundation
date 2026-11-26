@@ -69,6 +69,18 @@ public sealed class ScriptVariableReadValidatorTests : IDisposable
         Assert.Contains("'order'", warning.Message, StringComparison.Ordinal);
     }
 
+    // #5686: an input expression has no workflow-state capability, so only naming it is an authoring error.
+    [Theory]
+    [InlineData("const copy = { a: 1 }; const key = variables.order; delete copy[key]; return copy;")]
+    [InlineData("const result = {}; result[variables.order] = 1; return result;")]
+    public async Task An_input_expression_with_a_runtime_key_has_no_workflow_state_error(string source) =>
+        Assert.DoesNotContain(await ValidateAsync(new ActivityNode("w", "av-write", [Js(source)], [])), error => error.Type == "VF-STATE-002");
+
+    [Fact]
+    public async Task An_input_expression_naming_the_workflow_state_capability_is_an_error() =>
+        Assert.Contains(await ValidateAsync(new ActivityNode("w", "av-write", [Js("workflowState.getCorrelationId()")], [])),
+            error => error.Type == "VF-STATE-002");
+
     [Fact]
     public async Task A_script_activity_body_is_checked_too()
     {

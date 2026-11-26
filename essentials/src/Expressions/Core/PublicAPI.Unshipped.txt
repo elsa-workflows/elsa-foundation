@@ -867,5 +867,7 @@ static Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.operator ==(Elsa.
 
 Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.HasInvalidLiteralCall.get -> bool
 Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.HasInvalidLiteralCall.init -> void
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.ReferencesCapability.get -> bool
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.ReferencesCapability.init -> void
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.UndefinedAsNull.get -> bool
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.UndefinedAsNull.init -> void
