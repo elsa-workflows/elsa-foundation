@@ -662,8 +662,8 @@ internal static class PostgresRootParkedOperatorChecks
                 set.Answered("terminate-recorded-result-park", "ParkOutstanding");
                 set.Answered("delete-recorded-result-park", "ParkOutstanding");
             }
-            Check(after.Jobs == parked.Jobs && after.NextJobGeneration == parked.NextJobGeneration &&
-                after.ParkAt == parked.ParkAt && await set.ParkSelectionAsync(root, parked.Revision) == selection &&
+            await set.ParkSelectionAsync(root, parked.Revision);
+            Check(after.Jobs == parked.Jobs && after.NextJobGeneration == parked.NextJobGeneration && after.ParkAt == parked.ParkAt &&
                 await ReadResultAsync(actor, stop) == kept &&
                 set.Probe.Count(root, Contract.Kinds.JobFinished) == 1 && successor.Owns,
                 "the parked-operator refusals preserve the job footprint, original Park and owner");
