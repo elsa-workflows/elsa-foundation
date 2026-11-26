@@ -413,20 +413,25 @@ internal static class PostgresRootParkedOperatorChecks
             FoundationParkMark? mark = null;
             string? resolution = null;
             var observed = false;
+            var refused = false;
             set.Write = async (writer, batch, token) =>
             {
                 var result = await writer.CommitAsync(batch, token);
-                if (result.Landed && batch.Turns.Any(turn => turn.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true))
+                if (!batch.Turns.Any(turn => turn.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true))
+                    return result;
+                if (!result.Landed)
                 {
-                    var point = await reads.GetAsync(tenant, root, token);
-                    var list = await reads.ListAsync(tenant, new(Parked: true), cancellationToken: token);
-                    var listed = list.Items.Single(item => item.Header.Ref == root);
-                    Check(mark is not null && point is { Park: { } pointPark } &&
-                        pointPark == new Contract.ParkView(mark.At, resolution) && listed.Park == pointPark &&
-                        set.OpensPark(root, point.Selection, mark) && set.OpensPark(root, listed.Selection, mark),
-                        $"point and list project {resolution} under the original Park selection at Open");
-                    observed = true;
+                    refused = true;
+                    return result;
                 }
+                var point = await reads.GetAsync(tenant, root, token);
+                var list = await reads.ListAsync(tenant, new(Parked: true), cancellationToken: token);
+                var listed = list.Items.Single(item => item.Header.Ref == root);
+                Check(mark is not null && point is { Park: { } pointPark } &&
+                    pointPark == new Contract.ParkView(mark.At, resolution) && listed.Park == pointPark &&
+                    set.OpensPark(root, point.Selection, mark) && set.OpensPark(root, listed.Selection, mark),
+                    $"point and list project {resolution} under the original Park selection at Open");
+                observed = true;
                 return result;
             };
             await set.OwnAsync();
@@ -446,7 +451,31 @@ internal static class PostgresRootParkedOperatorChecks
                 Check(await set.OperateAsync(root, value, kind, await set.ParkSelectionAsync(root, parked.Revision)),
                     $"the {value} fixture admits its selected operator");
                 if (kind == Contract.Kinds.Terminate)
+                {
+                    var beforeInputs = await set.InputsAsync(root);
+                    var beforeJournal = await set.Cold.ReadJournalOfAsync(0, parked.Actor.Id, 0, stop);
+                    await using var control = OpenProjection();
+                    await control.Database.ExecuteSqlRawAsync("""
+                        ALTER TABLE "Instances" DISABLE TRIGGER kernel_project_root_park_metadata
+                        """, stop);
+                    try
+                    {
+                        await set.PassUntilAsync(() => set.StoodDown);
+                        Check(refused && !observed && (await set.ImageAsync(root)).Revision == parked.Revision &&
+                            await set.ClearingAsync(root) == new Set.ClearingRow(null, null) &&
+                            (await set.InputsAsync(root)).SequenceEqual(beforeInputs) &&
+                            (await set.Cold.ReadJournalOfAsync(0, parked.Actor.Id, 0, stop)).SequenceEqual(beforeJournal),
+                            "a missing Park projection rolls back the clearing, input settlement and journal");
+                    }
+                    finally
+                    {
+                        await control.Database.ExecuteSqlRawAsync("""
+                            ALTER TABLE "Instances" ENABLE TRIGGER kernel_project_root_park_metadata
+                            """, stop);
+                    }
+                    await set.RetakeAsync();
                     await set.DriveAsync(root, image => image is { Status: InstanceStatus.Cancelled });
+                }
                 else
                     await set.RetiredAsync(root);
                 var after = await reads.GetAsync(tenant, root, stop);
