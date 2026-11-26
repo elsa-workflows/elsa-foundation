@@ -31,7 +31,8 @@ public sealed partial class EfStore
                 SELECT 1 FROM "Instances" i
                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition"
                     AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
-                    AND NOT i."Retired" AND i."FoundationParkAt" IS NULL)
+                    AND NOT i."Retired" AND (i."FoundationParkAt" IS NULL OR
+                        m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" GLOB 'operator/*'))
             AND (m."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("m.")}))))
         """;
 
@@ -116,24 +117,32 @@ public sealed partial class EfStore
         if (fingerprint is null) return false;
         var pending = await ReadSqliteCreatorAsync(db, checkpoint.Tenant, checkpoint.Reference, fingerprint, token);
         if (pending is null || !checkpoint.MatchesCreator(DecodeSqliteCreator(pending))) return false;
-        if (await db.Database.ExecuteSqlInterpolatedAsync($"""
+        var parked = checkpoint.Row is { Status: InstanceStatus.Faulted, Fault: not null };
+        if (parked)
+        {
+            if (!await KeepSqliteParkInputsAsync(db, pending.Target, pending.Partition, 0, [pending.Id], token)) return false;
+        }
+        else if (await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "Id" = {pending.Id} AND "InboxScope" = 0
                 AND "Target" = {pending.Target} AND "Partition" = {pending.Partition} AND NOT "Done"
             """, token) != 1) return false;
 
-        var ended = checkpoint.Row.Status == InstanceStatus.Finished || db.RootStateFamily.Ends(checkpoint.Row.Status);
+        var ended = !parked && db.RootStateFamily.Ends(checkpoint.Row.Status);
         var family = RootStatePrefix(db);
         var revision = checkpoint.JournalRevision;
         FormattableString update = $"""
             UPDATE "Instances" SET "FoundationReference" = {checkpoint.Reference}, "FoundationTenant" = {checkpoint.Tenant},
                 "FoundationHeader" = {checkpoint.Header}, "FoundationStateWire" = {checkpoint.Wire}, "State" = {family} || "State",
                 "FoundationTerminalRevision" = CASE WHEN {ended} THEN {revision} END,
-                "FoundationTerminalAt" = CASE WHEN {ended} THEN /*sqlite-root-clock*/ END
+                "FoundationTerminalAt" = CASE WHEN {ended} THEN /*sqlite-root-clock*/ END,
+                "FoundationParkAt" = CASE WHEN {parked} THEN /*sqlite-root-clock*/ END,
+                "FoundationParkRevision" = CASE WHEN {parked} THEN {revision} END
             WHERE "Id" = {pending.Target} AND "Partition" = {pending.Partition} AND "Revision" = {revision}
                 AND "Status" = {(int)checkpoint.Row.Status} AND "FoundationReference" IS NULL
                 AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {pending.Target}))
             """;
-        return await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock(update), token) == 1;
+        return await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock(update), token) == 1 &&
+            (!parked || await VerifySqliteParkProjectionAsync(db, checkpoint.Tenant, checkpoint.Reference, revision, checkpoint.Row.Fault!, token));
     }
 
     private static async Task<bool> BindSqliteRootTurnAsync(KernelDb db, RootTurnCheckpoint turn, CancellationToken token)

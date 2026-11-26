@@ -2092,6 +2092,8 @@ jobs:
           $NAT sqlite-root-retirement in-batch
           $NAT sqlite-root-held-operators checked
           $NAT sqlite-root-held-operators in-batch
+          $NAT sqlite-root-park-opening checked
+          $NAT sqlite-root-park-opening in-batch
 
       - name: Graph engine corpus
         run: dotnet test ../../server/essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build
