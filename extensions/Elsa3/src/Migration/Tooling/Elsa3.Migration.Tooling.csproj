@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>The pipeline of the Elsa 3 workflows migration CLI: a test migration on the migration host's composition, a redacted report and the migrated content (spec 1237).</Description>
+    <!-- Ships only with the CLI, never as a package (spec 1237 R-7). -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa3.Migration.Cli" />
+    <InternalsVisibleTo Include="Elsa3.Migration.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="report.schema.json" LogicalName="Elsa3.Migration.Tooling.report.schema.json" />
+    <EmbeddedResource Include="Report\report.html" LogicalName="Elsa3.Migration.Tooling.report.html" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Models\Elsa3.Models.csproj" />
+    <ProjectReference Include="..\..\Mapping\Elsa3.Mapping.csproj" />
+    <ProjectReference Include="..\..\Activities\Design\Import\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
+    <ProjectReference Include="..\..\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\Activities\Design\Import\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
+    <ProjectReference Include="..\..\Activities\Design\Import\Reconciliation\Elsa3.Activities.Design.Import.Reconciliation.csproj" />
+    <ProjectReference Include="..\..\..\..\..\essentials\src\Workflows\Design\Reconciliation\Json\Elsa.Workflows.Design.Reconciliation.Json.csproj" />
+    <ProjectReference Include="..\..\..\..\..\essentials\src\Activities\Design\Reconciliation\Json\Elsa.Activities.Design.Reconciliation.Json.csproj" />
+    <ProjectReference Include="..\..\..\..\..\essentials\src\Serialization\Core\Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
+
+</Project>

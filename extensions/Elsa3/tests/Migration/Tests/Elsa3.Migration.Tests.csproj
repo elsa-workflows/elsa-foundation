@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="JsonSchema.Net" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Migration\Tooling\Elsa3.Migration.Tooling.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The contract the embedded schema must stay identical to (FR-020). -->
+    <None Include="..\..\..\..\..\specs\1237-elsa3-migration-cli\contracts\report.schema.json" Link="Contracts\report.schema.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

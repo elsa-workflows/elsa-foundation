@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elsa 3 migration report</title>
+<style>
+  :root { --fg: #1d1d1f; --muted: #6b6b70; --bg: #ffffff; --panel: #f5f5f7; --line: #d9d9de; --must: #b3261e; --reconsider: #8a5a00; --note: #2f5d8a; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #ececf0; --muted: #a0a0a8; --bg: #161618; --panel: #222226; --line: #3a3a40; --must: #ff8a80; --reconsider: #ffcc66; --note: #8ab4f8; } }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 17px; margin: 28px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  h3 { font-size: 15px; margin: 18px 0 6px; } .muted { color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 12px; } th, td { text-align: left; vertical-align: top; padding: 4px 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+  th { background: var(--panel); font-weight: 600; } code { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  details { background: var(--panel); border-radius: 6px; padding: 6px 10px; margin: 6px 0; } summary { cursor: pointer; font-weight: 600; }
+  .mustFix { color: var(--must); } .reconsider { color: var(--reconsider); } .takeIntoAccount { color: var(--note); }
+  .cards { display: flex; flex-wrap: wrap; gap: 8px; } .card { background: var(--panel); border-radius: 6px; padding: 8px 12px; min-width: 120px; }
+  .card b { display: block; font-size: 20px; }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script type="application/json" id="report-data">/*REPORT_JSON*/</script>
+<script>
+(function () {
+  "use strict";
+  var report = JSON.parse(document.getElementById("report-data").textContent);
+  var app = document.getElementById("app");
+  var categories = [["mustFix", "Must fix"], ["reconsider", "Reconsider"], ["takeIntoAccount", "Take into account"]];
+  var buckets = [["incompatible", "Incompatible"], ["convert-with-adjustments", "Convert with adjustments"], ["convert-as-is", "Convert as is"]];
+
+  function el(tag, text, cls) { var node = document.createElement(tag); if (text !== undefined && text !== null) node.textContent = String(text); if (cls) node.className = cls; return node; }
+  function add(parent, child) { parent.appendChild(child); return child; }
+  function table(parent, headers, rows) {
+    if (rows.length === 0) { add(parent, el("p", "None.", "muted")); return; }
+    var t = add(parent, el("table")); var head = add(add(t, el("thead")), el("tr"));
+    headers.forEach(function (h) { add(head, el("th", h)); });
+    var body = add(t, el("tbody"));
+    rows.forEach(function (row) { var tr = add(body, el("tr")); row.forEach(function (cell) { var td = add(tr, el("td")); if (cell instanceof Node) td.appendChild(cell); else td.textContent = cell === null || cell === undefined ? "" : String(cell); }); });
+  }
+  function code(text) { return el("code", text); }
+  function findingRows(findings) {
+    return findings.map(function (f) {
+      return [code(f.code), el("span", f.category, f.category), f.severity, f.remedy || "", f.componentKind ? f.componentKind + ": " + f.componentName : "", f.stage, f.path === null ? "" : code(f.path), f.nodeId || "",
+        f.message + (f.publishStoppedHere ? " (publish stopped here)" : "") + (f.routine ? " (routine)" : ""), f.guidance];
+    });
+  }
+  var findingHeaders = ["Code", "Category", "Severity", "Remedy", "Component", "Stage", "Path", "Node", "Message", "Guidance"];
+
+  add(app, el("h1", "Elsa 3 migration report"));
+  add(app, el("p", report.tool.name + " " + report.tool.version + " · command " + report.command + " · exit code " + report.exitCode + " · schema version " + report.schemaVersion + (report.options.allVersions ? " · all versions" : ""), "muted"));
+
+  add(app, el("h2", "Summary"));
+  var cards = add(app, el("div", null, "cards"));
+  function card(label, value, cls) { var c = add(cards, el("div", null, "card")); add(c, el("b", value, cls)); add(c, el("span", label, "muted")); }
+  var s = report.summary;
+  card("definitions", s.definitions); card("go smoothly", s.goesSmoothly); card("published", s.published); card("exported", s.exported);
+  card("blocked by dependency", s.blockedByDependency); card("not converted", s.notConverted);
+  categories.forEach(function (c) { card(c[1] + " findings", s.byCategory[c[0]], c[0]); });
+  card("convert as is", s.byBucket.convertAsIs); card("convert with adjustments", s.byBucket.convertWithAdjustments); card("incompatible", s.byBucket.incompatible);
+
+  add(app, el("h2", "Custom components"));
+  table(app, ["Kind", "Elsa 3 name", "Definitions", "Usages"], report.components.map(function (c) { return [c.kind, code(c.name), c.definitions.join(", "), c.usages]; }));
+
+  add(app, el("h2", "Definitions"));
+  buckets.forEach(function (b) {
+    var inBucket = report.definitions.filter(function (d) { return d.bucket === b[0]; });
+    add(app, el("h3", b[1] + " (" + inBucket.length + ")"));
+    inBucket.forEach(function (d) {
+      var box = add(app, el("details"));
+      add(box, el("summary", d.definitionId + " v" + d.version + (d.name ? " · " + d.name : "") + (d.isReusable ? " · reusable" : "") + " · " + d.findings.length + " findings"));
+      table(box, ["Source version", "Published", "Exported to", "Wrapper exported to", "Blocked by"], [[code(d.sourceVersionId), d.published ? "yes" : "no", d.exportedTo || "", d.wrapperExportedTo || "", d.blockedBy.join(", ")]]);
+      categories.forEach(function (c) {
+        var inCategory = d.findings.filter(function (f) { return f.category === c[0]; });
+        if (inCategory.length === 0) return;
+        add(box, el("h3", c[1], c[0]));
+        table(box, findingHeaders, findingRows(inCategory));
+      });
+    });
+  });
+
+  add(app, el("h2", "Versions not converted"));
+  table(app, ["Definition", "Version", "Source version"], report.notConverted.map(function (v) { return [v.definitionId, v.version, code(v.sourceVersionId)]; }));
+
+  add(app, el("h2", "Missing workflow targets (take into account)"));
+  table(app, ["Target definition", "Referenced by"], report.missingTargets.map(function (t) { return [t.definitionId, t.referencedBy.join(", ")]; }));
+
+  add(app, el("h2", "Run findings"));
+  table(app, findingHeaders, findingRows(report.runFindings));
+
+  add(app, el("h2", "Input findings"));
+  table(app, ["File"].concat(findingHeaders), report.inputFindings.map(function (i) { return [code(i.file)].concat(findingRows([i.finding])[0]); }));
+
+  add(app, el("h2", "Settings and composition"));
+  add(app, el("p", "Persistence " + (report.run.persistenceOverridden ? "was replaced by the run's in-memory database." : "was not replaced.") + " Local configuration sources were " + (report.command === "assess" ? "applied." : "not applied.")));
+  add(app, el("h3", "Features"));
+  table(app, ["Feature"], report.run.features.map(function (f) { return [code(f)]; }));
+  add(app, el("h3", "Setting keys"));
+  table(app, ["Key"], report.run.settingKeys.map(function (k) { return [code(k)]; }));
+})();
+</script>
+</body>
+</html>
