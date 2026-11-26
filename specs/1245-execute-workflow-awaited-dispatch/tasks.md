@@ -29,9 +29,10 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
     parts (FR-004).
   - Close #5851 when this lands.
 - [ ] T002 Test first, in `DispatchWorkflowEndToEndTests`, on the real `WorkflowOutputSource` with default diagnostics
-  settings. Fire-and-forget, faulted, cancelled and dispatch-failed
-  children each give no `Output`. A variable that captures `Output` and holds `"before"` still holds `"before"` after
-  each of them (FR-002, plan D-1).
+  settings (FR-002, plan D-1):
+  - Fire-and-forget gives no `Output`, and a variable that captures it and holds `"before"` still holds `"before"`.
+  - Faulted, cancelled and dispatch-failed children give `Output` `{}`. A captured variable that was never set reads
+    `undefined` for a member after them, and does not throw.
 - [ ] T003 Policy-free read of a child's committed workflow outputs (plan D-2): `IWorkflowOutputSource.ReadValuesAsync`,
   returning `WorkflowOutputValues`, implemented in `WorkflowOutputSource`. Update both `EXTENSION_POINTS.md` entries and
   `PublicAPI.Unshipped.txt` (the member and the record), and

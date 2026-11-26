@@ -153,8 +153,9 @@ parent that dispatches it with `WaitForCompletion` true, captures `Output` into 
 4. **Given** a child output marked sensitive, or required to be encrypted, or carrying a redaction mode or a retention policy, or not stored inline, **When** the parent
    captures `Output`, **Then** that output is left out of the object, and the dispatch reports one execution warning
    naming it, without its value. There is one test per kind; for encryption the value is an explicit null.
-5. **Given** a child that faults or is cancelled, **When** the dispatch resumes, **Then** `Output` is absent and a
-   capture of it leaves its variable unchanged, as for any other output an activity does not produce.
+5. **Given** a child that faults or is cancelled, or a start that fails, **When** the dispatch resumes, **Then**
+   `Output` is `{}`. A later `variables.Credit.Decision` reads `undefined` rather than throwing, and no child data
+   crosses (spec 100).
 6. **Given** `WaitForCompletion` false, **When** the dispatch completes with `Dispatched`, **Then** `Output` is absent.
 
 ---
@@ -239,9 +240,10 @@ faults.
 - **An Execute Workflow child suspends.** Elsa 3 with `WaitForCompletion` false continued at once, with a result of
   status `Running`. Elsa 4 always waits for the child. FR-008 warns about it, and no conversion keeps Elsa 3's early
   continue.
-- **A child faults after writing outputs.** Elsa 3 resumed the parent with those outputs. Elsa 4 exposes outputs only for
-  a completed child (spec 099 FR-010), so a capture keeps its previous value. FR-011 records this as an accepted
-  difference.
+- **A child faults after writing outputs.** Elsa 3 resumed the parent with those outputs. Elsa 4 exposes no child
+  outputs unless the child completed (spec 100), so `Output` is `{}`. A read of a member then gives `undefined`, where
+  Elsa 3 gave the partial value or `undefined`. It does not throw, and it does not keep a stale value from an earlier
+  run. FR-011 records this as an accepted difference.
 - **A child is cancelled.** In Elsa 3 an awaited parent stayed suspended. In Elsa 4 the dispatch selects `Cancelled`.
   No Elsa 3 port maps to it:
   - in a Flowchart parent the branch ends there instead of hanging;
@@ -278,9 +280,10 @@ faults.
   output the completed child set: the output's name, exactly as the child declares it, mapped to the child's committed
   value, unchanged. A converted Elsa 3 `Result` variable (`Object`, `ObjectDictionary`) MUST accept the capture at
   publish.
-- **FR-002**: `Output` MUST be produced only when the dispatch waited and the child completed (`Completed`). It MUST be
-  absent on `Dispatched`, `Faulted`, `Cancelled` and `DispatchFailed`. An absent output leaves a capture's variable
-  unchanged.
+- **FR-002**: `Output` holds the child's outputs only when the dispatch waited and the child completed (`Completed`).
+  - On `Faulted`, `Cancelled` and `DispatchFailed` it MUST be `{}`. Elsa 3 always resumed a faulted parent with a
+    non-null result, so a read of a member must not throw, and no earlier run's value may remain.
+  - On `Dispatched` it MUST be absent, which leaves a capture's variable unchanged: Elsa 3 never set `Result` there.
 - **FR-003**: `Output` MUST be built from the child's committed workflow output values. It MUST NOT be built from the
   diagnostics capture policy, so no diagnostics setting changes it.
   - An output marked sensitive, or required to be encrypted, or carrying a redaction mode or a retention policy (its value protection policy), or not stored inline, MUST be left out.
@@ -400,9 +403,8 @@ faults.
 - **FR-011**: The converter MUST NOT raise a warning for the following accepted differences, because whether they apply
   depends on how the child runs or how a script reads the value, not on the converted node. They MUST be recorded in the
   converter's mapping documentation (`extensions/Elsa3/src/Mapping/README.md`):
-  - A faulted child's outputs are not carried (FR-002); Elsa 3 resumed the parent with them. `V` keeps its earlier
-    value. When the node runs more than once, for example in a loop, that is the previous run's output. Meanwhile
-    `.SubStatus` reads this run's `"Faulted"`.
+  - A faulted child's outputs are not carried: `Output` is `{}` (FR-002). Elsa 3 resumed the parent with the partial
+    outputs.
   - A cancelled child selects `Cancelled`, which ends a Flowchart branch and continues a Sequence; Elsa 3 left an awaited
     parent suspended.
   - A failed child start selects `DispatchFailed`, with the same Flowchart and Sequence behaviour; Elsa 3 faulted the
@@ -440,10 +442,11 @@ the current core but are refused or behave differently on the kernel:
 
 1. **Map `Output` to the Native result.** `NativeActivityShapes` refuses a Dispatch Workflow `Result` read. After this
    spec the current activity has no `Result`, so that rule can go. An `Output` read has the same shape as
-   `Native.DispatchResult.Output`, so it can pass through. FR-002 also
-   needs the Native `Output` to be absent, not null, unless the child finished normally. Today it is not:
-   - `ChildDone.Output` is passed on for any status;
-   - `Dispatched` completes with an explicit `null` (`DispatchResult(null, "Dispatched")`), which a capture writes.
+   `Native.DispatchResult.Output`, so it can pass through. FR-002 also needs two changes to the Native `Output`:
+   - It must be `{}` after a child that faulted or was cancelled. Today `ChildDone.Output` is passed on for any
+     status.
+   - It must be absent, not null, on `Dispatched`. Today it completes with an explicit `null`
+     (`DispatchResult(null, "Dispatched")`), which a capture writes.
 
    The Native `Status` is `"Finished"` for a child that completed. FR-004a names it `Completed`, after the outcome.
    The kernel mapping should translate it, or the kernel should adopt `Completed`.
@@ -481,7 +484,7 @@ the current core but are refused or behave differently on the kernel:
   Dispatch Workflow reads the child's committed outputs when the child completes (spec 099 FR-009), so the values exist.
   FR-003 replaces the policy-filtered read with a read of the values themselves.
 - An output that is absent leaves its capture's variable unchanged (`RuntimeOutputCaptureProjector`). Elsa 3 behaved
-  the same way when it never set `Result`.
+  the same way when it never set `Result` (`Dispatched`).
 - Pre-stable: the Dispatch Workflow contract gains `Output` and `Status` and loses `Result`, with no compatibility
   work.
 - Execute Workflow's in-process, synchronous run is not kept. The child is a durable dispatch (spec 236), and the

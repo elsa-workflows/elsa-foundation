@@ -71,9 +71,13 @@ compatibility shims.
    - `DispatchWorkflowResult` loses `Outputs`. It keeps the child id, the status, the allow-listed diagnostics and the
      control transport. `DispatchWorkflowOutput` is deleted.
    - Specs 096, 099 and 100 each get a supersession note listing the parts that spec 1245 replaces (FR-004).
-2. **D-1, absent rather than null.** When no output is produced, the property is left out of the serialized result
-   (`JsonIgnore(WhenWritingNull)`). A missing path is an absent projection, so a capture leaves its variable unchanged.
-   A serialized `null` would write null into the variable (research R-2). The step that checks this is T002.
+2. **D-1, absent rather than null, `{}` after a failed child.**
+   - On `Dispatched` the property is left out of the serialized result (`JsonIgnore(WhenWritingNull)`). A missing path
+     is an absent projection, so a capture leaves its variable unchanged. A serialized `null` would write null into
+     the variable (research R-2).
+   - On `Faulted`, `Cancelled` and `DispatchFailed`, `ResumeAsync` sets `Output` to `{}` (FR-002). The resume payload
+     still carries no `Output` for those statuses.
+   - T002 checks both.
 3. **D-2, values, not the diagnostics view.**
    - `WorkflowDispatchCompletionEnricher.CreateIntent` builds today's `Result.outputs` from `IWorkflowOutputSource`,
      which runs the diagnostics capture policy (research R-2). That read is replaced: `Output` needs the child's
@@ -214,7 +218,8 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
       unchanged.
     - An output with each protection kind (sensitive, encryption, redaction mode, retention) is left out, one test per
       kind.
-    - Faulted, cancelled and dispatch-failed children give no `Output`, and a capture keeps its previous value.
+    - Faulted, cancelled and dispatch-failed children give `Output` `{}`, and a member read on a never-set variable
+      reads `undefined` without throwing.
     - Fire-and-forget gives no `Output`.
   - Enricher test: the resume payload's `Output` is replay-stable, and a conflicting re-enrichment fails closed.
   - Checkpoint test: a waiting parent resumes after a restart with the same `Output`.
