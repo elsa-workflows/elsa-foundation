@@ -525,6 +525,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore",
+          "path": "essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Locking.Core",
           "path": "essentials/src/Locking/Core/Elsa.Locking.Core.csproj"
         },
@@ -537,6 +542,11 @@
           "type": "internal",
           "id": "Elsa.Modularity.Api",
           "path": "essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Modularity.EntityFramework",
+          "path": "essentials/src/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj"
         },
         {
           "type": "internal",
@@ -575,6 +585,11 @@
         },
         {
           "type": "external",
+          "id": "Microsoft.AspNetCore.Authentication.JwtBearer",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.EntityFrameworkCore.SqlServer",
           "version": "10.0.10"
         },
@@ -582,6 +597,11 @@
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.Sqlite",
           "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Resilience",
+          "version": "10.3.0"
         },
         {
           "type": "external",
@@ -5033,6 +5053,11 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Resilience",
+          "version": "10.3.0"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "Newtonsoft.Json",
           "version": "13.0.4"
         },
@@ -5405,6 +5430,11 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Resilience",
+          "version": "10.3.0"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "ValenceWorks.MinimalEndpoints",
           "version": "1.0.0"
         }
@@ -5449,6 +5479,11 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Resilience",
+          "version": "10.3.0"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "OpenIddict.Abstractions",
           "version": "7.5.0"
         },
@@ -5478,8 +5513,8 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Foundation.Identity.OpenIddict.Behavior",
-          "path": "essentials/src/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj"
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
         },
         {
           "type": "internal",
@@ -5528,11 +5563,6 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "pinned-transitive",
           "id": "Microsoft.Data.SqlClient",
           "version": "7.0.2"
         },
@@ -5558,11 +5588,6 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "OpenIddict.AspNetCore",
-          "version": "7.5.0"
-        },
-        {
-          "type": "pinned-transitive",
           "id": "SQLitePCLRaw.bundle_e_sqlite3",
           "version": "3.0.3"
         },
@@ -5570,11 +5595,6 @@
           "type": "pinned-transitive",
           "id": "System.Security.Cryptography.Pkcs",
           "version": "9.0.21"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
         }
       ]
     },
@@ -6055,6 +6075,11 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Resilience",
+          "version": "10.3.0"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "Newtonsoft.Json",
           "version": "13.0.4"
         },
@@ -6283,6 +6308,11 @@
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Resilience",
+          "version": "10.3.0"
         },
         {
           "type": "pinned-transitive",
@@ -29511,6 +29541,11 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Resilience",
+          "version": "10.3.0"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "Newtonsoft.Json",
           "version": "13.0.4"
         },
@@ -32917,6 +32952,11 @@
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Resilience",
+          "version": "10.3.0"
         },
         {
           "type": "pinned-transitive",
