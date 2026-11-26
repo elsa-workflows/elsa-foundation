@@ -28,6 +28,53 @@ public sealed partial class EfStore
         }
     }
 
+    // A job registered after admission prevents compound retirement. Settle only its refused command while the
+    // exact running checkpoint and its job pair remain at the same revision.
+    private sealed record LiveCompoundRefusal(WorkerRoot Root, RootImage Current, Message Command, FoundationSelfIssuer? Issue, bool Withheld)
+        : QualifiedRootCheckpoint(0)
+    {
+        internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
+        {
+            if (!db.UsesRootTerminateThenDelete) return false;
+            FormattableString query = $"""
+                SELECT i."Revision" AS "Value" FROM "Instances" i JOIN "FoundationRootBirths" b
+                    ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = {Current.Actor.Creation}
+                    AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
+                WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition}
+                    AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
+                    AND i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired" AND i."Revision" = {Current.Revision}
+                    AND i."FoundationTerminalRevision" IS NULL AND i."FoundationTerminalAt" IS NULL
+                    AND i."Jobs" = {Current.Jobs} AND i."NextJobGeneration" IS NOT DISTINCT FROM {Current.NextJobGeneration}
+                    AND i."Suspended" = {Current.Suspended}
+                """;
+            var parked = db.UsesRootParkOpening ? """ AND i."FoundationParkAt" IS NULL""" : "";
+            var writeLock = db.Database.IsNpgsql() ? " FOR UPDATE OF i" : "";
+            var scoped = FormattableStringFactory.Create(query.Format + parked + writeLock, query.GetArguments());
+            var locked = await db.Database.SqlQuery<long>(scoped).ToListAsync(token);
+            return locked.Count == 1 && await SettleRootInputsAsync(db, Root.Reference, Current.Actor, [Command.InboxKey],
+                [Command], Issue, Current.Suspended || Withheld, token);
+        }
+    }
+
+    private async Task<LiveCompoundRefusal?> PrepareLiveCompoundRefusalAsync(WorkerRoot root, InboxKey key,
+        Message? held, CancellationToken token)
+    {
+        if (held is not null && held.Operator?.RootThenDelete != true) return null;
+        await using var db = create();
+        if (!db.UsesRootTerminateThenDelete) return null;
+        var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
+        if (current is not { Status: InstanceStatus.Running, Jobs: not null, TerminalRevision: null, TerminalAt: null }) return null;
+        await using var pinned = await BeginPinnedRootOperationAsync(db, token);
+        var row = await db.Messages.AsNoTracking().SingleOrDefaultAsync(message => message.Partition == root.Partition &&
+            message.Target == root.Actor && message.InboxScope == InboxKey.FoundationOccurrenceScope && message.Id == key.Id && !message.Done,
+            token);
+        if (row is null) return null;
+        var command = DecodeRootInput(db, row, root.Reference, issue: null);
+        return command is { Kind: Kinds.Terminate, Operator: { RootThenDelete: true, RootParkMark: null } } &&
+            (held is not null ? command == held : command.ReplyTo is null)
+            ? new(root, current, command, RootSelfIssuer, AuthoredWithholding(root, current)) : null;
+    }
+
     // S5b-3a: a Terminate-then-delete of a parked root clears the Park's last kept rows, ends it Cancelled and retires it in
     // one commit: the Park mark, the open clearing (if any) and the kept set must be the ones the command was decided on.
     // S5b-3b: a Delete that names the Park retires it the same way, still Faulted; both write the terminal mark the
