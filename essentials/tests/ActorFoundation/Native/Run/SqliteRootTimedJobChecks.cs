@@ -130,8 +130,9 @@ internal static partial class SqliteHostLifetimeChecks
         var definitions = new SqliteAdmissionDefinitions();
         var firstActor = new TimedJobActor();
         var oldSamples = new ConcurrentQueue<long>();
+        var latePublications = 0;
         var first = NewStore();
-        await using var old = await TakeAsync(first, "first", firstActor, oldSamples);
+        await using var old = await TakeAsync(first, "first", firstActor, oldSamples, () => Interlocked.Increment(ref latePublications));
         await DriveAsync(old, () => Task.FromResult(firstActor.TakeoverEntered.Task.IsCompleted));
         var before = (await first.ReadFirstRootAsync(scope.Tenant, reference, token))!;
         var rows = await JobRowsAsync(before.Actor.Id);
@@ -172,8 +173,8 @@ internal static partial class SqliteHostLifetimeChecks
             "a displaced fence cannot settle the due deadline while both inputs still exist");
         firstActor.ReleaseTakeover.TrySetResult("late");
         await lateCallback.WaitAsync(token);
-        Require(oldSamples.Count == 1 && oldSamples.Single() >= deadline,
-            "the displaced callback observes the deadline on the SQLite clock when it returns late");
+        Require(oldSamples.Count == 1 && oldSamples.Single() >= deadline && Volatile.Read(ref latePublications) == 0,
+            "the displaced callback observes the deadline on the SQLite clock and does not publish");
 
         await DriveAsync(next, async () => (await successor.ReadFirstRootAsync(scope.Tenant, reference, token))?.Revision >= 2);
         var result = (await JobRowsAsync(image.Id)).Single();
@@ -192,7 +193,8 @@ internal static partial class SqliteHostLifetimeChecks
 
         EfStore NewStore() => new(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
 
-        async Task<Worker> TakeAsync(EfStore store, string name, TimedJobActor executor, ConcurrentQueue<long>? samples = null)
+        async Task<Worker> TakeAsync(EfStore store, string name, TimedJobActor executor, ConcurrentQueue<long>? samples = null,
+            Action? onPublished = null)
         {
             await store.EnableRootJobsAsync(token);
             var headers = new EfStore.RootHeaders(store.BindSqliteWorkerNode());
@@ -202,7 +204,11 @@ internal static partial class SqliteHostLifetimeChecks
                 samples?.Enqueue(now);
                 return now;
             });
-            var worker = new Worker(name, 0, store, adapter, new WorkerOptions { PassTurnBudget = 1 });
+            // The fixture expires the database owners explicitly. Keep their local callback guards live through the deadline.
+            var worker = new Worker(name, 0, store, adapter, new WorkerOptions
+            {
+                Lease = TimeSpan.FromSeconds(40), PassTurnBudget = 1, AfterJobPublication = onPublished
+            });
             if (await new DurableHost([worker]).ActivateAsync(0, token) == worker) return worker;
             await worker.DisposeAsync();
             throw new InvalidOperationException("The timed fixture could not take its partition.");
