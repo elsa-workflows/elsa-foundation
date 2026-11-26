@@ -1504,6 +1504,16 @@ jobs:
         shell: bash
         run: git diff --exit-code -- ':(glob)**/packages.lock.json'
 
+      - name: Run the SQLite Workbench Core Preview journey
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          runner=essentials/tests/ActorFoundation/Native/Run
+          dotnet restore "$runner" --locked-mode
+          dotnet build "$runner" -c Debug --no-restore
+          dotnet "$runner/bin/Debug/net10.0/Kernel.Native.Run.dll" sqlite-workbench-core-preview \
+            "$PWD/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host"
+
       - name: Run the focused WriteLine bound-input test
         shell: bash
         run: dotnet test essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
