@@ -69,6 +69,16 @@ public sealed class Elsa3ExpressionRewriter(
         "under one namespace only; the converter then rewrites the call.";
 
     /// <summary>
+    /// What to do about an undeclared global used other than in a direct call: as an object (<c>myLib.format(1)</c>,
+    /// <c>name.call(…)</c>, <c>new name()</c>, a tagged template) or as a value (<c>items.map(name)</c>). The converter
+    /// rewrites only a direct call <c>name(…)</c> to a registered host function (#5664), so this guidance promises no rewrite.
+    /// </summary>
+    private static string ValueUseGuidance(string name) =>
+        $"A host function registered as '<prefix>.{name}' (for example 'acme.{name}') replaces only direct calls '{name}(...)'; " +
+        $"the converter does not rewrite '{name}' used as an object or a value. In the Elsa 3 workflow, call '{name}(...)' directly, " +
+        "or compute the value with JavaScript or an Elsa 4 built-in function, or in an activity, before import.";
+
+    /// <summary>
     /// What to do about a refused call to a name no host function can take over (a standard JavaScript global, a CLR
     /// global): registering a host function of that member name would not change the result.
     /// </summary>
@@ -188,7 +198,8 @@ public sealed class Elsa3ExpressionRewriter(
             return Elsa3ExpressionRewriteResult.Failure(result.Issues.Concat(analyzer.ReportableMissingGlobals));
 
         // Spec 1223 FR-016 to FR-018: the converted source, with the values that were live .NET objects in Elsa 3.
-        // A .NET type read as a global (new Uri(…)) is .NET usage, not a custom global, so this refusal stands alone.
+        // A .NET type read as a global (new Uri(…)) is .NET usage, not a custom global: the refusal lists the other
+        // undeclared globals, but not the names the analysis flagged as .NET.
         var usages = dotNetUsage.Analyze(
             result.Definition!.Source,
             scriptBody: mode == Elsa3JavaScriptMode.Script,
@@ -197,11 +208,16 @@ public sealed class Elsa3ExpressionRewriter(
         {
             // The analyzer's own message quotes the script, and its position is one in the converted source, not the
             // Elsa 3 one, so the refusal names the cause only (spec 1237 FR-019).
-            return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
+            var dotNetRoots = DotNetUsageRoots(result.Definition.Source, usages);
+            var dotNetIssue = new Elsa3ExpressionRewriteIssue(
                 Elsa3ImportDiagnosticCodes.DotNetMemberUsage,
                 "JavaScript uses a member of a value that was a live .NET object in Elsa 3, a .NET type or a .NET-style member " +
                 "in the script. Elsa 4 values are JSON and have no .NET members.",
-                "Rewrite the expression in the Elsa 3 workflow with JavaScript or an Elsa 4 built-in function, before import."));
+                "Rewrite the expression in the Elsa 3 workflow with JavaScript or an Elsa 4 built-in function, before import.");
+            return Elsa3ExpressionRewriteResult.Failure(new[] { dotNetIssue }.Concat(analyzer.ReportableMissingGlobals.Where(issue =>
+                issue.Metadata is null ||
+                !issue.Metadata.TryGetValue(Elsa3MigrationDiagnosticMetadataKeys.ComponentName, out var name) ||
+                !dotNetRoots.Contains(name))));
         }
 
         var missing = analyzer.ReportableMissingGlobals.ToArray();
@@ -209,6 +225,62 @@ public sealed class Elsa3ExpressionRewriter(
             return Elsa3ExpressionRewriteResult.Failure(missing);
 
         return result.WithConversionNotes(analyzer.Warnings, analyzer.AppliedDateInterpretation, analyzer.MayAccessNativeCompletion);
+    }
+
+    /// <summary>
+    /// The global names the .NET-usage analysis flagged as .NET, found at each refusal's range in the converted source:
+    /// the type a <c>new X(…)</c> constructs, and the root of a flagged member access or member call (<c>Uri</c> in
+    /// <c>Uri.EscapeDataString(s)</c>, <c>lib</c> in <c>lib.Format(1)</c>). Those are not custom globals to build.
+    /// </summary>
+    private static HashSet<string> DotNetUsageRoots(string source, IReadOnlyList<JavaScriptDotNetUsage> usages)
+    {
+        var roots = new HashSet<string>(StringComparer.Ordinal);
+        Node tree;
+        try
+        {
+            tree = new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source);
+        }
+        catch (ParseErrorException)
+        {
+            try
+            {
+                tree = new Parser().ParseExpression(source);
+            }
+            catch (ParseErrorException)
+            {
+                return roots;
+            }
+        }
+
+        var ranges = usages.Select(usage => usage.Range).ToHashSet();
+        Walk(tree);
+        return roots;
+
+        void Walk(Node node)
+        {
+            var range = new ExpressionToolingRange(
+                new(Math.Max(0, node.Location.Start.Line - 1), Math.Max(0, node.Location.Start.Column)),
+                new(Math.Max(0, node.Location.End.Line - 1), Math.Max(0, node.Location.End.Column)));
+            if (ranges.Contains(range) && FlaggedRoot(node) is { } root)
+                roots.Add(root);
+            foreach (var child in node.ChildNodes)
+                Walk(child);
+        }
+
+        static string? FlaggedRoot(Node node) => node switch
+        {
+            NewExpression { Callee: Identifier type } => type.Name,
+            CallExpression { Callee: MemberExpression callee } => StaticRoot(callee.Object),
+            MemberExpression member => StaticRoot(member.Object),
+            _ => null,
+        };
+
+        static string? StaticRoot(Node node) => node switch
+        {
+            Identifier identifier => identifier.Name,
+            MemberExpression { Computed: false } member => StaticRoot(member.Object),
+            _ => null,
+        };
     }
 
     private Elsa3ExpressionRewriteResult RewriteJavaScript(
@@ -852,31 +924,68 @@ public sealed class Elsa3ExpressionRewriter(
 
         /// <summary>
         /// Collects the function declarations inside a block (Annex B): any not directly in the script body or a function
-        /// body. A use outside the block is refused as such, not as a custom global.
+        /// body, each with the script or function body that encloses it. A use outside the block but inside that body is
+        /// refused as such, not as a custom global; a use elsewhere names a global, as it did in Elsa 3. A block function
+        /// whose name the enclosing body also declares with <c>var</c> is refused at once: Elsa 3 assigned the function to
+        /// that variable when the block ran, Elsa 4 does not.
         /// </summary>
-        public void CollectBlockFunctions(Node root) => Collect(root, topLevel: true);
+        public void CollectBlockFunctions(Script root) => Collect(root, root, topLevel: true);
 
-        private void Collect(Node node, bool topLevel)
+        private void Collect(Node node, Node body, bool topLevel)
         {
             foreach (var child in node.ChildNodes)
             {
                 if (child is FunctionDeclaration { Id: { } id } && !topLevel)
-                    _blockFunctions.Add(id.Name);
+                {
+                    if (!_blockFunctions.TryGetValue(id.Name, out var bodies))
+                        _blockFunctions[id.Name] = bodies = [];
+                    bodies.Add(body);
+                    if (VarNames(body).Contains(id.Name) && _reportedBlockFunctions.Add(id.Name))
+                        Issues.Add(BlockFunctionOverVar(id.Name));
+                }
                 if (child is IFunction function)
                 {
                     foreach (var part in child.ChildNodes)
                     {
                         if (ReferenceEquals(part, function.Body) && part is BlockStatement)
-                            Collect(part, topLevel: true);
+                            Collect(part, part, topLevel: true);
                         else
-                            Collect(part, topLevel: false);
+                            Collect(part, body, topLevel: false);
                     }
                     continue;
                 }
 
-                Collect(child, topLevel: false);
+                if (child is StaticBlock)
+                {
+                    Collect(child, child, topLevel: true);
+                    continue;
+                }
+
+                Collect(child, body, topLevel: false);
             }
         }
+
+        /// <summary>The names a script or function body declares with <c>var</c>, computed once per body.</summary>
+        private HashSet<string> VarNames(Node body)
+        {
+            if (!_bodyVarNames.TryGetValue(body, out var names))
+            {
+                names = new HashSet<string>(StringComparer.Ordinal);
+                CollectVarDeclarations(body, names);
+                _bodyVarNames[body] = names;
+            }
+            return names;
+        }
+
+        private readonly Dictionary<Node, HashSet<string>> _bodyVarNames = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Whether <paramref name="name"/>, undeclared where it is used, is a block function of a script or function body
+        /// that encloses the use (Annex B): Elsa 3 resolved it to that function, Elsa 4 to nothing.
+        /// </summary>
+        private bool IsBlockFunctionUse(string name) =>
+            _blockFunctions.TryGetValue(name, out var bodies) &&
+            bodies.Any(body => _syntaxParents.Any(parent => ReferenceEquals(parent, body)));
 
         public void CollectReassignedNames(Node root)
         {
@@ -1048,11 +1157,11 @@ public sealed class Elsa3ExpressionRewriter(
         private bool _usesWith;
 
         /// <summary>
-        /// Function declarations inside a block (not at the top of the script or of a function body). Elsa 3's sloppy mode
-        /// also made each a variable of the enclosing function (Annex B); Elsa 4's strict mode scopes it to its block, so a
-        /// use outside the block names nothing.
+        /// Function declarations inside a block (not at the top of the script or of a function body), each with the script
+        /// or function bodies that enclose one of that name. Elsa 3's sloppy mode also made each a variable of the enclosing
+        /// function (Annex B); Elsa 4's strict mode scopes it to its block, so a use outside the block names nothing.
         /// </summary>
-        private readonly HashSet<string> _blockFunctions = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, List<Node>> _blockFunctions = new(StringComparer.Ordinal);
 
         /// <summary>Block-scoped functions already refused for a use outside their block, so each is reported once.</summary>
         private readonly HashSet<string> _reportedBlockFunctions = new(StringComparer.Ordinal);
@@ -1117,6 +1226,12 @@ public sealed class Elsa3ExpressionRewriter(
             Elsa3ImportDiagnosticCodes.UnsupportedShape,
             $"JavaScript uses '{name}' outside the block that declares it as a function. Elsa 3's sloppy mode made the function visible " +
             "outside its block; Elsa 4 runs in strict mode, where it is not.",
+            $"Declare '{name}' at the top of the script or of the enclosing function, outside any block, in the Elsa 3 workflow before import.");
+
+        private static Elsa3ExpressionRewriteIssue BlockFunctionOverVar(string name) => new(
+            Elsa3ImportDiagnosticCodes.UnsupportedShape,
+            $"JavaScript declares '{name}' as a function inside a block and with var in the enclosing function or script. Elsa 3's sloppy mode " +
+            "assigned the function to that variable when the block ran; Elsa 4 runs in strict mode, where the variable keeps its own value.",
             $"Declare '{name}' at the top of the script or of the enclosing function, outside any block, in the Elsa 3 workflow before import.");
 
         private static readonly Elsa3ExpressionRewriteIssue WithStatementUse = new(
@@ -1572,7 +1687,7 @@ public sealed class Elsa3ExpressionRewriter(
             if (node is CallExpression call && call.Callee is Identifier callee && !IsDeclared(callee.Name))
             {
                 // A function declared in a block, called outside it, or a .NET namespace import: neither is a custom global.
-                if (_blockFunctions.Contains(callee.Name) || ClrNamespaceRoots.Contains(callee.Name))
+                if (IsBlockFunctionUse(callee.Name) || ClrNamespaceRoots.Contains(callee.Name))
                 {
                     Visit(callee);
                     foreach (var argument in call.Arguments)
@@ -1855,7 +1970,7 @@ public sealed class Elsa3ExpressionRewriter(
             if (node is Identifier used && !IsDeclared(used.Name) && !IsWriteTarget(used) && !IsTypeOfOperand(used))
             {
                 // Annex B: Elsa 3 ran a block's function declaration as a function-wide variable too, Elsa 4 does not.
-                if (_blockFunctions.Contains(used.Name))
+                if (IsBlockFunctionUse(used.Name))
                 {
                     if (_reportedBlockFunctions.Add(used.Name))
                         Issues.Add(BlockFunctionUse(used.Name));
@@ -2029,17 +2144,26 @@ public sealed class Elsa3ExpressionRewriter(
             // Any other undeclared global read as a value (passed as a callback, aliased, read) is an Elsa 3 custom global
             // a host function could provide (spec 1237 FR-016a). Without one it names nothing in Elsa 4. A write to the name
             // is reported as an undeclared write instead.
-            // A typeof operand is feature detection: Elsa 3 and Elsa 4 both evaluate it without a ReferenceError.
+            // A typeof operand is feature detection: Elsa 3 and Elsa 4 both evaluate it without a ReferenceError. A delete
+            // operand is no read either (and is refused itself in strict mode).
+            // The converter rewrites only a direct call, so the guidance for this use promises no rewrite.
             if (node is Identifier customGlobal && !IsDeclared(customGlobal.Name) && !IsWriteTarget(customGlobal) && !IsTypeOfOperand(customGlobal) &&
+                !IsDeleteOperand(customGlobal) &&
                 !TryGetAmbientKind(customGlobal.Name, out _) && !customGlobal.Name.Equals("args", StringComparison.Ordinal) &&
                 !customGlobal.Name.Equals(Elsa4CompleteName, StringComparison.Ordinal) && CanBeMatched(customGlobal.Name))
             {
                 if (_reportedMissingGlobals.Add(customGlobal.Name))
                 {
-                    MissingGlobals.Add(Elsa3ExpressionRewriteIssue.HostFunctionMissing(
-                        customGlobal.Name,
-                        $"JavaScript uses '{customGlobal.Name}', which neither the script, Elsa 4 nor a registered host function declares.",
-                        UndeclaredFunctionGuidance(customGlobal.Name)));
+                    // A refused Elsa 3 built-in read as a value gets its own guidance, as its call does.
+                    MissingGlobals.Add(RefusedHostFunctions.TryGetValue(customGlobal.Name, out var refusedValue)
+                        ? Elsa3ExpressionRewriteIssue.HostFunctionMissing(
+                            customGlobal.Name,
+                            $"JavaScript uses the Elsa 3 built-in '{customGlobal.Name}' as a value, not in a direct call; Elsa 4 does not provide it.",
+                            $"{refusedValue.Guidance} {ValueUseGuidance(customGlobal.Name)}")
+                        : Elsa3ExpressionRewriteIssue.HostFunctionMissing(
+                            customGlobal.Name,
+                            $"JavaScript uses '{customGlobal.Name}', which neither the script, Elsa 4 nor a registered host function declares.",
+                            ValueUseGuidance(customGlobal.Name)));
                 }
                 return;
             }
@@ -2431,6 +2555,10 @@ public sealed class Elsa3ExpressionRewriter(
 
             return names;
         }
+
+        /// <summary>Whether the identifier being visited is the operand of delete, which reads no value.</summary>
+        private bool IsDeleteOperand(Identifier identifier) =>
+            _syntaxParents.Count >= 2 && _syntaxParents[^2] is UnaryExpression { Operator: Operator.Delete } unary && ReferenceEquals(unary.Argument, identifier);
 
         /// <summary>Whether the identifier being visited is the operand of typeof, which reads no binding of an undeclared name.</summary>
         private bool IsTypeOfOperand(Identifier identifier) =>

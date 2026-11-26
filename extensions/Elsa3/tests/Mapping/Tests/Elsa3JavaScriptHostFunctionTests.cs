@@ -899,6 +899,145 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.Equal(Elsa3ImportDiagnosticCodes.UnsupportedShape, diagnostic.Code);
     }
 
+    // ---- Review round 4: what the missing-host-function report lists, and the guidance it gives ----
+
+    /// <summary>
+    /// The .NET-usage refusal keeps the other custom globals the script calls (spec 1237 FR-016a), but not a name the
+    /// analysis flagged as .NET: the constructed type, or the root of a flagged member call.
+    /// </summary>
+    [Theory]
+    [InlineData("lookupCustomer(new Uri('http://a').Host)", "Uri")]
+    [InlineData("lookupCustomer(Uri.EscapeDataString('a'))", "Uri")]
+    [InlineData("lookupCustomer(1) + myLib.Format(1)", "myLib")]
+    public async Task The_dotnet_usage_refusal_keeps_the_custom_globals_but_not_the_dotnet_names(string expression, string dotNetName)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("lookupCustomer", missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Metadata.TryGetValue(Elsa3MigrationDiagnosticMetadataKeys.ComponentName, out var name) &&
+                                                                name == dotNetName);
+    }
+
+    /// <summary>
+    /// A custom global used as an object or a value is still a component, but its guidance promises no rewrite: a
+    /// registered host function replaces only direct calls.
+    /// </summary>
+    [Theory]
+    [InlineData("myLib.format(1)", "myLib")]
+    [InlineData("lookupCustomer.name", "lookupCustomer")]
+    [InlineData("lookupCustomer.call(null, 1)", "lookupCustomer")]
+    [InlineData("new lookupCustomer(1)", "lookupCustomer")]
+    [InlineData("lookupCustomer`a`", "lookupCustomer")]
+    [InlineData("[1].map(lookupCustomer)", "lookupCustomer")]
+    public async Task A_custom_global_used_as_an_object_or_value_gets_guidance_without_a_rewrite_promise(string expression, string name)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal(name, missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.DoesNotContain("rewrites the call", missing.Guidance, StringComparison.Ordinal);
+        Assert.Contains($"replaces only direct calls '{name}(...)'", missing.Guidance, StringComparison.Ordinal);
+    }
+
+    /// <summary>A direct call keeps the guidance that registering the host function converts it.</summary>
+    [Fact]
+    public async Task A_directly_called_custom_global_keeps_the_rewrite_guidance()
+    {
+        var result = await ConvertTextAsync("lookupCustomer(1)");
+
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Contains("rewrites the call", missing.Guidance, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A block function only shadows the global inside the script or function body that encloses its block (Annex B);
+    /// elsewhere the name is the Elsa 3 custom global it was.
+    /// </summary>
+    [Theory]
+    [InlineData("(() => { function a() { if (true) { function lookupCustomer() {} } } function b() { return lookupCustomer(1); } return b(); })()")]
+    [InlineData("(() => { if (true) { function lookupCustomer() {} } })(); (() => lookupCustomer(1))()")]
+    [InlineData("(() => { if (true) { function lookupCustomer() {} } })(); (() => lookupCustomer)()")]
+    public async Task A_name_used_outside_the_body_of_a_block_function_is_a_missing_host_function(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("lookupCustomer", missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape);
+    }
+
+    /// <summary>A use in a nested function of the block function's enclosing body still saw the function in Elsa 3.</summary>
+    [Fact]
+    public async Task A_block_function_used_in_a_nested_function_of_its_body_is_refused_with_the_move()
+    {
+        var result = await ConvertTextAsync("(() => { if (true) { function helper() { return 1; } } const f = () => helper(); return f(); })()");
+
+        Assert.False(result.Succeeded);
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape);
+        Assert.Contains("outside the block", refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+    }
+
+    /// <summary>
+    /// Annex B with a var of the same name: Elsa 3 assigned the block function to the var when the block ran, Elsa 4's
+    /// strict mode leaves the var alone, so the declaration is refused with the move.
+    /// </summary>
+    [Theory]
+    [InlineData("(() => { var helper; if (true) { function helper() { return 1; } } return helper(); })()")]
+    [InlineData("(() => { var helper = 2; { function helper() { return 1; } } return helper; })()")]
+    [InlineData("(() => { if (true) { function helper() { return 1; } } var helper; return helper(); })()")]
+    public async Task A_block_function_over_a_var_of_its_name_is_refused_with_the_move(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape);
+        Assert.Contains("'helper'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("with var", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("top of the script", refusal.Guidance, StringComparison.Ordinal);
+    }
+
+    /// <summary>A parameter of the block function's name stops Annex B in Elsa 3 too, so the function stays block-scoped in both.</summary>
+    [Fact]
+    public async Task A_block_function_over_a_parameter_of_its_name_converts()
+    {
+        var result = await ConvertTextAsync("((helper) => { if (true) { function helper() { return 1; } } return helper; })(2)");
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    /// <summary>A delete operand reads no value: no component (the strict-mode parse refuses the delete itself).</summary>
+    [Fact]
+    public async Task A_delete_operand_is_no_missing_host_function()
+    {
+        var result = await ConvertTextAsync("(() => { delete lookupX; return 1; })()");
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+    }
+
+    /// <summary>A refused Elsa 3 built-in read as a value gets the built-in's own guidance, as its call does.</summary>
+    [Theory]
+    [InlineData("(() => { const g = getConfig; return g('Key'); })()", "getConfig", "workflow input")]
+    [InlineData("[1].map(bytesToString)", "bytesToString", "activity")]
+    public async Task A_refused_builtin_read_as_a_value_gets_its_own_guidance(string expression, string named, string guidance)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal(named, missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.Contains($"'{named}'", missing.Message, StringComparison.Ordinal);
+        Assert.Contains(guidance, missing.Guidance, StringComparison.Ordinal);
+        Assert.Contains($"replaces only direct calls '{named}(...)'", missing.Guidance, StringComparison.Ordinal);
+    }
+
     private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertTextAsync(string expression, params Elsa3Variable[] variables) =>
         ConvertTextAsync(expression, [], variables);
 

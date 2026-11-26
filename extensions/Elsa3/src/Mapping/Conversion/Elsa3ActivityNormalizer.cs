@@ -694,7 +694,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
             case Elsa3MemberRuleKind.UseRestriction:
                 if (!string.Equals(rule.Elsa3Default?.GetString(), literal, StringComparison.OrdinalIgnoreCase))
                     context.Error(NoCounterpart,
-                        $"Elsa 3 activity '{context.Activity.Type}' is used mid-flow (canStartWorkflow is {literal}); in Elsa 4 it can only start a workflow.",
+                        $"Elsa 3 activity '{context.Activity.Type}' is used mid-flow: its 'Can start workflow' setting does not let it start the workflow. In Elsa 4 it can only start a workflow.",
                         "Use a Delay for a mid-flow wait, or make the activity start the workflow.",
                         "customProperties.canStartWorkflow");
                 break;

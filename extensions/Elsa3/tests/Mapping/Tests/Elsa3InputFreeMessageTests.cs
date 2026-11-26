@@ -34,12 +34,15 @@ public sealed class Elsa3InputFreeMessageTests
 
     // ── Expression rewriter ─────────────────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>A legacy octal literal parses in Elsa 3's sloppy mode only, so only the strict-mode parse refuses it.</summary>
     [Fact]
     public async Task The_strict_mode_parse_message_quotes_no_script()
     {
-        var result = await ConvertExpressionAsync("JavaScript", $"with ({{ a: '{Sentinel}' }}) {{ a }}\n1");
+        var result = await ConvertExpressionAsync("JavaScript", $"var a = 017;\n'{Sentinel}' + a");
 
-        AssertRefusedWithout(result, Elsa3ImportDiagnosticCodes.UnsupportedShape, Sentinel);
+        AssertRefusedWithout(result, Elsa3ImportDiagnosticCodes.UnsupportedShape, Sentinel, "017");
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape);
+        Assert.Equal("JavaScript only works in Elsa 3's sloppy mode; Elsa 4 runs it in strict mode, where it does not parse.", refusal.Message);
     }
 
     [Fact]
@@ -302,6 +305,18 @@ public sealed class Elsa3InputFreeMessageTests
         var result = await ConvertAsync(Sequence("root", Write("a")), feature: new ThrowingMapFeature());
 
         AssertRefusedWithout(result, Elsa3MigrationDiagnosticCodes.DefinitionMappingFailed, Sentinel);
+    }
+
+    /// <summary>The mid-flow refusal of a start-only trigger names the setting, not its value.</summary>
+    [Fact]
+    public async Task The_mid_flow_trigger_refusal_quotes_no_setting_value()
+    {
+        var cron = Activity("cron", "Elsa.Cron", ("cronExpression", Literal("0 * * * *")));
+        cron.CustomProperties = new Elsa3ActivityCustomProperties { CanStartWorkflow = false };
+
+        var result = await ConvertAsync(Sequence("root", cron));
+
+        AssertRefusedWithout(result, Elsa3ActivityDiagnosticCodes.NoCounterpart, "false", "canStartWorkflow is");
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────────────────────
