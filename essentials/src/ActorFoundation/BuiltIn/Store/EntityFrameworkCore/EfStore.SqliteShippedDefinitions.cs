@@ -288,8 +288,7 @@ public sealed partial class EfStore
             WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND (NOT "Done" OR "FoundationKeptBy" = 0)
             """);
         yield return Index("IX_FoundationRootInbox_Kept", "Messages", """
-            ("Partition", "Target", "Seq", "Id", "InboxScope")
-            WHERE "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" IS NOT NULL
+            ("Partition", "Target", "Seq", "Id", "InboxScope") WHERE "FoundationKeptBy" IS NOT NULL
             """);
         yield return Index("IX_FoundationRootOperators_Pending", "Messages", """
             ("Partition", "Target", "Seq", "Due")
