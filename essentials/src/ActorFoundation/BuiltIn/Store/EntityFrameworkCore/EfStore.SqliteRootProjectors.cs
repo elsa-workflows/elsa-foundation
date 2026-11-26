@@ -6,7 +6,7 @@ public sealed partial class EfStore
     {
         // SQLite runs the two projections in one trigger so a Park update sees the actor-list row.
         // JSON values stay encoded until the read path compares them, preserving escaped NUL and backslash.
-        yield return new("trigger", "kernel_project_root_actor_list", "Instances", """
+        yield return new("trigger", "kernel_project_root_actor_list", "Instances", $"""
             CREATE TRIGGER kernel_project_root_actor_list AFTER UPDATE ON "Instances"
             WHEN NEW."FoundationReference" IS NOT NULL
             BEGIN
@@ -28,14 +28,18 @@ public sealed partial class EfStore
                     "Type" = excluded."Type", "Labels" = excluded."Labels";
 
                 SELECT RAISE(ABORT, 'Park requires the projected actor header')
-                WHERE NOT NEW."Retired" AND OLD."FoundationParkAt" IS DISTINCT FROM NEW."FoundationParkAt"
+                WHERE NOT NEW."Retired" AND (OLD."FoundationParkAt" IS DISTINCT FROM NEW."FoundationParkAt"
+                    OR OLD."FoundationParkClearingKind" IS DISTINCT FROM NEW."FoundationParkClearingKind")
                     AND NOT EXISTS (SELECT 1 FROM "FoundationActorList"
                         WHERE "Tenant" = NEW."FoundationTenant" AND "Reference" = NEW."FoundationReference");
 
                 UPDATE "FoundationActorList"
                 SET "ParkAt" = NEW."FoundationParkAt", "ParkRevision" = NEW."FoundationParkRevision",
-                    "ParkFault" = CASE WHEN NEW."FoundationParkAt" IS NOT NULL THEN NEW."Fault" END
-                WHERE NOT NEW."Retired" AND OLD."FoundationParkAt" IS DISTINCT FROM NEW."FoundationParkAt"
+                    "ParkFault" = CASE WHEN NEW."FoundationParkAt" IS NOT NULL THEN NEW."Fault" END,
+                    "ParkResolution" = CASE NEW."FoundationParkClearingKind"
+                        WHEN '{Kinds.Terminate}' THEN 'terminating' WHEN '{Kinds.Delete}' THEN 'deleting' END
+                WHERE NOT NEW."Retired" AND (OLD."FoundationParkAt" IS DISTINCT FROM NEW."FoundationParkAt"
+                    OR OLD."FoundationParkClearingKind" IS DISTINCT FROM NEW."FoundationParkClearingKind")
                     AND "Tenant" = NEW."FoundationTenant" AND "Reference" = NEW."FoundationReference";
             END
             """);

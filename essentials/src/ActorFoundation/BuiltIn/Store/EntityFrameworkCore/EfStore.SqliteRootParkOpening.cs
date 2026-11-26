@@ -68,24 +68,6 @@ public sealed partial class EfStore
         return await VerifySqliteParkProjectionAsync(db, root.Tenant, root.Reference, revision, park.EncodedFault, token);
     }
 
-    // Ordinary commands admitted before the Park are still delivered. Settle their refusal with
-    // the exact command and a new checkpoint revision, leaving the Park and its retained inputs intact.
-    private static async Task<bool> BindSqliteParkedRefusalAsync(KernelDb db, RootParkedRefusal refusal, CancellationToken token)
-    {
-        if (refusal.Retries || refusal.Command.Operator?.RootParkMark is not null) return false;
-        var root = refusal.Root;
-        if (!await SettleSqliteRootInputsAsync(db, root.Reference, new(root.Actor, 1), [refusal.Command.InboxKey],
-                [refusal.Command], suspended: true, token)) return false;
-        return await db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE "Instances" SET "Revision" = {refusal.JournalRevision}, "FoundationWriteRevision" = {refusal.JournalRevision}
-            WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" = {refusal.Expected}
-                AND "Status" = {(int)InstanceStatus.Faulted} AND NOT "Retired" AND "Suspended" = {refusal.Suspended}
-                AND "FoundationParkAt" > 0 AND "FoundationParkRevision" > 0 AND "Fault" IS NOT NULL
-                AND "FoundationParkClearing" IS NULL AND "FoundationTerminalAt" IS NULL AND "FoundationTerminalRevision" IS NULL
-                AND "FoundationTenant" = {root.Tenant} AND "FoundationReference" = {root.Reference}
-            """, token) == 1;
-    }
-
     private static async Task<bool> KeepSqliteParkInputsAsync(KernelDb db, string actor, int partition, long scope,
         string[] ids, CancellationToken token) => await db.Database.ExecuteSqlInterpolatedAsync($"""
         UPDATE "Messages" SET "Done" = 1, "Trial" = 0, "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}

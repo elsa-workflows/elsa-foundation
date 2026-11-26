@@ -36,7 +36,7 @@ public sealed partial class EfStore
             AND (m."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("m.")}))))
         """;
 
-    // A staged owner leaves later operator envelopes pending. They also cannot block an earlier supported stage's FIFO.
+    // Unsupported stored operator kinds stay pending and do not block the current operator FIFO.
     private static string SqliteSupportedOperator(string columnPrefix)
     {
         var address = $"""{columnPrefix}"ReplyTo" """;
@@ -51,7 +51,7 @@ public sealed partial class EfStore
             OR ({columnPrefix}"Kind" = '{Kinds.Delete}' AND
                 ({wire} GLOB '{PostgresRootAdmission.OperatorPrefix}*' OR
                     ({address} IS NULL AND {wire} GLOB '{PostgresRootAdmission.RetentionDeletePrefix}*'))))
-        AND CASE WHEN json_valid({payload}) THEN json_type({payload}, '$.Park') IS NULL ELSE 0 END
+        AND json_valid({payload})
         """;
     }
 

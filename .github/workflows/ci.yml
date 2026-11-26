@@ -2096,6 +2096,8 @@ jobs:
           $NAT sqlite-root-park-opening in-batch
           $NAT sqlite-root-park-inspection checked
           $NAT sqlite-root-park-inspection in-batch
+          $NAT sqlite-root-parked-operators checked
+          $NAT sqlite-root-parked-operators in-batch
 
       - name: Graph engine corpus
         run: dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build

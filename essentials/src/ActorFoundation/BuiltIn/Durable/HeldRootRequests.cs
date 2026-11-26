@@ -248,6 +248,7 @@ internal sealed class HeldRootRequests : IReplyTransport
                 "NotEligible" => "not eligible",
                 "Protected" => "protected",
                 "Parked" => "parked",
+                "ParkOutstanding" => "park outstanding",
                 "ProtectionUnavailable" => "protection unavailable",
                 "OperatorUnavailable" => "operator unavailable",
                 _ => "missing"
