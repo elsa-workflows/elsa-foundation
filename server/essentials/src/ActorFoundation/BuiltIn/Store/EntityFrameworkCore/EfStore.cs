@@ -165,6 +165,7 @@ public class KernelDb : DbContext
     internal bool UsesRootParkInspection => Has(RootCapabilities.ParkInspection);
     internal bool UsesRootParkArrivals => Has(RootCapabilities.ParkArrivals);
     internal bool UsesRootParkRecovery => Has(RootCapabilities.ParkRecovery);
+    internal bool UsesRootComposedParkRecovery => UsesRootParkRecovery && (Capabilities & RootProfiles.Shipped) == RootProfiles.Shipped;
     // A composed set with Park and Termination (S5a, #4229): an operator command reaches a parked root, passes its withheld
     // inputs and is refused there with a journalled reason. Of the shipped formats only RootShipped (format 25) carries both;
     // the qualification profiles 5, 11-17 and 19-22 carry one at most and keep their paths.
@@ -856,11 +857,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                    {(WithholdsParkInputs(db) ? """AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4 AND m."Id" LIKE 'operator/%')"""
                        : db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL"""
                        : ClearsParkInPages(db) ? RootClearingInputFilter : "")}
+                   {(db.UsesRootComposedParkRecovery ? """AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4)""" : "")}
                    {(db.UsesRootParkRecovery ? RootReleasedCohortFilter : "")})))
             """;
     private string PostgresOperatorPollFilter(KernelDb db)
     {
-        var filter = db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
+        var filter = db.UsesRootComposedParkRecovery ? WithReleasedCohort(RootClearingOperatorPollFilter)
+            : db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
             : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : ClearsParkInPages(db) ? RootClearingOperatorPollFilter
             : RootOperatorPollFilter;
         // A running actor can withhold even when the physical suspension flag is clear. Offer the first due operator
@@ -910,13 +913,15 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         """AND (target."FoundationParkAt" IS NULL OR prior."Id" LIKE 'operator/%')""", StringComparison.Ordinal);
     // S5b-2: while a parked root's Park is being cleared it receives only operator rows (its clearing's controls among them),
     // so nothing is kept mid-clearing; every other input stays pending in Seq order and, after the end, settles as Ended.
-    // Without Park arrivals a parked root already withholds them. Recovery sets admit no Terminate, so they never clear.
-    private static bool ClearsParkInPages(KernelDb db) => db.UsesRootParkedOperators && db.UsesRootParkArrivals && !db.UsesRootParkRecovery;
+    // Without Park arrivals a parked root already withholds them. The standalone recovery profile admits only Recover.
+    private static bool ClearsParkInPages(KernelDb db) => db.UsesRootParkedOperators && db.UsesRootParkArrivals &&
+        (!db.UsesRootParkRecovery || db.UsesRootComposedParkRecovery);
     private const string RootClearingInputFilter = """AND (i."FoundationParkClearing" IS NULL OR m."InboxScope" = -4 AND m."Id" LIKE 'operator/%')""";
     private static readonly string RootClearingOperatorPollFilter = RootOperatorPollFilter.Replace("/*withheld-prior*/",
         """AND (target."FoundationParkClearing" IS NULL OR prior."Id" LIKE 'operator/%')""", StringComparison.Ordinal);
     // A released row of the root's current generation goes before every control: an earlier operator row waits for the cohort.
-    private static readonly string RootRecoveryOperatorPollFilter = RootOperatorPollFilter.Replace("/*released-cohort*/",
+    private static readonly string RootRecoveryOperatorPollFilter = WithReleasedCohort(RootOperatorPollFilter);
+    private static string WithReleasedCohort(string filter) => filter.Replace("/*released-cohort*/",
         """m."FoundationReleasedBy" = target."FoundationParkGeneration" OR """, StringComparison.Ordinal);
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
         ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";

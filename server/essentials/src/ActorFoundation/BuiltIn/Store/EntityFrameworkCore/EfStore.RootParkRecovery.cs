@@ -25,7 +25,8 @@ public sealed partial class EfStore
                 IF EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance" AND i."FoundationReference" IS NOT NULL
                     AND NOT (i."Partition" = NEW."Partition" AND i."Revision" = NEW."Revision"
                         AND (NEW."Entries" NOT LIKE '{{"Outcome":"recovered",%' OR (i."Status" = 0 AND NOT i."Retired"
-                            AND i."FoundationParkAt" IS NULL AND i."FoundationParkRevision" IS NULL))))
+                            AND i."FoundationParkAt" IS NULL AND i."FoundationParkRevision" IS NULL))
+                        /*parked-operator-outcomes*/))
                 THEN RAISE EXCEPTION 'A recover outcome entry requires the checkpoint write at its revision' USING ERRCODE = '23514'; END IF;
                 RETURN NULL;
             END
@@ -34,7 +35,10 @@ public sealed partial class EfStore
             CREATE CONSTRAINT TRIGGER kernel_require_root_outcome_checkpoint AFTER INSERT ON "Journal"
                 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.{RootOutcomeEntry})
                 EXECUTE FUNCTION kernel_require_root_outcome_checkpoint();
-            """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal), token);
+            """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal)
+            .Replace("/*parked-operator-outcomes*/",
+                db.UsesRootComposedParkRecovery ? "AND " + RootParkedOutcomeCheckpoint + StoppedParkOutcomeCheckpoint : "",
+                StringComparison.Ordinal), token);
 
     // Operator outcome entries, the only journal entries that are JSON objects. The checkpoint trigger reads them
     // through the partial index above, so its predicate repeats this text exactly. Both raw commands are formatted,
@@ -168,7 +172,7 @@ public sealed partial class EfStore
         var recovered = !turn.Journal.StartsWith("""{"Outcome":"refused",""", StringComparison.Ordinal);
         if (recovered ? row.Status != InstanceStatus.Running || facts.Mark != mark || !facts.FitsPage || turn.Journal != Json.Write(
                 new { Outcome = "recovered", Operation = command.Id, Restored = facts.Arrived, Cleared = facts.Consumed, AlreadyRearmed = 0 })
-            : !new[] { "target", "selection", "plan", "page" }.Any(reason => turn.Journal == Json.Write(new { Outcome = "refused", Operation = command.Id, Reason = reason })))
+            : !new[] { "target", "selection", "clearing", "plan", "page" }.Any(reason => turn.Journal == Json.Write(new { Outcome = "refused", Operation = command.Id, Reason = reason })))
             throw RootShape();
 
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
@@ -196,7 +200,7 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
         {
             if (!db.UsesRootParkRecovery) return false;
-            var locked = await db.Database.SqlQuery<LockedRecover>($"""
+            FormattableString query = $"""
                 SELECT i."FoundationParkAt" AS "At", i."FoundationParkRevision" AS "Revision", i."FoundationParkGeneration" AS "Generation",
                     i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
                     sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion"
@@ -205,17 +209,21 @@ public sealed partial class EfStore
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND NOT i."Suspended"
                     AND i."Status" = {(int)Prior} AND i."Revision" = {Expected}
-                    AND (NOT {Recovered} OR i."Jobs" IS NULL)
+                    AND (NOT {Recovered} OR i."Jobs" IS NULL /*clearing*/)
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
-                """).ToListAsync(token);
+                """;
+            var locked = await db.Database.SqlQuery<LockedRecover>(System.Runtime.CompilerServices.FormattableStringFactory.Create(
+                query.Format.Replace("/*clearing*/", db.UsesRootComposedParkRecovery ? """AND i."FoundationParkClearing" IS NULL""" : "",
+                    StringComparison.Ordinal), query.GetArguments())).ToListAsync(token);
             var facts = Command.Operator!.RootParkFacts!;
             if (locked is not [var prior] || (prior.At is null) != (Prior == InstanceStatus.Running)) return false;
             var kept = Recovered ? await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token) : [];
             if (Recovered && (facts.Mark != new FoundationParkMark(prior.Revision ?? 0, prior.At ?? 0) || KeptSetDigest(kept) != facts.KeptDigest))
                 return false;
             var envelope = Command with { Operator = Command.Operator with { RootParkFacts = null } };
-            if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [envelope], null, false, token))
+            if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [envelope], null,
+                db.UsesRootComposedParkRecovery && facts.Clearing is not null, token))
                 return false;
 
             var generation = Recovered ? checked(prior.Generation + 1) : prior.Generation;

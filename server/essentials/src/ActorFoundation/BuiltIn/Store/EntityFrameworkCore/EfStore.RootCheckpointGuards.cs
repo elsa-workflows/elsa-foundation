@@ -69,7 +69,7 @@ public sealed partial class EfStore
         .Replace("/*journal-write-refused*/", RootJournalWriteRefused, StringComparison.Ordinal)
         .Replace("/*root-park-continues*/", db.UsesRootParkArrivals ? """
             (OLD."Status" = 2 AND NEW."Status" = OLD."Status" AND NOT NEW."Retired" /*parked-clearing-continues*/
-                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
+                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 /*park-recover-footprint*/
                 AND NEW."FoundationParkAt" = OLD."FoundationParkAt" AND NEW."FoundationParkRevision" = OLD."FoundationParkRevision"
                 AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
                 AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault" AND NEW."Suspended" = OLD."Suspended"
@@ -125,18 +125,23 @@ public sealed partial class EfStore
                 AND NEW."History" IS NOT DISTINCT FROM OLD."History"
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
                     AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/ AND j."Entries" LIKE '{{"Outcome":"recovered",%'))
-            """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal) : "false", StringComparison.Ordinal)
+            """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
+            .Replace("/*park-recover-footprint*/", db.UsesRootComposedParkRecovery
+                ? """AND OLD."FoundationParkClearing" IS NULL AND OLD."Jobs" IS NULL""" : "", StringComparison.Ordinal)
+            : "false", StringComparison.Ordinal)
         // A recovered entry is journaled only on the parked root it resolves.
         .Replace("/*root-park-recovered-journal*/", db.UsesRootParkRecovery ? """
             IF NEW."Entries" LIKE '{{"Outcome":"recovered",%' AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance"
                 AND i."FoundationReference" IS NOT NULL AND NOT (i."Status" = 2 AND NOT i."Retired" AND NOT i."Suspended"
                     AND i."Partition" = NEW."Partition" AND NEW."Revision" = i."Revision" + 1
-                    AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0))
+                    AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0 /*park-recover-footprint*/))
             THEN RAISE EXCEPTION 'A recovered journal entry requires the parked checkpoint it resolves' USING ERRCODE = '23514'; END IF;
-            """ : "", StringComparison.Ordinal)
+            """.Replace("/*park-recover-footprint*/", db.UsesRootComposedParkRecovery
+                ? """AND i."FoundationParkClearing" IS NULL AND i."Jobs" IS NULL""" : "", StringComparison.Ordinal) : "", StringComparison.Ordinal)
         .Replace("/*root-park-recover-journal*/", db.UsesRootParkRecovery
             // The raw command is formatted, so the literal brace is doubled.
-            ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'"""
+            ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'""" +
+                (db.UsesRootComposedParkRecovery ? " /*root-parked-terminated-journal*/" : "")
             : db.UsesRootParkedOperators ? """OR NEW."Entries" LIKE '{{"Outcome":"refused",%' /*root-parked-terminated-journal*/""" : "", StringComparison.Ordinal)
         // S5b: a Terminate that names the Park ends a parked root in one commit, journalled "terminated" at its revision.
         .Replace("/*root-parked-terminated-journal*/", db.UsesRootParkedOperators ? ParkedTerminatedJournal(db) : "", StringComparison.Ordinal)

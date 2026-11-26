@@ -390,6 +390,7 @@ internal static class PostgresRootParkedOperatorChecks
             await LiveCompoundRefusalSet();
             await RecordedResultParkSet(recovery: false);
             await RecordedResultParkSet(recovery: true);
+            await ComposedParkRecoveryAsync();
         }
         await RecoverNeverMeetsSuspendedPark();
         await ArrivalsSet();
@@ -751,6 +752,9 @@ internal static class PostgresRootParkedOperatorChecks
                 after = await set.DriveAsync(root, row => row is { Revision: 6, Status: InstanceStatus.Faulted });
                 set.Answered("terminate-recorded-result-park", "ParkOutstanding");
                 set.Answered("delete-recorded-result-park", "ParkOutstanding");
+                var afterRefusal = await set.StartAsync("after-outstanding-refusal");
+                Check(set.Probe.Saw(afterRefusal, Contract.Kinds.Start) && successor.Owns,
+                    "the owner processes a new root after replying to the outstanding Terminate");
             }
             await set.ParkSelectionAsync(root, parked.Revision);
             Check(after.Jobs == parked.Jobs && after.NextJobGeneration == parked.NextJobGeneration && after.ParkAt == parked.ParkAt &&
@@ -767,6 +771,109 @@ internal static class PostgresRootParkedOperatorChecks
                     FROM "Messages" WHERE "Target" = {target} AND "InboxScope" = {EfStore.RootTimedJobScope}
                     """).SingleAsync(token);
             }
+        }
+
+        async Task ComposedParkRecoveryAsync()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA joint_park_recovery", stop);
+            var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "joint_park_recovery" }.ConnectionString;
+            var jointOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
+            var protocol = StoreFormat.Current with { MessageProtocol = 86 };
+            var capabilities = RootProfiles.Shipped | RootProfiles.Formats[StoreFormat.RootParkRecovery];
+            KernelDb OpenJoint() => KernelDb.ForUnshippedComposition(jointOptions, protocol, capabilities);
+            await using var set = new Set("joint-park-recovery", OpenJoint, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
+            await set.InstallAsync(createTables: true);
+            var ingress = new PostgresRootIngress(set.Admission, Probe.Type, (_, _) => true, (_, _) => true, authorizeRecover: (_, _) => true);
+            Contract.ActorRef recovering = default;
+            Contract.ActorRef clearing = default;
+            EfStore.RootImage? parked = null;
+            string? clearingSelection = null;
+            var admittedAfterRecover = false;
+            var releasedBeforeControl = false;
+            var refusedDuringClearing = false;
+            set.Write = async (writer, batch, token) =>
+            {
+                var result = await writer.CommitAsync(batch, token);
+                if (result.Landed && parked is { } before &&
+                    batch.Turns.Any(turn => turn.Journal?.StartsWith("""{"Outcome":"recovered",""", StringComparison.Ordinal) == true))
+                {
+                    // Mature the older delayed control after Recover lands and before the restored inputs run.
+                    await using var write = OpenJoint();
+                    Check(await write.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "Messages" SET "Due" = 0
+                        WHERE "Target" = {before.Actor.Id} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                        """, token) == 1, "the delayed Park-selected Terminate matures behind the released cohort");
+                    admittedAfterRecover = await set.SendAsync(recovering, "after-recover", "after-recover");
+                }
+                if (result.Landed && batch.Turns.Any(turn => turn.FoundationRootOperator?.Id == "old-park-terminate"))
+                    releasedBeforeControl = set.Probe.Saw(recovering, "arrival-1") && set.Probe.Saw(recovering, "arrival-2");
+                if (result.Landed && clearingSelection is { } selected &&
+                    batch.Turns.Any(turn => turn.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true))
+                    refusedDuringClearing = await SendOperatorAsync(clearing, "during-clearing", Contract.Kinds.Recover, selected, token)
+                        is { Outcome: Contract.AdmissionOutcome.Refused };
+                return result;
+            };
+            var owner = await set.OwnAsync();
+            recovering = await set.StartAsync("cohort");
+            Check(await set.SendAsync(recovering, "cohort-fault", "fail"), "the joint profile admits input that opens a Park");
+            parked = await set.DriveAsync(recovering, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            var selection = await set.ParkSelectionAsync(recovering, 2);
+            Check(await set.OperateAsync(recovering, "old-park-terminate", Kinds.Terminate, selection, reply: true,
+                    dueAt: parked.AsOf + 120_000), "the joint profile admits a delayed selected Terminate while parked");
+            Check(await set.SendAsync(recovering, "arrival-1", "arrival-1") && await set.SendAsync(recovering, "arrival-2", "arrival-2"),
+                "the joint profile admits ordinary arrivals during the Park");
+            var arrivalsKept = await set.DriveAsync(recovering, image => image is { Revision: >= 3, Status: InstanceStatus.Faulted });
+            while ((await set.InputsAsync(recovering)).Count(input => input.KeptBy == (short)ParkKeepReason.Arrived) != 2)
+            {
+                await owner.WokenAsync(null, stop);
+                await owner.RunAsync(stop);
+                await Task.Delay(10, stop);
+            }
+            Check(!set.Probe.Saw(recovering, "arrival-1") && !set.Probe.Saw(recovering, "arrival-2"),
+                "the owner keeps arrivals without invoking the parked actor");
+            Check(await SendOperatorAsync(recovering, "recover", Contract.Kinds.Recover, selection, stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "public ingress admits an immediate Recover with the original Park selection");
+            await set.PassUntilAsync(() => set.AnsweredAny("old-park-terminate"));
+            await set.SettledInputsAsync(recovering);
+            var recovered = await set.ImageAsync(recovering);
+            set.Answered("old-park-terminate", "StaleSelection");
+            Check(admittedAfterRecover && releasedBeforeControl && recovered is { Status: InstanceStatus.Running, ParkAt: null } &&
+                recovered.Revision > arrivalsKept.Revision && set.Probe.InputKinds(recovering) is
+                    [Contract.Kinds.Start, "fail", "arrival-1", "arrival-2", "after-recover"] &&
+                ReferenceEquals(set.Owner, owner) && !set.StoodDown,
+                "Recover releases both arrivals in order ahead of the old control and post-recovery input");
+            Check(await SendOperatorAsync(recovering, "stale-recover", Contract.Kinds.Recover, selection, stop) is { Outcome: Contract.AdmissionOutcome.Refused },
+                "public ingress refuses a spent Park selection");
+
+            clearing = await set.StartAsync("clearing-and-recover");
+            var payload = Json.Write(new string('x', ParkRecoveryCredit.LimitBytes / 2 + 1_024));
+            Check(await set.SendAsync(clearing, "clearing-1", "fail", payload: payload) &&
+                await set.SendAsync(clearing, "clearing-2", "fail", payload: payload),
+                "the joint profile admits two inputs whose total exceeds one clearing page");
+            var clearingPark = await set.DriveAsync(clearing, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            clearingSelection = await set.ParkSelectionAsync(clearing, clearingPark.Revision);
+            Check(await set.OperateAsync(clearing, "start-clearing", Kinds.Terminate, clearingSelection, reply: true) &&
+                await SendOperatorAsync(clearing, "behind-clearing", Contract.Kinds.Recover, clearingSelection, stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "the joint profile queues Recover behind a Terminate selected on the same Park");
+            await set.DriveAsync(clearing, image => image is { Status: InstanceStatus.Cancelled });
+            Check(Outcomes(await set.Cold.ReadJournalOfAsync(0, clearingPark.Actor.Id, 0, stop)) is
+                    ["""{"Outcome":"clearing","Operation":"start-clearing","Cleared":1}""",
+                     """{"Outcome":"refused","Operation":"behind-clearing","Reason":"clearing"}""",
+                     """{"Outcome":"terminated","Operation":"start-clearing","Cleared":2}"""] &&
+                refusedDuringClearing && ReferenceEquals(set.Owner, owner) && !set.StoodDown,
+                "the queued and fresh Recover requests leave the clearing intact and the same owner finishes it");
+
+            var deleting = await set.StartAsync("delete-with-recover-enabled");
+            Check(await set.SendAsync(deleting, "delete-fault", "fail"), "the joint profile admits a fault before Delete");
+            var deletePark = await set.DriveAsync(deleting, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await SendOperatorAsync(deleting, "delete-joint", Contract.Kinds.Delete,
+                await set.ParkSelectionAsync(deleting, deletePark.Revision), stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "public ingress admits Delete in the profile that also admits Recover");
+            await set.RetiredAsync(deleting);
+
+            ValueTask<Contract.Admission> SendOperatorAsync(Contract.ActorRef actor, string operation, string kind, string parkSelection,
+                CancellationToken token) => ingress.SendAsync(tenant, new Contract.Target.Ref(actor), operation, kind,
+                    Json.Write(new Contract.OperatorCommand(parkSelection, ExpectedTarget: actor)), cancellationToken: token);
         }
 
         async Task CheckProtectionCeilingAsync(Set set, Contract.ActorRef root, EfStore.RootImage park, int cleared)
@@ -2803,6 +2910,7 @@ internal static class PostgresRootParkedOperatorChecks
         public HashSet<(string Actor, string Kind)> FailsOn { get; } = [];
         public bool Saw(Contract.ActorRef actor, string kind) => _seen.Contains((actor.Id, kind));
         internal int Count(Contract.ActorRef actor, string kind) => _seen.Count(entry => entry == (actor.Id, kind));
+        internal string[] InputKinds(Contract.ActorRef actor) => _seen.Where(entry => entry.Actor == actor.Id).Select(entry => entry.Kind).ToArray();
         string Contract.IActorType.Type => Type;
         public bool Withholds(Contract.ActorHeader header) => header.TypeData == WithheldBody;
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
