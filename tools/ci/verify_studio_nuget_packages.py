@@ -39,12 +39,9 @@ def _studio_root(root: Path) -> Path:
     return candidates[0]
 
 
-def _source_project_path(path: str, root: Path, studio: Path) -> str:
+def _source_project_path(path: str, studio: Path) -> str:
     if studio.name == "studio":
         return path
-    legacy_dashboard = "Studio/src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj"
-    if path == "extensions/Dashboard/studio/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" and (root / legacy_dashboard).is_file():
-        return legacy_dashboard
     for prefix, legacy_prefix in (
         ("studio/", "Studio/"),
         ("server/essentials/src/Preferences/", "essentials/src/Studio/Preferences/"),
@@ -142,7 +139,13 @@ def verify_project_inventory(root: Path) -> dict:
     packable = inventory["packable_projects"]
     non_packable = inventory["non_packable_projects"]
     for item in packable + non_packable + inventory["support_projects"]:
-        item["project"] = _source_project_path(item["project"], root, studio)
+        item["project"] = _source_project_path(item["project"], studio)
+        previous = item.get("renamed_from")
+        if previous and Path(previous).stem == item["id"]:
+            previous = _source_project_path(previous, studio)
+            if not (root / item["project"]).is_file() and (root / previous).is_file():
+                item["project"] = previous
+
     expected_paths = {item["project"] for item in packable + non_packable}
     actual_paths = _studio_projects(root)
     if actual_paths != expected_paths:
