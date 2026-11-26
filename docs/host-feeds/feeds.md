@@ -44,7 +44,8 @@ Exactly one of `DirectoryPath` or `ServiceIndex` per entry.
 `AddNuplane` registers both kinds from `Nuplane:Setup:Feeds`. Set `Trust` to `Trusted` on each
 feed you approve for package acquisition, including directory feeds.
 When writing a feed through the module-management API, use the optional `trust` field
-to approve it. Changing the feed address requires explicit approval for the new address.
+to approve it. An address change without that field clears the approval in the managed
+settings file. Environment settings and package-specific trust overrides still apply.
 
 When upgrading custom settings from Nuplane 0.0.15, put polling under `Nuplane:Reconciliation`,
 store persistence under `Nuplane:StoreRegistry`, and a pinned desired manifest under

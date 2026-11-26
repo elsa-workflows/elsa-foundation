@@ -36,6 +36,27 @@
         "resolved": "10.0.12",
         "contentHash": "9/qymSh7hVDMGTGwrLz8MRp5zRyXy9adGDOs4HwRdnLil3oZGYuWeZjbmHgCQ9BL1qBroVfgUK3U/nb61617Cw=="
       },
+      "Nuplane": {
+        "type": "Direct",
+        "requested": "[0.0.15, )",
+        "resolved": "0.0.15",
+        "contentHash": "psdnr45tl3YlgI2HiRjU/EgBmO3BulZIFi9vxnYbEY9H6UA3cLL92vODg1TgNWeksHJiMUurUYuBZmeRsEVTIA==",
+        "dependencies": {
+          "Microsoft.Extensions.Configuration.Binder": "10.0.3",
+          "Microsoft.Extensions.DependencyInjection": "10.0.3",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.3",
+          "Microsoft.Extensions.Hosting.Abstractions": "10.0.3",
+          "Microsoft.Extensions.Logging": "10.0.3",
+          "Microsoft.Extensions.Options": "10.0.3",
+          "Microsoft.Extensions.Resilience": "10.1.0",
+          "NuGet.Frameworks": "6.13.1",
+          "NuGet.Protocol": "6.13.1",
+          "NuGet.Resolver": "6.13.1",
+          "NuGet.Versioning": "6.13.1",
+          "Nuplane.Abstractions": "0.0.15",
+          "Polly.Extensions": "8.6.5"
+        }
+      },
       "Nuplane.Admin": {
         "type": "Direct",
         "requested": "[0.0.15, )",
@@ -369,27 +390,6 @@
         "requested": "[13.0.4, )",
         "resolved": "13.0.4",
         "contentHash": "pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A=="
-      },
-      "Nuplane": {
-        "type": "CentralTransitive",
-        "requested": "[0.0.15, )",
-        "resolved": "0.0.15",
-        "contentHash": "psdnr45tl3YlgI2HiRjU/EgBmO3BulZIFi9vxnYbEY9H6UA3cLL92vODg1TgNWeksHJiMUurUYuBZmeRsEVTIA==",
-        "dependencies": {
-          "Microsoft.Extensions.Configuration.Binder": "10.0.3",
-          "Microsoft.Extensions.DependencyInjection": "10.0.3",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.3",
-          "Microsoft.Extensions.Hosting.Abstractions": "10.0.3",
-          "Microsoft.Extensions.Logging": "10.0.3",
-          "Microsoft.Extensions.Options": "10.0.3",
-          "Microsoft.Extensions.Resilience": "10.1.0",
-          "NuGet.Frameworks": "6.13.1",
-          "NuGet.Protocol": "6.13.1",
-          "NuGet.Resolver": "6.13.1",
-          "NuGet.Versioning": "6.13.1",
-          "Nuplane.Abstractions": "0.0.15",
-          "Polly.Extensions": "8.6.5"
-        }
       },
       "System.Security.Cryptography.Pkcs": {
         "type": "CentralTransitive",

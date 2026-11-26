@@ -634,6 +634,7 @@
           "CShells": "[0.0.31, )",
           "Elsa.Modularity.Core": "[4.0.0-dev, )",
           "Elsa.Specifications.PackageManifests": "[0.0.1-preview.8, )",
+          "Nuplane": "[0.0.15, )",
           "Nuplane.Admin": "[0.0.15, )"
         }
       },
