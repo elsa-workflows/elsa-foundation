@@ -70,7 +70,7 @@ internal sealed partial class ActorAdapter
         var reason = message.Target.Id != row.Id || row.Creation != 1 ? "target"
             : row is not { Status: Durable.InstanceStatus.Faulted, Retired: false, Suspended: false } ||
                 facts.Mark != message.Operator.RootParkMark ? "selection"
-            : !RestoresNothing(row) ? "plan" : !facts.FitsPage ? "page" : null;
+            : row.Jobs is not null || !RestoresNothing(row) ? "plan" : !facts.FitsPage ? "page" : null;
         var revision = checked(row.Revision + 1);
         var next = reason is null ? row with { Status = Durable.InstanceStatus.Running, Fault = null, Revision = revision } : row with { Revision = revision };
         return new(input.Actor)

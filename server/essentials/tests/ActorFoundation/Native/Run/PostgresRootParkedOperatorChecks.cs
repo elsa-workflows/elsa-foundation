@@ -387,7 +387,8 @@ internal static class PostgresRootParkedOperatorChecks
             await AuthoredWithholdingSet();
             await HostedAuthoredWithholdingAsync();
             await LiveCompoundRefusalSet();
-            await RecordedResultParkSet();
+            await RecordedResultParkSet(recovery: false);
+            await RecordedResultParkSet(recovery: true);
         }
         await RecoverNeverMeetsSuspendedPark();
         await ArrivalsSet();
@@ -590,15 +591,18 @@ internal static class PostgresRootParkedOperatorChecks
             }
         }
 
-        async Task RecordedResultParkSet()
+        async Task RecordedResultParkSet(bool recovery)
         {
-            const string schema = "recorded_result_park";
             const string key = Probe.FaultingJob;
-            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + schema, stop);
+            var schema = recovery ? "recorded_result_recovery" : "recorded_result_park";
+            await db.Database.ExecuteSqlRawAsync(recovery ? "CREATE SCHEMA recorded_result_recovery" : "CREATE SCHEMA recorded_result_park", stop);
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = schema }.ConnectionString;
             var resultOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
-            KernelDb OpenResult() => KernelDb.ForPostgresRootShipped(resultOptions);
-            await using var set = new Set("recorded-result-park", OpenResult, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
+            var protocol = StoreFormat.Current with { MessageProtocol = 86 };
+            var capabilities = RootProfiles.Shipped | RootProfiles.Formats[StoreFormat.RootParkRecovery];
+            KernelDb OpenResult() => recovery ? KernelDb.ForUnshippedComposition(resultOptions, protocol, capabilities)
+                : KernelDb.ForPostgresRootShipped(resultOptions);
+            await using var set = new Set(schema, OpenResult, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
             EfStore.RootImage? before = null;
             PublishedResult? published = null;
             set.Write = async (writer, batch, token) =>
@@ -622,7 +626,7 @@ internal static class PostgresRootParkedOperatorChecks
             var kept = await ReadResultAsync(actor, stop);
             Check(before is { Revision: 3, Status: InstanceStatus.Running, NextJobGeneration: 1, Jobs: not null } &&
                 parked is { Revision: 4, TerminalRevision: null, TerminalAt: null, NextJobGeneration: 1 } &&
-                view is { Status: InstanceStatus.Faulted, ParkFault: Fault, ParkAt: > 0 } &&
+                view is { Status: InstanceStatus.Faulted, ParkFault: Fault, ParkAt: > 0 } && parked.ParkAt == view.ParkAt &&
                 parked.Jobs == before.Jobs && JobRegistry.Read(parked.Jobs) is [{ Key: key, Generation: 0 }] &&
                 parked.State == before.State && parked.TypeData == before.TypeData && parked.StateVersion == before.StateVersion &&
                 published is { Kind: Kinds.JobFinished, Due: 0, Generation: 0, Done: false, KeptBy: null } &&
@@ -638,15 +642,29 @@ internal static class PostgresRootParkedOperatorChecks
                 set.Probe.Count(root, Contract.Kinds.JobFinished) == 1 && await set.ImageAsync(root) is { Revision: 4, Status: InstanceStatus.Faulted } &&
                 await ReadResultAsync(actor, stop) == kept,
                 "replacement ownership runs a neighbor and leaves the recorded result settled without replay");
-            Check(await set.OperateAsync(root, "terminate-recorded-result-park", Contract.Kinds.Terminate, selection, reply: true) &&
-                await set.OperateAsync(root, "delete-recorded-result-park", Contract.Kinds.Delete, selection, reply: true),
-                "the shipped operator ingress admits controls for the Park with the retained job registration");
-            await set.DriveAsync(root, row => row is { Revision: 6, Status: InstanceStatus.Faulted });
-            set.Answered("terminate-recorded-result-park", "ParkOutstanding");
-            set.Answered("delete-recorded-result-park", "ParkOutstanding");
-            var after = await set.ImageAsync(root);
+            EfStore.RootImage after;
+            if (recovery)
+            {
+                const string operation = "recover-recorded-result-park";
+                Check(await set.OperateAsync(root, operation, Contract.Kinds.Recover, selection),
+                    "the recovery composition admits Recover for the Park with the retained job registration");
+                after = await set.DriveAsync(root, row => row is { Revision: 5, Status: InstanceStatus.Faulted });
+                var journal = await set.Cold.ReadJournalOfAsync(0, actor, 0, stop);
+                Check(journal[^1].Entries == Json.Write(new { Outcome = "refused", Operation = operation, Reason = "plan" }),
+                    "the current recovery composition refuses a job registration it cannot restore");
+            }
+            else
+            {
+                Check(await set.OperateAsync(root, "terminate-recorded-result-park", Contract.Kinds.Terminate, selection, reply: true) &&
+                    await set.OperateAsync(root, "delete-recorded-result-park", Contract.Kinds.Delete, selection, reply: true),
+                    "the shipped operator ingress admits controls for the Park with the retained job registration");
+                after = await set.DriveAsync(root, row => row is { Revision: 6, Status: InstanceStatus.Faulted });
+                set.Answered("terminate-recorded-result-park", "ParkOutstanding");
+                set.Answered("delete-recorded-result-park", "ParkOutstanding");
+            }
             Check(after.Jobs == parked.Jobs && after.NextJobGeneration == parked.NextJobGeneration &&
-                await set.ParkAtAsync(after) == await set.ParkAtAsync(parked) && await ReadResultAsync(actor, stop) == kept &&
+                after.ParkAt == parked.ParkAt && await set.ParkSelectionAsync(root, parked.Revision) == selection &&
+                await ReadResultAsync(actor, stop) == kept &&
                 set.Probe.Count(root, Contract.Kinds.JobFinished) == 1 && successor.Owns,
                 "the parked-operator refusals preserve the job footprint, original Park and owner");
 
