@@ -25,10 +25,10 @@ the unpinned `:latest` commands here are not that recorded run.
 > Studio NuGet/npm releases remain manual. There are no `4` / `4.0` / `4.0.0` release tags
 > yet; to pin a version, use a preview or commit tag.
 
-> **Studio flavors.** `elsaworkflows/elsa-studio` publishes the Studio Essentials app, the pair of `elsaworkflows/elsa-essentials-host`
-> ([#5768](https://github.com/elsa-workflows/elsa-foundation/issues/5768)). Against Workbench it shows the screens of the modules
-> it compiles in. The Studio app with every module compiled in publishes as `elsaworkflows/elsa-studio-workbench`, and the bare
-> shell as `elsaworkflows/elsa-studio-foundation`; see [Studio Docker](../studio/docs/docker.md).
+> **Studio flavors.** `elsaworkflows/elsa-studio` runs the Studio Essentials profile, which pairs with `elsaworkflows/elsa-essentials-host`.
+> Against Workbench it shows the screens of the curated modules. The Studio app with every module compiled in publishes as
+> `elsaworkflows/elsa-studio-workbench`, and the bare shell publishes as `elsaworkflows/elsa-studio-foundation`.
+> See [Studio Docker](../studio/docs/docker.md).
 > The three Studio images take their preview numbers from one shared counter, so one commit often carries the same
 > preview number in all three. During rapid merges each image's queue can run at a different pace, and the same preview
 > number can then name different commits in different repositories. A manual publish whose number sits between the

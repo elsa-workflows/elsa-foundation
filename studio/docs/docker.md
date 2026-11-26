@@ -1,26 +1,27 @@
 # Running the Studio apps in Docker
 
-Each Studio app in `studio/src/apps` ships a production `Dockerfile` that produces a self-contained container image of that
-app. Point it at an Elsa server backend at runtime via environment variables and, optionally, a mounted `shells.json`.
+Studio Foundation and Workbench each have a Dockerfile under `studio/src/apps`. The Studio Essentials profile extends the
+Foundation image with its package feed and shell configuration. Point each image at an Elsa backend using environment
+variables. You can also mount a `shells.json` file.
 
-| Studio app | Dockerfile | Published image | Pairs with |
+| Studio host or profile | Dockerfile | Published image | Pairs with |
 | --- | --- | --- | --- |
-| [`Elsa.Studio.Essentials.Host`](../src/apps/Elsa.Studio.Essentials.Host/README.md) | `studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile` | `elsaworkflows/elsa-studio` | `elsaworkflows/elsa-essentials-host` |
+| [Essentials profile](../docker/profiles/essentials/README.md) | `studio/docker/profiles/essentials/Dockerfile` | `elsaworkflows/elsa-studio` | `elsaworkflows/elsa-essentials-host` |
 | `Elsa.Studio.Workbench.Host` | `studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile` | `elsaworkflows/elsa-studio-workbench` | `elsaworkflows/elsa-workbench` |
 | [`Elsa.Studio.Foundation.Host`](../src/apps/Elsa.Studio.Foundation.Host/README.md) | `studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile` | `elsaworkflows/elsa-studio-foundation` | The bare `Elsa.Foundation.Host` |
 
-Until [#5768](https://github.com/elsa-workflows/elsa-foundation/issues/5768), `elsaworkflows/elsa-studio` published the Workbench app (then `Elsa.Studio.Web`). It now publishes Studio
-Essentials; the Workbench app has its own image.
+Before [#5768](https://github.com/elsa-workflows/elsa-foundation/issues/5768), `elsaworkflows/elsa-studio` ran the Workbench
+app under its former name, `Elsa.Studio.Web`.
 
-The **build context must be the repository root** for every Dockerfile, because the build depends on repo-root configuration
-(`studio/Directory.Build.props`, `studio/Directory.Packages.props`, `Studio/NuGet.config`) and the optional Studio modules
-beside their Foundation capabilities. Each Dockerfile copies only its app's project closure.
+Build Foundation and Workbench with the repository root as the context. Each host Dockerfile copies its project
+dependencies and shared build configuration from that context. The [Essentials profile build](../docker/profiles/essentials/README.md)
+uses a prepared context with the pinned packages and shell configuration.
 
 > The React/Vite frontend assets are generated into each project's `wwwroot` by
-> `pnpm build` before the Docker build. No MSBuild target invokes pnpm/vite, so the
-> image has **no Node/pnpm build stage**. The Docker workflow performs this frontend
-> build and the Dockerfile fails if the host shell asset is missing. All three NuGet
-> feeds used by the build are public, so no NuGet credentials are required.
+> `pnpm build` before building host images. The Docker build stages consume those
+> assets and build the .NET host. The Docker workflow performs the frontend build,
+> and each host Dockerfile checks that the shell asset exists. The host builds use
+> public NuGet feeds.
 
 All three images serve installed add-on browser files from verified package archives. See
 [upgrading older installs](../src/essentials/Elsa.Studio.Hosting.Nuplane/README.md) if you reuse an existing package store.
@@ -34,8 +35,8 @@ use `elsaworkflows/elsa-studio`; the other two images take the same settings.
 
 ### With Docker Compose
 
-Download the compose file from the `elsa-foundation` repo and start the full stack
-(PostgreSQL + Elsa.Server + Elsa Studio):
+Download the Compose file from the `elsa-foundation` repo to start Elsa Workbench and Studio
+with the bundled local SQLite settings.
 
 ```bash
 curl -O https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/main/docker/compose/docker-compose.images.yml
@@ -44,29 +45,9 @@ docker compose -f docker-compose.images.yml up
 
 ### With the Docker CLI
 
-Start the server, then Studio pointed at it:
-
-```bash
-# Elsa.Server
-docker run -d --name elsa-server \
-  -p 13000:8080 \
-  -e ASPNETCORE_ENVIRONMENT=Production \
-  -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
-  -e Cors__AllowedOrigins__0=http://localhost:14000 \
-  -v elsa-server-packages:/app/packages \
-  elsaworkflows/elsa-server:latest
-
-# Elsa Studio, pointed at the server backend
-docker run -d --name elsa-studio \
-  -p 14000:8080 \
-  -e ASPNETCORE_ENVIRONMENT=Production \
-  -e Studio__BackendBaseUrl=http://localhost:13000 \
-  -e Studio__BackendServerBaseUrl=http://host.docker.internal:13000 \
-  -e Studio__BackendModuleManagementApiKey=elsa-docker-demo-key \
-  elsaworkflows/elsa-studio:latest
-```
-
-Then open **http://localhost:14000** (Studio); it calls **http://localhost:13000** (the server).
+Follow the [Docker CLI quickstart](../../docs/docker-hub-quickstart.md#start-the-containers) to start Workbench and Studio
+on a shared Docker network. For the curated server image, follow the
+[server Essentials profile deployment instructions](../../docker/profiles/essentials-curated/README.md).
 
 ### Wiring Studio to the server
 
@@ -103,13 +84,13 @@ From the repository root:
 pnpm --dir studio install --frozen-lockfile
 pnpm --dir studio build
 docker build -f studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local .
-docker build -f studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile -t elsa-studio-essentials:local .
 docker build -f studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile -t elsa-studio-foundation:local .
 ```
 
-The examples below use the Workbench image, `elsa-studio-web:local`; the other two take the same settings.
+Build the derived Essentials image with the [profile instructions](../docker/profiles/essentials/README.md).
+The runtime examples below use the Workbench image. The Foundation host and Essentials profile accept the same settings.
 
-The image is a two-stage build: `mcr.microsoft.com/dotnet/sdk:10.0` publishes the app and
+The host images use a two-stage build. `mcr.microsoft.com/dotnet/sdk:10.0` publishes the app and
 `mcr.microsoft.com/dotnet/aspnet:10.0` runs it as the base image's non-root user.
 
 ## Run

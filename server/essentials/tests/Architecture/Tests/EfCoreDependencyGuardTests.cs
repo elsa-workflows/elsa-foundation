@@ -18,7 +18,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class EfCoreDependencyGuardTests
 {
     private static readonly string[] RestoreConfigurations = ["Release", "Debug"];
-    private static readonly string[] AllowedEfConsumers = ["Elsa.Essentials.Host", "Elsa.Foundation.Host", "Elsa.Workbench.Host"];
+    private static readonly string[] AllowedEfConsumers = ["Elsa.Foundation.Host", "Elsa.Workbench.Host"];
 
     /// <summary>
     /// <c>Elsa.Foundation.Host</c> carries EF Core (#2151, #2191) for its opt-in
@@ -26,27 +26,6 @@ public sealed class EfCoreDependencyGuardTests
     /// The host's four database engines also serve feed-loaded modules. The vendor store keeps EF design-time tooling private.
     /// </summary>
     private static readonly string[] AllowedFoundationHostEfPackages =
-    [
-        "Microsoft.EntityFrameworkCore",
-        "Microsoft.EntityFrameworkCore.Abstractions",
-        "Microsoft.EntityFrameworkCore.Analyzers",
-        "Microsoft.EntityFrameworkCore.InMemory",
-        "Microsoft.EntityFrameworkCore.Relational",
-        "Microsoft.EntityFrameworkCore.Sqlite",
-        "Microsoft.EntityFrameworkCore.Sqlite.Core",
-        "Microsoft.EntityFrameworkCore.SqlServer",
-        "MySql.EntityFrameworkCore",
-        "Npgsql.EntityFrameworkCore.PostgreSQL",
-        "OpenIddict.EntityFrameworkCore",
-        "OpenIddict.EntityFrameworkCore.Models"
-    ];
-
-    /// <summary>
-    /// <c>Elsa.Essentials.Host</c> compiles in the curated workflow features, whose EF modules are admitted below, the Foundation
-    /// host's membership and key store, and the OpenIddict token store with its in-memory demo store. No design-time package:
-    /// the token store keeps that private, and migrations are scaffolded from the module projects, never from this host.
-    /// </summary>
-    private static readonly string[] AllowedEssentialsHostEfPackages =
     [
         "Microsoft.EntityFrameworkCore",
         "Microsoft.EntityFrameworkCore.Abstractions",
@@ -147,7 +126,6 @@ public sealed class EfCoreDependencyGuardTests
 
     private static string[] ReviewedEfPackages(string host) => host switch
     {
-        "Elsa.Essentials.Host" => AllowedEssentialsHostEfPackages,
         "Elsa.Foundation.Host" => AllowedFoundationHostEfPackages,
         "Elsa.Workbench.Host" => AllowedWorkbenchEfPackages,
         _ => throw new ArgumentOutOfRangeException(nameof(host), host, "An admitted EF consumer needs a reviewed EF closure of its own.")
@@ -1681,8 +1659,8 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     // Owner decision 2026-11-24: the OpenIddict vendor EF token store Workbench owned moves into one opt-in, host-composed package,
-    // so every host that enables FoundationIdentityOpenIddict (Workbench, Essentials) composes the same store. OpenIddict's own EF
-    // model with SQLite, SQL Server and PostgreSQL migrations, and the in-memory demo store; MySQL is refused. The OpenIddict
+    // so Foundation and Workbench compose the same store when FoundationIdentityOpenIddict is enabled. The store uses
+    // the OpenIddict EF model with SQLite, SQL Server and PostgreSQL migrations and has an in-memory demo mode. The OpenIddict
     // feature package and its behavior project stay EF-free (OpenIddictPersistenceArchitectureTests).
     internal static class OpenIddictTokenStoreEf
     {

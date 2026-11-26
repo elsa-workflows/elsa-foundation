@@ -228,7 +228,6 @@
     <Project Path="extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/server/apps/">
-    <Project Path="server/apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj" />
     <Project Path="server/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
     <Project Path="server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj" />
   </Folder>

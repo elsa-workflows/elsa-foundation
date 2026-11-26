@@ -330,7 +330,7 @@ jobs:
           if os.environ["PUBLISH_IMAGE"] == "true" and manifest.get("ref") != expected_ref:
               raise SystemExit("Studio artifact ref does not match the selected Actions run ref.")
 
-          package_ids = verify_packages(Path.cwd(), artifact, manifest["version"], verify_payload=False)
+          package_ids = verify_packages(Path.cwd(), artifact, manifest["version"], verify_payload=False, historical_source=True)
 
           target = manifest.get("publish_target")
           gate_enabled = manifest.get("publisher_gate_enabled") is True
@@ -406,7 +406,7 @@ jobs:
           STUDIO_VERSION: ${{ steps.manifest.outputs.studio_version }}
         run: >-
           python3 "$STUDIO_IMAGE_VALIDATORS/verify_studio_nuget_packages.py"
-          --packages "$STUDIO_ROOT/packages/nuget" --version "$STUDIO_VERSION"
+          --packages "$STUDIO_ROOT/packages/nuget" --version "$STUDIO_VERSION" --historical-source
 
       - name: Set up .NET for source-built Essentials packages
         if: matrix.flavor == 'essentials' && github.event_name == 'workflow_run'
