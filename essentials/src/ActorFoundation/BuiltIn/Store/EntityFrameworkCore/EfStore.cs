@@ -943,7 +943,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition) throw RootShape();
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     JobGeneration = r.JobGeneration!.Value, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
-                var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
+                var message = key.Scope == 0 ? (db?.UsesSqliteRootRuntime == true ? DecodeSqliteCreator(entity) : PostgresRootAdmission.DecodeCreator(entity))
+                    with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
                     : DecodeRootInput(db!, entity, root.Reference, RootSelfIssuer, RootJobsEnabled, RootTimedJobSettlementEnabled);
                 if (root != bindings.ForInput(message.InboxKey)) throw RootShape();
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value)

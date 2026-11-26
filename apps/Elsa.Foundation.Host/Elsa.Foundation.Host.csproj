@@ -84,8 +84,7 @@
     0076, amended 2026-09-29; spec 183, FR-024). AddConfiguredClusterMembership composes it only when
     Elsa:Cluster:Membership:EntityFrameworkCore:Enabled is true, with an explicit Elsa:Cluster:Membership:HostId; with
     nothing configured this host stays a cluster of one on the in-process default. This and the Data Protection key store
-    below are the only reasons this host carries EF Core: no feature is compiled in, and every feature's EF module still
-    arrives from a feed.
+    below use EF Core on the host container. Each shell feature and its own EF module still arrive from a feed.
 
     It brings Elsa.Persistence.EntityFramework, EF Core and Relational. The four provider engines are referenced here
     because the membership table lives in whichever database the operator selects, and the host binds the engine before
@@ -102,6 +101,13 @@
       list. It carries the same EF closure as the membership provider, and nothing more.
     -->
     <ProjectReference Include="../../essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
+    <!-- Root token storage serves every shell that opts into OpenIddict. Its shell feature arrives from the feed. -->
+    <ProjectReference Include="../../essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../essentials/src/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj" />
+    <!-- Keep the IdentityModel contracts shared with feed-loaded authentication packages at the ASP.NET auth version. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <!-- The package runtime shares Microsoft.Extensions assemblies carried by the host. Keep HTTP diagnostics on one version. -->
+    <PackageReference Include="Microsoft.Extensions.Resilience" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="MySql.EntityFrameworkCore" />
