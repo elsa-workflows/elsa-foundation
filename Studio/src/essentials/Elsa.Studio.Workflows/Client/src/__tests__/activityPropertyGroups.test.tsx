@@ -17,6 +17,7 @@ import type {
 import { builtInPropertyEditors } from "../../../../../essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { createObjectExpressionEditorContribution } from "../objectExpressionEditor";
+import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import type { ActivityNode, WorkflowDefinitionState } from "../workflowTypes";
 
 let active: { root: Root; container: HTMLElement } | null = null;
@@ -150,6 +151,95 @@ function input(name: string, overrides: Partial<StudioActivityInputDescriptor> =
 function propertyLabels(container: HTMLElement) {
   return [...container.querySelectorAll(".wf-property-row[role='group']")].map(label => label.getAttribute("aria-label")?.replace(/ property$/, ""));
 }
+
+it("edits JSON arguments without coercion and retains the last valid value on invalid input", () => {
+  const descriptor = input("Arguments", {
+    referenceKey: "arguments",
+    typeName: "System.Text.Json.JsonElement",
+    isWrapped: true,
+    defaultValue: {}
+  });
+  const onChange = vi.fn();
+  const container = renderPanel([descriptor], {
+    activity: activity({ arguments: { typeName: descriptor.typeName, expression: { type: "Literal", value: {} } } }),
+    editors: builtInPropertyEditors,
+    expressionEditors: [createObjectExpressionEditorContribution(() => builtInPropertyEditors)],
+    onChange
+  });
+  const editor = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Arguments JSON value']")!;
+  expect(editor.value).toBe("{}");
+
+  const authored = { text: "true", count: 2, enabled: false, items: [null, { nested: "value" }] };
+  changeTextArea(editor, JSON.stringify(authored));
+  expect(onChange.mock.lastCall?.[0].arguments.expression).toEqual({ type: "Object", value: JSON.stringify(authored) });
+  changeTextArea(editor, '{"broken":');
+  expect(editor.value).toBe('{"broken":');
+  expect(container.querySelector("[role='status']")?.textContent).toContain("Invalid JSON");
+  expect(onChange).toHaveBeenCalledTimes(1);
+
+  flushSync(() => replaceActivity({ ...onChange.mock.lastCall![0], other: "changed" }));
+  expect(editor.value).toBe('{"broken":');
+  expect(container.querySelector("[role='status']")?.textContent).toContain("Invalid JSON");
+
+  changeTextArea(editor, '"true"');
+  expect(onChange.mock.lastCall?.[0].arguments.expression.value).toBe('"true"');
+  changeTextArea(editor, "null");
+  expect(onChange.mock.lastCall?.[0].arguments.expression.value).toBe("null");
+  expect(editor.value).toBe("null");
+
+  const saved = canonicalizeStateForWire({ rootActivity: onChange.mock.calls[0][0] } as WorkflowDefinitionState);
+  const restored = expandStateFromWire(saved).rootActivity!;
+  unmountActivePanel();
+  const reopened = renderPanel([descriptor], { activity: restored, editors: builtInPropertyEditors });
+  expect(JSON.parse(reopened.querySelector<HTMLTextAreaElement>("textarea[aria-label='Arguments JSON value']")!.value)).toEqual(authored);
+});
+
+it.each(["{}", "[]", '"true"', "42", "true", "null", '{"large":9007199254740993,"tiny":1e-400}'])("round-trips JSON argument %s through the wire", json => {
+  const descriptor = input("Arguments", { referenceKey: "arguments", typeName: "System.Text.Json.JsonElement", isWrapped: true });
+  const onChange = vi.fn();
+  const container = renderPanel([descriptor], {
+    activity: activity({ arguments: { typeName: descriptor.typeName, expression: { type: "Literal", value: { before: 1 } } } }),
+    editors: builtInPropertyEditors,
+    onChange
+  });
+  changeTextArea(container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Arguments JSON value']")!, json);
+  const saved = canonicalizeStateForWire({ rootActivity: onChange.mock.lastCall![0] } as WorkflowDefinitionState);
+  expect(saved.rootActivity!.inputs).toEqual([{ referenceKey: "arguments", value: { expressionType: "Object", value: json } }]);
+  const restored = expandStateFromWire(saved).rootActivity!;
+  unmountActivePanel();
+  const reopened = renderPanel([descriptor], { activity: restored, editors: builtInPropertyEditors });
+  expect(reopened.querySelector<HTMLTextAreaElement>("textarea[aria-label='Arguments JSON value']")!.value).toBe(json);
+});
+
+it("keeps malformed stored Object JSON editable and does not replace a contributed JSON editor", () => {
+  const descriptor = input("Arguments", { referenceKey: "arguments", typeName: "System.Text.Json.JsonElement", isWrapped: true });
+  const node = activity({ arguments: { typeName: descriptor.typeName, expression: { type: "Object", value: '{"bad":' } } });
+  const onChange = vi.fn();
+  const container = renderPanel([descriptor], { activity: node, editors: builtInPropertyEditors, onChange });
+  expect(container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Arguments JSON value']")?.value).toBe('{"bad":');
+  expect(container.querySelector("[role='status']")?.textContent).toContain("Invalid JSON");
+  expect(onChange).not.toHaveBeenCalled();
+  unmountActivePanel();
+  const custom: StudioActivityPropertyEditorContribution = {
+    id: "custom.json", supports: () => true, component: () => <div>Custom JSON editor</div>
+  };
+  const customPanel = renderPanel([descriptor], { activity: activity(), editors: [custom] });
+  expect(customPanel.textContent).toContain("Custom JSON editor");
+});
+
+it("retains a restored invalid JSON draft when another property changes", () => {
+  const descriptor = input("Arguments", { referenceKey: "arguments", typeName: "System.Text.Json.JsonElement", isWrapped: true });
+  const node = activity({ arguments: { typeName: descriptor.typeName, expression: { type: "Object", value: "{}" } } });
+  const first = renderPanel([descriptor], { activity: node, editors: builtInPropertyEditors });
+  changeTextArea(first.querySelector<HTMLTextAreaElement>("textarea[aria-label='Arguments JSON value']")!, '{"unfinished":');
+  unmountActivePanel();
+  const reopened = renderPanel([descriptor], { activity: node, editors: builtInPropertyEditors });
+  const editor = reopened.querySelector<HTMLTextAreaElement>("textarea[aria-label='Arguments JSON value']")!;
+  expect(editor.value).toBe('{"unfinished":');
+  flushSync(() => replaceActivity({ ...node, other: "changed" }));
+  expect(editor.value).toBe('{"unfinished":');
+  expect(reopened.querySelector("[role='status']")?.textContent).toContain("Invalid JSON");
+});
 
 it("focuses the input targeted by validation navigation", async () => {
   const container = renderPanel([input("Text", { referenceKey: "Text", isWrapped: false })], {

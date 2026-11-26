@@ -30,7 +30,8 @@ import type {
   StudioExpressionDescriptor,
   StudioExpressionEditingMode
 } from "@elsa-workflows/studio-sdk";
-import { objectExpressionEditorId } from "./objectExpressionEditor";
+import { GenericObjectExpandedEditor, objectExpressionEditorId } from "./objectExpressionEditor";
+import { isJsonTypeName } from "./jsonType";
 import type { ActivityNode, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ScopedVariableAnalysisStatus } from "./api/workflowDesign";
@@ -869,6 +870,10 @@ function PropertyRow({
   const inlineExpressionEditor = inlineExpressionContext
     ? currentRequiresAdmission ? admittedExpressionEditor : resolveExpressionEditor(expressionEditors, inlineExpressionContext)
     : null;
+  const rawJson = !!wrapped && isJsonTypeName(input.typeName) && (syntax === "Literal" || syntax === "Object") &&
+    (!input.collectionKind || input.collectionKind === "Single") &&
+    (!editor || editor.id === "studio.property.text-fallback") &&
+    (!inlineExpressionEditor || inlineExpressionEditor.id === objectExpressionEditorId);
   const moduleOwnedStructured = replacesGenericDictionaryEditor(inlineExpressionEditor, syntax);
   const dictionaryType = moduleOwnedStructured ? null : genericDictionaryType;
   const InlineExpressionEditorComponent = inlineExpressionEditor?.surfaces.inline;
@@ -915,12 +920,12 @@ function PropertyRow({
   const isCollectionEditor = dictionaryType != null || collectionType != null || structuredCollectionType != null;
   // Reference contributions own their picker, labels and feedback. A literal's single-line hint
   // must not put overlaid text-field chrome across that whole reference editor.
-  const useInlineSyntaxPicker = Boolean(wrapped && editingMode !== "reference" && !isCollectionEditor && !moduleOwnedStructured && (
+  const useInlineSyntaxPicker = Boolean(!rawJson && wrapped && editingMode !== "reference" && !isCollectionEditor && !moduleOwnedStructured && (
     editingMode === "text" || editingMode === "structured" || isSingleLineInput(input, editor?.id)
   ));
   const useDictionarySyntaxPicker = Boolean(wrapped && dictionaryType != null);
   const useToggleLayout = editor?.id === "studio.property.checkbox" && editingMode === "literal";
-  const canExpandEditor = Boolean(wrapped && !secretOnly && !valueMasked && (
+  const canExpandEditor = Boolean(!rawJson && wrapped && !secretOnly && !valueMasked && (
     dictionaryType != null ||
     editingMode === "text" ||
     (moduleOwnedStructured && !!inlineExpressionEditor?.surfaces.expanded) ||
@@ -1275,6 +1280,18 @@ function PropertyRow({
           This value is masked. It is preserved and read-only here.
         </p>
       )
+  ) : rawJson ? (
+    <GenericObjectExpandedEditor
+      key={`${draftId}\u001f${activity.nodeId}\u001f${propertyKey}`}
+      descriptor={effectiveInput}
+      syntax="Literal"
+      value={value}
+      disabled={editorDisabled}
+      context={makeExpressionContext("Literal")}
+      onChange={next => onChange(writeInputValue(activity, input, withExpression(wrapped!, "Object", next)), input)}
+      rawJson
+      wireJson={syntax === "Object"}
+    />
   ) : editingMode === "text" && inlineExpressionContext ? (
     contributedExpressionEditor ?? (
       <GenericTextExpressionEditor
@@ -1314,7 +1331,7 @@ function PropertyRow({
   const renderedValueEditor = expanded && editingMode === "text" ? null : valueEditor;
   // Scalar editors own the caption on their outline. Keep the row caption for composite,
   // unavailable and third-party editors that have not opted into that presentation contract.
-  const editorPresentsField = !(forceExpressionEditor && syntax === "Literal") && !dictionaryType && !collectionType && !expanded && (
+  const editorPresentsField = !rawJson && !(forceExpressionEditor && syntax === "Literal") && !dictionaryType && !collectionType && !expanded && (
     contributedExpressionEditor ? Boolean(inlineExpressionEditor?.presentsField)
       : !secretOnly && (valueMasked ? editingMode === "literal" && editor?.id === maskedPropertyEditorId
         : editingMode === "text" && inlineExpressionContext ? true
