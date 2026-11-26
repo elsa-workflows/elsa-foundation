@@ -275,7 +275,8 @@ faults.
   - An output marked sensitive, or required to be encrypted, or carrying a redaction mode or a retention policy (its value protection policy), or not stored inline, MUST be left out.
   - The `Output` contract description MUST state that protected and externally stored outputs are left out (ADR 0046
     V6: a declared loss).
-  - When an output is left out, the dispatch MUST report one execution warning on resume (ADR 0045 §9: not silent):
+  - When an output is left out, the dispatch MUST report one execution warning on resume (ADR 0046 V6: never
+    silent):
     - code `dispatch.child-output-withheld`, severity Warning;
     - the left-out output names, sorted ordinally and joined with `", "`, under the `Details` key `outputs`, as
       `JavaScriptValueWrites` does for `paths`;
@@ -294,11 +295,14 @@ faults.
     - spec 096 (FR-003 and `contracts/dispatch-workflow.md`: the reserved `Result` output);
     - spec 099: its child-output capture through the runtime capture policy, the redacted entries kept with metadata,
       and the activity setting `Result`. In `spec.md` that is User Story 2 scenarios 2 and 3, User Story 3 and its
-      scenario 4, User Story 4 scenario 4, FR-009, FR-011, FR-012, FR-021, Key Entities, SC-004 and the capture-policy
+      scenario 4, User Story 4 scenario 4, FR-011, FR-012, FR-021, Key Entities, SC-004 and the capture-policy
       assumption. It is also the outputs and capture lines of `contracts/dispatch-wait-success.md`, and the `Result` row
       and redacted-entry rules of `data-model.md`;
     - spec 100: FR-004, FR-008 and FR-026 where they name `Result` or output capture, and the outputs lines of
       `contracts/dispatch-fault-cancellation.md`.
+
+    Spec 099 FR-009 (the read uses only the child's durable workflow-output channel, after merging the terminal
+    checkpoint's output changes) and FR-013 (fail closed) stay in force: `ReadValuesAsync` keeps both.
 
     Each of those specs gets one note under its status line that cites spec 1245 and lists its superseded parts. Their
     text is otherwise unchanged.

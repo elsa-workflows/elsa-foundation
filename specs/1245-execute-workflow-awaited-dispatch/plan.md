@@ -33,18 +33,25 @@ compatibility shims.
   - existing converter rules take new data.
 - **Extension points.** Two public additions:
   - `ActivityResumeContext<TState, TTrigger>.Warnings` (`IExecutionWarningSink?`) in `Activities.Runtime.Core`, copied
-    from the attempt's `Warnings`, which the resume handler already sets. Update that project's `EXTENSION_POINTS.md`
-    if it lists context members.
+    from the attempt's `Warnings`, which the resume handler already sets.
+    - Add `Warnings.get`, and the constructor if it changes, to `Activities/Runtime/Core/PublicAPI.Unshipped.txt`.
+    - Update that project's `EXTENSION_POINTS.md` if it lists context members.
   - `IWorkflowOutputSource.ReadValuesAsync` in `Workflows.Runtime.Core`: the policy-free read (D-2). It has the same
-    parameters as `ReadAsync` and returns the included values and the withheld names. `WorkflowOutputSource` in
+    parameters as `ReadAsync` and returns a new public record, `WorkflowOutputValues`: `Values` (a JSON object, output name
+    to value, ordinal order) and `WithheldNames` (ordinal). `WorkflowOutputSource` in
     `Elsa.Workflows.Runtime` implements it. It is a new member on the existing replacement contract, not a new
     contract, so the diagnostics read and the value read sit side by side under distinct names.
     - DispatchWorkflow references only the `.Core` projects, so the read cannot live inside it.
     - Update the `IWorkflowOutputSource` entries in `Elsa.Workflows.Runtime/EXTENSION_POINTS.md` (its "Usage and
       dependents" line says DispatchWorkflow reads policy-safe outputs) and in `Resumption/EXTENSION_POINTS.md`.
-    - Add the member to `Workflows/Runtime/Core/PublicAPI.Unshipped.txt`.
-  - The removed `Result` output and `DispatchWorkflowOutput` type leave the Dispatch Workflow public API files too. Check whether the Dispatch
-  Workflow `EXTENSION_POINTS.md` lists outputs and update it if it does.
+    - Add the member and `WorkflowOutputValues` to `Workflows/Runtime/Core/PublicAPI.Unshipped.txt`.
+  - Public members that change in `Elsa.Activities.DispatchWorkflow.Runtime`, which has no PublicAPI file:
+    - `DispatchWorkflowActivityResult.Result` becomes `Terminal` (not an output), and `Output` is new;
+    - the `WorkflowDispatchParentResumePayload` constructor gains `Output` and `WithheldOutputs`;
+    - `DispatchWorkflowResult.Outputs` is removed;
+    - `DispatchWorkflowOutput` is deleted.
+
+    Its `EXTENSION_POINTS.md` and `README.md` are updated (Design step 6).
 - **ADRs.** No ADR change (see the spec, "Rule and boundary").
 
 ## Design

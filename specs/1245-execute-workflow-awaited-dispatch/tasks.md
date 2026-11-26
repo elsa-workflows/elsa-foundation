@@ -31,7 +31,8 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   children each give no `Output`. A variable that captures `Output` and holds `"before"` still holds `"before"` after
   each of them (FR-002, plan D-1).
 - [ ] T003 Policy-free read of a child's committed workflow outputs (plan D-2): `IWorkflowOutputSource.ReadValuesAsync`,
-  implemented in `WorkflowOutputSource`. Update both `EXTENSION_POINTS.md` entries and `PublicAPI.Unshipped.txt`, and
+  returning `WorkflowOutputValues`, implemented in `WorkflowOutputSource`. Update both `EXTENSION_POINTS.md` entries and
+  `PublicAPI.Unshipped.txt` (the member and the record), and
   give the test stubs (`WorkflowControlBoundaryTests.NoOutputs`, `DispatchWorkflowRuntimeTestFixture`) the member. It selects the same outputs as
   `RuntimeWorkflowOutputStateProjection`, without `IRuntimePayloadCapturePolicy`. It leaves out values whose
   `DurableValuePolicies.Read` is protected (sensitive, encryption, redaction mode, retention) and values not stored
@@ -50,7 +51,8 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   - Update the "payload-safe" doc comment.
   - Enricher tests: the value is replay-stable; a conflicting re-enrichment fails closed; a payload with `Output` on
     `Faulted` is rejected; the terminal result keeps its status, diagnostics and control.
-- [ ] T003c Add `Warnings` (`IExecutionWarningSink?`) to `ActivityResumeContext<TState, TTrigger>`, copied from the
+- [ ] T003c Add `Warnings` (`IExecutionWarningSink?`) to `ActivityResumeContext<TState, TTrigger>`, with its
+  `Activities/Runtime/Core/PublicAPI.Unshipped.txt` entries, copied from the
   attempt. Test that a warning reported in `ResumeAsync` is recorded on the activity execution. Update
   `EXTENSION_POINTS.md` if it lists context members.
 - [ ] T003b `DispatchWorkflow.ResumeAsync` copies `payload.Output` into the activity result for `Completed`, and reports
