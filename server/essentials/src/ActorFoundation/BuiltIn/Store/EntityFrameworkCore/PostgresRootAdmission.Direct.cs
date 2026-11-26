@@ -86,7 +86,7 @@ internal sealed partial class PostgresRootAdmission
             if (db.UsesRootRetirement && await HasReceiptAsync()) return await DuplicateAsync();
             return await RefuseAsync(DirectResult.MissingTarget);
         }
-        var acceptsParkArrival = db.UsesRootParkArrivals && status == InstanceStatus.Faulted &&
+        var acceptsParkArrival = db.UsesRootParkArrivals && status == InstanceStatus.Faulted && reply is null &&
             await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
                     AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"

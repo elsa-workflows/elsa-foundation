@@ -70,10 +70,12 @@ public sealed partial class EfStore
             header.Tenant != root.Tenant || header.Reference != root.Reference)
             throw RootShape();
         return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
-            new RecoveredParkRefusal(root, expected, WithoutParkFacts(command)!, current.Suspended, RootSelfIssuer));
+            new RecoveredParkRefusal(root, expected, WithoutParkFacts(command)!, current.Suspended,
+                AuthoredWithholding(root, current), RootSelfIssuer));
     }
 
-    private sealed record RecoveredParkRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended, FoundationSelfIssuer? Issue)
+    private sealed record RecoveredParkRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended,
+        bool WithheldInputs, FoundationSelfIssuer? Issue)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
@@ -90,7 +92,7 @@ public sealed partial class EfStore
                         AND "Reference" = {Root.Reference} AND "Actor" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Creation" = 1)
                 """, token);
             return updated == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command],
-                Issue, Suspended, token);
+                Issue, Suspended || WithheldInputs, token);
         }
     }
 
@@ -441,7 +443,7 @@ public sealed partial class EfStore
             // Without Park arrivals, or while its Park is being cleared, the parked root withholds its ordinary inputs, so the
             // settled prefix is its operator rows. The envelope comparison binds a held command's exact reply address.
             if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
-                    suspended: !db.UsesRootParkArrivals || prior.ClearingKind is not null, token, includePrivateInputs: false)) return false;
+                    suspended: !db.UsesRootParkArrivals || prior.ClearingKind is not null, token, includePrivateInputs: false, parked: true)) return false;
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "FoundationParkClearing" = CASE WHEN {Stops} THEN NULL ELSE "FoundationParkClearing" END,
@@ -514,7 +516,7 @@ public sealed partial class EfStore
             // multi-page Open the page count stays the same, so the digest is the only check there.
             if (KeptSetDigest(kept) != KeptDigest || page.Length != Count || Ends != (page.Length == kept.Count) ||
                 !await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
-                    suspended: !db.UsesRootParkArrivals || prior.ClearingKind is not null, token, includePrivateInputs: false)) return false;
+                    suspended: !db.UsesRootParkArrivals || prior.ClearingKind is not null, token, includePrivateInputs: false, parked: true)) return false;
             var window = Command.Operator!.RootParkWindow!.Value;
             var cleared = page.Select(row => row.Id).ToArray();
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""

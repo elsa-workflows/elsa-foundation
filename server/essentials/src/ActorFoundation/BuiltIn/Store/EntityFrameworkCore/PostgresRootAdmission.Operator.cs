@@ -76,10 +76,11 @@ internal sealed partial class PostgresRootAdmission
         var windowMs = (long)window.TotalMilliseconds;
         await using var db = create();
         if (!db.UsesRootOperatorProtocol || kind == Kinds.Terminate && !db.UsesRootTermination) return null;
-        // The Park recovery profile admits Recover and no other operator command. No other profile admits Recover.
+        // The standalone recovery profile admits only Recover. The composition also admits Terminate and Delete.
         var recover = kind == Kinds.Recover;
         // Recover is immediate: a delayed one could mature behind the cohort it releases.
-        if (recover != db.UsesRootParkRecovery || recover && due is not null) return null;
+        if (recover ? !db.UsesRootParkRecovery || due is not null || reply is not null
+            : db.UsesRootParkRecovery && (!db.UsesRootComposedParkRecovery || kind is Kinds.Suspend or Kinds.Resume)) return null;
         var deletion = kind == Kinds.Delete;
         if (deletion && !db.UsesRootRetirement || thenDelete && (kind != Kinds.Terminate || !db.UsesRootTerminateThenDelete) ||
             retentionDelete && (!deletion || !db.UsesRootRetention)) return null;
@@ -142,7 +143,7 @@ internal sealed partial class PostgresRootAdmission
             var exactTerminal = terminal is not null && await LocksRootDeleteSelectionAsync(db, address, tenant, reference, terminal, token);
             // S5b-2: a Terminate, or a Delete, that names the Park is refused while its Park is being cleared.
             var exactPark = park is not null && await LocksRootParkSelectionAsync(db, address, tenant, reference, park, token) &&
-                (recover || !await ClearsRootParkAsync(db, address, token));
+                (recover && !db.UsesRootComposedParkRecovery || !await ClearsRootParkAsync(db, address, token));
             var selectedStatus = selected && !deletion && park is null
                 ? await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: true)
                 : null;
@@ -390,13 +391,14 @@ internal sealed partial class PostgresRootAdmission
 
     internal static Message DecodeOperator(KernelDb db, MessageEntity row, string reference) =>
         DecodeOperator(row, reference, db.UsesRootTermination, db.UsesRootRetirement, db.UsesRootTerminateThenDelete,
-            db.UsesRootRetention, db.UsesRootOperatorReplies, db.UsesRootParkRecovery, db.UsesRootParkedOperators);
+            db.UsesRootRetention, db.UsesRootOperatorReplies, db.UsesRootParkRecovery, db.UsesRootParkedOperators, db.UsesRootComposedParkRecovery);
 
     internal static Message DecodeOperator(MessageEntity row, string reference, bool terminations, bool retirements, bool terminateThenDelete,
-        bool retentionDeletes = false, bool operatorReplies = false, bool parkRecovery = false, bool parkedTerminate = false)
+        bool retentionDeletes = false, bool operatorReplies = false, bool parkRecovery = false, bool parkedTerminate = false,
+        bool composedRecovery = false)
     {
         if (!IsOperatorOccurrence(new(row.Id, row.InboxScope)) || !IsStoredOperator(row.Start) ||
-            !CanReadOperatorKind(row.Kind, terminations, retirements, parkRecovery, parkedTerminate) ||
+            !CanReadOperatorKind(row.Kind, terminations, retirements, parkRecovery, parkedTerminate, composedRecovery) ||
             row.EventMatch is not null || row.Payload is not null || row.Sender is not null || row.JobGeneration != 0 || row.KeepUntil is not { } until)
             throw new StoreException(Failure.Definite, "Unexpected stored one-way operator envelope.");
         var held = row.Start!.StartsWith(HeldOperatorPrefix, StringComparison.Ordinal);
@@ -404,7 +406,7 @@ internal sealed partial class PostgresRootAdmission
             row.Kind is not (Kinds.Terminate or Kinds.Delete)))
             throw new StoreException(Failure.Definite, "Unexpected stored operator reply route.");
         var (header, thenDelete, retentionDelete) = ReadOperatorHeader(row.Start!, reference, row.Id, row.Kind, row.Due,
-            held, terminateThenDelete, retentionDeletes, parkedTerminate, parkRecovery);
+            held, terminateThenDelete, retentionDeletes, parkedTerminate, parkRecovery && !composedRecovery);
         var suffix = row.Id.LastIndexOf('/');
         return FoundationIngressAddress.Occurrence(header.Operation, row.Id[..suffix], row.Id[(suffix + 1)..],
             new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, row.ReplyTo, new(null)
@@ -420,29 +422,31 @@ internal sealed partial class PostgresRootAdmission
         string occurrence, string kind, long due, bool hasReply)
     {
         if (!db.UsesRootOperatorProtocol || !IsStoredOperator(wire) ||
-            !CanReadOperatorKind(kind, db.UsesRootTermination, db.UsesRootRetirement, db.UsesRootParkRecovery, db.UsesRootParkedOperators))
+            !CanReadOperatorKind(kind, db.UsesRootTermination, db.UsesRootRetirement, db.UsesRootParkRecovery, db.UsesRootParkedOperators,
+                db.UsesRootComposedParkRecovery))
             throw new StoreException(Failure.Definite, "Unexpected stored PostgreSQL operator envelope.");
         var held = wire!.StartsWith(HeldOperatorPrefix, StringComparison.Ordinal);
         if (held != hasReply || held && (!db.UsesRootOperatorReplies || kind is not (Kinds.Terminate or Kinds.Delete)))
             throw new StoreException(Failure.Definite, "Unexpected stored operator reply route.");
         var (header, _, _) = ReadOperatorHeader(wire, reference, occurrence, kind, due, held,
-            db.UsesRootTerminateThenDelete, db.UsesRootRetention, db.UsesRootParkedOperators, db.UsesRootParkRecovery);
+            db.UsesRootTerminateThenDelete, db.UsesRootRetention, db.UsesRootParkedOperators,
+            db.UsesRootParkRecovery && !db.UsesRootComposedParkRecovery);
         return (header.Operation, kind, due != 0 || header.ExplicitZeroDue ? due : null);
     }
 
-    private static bool CanReadOperatorKind(string kind, bool terminations, bool retirements, bool parkRecovery, bool parkedTerminate) =>
+    private static bool CanReadOperatorKind(string kind, bool terminations, bool retirements, bool parkRecovery, bool parkedTerminate, bool composedRecovery) =>
         kind switch
         {
             Kinds.Suspend or Kinds.Resume => !parkRecovery,
             Kinds.Terminate => terminations && (!parkRecovery || parkedTerminate),
-            Kinds.Delete => retirements && !parkRecovery,
+            Kinds.Delete => retirements && (!parkRecovery || composedRecovery),
             Kinds.Recover => parkRecovery,
             _ => false
         };
 
     private static (StoredOperator Header, bool ThenDelete, bool RetentionDelete) ReadOperatorHeader(string framing,
         string reference, string occurrence, string kind, long due, bool held, bool terminateThenDelete, bool retentionDeletes,
-        bool parkedTerminate, bool parkRecovery)
+        bool parkedTerminate, bool standaloneRecovery)
     {
         var wire = held ? framing[HeldOperatorPrefix.Length..] : framing;
         var thenDelete = wire.StartsWith(TerminateThenDeletePrefix, StringComparison.Ordinal);
@@ -454,7 +458,7 @@ internal sealed partial class PostgresRootAdmission
         try { header = DurableKeyJson.Read<StoredOperator>(wire[prefix.Length..]); }
         catch (JsonException error) { throw new StoreException(Failure.Definite, "Invalid stored operator framing.", error); }
         if (header is null) throw new StoreException(Failure.Definite, "Invalid stored operator framing.");
-        if (parkRecovery && kind == Kinds.Terminate && header is not { Park: not null, Clear: null })
+        if (standaloneRecovery && kind == Kinds.Terminate && header is not { Park: not null, Clear: null })
             throw new StoreException(Failure.Definite, "The recovery composition requires a Park-selected Terminate.");
         if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != kind ||
             (kind == Kinds.Delete && !(parkedTerminate && header.Park is not null) ? header.Terminal is not { Revision: > 0 } : header.Terminal is not null) ||
