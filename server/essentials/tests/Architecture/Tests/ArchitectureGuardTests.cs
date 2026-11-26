@@ -579,6 +579,11 @@ public sealed partial class ArchitectureGuardTests
     /// </summary>
     private static readonly Dictionary<string, string> RelocatedProjects = new(StringComparer.Ordinal)
     {
+        // Attention API and task execution move independently of their Essentials contracts.
+        ["Elsa.Attention.Api"] = "extensions/Attention/src/Api/Elsa.Attention.Api.csproj",
+        ["Elsa.Attention.Api.Tests"] = "extensions/Attention/tests/Api/Tests/Elsa.Attention.Api.Tests.csproj",
+        ["Elsa.Tasks"] = "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj",
+        ["Elsa.Tasks.Execution.Tests"] = "extensions/Tasks/tests/Execution/Tests/Elsa.Tasks.Execution.Tests.csproj",
         // The Workflow dataset adapter and its tests live beside saved Dashboards rather than the Home widgets.
         ["Elsa.Workflows.Dashboard.Queries"] = "extensions/Dashboard/src/Workflows/Queries/Elsa.Workflows.Dashboard.Queries.csproj",
         ["Elsa.Workflows.Dashboard.QueryTests"] = "extensions/Dashboard/tests/Workflows/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",

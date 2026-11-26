@@ -105,7 +105,7 @@ def self_test() -> int:
         (["studio/specs/004-x/tasks.md"], True),
         (["docs/maps/README.md"], True),
         (["EXTENSION_POINTS.md"], False),
-        (["server/essentials/src/Tasks/Elsa.Tasks/packages.lock.json"], False),
+        (["extensions/Tasks/src/Elsa.Tasks/packages.lock.json"], False),
         (["specs/220-domain-owned-apis/contracts/management-api.openapi.yaml"], False),
         ([".claude/x/.editorconfig"], False),
         (["docs/Directory.Build.props"], False),

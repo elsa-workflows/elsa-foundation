@@ -36,7 +36,7 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\..\extensions\Tasks\src\Elsa.Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
