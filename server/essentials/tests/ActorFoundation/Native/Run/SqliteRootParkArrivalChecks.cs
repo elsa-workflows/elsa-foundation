@@ -86,15 +86,15 @@ internal static partial class SqliteHostLifetimeChecks
             Require(observation.Plan.Any(step => step.Contains("IX_FoundationRootInbox_Inspectable", StringComparison.Ordinal) &&
                 step.Contains("Target=?", StringComparison.Ordinal)),
                 "the arrival inbox uses its actor-scoped partial index with both kept reasons");
+            var heldInput = await db.Messages.AsNoTracking().SingleAsync(row => row.Target == parked.Actor.Id && row.Kind == "held", token);
             Require(successor.Epoch > epoch && kept.State == parked.State && view.Park == oldView!.Park && executor.OrdinaryTurns == 0 &&
                 PostgresRootSelection.OpenPark(cursor, view.Selection, scope.Tenant, actor.Id) == new FoundationParkMark(2, view.Park!.At) &&
                 inbox.Items.Where(input => input.Id != "held-before-park").ToArray() is
                     [{ Id: "fail", State: Contract.DeliveryState.Consumed }, { Id: "arrival", State: Contract.DeliveryState.Arrived }] &&
+                heldInput is { Done: false, InboxScope: InboxKey.FoundationOccurrenceScope, KeepUntil: > 0 } && heldInput.ReplyTo == pending.Address &&
                 await db.Database.SqlQuery<bool>($"""
                     SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {parked.Actor.Id} AND "Kind" = 'ordinary'
-                        AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived} AND "Payload" = {payload})
-                    AND EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {parked.Actor.Id} AND "Kind" = 'held'
-                        AND NOT "Done" AND "FoundationKeptBy" IS NULL AND "ReplyTo" = {pending.Address}) AS "Value"
+                        AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived} AND "Payload" = {payload}) AS "Value"
                     """).SingleAsync(token), "the replacement owner keeps the exact arrival under the original Park without invoking the actor");
             Require(await admission.OperateAsync(scope.Tenant, actor, "end", Kinds.Terminate, view.Selection!, null, null, token) is
                 { Outcome: Contract.AdmissionOutcome.Accepted }, "the original Park selection still admits a Terminate after the arrival");
@@ -108,7 +108,10 @@ internal static partial class SqliteHostLifetimeChecks
                 await successor.RunAsync(token);
                 await Task.Delay(15, token);
             }
-            Require(successor.Owns && executor.HeldTurns == 0,
+            var settled = await db.Messages.AsNoTracking().SingleAsync(row => row.InboxScope == heldInput.InboxScope &&
+                row.Id == heldInput.Id && row.Target == heldInput.Target && row.Partition == heldInput.Partition, token);
+            Require(successor.Owns && executor.HeldTurns == 0 && settled.KeepUntil == heldInput.KeepUntil &&
+                settled is { Done: true, Start: null, Payload: null, ReplyTo: null },
                 "the same owner settles the preadmitted held input after the Park ends without invoking the actor");
             return 0;
 
