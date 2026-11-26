@@ -43,7 +43,9 @@ def json_configuration(path):
 def merge_configuration(base, overrides):
     if not isinstance(base, dict) or not isinstance(overrides, dict):
         raise ValueError("Configuration files must contain JSON objects")
-    for key, value in overrides.items():
+    keys = {key.casefold(): key for key in base}
+    for name, value in overrides.items():
+        key = keys.setdefault(name.casefold(), name)
         current = base.get(key)
         if isinstance(current, dict) and isinstance(value, dict):
             merge_configuration(current, value)

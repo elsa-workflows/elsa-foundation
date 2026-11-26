@@ -17,6 +17,7 @@ using Microsoft.Extensions.Options;
 using Nuplane;
 using Nuplane.Abstractions;
 using Nuplane.Admin;
+using Nuplane.Feeds.Setup;
 using Nuplane.Reconciliation;
 using Nuplane.Store.Cleanup;
 
@@ -91,11 +92,11 @@ public static class ModuleManagementApiEndpoints
             new(options.Value.HostId, options.Value.HostDisplayName, ModuleManagementApiOptions.ResolveHostOwner(options.Value, environment), environment.ContentRootPath),
             DateTimeOffset.UtcNow,
             modules,
-            ListDropFolderPackages(dropFolder),
+            dropFolder is null ? [] : ListDropFolderPackages(dropFolder),
             ReadRegistryFeeds(config),
             ReadRetentionPolicy(config, cleanupOptions.Value),
             new(
-                CanUploadPackages: true,
+                CanUploadPackages: dropFolder is not null,
                 CanManageFeeds: true,
                 CanReconcile: true,
                 CanPrunePackages: true,
@@ -125,6 +126,8 @@ public static class ModuleManagementApiEndpoints
 
         var config = await ReadManagementConfigurationAsync(environment, options, cancellationToken);
         var dropFolder = ResolveDropFolder(environment, config);
+        if (dropFolder is null)
+            return CacheDropFolderIsReadOnly();
         Directory.CreateDirectory(dropFolder);
 
         var destination = EnsureChildPath(dropFolder, fileName);
@@ -160,6 +163,8 @@ public static class ModuleManagementApiEndpoints
 
         var config = await ReadManagementConfigurationAsync(environment, options, cancellationToken);
         var dropFolder = ResolveDropFolder(environment, config);
+        if (dropFolder is null)
+            return CacheDropFolderIsReadOnly();
         var path = EnsureChildPath(dropFolder, safeFileName);
         if (!File.Exists(path))
             return Results.NotFound(new ModuleManagementErrorResponse($"Package '{safeFileName}' was not found in the drop folder."));
@@ -275,6 +280,8 @@ public static class ModuleManagementApiEndpoints
         var index = FindFeedIndex(feeds, name);
         if (index < 0)
             return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
+        if (IsCacheFeed(feeds[index]))
+            return CacheFeedIsReadOnly(name);
 
         feeds[index] = ToJson(feed with { Name = name });
         await WriteManagementConfigurationAsync(environment, options.Value, config, cancellationToken);
@@ -292,11 +299,24 @@ public static class ModuleManagementApiEndpoints
         var index = FindFeedIndex(feeds, name);
         if (index < 0)
             return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
+        if (IsCacheFeed(feeds[index]))
+            return CacheFeedIsReadOnly(name);
 
         feeds.RemoveAt(index);
         await WriteManagementConfigurationAsync(environment, options.Value, config, cancellationToken);
         return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate feed registration changes."));
     }
+
+    private static bool IsCacheFeed(JsonNode? feed) =>
+        feed?["Directory"]?["Role"] is JsonValue role &&
+        Enum.TryParse<DirectoryFeedRole>(role.ToString(), ignoreCase: true, out var parsedRole) &&
+        parsedRole == DirectoryFeedRole.Cache;
+
+    private static IResult CacheFeedIsReadOnly(string name) =>
+        Results.Conflict(new ModuleManagementErrorResponse($"Cache feed '{name}' is read-only through this API. Edit it in the host configuration."));
+
+    private static IResult CacheDropFolderIsReadOnly() =>
+        Results.Conflict(new ModuleManagementErrorResponse("The package drop folder is used by a read-only cache feed. Configure a separate directory for package management."));
 
     private static async Task<IResult> UpdateRetentionPolicyAsync(
         ModuleManagementRetentionPolicy policy,
@@ -372,9 +392,10 @@ public static class ModuleManagementApiEndpoints
             .ToArray();
     }
 
-    private static ModuleManagementFeed[] ReadFeeds(ManagementConfiguration config) =>
+    private static ModuleManagementFeed[] ReadFeeds(ManagementConfiguration config, bool includeCacheFeeds = true) =>
         ReadFeedsArray(config)
             .OfType<JsonObject>()
+            .Where(feed => includeCacheFeeds || !IsCacheFeed(feed))
             .Select(feed => new ModuleManagementFeed(
                 (string?)feed["Name"] ?? "",
                 (string?)feed["ServiceIndex"],
@@ -404,11 +425,23 @@ public static class ModuleManagementApiEndpoints
             (bool?)node?["ProtectLastKnownGood"] ?? fallback.ProtectLastKnownGood);
     }
 
-    private static string ResolveDropFolder(IWebHostEnvironment environment, ManagementConfiguration config)
+    private static string? ResolveDropFolder(IWebHostEnvironment environment, ManagementConfiguration config)
     {
-        var feed = ReadFeeds(config).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.DirectoryPath));
-        var path = feed?.DirectoryPath ?? "packages";
-        return Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(environment.ContentRootPath, path));
+        var feed = ReadFeeds(config, includeCacheFeeds: false).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.DirectoryPath));
+        var dropFolder = NormalizeDirectory(feed?.DirectoryPath ?? "packages");
+        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        // An editable feed or the default drop folder can point to the same directory as a cache.
+        var isCacheDirectory = ReadFeedsArray(config).OfType<JsonObject>()
+            .Where(IsCacheFeed)
+            .Select(cache => (string?)cache["DirectoryPath"])
+            .Any(path => !string.IsNullOrWhiteSpace(path) && string.Equals(NormalizeDirectory(path), dropFolder, comparison));
+        return isCacheDirectory ? null : dropFolder;
+
+        string NormalizeDirectory(string path) => Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(environment.ContentRootPath, path)));
     }
 
     private static async Task<ManagementConfiguration> ReadManagementConfigurationAsync(
@@ -421,7 +454,9 @@ public static class ModuleManagementApiEndpoints
             return new(path, new JsonObject { ["Nuplane"] = new JsonObject { ["Setup"] = new JsonObject { ["Feeds"] = new JsonArray() } } });
 
         var json = await File.ReadAllTextAsync(path, cancellationToken);
-        return new(path, JsonNode.Parse(json, documentOptions: ConfigurationDocumentOptions)?.AsObject() ?? new JsonObject());
+        return new(path, JsonNode.Parse(json,
+            nodeOptions: new JsonNodeOptions { PropertyNameCaseInsensitive = true },
+            documentOptions: ConfigurationDocumentOptions)?.AsObject() ?? new JsonObject());
     }
 
     private static async Task WriteManagementConfigurationAsync(

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using CShells.Features;
 using Elsa.Api.AspNetCore;
@@ -16,66 +17,180 @@ using Xunit;
 
 namespace Elsa.Modularity.Tests;
 
-public sealed class ModuleManagementApiTests
+public sealed class ModuleManagementApiTests : IDisposable
 {
     private const string ApiKey = "custom-host-management-key";
     private const string HostOwner = "CustomElsaHost";
+    private const string Api = "/_elsa/module-management";
+    private readonly DirectoryInfo _contentRoot = Directory.CreateTempSubdirectory("elsa-module-management-");
+    private string SettingsPath => Path.Combine(_contentRoot.FullName, "appsettings.json");
+
+    public void Dispose() => _contentRoot.Delete(recursive: true);
 
     [Fact]
     public async Task Custom_host_can_read_registry_and_routes_use_configured_owner()
     {
         // Host settings files commonly carry comments (Foundation.Host's does); the registry must read them as ASP.NET Core does.
-        var contentRoot = Directory.CreateTempSubdirectory("elsa-module-management-").FullName;
-        try
-        {
-            await File.WriteAllTextAsync(Path.Combine(contentRoot, "appsettings.json"), """
-                {
-                  // A commented host settings file.
-                  "Nuplane": {
-                    "Setup": {
-                      "Feeds": [],
-                    },
-                  },
-                }
-                """);
-            await AssertCustomHostAsync(contentRoot);
-        }
-        finally
-        {
-            Directory.Delete(contentRoot, recursive: true);
-        }
-    }
-
-    private static async Task AssertCustomHostAsync(string contentRoot)
-    {
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = contentRoot });
-        builder.WebHost.UseTestServer();
-        builder.Configuration[ManagementApiKeyAuthentication.ConfigurationKey] = ApiKey;
-        builder.Services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog());
-        builder.Services.AddSingleton<INuplaneAdminOperations>(new FakeNuplaneAdminOperations());
-        builder.Services.AddElsaModuleManagement(options => options.HostOwner = HostOwner);
-
-        await using var app = builder.Build();
-        app.MapElsaModuleManagement();
-        await app.StartAsync();
+        await using var app = await StartAsync("""
+            {
+              // A commented host settings file.
+              "Nuplane": {
+                "Setup": {
+                  "Feeds": [],
+                },
+              },
+            }
+            """);
 
         var registryEndpoint = new EndpointManifestBuilder(app.Services.GetServices<EndpointDataSource>())
             .Build()
             .Entries
-            .Single(entry => entry.Route.Value == "/_elsa/module-management/registry");
+            .Single(entry => entry.Route.Value == Api + "/registry");
         Assert.Equal(HostOwner, registryEndpoint.Owner);
 
         using var client = app.GetTestClient();
-        using var authorizedRequest = new HttpRequestMessage(HttpMethod.Get, "/_elsa/module-management/registry");
+        using var authorizedRequest = new HttpRequestMessage(HttpMethod.Get, Api + "/registry");
         authorizedRequest.Headers.Add(ManagementApiKeyAuthentication.HeaderName, ApiKey);
         using var authorizedResponse = await client.SendAsync(authorizedRequest);
         Assert.Equal(HttpStatusCode.OK, authorizedResponse.StatusCode);
         using var body = JsonDocument.Parse(await authorizedResponse.Content.ReadAsStringAsync());
         Assert.Equal(HostOwner, body.RootElement.GetProperty("host").GetProperty("runtime").GetString());
 
-        using var rejectedRequest = new HttpRequestMessage(HttpMethod.Get, "/_elsa/module-management/registry");
+        using var rejectedRequest = new HttpRequestMessage(HttpMethod.Get, Api + "/registry");
         rejectedRequest.Headers.Add(ManagementApiKeyAuthentication.HeaderName, "wrong-key");
         using var rejectedResponse = await client.SendAsync(rejectedRequest);
         Assert.Equal(HttpStatusCode.Unauthorized, rejectedResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Cache_feed_configuration_is_read_only_and_ordinary_feeds_remain_editable()
+    {
+        // Configuration keys and enum values are case-insensitive in the host.
+        const string configuration = """
+            { "nuplane": { "setup": { "feeds": [
+              { "name": "baked", "directoryPath": "cache", "directory": { "role": "cAcHe", "watch": false } }
+            ] } } }
+            """;
+        await using var app = await StartAsync(configuration);
+        using var client = AuthorizedClient(app);
+        var feed = new { name = "editable", directoryPath = "drop-zone", includePatterns = new[] { "*" }, directory = new { watch = true } };
+
+        using var updateCache = await client.PutAsJsonAsync(Api + "/feeds/BAKED", feed);
+        Assert.Equal(HttpStatusCode.Conflict, updateCache.StatusCode);
+        using var deleteCache = await client.DeleteAsync(Api + "/feeds/baked");
+        Assert.Equal(HttpStatusCode.Conflict, deleteCache.StatusCode);
+        Assert.Equal(configuration, await File.ReadAllTextAsync(SettingsPath));
+
+        using var addEditable = await client.PostAsJsonAsync(Api + "/feeds", feed);
+        Assert.Equal(HttpStatusCode.OK, addEditable.StatusCode);
+        using var updateEditable = await client.PutAsJsonAsync(Api + "/feeds/editable", new
+        {
+            feed.name,
+            directoryPath = "new-drop-zone",
+            feed.includePatterns,
+            feed.directory
+        });
+        Assert.Equal(HttpStatusCode.OK, updateEditable.StatusCode);
+        using var registry = await client.GetFromJsonAsync<JsonDocument>(Api + "/registry");
+        var feeds = registry!.RootElement.GetProperty("feeds").EnumerateArray().ToArray();
+        Assert.Equal("cache", feeds.Single(item => item.GetProperty("name").GetString() == "baked").GetProperty("directoryPath").GetString());
+        Assert.Equal("new-drop-zone", feeds.Single(item => item.GetProperty("name").GetString() == "editable").GetProperty("directoryPath").GetString());
+        using var deleteEditable = await client.DeleteAsync(Api + "/feeds/editable");
+        Assert.Equal(HttpStatusCode.OK, deleteEditable.StatusCode);
+        using var saved = JsonDocument.Parse(await File.ReadAllTextAsync(SettingsPath));
+        var retained = Assert.Single(saved.RootElement.GetProperty("nuplane").GetProperty("setup").GetProperty("feeds").EnumerateArray());
+        Assert.Equal("cAcHe", retained.GetProperty("directory").GetProperty("role").GetString());
+    }
+
+    [Theory]
+    [InlineData(true, "drop-zone")]
+    [InlineData(false, "packages")]
+    public async Task Upload_and_drop_folder_deletion_use_an_editable_directory_or_the_default(bool hasEditableFeed, string expectedDirectory)
+    {
+        const string fileName = "Fixture.1.0.0.nupkg";
+        var cache = _contentRoot.CreateSubdirectory("cache");
+        var cachedPackage = Path.Combine(cache.FullName, fileName);
+        await File.WriteAllTextAsync(cachedPackage, "baked");
+        var editable = hasEditableFeed ? """, { "Name": "editable", "DirectoryPath": "drop-zone" }""" : "";
+        await using var app = await StartAsync($$"""
+            { "Nuplane": { "Setup": { "Feeds": [
+              { "Name": "baked", "DirectoryPath": "cache", "Directory": { "Role": "Cache", "Watch": false } }{{editable}}
+            ] } } }
+            """);
+        using var client = AuthorizedClient(app);
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent("uploaded"), "package", fileName);
+        using var upload = await client.PostAsync(Api + "/packages/upload", form);
+        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+
+        var staged = Path.Combine(_contentRoot.FullName, expectedDirectory, fileName);
+        Assert.Equal("uploaded", await File.ReadAllTextAsync(staged));
+        Assert.Equal("baked", await File.ReadAllTextAsync(cachedPackage));
+        using var deletion = await client.DeleteAsync(Api + "/packages/drop-folder/" + fileName);
+        Assert.Equal(HttpStatusCode.OK, deletion.StatusCode);
+        Assert.False(File.Exists(staged));
+        Assert.Equal("baked", await File.ReadAllTextAsync(cachedPackage));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("drop-zone")]
+    public async Task Drop_folder_mutations_refuse_a_directory_also_owned_by_a_cache_feed(string? primaryFolder)
+    {
+        const string fileName = "Fixture.1.0.0.nupkg";
+        var directory = primaryFolder ?? "packages";
+        var cache = _contentRoot.CreateSubdirectory(directory);
+        var cachedPackage = Path.Combine(cache.FullName, fileName);
+        await File.WriteAllTextAsync(cachedPackage, "baked");
+        var cachePath = JsonSerializer.Serialize(Path.Combine(_contentRoot.FullName, "unused", "..", directory) + Path.DirectorySeparatorChar);
+        var primary = primaryFolder is null ? "" : """, { "Name": "editable", "DirectoryPath": "drop-zone" }""";
+        await using var app = await StartAsync($$"""
+            { "Nuplane": { "Setup": { "Feeds": [
+              { "Name": "baked", "DirectoryPath": {{cachePath}}, "Directory": { "Role": "Cache" } }{{primary}}
+            ] } } }
+            """);
+        using var client = AuthorizedClient(app);
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent("uploaded"), "package", fileName);
+        using var upload = await client.PostAsync(Api + "/packages/upload", form);
+        using var deletion = await client.DeleteAsync(Api + "/packages/drop-folder/" + fileName);
+
+        Assert.Equal(HttpStatusCode.Conflict, upload.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, deletion.StatusCode);
+        Assert.Equal("baked", await File.ReadAllTextAsync(cachedPackage));
+        using var registry = await client.GetFromJsonAsync<JsonDocument>(Api + "/registry");
+        Assert.False(registry!.RootElement.GetProperty("capabilities").GetProperty("canUploadPackages").GetBoolean());
+        Assert.Empty(registry.RootElement.GetProperty("dropFolderPackages").EnumerateArray());
+    }
+
+    private static HttpClient AuthorizedClient(WebApplication app)
+    {
+        var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Add(ManagementApiKeyAuthentication.HeaderName, ApiKey);
+        return client;
+    }
+
+    private async Task<WebApplication> StartAsync(string configuration)
+    {
+        await File.WriteAllTextAsync(SettingsPath, configuration);
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = _contentRoot.FullName });
+        builder.WebHost.UseTestServer();
+        builder.Configuration[ManagementApiKeyAuthentication.ConfigurationKey] = ApiKey;
+        builder.Services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog());
+        builder.Services.AddSingleton<INuplaneAdminOperations>(new FakeNuplaneAdminOperations());
+        builder.Services.AddElsaModuleManagement(options => options.HostOwner = HostOwner);
+
+        var app = builder.Build();
+        try
+        {
+            app.MapElsaModuleManagement();
+            await app.StartAsync();
+            return app;
+        }
+        catch
+        {
+            await app.DisposeAsync();
+            throw;
+        }
     }
 }

@@ -5,6 +5,7 @@ A profile runs `Elsa.Foundation.Host.dll`. `packages.txt` selects the NuGet pack
 | Profile | Intended use |
 | --- | --- |
 | [Essentials](essentials/shells.json) | Design, publish and execute a workflow with a small activity set, local identity and SQLite. The runtime API works with HTTP, cron and timer triggers switched off. The shell keeps the recurring-schedule projection that publishing requires. |
+| [Curated Essentials](essentials-curated/README.md) | The published server Essentials composition, including the shared token store, package registry, standard Production overlays, and a writable add-on feed. |
 | [Elsa 3 import](elsa3-import/shells.json) | Analyze and import Elsa 3 reusable activity definitions through the migration API. Includes mapping, publishing, persistence and expressions used by the import path. The same image can [run already-converted Elsa 4 files](elsa3-import/migrated-files.md) from a read-only `migrated/` mount. |
 | [Full](full/shells.json) | Explore a broader server composition, including import, native BPMN runtime and design, decisions, diagnostics, connections and Studio backend services. XML interchange stays opt-in pending [published activity version support](https://github.com/elsa-workflows/elsa-foundation/issues/5809). The linked shell file is the exact selection. Run a separate compatible Studio for a browser UI. |
 
@@ -37,7 +38,7 @@ docker build -t "$image" .
 
 ## Author a standalone profile
 
-Start an empty directory and copy `Dockerfile`, `packages.txt` and `shells.json` from one of the profile directories or its release artifact. The directory is the complete build context. Docker with BuildKit and Linux containers is sufficient. The builder image carries the .NET SDK, package version plan, feeds and built-in package packs.
+Copy a profile directory or its release build context into your project. Keep the Dockerfile, package list, shell files, and any settings the Dockerfile copies. The directory is the complete build context. Docker with BuildKit and Linux containers is sufficient. The builder image carries the .NET SDK, package version plan, feeds and built-in package packs.
 
 - Edit `packages.txt` to select what the image carries. Lines such as `@engine`, `@http-trigger` and `@sqlite` select built-in groups of package roots. List a first-party package by ID to use the release plan. For example, an `Elsa.Expressions.Liquid` line selects that package at the matching release version. Give an external package an exact pin using `Package.Id [1.2.3]`. List your CLR activity package explicitly so the builder includes its assembly in the activity reconciliation folder. The builder restores the dependencies of the listed packages.
 - Edit `shells.json` to select active features and their settings. A package can remain available while its features are disabled. Keep the features and package dependencies the shell needs to activate. Do not include deployment credentials in the profile directory.
@@ -106,4 +107,4 @@ Use **build_profiles** on a manual **Docker Images** dispatch to build only the 
 
 Artifacts are retained for seven days. Download the artifact for your architecture and run `docker load -i image.tar.gz` to import the tested runtime image. The profile files and both locks are the build context for replay. To replay a build-only run, load the native builder artifact's `image.tar.gz` too. Use the `builderImage`, `foundationImage` and `platform` values in the profile artifact's `build.json` as the `PROFILE_BUILDER_IMAGE` and `FOUNDATION_IMAGE` build arguments and the `--platform` option.
 
-To publish the tested images, a maintainer can select **publish_profiles** on `main`. After all six native builds and smoke tests pass, the workflow stages the tested archives by architecture. It publishes the matching Foundation and builder tags before exposing multi-platform profile tags such as `essentials-4.0.0-preview.<run>.<attempt>`. Foundation maintainers own the packaged profile definitions and their release inputs here.
+To publish the tested images, a maintainer can select **publish_profiles** on `main`. After all eight native builds and smoke tests pass, the workflow stages the tested archives by architecture. It publishes the matching Foundation and builder tags before exposing multi-platform profile tags such as `essentials-4.0.0-preview.<run>.<attempt>`. Foundation maintainers own the packaged profile definitions and their release inputs here.
