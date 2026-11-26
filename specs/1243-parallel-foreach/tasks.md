@@ -85,12 +85,14 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
 
 - [ ] T020 README and `EXTENSION_POINTS.md` for the new activity (FR-020); control-flow module README list;
   `docs/architecture/large-fan-out.md`: the "What exists today" row (line 29) that says Elsa 4 has none, the
-  in-instance effect-key row (line 240, proposed → built, with the new iteration id form), and the release 1 section
+  in-instance effect-key row (line 240) and the paragraph under it that calls it proposed (lines 243-245)
+  (proposed → built, with the new iteration id form), and the release 1 section
   (lines 250-256) in the present tense with the input named `Collection`.
 - [ ] T021 Regenerate the activity contract surface baseline and the Elsa 4 parity surface evidence (FR-021).
 - [ ] T022 Run the JTest `single-outcome` suite on Elsa 4; record the ParallelForEach steps in the S-15 ledger
   (SC-002); name remaining blockers with their issues.
-- [ ] T023 Set this spec's status to Implemented in the implementing PR; close the #1152 row and #5832.
+- [ ] T023 Set this spec's status to Implemented in the implementing PR; close the #1152 row and #5832; file the follow-up issue for the
+  existing silent bind of a by-name `CurrentValue` read to a declared variable in `For`/`ForEach` bodies (research R-5).
 
 ## Dependencies
 
