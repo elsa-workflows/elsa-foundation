@@ -15,7 +15,6 @@ import zipfile
 
 
 PROFILE = Path(__file__).resolve().parent
-SETTINGS = PROFILE / "settings"
 FEED_NAME = "studio-essentials-packages"
 PROFILE_ROOT = "/studio-profile"
 PROFILE_TIME = "1970-01-01T00:00:00Z"
@@ -25,8 +24,8 @@ def write_json(path, data):
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def stage_packages(archives, version, output):
-    package_ids = (PROFILE / "packages.txt").read_text(encoding="utf-8").split()
+def stage_packages(archives, version, output, profile):
+    package_ids = (profile / "packages.txt").read_text(encoding="utf-8").split()
     package_directory = output / "packages"
     package_directory.mkdir()
     lock_entries = []
@@ -67,14 +66,14 @@ def stage_packages(archives, version, output):
     (output / "version").write_text(version + "\n", encoding="utf-8")
 
 
-def stage_configuration(output):
-    settings = json.loads((SETTINGS / "appsettings.json").read_text(encoding="utf-8"))
+def stage_configuration(output, settings_directory):
+    settings = json.loads((settings_directory / "appsettings.json").read_text(encoding="utf-8"))
     nuplane = settings.setdefault("Nuplane", {})
     nuplane["Convergence"] = {"Manifest": {"Enabled": True, "Path": f"{PROFILE_ROOT}/desired.json"}}
     nuplane["LockFile"] = {"Mode": "Enforce", "Path": f"{PROFILE_ROOT}/nuplane.lock.json", "FailOnHashMismatch": True}
     write_json(output / "appsettings.json", settings)
 
-    management = json.loads((SETTINGS / "nuplane-management.json").read_text(encoding="utf-8"))
+    management = json.loads((settings_directory / "nuplane-management.json").read_text(encoding="utf-8"))
     management["Nuplane"]["Setup"]["Feeds"].append({
         "Name": FEED_NAME,
         "DirectoryPath": f"{PROFILE_ROOT}/packages",
@@ -82,12 +81,14 @@ def stage_configuration(output):
     })
     write_json(output / "nuplane-management.json", management)
     for name in ("shells.json", "appsettings.Development.json"):
-        shutil.copyfile(SETTINGS / name, output / name)
+        shutil.copyfile(settings_directory / name, output / name)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("archives", type=Path, help="directory of official or locally packed Studio .nupkg files")
+    parser.add_argument("--profile-source", type=Path, default=PROFILE,
+                        help="verified source directory providing the package list, settings and Dockerfile")
     parser.add_argument("--version", required=True, help="Studio version shared by the Foundation image and packages")
     parser.add_argument("--output", required=True, type=Path, help="new directory for the standalone Docker build context")
     args = parser.parse_args()
@@ -101,9 +102,9 @@ def main():
             directory = Path(temporary) / "context"
             payload = directory / "profile"
             payload.mkdir(parents=True)
-            stage_packages(args.archives, args.version, payload)
-            stage_configuration(directory)
-            shutil.copyfile(PROFILE / "Dockerfile", directory / "Dockerfile")
+            stage_packages(args.archives, args.version, payload, args.profile_source)
+            stage_configuration(directory, args.profile_source / "settings")
+            shutil.copyfile(args.profile_source / "Dockerfile", directory / "Dockerfile")
             directory.rename(args.output)
     except (OSError, ValueError, ET.ParseError, zipfile.BadZipFile) as error:
         print(f"Studio Essentials profile preparation failed: {error}", file=sys.stderr)

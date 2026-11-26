@@ -6,7 +6,7 @@ name: Studio Docker (consolidated gated)
 #
 # Each Studio flavor publishes its own image (#5768); tools/ci/studio_docker_publish.py (STUDIO_FLAVORS) maps
 # each flavor to its Docker Hub repository and Dockerfile:
-#   essentials -> elsaworkflows/elsa-studio            (pairs with elsaworkflows/elsa-essentials-host)
+#   essentials -> elsaworkflows/elsa-studio            (the Foundation-derived profile for elsaworkflows/elsa-essentials-host)
 #   workbench  -> elsaworkflows/elsa-studio-workbench  (pairs with elsaworkflows/elsa-workbench)
 #   foundation -> elsaworkflows/elsa-studio-foundation (the bare shell; every module from the feed)
 # Every flavor job runs every gate below on its own. One flavor failing, for example because its Docker Hub
@@ -142,7 +142,10 @@ jobs:
           mkdir -p "$STUDIO_IMAGE_VALIDATORS"
           cp tools/ci/studio_docker_publish.py tools/ci/studio_image_tags.py \
             tools/ci/verify_studio_nuget_packages.py tools/ci/studio-package-identities.json \
+            tools/ci/verify-studio-assets.py tools/ci/studio_profile_release.py \
             "$STUDIO_IMAGE_VALIDATORS/"
+          mkdir -p "$STUDIO_IMAGE_VALIDATORS/profile"
+          cp Studio/docker/profiles/essentials/{prepare.py,smoke.py,release.hcl} "$STUDIO_IMAGE_VALIDATORS/profile/"
           echo "STUDIO_IMAGE_VALIDATORS=$STUDIO_IMAGE_VALIDATORS" >> "$GITHUB_ENV"
 
       - name: Resolve the flavor's image and Dockerfile
@@ -229,6 +232,16 @@ jobs:
           ref: ${{ steps.ci_source.outputs.source_sha || steps.source.outputs.sha }}
           persist-credentials: false
 
+      - name: Require the Essentials profile at the verified source
+        if: matrix.flavor == 'essentials'
+        run: |
+          profile="$GITHUB_WORKSPACE/Studio/docker/profiles/essentials"
+          if [[ ! -f "$profile/Dockerfile" || ! -f "$profile/packages.txt" || ! -d "$profile/settings" ]]; then
+            echo "::error::Verified source $(git rev-parse HEAD) predates the source-owned Studio Essentials profile. Select a Studio Packages run from a commit that includes the profile Dockerfile, package list and settings."
+            exit 1
+          fi
+          echo "STUDIO_PROFILE_SOURCE=$profile" >> "$GITHUB_ENV"
+
       - name: Reject a stale main image source
         if: github.event_name == 'workflow_run' || (inputs.publish == true && steps.source.outputs.head_branch == 'main')
         env:
@@ -296,7 +309,7 @@ jobs:
           if os.environ["PUBLISH_IMAGE"] == "true" and manifest.get("ref") != expected_ref:
               raise SystemExit("Studio artifact ref does not match the selected Actions run ref.")
 
-          package_ids = verify_packages(Path.cwd(), artifact, manifest["version"])
+          package_ids = verify_packages(Path.cwd(), artifact, manifest["version"], verify_payload=False)
 
           target = manifest.get("publish_target")
           gate_enabled = manifest.get("publisher_gate_enabled") is True
@@ -366,6 +379,46 @@ jobs:
       - name: Verify Studio frontend assets
         run: python3 tools/ci/verify-studio-assets.py
 
+      - name: Verify the selected Studio package payload
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          STUDIO_VERSION: ${{ steps.manifest.outputs.studio_version }}
+        run: >-
+          python3 "$STUDIO_IMAGE_VALIDATORS/verify_studio_nuget_packages.py"
+          --packages Studio/packages/nuget --version "$STUDIO_VERSION"
+
+      - name: Set up .NET for source-built Essentials packages
+        if: matrix.flavor == 'essentials' && github.event_name == 'workflow_run'
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 10.x
+
+      - name: Prepare the seven pinned Studio Essentials packages
+        if: matrix.flavor == 'essentials'
+        id: profile_prepare
+        env:
+          STUDIO_IMAGE: ${{ steps.flavor.outputs.image }}
+          STUDIO_VERSION: ${{ steps.image.outputs.version }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/studio-profile-release"
+          profile="$STUDIO_IMAGE_VALIDATORS/profile"
+          packages="$GITHUB_WORKSPACE/Studio/packages/nuget"
+          mkdir -p "$root/evidence"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
+            packages="$root/packages"
+            python3 "$STUDIO_IMAGE_VALIDATORS/studio_profile_release.py" pack \
+              --profile "$STUDIO_PROFILE_SOURCE" --output "$packages" --version "$STUDIO_VERSION"
+          fi
+          python3 "$profile/prepare.py" "$packages" --profile-source "$STUDIO_PROFILE_SOURCE" \
+            --version "$STUDIO_VERSION" --output "$root/context"
+          {
+            echo "STUDIO_PROFILE_ROOT=$root"
+            echo "STUDIO_PROFILE_CONTEXT=$root/context"
+            echo "STUDIO_PROFILE_PACKAGES=$packages"
+            echo "STUDIO_PROFILE_TAG=$STUDIO_IMAGE:profile-staging-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          } >> "$GITHUB_ENV"
+
       - name: Set up QEMU for the multi-platform publisher
         if: ${{ github.event_name == 'workflow_run' || inputs.publish == true }}
         uses: docker/setup-qemu-action@v3
@@ -381,6 +434,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and optionally publish versioned image tags
+        if: matrix.flavor != 'essentials'
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -400,14 +454,90 @@ jobs:
           cache-from: type=gha,scope=studio-${{ matrix.flavor }}
           cache-to: type=gha,mode=max,scope=studio-${{ matrix.flavor }}
 
+      - name: Build and stage the Foundation-derived Studio Essentials image
+        if: matrix.flavor == 'essentials'
+        id: profile_build
+        uses: docker/bake-action@5be5f02ff8819ecd3092ea6b2e6261c31774f2b4 # v6
+        env:
+          STUDIO_VERSION: ${{ steps.image.outputs.version }}
+          STUDIO_PROFILE_PLATFORMS: ${{ (github.event_name == 'workflow_run' || inputs.publish == true) && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+        with:
+          source: .
+          files: ${{ env.STUDIO_IMAGE_VALIDATORS }}/profile/release.hcl
+          allow: fs.read=${{ env.STUDIO_PROFILE_CONTEXT }}
+          targets: profile
+          push: ${{ github.event_name == 'workflow_run' || inputs.publish == true }}
+          load: ${{ github.event_name == 'workflow_dispatch' && inputs.publish != true }}
+          set: |
+            profile.labels.org.opencontainers.image.title=${{ steps.flavor.outputs.title }}
+            profile.labels.org.opencontainers.image.description=${{ steps.flavor.outputs.description }}
+            profile.labels.org.opencontainers.image.revision=${{ steps.ci_source.outputs.source_sha || steps.source.outputs.sha }}
+            profile.labels.org.opencontainers.image.version=${{ steps.image.outputs.version }}
+            profile.labels.org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            profile.labels.io.elsa.build.source-run=${{ steps.ci_source.outputs.source_url || format('https://github.com/{0}/actions/runs/{1}', github.repository, steps.source.outputs.run_id) }}
+            studio-foundation.cache-from=type=gha,scope=studio-essentials-profile-foundation
+            studio-foundation.cache-to=type=gha,mode=max,scope=studio-essentials-profile-foundation
+
+      - name: Qualify the exact Studio Essentials image
+        if: matrix.flavor == 'essentials'
+        id: profile_qualification
+        env:
+          BUILD_RESULT: ${{ steps.profile_build.outputs.metadata }}
+          PUBLISH_IMAGE: ${{ github.event_name == 'workflow_run' || inputs.publish == true }}
+          SOURCE_SHA: ${{ steps.ci_source.outputs.source_sha || steps.source.outputs.sha }}
+          STUDIO_VERSION: ${{ steps.image.outputs.version }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ "$PUBLISH_IMAGE" == "true" ]]; then
+            args+=(--index "$(jq -er '.profile["containerimage.digest"] | select(test("^sha256:[0-9a-f]{64}$"))' <<< "$BUILD_RESULT")")
+          fi
+          python3 "$STUDIO_IMAGE_VALIDATORS/studio_profile_release.py" qualify \
+            --profile "$STUDIO_IMAGE_VALIDATORS/profile" --output "$STUDIO_PROFILE_ROOT" \
+            --packages "$STUDIO_PROFILE_PACKAGES" --image "$STUDIO_PROFILE_TAG" \
+            --source "$SOURCE_SHA" --version "$STUDIO_VERSION" "${args[@]}"
+
+      - name: Retain Studio Essentials image qualification evidence
+        if: ${{ !cancelled() && steps.profile_prepare.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-essentials-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.STUDIO_PROFILE_ROOT }}/evidence/
+          retention-days: 7
+
+      - name: Apply ordinary Essentials tags to the qualified staging index
+        if: matrix.flavor == 'essentials' && (github.event_name == 'workflow_run' || inputs.publish == true)
+        env:
+          IMAGE_DIGEST: ${{ steps.profile_qualification.outputs.digest }}
+          IMAGE_TAGS: ${{ steps.image.outputs.tags }}
+          STUDIO_IMAGE: ${{ steps.flavor.outputs.image }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          tags=()
+          while IFS= read -r tag; do
+            [[ "$tag" == "$STUDIO_IMAGE:"* && "$tag" != "$STUDIO_IMAGE:latest" ]]
+            tags+=(--tag "$tag")
+          done <<< "$IMAGE_TAGS"
+          docker buildx imagetools create "${tags[@]}" "$STUDIO_IMAGE@$IMAGE_DIGEST"
+
       - name: Promote the verified main digest to latest
         if: (github.event_name == 'workflow_run' || inputs.publish == true) && (github.event_name == 'workflow_run' || steps.source.outputs.head_branch == 'main')
         env:
           GH_TOKEN: ${{ github.token }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_DIGEST: ${{ steps.profile_qualification.outputs.digest || steps.build.outputs.digest }}
+          STUDIO_FLAVOR: ${{ matrix.flavor }}
           STUDIO_IMAGE: ${{ steps.flavor.outputs.image }}
         run: |
           set -euo pipefail
+          read_latest_digest() {
+            docker buildx imagetools inspect "$STUDIO_IMAGE:latest" --format '{{json .Manifest}}' |
+              jq -er '.digest | select(test("^sha256:[0-9a-f]{64}$"))'
+          }
+          if [[ "$STUDIO_FLAVOR" == "essentials" ]]; then
+            previous_digest=$(read_latest_digest)
+            printf 'Previous %s latest digest: %s.\n' "$STUDIO_IMAGE" "$previous_digest" >> "$GITHUB_STEP_SUMMARY"
+          fi
           MAIN_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
           SOURCE_SHA=$(git rev-parse HEAD)
           export MAIN_SHA SOURCE_SHA
@@ -421,4 +551,11 @@ jobs:
           [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           [[ "$STUDIO_IMAGE" =~ ^elsaworkflows/elsa-studio(-workbench|-foundation)?$ ]]
           docker buildx imagetools create --tag "$STUDIO_IMAGE:latest" "$STUDIO_IMAGE@$IMAGE_DIGEST"
+          if [[ "$STUDIO_FLAVOR" == "essentials" ]]; then
+            published_digest=$(read_latest_digest)
+            if [[ "$published_digest" != "$IMAGE_DIGEST" ]]; then
+              echo "::error::$STUDIO_IMAGE latest resolves to $published_digest, expected the tested $IMAGE_DIGEST."
+              exit 1
+            fi
+          fi
           echo "Published $STUDIO_IMAGE latest from $SOURCE_SHA ($IMAGE_DIGEST)." >> "$GITHUB_STEP_SUMMARY"

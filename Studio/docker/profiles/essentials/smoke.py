@@ -87,11 +87,12 @@ def wait_json(container, path, ready, timeout):
 
 
 @contextmanager
-def run_isolated(image, logs, demo=False):
+def run_isolated(image, platform, logs, demo=False):
     settings = ["-e", "Logging__LogLevel__Nuplane=Information"]
     if demo:
         settings += ["-e", "Studio__Auth__Enabled=false"]
-    container = docker("run", "-d", "--pull", "never", "--network", "none", *settings, image).decode().strip()
+    container = docker("run", "-d", "--platform", platform, "--pull", "never", "--network", "none",
+                       *settings, image).decode().strip()
     try:
         yield container
     finally:
@@ -230,12 +231,13 @@ def qualify(args):
     expected_modules = set(curated) | BUILT_INS
     expected_features = set(read_json(args.context / "shells.json")["CShells"]["Shells"]["Default"]["Features"])
     expected_features.add("Events")  # Foundation enables this infrastructure feature in the shell.
-    docker("run", "--rm", "--pull", "never", "--network", "none", "--entrypoint", "sh", image_id, "-ec",
+    docker("run", "--rm", "--platform", platform, "--pull", "never", "--network", "none",
+           "--entrypoint", "sh", image_id, "-ec",
            'test ! -w /studio-profile && test ! -w /studio-profile/packages && test -w /app/packages && '
            '{ test ! -d /app/.nuplane || test -z "$(find /app/.nuplane -type f -print -quit)"; }')
-    with run_isolated(image_id, args.output / "default-auth.log") as container:
+    with run_isolated(image_id, platform, args.output / "default-auth.log") as container:
         default = verify_default_auth(container, expected_modules, archives, args.timeout)
-    with run_isolated(image_id, args.output / "etl.log", demo=True) as container:
+    with run_isolated(image_id, platform, args.output / "etl.log", demo=True) as container:
         demo = verify_demo(container, expected_modules, expected_features, curated, args.etl, args.timeout)
     return {"imageId": image_id, "platform": platform, "network": "none", "defaultAuth": default, "demo": demo}
 

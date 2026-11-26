@@ -15,6 +15,7 @@ from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
 import studio_docker_publish as publish
+from studio_profile_release import runtime_children
 
 
 REPOSITORY = "elsa-workflows/elsa-foundation"
@@ -477,7 +478,7 @@ class StudioDockerPublishTests(unittest.TestCase):
             text = output.read_text()
             self.assertIn("flavor=essentials\n", text)
             self.assertIn(f"image={IMAGE}\n", text)
-            self.assertIn("dockerfile=Studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile\n", text)
+            self.assertIn("dockerfile=Studio/docker/profiles/essentials/Dockerfile\n", text)
         for flavor in ("", "web", "Essentials"):
             with self.subTest(flavor=flavor), tempfile.TemporaryDirectory() as directory:
                 output = Path(directory) / "github-output"
@@ -490,7 +491,7 @@ class StudioDockerPublishTests(unittest.TestCase):
     def test_flavor_table_follows_the_owner_image_decision(self) -> None:
         self.assertEqual(
             {
-                "essentials": ("elsaworkflows/elsa-studio", "Studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile"),
+                "essentials": ("elsaworkflows/elsa-studio", "Studio/docker/profiles/essentials/Dockerfile"),
                 "workbench": ("elsaworkflows/elsa-studio-workbench", "Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile"),
                 "foundation": ("elsaworkflows/elsa-studio-foundation", "Studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile"),
             },
@@ -504,15 +505,40 @@ class StudioDockerPublishTests(unittest.TestCase):
                     self.assertTrue(values[key])
                     self.assertNotRegex(values[key], r"[,\r\n]")
 
-    def test_each_flavor_dockerfile_exists_and_starts_its_own_app(self) -> None:
-        for flavor, values in publish.STUDIO_FLAVORS.items():
+    def test_standalone_flavor_dockerfiles_start_their_own_apps(self) -> None:
+        for flavor in ("foundation", "workbench"):
             with self.subTest(flavor=flavor):
-                dockerfile = REPO_ROOT / values["dockerfile"]
-                self.assertTrue(dockerfile.is_file(), f"{values['dockerfile']} is missing.")
+                dockerfile = REPO_ROOT / publish.STUDIO_FLAVORS[flavor]["dockerfile"]
+                self.assertTrue(dockerfile.is_file(), f"{dockerfile} is missing.")
                 app = dockerfile.parent.name
                 text = dockerfile.read_text()
                 self.assertIn(f'ENTRYPOINT ["dotnet", "{app}.dll"]', text)
                 self.assertIn(f"dotnet publish Studio/src/apps/{app}/{app}.csproj", text)
+
+    def test_essentials_flavor_links_the_standalone_foundation_build(self) -> None:
+        dockerfile = REPO_ROOT / publish.STUDIO_FLAVORS["essentials"]["dockerfile"]
+        foundation = publish.STUDIO_FLAVORS["foundation"]["dockerfile"]
+        self.assertIn("FROM ${FOUNDATION_IMAGE}", dockerfile.read_text())
+        bake = dockerfile.with_name("release.hcl").read_text()
+        self.assertIn(f'dockerfile = "{foundation}"', bake)
+        self.assertIn('studio-foundation = "target:studio-foundation"', bake)
+
+    def test_staging_index_requires_exact_runtime_children(self) -> None:
+        amd64 = {"platform": {"os": "linux", "architecture": "amd64"}, "digest": "sha256:" + "a" * 64}
+        arm64 = {"platform": {"os": "linux", "architecture": "arm64"}, "digest": "sha256:" + "b" * 64}
+        attestation = {
+            "platform": {"os": "unknown", "architecture": "unknown"},
+            "annotations": {"vnd.docker.reference.type": "attestation-manifest",
+                            "vnd.docker.reference.digest": arm64["digest"]},
+        }
+        self.assertEqual({"linux/amd64": amd64["digest"], "linux/arm64": arm64["digest"]},
+                         runtime_children({"schemaVersion": 2, "manifests": [amd64, attestation, arm64]}))
+        for manifests in ([amd64], [amd64, arm64, arm64], [amd64, {**arm64, "digest": amd64["digest"]}],
+                          [amd64, arm64, {**attestation, "annotations": {
+                              **attestation["annotations"], "vnd.docker.reference.digest": "sha256:" + "c" * 64,
+                          }}]):
+            with self.subTest(manifests=manifests), self.assertRaises(ValueError):
+                runtime_children({"schemaVersion": 2, "manifests": manifests})
 
     def test_the_docker_workflow_builds_every_flavor_and_nothing_else(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/studio-docker.yml").read_text()
@@ -521,6 +547,23 @@ class StudioDockerPublishTests(unittest.TestCase):
         self.assertEqual(sorted(publish.STUDIO_FLAVORS), sorted(item.strip() for item in match.group(1).split(",")))
         # The image and Dockerfile come only from resolve-flavor, never from a literal in the workflow.
         self.assertNotIn("Studio/src/apps/", workflow)
+        self.assertLess(workflow.index("Qualify the exact Studio Essentials image"),
+                        workflow.index("Apply ordinary Essentials tags"))
+        self.assertLess(workflow.index("Apply ordinary Essentials tags"),
+                        workflow.index("Promote the verified main digest to latest"))
+
+    def test_manual_archive_payload_verification_follows_frontend_build(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/studio-docker.yml").read_text()
+        trusted = workflow.index("Preserve trusted image validators")
+        checkout = workflow.index("Checkout the verified source commit")
+        frontend = workflow.index("Build frontend assets")
+        payload = workflow.index("Verify the selected Studio package payload")
+        first_docker_build = workflow.index("Build and optionally publish versioned image tags")
+        self.assertIn("tools/ci/verify-studio-assets.py", workflow[trusted:checkout])
+        self.assertIn('verify_packages(Path.cwd(), artifact, manifest["version"], verify_payload=False)', workflow[:frontend])
+        self.assertLess(frontend, payload)
+        self.assertLess(payload, first_docker_build)
+        self.assertIn('$STUDIO_IMAGE_VALIDATORS/verify_studio_nuget_packages.py', workflow[payload:first_docker_build])
 
     def test_invalid_source_cli_fails_without_writing_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
