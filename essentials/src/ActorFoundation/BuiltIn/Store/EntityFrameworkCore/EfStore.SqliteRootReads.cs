@@ -66,7 +66,7 @@ public sealed partial class EfStore
                 "ReplyTo" IS NOT NULL AS "HasReply",
                 ("EnvelopeShape" AND ("ReplyTo" IS NULL OR (
                     "NodeEnd" > 1 AND "DeadlineEnd" > 1
-                    AND octet_length("Tail") > "DeadlineEnd" + CASE WHEN "Early" THEN 6 ELSE 0 END
+                    AND length("Tail") > "DeadlineEnd" + CASE WHEN "Early" THEN 6 ELSE 0 END
                     AND "Digits" <> '' AND "Digits" NOT GLOB '*[^0-9]*'
                     AND (length("Digits") < 19 OR length("Digits") = 19 AND "Digits" <= '9223372036854775807')
                     AND ("Occurrence" NOT GLOB 'operator/*' OR NOT "Early")

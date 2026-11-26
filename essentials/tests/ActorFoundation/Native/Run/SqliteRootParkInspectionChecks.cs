@@ -21,7 +21,16 @@ internal static partial class SqliteHostLifetimeChecks
         try
         {
             var file = Path.Combine(directory.FullName, "park.db");
-            await InstallFoundationAsync(file, token);
+            if (fenceInBatch)
+            {
+                await using var utf16 = OpenFoundationDb(file);
+                await utf16.Database.OpenConnectionAsync(token);
+                await utf16.Database.ExecuteSqlRawAsync("PRAGMA encoding = 'UTF-16le'", token);
+                await EfStore.InstallSqliteShippedAsync(utf16, 1, token);
+                Require(await utf16.Database.SqlQueryRaw<string>("""SELECT encoding AS "Value" FROM pragma_encoding""")
+                    .SingleAsync(token) == "UTF-16le", "the in-batch inspection fixture uses a UTF-16 SQLite file");
+            }
+            else await InstallFoundationAsync(file, token);
             var scope = EmbeddedTenant.Bind("sqlite-park-inspection");
             var other = ContractScopes.Bind("sqlite-park-inspection-other");
             var ingress = await SqliteEmbeddedHosting.OpenFoundationAsync(file, ParkKind, cancellationToken: token);
@@ -139,12 +148,19 @@ internal static partial class SqliteHostLifetimeChecks
                     """, token);
                 Require(await reads.InboxAsync(scope, actor, first.Next, token) is { Items: [{ Id: "later", Size: > 1048576 }] },
                     "a large held route and payload leave only their bounded delivery metadata in the page");
-                await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "Messages" SET "ReplyTo" = 'inspection|9223372036854775808|request'
-                    WHERE "Target" = {physical} AND "Kind" = 'continue' AND NOT "Done"
-                    """, token);
-                await ExpectFoundationFailureAsync<StoreFormatException>(() => reads.InboxAsync(scope, actor, first.Next, token).AsTask(),
-                    "the metadata projection refuses a reply deadline beyond the supported range");
+                await CheckInvalidRouteAsync("inspection|9223372036854775808|request", "a reply deadline beyond the supported range");
+                await CheckInvalidRouteAsync("inspection|1|", "an empty reply request");
+                await CheckInvalidRouteAsync("inspection|1||early", "an empty early reply request");
+
+                async Task CheckInvalidRouteAsync(string invalidRoute, string witness)
+                {
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "Messages" SET "ReplyTo" = {invalidRoute}
+                        WHERE "Target" = {physical} AND "Kind" = 'continue' AND NOT "Done"
+                        """, token);
+                    await ExpectFoundationFailureAsync<StoreFormatException>(() => reads.InboxAsync(scope, actor, first.Next, token).AsTask(),
+                        $"the metadata projection refuses {witness}");
+                }
             }
 
             SqliteEmbeddedHostedService Host(string node, ParkOpeningActor executor) => SqliteEmbeddedHostedService.ForFoundation(file,
