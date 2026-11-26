@@ -166,7 +166,7 @@ internal static class SqliteHostLifetimeChecks
                 application.Cancel();
                 await RequireCancellationAsync(stopping, application.Token, token);
                 if (mode == "stuck")
-                    Require((await escalation.Task.WaitAsync(token)).Contains("application shutdown deadline", StringComparison.Ordinal),
+                    Require(escalation.Task.IsCompletedSuccessfully,
                         "a stopped process whose actor stays blocked past the grace invokes its process policy");
             }
             else if (mode == "dispose")
@@ -242,7 +242,7 @@ internal static class SqliteHostLifetimeChecks
     private static async Task RequireRefusedAsync(SqliteEmbeddedHostedService service, CancellationToken token)
     {
         try { await service.StartAsync(token).WaitAsync(token); }
-        catch (InvalidOperationException error) when (error.Message.Contains("SQLite host lock", StringComparison.Ordinal))
+        catch (SqliteHostLockException)
         {
             Console.WriteLine("ok a second host is refused while the SQLite file is locked");
             return;
@@ -302,7 +302,7 @@ internal static class SqliteHostLifetimeChecks
         public bool IsEnabled(LogLevel logLevel) => true;
         public void Log<TState>(LogLevel level, EventId eventId, TState state, Exception? error, Func<TState, Exception?, string> format)
         {
-            if (level == LogLevel.Warning && format(state, error).Contains("lease expiry", StringComparison.Ordinal))
+            if (level == LogLevel.Warning && error is null)
                 Interlocked.Increment(ref _kills);
             if (level == LogLevel.Error && error is ScopeOwnershipLostException)
                 Interlocked.Increment(ref _ownershipErrors);

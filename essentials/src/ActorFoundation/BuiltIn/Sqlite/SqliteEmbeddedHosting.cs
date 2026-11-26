@@ -150,25 +150,24 @@ public static class SqliteEmbeddedHosting
     {
         // Keep the sidecar on disk after closing it. Unlinking a locked inode would let another host lock a new inode.
         FileStream stream;
+        try { stream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+        catch (IOException error) { throw new SqliteHostLockException(path, error); }
+
         try
         {
-            stream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-        }
-        catch (IOException error)
-        {
-            throw new InvalidOperationException($"Cannot acquire the SQLite host lock '{path}'. Only one host may use the database file.", error);
-        }
-        const int exclusiveNonBlocking = 2 | 4;
-        if (!OperatingSystem.IsWindows() && UnixLockFile(stream.SafeFileHandle.DangerousGetHandle().ToInt32(), exclusiveNonBlocking) != 0)
-        {
-            var error = new Win32Exception(Marshal.GetLastPInvokeError());
-            stream.Dispose();
-            throw new InvalidOperationException($"Cannot acquire the SQLite host lock '{path}'. Only one host may use the database file.", error);
-        }
+            const int exclusiveNonBlocking = 2 | 4;
+            if (!OperatingSystem.IsWindows() && UnixLockFile(stream.SafeFileHandle.DangerousGetHandle().ToInt32(), exclusiveNonBlocking) != 0)
+                throw new SqliteHostLockException(path, new Win32Exception(Marshal.GetLastPInvokeError()));
 
-        if (HeldLocks.TryAdd(path, stream)) return stream;
-        stream.Dispose();
-        throw new InvalidOperationException($"The SQLite host lock '{path}' is already held in this process.");
+            if (!HeldLocks.TryAdd(path, stream))
+                throw new SqliteHostLockException(path);
+            return stream;
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
     }
 
     private static void ReleaseLock(FileStream stream)
@@ -177,3 +176,6 @@ public static class SqliteEmbeddedHosting
         stream.Dispose();
     }
 }
+
+internal sealed class SqliteHostLockException(string path, Exception? cause = null)
+    : IOException($"Cannot acquire the SQLite host lock '{path}'. Only one host may use the database file.", cause);
