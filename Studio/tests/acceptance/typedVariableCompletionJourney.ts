@@ -201,7 +201,7 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await page.keyboard.press("Escape");
   await expect(list()).toHaveCount(0);
 
-  // The Activity Data chooser offers the typed variable as a whole value: choosing it inserts the variable, no members.
+  // The Activity Data chooser offers the whole variable while the JavaScript editor provides advisory members.
   await page.keyboard.insertText(" + ");
   const beforeInsert = `${expandedSource} + `;
   await expect.poll(source).toBe(beforeInsert);
@@ -216,8 +216,7 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await expectReadable(type, "Variable type");
   await expect(variables.getByRole("option", { name: "plain Object", exact: true })).toBeVisible();
   await capture(page, info, "chooser-typed-variable");
-  await variable.press("Enter");
-  await expect(chooser).toHaveCount(0);
+  await s.chooseWholeExpressionSource(created, variable);
   await expect(large).toBeFocused();
   type Stored = { source: string; parameters: Record<string, { kind: string; variableKey?: string }> };
   const inserted = async () => {

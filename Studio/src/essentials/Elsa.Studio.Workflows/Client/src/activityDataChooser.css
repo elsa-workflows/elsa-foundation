@@ -348,7 +348,7 @@
 }
 
 .wf-data-members .wf-data-chooser-option {
-  grid-template-columns: minmax(0, 1fr) fit-content(60%) auto;
+  grid-template-columns: minmax(0, 1fr) fit-content(45%) auto;
 }
 
 .wf-data-members .wf-data-chooser-option-type {

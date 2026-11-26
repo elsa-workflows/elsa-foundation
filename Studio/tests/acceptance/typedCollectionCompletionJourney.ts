@@ -122,7 +122,7 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   await page.mouse.move(0, 0);
   await expect(hover).toHaveCount(0);
 
-  // Insert data still offers the list as a whole value: choosing it inserts the variable, with no member view.
+  // Insert data offers the whole list while the JavaScript editor provides advisory item members.
   await editor.press("ControlOrMeta+End");
   await page.keyboard.insertText(" + ");
   const beforeInsert = "variables.orders[0].display_name + ";
@@ -131,8 +131,7 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   const chooser = page.getByRole("dialog", { name: "Choose data for Text", exact: true });
   const variable = chooser.getByRole("listbox", { name: "Variables", exact: true }).getByRole("option").filter({ hasText: /^orders/ });
   await expect(variable).toHaveCount(1);
-  await variable.press("Enter");
-  await expect(chooser).toHaveCount(0);
+  await s.chooseWholeExpressionSource(created, variable);
   type Stored = { source: string; parameters: Record<string, { kind: string; variableKey?: string }> };
   const inserted = async () => {
     const value = (await s.stored(created))?.value;
