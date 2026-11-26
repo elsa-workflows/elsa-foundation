@@ -259,8 +259,11 @@ internal static partial class SqliteHostLifetimeChecks
                     UPDATE "Messages" SET "Due" = 0, "Seen" = {epoch}
                     WHERE "Target" = {observedActor} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
                     """, token);
+                var polls = cohortPlan.PlanReads;
                 var settled = await DriveAsync(replacement, root, row => row.Revision > restored.Revision &&
                     row is { Status: InstanceStatus.Running, Suspended: false });
+                Require(cohortPlan.PlanReads - polls <= 8,
+                    "observed predecessors stay outside the SQLite sampler before the selected control settles");
                 var journal = (await store.ReadJournalOfAsync(partition, settled.Actor.Id, 0, token)).Single(row => row.Revision == settled.Revision);
                 Require(replacement.Epoch > oldEpoch && replacement.Owns && executor.Order.Count == 0 &&
                     journal.Entries.Contains("\"Reason\":\"selection\"", StringComparison.Ordinal) &&
@@ -268,8 +271,8 @@ internal static partial class SqliteHostLifetimeChecks
                         SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {settled.Actor.Id} AND "Kind" = 'cohort-arrival'
                             AND NOT "Done" AND "FoundationKeptBy" IS NULL AND "FoundationReleasedBy" = 1 AND "Payload" = {payload}) AS "Value"
                         """).SingleAsync(token), "a cold owner settles the stale control while the withheld arrival retains its released generation");
-                Require(cohortPlan.Plan.Any(step => step.Contains("IX_FoundationRootInbox_CohortSequence", StringComparison.Ordinal) &&
-                    step.Contains("Partition=? AND Seq>? AND Seq<?", StringComparison.Ordinal)),
+                Require(cohortPlan.Plan.Any(step => step.Contains("IX_FoundationRootInbox_CohortGroups", StringComparison.Ordinal) &&
+                    step.Contains("Partition=? AND Seen=? AND Due=? AND Seq>? AND Seq<?", StringComparison.Ordinal)),
                     "the SQLite cohort sampler seeks waiting controls inside the sequence ceiling");
 
                 async Task<(Contract.ActorRef Root, EfStore.RootImage Image)> StartInPartitionAsync(Worker owner, int home)

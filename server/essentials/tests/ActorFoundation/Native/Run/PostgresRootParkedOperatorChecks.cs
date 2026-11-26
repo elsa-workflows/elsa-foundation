@@ -1,6 +1,7 @@
 using System.Data.Common;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Runtime.Hosting;
@@ -1037,13 +1038,13 @@ internal static class PostgresRootParkedOperatorChecks
                 observation.ObserveCohortPlan = true;
                 await set.DriveAsync(withheld, row => row is { Revision: 6, Status: InstanceStatus.Running });
                 set.Answered("younger-control", "StaleSelection");
-                var candidatePlan = observation.CohortPlan.SkipWhile(line => line.Trim() != "CTE candidates").Skip(1)
+                var candidatePlan = observation.CohortPlan.SkipWhile(line => line.Trim() != "CTE picked").Skip(1)
                     .TakeWhile(line => line.StartsWith("    ", StringComparison.Ordinal)).ToArray();
-                var boundedPlan = candidatePlan.Any(line => line.Contains("IX_FoundationRootInbox_CohortSequence", StringComparison.Ordinal) &&
+                var boundedPlan = candidatePlan.Any(line => line.Contains("IX_FoundationRootInbox_CohortGroups", StringComparison.Ordinal) &&
                         (line.Contains("Index Scan", StringComparison.Ordinal) || line.Contains("Index Only Scan", StringComparison.Ordinal))) &&
                     candidatePlan.Any(line => line.Contains("->  Limit", StringComparison.Ordinal)) &&
                     candidatePlan.Any(line => line.Contains("Index Cond:", StringComparison.Ordinal) &&
-                        line.Contains("\"Seq\" <= ", StringComparison.Ordinal) && line.Contains(".\"Through\"", StringComparison.Ordinal));
+                        line.Contains("\"Seq\" <= ", StringComparison.Ordinal) && line.Contains(".\"Ceiling\"", StringComparison.Ordinal));
                 Check(boundedPlan, boundedPlan ? "the cohort window seeks within the sequence ceiling and limits candidates"
                     : string.Join(Environment.NewLine, observation.CohortPlan));
                 Check(!set.AnsweredAny("older-control") && await set.ImageAsync(offerable) is { Revision: 4 } &&
@@ -1080,6 +1081,31 @@ internal static class PostgresRootParkedOperatorChecks
                         commands.CohortWindows.All(window => window.Partitions.Length * window.PerPartition <= limit) &&
                         commands.CohortWindows.SelectMany(window => window.Partitions).Distinct().Count() == count,
                         "one bounded query per poll rotates across all 1,024 owned partitions");
+                    await using var write = OpenWide();
+                    var observedEpoch = fences.Single(fence => fence.Partition == 1).Epoch;
+                    await write.Database.ExecuteSqlInterpolatedAsync($"""
+                        INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
+                        SELECT 'operator/future-' || row, {InboxKey.FoundationOccurrenceScope}, 0, 'fixture', {Kinds.Terminate},
+                            {long.MaxValue}, 0, 0, 0, false FROM generate_series(1, 10000) row
+                        UNION ALL
+                        SELECT 'operator/observed-' || row, {InboxKey.FoundationOccurrenceScope}, 1, 'fixture', {Kinds.Terminate},
+                            0, {observedEpoch}, 0, 0, false FROM generate_series(1, 10000) row
+                        """, stop);
+                    await write.Database.ExecuteSqlRawAsync("""ANALYZE "Messages" """, stop);
+                    foreach (var fence in fences.Where(fence => fence.Partition is 0 or 1))
+                    {
+                        for (var pass = 0; pass < 2; pass++)
+                        {
+                            commands.CohortPlan.Clear();
+                            commands.ObserveCohortPlan = true;
+                            Check((await owner.PollAsync(fence.Partition, fence.Epoch, TimeSpan.Zero, 1, stop)).Messages.Count == 0,
+                                "a partition full of future or observed controls offers no input");
+                            var summary = commands.CohortPlan.First(line => line.TrimStart().StartsWith("Buffers:", StringComparison.Ordinal));
+                            var blocks = Regex.Matches(summary, @"(?:hit|read)=(\d+)").Sum(match => int.Parse(match.Groups[1].Value,
+                                System.Globalization.CultureInfo.InvariantCulture));
+                            Check(blocks <= 32, $"the loaded empty poll uses {blocks} buffers within the 32-buffer allowance");
+                        }
+                    }
                 }
                 finally { await owner.ReleaseAsync(fences, stop); }
             }
@@ -3136,13 +3162,13 @@ internal static class PostgresRootParkedOperatorChecks
             if (command is NpgsqlCommand cohort &&
                 cohort.CommandText.Contains("/* root-cohort-waiting */", StringComparison.Ordinal))
             {
-                CohortWindows.Add(((int[])cohort.Parameters[0].Value!, (int)cohort.Parameters[4].Value!));
+                CohortWindows.Add(((int[])cohort.Parameters[0].Value!, (int)cohort.Parameters[7].Value!));
                 if (!ObserveCohortPlan) return result;
                 ObserveCohortPlan = false;
                 var planOptions = new NpgsqlConnectionStringBuilder(connection) { Options = "-c enable_seqscan=off" };
                 await using var source = new NpgsqlConnection(planOptions.ConnectionString);
                 await source.OpenAsync(cancellationToken);
-                await using var explain = new NpgsqlCommand("EXPLAIN (COSTS OFF) " + cohort.CommandText, source);
+                await using var explain = new NpgsqlCommand("EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) " + cohort.CommandText, source);
                 foreach (NpgsqlParameter parameter in cohort.Parameters) explain.Parameters.Add(parameter.Clone());
                 await using var plan = await explain.ExecuteReaderAsync(cancellationToken);
                 while (await plan.ReadAsync(cancellationToken)) CohortPlan.Add(plan.GetString(0));
