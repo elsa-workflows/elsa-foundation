@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Nuplane;
+using Nuplane.Abstractions;
 using Nuplane.Abstractions.PackageStoreProtection;
 using Nuplane.Admin;
 using Nuplane.Feeds.Configuration;
@@ -236,7 +237,12 @@ HostApplicationBuilder CreateBuilder()
     builder.Services.AddNuplane(nuplane =>
     {
         nuplane.WithStateFile(state).UseCoordinatedPackageStore([new("default", "studio", state)], true);
-        nuplane.AddDirectoryFeed("fixture", feed, directory => { directory.Watch = false; directory.IncludeAll(); });
+        nuplane.AddDirectoryFeed("fixture", feed, directory =>
+        {
+            directory.Trust = FeedTrustLevel.Trusted;
+            directory.Watch = false;
+            directory.IncludeAll();
+        });
     });
     builder.Services.Configure<FeedResolutionOptions>(options => options.PackageInstallRoot = installs);
     builder.Services.Configure<ReconciliationOptions>(options => options.EnableAutomaticReconciliation = false);

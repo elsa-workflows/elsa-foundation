@@ -82,8 +82,16 @@ public sealed class ModuleManagementApiTests : IDisposable
         Assert.Equal(HttpStatusCode.Conflict, deleteCache.StatusCode);
         Assert.Equal(configuration, await File.ReadAllTextAsync(SettingsPath));
 
-        using var addEditable = await client.PostAsJsonAsync(Api + "/feeds", feed);
+        using var addEditable = await client.PostAsJsonAsync(Api + "/feeds", new
+        {
+            feed.name, feed.directoryPath, feed.includePatterns, feed.directory, trust = "Trusted"
+        });
         Assert.Equal(HttpStatusCode.OK, addEditable.StatusCode);
+        using var updateSameDirectory = await client.PutAsJsonAsync(Api + "/feeds/editable", feed);
+        Assert.Equal(HttpStatusCode.OK, updateSameDirectory.StatusCode);
+        using var unchangedFeed = await client.GetFromJsonAsync<JsonDocument>(Api + "/registry");
+        Assert.Equal("Trusted", unchangedFeed!.RootElement.GetProperty("feeds").EnumerateArray()
+            .Single(item => item.GetProperty("name").GetString() == "editable").GetProperty("trust").GetString());
         using var updateEditable = await client.PutAsJsonAsync(Api + "/feeds/editable", new
         {
             feed.name,
@@ -95,7 +103,9 @@ public sealed class ModuleManagementApiTests : IDisposable
         using var registry = await client.GetFromJsonAsync<JsonDocument>(Api + "/registry");
         var feeds = registry!.RootElement.GetProperty("feeds").EnumerateArray().ToArray();
         Assert.Equal("cache", feeds.Single(item => item.GetProperty("name").GetString() == "baked").GetProperty("directoryPath").GetString());
-        Assert.Equal("new-drop-zone", feeds.Single(item => item.GetProperty("name").GetString() == "editable").GetProperty("directoryPath").GetString());
+        var updatedFeed = feeds.Single(item => item.GetProperty("name").GetString() == "editable");
+        Assert.Equal("new-drop-zone", updatedFeed.GetProperty("directoryPath").GetString());
+        Assert.Equal(JsonValueKind.Null, updatedFeed.GetProperty("trust").ValueKind);
         using var deleteEditable = await client.DeleteAsync(Api + "/feeds/editable");
         Assert.Equal(HttpStatusCode.OK, deleteEditable.StatusCode);
         using var saved = JsonDocument.Parse(await File.ReadAllTextAsync(SettingsPath));

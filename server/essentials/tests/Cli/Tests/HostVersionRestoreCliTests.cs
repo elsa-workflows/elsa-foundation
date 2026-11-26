@@ -114,6 +114,7 @@ public sealed class HostVersionRestoreCliTests : IDisposable
     private static string ModuleFeed =>
         """
           "local-packages": {
+            "Trust": "Trusted",
             "DirectoryPath": "packages",
             "IncludePatterns": [ "Acme.*" ]
           }

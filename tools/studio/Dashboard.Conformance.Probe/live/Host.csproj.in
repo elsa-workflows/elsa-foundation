@@ -29,11 +29,9 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="MySql.EntityFrameworkCore" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-    <PackageReference Include="OpenIddict.EntityFrameworkCore" />
     <PackageReference Include="Nuplane" />
     <PackageReference Include="Nuplane.Admin" />
     <PackageReference Include="Nuplane.Loading" />
-    <PackageReference Include="Nuplane.Sources.Directory" />
     <ProjectReference Include="__SOURCE_ROOT__/extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />

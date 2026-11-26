@@ -205,6 +205,7 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
             // A second feed beside the host's own `packages` one, which resolves what the package there depends on and holds
             // nothing the host loads on its own account: the host carries EF Core and Elsa.Persistence.EntityFramework itself.
             ["Nuplane:Setup:Feeds:1:Name"] = "closure",
+            ["Nuplane:Setup:Feeds:1:Trust"] = "Trusted",
             ["Nuplane:Setup:Feeds:1:DirectoryPath"] = feed.ClosureDirectory,
             ["Nuplane:Capabilities:ef-provider"] = "Sqlite",
             [$"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)}"] = policy.ToString()

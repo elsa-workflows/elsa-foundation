@@ -1,8 +1,6 @@
-using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json.Nodes;
 using Xunit;
 
@@ -17,8 +15,6 @@ namespace Elsa.Workbench.Tests;
 public sealed class WorkbenchModuleManagementReconcileTests
 {
     private const string Api = "/_elsa/module-management";
-    private const string PackageId = "Elsa.Workbench.Tests.ModuleManagementMarker";
-
     /// <summary>The reconcile itself takes seconds; a request that outlasts this has hung, as the sibling suites bound theirs.</summary>
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
 
@@ -31,7 +27,7 @@ public sealed class WorkbenchModuleManagementReconcileTests
     {
         Settings = new Dictionary<string, string>
         {
-            ["Nuplane:Setup:PollInterval"] = "1.00:00:00",
+            ["Nuplane:Reconciliation:PollInterval"] = "1.00:00:00",
             ["Nuplane:Setup:Feeds:0:Directory:Watch"] = "false"
         }
     };
@@ -51,22 +47,28 @@ public sealed class WorkbenchModuleManagementReconcileTests
     public async Task Uploading_a_package_reconciles_it_in_before_answering()
     {
         await using var workbench = await WorkbenchProcess.StartAsync(OnDemandReconcile);
-        using var form = new MultipartFormDataContent { { PackageContent(PackageId), "package", $"{PackageId}.1.0.0.nupkg" } };
+        var stagingDirectory = Path.Combine(workbench.ContentRoot, "upload-fixture");
+        Directory.CreateDirectory(Path.Combine(stagingDirectory, "packages"));
+        var package = NativeHostingScenario.CreatePackage(stagingDirectory);
+        using var content = new StreamContent(File.OpenRead(package));
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        using var form = new MultipartFormDataContent { { content, "package", Path.GetFileName(package) } };
 
         using var response = await AnsweredAsync(workbench, "POST", $"{Api}/packages/upload", workbench.ManagementClient.PostAsync($"{Api}/packages/upload", form));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("Completed", await OutcomeAsync(response));
+        var reconcile = (await response.Content.ReadFromJsonAsync<JsonNode>())!["reconcile"]!;
+        Assert.Equal("Completed", reconcile["outcome"]!.GetValue<string>());
+        Assert.False(reconcile["isDegraded"]!.GetValue<bool>(), reconcile.ToJsonString());
         var registry = await workbench.ManagementClient.GetFromJsonAsync<JsonNode>($"{Api}/registry");
-        Assert.Contains(PackageId, registry!["modules"]!.AsArray().Select(module => module!["packageId"]!.GetValue<string>()));
+        Assert.Contains(NativeHostingScenario.PackageId, registry!["modules"]!.AsArray().Select(module => module!["packageId"]!.GetValue<string>()));
     }
 
     [Fact]
     public async Task Deleting_a_dropped_package_runs_its_background_reconcile()
     {
         await using var workbench = await WorkbenchProcess.StartAsync(OnDemandReconcile);
-        var file = $"{PackageId}.1.0.0.nupkg";
-        await File.WriteAllBytesAsync(Path.Join(workbench.ContentRoot, "packages", file), await PackageContent(PackageId).ReadAsByteArrayAsync());
+        var file = Path.GetFileName(NativeHostingScenario.CreatePackage(workbench.ContentRoot));
 
         var path = $"{Api}/packages/drop-folder/{file}";
 
@@ -100,28 +102,5 @@ public sealed class WorkbenchModuleManagementReconcileTests
             Assert.True(DateTimeOffset.UtcNow < deadline, $"The host never logged '{expected}' within {Patience}. Host output:{Environment.NewLine}{workbench.Output}");
             await Task.Delay(250);
         }
-    }
-
-    /// <summary>A package with nothing in it but its identity: enough for a directory feed to list it and Nuplane to install it.</summary>
-    private static ByteArrayContent PackageContent(string id)
-    {
-        using var stream = new MemoryStream();
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            Add(archive, "[Content_Types].xml", """<?xml version="1.0" encoding="utf-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml" /><Default Extension="nuspec" ContentType="application/octet" /><Default Extension="_" ContentType="application/octet" /></Types>""");
-            Add(archive, "_rels/.rels", $"""<?xml version="1.0" encoding="utf-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Type="http://schemas.microsoft.com/packaging/2010/07/manifest" Target="/{id}.nuspec" Id="R1" /></Relationships>""");
-            Add(archive, $"{id}.nuspec", $"""<?xml version="1.0" encoding="utf-8"?><package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd"><metadata><id>{id}</id><version>1.0.0</version><authors>tests</authors><description>Marks a package dropped in by a module-management test.</description></metadata></package>""");
-            Add(archive, "lib/net10.0/_._", "");
-        }
-
-        var content = new ByteArrayContent(stream.ToArray());
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        return content;
-    }
-
-    private static void Add(ZipArchive archive, string name, string text)
-    {
-        using var entry = archive.CreateEntry(name).Open();
-        entry.Write(Encoding.UTF8.GetBytes(text));
     }
 }

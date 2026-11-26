@@ -137,6 +137,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             "Nuplane.Feeds.MultiFeedPackageResolver",
             "Nuplane.Feeds.NuGetRemotePackageAcquirer",
             "Nuplane.Loading.IScopedPackageLoader",
+            "Nuplane.Reconciliation.IOrdinaryPackageLoadingActivation",
             "Nuplane.Reconciliation.ILeasedPackageGraphLoadingObserver",
             "Nuplane.Reconciliation.ILeasedPackageGraphRecoveryLoadingObserver"),
         Entries(
@@ -526,7 +527,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
                 "--contentRoot", _directory,
                 "--environment", "Development",
                 "--urls", "http://127.0.0.1:0",
-                "--Nuplane:Setup:StateFilePath", Path.Join(_directory, ".nuplane", "store-state.json"),
+                "--Nuplane:StoreRegistry:StateFilePath", Path.Join(_directory, ".nuplane", "store-state.json"),
                 // Enables the real Foundation package management composition. Workbench already enables it.
                 "--Elsa:ModuleManagement:Enabled", "true",
                 "--Elsa:ModuleManagement:ApiKey", "guard-test-key"

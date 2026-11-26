@@ -366,8 +366,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.15",
-        "contentHash": "IGmLRHXJ/BcHWmjfilrikRFCkkJOyb5V7KoRld+yxGB0PzmWxEaBUWsz0+FXEIrmDz7lOoDESq7MI8XADRUoNA=="
+        "resolved": "1.0.1",
+        "contentHash": "B9Uud5b0LNA5QMOKeQV4Bv17OzStoaDu30YmA+zRtijAO/N0zw4eoc/YUaej+ta80LjZsVrhW1cIhMX8/1ZX5g=="
       },
       "SharpZipLib": {
         "type": "Transitive",
@@ -544,7 +544,7 @@
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
-          "Nuplane.Loading.Abstractions": "[0.0.15, )"
+          "Nuplane.Loading.Abstractions": "[1.0.1, )"
         }
       },
       "elsa.cluster.testing": {
@@ -933,11 +933,11 @@
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.15, )",
-        "resolved": "0.0.15",
-        "contentHash": "lDjC7irExdJXl2Br9kiOz9hhYewlXLEgpw8hi2S0DILX3JRbhNl/pTcj62fEntLAYa5zBMGBmO+/zezdJLRnMA==",
+        "requested": "[1.0.1, )",
+        "resolved": "1.0.1",
+        "contentHash": "lcPcEr/DU3E2K1/+f9PRKr4gZW57EaWjxCl864w1I0MUgrX2Qzk0wcNEdY+fQcTyoO8oS26X9tuD+JUhwKiLeA==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.15"
+          "Nuplane.Abstractions": "1.0.1"
         }
       },
       "System.Security.Cryptography.Pkcs": {

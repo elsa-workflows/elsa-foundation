@@ -196,7 +196,7 @@ public sealed class FoundationHostReconcileTests(FoundationHostFeed feed, ITestO
         settings["Elsa:Boot:EagerShellActivation:Retry:InitialDelay"] = maxRetryInterval.ToString("c", CultureInfo.InvariantCulture);
         settings["Elsa:Boot:EagerShellActivation:Retry:MaxDelay"] = maxRetryInterval.ToString("c", CultureInfo.InvariantCulture);
         settings["Nuplane:Setup:Feeds:0:Directory:Watch"] = "false";
-        settings["Nuplane:Setup:PollInterval"] = "1.00:00:00";
+        settings["Nuplane:Reconciliation:PollInterval"] = "1.00:00:00";
 
         _host = await FoundationHostProcess.StartAsync(
             Shells(connectionString, EntityFrameworkCoreFeature, OrdersFeature, "FeedModuleFixtureStartupControl"),
@@ -341,7 +341,7 @@ public sealed class FoundationHostReconcileTests(FoundationHostFeed feed, ITestO
         // The folder's watcher would reconcile a package dropped in on its own, and the poll would run a cycle of its own, either
         // racing the request under test and answering it with a skipped outcome.
         settings["Nuplane:Setup:Feeds:0:Directory:Watch"] = "false";
-        settings["Nuplane:Setup:PollInterval"] = "1.00:00:00";
+        settings["Nuplane:Reconciliation:PollInterval"] = "1.00:00:00";
         _host = await FoundationHostProcess.StartAsync(Shells(ConnectionString, EntityFrameworkCoreFeature, OrdersFeature), packageFiles, settings);
     }
 

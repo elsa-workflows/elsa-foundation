@@ -26,7 +26,7 @@ public sealed class EmbeddedFoundationShellHostingTests
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = contentRoot.FullName });
             builder.WebHost.UseTestServer();
             builder.Configuration["CShells:Shells:embedded:Name"] = "embedded";
-            builder.Configuration["Nuplane:Setup:StateFilePath"] = Path.Join(contentRoot.FullName, "state.json");
+            builder.Configuration["Nuplane:StoreRegistry:StateFilePath"] = Path.Join(contentRoot.FullName, "state.json");
             builder.Configuration["Nuplane:Loading:Enabled"] = "true";
             builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
             builder.Services.AddAuthentication("existing-app").AddCookie("existing-app", options =>

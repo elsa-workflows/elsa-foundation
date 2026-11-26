@@ -234,8 +234,8 @@ public sealed class WorkbenchHostProcessTests(FoundationHostFeed feed, ITestOutp
         settings["Elsa:Readiness:WarmDefaultShell"] = warmDefaultShell.ToString();
         settings["Elsa:Shells:ReloadOnPackageChange"] = autoReload.ToString();
         settings["Elsa:Diagnostics:ConsoleLogStreaming:Enabled"] = "false";
-        settings["Nuplane:Setup:AutomaticReconciliation"] = automaticReconciliation.ToString();
-        settings["Nuplane:Setup:PollInterval"] = "1.00:00:00";
+        settings["Nuplane:Reconciliation:EnableAutomaticReconciliation"] = automaticReconciliation.ToString();
+        settings["Nuplane:Reconciliation:PollInterval"] = "1.00:00:00";
         settings["Nuplane:Setup:Feeds:0:Directory:Watch"] = "false";
         configureSettings?.Invoke(settings);
 

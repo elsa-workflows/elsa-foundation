@@ -6,10 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Nuplane;
-using Nuplane.Loading.Hosting.Builder;
+using Nuplane.Loading;
 using Nuplane.PackageArchives;
 using Nuplane.Reconciliation;
-using Nuplane.Sources.Directory.Configuration;
 
 namespace Elsa.Foundation.Hosting;
 
@@ -36,7 +35,6 @@ public static class FoundationShellHostingExtensions
         builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
         {
             nuplane.UseBasePath(builder.Environment.ContentRootPath);
-            nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
             nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
         });
         builder.Services.AddSingleton<IOptionsChangeTokenSource<NuplaneIntegrationOptions>>(

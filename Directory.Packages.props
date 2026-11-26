@@ -126,10 +126,11 @@
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
     <PackageVersion Include="RabbitMQ.Client" Version="7.2.0" />
-    <PackageVersion Include="Nuplane" Version="0.0.15" />
-    <PackageVersion Include="Nuplane.Admin" Version="0.0.15" />
-    <PackageVersion Include="Nuplane.Loading" Version="0.0.15" />
-    <PackageVersion Include="Nuplane.Loading.Abstractions" Version="0.0.15" />
+    <PackageVersion Include="Nuplane" Version="1.0.1" />
+    <PackageVersion Include="Nuplane.Admin" Version="1.0.1" />
+    <PackageVersion Include="Nuplane.Loading" Version="1.0.1" />
+    <PackageVersion Include="Nuplane.Loading.Abstractions" Version="1.0.1" />
+    <!-- The CLI worker still supports hosts that carry the legacy directory module. -->
     <PackageVersion Include="Nuplane.Sources.Directory" Version="0.0.15" />
     <PackageVersion Include="Open.Linq.AsyncExtensions" Version="1.2.0" />
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.5.0" />

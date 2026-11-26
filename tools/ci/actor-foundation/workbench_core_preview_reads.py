@@ -68,7 +68,7 @@ def host(workspace, principals, resource_handler=False, replacement=False, enabl
     env.update({
         "ASPNETCORE_ENVIRONMENT": "Development", "DOTNET_ENVIRONMENT": "Development",
         "ConnectionStrings__KernelCorePreview": CONNECTION, "Elsa__CorePreview__Enabled": str(enabled),
-        "Nuplane__Setup__StateFilePath": str(workspace / ".nuplane/store-state.json"),
+        "Nuplane__StoreRegistry__StateFilePath": str(workspace / ".nuplane/store-state.json"),
         "Logging__LogLevel__Microsoft.Hosting.Lifetime": "Information",
     })
     if reads:

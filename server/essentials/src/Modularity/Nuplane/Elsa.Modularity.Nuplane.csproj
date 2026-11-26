@@ -3,7 +3,9 @@
   <ItemGroup>
     <PackageReference Include="CShells" />
     <PackageReference Include="Elsa.Specifications.PackageManifests" />
-    <PackageReference Include="Nuplane.Admin" />
+    <!-- The adapter uses the common API and is also consumed by the Studio 0.0.15 host. -->
+    <PackageReference Include="Nuplane" VersionOverride="0.0.15" />
+    <PackageReference Include="Nuplane.Admin" VersionOverride="0.0.15" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
 

@@ -5,7 +5,6 @@
     <PackageReference Include="CShells.Nuplane" />
     <PackageReference Include="Nuplane.Admin" />
     <PackageReference Include="Nuplane.Loading" />
-    <PackageReference Include="Nuplane.Sources.Directory" />
     <ProjectReference Include="../Fixtures/First/First.csproj" />
     <ProjectReference Include="../Fixtures/Second/Second.csproj" />
   </ItemGroup>

@@ -40,6 +40,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
             packageFeeds: new JsonArray(new JsonObject
             {
                 ["Name"] = "local-packages",
+                ["Trust"] = "Trusted",
                 ["DirectoryPath"] = "packages",
                 ["IncludePatterns"] = new JsonArray("*"),
                 ["Directory"] = new JsonObject { ["Watch"] = true, ["DebounceWindow"] = "00:00:01" }

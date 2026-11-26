@@ -1,5 +1,6 @@
 using System.Net;
 using Elsa.Cluster.Core.Contracts;
+using Nuplane;
 using static Elsa.Cluster.EntityFrameworkCore.Tests.FeedLoadedModuleHost;
 using static Elsa.Cluster.EntityFrameworkCore.Tests.FoundationHostComposition;
 
@@ -211,15 +212,17 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IAsyncLif
     {
         await SeedAsync(ConnectionString);
         await StartAsync(feed.PreviousDirectory, eagerActivation: false);
-        await WaitUntilAsync(() => Task.FromResult(_host!.Output.Contains(Loaded(feed.PreviousPackage), StringComparison.Ordinal)));
+        await WaitUntilAsync(() => IsActivationCompleteAsync(feed.PreviousPackage));
 
         _host!.UpgradeInPlace(FoundationHostFeed.FixturePackageId, feed.FixturePackage);
 
-        await WaitUntilAsync(() => Task.FromResult(_host.Output.Contains(Loaded(feed.FixturePackage), StringComparison.Ordinal)), UpgradePatience);
+        await WaitUntilAsync(() => IsActivationCompleteAsync(feed.FixturePackage), UpgradePatience);
         // No shell has been built, so no gate has run and nothing is finalized yet.
         Assert.Equal("1", (await RecordAsync(ConnectionString)).FinalizedVersion);
 
-        await WaitUntilAsync(async () => await Orders() is (HttpStatusCode.OK, var text) && text.Contains("is at 2", StringComparison.Ordinal), UpgradePatience);
+        var (status, body) = await Orders();
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Contains("is at 2", body, StringComparison.Ordinal);
         await WaitUntilAsync(async () => (await RecordAsync(ConnectionString)).FinalizedVersion == "2", UpgradePatience);
         Assert.True(_host.IsRunning, "The host must be upgraded in place, not restarted.");
     }
@@ -237,9 +240,19 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IAsyncLif
             Shells(ConnectionString, EntityFrameworkCoreFeature, OrdersFeature), packages ?? feed.Directory, settings, awaitShells: eagerActivation);
     }
 
-    /// <summary>What the host logs once Nuplane has loaded <paramref name="package"/>, a release of the fixture.</summary>
-    private static string Loaded(string package) =>
-        $"Loaded package {FoundationHostFeed.FixturePackageId}@{Path.GetFileNameWithoutExtension(package)[(FoundationHostFeed.FixturePackageId.Length + 1)..]}";
+    /// <summary>Waits for the exact version to be published without sending a request that builds the shell.</summary>
+    private async Task<bool> IsActivationCompleteAsync(string package)
+    {
+        var host = _host!;
+        var version = Path.GetFileNameWithoutExtension(package)[(FoundationHostFeed.FixturePackageId.Length + 1)..];
+        var packages = await NuplaneStore.ReadActivePackagesAsync(Path.Join(host.ContentRoot, ".nuplane", "store-state.json"));
+        var active = packages.SingleOrDefault(candidate =>
+            candidate.PackageId.Equals(FoundationHostFeed.FixturePackageId, StringComparison.OrdinalIgnoreCase)
+            && candidate.Version == version);
+        // Store state is saved before the in-memory catalog is published. The matching cycle completes after publication.
+        return active is not null && host.Output.Contains(
+            $"Reconciliation cycle completed [CorrelationId={active.ActivationCorrelationId}, IsDegraded=False,", StringComparison.Ordinal);
+    }
 
     private Task<(HttpStatusCode Status, string Text)> Orders() => OrdersAsync(_host!);
 

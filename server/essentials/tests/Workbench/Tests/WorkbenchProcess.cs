@@ -129,7 +129,7 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         {
             ["Elsa:ModuleManagement:ApiKey"] = managementKey,
             // Nuplane keeps its store state beside the host binaries by default, which every run shares.
-            ["Nuplane:Setup:StateFilePath"] = Path.Combine(directory, ".nuplane", "store-state.json")
+            ["Nuplane:StoreRegistry:StateFilePath"] = Path.Combine(directory, ".nuplane", "store-state.json")
         };
 
         var arguments = new List<string>

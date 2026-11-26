@@ -445,7 +445,7 @@ public sealed class WorkbenchCompensationRecoveryTests
         Settings = new Dictionary<string, string>
         {
             ["Nuplane:Setup:Feeds:0:Directory:Watch"] = "false",
-            ["Nuplane:Setup:PollInterval"] = "1.00:00:00"
+            ["Nuplane:Reconciliation:PollInterval"] = "1.00:00:00"
         }
     };
 

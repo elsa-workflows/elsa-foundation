@@ -293,17 +293,19 @@ def verify_pinned_packages(image_id, allow_add_ons):
     feed_name = "profile-packages"
     manifest_path = "/app/profile-desired.json"
     lock_path = "/app/nuplane.lock.json"
-    feeds = [{"Name": feed_name, "DirectoryPath": feed_name, "Directory": {"Role": "Cache", "Watch": False}}]
+    feeds = [{"Name": feed_name, "Trust": "Trusted", "DirectoryPath": feed_name,
+              "Directory": {"Role": "Cache", "Watch": False}}]
     if allow_add_ons:
         feeds.insert(0, {
             "Name": "local-packages",
+            "Trust": "Trusted",
             "DirectoryPath": "packages",
             "IncludePatterns": ["*"],
             "Directory": {"Watch": True, "DebounceWindow": "00:00:01"},
         })
     if settings["Setup"]["Feeds"] != feeds:
         raise RuntimeError("Unexpected runtime feeds for the profile")
-    if settings["Convergence"]["Manifest"] != {"Enabled": True, "Path": manifest_path}:
+    if settings["DesiredState"]["Manifest"] != {"Enabled": True, "Path": manifest_path}:
         raise RuntimeError("Expected the baked Nuplane desired manifest to be enabled")
     mode = "Enforce" if allow_add_ons else "Strict"
     if settings["LockFile"] != {"Mode": mode, "Path": lock_path, "FailOnHashMismatch": True}:

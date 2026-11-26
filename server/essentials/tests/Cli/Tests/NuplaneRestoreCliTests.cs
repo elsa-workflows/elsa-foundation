@@ -123,6 +123,7 @@ public sealed class NuplaneRestoreCliTests : IDisposable
         host.Configure(
             """
               "remote": {
+                "Trust": "Trusted",
                 "ServiceIndex": "https://example.invalid/v3/index.json",
                 "IncludePatterns": [ "Acme.Widgets", "Acme.Gadgets [1.0.0,2.0.0)" ]
               }
@@ -158,6 +159,7 @@ public sealed class NuplaneRestoreCliTests : IDisposable
         host.Configure(
             $$"""
                 "private-feed": {
+                  "Trust": "Trusted",
                   "ServiceIndex": "https://example.invalid/v3/index.json",
                   "Credentials": "secrets://env/{{sentinel}}",
                   "IncludePatterns": [ "Acme.Widgets [1.4.2]" ]
@@ -194,6 +196,7 @@ public sealed class NuplaneRestoreCliTests : IDisposable
         host.Configure(
             $$"""
                 "private-feed": {
+                  "Trust": "Trusted",
                   "ServiceIndex": "https://example.invalid/v3/index.json",
                   "Credentials": "secrets://nosuch/{{variable}}",
                   "IncludePatterns": [ "Acme.Widgets [1.4.2]" ]
@@ -309,6 +312,7 @@ public sealed class NuplaneRestoreCliTests : IDisposable
     private static string DirectoryFeed(string directory) =>
         $$"""
             "local-packages": {
+              "Trust": "Trusted",
               "DirectoryPath": "{{directory}}",
               "IncludePatterns": [ "Acme.*" ]
             }

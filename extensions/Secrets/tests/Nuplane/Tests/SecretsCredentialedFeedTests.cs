@@ -183,6 +183,7 @@ public sealed class SecretsCredentialedFeedTests : IAsyncDisposable
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 [$"Setup:Feeds:{FeedName}:ServiceIndex"] = server.ServiceIndexUri.AbsoluteUri,
+                [$"Setup:Feeds:{FeedName}:Trust"] = "Trusted",
                 [$"Setup:Feeds:{FeedName}:Credentials"] = $"secrets://elsa/{SecretName}",
                 [$"Setup:Feeds:{FeedName}:IncludePatterns:0"] = $"{PackageId} [1.0.0,2.0.0)",
                 ["FeedResolution:PackageInstallRoot"] = InstallRoot,

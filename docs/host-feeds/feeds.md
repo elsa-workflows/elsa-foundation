@@ -13,18 +13,22 @@ Exactly one of `DirectoryPath` or `ServiceIndex` per entry.
 ```json
 {
   "Nuplane": {
+    "Reconciliation": {
+      "EnableAutomaticReconciliation": true,
+      "PollInterval": "00:01:00"
+    },
     "Setup": {
-      "AutomaticReconciliation": true,
-      "PollInterval": "00:01:00",
       "Feeds": [
         {
           "Name": "local-packages",
+          "Trust": "Trusted",
           "DirectoryPath": "packages",
           "IncludePatterns": [ "*" ],
           "Directory": { "Watch": true, "DebounceWindow": "00:00:01" }
         },
         {
           "Name": "elsa-4",
+          "Trust": "Trusted",
           "ServiceIndex": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json",
           "IncludePatterns": [
             "Elsa.Tasks [4.0.0-preview.793]",
@@ -37,11 +41,16 @@ Exactly one of `DirectoryPath` or `ServiceIndex` per entry.
 }
 ```
 
-Both kinds are registered by `AddNuplane` itself, which reads `Nuplane:Setup:Feeds` and calls
-`AddFeed(...).FromUri(...)` for every entry carrying a `ServiceIndex`. The host's extra
-`AddDirectoryFeedsFromConfiguration` call exists only because the *directory* source ships in a
-separate package (`Nuplane.Sources.Directory`) that `AddNuplane` cannot reach. There is no
-`AddRemoteFeedsFromConfiguration`, and none is needed.
+`AddNuplane` registers both kinds from `Nuplane:Setup:Feeds`. Set `Trust` to `Trusted` on each
+feed you approve for package acquisition, including directory feeds.
+When writing a feed through the module-management API, use the optional `trust` field
+to approve it. An address change without that field clears the approval in the managed
+settings file. Environment settings and package-specific trust overrides still apply.
+
+When upgrading custom settings from Nuplane 0.0.15, put polling under `Nuplane:Reconciliation`,
+store persistence under `Nuplane:StoreRegistry`, and a pinned desired manifest under
+`Nuplane:DesiredState:Manifest`. To recover the previous active graph after a package load
+failure during startup, set `Nuplane:Reconciliation:StartupFailurePolicy` to `UseLastKnownGood`.
 
 Add `Credentials` for a private feed — a *reference* to its secret, never the secret; see
 [Feed credentials](#feed-credentials). `Nuplane:FeedResolution` controls multi-feed behavior —
@@ -103,6 +112,7 @@ A private feed is configured with a **reference** to its secret, never with the 
       "Feeds": [
         {
           "Name": "private-feed",
+          "Trust": "Trusted",
           "ServiceIndex": "https://packages.example.com/v3/index.json",
           "Credentials": "secrets://elsa/feed-token",
           "IncludePatterns": [ "Acme.Plugins.Widgets [1.4.2]" ]
