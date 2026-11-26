@@ -3246,6 +3246,36 @@
           "type": "internal",
           "id": "Elsa.ActorFoundation.BuiltIn.Runtime",
           "path": "essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
         }
       ]
     },
@@ -3390,6 +3420,135 @@
       "package_id": "Elsa.ActorFoundation.BuiltIn.Runtime",
       "line": "B",
       "edges": []
+    },
+    {
+      "path": "essentials/src/ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj",
+      "name": "Elsa.ActorFoundation.BuiltIn.Sqlite",
+      "kind": "source",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "BuiltIn.Sqlite",
+      "role": "provider/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.ActorFoundation.BuiltIn.Sqlite",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Hosting",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Data.SqlClient",
+          "version": "7.0.2"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore.Relational",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore.SqlServer",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Memory",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "MySql.Data",
+          "version": "26.7.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "MySql.EntityFrameworkCore",
+          "version": "10.0.9"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Npgsql",
+          "version": "10.0.3"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
+          "version": "10.0.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "SQLitePCLRaw.bundle_e_sqlite3",
+          "version": "3.0.3"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "System.Security.Cryptography.Pkcs",
+          "version": "9.0.21"
+        }
+      ]
     },
     {
       "path": "essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj",
@@ -13667,6 +13826,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Sqlite",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
           "path": "essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj"
         },
@@ -14233,6 +14397,11 @@
           "type": "internal",
           "id": "Elsa.ActorFoundation.BuiltIn.Runtime",
           "path": "essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Sqlite",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj"
         },
         {
           "type": "internal",
