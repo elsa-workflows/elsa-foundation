@@ -37,9 +37,21 @@ public sealed partial class ActivityTemplatePlacementTests
         await RefusesState(placer, request);
     }
 
+    // #5686: an input expression has no workflow-state capability, so a runtime key cannot reach it.
+    [Theory]
+    [InlineData("const parts = ['a', 'b']; const index = 1; return parts[index];")]
+    [InlineData("const copy = { a: 1, b: 2 }; const key = 'a'; delete copy[key]; return copy.b;")]
+    public async Task Nested_occurrence_input_expressions_with_runtime_keys_are_placed(string source)
+    {
+        var inputs = System.Text.Json.JsonSerializer.Serialize(new[] { new { referenceKey = "total", value = new { expressionType = "JavaScript", value = source } } });
+        var (placer, request) = ClosedScopeGraph("closed", formatInputs: inputs, readResolver: WorkflowExecutableCompilerTests.StateReadResolver());
+        await placer.PlaceAsync(request);
+    }
+
     [Theory]
     [InlineData("workflowState.setCorrelationId('new')")]
     [InlineData("workflowState.getOutput('x')")]
+    [InlineData("workflowState['getOutput']('x')")]
     public async Task Nested_occurrence_input_expressions_refuse_state_access_without_variable_reads(string source)
     {
         var inputs = System.Text.Json.JsonSerializer.Serialize(new[] { new { referenceKey = "total", value = new { expressionType = "JavaScript", value = source } } });

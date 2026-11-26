@@ -81,6 +81,28 @@ public sealed partial class WorkflowExecutableCompilerTests
     public async Task Plain_property_names_remain_valid_in_read_only_input_expressions(string source) =>
         await CompileReadsAsync(Node("consumer", JavaScriptText(source)), [Greeting], StateReadResolver());
 
+    // #5686: an input expression runs without the workflow-state capability (binding-readonly-v1), so a runtime key, eval
+    // or `this` cannot reach it. Only a reference to the capability's own name is refused at publication.
+    [Theory]
+    [InlineData("const parts = ['a', 'b']; const index = variables.greeting.length % 2; return parts[index];")]
+    [InlineData("const result = {}; const key = variables.greeting; result[key] = 1; return JSON.stringify(result);")]
+    [InlineData("const copy = { a: 1, b: 2 }; const key = variables.greeting; delete copy[key]; return JSON.stringify(copy);")]
+    [InlineData("const list = [1, 2]; list[variables.greeting.length] = 3; return list.join(',');")]
+    [InlineData("const keysOf = Object.keys; const o = Object; return keysOf({ a: 1 }).concat(o.keys({ b: 2 })).join(',');")]
+    public async Task Runtime_keys_remain_valid_in_read_only_input_expressions(string source) =>
+        await CompileReadsAsync(Node("consumer", JavaScriptText(source)), [Greeting], StateReadResolver());
+
+    [Theory]
+    [InlineData("workflowState.getCorrelationId()")]
+    [InlineData("workflowState['getCorrelationId']()")]
+    [InlineData("const s = workflowState; return s.getCorrelationId();")]
+    public async Task Input_expressions_naming_the_workflow_state_capability_refuse_publication(string source)
+    {
+        var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            CompileReadsAsync(Node("consumer", JavaScriptText(source)), [Greeting], StateReadResolver()).AsTask());
+        Assert.Contains("VF-STATE-002", error.Message, StringComparison.Ordinal);
+    }
+
     internal async Task<Elsa.Workflows.Runtime.Core.Models.ExecutableNode> NativeStateScriptNodeAsync() =>
         (await CompileBodyAsync("return 1;", typeof(NativeStateScriptProbe), StateReadResolver())).RootActivity;
 

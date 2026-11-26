@@ -915,7 +915,7 @@ public sealed class ActivityTemplatePlacer(
                 marked[key] = binding;
                 continue;
             }
-            if (analysis.WorkflowState.AccessesState)
+            if (analysis.WorkflowState.ReferencesCapability)
                 throw Rejected(binding.InputName, "VF-STATE-002", "Input expressions cannot access body workflow state. Use an inline leaf body.");
             if (!analysis.ReadsVariables || expression.VariableReadFallback is not null)
             {
