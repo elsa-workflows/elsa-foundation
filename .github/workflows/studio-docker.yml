@@ -27,6 +27,11 @@ on:
         required: true
         type: boolean
         default: false
+      qualify_essentials_profile:
+        description: 'Qualify the Foundation-derived Studio Essentials profile on native AMD64 and ARM64.'
+        required: false
+        type: boolean
+        default: false
       preview_image_tag:
         description: 'Required for a main image push. Check all three Studio images on Docker Hub (elsa-studio, elsa-studio-workbench, elsa-studio-foundation) and enter a 4.0.0-preview.N tag above the highest of them.'
         required: false
@@ -38,11 +43,19 @@ permissions:
   actions: read
 
 jobs:
+  qualify_profile:
+    name: Qualify the derived Studio Essentials profile
+    if: github.event_name == 'workflow_dispatch' && inputs.qualify_essentials_profile == true
+    uses: ./.github/workflows/studio-profile-qualification.yml
+    with:
+      packages_run_id: ${{ inputs.packages_run_id }}
+      publish: ${{ inputs.publish }}
+
   build:
     name: Build & optionally publish Studio ${{ matrix.flavor }}
     if: >-
       github.ref == 'refs/heads/main' &&
-      (github.event_name == 'workflow_dispatch' ||
+      ((github.event_name == 'workflow_dispatch' && inputs.qualify_essentials_profile != true) ||
        (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
         github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' &&
         github.event.workflow_run.head_repository.full_name == github.repository &&
