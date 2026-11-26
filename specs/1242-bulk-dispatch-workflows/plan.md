@@ -115,8 +115,10 @@ the design side), and converter rules.
 
 - **Map entry**: `Elsa3BuiltInActivityMap.Entries.cs` replaces `NoCounterpart("BulkDispatchWorkflows")` with a
   `Catalog` entry targeting the CLR key `Elsa.Activities.DispatchWorkflow.Runtime.Activities.BulkDispatchWorkflows`.
-  - **Bulk-entry members**: `Items` (`Carry`, `NullUnbound`, FR-014) and
-    `ChildCompleted`/`ChildFaulted` as `Port` members mapped to the slots. Every dispatch member is `Structure` (R7) on
+  - **Bulk-entry members**: `Items` (`Carry`, `NullUnbound`, FR-014). `ChildCompleted` and `ChildFaulted` are
+    `Structure(…, Elsa3MemberKind.Port)`, not `Slot()`: `ApplyMembers` would add a `Slot()` port as a child before
+    the rewrite runs. The rewrite calls `context.AddChild` for each branch itself, unless the wait is a literal false.
+    Every dispatch member is `Structure` (R7) on
     the bulk entry: `WorkflowDefinitionId`, `Input`, `DefaultItemInputKey`, `CorrelationIdFunction`,
     `WaitForCompletion`, `StartNewTrace` and `ChannelName`. The coverage test requires targeted keys to be inputs of
     the entry's own type, and the bulk node has only `Items`.
@@ -154,18 +156,30 @@ the design side), and converter rules.
   `Elsa3LoopVariableReferencesRewrite.CurrentValueVariables` (For, ForEach). Add the bulk key with `currentItem` and
   `currentIndex`, so the existing FR-031 shadow refusal also fires for a workflow variable named `currentItem` read
   inside `Dispatch` or a slot.
-- **Inputs script**: the declared names appear as literals. Item members are reached via
-  `Object.entries`/`filter`/`Object.fromEntries`, never `item[name]` (VF-STATE-002). The static `Input` follows the
-  #5808 rules (literal or Object) or is embedded (JavaScript). A target outside the import is refused
-  (`…-TARGET-UNKNOWN`).
+- **Inputs script**: the rewrite builds `Inputs` as an Elsa 4 `ExpressionDefinition` directly, with a pinned
+  `VariableExpressionParameterBinding` to the bulk node's `currentItem`, as `Elsa3HttpTriggerResponseModeRewrite`
+  builds its script.
+  - It does not go through the Elsa 3 lowerer, so the item is always the item. Elsa 3 merged it in C#, never through a
+    getter, so a variable or input with the key's name never wins there.
+  - Declared names appear as literals, and item members are reached via `Object.entries`/`filter`/`Object.fromEntries`,
+    never `item[name]` (VF-STATE-002).
+  - The static `Input` follows the #5808 rules (literal or Object). A JavaScript `Input` is lowered on its own by the
+    existing JavaScript rewrite; Elsa 3 evaluated it without the item. Its lowered text and bindings are embedded as
+    the first operand.
+  - A target outside the import is refused (`…-TARGET-UNKNOWN`).
+  - Item resolution through `get{key}`/`args.<key>` (Item read, above) therefore applies only to the correlation
+    function.
 - **Outcomes** (spec FR-017): in `Elsa3FlowchartGraphBuilder.DropDeadEdges`, before `MapPorts` and `CheckJoins`. The
   node rewrite cannot see connections. The step reads the wait classification from the plan field the rewrite
   recorded, because `WaitForCompletion` is a consumed `Structure` member by then.
-- **Branches with a literal-false wait** (spec FR-018): the rewrite does not add the slots as children. It raises
+- **Branches with a literal-false wait** (spec FR-018): the rewrite does not call `AddChild` for them, and raises
   `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` for each dropped branch.
+- **Outer writes** (spec FR-010a, FR-019): after lowering, a write inside a converted branch or the `Dispatch` child to
+  a variable declared outside the bulk node is refused with `…-BULK-DISPATCH-OUTER-WRITE`. This check runs before
+  publish would refuse the same write with a generic unordered-write error.
 - **Child-result reads** (spec FR-019): resolved to `…-CHILD-RESULT-READ` in name resolution for nodes inside the
   converted slots, before the generic missing-name failures.
-- **Codes**: 3 errors and 2 warnings in `extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs`.
+- **Codes**: 4 errors and 2 warnings in `extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs`.
   `…-ITEM-INPUTS`, raised by the rewrite, goes in `raisedByRewrites` in `Elsa3ActivityMapCoverageTests`.
   `…-CAPPED` is the entry's behaviour warning.
 
@@ -192,8 +206,12 @@ the design side), and converter rules.
   - `variables.currentItem` reads in `Dispatch` and in the slots resolve at publish;
   - a fault inside a `Sequence` in a slot takes the intervention path (descendant fault);
   - parent cancellation cancels the waiting children;
-  - publish pins the `Dispatch` node through the unchanged `DispatchPinSource`.
-- **Converter** (`Elsa3BulkDispatchConversionTests`): every member rule; each FR-017 and FR-019 row; the item-read
+  - publish pins the `Dispatch` node through the unchanged `DispatchPinSource`;
+  - publish refuses a slot that writes a variable declared outside the bulk node, and accepts one that writes a
+    variable declared inside it.
+- **Converter** (`Elsa3BulkDispatchConversionTests`): every member rule; each FR-017 and FR-019 row; an item key
+  that clashes with a workflow variable (the item wins in `Inputs`, and the variable wins in the correlation function,
+  as in Elsa 3); the item-read
   resolution, including the variable-wins case and `args.item`; the inputs script through publish validation; kept
   slot ids.
 - **Coverage tests**: the map coverage and the surface fixture.
@@ -223,7 +241,7 @@ extensions/Elsa3/src/Mapping/
 ├── Conversion/Elsa3DefinitionConverter.cs               (bulk key in AncestorScopeNames)
 ├── Models/Elsa3ConversionPlan.cs                        (bulk child → item key field)
 └── README.md
-extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs (5 codes)
+extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs (6 codes)
 ```
 
 ## Complexity Tracking

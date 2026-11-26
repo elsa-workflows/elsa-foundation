@@ -292,6 +292,12 @@ and on-completed-callbacks suites pass.
 - **FR-009**: The activity has one outcome, `Done`.
 - **FR-010**: A slot reads its item as `variables.currentItem` and `variables.currentIndex`. Reading the dispatched
   child's result in a slot is not part of this spec (Out of Scope).
+- **FR-010a**: Passes run concurrently, so `Dispatch` and both slots are unordered with themselves across passes.
+  - A write to a variable declared outside the bulk node, from `Dispatch` (an output capture) or from either slot, is
+    refused at publish by the existing unordered-write check (spec 266).
+  - Only variables declared inside the slot can be written.
+  - The README states this with the alternative: collect results per child in the child workflow, or read them after
+    the bulk activity.
 
 **Converter**
 
@@ -343,7 +349,9 @@ and on-completed-callbacks suites pass.
   - **`ParentInstanceId`** is not passed, because the parent link lives in the dispatch record.
   - **Warning**: a conversion raises warning `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS`. It says that only declared
     inputs are passed, that a child-declared `ParentInstanceId` is no longer filled, that the static `Input` is now
-    evaluated per item, and that `ChildFaulted` now also runs for cancelled and undispatchable children (FR-018).
+    evaluated per item, and that `ChildFaulted` now also runs for cancelled and undispatchable children (FR-018). It
+    also says that without a correlation function the child now inherits the parent's correlation id, where Elsa 3
+    bulk dispatch gave it none.
 - **FR-017**: Outcomes:
   - `Done` maps to `Done`.
   - `Completed` (Elsa 3 emitted it with `Done` when it waited and had items):
@@ -375,6 +383,7 @@ and on-completed-callbacks suites pass.
 | `DefaultItemInputKey` not a literal, or static `Input` in another language | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` |
 | Target workflow not in the import | `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`, guidance: import the target in the same run |
 | `Completed`/`Canceled` route with no faithful meaning (FR-017) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` |
+| A branch (or `CorrelationIdFunction`/`Input`) writing a variable declared outside the bulk node. Elsa 3 ran the branches one at a time; Elsa 4 runs passes concurrently (FR-010a) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTER-WRITE`. Guidance: Elsa 4 runs the branches concurrently, so a shared counter or list would lose updates. Record per-child results in the child workflow, or declare the variable inside the branch |
 | A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution. Guidance: remove the read; the child's result is not available in the branch yet |
 
 - **FR-020**: Every conversion MUST raise warning `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED`, as an entry-level behaviour
@@ -383,7 +392,8 @@ and on-completed-callbacks suites pass.
   child at once. It points to batching with a sequential `ForEach` over batches.
 - **FR-021**: New codes go to `Elsa3ActivityDiagnosticCodes` and the spec 236 diagnostic-code contract, each in the
   task that first raises it.
-  - Errors: `…-BULK-DISPATCH-TARGET-UNKNOWN`, `…-BULK-DISPATCH-OUTCOME-ROUTE`, `…-BULK-DISPATCH-CHILD-RESULT-READ`.
+  - Errors: `…-BULK-DISPATCH-TARGET-UNKNOWN`, `…-BULK-DISPATCH-OUTCOME-ROUTE`, `…-BULK-DISPATCH-CHILD-RESULT-READ`,
+    `…-BULK-DISPATCH-OUTER-WRITE`.
   - Warnings: `…-BULK-DISPATCH-ITEM-INPUTS`, `…-BULK-DISPATCH-CAPPED`.
 
 **Documentation and evidence**

@@ -30,13 +30,15 @@ converter) needs the activity in the catalog.
 ## Phase 2: Converter (US3, US4)
 
 - [ ] T008 [US3] Map entry for the CLR key `Elsa.Activities.DispatchWorkflow.Runtime.Activities.BulkDispatchWorkflows`:
-  - `Items` (FR-014) and the two ports on the bulk entry, added to the surface fixture as ports;
+  - `Items` (FR-014), and the two ports as `Structure(…, Port)`, added to the surface fixture as ports;
   - every dispatch member as `Structure`;
   - `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` as the entry's behaviour warning (FR-011, FR-020). Add that code here.
 - [ ] T009 [US3] The one rewrite, `BulkDispatchChild`, builds the `{elsa3NodeId}.dispatch` child as a ready-made plan,
   with every member set explicitly and the source names mapped back (FR-012, FR-013, FR-015, FR-016, plan §3). It also:
   - refuses a non-null literal `Items` (FR-014);
-  - drops the branches on a literal-false wait (FR-018);
+  - adds the branches with `AddChild`, except on a literal-false wait (FR-018);
+  - builds `Inputs` as an Elsa 4 expression bound to `currentItem`, with the static `Input` lowered on its own
+    (plan §3);
   - records the wait classification in the plan field.
 
   Add the plan field for the item key, the item-read resolution in `Elsa3ValueFlowLowerer`, the `args.<key>`
@@ -45,9 +47,10 @@ converter) needs the activity in the catalog.
 - [ ] T010 [US3] Outcome step in `Elsa3FlowchartGraphBuilder` (FR-017). Add `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`
   here.
 - [ ] T011 [US4] Child-result reads in the slots (FR-019). Add `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ` here.
+  Also add the outer-write refusal (FR-010a, FR-019) and `ELS3-ACTIVITY-BULK-DISPATCH-OUTER-WRITE` here.
 - [ ] T012 [P] [US3] [US4] Converter tests (plan, Test scope: Converter). Remove `no-counterpart:BulkDispatchWorkflows`
   from `Elsa3ConversionDiagnosticsTests` and keep ParallelForEach.
-- [ ] T013 [P] Update the converter README and the spec 236 member map and diagnostic-code contract (FR-021, FR-023).
+- [ ] T013 [P] Update the converter README and the spec 236 member map and diagnostic-code contract (FR-021, FR-023). The README states the outer-write rule (FR-010a).
 - [ ] T014 Convert `performance-concurrency.json` (with its child) and the composition root locally, and hand FR-022
   over to S-15 through the shared notes. Ask S-15 to run the concurrency suite and record the 300-children result.
 
