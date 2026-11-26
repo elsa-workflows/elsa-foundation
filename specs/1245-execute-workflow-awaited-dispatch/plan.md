@@ -165,8 +165,11 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
        object literal.
      - **Refused reads** get the FR-010 per-read text, through an optional per-rule message and guidance on
        `Elsa3MemberRule` that defaults to today's text. That covers any other member of `V`, and the other Liquid reads.
+     - **The activity-output rows resolve through `Elsa3ValueFlowLowerer.ResolveAmbient`.** It keeps its
+       `CrossFrameReference` and `UnresolvableReferenceShape` refusals, which now carry the FR-010 guidance.
      - **Availability is left to publish.** A read whose producer is not definite is refused at publish
        (`ValueFlow/UnavailableProducer`), so the converter computes no availability.
+     - **A declared initial value on `V` counts as another writer.**
    - `WaitForCompletion` becomes `Structure("WaitForCompletion", Elsa3MemberKind.Input)`. Implement the existing
      `ExecuteWorkflowAsDispatch` rewrite kind, which is declared but has no `IElsa3NodeRewrite` today, beside the other
      rewrites in `ActivityMap/Rewrites/`. Register it in `Elsa3MappingFeature` like the others. The rewrite must emit
@@ -184,7 +187,7 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
    - `Catalog("ExecuteWorkflow", …, [Outcome("Done", "Completed", "Faulted")])`.
    - `Cancelled` stays unmapped. An Elsa 3 cancelled child never resumed its parent (FR-011).
 4. **Records.**
-   - `extensions/Elsa3/src/Mapping/README.md` gets the rows for FR-006 to FR-011, including the five accepted
+   - `extensions/Elsa3/src/Mapping/README.md` gets the rows for FR-006 to FR-011, including the six accepted
      differences.
    - Spec 236's `member-map.md` rows for `DispatchWorkflow.Result`, the `Done` outcome and `ExecuteWorkflow`, and the
      null-member row for `ExecuteWorkflow.WaitForCompletion`, are amended in place, citing spec 1245 (FR-011a).

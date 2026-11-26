@@ -365,12 +365,21 @@ faults.
     one member, and it has no inline form for the other rows.
   - Three cases are refused with `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`. The lost-output rule takes per-rule text for
     them, and the guidance names the read and the reason:
-    - `V` has another writer, so its reads would see two shapes;
+    - `V` has another writer, so its reads would see two shapes. A declared initial value counts as a writer: Elsa 3
+      read `init.Output.X`, and Elsa 4 would read `init.X`;
     - a read of any other member `X` of `V`. Elsa 3 had that only in its bare-dictionary shape, after a child that
       suspended, so the intent is ambiguous;
     - a Liquid read of `V` other than `.Output` or `.Output.X`.
-  - A read where the dispatch has not definitely run before it is left to publish. The converter does not compute
-    availability, and publish already refuses an activity-output read whose producer is not definite
+  - The rows that read the node's outputs (`.WorkflowInstanceId`, `.SubStatus`, and the whole value) resolve through
+    the converter's existing activity-result path. That path keeps its two refusals, and each gets the FR-010
+    guidance:
+    - the read and the node sit in different structural frames, for example a read inside a ForEach body after a
+      top-level Execute Workflow (`CrossFrameReference`);
+    - the node does not come before the read in node order (`UnresolvableReferenceShape`).
+
+    The `.Output` rows read only the variable and are not affected.
+  - For those same rows, a read where the dispatch has not definitely run before it is left to publish. The converter
+    computes no availability, and publish already refuses a non-definite activity-output read
     (`ValueFlow/UnavailableProducer`). Elsa 3 read `V`'s earlier value there.
 
 **Differences, tests and records**
@@ -386,6 +395,9 @@ faults.
   - A failed child start selects `DispatchFailed`, with the same Flowchart and Sequence behaviour; Elsa 3 faulted the
     parent's activity.
   - The child gets no `ParentInstanceId` input.
+  - After a waited child that suspended, Elsa 3 set `Result` to the bare output dictionary. In that run
+    `getV().Output.X` and `.SubStatus` read `undefined`. The converted reads return the child's value and
+    `"Finished"`.
   - An output read must match the output name's case.
 - **FR-011a**: Spec 236's member map (`specs/236-elsa3-activity-map/member-map.md`) MUST be amended in place for the
   `DispatchWorkflow.Result`, `DispatchWorkflow outcome Done` and `ExecuteWorkflow → DispatchWorkflow` rows, and the

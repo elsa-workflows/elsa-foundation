@@ -88,8 +88,9 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   - Lowering rewrites every read of the captured variable: JavaScript member paths, Liquid member paths, a bare
     `getV()`, and a direct binding of `V`.
   - Converter tests: one per FR-010 table row in JavaScript, Liquid `.Output` and `.Output.X`, and one per refusal
-    (another writer, an unknown member, another Liquid read).
-  - One publish test: a read on a path where the dispatch may not have run is refused with
+    (another writer, an initial value, an unknown member, another Liquid read, a cross-frame read, an out-of-order
+    read).
+  - One publish test: a `.SubStatus` read on a path where the dispatch may not have run is refused with
     `ValueFlow/UnavailableProducer`.
   - Run-time tests: US3 scenario 4 with a child that completes and with one that faults. The whole-value read is
     checked against the Elsa 3 key set.
@@ -119,7 +120,7 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   Keep one Sequence-parent case as a regression check that a faulted child still runs the next step.
 - [ ] T013 [P] Converter README (`extensions/Elsa3/src/Mapping/README.md`): add the FR-006 to FR-011 rows, the five
   accepted differences (a faulted child's outputs, a cancelled child, a failed child start, `ParentInstanceId`,
-  output-name case) with their Flowchart and Sequence behaviour, and Execute Workflow's always-wait.
+  output-name case, the suspended-child shape) with their Flowchart and Sequence behaviour, and Execute Workflow's always-wait.
 - [ ] T013a [P] Amend spec 236's `member-map.md` rows for `DispatchWorkflow.Result`, the `Done` outcome and
   `ExecuteWorkflow` in place, and the null-member row for `ExecuteWorkflow.WaitForCompletion`, citing spec 1245
   (FR-011a). The `ExecuteWorkflow` row also corrects the default: Elsa 3
