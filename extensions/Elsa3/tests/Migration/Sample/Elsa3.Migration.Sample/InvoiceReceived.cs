@@ -11,7 +11,8 @@ namespace Acme;
 // catalog:case-09 begin
 // A trigger activity: it completes when an incoming invoice starts the workflow at this node, and otherwise
 // waits for the next one. The stimulus provider below tells publishing which stimulus starts the workflow;
-// AcmeFeature registers it.
+// AcmeFeature registers it. A node with CanStartWorkflow set to false only waits mid-flow, so the provider
+// declares no start stimulus for it (publishing refuses a start trigger that is not on the start path).
 [TriggerActivity]
 public sealed class InvoiceReceived : StatefulTriggerActivity<InvoiceReceivedResult, InvoiceWaitState, IncomingInvoice>
 {
@@ -22,6 +23,9 @@ public sealed class InvoiceReceived : StatefulTriggerActivity<InvoiceReceivedRes
     [ActivityInput]
     [Required]
     public string Mailbox { get; set; } = null!;
+
+    [ActivityInput(DisplayName = "Start new workflows", DefaultValue = "true")]
+    public bool CanStartWorkflow { get; set; } = true;
 
     public static string Hash(string mailbox) =>
         $"sha256:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(mailbox))).ToLowerInvariant()}";
@@ -56,6 +60,11 @@ internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulus
     {
         if (!StringComparer.Ordinal.Equals(node.ActivityType, InvoiceReceived.ActivityType))
             return ActivityTriggerStimulusResult.NotRecognized;
+
+        // A mid-flow wait: recognised, but it starts nothing.
+        var canStart = node.InputBindings.GetValueOrDefault(nameof(InvoiceReceived.CanStartWorkflow));
+        if (canStart?.Source == RuntimeInputBindingSource.Literal && canStart.LiteralValue is { ValueKind: JsonValueKind.False })
+            return ActivityTriggerStimulusResult.Recognized([]);
 
         // The stimulus is fixed at publish time, so the mailbox must be a literal.
         var binding = node.InputBindings.GetValueOrDefault(nameof(InvoiceReceived.Mailbox));

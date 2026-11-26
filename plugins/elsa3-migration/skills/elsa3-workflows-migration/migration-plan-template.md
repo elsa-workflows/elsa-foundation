@@ -10,7 +10,7 @@ Rows marked "(example)" show the shape; replace or delete them.
 Elsa 4 clone: <path> at <commit> (the tool and the migration host run from it; try the result on the same commit)
 Stage: inventory
 Export: <path>
-Last report: <path> (<command>, exit <code>, <date>)
+Last report: <path> (<command>, exit <code>, <date>, <tool name> <tool version>)
 
 <!--
 Stage moves forward only: inventory → prepare → test-migration → handoff.

@@ -450,7 +450,8 @@ public class InvoiceReceived : Trigger<string>
 ```csharp
 // A trigger activity: it completes when an incoming invoice starts the workflow at this node, and otherwise
 // waits for the next one. The stimulus provider below tells publishing which stimulus starts the workflow;
-// AcmeFeature registers it.
+// AcmeFeature registers it. A node with CanStartWorkflow set to false only waits mid-flow, so the provider
+// declares no start stimulus for it (publishing refuses a start trigger that is not on the start path).
 [TriggerActivity]
 public sealed class InvoiceReceived : StatefulTriggerActivity<InvoiceReceivedResult, InvoiceWaitState, IncomingInvoice>
 {
@@ -461,6 +462,9 @@ public sealed class InvoiceReceived : StatefulTriggerActivity<InvoiceReceivedRes
     [ActivityInput]
     [Required]
     public string Mailbox { get; set; } = null!;
+
+    [ActivityInput(DisplayName = "Start new workflows", DefaultValue = "true")]
+    public bool CanStartWorkflow { get; set; } = true;
 
     public static string Hash(string mailbox) =>
         $"sha256:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(mailbox))).ToLowerInvariant()}";
@@ -496,6 +500,11 @@ internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulus
         if (!StringComparer.Ordinal.Equals(node.ActivityType, InvoiceReceived.ActivityType))
             return ActivityTriggerStimulusResult.NotRecognized;
 
+        // A mid-flow wait: recognised, but it starts nothing.
+        var canStart = node.InputBindings.GetValueOrDefault(nameof(InvoiceReceived.CanStartWorkflow));
+        if (canStart?.Source == RuntimeInputBindingSource.Literal && canStart.LiteralValue is { ValueKind: JsonValueKind.False })
+            return ActivityTriggerStimulusResult.Recognized([]);
+
         // The stimulus is fixed at publish time, so the mailbox must be a literal.
         var binding = node.InputBindings.GetValueOrDefault(nameof(InvoiceReceived.Mailbox));
         if (binding?.Source != RuntimeInputBindingSource.Literal || binding.LiteralValue is not { ValueKind: JsonValueKind.String } mailbox)
@@ -513,6 +522,14 @@ internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulus
    node: complete from it. Otherwise suspend as in case 08.
 3. Write an `IActivityTriggerStimulusProvider` that recognises the activity type and describes the stimulus from the
    node's literal inputs, the way `GetTriggerPayload` did. Register it in the feature (case 18).
+4. Give the trigger a `CanStartWorkflow` input (default `true`). When a node sets it to `false`, the provider returns
+   `Recognized([])`: the node only waits mid-flow. Publishing refuses a node that declares a start stimulus but is not on
+   the workflow's start path.
+
+**Known gap**: the converter does not yet carry Elsa 3's `canStartWorkflow` custom property onto a custom trigger
+(it does for Elsa's own triggers). A converted workflow that waits on a ported custom trigger mid-flow therefore keeps
+`CanStartWorkflow` at its default and is refused at publish. Record such definitions in the plan; do not work around it
+in the activity (for example by defaulting the input to `false`, which breaks the workflows the trigger starts).
 
 ## Case 10: Services
 
@@ -812,9 +829,10 @@ The conversion's rules, as they stand:
 - **Matching.** A global matches the registered host function with the same name after its prefix. No mapping is
   declared.
 - **Ambiguous.** The match is refused when two prefixes carry the same name, when a variable, input or activity output
-  has a generated accessor with that name, or when a script declares the prefix itself.
+  has a generated accessor with that name (`getTotal` for a variable `Total`), or when a script declares the prefix
+  itself.
 - **Never matched.** Functions the converter converts itself keep that conversion: the variable and input readers
-  and setters (`getVariable`, `setVariable`, the generated `get…` and `set…` accessors), `toJson`, the Elsa 4
+  and setters (`getVariable`, `setVariable`, `getInput`, `setInput`), `toJson`, the Elsa 4
   built-ins such as `newGuid` and `isNullOrEmpty`, the outcome setters, the instance-state helpers (including the
   instance-name readers), the read roots (`variables`, `input`, `activities`, `workflow`, `args`), the CLR, lodash and
   moment globals, and standard JavaScript globals such as `String` or `encodeURIComponent`.

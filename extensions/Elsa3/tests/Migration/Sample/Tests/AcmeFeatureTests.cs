@@ -87,15 +87,23 @@ public sealed class AcmeFeatureTests
         Assert.False(new InvoiceReceivedStimulusProvider().Describe(Node("Acme.Other", "x")).IsRecognized);
     }
 
-    private static ExecutableNode Node(string activityType, string mailbox)
+    [Fact]
+    public void Stimulus_provider_declares_no_start_stimulus_for_a_mid_flow_wait()
     {
-        var type = new ValueTypeDescriptor("String");
-        var binding = new RuntimeInputBinding(
-            nameof(InvoiceReceived.Mailbox),
-            type,
-            ValueProtectionPolicy.InstanceInline,
-            RuntimeInputBindingSource.Literal,
-            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(mailbox), ValueProtectionPolicy.InstanceInline));
+        var result = new InvoiceReceivedStimulusProvider().Describe(Node(InvoiceReceived.ActivityType, "invoices@acme.test", canStartWorkflow: false));
+
+        Assert.True(result.IsRecognized);
+        Assert.Empty(result.Descriptors);
+    }
+
+    private static ExecutableNode Node(string activityType, string mailbox, bool? canStartWorkflow = null)
+    {
+        var bindings = new Dictionary<string, RuntimeInputBinding>
+        {
+            [nameof(InvoiceReceived.Mailbox)] = Literal(nameof(InvoiceReceived.Mailbox), "String", mailbox)
+        };
+        if (canStartWorkflow is { } canStart)
+            bindings[nameof(InvoiceReceived.CanStartWorkflow)] = Literal(nameof(InvoiceReceived.CanStartWorkflow), "Boolean", canStart);
         using var document = JsonDocument.Parse("{}");
         return new ExecutableNode(
             executableNodeId: "node-1",
@@ -104,7 +112,18 @@ public sealed class AcmeFeatureTests
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
-            inputBindings: new Dictionary<string, RuntimeInputBinding> { [nameof(InvoiceReceived.Mailbox)] = binding },
+            inputBindings: bindings,
             metadata: new Dictionary<string, string>());
+    }
+
+    private static RuntimeInputBinding Literal(string name, string typeAlias, object value)
+    {
+        var type = new ValueTypeDescriptor(typeAlias);
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
     }
 }

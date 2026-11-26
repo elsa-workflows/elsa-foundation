@@ -96,8 +96,8 @@ dotnet run --project <clone>/extensions/Elsa3/src/Migration/Cli -- workflows ass
 `<export>` is a folder of Elsa 3 definition JSON files (searched recursively) or a `.zip`. The tool writes
 `report.json`, `report.html` and a `migrated/` folder into `<output>`.
 
-After every run, record the command, its exit code and the date as `Last report` in the plan (with the report's
-`tool` name and version once a report is written), then read the result:
+After every run, record the command, its exit code and the date as `Last report` in the plan (and the report's
+`tool` name and version once a report is written, as the template's `Last report` line shows), then read the result:
 
 - **Exit 0 or 1, and the last line of standard output is the output path**: the run wrote a report. Exit 0 means no
   Must fix or Reconsider finding is left; exit 1 means there are some. Read `<output>/report.json`.
