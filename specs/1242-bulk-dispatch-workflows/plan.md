@@ -68,8 +68,10 @@ a projection of them for the designer. Record the outcome in the PR.
   Check the cap (FR-007). Then schedule the hidden dispatch node once per item, each with
   `IterationId = StructuredExecutionIdentity.Iteration(aeid, index)` and a `LoopIterationScopeRequest` carrying
   `currentItem` and `currentIndex`, all in the same turn (FR-005).
-- **State**: the item count and the number of passes ended, kept in the activity's state. The children are counted
-  through `ListAllByParentAsync`, as `Parallel` does, so a recount after recovery is exact.
+- **State**: the item count, kept in the activity's state. Ended passes are counted with
+  `CountProcessedCompletedChildIterationsAsync` (FR-024), which counts distinct iteration ids whose completion the
+  parent has processed. A raw count of completed rows runs ahead of the parent's evaluations, so a recount after
+  recovery would not be exact.
 - **`OnChildCompletedAsync`**:
   - For the hidden dispatch node, read the outcome.
     - Without waiting (`Dispatched`): mark the pass ended.
@@ -79,10 +81,11 @@ a projection of them for the designer. Record the outcome in the PR.
   - When every pass has ended, complete with `Done`.
 - **`OnChildFaultedAsync`**: a hidden dispatch node that faults (an input refused at dispatch) is handled like
   `DispatchFailed`, so `ChildFaulted` runs. A slot child that faults faults the bulk activity (FR-008).
-- **Concurrent same-node scheduling**: this is the runtime piece shared with spec 1243 (FR-024). If spec 1243 lands
-  first, use its scheduler. Otherwise build it here, in the scheduler-facing code, so 1243 can reuse it. Research item
-  R-2: confirm that `ScheduleChildActivity` accepts the same child node several times in one turn with distinct
-  iteration ids, and that nothing keys on (parent, child node) alone.
+- **Concurrent same-node scheduling**: no new scheduler (FR-024). Each `ScheduleChildActivity` call gets its own
+  activity execution id, and work-item, command and idempotency ids derive from
+  `schedule-child:{nodeId}:{childActivityExecutionId}` (`SchedulerWorkItems.cs`). The shared pieces with spec 1243 are
+  the iteration-id prefix, the scope request, the processed-completion count and `LoopCollection`. Whichever spec is
+  implemented first builds them.
 
 ### 3. Converter
 

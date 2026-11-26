@@ -252,8 +252,9 @@ and on-completed-callbacks suites pass.
   - With no items, the activity completes with `Done` at once.
 - **FR-007**: The activity MUST fault with `BulkDispatchCapExceeded` before dispatching when `Items` has more than
   1,000 entries. That is the release 1 cap of `docs/architecture/large-fan-out.md` decision 1, which states that a body
-  starting a child workflow per item stays inside the same cap. The cap is not an author-facing input. Whether it
-  applies without waiting too is Q1.
+  starting a child workflow per item stays inside the same cap. The cap is not an author-facing input. The cap itself
+  is under question in #5875 (Elsa 3 had none), and this spec follows whatever #5875 decides. Whether it applies
+  without waiting too is Q1.
 - **FR-008**: A slot activity that faults MUST fault the bulk activity through the ordinary child-fault path, as for
   `If`. Retrying the faulted slot activity, where the runtime supports it, lets the bulk activity continue.
 - **FR-009**: The activity has one outcome, `Done`.
@@ -354,9 +355,15 @@ and on-completed-callbacks suites pass.
     the batching advice;
   - the converter mapping README;
   - the spec 236 member map.
-- **FR-024**: Spec 1243's parallel ForEach also schedules the same body node once per item under distinct iteration
-  ids. The two specs MUST share one runtime mechanism for that, whichever is implemented first, instead of building
-  two.
+- **FR-024**: No new scheduler is needed. Every `ScheduleChildActivity` call gets its own activity execution id, and
+  nothing deduplicates by node (`SchedulerWorkItems`), so one node can run once per item at the same time. Spec 1243
+  needs the same pieces, and the two specs MUST share them; whichever is implemented first owns them:
+  - `StructuredExecutionIdentity.Iteration` with a neutral prefix or kind parameter, keeping `ForEach`'s ids unchanged;
+  - `LoopIterationScopeRequest` with `ActivitySchedulingProvenance.From(…, iterationId)`, as `ForEach` uses it;
+  - `IActivityExecutionStateStore.CountProcessedCompletedChildIterationsAsync`, which counts passes whose completion
+    the parent has processed. A raw count of completed rows runs ahead of the parent's evaluations;
+  - `LoopCollection`, `ForEach`'s collection resolution extracted to
+    `essentials/src/Activities/ControlFlow/Loops/LoopCollection.cs`.
 
 ### Key Entities
 
@@ -395,7 +402,8 @@ and on-completed-callbacks suites pass.
 
 ## Open questions for the coordinator
 
-1. **Q1**: Does the 1,000-item cap apply without waiting too? Recommendation: yes, one rule. A fire-and-forget run
+1. **Q1**: Does the 1,000-item cap apply without waiting too, once #5875 settles the cap itself? Recommendation:
+   yes, one rule. A fire-and-forget run
    still writes one dispatch record and start intent per item in the parent's commit.
 2. **Q2**: Converter: refuse a target outside the import (recommended), or warn? Without the target's declarations an
    undeclared item member faults the child's dispatch at run time.

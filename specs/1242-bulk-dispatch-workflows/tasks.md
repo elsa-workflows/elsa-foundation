@@ -7,9 +7,9 @@ converter) needs the activity in the catalog.
 
 ## Phase 1: The Elsa 4 activity (US1, US2)
 
-- [ ] T001 Resolve research items R-1 (hidden node bindings) and R-2 (same node scheduled several times in one turn)
-  (plan §1, §2). Check with the spec 1243 session whether its concurrent scheduling exists yet (FR-024). Record the
-  outcome in the PR.
+- [ ] T001 Resolve research item R-1 (hidden node bindings, plan §1). Check which FR-024 pieces exist on the
+  initiative branch: the neutral iteration-id prefix, `CountProcessedCompletedChildIterationsAsync` and
+  `LoopCollection`. Build the missing ones here so spec 1243 can reuse them. Record the outcome in the PR.
 - [ ] T002 [US1] Add `BulkDispatchWorkflows` with its inputs, slots, type key, cap constant and `Done` outcome in
   `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/` (FR-001–FR-003, FR-009).
 - [ ] T003 [US1] Add the structure handler that keeps the hidden `DispatchWorkflow` node and binds its inputs (FR-004).
