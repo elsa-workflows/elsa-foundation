@@ -13,7 +13,6 @@
       "essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj",
       "essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj",
       "essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
-      "essentials/src/Activities/Http/Elsa.Activities.Http.csproj",
       "essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj",
       "essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj",
       "essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj",
@@ -36,7 +35,6 @@
       "essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
       "essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj",
       "essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj",
-      "essentials/src/Http/Core/Elsa.Http.Core.csproj",
       "essentials/src/Locking/Core/Elsa.Locking.Core.csproj",
       "essentials/src/Mediator/Core/Elsa.Mediator.Core.csproj",
       "essentials/src/Mediator/Elsa.Mediator/Elsa.Mediator.csproj",
@@ -70,7 +68,6 @@
       "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj",
       "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
       "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj",
-      "essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj",
       "essentials/src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj",
       "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj",
       "essentials/src/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj",
@@ -102,7 +99,10 @@
       "essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/IndependentTriggers.Consumer.csproj",
       "essentials/tests/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj",
       "essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj",
-      "essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj"
+      "essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+      "extensions/Http/src/Activities/Elsa.Activities.Http.csproj",
+      "extensions/Http/src/Core/Elsa.Http.Core.csproj",
+      "extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj"
     ]
   }
 }

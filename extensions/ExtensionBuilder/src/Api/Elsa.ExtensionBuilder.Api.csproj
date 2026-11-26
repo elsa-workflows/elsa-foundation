@@ -20,7 +20,7 @@
     <ProjectReference Include="..\..\..\..\essentials\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
     <ProjectReference Include="..\..\..\..\essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
     <ProjectReference Include="..\..\..\..\essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Git\Elsa.Git.csproj" />
+    <ProjectReference Include="..\..\..\Git\src\Elsa.Git\Elsa.Git.csproj" />
     <ProjectReference Include="..\..\..\..\essentials\src\Modularity\Core\Elsa.Modularity.Core.csproj" />
   </ItemGroup>
 

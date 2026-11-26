@@ -7,7 +7,7 @@
 # Elsa.Essentials.Host container image (Nuplane + CShells host with the curated workflow essentials compiled in).
 #
 # Build context MUST be the repository root: restore relies on repo-root configuration (Directory.Build.props,
-# Directory.Packages.props, NuGet.config), and the curated features are ProjectReferences across essentials/src.
+# Directory.Packages.props, NuGet.config), and the curated features reference essentials and extension projects.
 # Add-on features still arrive at runtime as .nupkg files through the Nuplane directory feed at /app/packages.
 # Example:
 #
@@ -31,11 +31,12 @@ WORKDIR /src
 COPY *.props *.targets .editorconfig NuGet.config ./
 
 # Restore inputs only, at their source-tree paths, so ordinary source changes keep the restore layer. The curated set
-# is a large project graph across essentials/src, so the recursive patterns cover it, with each project's committed
-# NuGet lock file (#2122), instead of a hand-kept list that would drift whenever the set changes. essentials/tests is
-# excluded by .dockerignore. The host comes with the computed-production-settings swap its csproj imports from apps/
+# is a large project graph across essentials/src and the HTTP and Secrets extensions. The recursive patterns
+# include each project's committed NuGet lock file (#2122). Tests are excluded by .dockerignore. The host comes
+# with the computed-production-settings swap its csproj imports from apps/
 # (#2126): MSBuild treats a missing <Import> as an error, so it has to be here before restore.
 COPY --parents essentials/**/*.csproj essentials/**/*.targets essentials/**/packages.lock.json apps/ComputedProductionSettings.targets apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj apps/Elsa.Essentials.Host/packages.lock.json ./
+COPY --parents extensions/Http/src/**/*.csproj extensions/Http/src/**/packages.lock.json extensions/Secrets/src/**/*.csproj extensions/Secrets/src/**/packages.lock.json ./
 
 # Locked (#2122): restores exactly the versions the committed lock files name, and fails when one no longer matches
 # its project or names a version the feed no longer has. See docs/reference/nuget-lock-files.md.
@@ -45,8 +46,9 @@ RUN dotnet restore apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj \
     --locked-mode \
     -p:WarningsNotAsErrors=NU1603
 
-# Now the sources: the curated features and the analyzers under essentials/, and the host itself.
+# Now the sources for the curated features, analyzers, and host.
 COPY essentials/ ./essentials/
+COPY --parents extensions/Http/src/ extensions/Secrets/src/ ./
 COPY apps/Elsa.Essentials.Host/ apps/Elsa.Essentials.Host/
 
 # Package versions (ADR 0067, spec 150, #2084, #2126), handled exactly as in the Foundation host Dockerfile. The Docker

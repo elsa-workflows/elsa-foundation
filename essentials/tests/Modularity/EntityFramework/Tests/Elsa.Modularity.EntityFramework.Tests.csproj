@@ -25,7 +25,7 @@
     <Compile Include="../../../Persistence/EntityFramework/Tests/ContractingModule.cs" Link="ContractingModule.cs" />
     <ProjectReference Include="..\..\..\..\src\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\..\src\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\extensions\Secrets\src\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
     <!-- The two-module feature with no Provider setting of its own, and the features that register the
          migrations it is evaluated through (FR-065). -->
     <ProjectReference Include="..\..\..\..\src\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
