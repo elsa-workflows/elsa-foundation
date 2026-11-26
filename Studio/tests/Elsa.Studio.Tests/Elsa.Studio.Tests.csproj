@@ -41,7 +41,7 @@
     <ProjectReference Include="..\..\..\extensions\Weaver\studio\Elsa.Studio.Weaver.Workflows\Elsa.Studio.Weaver.Workflows.csproj" />
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Workflows\Elsa.Studio.Workflows.csproj" />
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Backends\Elsa.Studio.Backends.csproj" />
-    <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Dashboard\Elsa.Studio.Dashboard.csproj" />
+    <ProjectReference Include="..\..\..\extensions\Dashboard\studio\Elsa.Studio.Dashboard\Elsa.Studio.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\extensions\Samples.WeatherForecast\studio\Elsa.Studio.Samples.WeatherForecast\Elsa.Studio.Samples.WeatherForecast.csproj" />
     <ProjectReference Include="..\..\src\apps\Elsa.Studio.Workbench.Host\Elsa.Studio.Workbench.Host.csproj" />
     <!--

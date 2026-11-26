@@ -18,7 +18,7 @@ public sealed partial class ArchitectureGuardTests
         Assert.DoesNotContain(names, name => name.Contains("Valence", StringComparison.OrdinalIgnoreCase));
 
         var sourceFiles = Directory.EnumerateFiles(
-                Path.Combine(RepoRoot, "essentials", "src", "Connections"),
+                Path.Combine(RepoRoot, "extensions", "Connections", "src"),
                 "*.cs",
                 SearchOption.AllDirectories)
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal));

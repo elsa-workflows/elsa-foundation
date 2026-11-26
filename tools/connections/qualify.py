@@ -13,8 +13,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULE = "essentials/src/Connections/Persistence/EntityFrameworkCore/Elsa.Connections.Persistence.EntityFrameworkCore.csproj"
-PROBE = "essentials/tests/Connections/Persistence/EntityFrameworkCore/RestartProbe/Program.cs"
+MODULE = "extensions/Connections/src/Persistence/EntityFrameworkCore/Elsa.Connections.Persistence.EntityFrameworkCore.csproj"
+PROBE = "extensions/Connections/tests/Persistence/EntityFrameworkCore/RestartProbe/Program.cs"
 
 
 def sha(path):

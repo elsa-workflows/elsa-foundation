@@ -75,7 +75,7 @@ def _verify_pinned_layout(root: Path, inventory: dict) -> None:
         for item in manifest["projects"]
         if item.get("product") == "studio"
     ]
-    # A project renamed after consolidation keeps its frozen manifest row under the old path and identity.
+    # A project moved or renamed after consolidation keeps its frozen manifest row under the original path and identity.
     renamed = {item["renamed_from"]: item for item in inventory["packable_projects"] + inventory["non_packable_projects"]
                if "renamed_from" in item}
     stale = sorted(set(renamed) - {path for path, _ in projected})

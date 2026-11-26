@@ -22,10 +22,10 @@
     <Project Path="src/essentials/Elsa.Studio.Hosting.Themes/Elsa.Studio.Hosting.Themes.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Hosting.Nuplane/Elsa.Studio.Hosting.Nuplane.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Hosting.Distribution/Elsa.Studio.Hosting.Distribution.csproj" />
-    <Project Path="src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj" />
   </Folder>
   <Folder Name="/src/extensions/">
+    <Project Path="../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" />
     <Project Path="../extensions/Attention/studio/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj" />
     <Project Path="../extensions/Connections/studio/Elsa.Studio.Connections/Elsa.Studio.Connections.csproj" />
     <Project Path="../extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj" />

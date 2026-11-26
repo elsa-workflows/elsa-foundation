@@ -549,7 +549,7 @@ public sealed partial class ArchitectureGuardTests
 
     /// <summary>
     /// Project-name prefixes that belong to an optional module, and the <c>extensions/</c> bucket owning
-    /// each (#1815). Order matters only if one prefix is a prefix of another, which none are today.
+    /// each (#1815). The more specific Diagnostics prefixes precede the shared Diagnostics prefix.
     /// </summary>
     private static readonly (string Prefix, string Bucket)[] ExtensionBuckets =
     [
@@ -561,6 +561,13 @@ public sealed partial class ArchitectureGuardTests
         ("Elsa.Decisions.", "Decisions"),
         ("Elsa.ExtensionBuilder.", "ExtensionBuilder"),
         ("Elsa.Integrations.", "Integrations"),
+        ("Elsa.Connections.", "Connections"),
+        ("Elsa.Activities.Bpmn.", "Bpmn"),
+        ("Elsa.Foundation.Identity.ExternalAuthentication.", "Identity"),
+        ("Elsa.Diagnostics.ConsoleLogStreaming.", "ConsoleStream"),
+        ("Elsa.Diagnostics.OpenTelemetry.", "Diagnostics.OpenTelemetry"),
+        ("Elsa.Diagnostics.StructuredLogs.", "Diagnostics.StructuredLogs"),
+        ("Elsa.Diagnostics.", "Diagnostics"),
     ];
 
     /// <summary>
