@@ -40,6 +40,19 @@ def json_configuration(path):
     return json.loads(configuration)
 
 
+def merge_configuration(base, overrides):
+    if not isinstance(base, dict) or not isinstance(overrides, dict):
+        raise ValueError("Configuration files must contain JSON objects")
+    keys = {key.casefold(): key for key in base}
+    for name, value in overrides.items():
+        key = keys.setdefault(name.casefold(), name)
+        current = base.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merge_configuration(current, value)
+        else:
+            base[key] = value
+
+
 def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
@@ -253,7 +266,7 @@ def stage_libraries(graph, host, roots, restore_packages, output):
     return len(lock_entries)
 
 
-def stage_configuration(configuration, production, output):
+def stage_configuration(configuration, production, output, allow_add_ons):
     if production.get("Nuplane", {}).get("Setup", {}).get("Feeds"):
         raise ValueError("Foundation production settings already declare feeds. The profile would inherit extra sources.")
     nuplane = configuration["Nuplane"]
@@ -263,8 +276,20 @@ def stage_configuration(configuration, production, output):
         "Directory": {"Role": "Cache", "Watch": False},
     }]
     nuplane.setdefault("Convergence", {})["Manifest"] = {"Enabled": True, "Path": f"/app/{MANIFEST_FILE}"}
-    nuplane.setdefault("FeedResolution", {})["OfflineMode"] = True
-    nuplane["LockFile"] = {"Mode": "Strict", "Path": "/app/nuplane.lock.json", "FailOnHashMismatch": True}
+    if allow_add_ons:
+        # Module management uses the first directory as its upload target.
+        nuplane["Setup"]["Feeds"].insert(0, {
+            "Name": "local-packages",
+            "DirectoryPath": "packages",
+            "IncludePatterns": ["*"],
+            "Directory": {"Watch": True, "DebounceWindow": "00:00:01"},
+        })
+    nuplane.setdefault("FeedResolution", {})["OfflineMode"] = not allow_add_ons
+    nuplane["LockFile"] = {
+        "Mode": "Enforce" if allow_add_ons else "Strict",
+        "Path": "/app/nuplane.lock.json",
+        "FailOnHashMismatch": True,
+    }
     nuplane.setdefault("Reconciliation", {})["StartupFailurePolicy"] = "FailHost"
     nuplane["Loading"]["DefaultLoadMode"] = "HostIntegrated"
     write_json(output / "appsettings.json", configuration)
@@ -307,6 +332,12 @@ def assemble(args):
             configuration = json_configuration(FOUNDATION_DIRECTORY / "appsettings.json")
             production = json_configuration(FOUNDATION_DIRECTORY / "appsettings.Production.json")
             host, shared = foundation_pins(FOUNDATION_DIRECTORY, versions, roots, configuration, production)
+            if args.appsettings_directory:
+                for name, settings in [("appsettings.json", configuration), ("appsettings.Production.json", production)]:
+                    overlay = args.appsettings_directory / name
+                    if overlay.is_file():
+                        merge_configuration(settings, json_configuration(overlay))
+                write_json(app / "appsettings.Production.json", production)
             config = args.nuget_config.resolve() if args.nuget_config else default_nuget_config(restore / "NuGet.config")
             graph, lock = restore_graph(restore, {**shared, **versions, **roots}, roots, config, reviewed_lock)
             count = stage_libraries(graph, host, roots, restore / "packages", app)
@@ -315,7 +346,7 @@ def assemble(args):
             if args.locked and json_data(reviewed_runtime_lock) != runtime_lock_data:
                 raise ValueError(f"Resolved archive hashes differ from {reviewed_runtime_lock}")
             stage_manifest(runtime_lock_data, app)
-            stage_configuration(configuration, production, app)
+            stage_configuration(configuration, production, app, args.allow_add_ons)
             shutil.copyfile(lock, context / "packages.lock.json")
             shutil.copyfile(runtime_lock, context / "nuplane.lock.json")
             (context / "foundation-base.sha256").write_text(
@@ -340,6 +371,8 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     command = commands.add_parser("assemble", help="read packages.txt from the working directory")
     command.add_argument("--output", required=True, type=Path, help="new or empty directory for the assembled feed and locks")
+    command.add_argument("--allow-add-ons", action="store_true", help="allow watched add-on packages beside the locked profile")
+    command.add_argument("--appsettings-directory", type=Path, help="merge the profile's appsettings and Production overrides")
     command.add_argument("--locked", action="store_true", help="require both locks beside packages.txt and reproduce them")
     command.add_argument("--packs-directory", type=Path, default=TOOL_DIRECTORY / "packs", help="use this directory of named packs")
     command.add_argument("--nuget-config", type=Path, help="override build-time NuGet sources")

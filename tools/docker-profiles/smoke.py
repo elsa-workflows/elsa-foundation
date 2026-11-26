@@ -14,9 +14,10 @@ import time
 from urllib.parse import urlencode, urlsplit
 from uuid import uuid4
 
-from profile_acceptance import MIGRATED_FIXTURE, MIGRATED_PROFILE, verify_migrated_files, verify_variant
+from profile_acceptance import MIGRATED_FIXTURE, MIGRATED_PROFILE, verify_migrated_files, verify_secret_store, verify_variant
 
 
+CURATED = "essentials-curated"
 WRITE_LINE = "Elsa.Activities.Primitives.Activities.WriteLine"
 LOGIN_PATH = "/_elsa/identity/login"
 COOKIE_DIRECTORY = "/tmp/elsa-profile-smoke"
@@ -38,11 +39,11 @@ def docker(*args, input_text=None, strip=True):
     return output.strip() if strip else output
 
 
-def request(container, path, data=None, *, authenticated=True):
+def request(container, path, data=None, *, authenticated=True, header_file=COOKIE_HEADER):
     args = ["exec", "-i", container, "curl", "-sS", "--max-time", "5",
             "-w", "\n%{http_code}\n%{redirect_url}"]
     if authenticated:
-        args.extend(["-H", f"@{COOKIE_HEADER}"])
+        args.extend(["-H", f"@{header_file}"])
     elif path == LOGIN_PATH:
         args.extend(["-c", COOKIE_JAR])
     if data is not None:
@@ -109,6 +110,44 @@ def authenticate(container, args):
         raise RuntimeError(f"Identity did not report an authenticated session: {login['status']}")
     prepare_cookie_header(container)
     return unauthenticated_status, login["status"]
+
+
+def write_header(container, file_name, value):
+    path = f"{COOKIE_DIRECTORY}/{file_name}"
+    docker("exec", "-i", container, "sh", "-ec", 'umask 077; cat > "$1"', "sh", path, input_text=value + "\n")
+    return path
+
+
+def verify_curated_profile(container, args):
+    token_path = "/_elsa/identity/token"
+    if request(container, token_path, authenticated=False)[0] != 401:
+        raise RuntimeError("Token exchange must require a signed-in session")
+    access_token = read_json(container, token_path)["accessToken"]
+    bearer = write_header(container, "bearer-header", f"Authorization: Bearer {access_token}")
+    if request(container, "/design/activities/definitions", header_file=bearer)[0] != 200:
+        raise RuntimeError("The token issued by this host was refused by its protected workflow API")
+
+    registry = "/_elsa/module-management/registry"
+    if request(container, registry, authenticated=False)[0] != 401:
+        raise RuntimeError("The module registry must challenge requests missing the configured management key")
+    management = write_header(container, "management-header", f"X-Elsa-Module-Management-Key: {args.management_key}")
+    status, body, _ = request(container, registry, header_file=management)
+    if status != 200:
+        raise RuntimeError(f"The module registry returned HTTP {status}")
+    feeds = [feed["name"] for feed in json.loads(body)["feeds"]]
+    if feeds != ["local-packages", "profile-packages"]:
+        raise RuntimeError(f"The writable registry feed must precede the baked package cache: {feeds}")
+
+    origin = "http://localhost:5089"
+    headers = docker("exec", container, "curl", "-fsS", "--max-time", "5", "-X", "OPTIONS",
+                     "-D", "-", "-o", "/dev/null", "-H", f"Origin: {origin}",
+                     "-H", "Access-Control-Request-Method: GET",
+                     "http://127.0.0.1:8080/design/activities/definitions").lower()
+    if f"access-control-allow-origin: {origin}" not in headers.splitlines():
+        raise RuntimeError(f"CORS preflight for {origin} was refused")
+
+    return {"tokenExchange": "verified", "bearerAuthorization": "verified", "corsOrigin": origin, "registryFeeds": feeds,
+            "secrets": verify_secret_store(lambda path, data=None: read_json(container, path, data))}
 
 
 def run_workflow(container, args):
@@ -218,6 +257,8 @@ def smoke(args, migrated_directory=None):
                 else:
                     results.update(run_workflow(container, args))
                     results.update(verify_variant(args.variant, request_json))
+                    if args.variant == CURATED:
+                        results.update(verify_curated_profile(container, args))
                 lines = docker("logs", container).splitlines()
                 if migrated_directory and results["migratedFiles"]["output"] not in lines:
                     raise RuntimeError("Output from the mounted catalog activity was absent from container logs")
@@ -247,21 +288,30 @@ def read_image_file(image_id, path):
                   "--entrypoint", "cat", image_id, path)
 
 
-def verify_pinned_packages(image_id):
+def verify_pinned_packages(image_id, allow_add_ons):
     settings = json.loads(read_image_file(image_id, "/app/appsettings.json"))["Nuplane"]
     feed_name = "profile-packages"
     manifest_path = "/app/profile-desired.json"
     lock_path = "/app/nuplane.lock.json"
-    if settings["Setup"]["Feeds"] != [{
-        "Name": feed_name, "DirectoryPath": feed_name, "Directory": {"Role": "Cache", "Watch": False},
-    }]:
-        raise RuntimeError("Expected a single cache-only profile feed with watching disabled")
+    feeds = [{"Name": feed_name, "DirectoryPath": feed_name, "Directory": {"Role": "Cache", "Watch": False}}]
+    if allow_add_ons:
+        feeds.insert(0, {
+            "Name": "local-packages",
+            "DirectoryPath": "packages",
+            "IncludePatterns": ["*"],
+            "Directory": {"Watch": True, "DebounceWindow": "00:00:01"},
+        })
+    if settings["Setup"]["Feeds"] != feeds:
+        raise RuntimeError("Unexpected runtime feeds for the profile")
     if settings["Convergence"]["Manifest"] != {"Enabled": True, "Path": manifest_path}:
         raise RuntimeError("Expected the baked Nuplane desired manifest to be enabled")
-    if settings["LockFile"] != {"Mode": "Strict", "Path": lock_path, "FailOnHashMismatch": True}:
-        raise RuntimeError("Expected strict Nuplane archive hash enforcement")
-    if settings["FeedResolution"]["OfflineMode"] is not True or settings["Reconciliation"]["StartupFailurePolicy"] != "FailHost":
-        raise RuntimeError("Expected offline Nuplane resolution with fail-closed startup")
+    mode = "Enforce" if allow_add_ons else "Strict"
+    if settings["LockFile"] != {"Mode": mode, "Path": lock_path, "FailOnHashMismatch": True}:
+        raise RuntimeError("Expected Nuplane to enforce the baked archive hashes")
+    if settings["FeedResolution"]["OfflineMode"] != (not allow_add_ons):
+        raise RuntimeError("Unexpected profile offline policy")
+    if settings["Reconciliation"]["StartupFailurePolicy"] != "FailHost":
+        raise RuntimeError("Expected startup to fail if package admission fails")
     lock = json.loads(read_image_file(image_id, lock_path))
     manifest = json.loads(read_image_file(image_id, manifest_path))
     pins = [
@@ -269,7 +319,7 @@ def verify_pinned_packages(image_id):
         for package in lock["packages"]
     ]
     if not pins or manifest != {"schemaVersion": "1.0", "generatedAtUtc": lock["generatedAt"], "packages": pins}:
-        raise RuntimeError("The baked desired manifest differs from the strict Nuplane lock")
+        raise RuntimeError("The baked desired manifest differs from the Nuplane lock")
     return len(pins)
 
 
@@ -287,7 +337,7 @@ def smoke_migrated_files(args, directory):
 
 
 def verify_profile(args):
-    args.pinned_package_count = verify_pinned_packages(args.image_id)
+    args.pinned_package_count = verify_pinned_packages(args.image_id, allow_add_ons=args.variant == CURATED)
     with tempfile.TemporaryDirectory(prefix="elsa-profile-smoke-") as temporary:
         directory = Path(temporary)
         args.env_file = directory / "smoke.env"
@@ -302,9 +352,13 @@ def verify_profile(args):
             "WorkflowsRuntimeApi__WorkflowAlterationPayloadProtectionKeys__local-smoke":
                 base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
         }
-        if args.variant == "full":
+        if args.variant in ("full", CURATED):
             settings["Secrets__EncryptionKey"] = secrets.token_hex(32)
-        args.env_file.write_text("".join(f"{feature}{name}={value}\n" for name, value in settings.items()))
+        lines = [f"{feature}{name}={value}\n" for name, value in settings.items()]
+        if args.variant == CURATED:
+            args.management_key = secrets.token_hex(32)
+            lines.append(f"Elsa__ModuleManagement__ApiKey={args.management_key}\n")
+        args.env_file.write_text("".join(lines))
 
         if args.variant != "essentials":
             args.expect_trigger.extend(ALL_OPTIONAL_TRIGGER_TYPES)
@@ -338,7 +392,7 @@ def main():
     parser.add_argument("image", help="locally available image reference")
     parser.add_argument("--env-file", type=Path, help="Docker env file with local test configuration")
     parser.add_argument("--username", default="admin", help="local seeded username")
-    parser.add_argument("--variant", choices=("essentials", "elsa3-import", "full"),
+    parser.add_argument("--variant", choices=("essentials", "elsa3-import", "full", CURATED),
                         help="verify a built profile with generated local test configuration")
     parser.add_argument("--shells", type=Path, help="read-only shells.json override")
     parser.add_argument("--expect-activity", action="append", default=[], help="CLR type key required in the catalog")
