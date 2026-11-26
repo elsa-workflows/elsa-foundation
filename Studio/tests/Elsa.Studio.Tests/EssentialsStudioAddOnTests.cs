@@ -9,8 +9,7 @@ namespace Elsa.Studio.Tests;
 /// <summary>
 /// A Studio add-on installs into the running Essentials Studio from the feed, with no rebuild and no restart (#5768). The test
 /// packs the real ETL Studio module with <c>dotnet pack</c>, uploads the package the way the Modules page does, enables its
-/// feature the way the Features page does, and reads the module back from the same process. Its client assets are refused
-/// today (#5778), and the test pins that refusal.
+/// feature the way the Features page does, and reads the module and its browser assets back from the same process.
 /// </summary>
 /// <remarks>
 /// ETL is a feed-only module of Studio Essentials, so <see cref="EssentialsStudioHostBootTests"/> pins that the app's build output
@@ -45,8 +44,18 @@ public sealed class EssentialsStudioAddOnTests(EssentialsStudioAddOnTests.Host h
         // The Features page: the add-on's feature appears in the catalog once the package is loaded, and is enabled from there.
         var catalog = await UntilAsync(CatalogAsync, value => FeatureOf(value) is not null, $"{FeatureId} never appeared in the feature catalog");
         Assert.False((bool)FeatureOf(catalog)!["enabled"]!);
-        using (var apply = await host.Client.PostAsJsonAsync("/modularity/features/apply", EnableRequest(catalog)))
-            Assert.True(apply.IsSuccessStatusCode, $"Apply answered {apply.StatusCode}: {await apply.Content.ReadAsStringAsync()}{host.OutputSection}");
+        for (var attempt = 1; ; attempt++)
+        {
+            using var apply = await host.Client.PostAsJsonAsync("/modularity/features/apply", EnableRequest(catalog));
+            if (apply.IsSuccessStatusCode)
+                break;
+
+            // A shell reload can overlap the save or interrupt shell replacement. Read the latest catalog before retrying.
+            var retryable = (apply.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.ServiceUnavailable) && attempt < 3;
+            Assert.True(retryable, $"Apply answered {apply.StatusCode}: {await apply.Content.ReadAsStringAsync()}{host.OutputSection}");
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            catalog = await CatalogAsync();
+        }
 
         // The module is listed, with its client entry and stylesheet resolved from the installed package's own static assets.
         var module = await UntilAsync(ModulesAsync, value => ModuleOf(value) is not null, $"{ModuleId} never appeared in /_elsa/studio/modules");
@@ -56,18 +65,29 @@ public sealed class EssentialsStudioAddOnTests(EssentialsStudioAddOnTests.Host h
         Assert.NotEmpty(styles);
         Assert.All(styles, style => Assert.StartsWith($"/_content/{ModuleId}/studio/modules/etl/", style));
 
-        // Pinned gap (#5778): the shipped app's package store is not an enrolled coordinated store, so Nuplane refuses to admit
-        // the installed bytes and the browser cannot load the module. When #5778 lands, assert 200 text/javascript and text/css.
-        foreach (var asset in styles.Prepend(entry))
-        {
-            using var response = await host.Client.GetAsync(asset);
-            var body = await response.Content.ReadAsStringAsync();
-            Assert.True(response.StatusCode == HttpStatusCode.ServiceUnavailable, $"{asset} answered {response.StatusCode}: {body}{host.OutputSection}");
-            Assert.Equal("UnknownAuthority", (string?)JsonNode.Parse(body)!["reason"]);
-        }
+        await AssertServedAsync(entry, "text/javascript");
+        foreach (var style in styles)
+            await AssertServedAsync(style, "text/css");
 
         Assert.Equal(processId, host.ProcessId);
         Assert.False(File.Exists(Path.Join(host.OutputDirectory, ModuleId + ".dll")));
+    }
+
+    private async Task AssertServedAsync(string asset, string mediaType)
+    {
+        using var response = await host.Client.GetAsync(asset);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, $"{asset} answered {response.StatusCode}: {body}{host.OutputSection}");
+        Assert.Equal(mediaType, response.Content.Headers.ContentType?.MediaType);
+        Assert.NotEmpty(body);
+        var tag = Assert.IsType<EntityTagHeaderValue>(response.Headers.ETag);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, asset);
+        request.Headers.IfNoneMatch.Add(tag);
+        using var revalidation = await host.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.NotModified, revalidation.StatusCode);
+        Assert.Equal(tag, revalidation.Headers.ETag);
+        Assert.Empty(await revalidation.Content.ReadAsByteArrayAsync());
     }
 
     /// <summary>
@@ -100,9 +120,20 @@ public sealed class EssentialsStudioAddOnTests(EssentialsStudioAddOnTests.Host h
 
     private async Task<JsonObject> CatalogAsync()
     {
-        using var response = await host.Client.GetAsync("/modularity/features");
-        response.EnsureSuccessStatusCode();
-        return JsonNode.Parse(await response.Content.ReadAsStringAsync())!.AsObject();
+        var deadline = DateTimeOffset.UtcNow + SettleTimeout;
+        while (true)
+        {
+            using var response = await host.Client.GetAsync("/modularity/features");
+            if (response.StatusCode == HttpStatusCode.ServiceUnavailable && response.Headers.RetryAfter?.Delta is { } delay && DateTimeOffset.UtcNow < deadline)
+            {
+                await Task.Delay(delay);
+                continue;
+            }
+
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.True(response.IsSuccessStatusCode, $"/modularity/features answered {response.StatusCode}: {body}{host.OutputSection}");
+            return JsonNode.Parse(body)!.AsObject();
+        }
     }
 
     private async Task<JsonObject> ModulesAsync()

@@ -134,8 +134,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.13",
-        "contentHash": "3QaKweEyDncmytmpGKT9I0zYtpRg2ZSgzzU092yo/iVeon3d7q9LBW7J79yB7kDzQMxEriP8pl1VfrmkezQxTw=="
+        "resolved": "0.0.14",
+        "contentHash": "iDWsMbT01VEl7kvAZnb83s2u+1trXB/98wGMkKv6YyZ4nnhNonSuv2M5xnMS31qqxYK5/8L0EH13PprpVmEbaw=="
       },
       "SourceGear.sqlite3": {
         "type": "Transitive",
@@ -337,7 +337,7 @@
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
-          "Nuplane.Loading.Abstractions": "[0.0.13, )"
+          "Nuplane.Loading.Abstractions": "[0.0.14, )"
         }
       },
       "elsa.events": {
@@ -711,11 +711,11 @@
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.13, )",
-        "resolved": "0.0.13",
-        "contentHash": "HC2V7HnZXL6p2SHkn7ronHT8qZhgiW9HTkULJ+Y8TfCZjdev9aD43ST44Gws7Dh2/sG5SVCiilOJx+LtR6ZGRw==",
+        "requested": "[0.0.14, )",
+        "resolved": "0.0.14",
+        "contentHash": "Y2fnjVYr8XzR7MT/yzP3yE0xOBhq/LmpP3Yztj4JJo8bpipWDgTPt5O0n75G1xp7hClcNAEfLIoqPpbdm7FiPw==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.13"
+          "Nuplane.Abstractions": "0.0.14"
         }
       },
       "SQLitePCLRaw.bundle_e_sqlite3": {

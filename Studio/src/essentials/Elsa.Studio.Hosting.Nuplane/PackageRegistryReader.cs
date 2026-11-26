@@ -5,10 +5,11 @@ using System.Xml;
 using System.Xml.Linq;
 using global::Nuplane.Abstractions;
 using global::Nuplane.Abstractions.PackageStoreProtection;
+using global::Nuplane.PackageArchives;
 
 namespace Elsa.Studio.Hosting.Nuplane;
 
-/// <summary>Projects detached metadata bytes; every installed-file read uses the admitted content adapter.</summary>
+/// <summary>Projects detached metadata bytes; reads are served by the verified archive.</summary>
 internal static class PackageRegistryReader
 {
     public static async Task<ModuleManagementPackage> ReadAsync(ActivePackage package, PackageContentReader reader,
@@ -18,11 +19,11 @@ internal static class PackageRegistryReader
         var dependencies = new List<ModuleManagementPackageDependency>();
         try
         {
-            await using var scope = await reader.OpenAsync(package, token);
+            var archive = await reader.OpenAsync(package, token);
             foreach (var path in new[] { "elsa-package.json", "build/elsa-package.json" })
             {
-                if (scope.Read(path, PackageContentReader.MaximumMetadataBytes, token) is not { } content) continue;
-                var text = Text(content.Bytes);
+                if (archive.GetEntry(path) is not { } entry) continue;
+                var text = Text(PackageContentReader.Read(entry, PackageContentReader.MaximumMetadataBytes, token));
                 try
                 {
                     var document = JsonNode.Parse(text);
@@ -37,11 +38,13 @@ internal static class PackageRegistryReader
                     diagnostics.Add(new(package.PackageId, "invalid-metadata", $"{path} is not valid JSON."));
                 }
             }
-            if (scope.FindRootFile(".nuspec", token) is { } nuspec && scope.Read(nuspec, PackageContentReader.MaximumMetadataBytes, token) is { } xml)
+            var nuspec = archive.Entries.FirstOrDefault(entry => !entry.Path.Contains('/') && entry.Path.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
+            if (nuspec is not null)
             {
-                manifest ??= new("nuspec", Path.Combine(package.InstallPath, nuspec), null, Text(xml.Bytes));
+                var bytes = PackageContentReader.Read(nuspec, PackageContentReader.MaximumMetadataBytes, token);
+                manifest ??= new("nuspec", Path.Combine(package.InstallPath, nuspec.Path), null, Text(bytes));
                 // NuSpec display/projection is not a second filesystem reader or dependency resolver.
-                using var stream = new MemoryStream(xml.Bytes, writable: false);
+                using var stream = new MemoryStream(bytes, writable: false);
                 using var input = XmlReader.Create(stream, new XmlReaderSettings
                 {
                     DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null,
@@ -58,7 +61,8 @@ internal static class PackageRegistryReader
         }
         catch (PackageStoreAdmissionException error) { Unavailable(error.Reason.ToString()); }
         catch (PackageContentSizeException error) { Unavailable(error.Message); }
-        catch (PackageContentProfileException error) { Unavailable(error.Message); }
+        catch (PackageArchiveException error) { Unavailable(error.Reason.ToString()); }
+        catch (InvalidDataException) { Unavailable("Package metadata entry could not be read."); }
         catch (IOException) { Unavailable("Protected package metadata could not be read."); }
         catch (UnauthorizedAccessException) { Unavailable("Protected package metadata access was refused."); }
         catch (XmlException) { diagnostics.Add(new(package.PackageId, "invalid-metadata", "The NuSpec is not valid supported XML.")); }
