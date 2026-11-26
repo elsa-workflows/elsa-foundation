@@ -95,8 +95,8 @@ child's policy no longer applies. [ADR 0045](../../docs/adr/0045-workflow-value-
 forbids that downgrade. The current projection pipeline gives an output one static policy, so it cannot carry a
 per-value policy.
 
-Leaving a value out is not a downgrade, but ADR 0045 §9 also says it must not happen silently. So the omission is
-loud in two ways:
+Leaving a value out keeps §9: nothing is downgraded. ADR 0046 V6 then requires a loss to be declared, never silent.
+So the omission is visible in two ways:
 
 - **At design time.** The `Output` contract description states it: a declared loss under
   [ADR 0046](../../docs/adr/0046-output-binding-coercion-uses-pinned-value-representations.md) V6.
@@ -161,7 +161,8 @@ outputs by name.
 **Why this priority**: The awaited result is the gap #1152 records. It blocks two S-15 suites.
 
 **Independent Test**: Convert the `acme.address-check` node from the Problem section and run it. Separately, convert the
-original `composition-dispatch-root-workflow.json` with only its `channelName` cleared.
+original `composition-dispatch-root-workflow.json` with only its `channelName` cleared. The S-15 session does this
+part (FR-013).
 
 **Acceptance Scenarios**:
 
@@ -272,7 +273,8 @@ faults.
     V6: a declared loss).
   - When an output is left out, the dispatch MUST report one execution warning on resume (ADR 0045 §9: not silent):
     - code `dispatch.child-output-withheld`, severity Warning;
-    - the left-out output names, sorted ordinally, under the `Details` key `outputs`;
+    - the left-out output names, sorted ordinally and joined with `", "`, under the `Details` key `outputs`, as
+      `JavaScriptValueWrites` does for `paths`;
     - no value.
   - A completed child with no outputs gives `{}`.
   - The values MUST be replay-stable: a resumed or retried parent gets the same `Output` (spec 099 FR-008).
@@ -371,8 +373,9 @@ the current core but are refused or behave differently on the kernel:
 - **SC-003**: 100% of the FR-001 to FR-004 cases pass on the current core with the real workflow output source and
   default diagnostics settings, including a waiting parent that resumes after a restart.
 - **SC-004**: No existing waited-dispatch, Dispatch Workflow contract or Elsa 3 converter test changes behaviour, except
-  the tests that pin the old `Lost("Result")` rule, the old `Done` mapping, and the carried `WaitForCompletion` value of
-  Execute Workflow.
+  the tests that pin the old `Lost("Result")` rule, the old `Done` mapping, the carried `WaitForCompletion` value of
+  Execute Workflow, and the Execute Workflow durable-warning tests (the warning moves into the rewrite and gains a
+  sentence).
 
 ## Assumptions
 
