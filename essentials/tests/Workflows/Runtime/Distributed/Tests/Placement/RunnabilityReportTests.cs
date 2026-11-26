@@ -1,5 +1,6 @@
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Cluster.Core.Contracts;
+using Elsa.Cluster.Core.Extensions;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.InProcess;
 using Elsa.Cluster.Testing.Runtime;
@@ -102,6 +103,33 @@ public sealed class RunnabilityReportTests : IAsyncDisposable
         var section = await first.GetRequiredService<IMemberReportSource<RunnabilitySection>>().ReadAsync();
         Assert.Equal(2, section.Entries.Count);
         Assert.Equal(section, await second.GetRequiredService<IMemberReportSource<RunnabilitySection>>().ReadAsync());
+    }
+
+    [Fact]
+    public async Task A_host_report_shares_shell_entries_without_the_distributed_runtime_registration()
+    {
+        var host = new ServiceCollection();
+        host.AddSharedRunnabilityReport();
+
+        await using var root = host.BuildServiceProvider();
+        await using var first = Shell(host);
+        await using var reloaded = Shell(host);
+        var firstRegistry = first.GetRequiredService<ShellRunnabilityRegistry>();
+        var reloadedRegistry = reloaded.GetRequiredService<ShellRunnabilityRegistry>();
+        var firstShell = new DistributedRuntimeShell("default", "first-generation");
+        var reloadedShell = new DistributedRuntimeShell("default", "reloaded-generation");
+        var firstEntry = new RunnabilityEntry([new RunnableConsumer(ApprovalsConsumer, ["1"])], [], []);
+        var reloadedEntry = new RunnabilityEntry([new RunnableConsumer(ApprovalsConsumer, ["2"])], [], []);
+
+        Assert.True(firstRegistry.Record(firstShell, firstEntry));
+        Assert.True(reloadedRegistry.Record(reloadedShell, reloadedEntry));
+
+        var source = root.GetRequiredService<IMemberReportSource<RunnabilitySection>>();
+        Assert.Equal([firstEntry, reloadedEntry], (await source.ReadAsync()).Entries);
+        Assert.Single(reloaded.GetServices<IMemberReportSource<RunnabilitySection>>());
+
+        Assert.True(firstRegistry.Remove(firstShell));
+        Assert.Equal(reloadedEntry, Assert.Single((await source.ReadAsync()).Entries));
     }
 
     /// <summary>

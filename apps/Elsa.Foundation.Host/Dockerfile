@@ -63,10 +63,12 @@ COPY essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundatio
 COPY essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj essentials/src/Foundation/Hosting/packages.lock.json essentials/src/Foundation/Hosting/
 COPY essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj essentials/src/Foundation/Identity/Core/packages.lock.json essentials/src/Foundation/Identity/Core/
 COPY essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj essentials/src/Foundation/Identity/Elsa.Foundation.Identity/packages.lock.json essentials/src/Foundation/Identity/Elsa.Foundation.Identity/
+COPY essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/packages.lock.json essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/
 COPY essentials/src/Locking/Core/Elsa.Locking.Core.csproj essentials/src/Locking/Core/packages.lock.json essentials/src/Locking/Core/
 COPY essentials/src/Mediator/Core/Elsa.Mediator.Core.csproj essentials/src/Mediator/Core/packages.lock.json essentials/src/Mediator/Core/
 COPY essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj essentials/src/Modularity/Api/packages.lock.json essentials/src/Modularity/Api/
 COPY essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj essentials/src/Modularity/Core/packages.lock.json essentials/src/Modularity/Core/
+COPY essentials/src/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj essentials/src/Modularity/EntityFramework/packages.lock.json essentials/src/Modularity/EntityFramework/
 COPY essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj essentials/src/Modularity/Nuplane/packages.lock.json essentials/src/Modularity/Nuplane/
 COPY essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj essentials/src/Persistence/EntityFramework/packages.lock.json essentials/src/Persistence/EntityFramework/
 COPY essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj essentials/src/Persistence/Core/packages.lock.json essentials/src/Persistence/Core/
@@ -99,10 +101,12 @@ COPY essentials/src/Foundation/DataProtection/EntityFrameworkCore/ essentials/sr
 COPY essentials/src/Foundation/Hosting/ essentials/src/Foundation/Hosting/
 COPY essentials/src/Foundation/Identity/Core/ essentials/src/Foundation/Identity/Core/
 COPY essentials/src/Foundation/Identity/Elsa.Foundation.Identity/ essentials/src/Foundation/Identity/Elsa.Foundation.Identity/
+COPY essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/ essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/
 COPY essentials/src/Locking/Core/ essentials/src/Locking/Core/
 COPY essentials/src/Mediator/Core/ essentials/src/Mediator/Core/
 COPY essentials/src/Modularity/Api/ essentials/src/Modularity/Api/
 COPY essentials/src/Modularity/Core/ essentials/src/Modularity/Core/
+COPY essentials/src/Modularity/EntityFramework/ essentials/src/Modularity/EntityFramework/
 COPY essentials/src/Modularity/Nuplane/ essentials/src/Modularity/Nuplane/
 COPY essentials/src/Persistence/EntityFramework/ essentials/src/Persistence/EntityFramework/
 COPY essentials/src/Persistence/Core/ essentials/src/Persistence/Core/

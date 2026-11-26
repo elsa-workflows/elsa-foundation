@@ -65,21 +65,22 @@ public sealed class SharedAssemblyClosureGuardTests
 
         // Elsa.Foundation.Host shares Line A's ten contracts (#2126), the two host-composed ones (#2143) and the
         // Elsa.Persistence.EntityFramework its cluster membership provider carries (#2151), beside its three
-        // CShells.*.Abstractions ones and EF Core's own. Line A is closed under its own dependencies by definition,
-        // the two host-composed ones reach nothing but Line A, and Elsa.Persistence.EntityFramework reaches only
-        // Elsa.Primitives and Elsa.Persistence.Schema, so the theory above holds with every one of the thirteen examined and
-        // none of them reaching outside the set.
+        // CShells.*.Abstractions ones and EF Core's own. Line A is closed under its own dependencies by definition.
+        // The root OpenIddict token store adds the feature-free identity contract and the vendor manager contracts.
         var foundationHost = SharedAssemblies(ReadNuplane("Elsa.Foundation.Host"));
         Assert.NotEmpty(Examined(foundationHost));
         Assert.Equal(foundationHost.Where(ProjectGraph.IsElsa), Examined(foundationHost));
+        Assert.DoesNotContain("Elsa.Workflows.Runtime.Distributed", Reachable("Elsa.Foundation.Host", ElsaReferences));
 
         // The Essentials host shares what Elsa.Foundation.Host shares, so an add-on binds the same host contracts on either
         // host, plus the domain contracts of the features it compiles in, which Elsa.Workbench shares for the same reason: a
         // feed add-on binds the host's copy of them instead of loading its own. Those are exactly Workbench's domain shares,
         // less Elsa.Weaver.Core, whose feature it does not compile in.
-        var essentialsDomainShares = workbench.Except(foundationHost).Where(name => name != "Elsa.Weaver.Core");
+        var foundationContracts = foundationHost.Except(TokenStoreShares)
+            .Where(name => name != "Elsa.Modularity.Core");
+        var essentialsDomainShares = workbench.Except(foundationContracts).Where(name => name != "Elsa.Weaver.Core");
         Assert.Equal(
-            foundationHost.Union(essentialsDomainShares).Order(StringComparer.Ordinal),
+            foundationContracts.Union(essentialsDomainShares).Order(StringComparer.Ordinal),
             SharedAssemblies(ReadNuplane("Elsa.Essentials.Host")).Order(StringComparer.Ordinal));
 
         // The edge behind the original bug, resolved from the real csproj files.
@@ -152,6 +153,36 @@ public sealed class SharedAssemblyClosureGuardTests
             var entry = entries[share];
             Assert.Equal((EfCorePublicKeyToken, Major(locked[share])), (entry["PublicKeyToken"], int.Parse(entry["MajorVersion"]!)));
         });
+    }
+
+    private static readonly string[] TokenStoreShares =
+    [
+        "OpenIddict.Abstractions", "OpenIddict.Core",
+        "Microsoft.IdentityModel.Abstractions", "Microsoft.IdentityModel.Logging", "Microsoft.IdentityModel.Tokens",
+        "Microsoft.Extensions.Telemetry.Abstractions"
+    ];
+
+    [Fact]
+    public void Foundation_host_shares_its_token_store_contracts_and_loads_the_feature_from_packages()
+    {
+        const string host = "Elsa.Foundation.Host";
+        var entries = ReadNuplane(host).GetSection("Loading:SharedAssemblies").GetChildren()
+            .ToDictionary(entry => entry["Name"]!, StringComparer.OrdinalIgnoreCase);
+        var carried = Reachable(host, ElsaReferences).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var locked = LockedVersions(host);
+
+        Assert.Contains("Elsa.Foundation.Identity.Core", entries.Keys);
+        Assert.Contains("Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore", carried);
+        Assert.DoesNotContain("Elsa.Foundation.Identity.OpenIddict", carried);
+        Assert.DoesNotContain("Elsa.Foundation.Identity.OpenIddict.Behavior", carried);
+
+        Assert.Contains("Elsa.Modularity.Core", entries.Keys);
+        foreach (var name in TokenStoreShares)
+        {
+            var entry = entries[name];
+            var token = name.StartsWith("OpenIddict.", StringComparison.Ordinal) ? "35a561290d20de2f" : "31bf3856ad364e35";
+            Assert.Equal((token, Major(locked[name])), (entry["PublicKeyToken"], int.Parse(entry["MajorVersion"]!)));
+        }
     }
 
     /// <summary>The packages the host's committed lock file resolves, by id, at the version it resolves.</summary>
