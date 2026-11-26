@@ -23,6 +23,7 @@
     <ProjectReference Include="../../../Workflows/Runtime/Native/RetentionFixture/Elsa.Workflows.Runtime.Native.RetentionFixture.csproj" />
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
+    <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj" />
     <ProjectReference Include="../../Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
     <ProjectReference Include="../../TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
     <ProjectReference Include="../../../../src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
