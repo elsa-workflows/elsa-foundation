@@ -2082,6 +2082,8 @@ jobs:
           $NAT sqlite-host-lifetime in-batch shipped
           $NAT sqlite-shipped-install
           $NAT sqlite-root-ingress
+          $NAT sqlite-root-timed-jobs checked
+          $NAT sqlite-root-timed-jobs in-batch
 
       - name: Graph engine corpus
         run: dotnet test ../../server/essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build

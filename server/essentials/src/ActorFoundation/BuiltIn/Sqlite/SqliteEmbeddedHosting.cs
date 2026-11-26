@@ -29,14 +29,15 @@ public static partial class SqliteEmbeddedHosting
         return StartCoreAsync(databasePath, node, _ => actor, shipped: false, endProcess, options, fenceInBatch, cancellationToken, onFault);
     }
 
-    /// <summary>Starts an Embedded node on the shipped format for durable creators and ordinary root turns.</summary>
+    /// <summary>Starts an Embedded node on the shipped format for root turns and timed jobs.</summary>
     internal static Task<RuntimeNode> StartFoundationAsync(string databasePath, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
         CancellationToken cancellationToken = default, Action<Exception>? onFault = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         RequireFoundationActorType(actor.Type);
-        return StartCoreAsync(databasePath, node, store => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode()), actor),
+        return StartCoreAsync(databasePath, node, store => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode()), actor,
+                rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync),
             shipped: true, endProcess, options, fenceInBatch, cancellationToken, onFault);
     }
 
@@ -85,6 +86,7 @@ public static partial class SqliteEmbeddedHosting
             }
 
             var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch) { CommitSql = CommitSql.Owned };
+            if (shipped) await store.EnableRootJobsAsync(cancellationToken);
             var watchdog = new Watchdog(Defaults.Lease, endProcess);
             var watched = watchdog.Watch(store);
             RuntimeNode? reporter = null;

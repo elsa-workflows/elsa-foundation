@@ -105,9 +105,9 @@ public sealed partial class EfStore
         {
             if (_ordinaryRoots is not null)
                 throw new InvalidOperationException("The PostgreSQL owner is already bound.");
-            if (!db.UsesSqliteRootRuntime && (db.UsesRootJobProtocol != RootJobsEnabled || db.UsesRootTimedJobIssuance != RootTimedJobIssuanceEnabled ||
-                db.UsesRootTimedJobSettlement != RootTimedJobSettlementEnabled || db.UsesRootTimedJobPreview != RootTimedJobPreviewEnabled))
-                throw new StoreFormatException("The PostgreSQL owner must initialize its job capability before binding to the job profile.");
+            if (db.UsesRootJobProtocol != RootJobsEnabled || db.UsesRootTimedJobIssuance != RootTimedJobIssuanceEnabled ||
+                db.UsesRootTimedJobSettlement != RootTimedJobSettlementEnabled || db.UsesRootTimedJobPreview != RootTimedJobPreviewEnabled)
+                throw new StoreFormatException("The root owner must initialize its job capability before binding to the job profile.");
             if (RootTimedJobs && !RootTimedJobPreviewEnabled && (scope.Discover || scope.Actors.Length != 1))
                 throw new NotSupportedException("The timed job fixture binds exactly one generated root.");
             if (db.UsesRootValueProtocol != RootValuesEnabled)
@@ -179,8 +179,10 @@ public sealed partial class EfStore
         if (RootJobsEnabled)
         {
             var jobs = JobRegistry.Read(image.Jobs);
-            if (image.NextJobGeneration is not >= 0 || jobs.Count > 1 ||
-                jobs is [var job] && (job.Generation < 0 || job.Generation != image.NextJobGeneration - 1 ||
+            // The initial staged SQLite worker persisted no generation on roots without jobs.
+            var generation = !postgres && image.Jobs is null ? image.NextJobGeneration ?? 0 : image.NextJobGeneration;
+            if (generation is not >= 0 || jobs.Count > 1 ||
+                jobs is [var job] && (job.Generation < 0 || job.Generation != generation - 1 ||
                     image.Status != InstanceStatus.Running)) throw RootShape();
         }
         else if (image.Jobs is not null || image.NextJobGeneration is > 0) throw RootShape();
@@ -235,7 +237,7 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             var terminal = db.UsesSqliteRootRuntime
-                ? await ReadSqliteFinishedRevisionAsync(db, Root, cancellationToken)
+                ? await ReadSqliteTerminalRevisionAsync(db, Root, cancellationToken)
                 : await LockQualifiedTerminalAsync(db, Root, cancellationToken);
             if (terminal.Count != 1) return false;
             if (SettledJobs.Length > 0 && await db.Messages.AnyAsync(m => m.Target == Root.Actor && m.Partition == Root.Partition &&
@@ -299,11 +301,9 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             if (db.UsesSqliteRootRuntime != SqliteRuntime) return false;
-            // The SQLite worker executes ordinary turns while its shipped definitions already describe the later job slices.
-            if ((!SqliteRuntime && db.UsesRootJobProtocol) != JobProfile ||
-                (!SqliteRuntime && db.UsesRootTimedJobIssuance) != TimedJobIssuance ||
-                (!SqliteRuntime && db.UsesRootTimedJobSettlement) != TimedJobSettlement ||
-                (!SqliteRuntime && db.UsesRootTimedJobPreview) != TimedJobPreview || db.UsesRootValueProtocol != ValueProfile)
+            if (db.UsesRootJobProtocol != JobProfile || db.UsesRootTimedJobIssuance != TimedJobIssuance ||
+                db.UsesRootTimedJobSettlement != TimedJobSettlement || db.UsesRootTimedJobPreview != TimedJobPreview ||
+                db.UsesRootValueProtocol != ValueProfile)
                 return false;
             foreach (var command in Commands)
                 if (!await command.BindCheckpointAsync(db, cancellationToken)) return false;
