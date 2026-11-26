@@ -25,7 +25,8 @@ public sealed partial class EfStore
         }
     }
 
-    private async Task<SqliteLiveCompoundRefusal?> PrepareSqliteLiveCompoundRefusalAsync(WorkerRoot root, InboxKey key, CancellationToken token)
+    private async Task<SqliteLiveCompoundRefusal?> PrepareSqliteLiveCompoundRefusalAsync(WorkerRoot root, InboxKey key,
+        Message? held, CancellationToken token)
     {
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
         if (current is not { Status: InstanceStatus.Running, Jobs: not null }) return null;
@@ -36,7 +37,7 @@ public sealed partial class EfStore
             token);
         if (row is null) return null;
         var command = DecodeRootInput(db, row, root.Reference, issue: null);
-        return command is { Kind: Kinds.Terminate, Operator.RootThenDelete: true }
+        return command is { Kind: Kinds.Terminate, Operator.RootThenDelete: true } && (held is not null ? command == held : command.ReplyTo is null)
             ? new(root, current, command, AuthoredSqliteWithholding(root, current)) : null;
     }
 
@@ -85,8 +86,10 @@ public sealed partial class EfStore
             message.Partition == root.Partition && !message.Done && message.ReplyTo != null).OrderBy(message => message.Seq).ToListAsync(token);
         foreach (var row in waiting)
         {
+            // Retirement ends every valid pending route, including later Park-selected routes that the staged poll withholds.
             var message = PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
-                ? PostgresRootAdmission.DecodeOperator(db, row, root.Reference)
+                ? PostgresRootAdmission.DecodeOperator(row, root.Reference, terminations: true, retirements: true, terminateThenDelete: true,
+                    retentionDeletes: true, operatorReplies: true, parkedTerminate: true)
                 : PostgresRootAdmission.DecodeDirect(row, root.Reference, replies: true);
             if (message.ReplyTo is { } route)
                 (db.RetiredReplies ??= []).Add(new(row.Id, new(route, root.Tenant)));
