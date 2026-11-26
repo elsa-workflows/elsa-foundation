@@ -16,7 +16,7 @@ Filled in from `migration-plan-template.md` ([contract](contracts/plan-template.
 | Features | Elsa 4 feature name → project → components | The migration host must reference every project and list every feature (FR-011). |
 | Components | One row per inventory item | See below. |
 | Accepted refusals | Definition, finding code, reason, date | Only the user adds a row. |
-| Last report | Path of the last `report.json`, the `dotnet run` command and its exit code | Updated after every run. |
+| Last report | Path of the last `report.json`, the `dotnet run` command, its exit code, the date, and the report's tool name and version | Updated after every run. |
 
 ### Component row
 

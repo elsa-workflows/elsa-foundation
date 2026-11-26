@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-24
 
-**Status**: Draft
+**Status**: In progress
 
 **Input**: A guide that takes an Elsa 3 user through a test migration of their workflows to Elsa 4, ending in a
 complete report of what to patch, what to reconsider, what to take into account and what goes smoothly. The guide is a
