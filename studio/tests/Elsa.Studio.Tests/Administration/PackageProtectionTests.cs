@@ -32,7 +32,7 @@ public sealed class PackageProtectionTests
             loadPackages: true,
             beforeStudio: builder => builder.Configuration.AddInMemoryCollection(
                 new Dictionary<string, string?> { ["CShells:Shells:Authoring:Features:EtlStudio"] = "true" }));
-        EssentialsStudioAddOnTests.Pack(host.Root);
+        FoundationStudioAddOnTests.Pack(host.Root);
         await PackageAssetTests.Reconcile(host);
         const string modulesUrl = "/_elsa/studio/modules";
         var initial = await host.Client.GetFromJsonAsync<JsonObject>(modulesUrl);

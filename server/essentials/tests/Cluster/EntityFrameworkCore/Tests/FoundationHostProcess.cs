@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json.Nodes;
 
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
@@ -35,7 +36,14 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     public static async Task<FoundationHostProcess> StartAsync(string shells, IEnumerable<string> packageFiles, IReadOnlyDictionary<string, string> settings, bool deployed = false, bool awaitShells = true)
     {
         var process = await ChildHostProcess.StartAsync(
-            Host, SourceDirectory, "elsa-foundation-host-boot-", shells, packageFiles, settings, deployed, awaitShells);
+            Host, SourceDirectory, "elsa-foundation-host-boot-", shells, packageFiles, settings, deployed, awaitShells,
+            packageFeeds: new JsonArray(new JsonObject
+            {
+                ["Name"] = "local-packages",
+                ["DirectoryPath"] = "packages",
+                ["IncludePatterns"] = new JsonArray("*"),
+                ["Directory"] = new JsonObject { ["Watch"] = true, ["DebounceWindow"] = "00:00:01" }
+            }));
         return new FoundationHostProcess(process);
     }
 

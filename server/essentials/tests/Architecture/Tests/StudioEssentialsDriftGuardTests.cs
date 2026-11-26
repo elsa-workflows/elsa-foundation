@@ -6,15 +6,14 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Keeps the Studio Essentials app and the Essentials server in step (#5768): a Studio module is compiled into
-/// <c>studio/src/apps/Elsa.Studio.Essentials.Host</c> exactly when <c>server/apps/Elsa.Essentials.Host</c> advertises the backend
-/// capabilities that module requires.
+/// Keeps the Studio and server Essentials profiles in step (#5768). Studio includes the modules whose backend
+/// capabilities the server profile serves, together with the modules reviewed separately below.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Both sides are read statically. <b>The server's capabilities</b> are the <c>elsa.api.*</c> ids declared, in a source file that
-/// uses one of the declaration forms in <see cref="DeclarationTokens"/>, by a project in the server's transitive <c>ProjectReference</c> closure that
-/// declares at least one feature its <c>shells.json</c> enables. That is a project-level approximation: a project carries one
+/// uses one of the declaration forms in <see cref="DeclarationTokens"/>, by a project in the server's host or package
+/// closure that declares at least one feature its <c>shells.json</c> enables. That is a project-level approximation: a project carries one
 /// domain's API, and its capability sources (the user-task source in the runtime API, for one) are registered by its enabled
 /// feature rather than declared beside it, so a finer per-feature split would miss them. It can overstate what the server
 /// advertises only when an enabled feature shares a project with a disabled one that declares a capability;
@@ -30,9 +29,11 @@ namespace Elsa.Architecture.Tests;
 /// </remarks>
 public sealed class StudioEssentialsDriftGuardTests
 {
-    private const string ServerProject = "server/apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj";
-    private const string ServerShells = "server/apps/Elsa.Essentials.Host/shells.json";
-    private const string StudioProject = "studio/src/apps/Elsa.Studio.Essentials.Host/Elsa.Studio.Essentials.Host.csproj";
+    private const string ServerProject = "server/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
+    private const string ServerProfile = "docker/profiles/essentials-curated";
+    private const string ServerShells = ServerProfile + "/shells.json";
+    private const string StudioProject = "studio/src/apps/Elsa.Studio.Foundation.Host/Elsa.Studio.Foundation.Host.csproj";
+    private const string StudioProfile = "studio/docker/profiles/essentials";
 
     /// <summary>Ids a module names for screens another add-on serves. They do not count toward the module's requirement.</summary>
     internal static readonly IReadOnlyDictionary<string, (Func<string, bool> Owned, string Reason)> AddOnOwnedIds =
@@ -44,14 +45,14 @@ public sealed class StudioEssentialsDriftGuardTests
                 "Dashboard question authoring in the Weaver dock (native/weaverAuthoring.tsx); Weaver's server add-on declares it."),
         };
 
-    /// <summary>Modules that name no backend capability and ship compiled into Studio Essentials.</summary>
+    /// <summary>Modules that name no backend capability and ship in the Studio Essentials profile.</summary>
     internal static readonly IReadOnlyDictionary<string, (string[] ServerFeatures, string Reason)> InSetWithoutBackend =
         new Dictionary<string, (string[], string)>(StringComparer.Ordinal)
         {
             ["Elsa.Studio.Backends"] = ([], "Backend profiles and selection: part of every Studio shell, composed by Elsa.Studio.Hosting.Distribution."),
             ["Elsa.Studio.FeatureManagement"] = ([], "The Features page that enables installed add-ons; it talks to the Studio host's own administration API."),
-            ["Elsa.Studio.ExpressionEditors.JavaScript"] = (["JavaScriptExpressions"], "The JavaScript expression editor; the server compiles in JavaScript expressions."),
-            ["Elsa.Studio.ExpressionEditors.Liquid"] = (["Liquid"], "The Liquid expression editor; the server compiles in Liquid expressions."),
+            ["Elsa.Studio.ExpressionEditors.JavaScript"] = (["JavaScriptExpressions"], "The JavaScript expression editor; the server enables JavaScript expressions."),
+            ["Elsa.Studio.ExpressionEditors.Liquid"] = (["Liquid"], "The Liquid expression editor; the server enables Liquid expressions."),
         };
 
     /// <summary>
@@ -80,22 +81,22 @@ public sealed class StudioEssentialsDriftGuardTests
     private static readonly Regex ShellFeatureName = new("""\[ShellFeature\(\s*(?:name:\s*)?"(?<name>[^"]+)""", RegexOptions.Compiled);
 
     [Fact]
-    public void Studio_essentials_compiles_in_exactly_the_modules_the_essentials_server_serves()
+    public void Studio_essentials_ships_exactly_the_modules_the_essentials_server_serves()
     {
         var served = ServerCapabilities();
         var modules = StudioModules();
-        var expected = modules.Where(module => IsServed(module.Key, module.Value, served)).Select(module => module.Key).ToHashSet(StringComparer.Ordinal);
-        var actual = CompiledIntoStudioEssentials(modules.Keys);
+        var expected = modules.Where(module => IsServed(module.Key, module.Value.Capabilities, served)).Select(module => module.Key).ToHashSet(StringComparer.Ordinal);
+        var actual = ConfiguredStudioModules(modules);
 
         var missing = expected.Except(actual).Order(StringComparer.Ordinal).ToArray();
         var extra = actual.Except(expected).Order(StringComparer.Ordinal).ToArray();
         Assert.True(missing.Length == 0 && extra.Length == 0, string.Join(Environment.NewLine,
         [
-            $"{StudioProject} is out of step with {ServerProject}.",
-            .. missing.Select(module => $"  Missing: {module}, whose requirement [{string.Join(", ", Requirement(module, modules[module]))}] the server serves. Add its ProjectReference, its assembly in Program.cs and its feature in shells.json."),
-            .. extra.Select(module => modules[module].Count == 0
+            $"{StudioProfile} is out of step with {ServerProfile}.",
+            .. missing.Select(module => $"  Missing: {module}, whose requirement [{string.Join(", ", Requirement(module, modules[module].Capabilities))}] the server serves. Include its package and enable its feature."),
+            .. extra.Select(module => modules[module].Capabilities.Count == 0
                 ? $"  Not in the set: {module} names no capability and is reviewed as feed-only ({(FeedOnlyWithoutBackend.TryGetValue(module, out var entry) ? entry.Reason : "unlisted")}). Remove it."
-                : $"  Not served: {module}, which requires [{string.Join(", ", Requirement(module, modules[module]).Except(served))}] beyond what the server advertises. Remove it; it is a feed add-on."),
+                : $"  Not served: {module}, which requires [{string.Join(", ", Requirement(module, modules[module].Capabilities).Except(served))}] beyond what the server advertises. Remove it; it is a feed add-on."),
         ]));
     }
 
@@ -104,12 +105,12 @@ public sealed class StudioEssentialsDriftGuardTests
     public void Every_module_without_a_backend_requirement_is_reviewed_in_one_list()
     {
         var modules = StudioModules();
-        var unlisted = modules.Where(module => module.Value.Count == 0)
+        var unlisted = modules.Where(module => module.Value.Capabilities.Count == 0)
             .Select(module => module.Key)
             .Where(module => !InSetWithoutBackend.ContainsKey(module) && !FeedOnlyWithoutBackend.ContainsKey(module))
             .ToArray();
         var stale = InSetWithoutBackend.Keys.Concat(FeedOnlyWithoutBackend.Keys)
-            .Where(module => !modules.TryGetValue(module, out var ids) || ids.Count > 0)
+            .Where(module => !modules.TryGetValue(module, out var definition) || definition.Capabilities.Count > 0)
             .ToArray();
 
         Assert.True(unlisted.Length == 0, $"Studio modules that name no elsa.api.* capability must be listed in InSetWithoutBackend or FeedOnlyWithoutBackend, with a reason: {string.Join(", ", unlisted)}");
@@ -121,7 +122,7 @@ public sealed class StudioEssentialsDriftGuardTests
     [Fact]
     public void Feed_only_modules_have_their_server_side_left_out_of_the_essentials_server()
     {
-        var closure = Closure(Path.Join(RepoRoot, ServerProject));
+        var closure = ServerProjectClosure();
         var served = ServerCapabilities();
         foreach (var (module, (serverRoot, _)) in FeedOnlyWithoutBackend)
         {
@@ -130,8 +131,8 @@ public sealed class StudioEssentialsDriftGuardTests
             var root = Path.GetFullPath(Path.Join(RepoRoot, serverRoot)) + Path.DirectorySeparatorChar;
             Assert.True(Directory.Exists(root), $"{module}: {serverRoot} does not exist.");
             Assert.True(SourceFiles(root, "*.csproj").Any(), $"{module}: {serverRoot} holds no project, so the check below would pass with nothing to match.");
-            var compiledIn = closure.Where(project => project.StartsWith(root, StringComparison.OrdinalIgnoreCase)).ToArray();
-            Assert.True(compiledIn.Length == 0, $"{module} is reviewed as feed-only, but the Essentials server compiles in {string.Join(", ", compiledIn)}.");
+            var included = closure.Where(project => project.StartsWith(root, StringComparison.OrdinalIgnoreCase)).ToArray();
+            Assert.True(included.Length == 0, $"{module} is reviewed as feed-only, but the Essentials server includes {string.Join(", ", included)}.");
             var declared = SourceFiles(root, "*.cs").Select(File.ReadAllText).Where(IsDeclarationFile).SelectMany(CapabilityIds).ToArray();
             Assert.True(!declared.Any(served.Contains), $"{module} is reviewed as feed-only, but the Essentials server serves {string.Join(", ", declared.Where(served.Contains))}.");
         }
@@ -170,8 +171,8 @@ public sealed class StudioEssentialsDriftGuardTests
         var modules = StudioModules();
         foreach (var (module, (owned, _)) in AddOnOwnedIds)
         {
-            Assert.True(modules.TryGetValue(module, out var ids), $"{module} is not a Studio module.");
-            Assert.True(ids.Any(owned), $"{module} no longer names an id its add-on-owned exclusion matches; remove the exclusion.");
+            Assert.True(modules.TryGetValue(module, out var definition), $"{module} is not a Studio module.");
+            Assert.True(definition.Capabilities.Any(owned), $"{module} no longer names an id its add-on-owned exclusion matches; remove the exclusion.");
         }
     }
 
@@ -210,7 +211,7 @@ public sealed class StudioEssentialsDriftGuardTests
     public void The_drift_scans_read_the_real_server_and_studio_sources()
     {
         var declared = ServerProjects().SelectMany(project => project.Features).ToHashSet(StringComparer.Ordinal);
-        Assert.Empty(EnabledServerFeatures().Where(feature => !declared.Contains(feature)));
+        Assert.DoesNotContain(EnabledServerFeatures(), feature => !declared.Contains(feature));
 
         var served = ServerCapabilities();
         Assert.Superset(new HashSet<string>(["elsa.api.workflow-design", "elsa.api.runtime", "elsa.api.secrets", "elsa.api.user-tasks"]), served);
@@ -220,8 +221,8 @@ public sealed class StudioEssentialsDriftGuardTests
 
         var modules = StudioModules();
         Assert.True(modules.Count >= 20, $"Only {modules.Count} Studio modules found.");
-        Assert.Contains("elsa.api.etl-design", modules["Elsa.Studio.Etl"]);
-        Assert.Contains("Elsa.Studio.Workflows", CompiledIntoStudioEssentials(modules.Keys));
+        Assert.Contains("elsa.api.etl-design", modules["Elsa.Studio.Etl"].Capabilities);
+        Assert.Contains("Elsa.Studio.Workflows", ConfiguredStudioModules(modules));
     }
 
     private static bool IsServed(string module, IReadOnlySet<string> ids, IReadOnlySet<string> served) =>
@@ -232,9 +233,11 @@ public sealed class StudioEssentialsDriftGuardTests
     private static IEnumerable<string> Requirement(string module, IReadOnlySet<string> ids) =>
         AddOnOwnedIds.TryGetValue(module, out var exclusion) ? ids.Where(id => !exclusion.Owned(id)) : ids;
 
-    private static HashSet<string> EnabledServerFeatures()
+    private static HashSet<string> EnabledServerFeatures() => EnabledFeatures(ServerShells);
+
+    private static HashSet<string> EnabledFeatures(string path)
     {
-        using var document = JsonDocument.Parse(File.ReadAllText(Path.Join(RepoRoot, ServerShells)));
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Join(RepoRoot, path)));
         return document.RootElement.GetProperty("CShells").GetProperty("Shells").EnumerateObject()
             .SelectMany(shell => shell.Value.GetProperty("Features").EnumerateObject())
             .Where(feature => feature.Value.ValueKind != JsonValueKind.False)
@@ -254,7 +257,7 @@ public sealed class StudioEssentialsDriftGuardTests
 
     private static IEnumerable<(string Path, string[] Features, string[] Capabilities)> ServerProjects()
     {
-        foreach (var project in Closure(Path.Join(RepoRoot, ServerProject)))
+        foreach (var project in ServerProjectClosure())
         {
             var sources = SourceFiles(Path.GetDirectoryName(project)!, "*.cs").Select(File.ReadAllText).ToArray();
             var features = sources
@@ -266,23 +269,38 @@ public sealed class StudioEssentialsDriftGuardTests
         }
     }
 
+    private static HashSet<string> ServerProjectClosure()
+    {
+        var sourceProjects = ProjectGraph.ElsaProjectPaths(RepoRoot).ToDictionary(
+            path => Path.GetFileNameWithoutExtension(path), StringComparer.OrdinalIgnoreCase);
+        var packageRoots = ProfilePackageIds(ServerProfile + "/packages.txt", "docker/profiles/packs")
+            .Where(id => id.StartsWith("Elsa.", StringComparison.OrdinalIgnoreCase) || id.Equals("Elsa", StringComparison.OrdinalIgnoreCase))
+            .Select(id => sourceProjects.GetValueOrDefault(id) ??
+                throw new InvalidOperationException($"The Essentials server profile package '{id}' has no source project."));
+        return Closure([Path.Join(RepoRoot, ServerProject), .. packageRoots]);
+    }
+
     private static bool IsDeclarationFile(string source) => DeclarationTokens.Any(token => source.Contains(token, StringComparison.Ordinal));
 
     private static IEnumerable<string> CapabilityIds(string source) => CapabilityLiteral.Matches(source).Select(match => match.Groups["id"].Value);
 
     /// <summary>Every Studio module (a project with a <c>[StudioModule]</c> feature) by assembly name, with the capability ids its client names.</summary>
-    private static Dictionary<string, IReadOnlySet<string>> StudioModules()
+    private static Dictionary<string, StudioModule> StudioModules()
     {
         var roots = Directory.EnumerateDirectories(Path.Join(RepoRoot, "studio", "src", "essentials"))
             .Concat(Directory.EnumerateDirectories(Path.Join(RepoRoot, "extensions"))
                 .Select(extension => Path.Join(extension, "studio"))
                 .Where(Directory.Exists)
                 .SelectMany(Directory.EnumerateDirectories));
-        var modules = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
+        var modules = new Dictionary<string, StudioModule>(StringComparer.Ordinal);
         foreach (var directory in roots)
         {
             var project = Directory.EnumerateFiles(directory, "*.csproj").SingleOrDefault();
-            if (project is null || !SourceFiles(directory, "*.cs").Any(file => StudioModuleAttribute.IsMatch(File.ReadAllText(file))))
+            if (project is null)
+                continue;
+            var moduleSources = SourceFiles(directory, "*.cs").Select(File.ReadAllText)
+                .Where(source => StudioModuleAttribute.IsMatch(source)).ToArray();
+            if (moduleSources.Length == 0)
                 continue;
             var client = Path.Join(directory, "Client", "src");
             var ids = !Directory.Exists(client)
@@ -291,23 +309,51 @@ public sealed class StudioEssentialsDriftGuardTests
                     .Where(file => !file.Split(Path.DirectorySeparatorChar).Contains("__tests__") && !Path.GetFileName(file).Contains(".test.", StringComparison.Ordinal))
                     .SelectMany(file => CapabilityLiteral.Matches(File.ReadAllText(file)).Select(match => match.Groups["id"].Value))
                     .ToHashSet(StringComparer.Ordinal);
-            modules[Path.GetFileNameWithoutExtension(project)] = ids;
+            var features = moduleSources.SelectMany(source => ShellFeatureName.Matches(source).Select(match => match.Groups["name"].Value))
+                .ToHashSet(StringComparer.Ordinal);
+            modules[Path.GetFileNameWithoutExtension(project)] = new(ids, features);
         }
 
         return modules;
     }
 
-    /// <summary>The Studio modules in the Studio Essentials app's transitive project closure.</summary>
-    private static HashSet<string> CompiledIntoStudioEssentials(IEnumerable<string> modules)
+    private static HashSet<string> ConfiguredStudioModules(IReadOnlyDictionary<string, StudioModule> modules)
     {
-        var closure = Closure(Path.Join(RepoRoot, StudioProject)).Select(Path.GetFileNameWithoutExtension).ToHashSet(StringComparer.Ordinal);
-        return modules.Where(closure.Contains).ToHashSet(StringComparer.Ordinal);
+        var bakedPackages = ProfilePackageIds(StudioProfile + "/packages.txt").ToArray();
+        Assert.All(bakedPackages, id => Assert.Contains(id, modules.Keys));
+        var compiled = Closure([Path.Join(RepoRoot, StudioProject)]).Select(Path.GetFileNameWithoutExtension);
+        var included = bakedPackages.Concat(compiled.OfType<string>().Where(modules.ContainsKey)).ToHashSet(StringComparer.Ordinal);
+        var enabled = EnabledFeatures(StudioProfile + "/settings/shells.json");
+        Assert.All(included, id => Assert.True(modules[id].Features.Overlaps(enabled),
+            $"{StudioProfile} includes {id}, but enables none of its module features: {string.Join(", ", modules[id].Features)}."));
+        return included;
     }
 
-    private static HashSet<string> Closure(string root)
+    private static IEnumerable<string> ProfilePackageIds(string manifest, string? packsDirectory = null)
+    {
+        foreach (var line in File.ReadLines(Path.Join(RepoRoot, manifest)))
+        {
+            var declaration = line.Split('#', 2)[0].Trim().Split((char[]?)null, 2)[0];
+            if (declaration.Length == 0)
+                continue;
+            if (declaration[0] == '@')
+            {
+                if (packsDirectory is null)
+                    throw new InvalidOperationException($"Package pack '{declaration}' is not supported in {manifest}.");
+                foreach (var id in ProfilePackageIds($"{packsDirectory}/{declaration[1..]}.txt"))
+                    yield return id;
+            }
+            else
+            {
+                yield return declaration;
+            }
+        }
+    }
+
+    private static HashSet<string> Closure(IEnumerable<string> roots)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var pending = new Stack<string>([Path.GetFullPath(root)]);
+        var pending = new Stack<string>(roots.Select(Path.GetFullPath));
         while (pending.TryPop(out var project))
         {
             if (!seen.Add(project))
@@ -322,4 +368,6 @@ public sealed class StudioEssentialsDriftGuardTests
     private static IEnumerable<string> SourceFiles(string directory, string pattern) =>
         Directory.EnumerateFiles(directory, pattern, SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file) && !file.Split(Path.DirectorySeparatorChar).Contains("node_modules"));
+
+    private sealed record StudioModule(IReadOnlySet<string> Capabilities, IReadOnlySet<string> Features);
 }

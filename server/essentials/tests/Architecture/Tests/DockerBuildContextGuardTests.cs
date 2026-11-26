@@ -72,7 +72,9 @@ public sealed class DockerBuildContextGuardTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(dockerfiles.Length >= 3, $"Expected at least three Dockerfiles under backend production roots; found {dockerfiles.Length}.");
+        var hostNames = dockerfiles.Select(path => Path.GetFileName(Path.GetDirectoryName(path))).ToArray();
+        Assert.Contains("Elsa.Foundation.Host", hostNames);
+        Assert.Contains("Elsa.Workbench.Host", hostNames);
 
         var violations = new List<string>();
         foreach (var dockerfile in dockerfiles)
@@ -126,12 +128,11 @@ public sealed class DockerBuildContextGuardTests
     /// from the restore, not the build: a publish whose restore was not given the file too stamps the computed versions
     /// into the assemblies and still records the dev versions in <c>deps.json</c>, which is what Nuplane checks a feed
     /// package's range against. So the <c>RUN</c> that publishes restores first, with every property it publishes with -
-    /// true of every host that carries computed versions: Elsa.Workbench, Elsa.Foundation.Host and Elsa.Essentials.Host.
+    /// true of every host that carries computed versions: Elsa.Workbench.Host and Elsa.Foundation.Host.
     /// </summary>
     [Theory]
     [InlineData("Elsa.Workbench.Host")]
     [InlineData("Elsa.Foundation.Host")]
-    [InlineData("Elsa.Essentials.Host")]
     public void The_host_publish_restores_with_every_property_it_publishes_with(string host)
     {
         var dockerfile = File.ReadAllText(Path.Join(RepoRoot, "server/apps", host, "Dockerfile"));

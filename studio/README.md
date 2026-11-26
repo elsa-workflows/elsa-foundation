@@ -1,6 +1,6 @@
 # Elsa Foundation Studio
 
-Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The standard browser source and prebuilt `/studio` assets belong to `src/essentials/Elsa.Studio.Hosting`. Three Studio apps ship from `src/apps`: `Elsa.Studio.Workbench.Host` compiles in every Studio module, `Elsa.Studio.Essentials.Host` compiles in the modules the Essentials server serves, and `Elsa.Studio.Foundation.Host` is the bare shell whose modules all arrive from a Nuplane feed. All three compose the same host wiring from `src/essentials/Elsa.Studio.Hosting.Distribution`. Package consumers use Hosting without copying frontend source or running a frontend build. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
+Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The standard browser source and prebuilt `/studio` assets belong to `src/essentials/Elsa.Studio.Hosting`. Use `Elsa.Studio.Workbench.Host` for development with all Studio modules. The [Studio Essentials Docker profile](docker/profiles/essentials/README.md) builds on `Elsa.Studio.Foundation.Host`, which loads add-on modules from a Nuplane feed. Both hosts use `src/essentials/Elsa.Studio.Hosting.Distribution`. Package consumers use Hosting without copying frontend source or running a frontend build. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
 
 For a runnable package-only starting point, supported optional capabilities and migration from copied Web infrastructure, see [custom Studio hosting](docs/custom-hosting.md).
 
@@ -19,13 +19,13 @@ The host is composed from independently enabled Studio capabilities:
 - `Elsa.Studio.Core` defines manifests, diagnostics, and the manifest collection event.
 - `Elsa.Studio.Api` exposes `GET /_elsa/studio/modules`.
 - `Elsa.Studio.Hosting` serves the prebuilt root-mounted browser; `Elsa.Studio.Hosting.Distribution` composes it with backend profiles, Nuplane add-ons and the Theme Store for the shipped apps.
-- `Elsa.Studio.Workbench.Host` selects every Studio module; [`Elsa.Studio.Essentials.Host`](src/apps/Elsa.Studio.Essentials.Host/README.md) pairs with `Elsa.Essentials.Host`; [`Elsa.Studio.Foundation.Host`](src/apps/Elsa.Studio.Foundation.Host/README.md) is the bare shell that pairs with `Elsa.Foundation.Host`.
+- [Studio Workbench](src/apps/Elsa.Studio.Workbench.Host/Program.cs) pairs with the server Workbench for local development. [Studio Foundation](src/apps/Elsa.Studio.Foundation.Host/README.md) is the base for deployment profiles, including [Studio Essentials](docker/profiles/essentials/README.md).
 - `Elsa.Studio.Hosting` also owns Home (`/`, `/dashboard`, `/overview`) and its widget area: the frames, loading, refresh, the saved layout and the empty state. Every Studio flavor has it.
 - `Elsa.Studio.Dashboard` adds saved questions and named dashboards (`/questions`, `/dashboards`); it needs the backend's `elsa.api.studio-dashboard` capability and leaves Home to the shell.
 - `Elsa.Studio.Attention` contributes the ordinary wide/full Attention widget.
 - `Elsa.Studio.Workflows.Dashboard` contributes the workflow task group and workflow widgets on Home: Get started, Quick actions, Recent workflows, Recent runs, Needs attention, Tasks, portfolio and run health.
 - `Elsa.Studio.Samples.WeatherForecast` contributes a frontend route and deterministic sample endpoint.
-- `Elsa.Studio.Decisions` contributes the Decisions collection, table authoring, cases, explanations and published-version workflow selector; see its [module guide](../Extensions/Decisions/studio/Elsa.Studio.Decisions/README.md).
+- `Elsa.Studio.Decisions` contributes the Decisions collection, table authoring, cases, explanations and published-version workflow selector. See its [module guide](../extensions/Decisions/studio/Elsa.Studio.Decisions/README.md).
 - `Elsa.Studio.ConsoleStream` demonstrates a backend-scoped console stream module.
 - `Elsa.Studio.ExtensionBuilder` is an optional module: the Extension Builder page plus its bridge relay to the backend's `/_elsa/extension-builder` surface. It is not part of the default composition (see below).
 
@@ -204,17 +204,17 @@ Preview builds (`4.0.0-preview.<n>`) publish to the elsa-4 feedz.io npm feed on 
 
 ## Docker
 
-Each Studio app has a Dockerfile, and `.github/workflows/studio-docker.yml` publishes three images to Docker Hub:
+`.github/workflows/studio-docker.yml` publishes three Studio images to Docker Hub.
 
-| Image | Studio app | Pairs with |
+| Image | Studio host or profile | Pairs with |
 | --- | --- | --- |
-| `elsaworkflows/elsa-studio` | `Elsa.Studio.Essentials.Host` | `elsaworkflows/elsa-essentials-host` |
+| `elsaworkflows/elsa-studio` | [Essentials profile](docker/profiles/essentials/README.md) | `elsaworkflows/elsa-essentials-host` |
 | `elsaworkflows/elsa-studio-workbench` | `Elsa.Studio.Workbench.Host` | `elsaworkflows/elsa-workbench` |
 | `elsaworkflows/elsa-studio-foundation` | `Elsa.Studio.Foundation.Host` | The bare `Elsa.Foundation.Host` |
 
 The images serve installed add-on browser files from verified package archives.
-Build an image from the repository root (the build context must be the repo root); the
-Essentials and Foundation Dockerfiles sit beside their projects in the same way:
+Build the Workbench and Foundation host images from the repository root. The
+[Essentials profile](docker/profiles/essentials/README.md) uses a generated build context.
 
 ```bash
 pnpm --dir studio install --frozen-lockfile
