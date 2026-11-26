@@ -1,7 +1,11 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Http.Json;
 using System.Runtime.InteropServices;
+using System.Text.Json.Nodes;
+using Elsa.Studio.Hosting.Nuplane;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.FileProviders;
@@ -19,6 +23,55 @@ namespace Elsa.Studio.Tests.Administration;
 public sealed class PackageProtectionTests
 {
     private static string AssetUrl => $"/_content/{PackageAssetTests.PackageId}/probe.txt";
+
+    [Fact]
+    public async Task Feed_module_discovery_retries_without_caching_an_incomplete_manifest_when_archive_admission_is_full()
+    {
+        await using var host = await AdministrationHost.StartAsync(
+            nuplane => nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); }),
+            loadPackages: true,
+            beforeStudio: builder => builder.Configuration.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["CShells:Shells:Authoring:Features:EtlStudio"] = "true" }));
+        EssentialsStudioAddOnTests.Pack(host.Root);
+        await PackageAssetTests.Reconcile(host);
+        const string modulesUrl = "/_elsa/studio/modules";
+        var initial = await host.Client.GetFromJsonAsync<JsonObject>(modulesUrl);
+        var module = Assert.Single(initial!["modules"]!.AsArray(), item => (string?)item!["id"] == "Elsa.Studio.Etl")!;
+        Assert.True((bool)module["stylesHaveContentHashes"]!);
+
+        var reader = host.App.Services.GetRequiredService<PackageContentReader>();
+        using var cancellation = new CancellationTokenSource();
+        var responses = new List<IAsyncDisposable>();
+        var waiting = new List<Task<IAsyncDisposable?>>();
+        try
+        {
+            for (var i = 0; i < 4; i++)
+                responses.Add((await reader.TryAcquireResponseAsync(cancellation.Token))!);
+            for (var i = 0; i < 28; i++)
+                waiting.Add(reader.TryAcquireResponseAsync(cancellation.Token));
+            Assert.All(waiting, request => Assert.False(request.IsCompleted));
+
+            using var responseTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            foreach (var path in new[] { modulesUrl, "/_elsa/studio/module-registry", "/_elsa/module-management/registry" })
+            {
+                using var busy = await host.Client.GetAsync(path, responseTimeout.Token);
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, busy.StatusCode);
+                Assert.Equal(TimeSpan.FromSeconds(1), busy.Headers.RetryAfter!.Delta);
+                Assert.True(busy.Headers.CacheControl!.NoStore);
+            }
+        }
+        finally
+        {
+            cancellation.Cancel();
+            foreach (var request in waiting)
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+            foreach (var response in responses)
+                await response.DisposeAsync();
+        }
+
+        var retried = await host.Client.GetFromJsonAsync<JsonObject>(modulesUrl);
+        Assert.True(JsonNode.DeepEquals(initial, retried));
+    }
 
     [Fact]
     public async Task Slow_responses_keep_the_payload_limit_while_queue_cancellation_releases_admission()
