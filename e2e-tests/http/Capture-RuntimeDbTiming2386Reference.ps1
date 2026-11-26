@@ -229,9 +229,16 @@ function Get-ExecutableExportEvidence {
     }
 }
 
-$fusionPath = 'server/essentials/src/Workflows/Runtime/Core/Models/ExecutableNode.cs'
-$fusionSource = (& git -C $RepoRoot show "$($CandidateSha):$fusionPath" 2>$null) -join "`n"
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($fusionSource)) {
+$fusionSource = $null
+foreach ($sourceRoot in @('server/essentials', 'essentials', 'Essentials')) {
+    $fusionPath = "$sourceRoot/src/Workflows/Runtime/Core/Models/ExecutableNode.cs"
+    $candidateSource = (& git -C $RepoRoot show "${CandidateSha}:$fusionPath" 2>$null) -join "`n"
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($candidateSource)) {
+        $fusionSource = $candidateSource
+        break
+    }
+}
+if ([string]::IsNullOrWhiteSpace($fusionSource)) {
     throw "Could not read WorkflowIntrinsicFusion from supplied candidate $CandidateSha."
 }
 $fusionClass = [regex]::Match($fusionSource, 'public static class WorkflowIntrinsicFusion\s*\{(?<body>[\s\S]*?)\n\}', [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
