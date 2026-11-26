@@ -84,6 +84,7 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             if (!db.UsesRootParkOpening || !Opening && !db.UsesRootParkArrivals) return false;
+            if (db.UsesSqliteRootRuntime) return await BindSqliteParkOpeningAsync(db, this, cancellationToken);
             var priorStatus = Opening ? InstanceStatus.Running : InstanceStatus.Faulted;
             FormattableString read = $"""
                 SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "At", i."FoundationParkAt" AS "ParkAt",
