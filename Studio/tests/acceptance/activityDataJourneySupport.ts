@@ -149,7 +149,9 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     if (nodeId === "consumer") await expect(page.locator(".wf-inspector-context h3")).toHaveText("Write Line");
   }
   async function open(created: Created) {
+    const signedInProfile = new URL(page.url()).searchParams.get("backend");
     await page.goto(`/workflows/definitions?definition=${created.definition.id}&backend=legacy`);
+    expect(new URL(page.url()).searchParams.get("backend"), "The definition link keeps the signed-in Studio backend profile").toBe(signedInProfile);
     await expect(page.locator('.wf-sequence-step[data-id="consumer"],.react-flow__node[data-id="consumer"]').first()).toBeAttached();
     await select(); await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
   }
