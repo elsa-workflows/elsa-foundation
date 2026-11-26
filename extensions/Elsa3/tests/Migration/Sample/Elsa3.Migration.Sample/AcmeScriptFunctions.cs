@@ -7,7 +7,7 @@ namespace Acme;
 // The Elsa 3 global lookupCustomer(id) becomes acme.lookupCustomer(id): the converter matches a global to the
 // registered host function with the same name after its prefix, and rewrites direct calls. The function is
 // effect-free and takes and returns JSON. AcmeFeature registers the declaration.
-public static class AcmeScriptFunctions
+internal static class AcmeScriptFunctions
 {
     private static readonly Dictionary<string, string> CustomerNames = new(StringComparer.Ordinal)
     {

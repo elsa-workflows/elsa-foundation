@@ -10,9 +10,9 @@ namespace Acme;
 // The user's own Elsa 4 feature. The migration host references this project and lists the feature in its
 // local settings; the activities are found in the feature's assembly, so they need no registration here.
 [ShellFeature("Acme", DisplayName = "Acme", Description = "Acme activities, script functions and variable types.")]
-public sealed class AcmeFeature : IShellFeature
+public class AcmeFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         // Services the activities take through their constructors (case 10).
         services.TryAddSingleton<IInvoiceClient, InMemoryInvoiceClient>();

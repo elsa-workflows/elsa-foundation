@@ -27,9 +27,13 @@ session is this statement, before it reads any file, the plan included:
   values, scripts or secrets), the migration plan, and the files in this folder. The plan holds only what you write
   into it: paths, names, decisions and notes.
 - **Read only after you agree**:
-  - each Elsa 3 source folder or repository: asked once per folder, before searching it;
+  - each Elsa 3 source folder or repository: asked once per folder, before searching it (the search shows file names
+    and matching lines only);
+  - each Elsa 3 source file: asked before opening it, naming the file;
   - each raw workflow definition: asked each time, naming the file and the JSON path it wants to look at;
   - each other file: asked each time, naming the file.
+
+If a report's `redacted` marker is not `true`, the assistant stops before reading the rest of it and asks the user.
 - **Never read without asking, with a warning**: the migration host's local settings (`shells.Local.json`, user
   secrets, environment variables). They can hold connection strings and secrets.
 
@@ -94,7 +98,8 @@ dotnet run --project <clone>/extensions/Elsa3/src/Migration/Cli -- workflows ass
 `<export>` is a folder of Elsa 3 definition JSON files (searched recursively) or a `.zip`. The tool writes
 `report.json`, `report.html` and a `migrated/` folder into `<output>`.
 
-After every run, record the command, its exit code and the date as `Last report` in the plan, then read the result:
+After every run, record the command, its exit code and the date as `Last report` in the plan (with the report's
+`tool` name and version once a report is written), then read the result:
 
 - **Exit 0 or 1, and the last line of standard output is the output path**: the run wrote a report. Exit 0 means no
   Must fix or Reconsider finding is left; exit 1 means there are some. Read `<output>/report.json`.
@@ -113,6 +118,12 @@ After every run, record the command, its exit code and the date as `Last report`
 - **No built-in knowledge of findings.** Read each finding's `code`, `message`, `path` and `guidance` from the report,
   and act on its `category`, `remedy`, `componentKind` and `componentName`. Never rely on remembering what a code
   means; refer to a finding by its code as the report gives it (written `<code>` in this guide).
+- **Redacted.** Confirm the report's `redacted` marker is `true` before reading further (see the privacy statement).
+- **Progress.** Show the user the report's `summary` after every run: definitions, how many go smoothly, the counts per
+  category and per bucket, and how many are blocked by a dependency.
+- **Buckets** (per definition): `convert-as-is` (nothing to do), `convert-with-adjustments` (converts; findings to
+  reconsider or take into account) and `incompatible` (does not convert until its Must fix findings are resolved).
+  Work the `incompatible` definitions first, then `convert-with-adjustments`; `convert-as-is` needs no work.
 - **Categories**: `mustFix` (the definition does not convert until fixed), `reconsider` (it converts, but behaves
   differently), `takeIntoAccount` (good to know).
 - **Remedy** (Must fix findings only): `build-component` means a custom component is missing, so go to the plan's
@@ -126,8 +137,8 @@ After every run, record the command, its exit code and the date as `Last report`
 
 1. Run `workflows inventory` on the export.
 2. Take the custom components from the report's `components` list only: activity types, JavaScript functions,
-   variable types and storage drivers, with the number of definitions that use each (`definitions`) and the number of
-   references (`usages`). Add one row per component to the plan with status `todo`. A component that exists in the
+   variable types and storage drivers, with the number of definitions that use each (the length of its `definitions`
+   list) and the number of references (`usages`). Add one row per component to the plan with status `todo`. A component that exists in the
    Elsa 3 source but that no definition uses is not migrated.
 3. Show the user the components with their counts.
 4. Mark the Elsa 3 built-ins: a storage driver or activity type whose namespace starts with `Elsa.` (Elsa 3's own), and a
@@ -152,7 +163,8 @@ After every run, record the command, its exit code and the date as `Last report`
 Work through the components one at a time, in the order the user prefers (most used first is a good default). For
 each:
 
-1. **Cases.** Read its Elsa 3 source and find the porting catalog cases that apply. Record them in catalog order. A
+1. **Cases.** Read its Elsa 3 source (asking before opening each file, naming it) and find the porting catalog cases
+   that apply. Record them in catalog order. A
    component often needs several (a trigger with bookmarks, services and outputs).
 2. **Target.** Record the Elsa 4 target name: for an activity, the full class name (case 02); for a JavaScript
    function, `<prefix>.<name>` (case 14); for a variable type, its dotted alias (case 16).
@@ -214,8 +226,9 @@ The converted workflows are under `<output>/migrated/`: each definition's `expor
 
 ## Stage 4: handoff
 
-The migration ends here; this guide changes nothing outside your workspace and the clone's local settings. Tell the
-user:
+The migration ends here. Outside your workspace, this guide changed only the migration host in your clone: its
+project references to your feature projects (stage 3) and its local settings. Nothing is published or deployed. Tell
+the user:
 
 - Keep the Elsa 4 feature projects in any repository, and store the migrated workflows anywhere.
 - **Trying the result, for now**: run the migration host from the same clone and commit

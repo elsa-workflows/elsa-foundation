@@ -36,6 +36,7 @@ Use the narrowest source that answers the task.
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` ([lifecycle and numbering](docs/reference/spec-lifecycle.md)) |
 | AI-provider-specific adapters | `.claude/`, `.specify/integrations/`, and provider shim files |
+| User-facing product skills (not contributor workflows) and their plugin metadata | `plugins/` and `.claude-plugin/marketplace.json` |
 
 Do not duplicate concept explanations in new docs. Link to the canonical glossary entry or map instead.
 

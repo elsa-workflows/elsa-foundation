@@ -485,7 +485,7 @@ public sealed record InvoiceWaitState(string Mailbox);
 
 public sealed record InvoiceReceivedResult([property: Output] string InvoiceNumber);
 
-public sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulusProvider
+internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulusProvider
 {
     public string ProviderId => InvoiceReceived.ActivityType;
 
@@ -779,7 +779,7 @@ services.Configure<JintOptions>(options => options.ConfigureEngine(engine =>
 // The Elsa 3 global lookupCustomer(id) becomes acme.lookupCustomer(id): the converter matches a global to the
 // registered host function with the same name after its prefix, and rewrites direct calls. The function is
 // effect-free and takes and returns JSON. AcmeFeature registers the declaration.
-public static class AcmeScriptFunctions
+internal static class AcmeScriptFunctions
 {
     private static readonly Dictionary<string, string> CustomerNames = new(StringComparer.Ordinal)
     {
@@ -880,7 +880,7 @@ public sealed record Invoice(string Number, decimal Amount, string Currency);
 
 // Registers Invoice under the dotted alias acme.Invoice. Elsa 4 module aliases are dotted, so a variable typed
 // with the bare Elsa 3 alias Invoice is changed to acme.Invoice in the Elsa 3 definition before conversion.
-public sealed class AcmeVariableTypes : IVariableTypeDescriptorProvider
+internal sealed class AcmeVariableTypes : IVariableTypeDescriptorProvider
 {
     public const string InvoiceAlias = "acme.Invoice";
 
@@ -997,9 +997,9 @@ services.AddElsa(elsa => elsa.Use<AcmeFeature>());
 // The user's own Elsa 4 feature. The migration host references this project and lists the feature in its
 // local settings; the activities are found in the feature's assembly, so they need no registration here.
 [ShellFeature("Acme", DisplayName = "Acme", Description = "Acme activities, script functions and variable types.")]
-public sealed class AcmeFeature : IShellFeature
+public class AcmeFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         // Services the activities take through their constructors (case 10).
         services.TryAddSingleton<IInvoiceClient, InMemoryInvoiceClient>();

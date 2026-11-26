@@ -9,7 +9,7 @@ public sealed record Invoice(string Number, decimal Amount, string Currency);
 
 // Registers Invoice under the dotted alias acme.Invoice. Elsa 4 module aliases are dotted, so a variable typed
 // with the bare Elsa 3 alias Invoice is changed to acme.Invoice in the Elsa 3 definition before conversion.
-public sealed class AcmeVariableTypes : IVariableTypeDescriptorProvider
+internal sealed class AcmeVariableTypes : IVariableTypeDescriptorProvider
 {
     public const string InvoiceAlias = "acme.Invoice";
 

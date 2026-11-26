@@ -48,7 +48,7 @@ public sealed record InvoiceWaitState(string Mailbox);
 
 public sealed record InvoiceReceivedResult([property: Output] string InvoiceNumber);
 
-public sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulusProvider
+internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulusProvider
 {
     public string ProviderId => InvoiceReceived.ActivityType;
 

@@ -12,6 +12,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Elsa3.Migration.Sample.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
   </ItemGroup>
 
