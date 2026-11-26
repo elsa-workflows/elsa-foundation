@@ -1343,13 +1343,9 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText([...container.querySelectorAll<HTMLElement>(".wf-instance-incident")]
       .find(candidate => candidate.textContent?.includes(`Failure-${lastIndex}`))!, "View input data"));
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
-    await showActivityData();
-    await vi.waitFor(() => {
-      expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed");
-      const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
-        .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
-      expect(incidentCount).toBe("1");
-    });
+    const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
+      .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
+    expect(incidentCount).toBe("1");
   });
 
   it("keeps the newest incident selected when exact activity lookups finish out of order", async () => {
@@ -2134,6 +2130,9 @@ function enableRecordedPlayback() {
 
 it.each(["pointerdown", "keydown", "wheel"] as const)("preserves independent exact ancestry when %s pauses initial playback preparation", async interaction => {
   const { rows, readPage } = enableRecordedPlayback();
+  // The run summary must agree with the recorded provenance: a root summary (parent null) is resolved
+  // from known ancestry without an exact ancestry read.
+  api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [{ ...rows[0], parentActivityExecutionId: "slow-parent" }, ...rows.slice(1)], incidents: [] }));
   const occurrences = deferred<ReturnType<typeof readPage>>();
   playbackApi.readActivityPlayback.mockReturnValueOnce(occurrences.promise);
   const ancestry = deferred<ActivityExecutionInspection>();
@@ -2146,6 +2145,7 @@ it.each(["pointerdown", "keydown", "wheel"] as const)("preserves independent exa
     totalCount: 1, previousCursor: null, nextCursor: null
   }));
   renderWorkbench("timeline", rows[0].activityExecutionId, "timeline");
+  await openPlayback();
   await vi.waitFor(() => expect(api.getActivityExecutionInspection.mock.calls.some(call => call[2] === "slow-parent")).toBe(true));
   expect(container.textContent).toContain("Resolving execution scope");
   const request = playbackApi.readActivityPlayback.mock.calls[0];

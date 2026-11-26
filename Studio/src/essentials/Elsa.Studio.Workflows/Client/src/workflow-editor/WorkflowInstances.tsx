@@ -113,6 +113,7 @@ import { getWorkflowHistoryEvent, getWorkflowHistoryBookmark } from "../api/runt
 import type { PlaybackOperation, PlaybackTarget, PreparedPlaybackSelection } from "./activityPlaybackModel";
 import type { PreparedHistoryEvent } from "./run-history/HistoryInspection";
 import { RunActivitiesTimeline } from "./run-history/RunActivitiesTimeline";
+import { AcceptedWorkflowChanges } from "./run-history/AcceptedWorkflowChanges";
 
 type RunTimelineMode = "activities" | "events";
 
@@ -2401,7 +2402,9 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
                 </div>
               </AnchoredPopover>
             ) : null}
-            {timelineMode === "activities" ? (
+            {timelineMode === "activities" ? (<>
+              <AcceptedWorkflowChanges activities={associationActivities} selectedActivityExecutionId={selectedActivity?.activityExecutionId}
+                labelForActivity={labelForExecution} />
               <RunActivitiesTimeline
                 context={context}
                 workflowExecutionId={workflowExecutionId}
@@ -2413,7 +2416,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
                 onRefresh={refreshWorkspace}
                 onExecutionsLoaded={rememberObservedExecutions}
               />
-            ) : (
+            </>) : (
               <Suspense fallback={<p role="status">Loading run history workspace…</p>}>
                 {!timelineDocked ? <RunHistorySummary context={context} instance={currentData.details.instance}
                   name={unattributedChildDefinition ? runDisplayName ?? "Child run" : currentData.definitionName ?? currentData.definitionVersion?.definition.name ?? currentData.details.instance.definitionId}
