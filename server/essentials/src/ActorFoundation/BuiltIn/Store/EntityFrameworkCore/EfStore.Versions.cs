@@ -54,6 +54,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootParkInspection => Current with { MessageProtocol = 20 };
     internal static StoreFormat RootParkArrivals => Current with { MessageProtocol = 21 };
     internal static StoreFormat RootParkRecovery => Current with { MessageProtocol = 22 };
+    internal static StoreFormat SqliteParkArrivalsQualification => Current with { MessageProtocol = 85 };
 
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
@@ -305,7 +306,7 @@ public sealed partial class EfStore
     private static async Task<(StoreVersionEntity Format, StoreVersionEntity? Definitions)> ReadVersionMarkersAsync(
         KernelDb db, FormatLock formatLock, CancellationToken cancellationToken)
     {
-        var withDefinitions = db.RequiredFormat == StoreFormat.RootShipped;
+        var withDefinitions = StoreDefinitionsRevision.Seed(db) is not null;
         List<StoreVersionEntity> rows;
         try
         {
@@ -364,13 +365,14 @@ internal static class StoreDefinitionsRevision
 
     internal static StoreVersionEntity? Seed(KernelDb db)
     {
-        if (db.RequiredFormat != StoreFormat.RootShipped) return null;
+        var sqliteQualification = db.UsesSqliteShippedInstall && db.RequiredFormat == StoreFormat.SqliteParkArrivalsQualification;
+        if (db.RequiredFormat != StoreFormat.RootShipped && !sqliteQualification) return null;
         var sqlite = db.Database.IsSqlite();
         return new StoreVersionEntity
         {
             Id = MarkerId,
             StoreSchema = sqlite ? Sqlite : PostgreSql,
-            MessageProtocol = sqlite ? SqliteRevision : PostgreSqlRevision,
+            MessageProtocol = sqliteQualification ? 1 : sqlite ? SqliteRevision : PostgreSqlRevision,
             JournalCodec = 0
         };
     }

@@ -124,7 +124,7 @@ public sealed partial class EfStore
                 throw new StoreFormatException("The PostgreSQL owner must initialize its value capability before binding to the value qualification profile.");
             scope.RequiresCommittedTerminal = db.UsesRootRetirement;
             scope.KeepsParkInputs = db.UsesRootParkOpening;
-            scope.KeepsParkArrivals = db.UsesRootParkArrivals && !db.UsesSqliteRootRuntime;
+            scope.KeepsParkArrivals = db.UsesRootParkArrivals;
             scope.RecoversPark = db.UsesRootParkRecovery && !db.UsesSqliteRootRuntime;
             scope.RefusesParkedOperators = db.UsesRootParkedOperators;
             Volatile.Write(ref _ordinaryRoots, scope);
@@ -405,7 +405,7 @@ public sealed partial class EfStore
 
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
-        if (!postgres && (turn.FoundationKept is not null && !turn.OpensPark ||
+        if (!postgres && (turn.FoundationKept is not null && !turn.OpensPark && _ordinaryRoots?.KeepsParkArrivals != true ||
             turn.FoundationRootOperator is { Kind: not (Kinds.Terminate or Kinds.Delete) }))
             throw new NotSupportedException("This SQLite root writer supports ordinary checkpoints, timed jobs, Park opening and selected Terminate and Delete.");
         if (turn is { Row.Status: InstanceStatus.Running, FoundationRootOperator: { Kind: Kinds.Terminate or Kinds.Delete,

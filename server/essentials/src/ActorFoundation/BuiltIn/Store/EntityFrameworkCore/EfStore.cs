@@ -180,6 +180,9 @@ public class KernelDb : DbContext
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true);
     internal static KernelDb ForSqliteRootRuntime(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+    internal static KernelDb ForSqliteParkArrivalsQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions? definitions = null) =>
+        new(options, StoreFormat.SqliteParkArrivalsQualification, RootProfiles.Shipped | RootCapabilities.ParkArrivals,
+            sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
@@ -845,7 +848,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
     private string RootInputScopes => $"{InboxKey.FoundationOccurrenceScope}, {RootSelfScope}" +
         (RootTimedJobSettlementEnabled ? $", {RootTimedJobScope}" : RootJobsEnabled ? $", {RootJobScope}" : "");
-    private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" : db.UsesSqliteRootRuntime ? SqliteRootPollFilter :
+    private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" :
+        db.UsesSqliteRootRuntime ? (db.UsesRootParkArrivals ? SqliteParkArrivalsPollFilter : SqliteRootPollFilter) :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
              {(db.UsesRootOperatorProtocol ? PostgresOperatorPollFilter(db) : "")}
@@ -908,10 +912,18 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     // SQLite exposes due controls alongside ready ordinary inputs so the actor's withholding rule can decide.
     // The owned transaction still checks the appropriate FIFO before it consumes the command.
-    private static readonly string SqliteRootPollFilter = RootOperatorPollTemplate
+    private static readonly string SqliteRootPollFilter = SqliteRootPoll(includeParkArrivals: false);
+    private static readonly string SqliteParkArrivalsPollFilter = SqliteRootPoll(includeParkArrivals: true);
+
+    private static string SqliteRootPoll(bool includeParkArrivals) => RootOperatorPollTemplate
         .Replace("LIKE 'operator/%'", "GLOB 'operator/*'", StringComparison.Ordinal)
-        .Replace("/*earlier-command-input*/", "AND " + SqliteSupportedOperator("prior."), StringComparison.Ordinal)
-        .Replace("/*supported-operator*/", "AND " + SqliteSupportedOperator("op."), StringComparison.Ordinal) + SqliteRootPollScope();
+        .Replace("/*earlier-command-input*/", includeParkArrivals
+            ? $"""
+              AND (target."FoundationParkAt" IS NOT NULL AND target."FoundationParkClearing" IS NULL AND prior."ReplyTo" IS NULL
+                  AND prior."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("prior.")}))
+              """
+            : "AND " + SqliteSupportedOperator("prior."), StringComparison.Ordinal)
+        .Replace("/*supported-operator*/", "AND " + SqliteSupportedOperator("op."), StringComparison.Ordinal) + SqliteRootPollScope(includeParkArrivals);
     // A parked root without Park arrivals withholds its ordinary inputs, so only an earlier operator row holds a command back.
     // A held command admitted before the Park opened passes too: the owner refuses it there and answers its caller.
     private static bool WithholdsParkInputs(KernelDb db) => db.UsesRootParkedOperators && !db.UsesRootParkArrivals;
