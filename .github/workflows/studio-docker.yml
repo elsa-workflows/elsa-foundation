@@ -503,7 +503,8 @@ jobs:
         if: matrix.flavor == 'essentials'
         id: profile_qualification
         env:
-          BUILD_RESULT: ${{ steps.profile_build.outputs.metadata }}
+          # Bake metadata can exceed Linux's per-environment-string limit. Evaluate the digest in the runner.
+          PROFILE_INDEX_DIGEST: ${{ (github.event_name == 'workflow_run' || inputs.publish == true) && fromJSON(steps.profile_build.outputs.metadata).profile['containerimage.digest'] || '' }}
           PUBLISH_IMAGE: ${{ github.event_name == 'workflow_run' || inputs.publish == true }}
           SOURCE_SHA: ${{ steps.ci_source.outputs.source_sha || steps.source.outputs.sha }}
           STUDIO_VERSION: ${{ steps.image.outputs.version }}
@@ -511,7 +512,8 @@ jobs:
           set -euo pipefail
           args=()
           if [[ "$PUBLISH_IMAGE" == "true" ]]; then
-            args+=(--index "$(jq -er '.profile["containerimage.digest"] | select(test("^sha256:[0-9a-f]{64}$"))' <<< "$BUILD_RESULT")")
+            [[ "$PROFILE_INDEX_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+            args+=(--index "$PROFILE_INDEX_DIGEST")
           fi
           python3 "$STUDIO_IMAGE_VALIDATORS/studio_profile_release.py" qualify \
             --profile "$STUDIO_IMAGE_VALIDATORS/profile" --output "$STUDIO_PROFILE_ROOT" \

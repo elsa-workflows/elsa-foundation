@@ -7,8 +7,10 @@ import io
 import json
 import os
 from pathlib import Path
+from textwrap import dedent
 import re
 import runpy
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -558,6 +560,35 @@ class StudioDockerPublishTests(unittest.TestCase):
                         workflow.index("Apply ordinary Essentials tags"))
         self.assertLess(workflow.index("Apply ordinary Essentials tags"),
                         workflow.index("Promote the verified main digest to latest"))
+
+    def test_profile_qualification_receives_only_the_bake_index_digest(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/studio-docker.yml").read_text()
+        start = workflow.index("      - name: Qualify the exact Studio Essentials image")
+        end = workflow.index("      - name: Retain Studio Essentials image qualification evidence", start)
+        environment, script = workflow[start:end].split("        run: |\n")
+        self.assertRegex(
+            environment,
+            r"PROFILE_INDEX_DIGEST: \$\{\{ .*fromJSON\(steps\.profile_build\.outputs\.metadata\)"
+            r"\.profile\['containerimage\.digest'\].* \}\}",
+        )
+        self.assertEqual(1, environment.count("steps.profile_build.outputs.metadata"))
+
+        digest = "sha256:" + "a" * 64
+        cases = [("false", "", True), ("true", digest, True), ("true", "", False), ("true", "sha256:invalid", False)]
+        for publish, index, succeeds in cases:
+            with self.subTest(publish=publish, index=index):
+                env = dict(os.environ, PUBLISH_IMAGE=publish, PROFILE_INDEX_DIGEST=index,
+                           STUDIO_IMAGE_VALIDATORS="/validators", STUDIO_PROFILE_ROOT="/output",
+                           STUDIO_PROFILE_PACKAGES="/packages", STUDIO_PROFILE_TAG="studio:test",
+                           SOURCE_SHA=SHA, STUDIO_VERSION="4.0.0-preview.1")
+                probe = 'python3() { printf "%s\\n" "$@"; }\n' + dedent(script)
+                result = subprocess.run(["bash", "-c", probe], env=env, capture_output=True, text=True)
+                self.assertEqual(succeeds, result.returncode == 0, result.stderr)
+                arguments = result.stdout.splitlines()
+                if publish == "true" and succeeds:
+                    self.assertEqual(digest, arguments[arguments.index("--index") + 1])
+                else:
+                    self.assertNotIn("--index", arguments)
 
     def test_manual_archive_payload_verification_follows_frontend_build(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/studio-docker.yml").read_text()
