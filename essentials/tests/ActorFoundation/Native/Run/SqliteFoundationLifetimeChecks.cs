@@ -1,9 +1,11 @@
+using System.Data.Common;
 using Elsa.ActorFoundation.Hosting;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Sqlite;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
@@ -28,6 +30,7 @@ internal static partial class SqliteHostLifetimeChecks
             await InstallFoundationAsync(path, token);
             var scope = EmbeddedTenant.Bind(FoundationKind);
             await CheckWideFoundationFenceAsync(Path.Combine(directory.FullName, "wide.db"), scope, fenceInBatch, token);
+            await CheckFoundationDefinitionDriftAsync(Path.Combine(directory.FullName, "definitions.db"), scope, fenceInBatch, token);
             var ingress = await SqliteEmbeddedHosting.OpenFoundationAsync(path, FoundationKind, cancellationToken: token);
             var slow = await AdmitFoundationStartAsync(ingress, scope, "slow", token);
             var sibling = await AdmitFoundationStartAsync(ingress, scope, "sibling", token);
@@ -122,9 +125,6 @@ internal static partial class SqliteHostLifetimeChecks
             await InstallFoundationAsync(deadlinePath, token);
             await RunPeerAsync("foundation-stuck", deadlinePath, fenceInBatch, token);
             await RunPeerAsync("foundation-recover", deadlinePath, fenceInBatch, token);
-            var driftPath = Path.Combine(directory.FullName, "foundation-definition-drift.db");
-            await InstallFoundationAsync(driftPath, token);
-            await RunPeerAsync("foundation-definition-drift", driftPath, fenceInBatch, token);
             return 0;
 
             Task<EfStore.RootImage?> ReadRootAsync(Contract.ActorRef actorRef) => store.ReadFirstRootAsync(scope.Tenant, actorRef.Id, token);
@@ -163,68 +163,97 @@ internal static partial class SqliteHostLifetimeChecks
             "one stale epoch refuses all marks in the 1,024-partition batch");
         var current = fences.Select(fence => fence.Partition == home ? new PartitionFence(home, renewed.Epoch, renewed.Position) : fence)
             .ToArray();
-        var marked = await store.CommitAsync(CommitBatch.Owned(current, Defaults.Lease, false, [], seen, []), token);
+        var marked = await store.CommitAsync(CommitBatch.Owned(current, Defaults.Lease, false, [], seen[1..], [seen[0]]), token);
         var messages = await db.Messages.AsNoTracking().ToListAsync(token);
         var epochs = current.ToDictionary(fence => fence.Partition, fence => fence.Epoch);
-        Require(marked.Landed && messages.All(message => message.Seen == epochs[message.Partition]),
+        Require(marked.Landed && messages.All(message => message.Seen == epochs[message.Partition]) &&
+            messages.Single(message => message.Id == seen[0].Id).Trial == epochs[home],
             "the fresh 1,024-partition batch marks each creator with its own epoch");
-        await store.ReleaseAsync(current, token);
+
+        await db.Nodes.Where(node => node.Id == "wide-worker")
+            .ExecuteUpdateAsync(update => update.SetProperty(node => node.LeaseUntil, 0L), token);
+        var takeover = await store.TakeAsync(Enumerable.Range(0, partitions).ToArray(), "wide-successor", Defaults.Lease, token);
+        messages = await db.Messages.AsNoTracking().ToListAsync(token);
+        Require(takeover.Taken.Count == partitions && takeover.Taken.All(fence => fence.Epoch == epochs[fence.Partition] + 1)
+            && await db.Partitions.AllAsync(partition => partition.Died && partition.Owner == "wide-successor", token),
+            "a new node takes all 1,024 expired partitions together");
+        Require(messages.All(message => message.Attempts == (message.Id == seen[0].Id ? 1 : 0)),
+            "the 1,024-partition takeover counts only a matching previous-epoch trial");
+        await store.ReleaseAsync(takeover.Taken, token);
     }
 
-    private static async Task<int> CheckFoundationDefinitionDriftAsync(string path, bool fenceInBatch, CancellationToken token)
+    private static async Task CheckFoundationDefinitionDriftAsync(string path, Contract.BoundScope scope, bool fenceInBatch, CancellationToken token)
     {
-        var scope = EmbeddedTenant.Bind(FoundationKind);
+        await InstallFoundationAsync(path, token);
         var ingress = await SqliteEmbeddedHosting.OpenFoundationAsync(path, FoundationKind, cancellationToken: token);
         var root = await AdmitFoundationStartAsync(ingress, scope, "drift", token);
         var definitions = new SqliteAdmissionDefinitions();
-        var store = new EfStore(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
-        Require(await store.ReadFirstRootAsync(scope.Tenant, root.Id, token) is null, "the drift fixture verifies the original definitions");
-        var actor = new FoundationLifetimeActor();
-        await using var service = FoundationService(path, "drift", actor, fenceInBatch, _ => { });
-        await service.StartAsync(token);
-        await AwaitEntryAsync(service, actor.SlowEntered.Task, token);
+        var drift = new DefinitionDrift();
+        var store = new EfStore(() => OpenFoundationDb(path, definitions, drift), postgres: false, fenceInBatch);
+        store.BindSqliteWorkerNode();
+        var lease = (await store.TakeAsync(0, "drift", Defaults.Lease, token))!;
+        var polled = await store.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, token);
+        var creator = polled.Messages.Single().Message;
+        var start = creator.Start!;
+        var header = new FoundationHeaderChange(start.Definition, new Dictionary<string, string>());
+        var row = new InstanceRow(creator.Target.Id, start.Model, start.Definition, InstanceStatus.Running, WaitingState, 1, null,
+            History: start.History, StateVersion: 1, Creation: 1, StartIntent: CreationProtocol.Fingerprint(start, creator.Kind, creator.Payload))
+        {
+            FoundationDispatchHeader = new(scope.Tenant, root.Id, header)
+        };
+        var turn = new TurnCommit(row.Id, row, null, [creator.InboxKey], [], [], [], [], "[]") { FoundationHeader = header };
+        var batch = new CommitBatch(0, lease.Epoch, lease.Position, Defaults.Lease, false, [turn], [], []);
+
+        await using var db = OpenFoundationDb(path);
+        var definitionsToRestore = await db.Database.SqlQueryRaw<string>("""
+            SELECT sql AS "Value" FROM main.sqlite_schema
+            WHERE name IN ('kernel_project_root_actor_list', 'kernel_require_root_actor_list')
+            """).ToListAsync(token);
+        Require(definitionsToRestore.Count == 2, "the actor-list projector and its guard are installed");
+
+        drift.Armed = true;
         try
         {
-            await using var db = OpenFoundationDb(path);
-            var definitionsToRestore = await db.Database.SqlQueryRaw<string>("""
-                SELECT sql AS "Value" FROM main.sqlite_schema
-                WHERE name IN ('kernel_project_root_actor_list', 'kernel_require_root_actor_list')
-                """).ToListAsync(token);
-            Require(definitionsToRestore.Count == 2, "the actor-list projector and its guard are installed");
-            await using (var update = await db.Database.BeginTransactionAsync(token))
-            {
-                await db.Database.ExecuteSqlRawAsync("DROP TRIGGER kernel_project_root_actor_list", token);
-                await db.Database.ExecuteSqlRawAsync("DROP TRIGGER kernel_require_root_actor_list", token);
-                await update.CommitAsync(token);
-            }
-
-            var fence = await db.Partitions.AsNoTracking().SingleAsync(token);
-            await ExpectFoundationFailureAsync<StoreFormatException>(() =>
-                store.FenceAsync([new(0, fence.Epoch, fence.Position, fence.Position)], token).AsTask(),
-                "the owned write checks the manifest again before updating its fence");
-            actor.ReleaseSlow.TrySetResult();
-            await actor.SlowReturned.Task.WaitAsync(token);
-            // A bad definition also refuses lease renewal. Give the authored turn its whole remaining lease.
-            while (await LeaseAsync(path, "drift", token) > DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
-                await Task.Delay(25, token);
-            Require(!await db.Instances.AnyAsync(token) && !await db.Journal.AnyAsync(token),
-                "an authored creator stays uncommitted through lease expiry while the projection definitions are absent");
-
-            await using (var update = await db.Database.BeginTransactionAsync(token))
-            {
-                foreach (var definition in definitionsToRestore)
-                    await db.Database.ExecuteSqlRawAsync(definition, token);
-                await update.CommitAsync(token);
-            }
-            await WaitForRootAsync(store, scope.Tenant, root, 1, token);
-            Require(await db.Database.SqlQuery<bool>($"""
-                SELECT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {scope.Tenant}
-                    AND "Reference" = {root.Id}) AS "Value"
-                """).SingleAsync(token), "retry after restoring the definition commits the checkpoint with its projection");
-            await service.StopAsync(token);
-            return 0;
+            await store.CommitAsync(batch, token);
+            throw new InvalidOperationException("The owned commit accepted missing projection definitions.");
         }
-        finally { actor.ReleaseSlow.TrySetResult(); }
+        catch (StoreException error) when (error is StoreFormatException || error.InnerException is StoreFormatException)
+        {
+            Require(drift.Changed, "the owned commit verifies the manifest again after preparation and before the fence");
+        }
+
+        Require(!await db.Instances.AnyAsync(token) && !await db.Journal.AnyAsync(token) &&
+            await db.Messages.AnyAsync(message => message.Id == creator.InboxKey.Id && !message.Done, token),
+            "schema drift rolls back the checkpoint and leaves its creator pending");
+        await using (var update = await db.Database.BeginTransactionAsync(token))
+        {
+            foreach (var definition in definitionsToRestore)
+                await db.Database.ExecuteSqlRawAsync(definition, token);
+            await update.CommitAsync(token);
+        }
+        Require((await store.CommitAsync(batch, token)).Landed && await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {scope.Tenant}
+                AND "Reference" = {root.Id}) AS "Value"
+            """).SingleAsync(token), "restoring the definitions lets the same fenced checkpoint and projection commit together");
+        await store.ReleaseAsync(0, lease.Epoch, token);
+    }
+
+    private sealed class DefinitionDrift : DbTransactionInterceptor
+    {
+        internal bool Armed { get; set; }
+        internal bool Changed { get; private set; }
+
+        public override async ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(DbConnection connection,
+            TransactionStartingEventData eventData, InterceptionResult<DbTransaction> result, CancellationToken cancellationToken = default)
+        {
+            if (!Armed) return result;
+            Armed = false;
+            await using var drop = connection.CreateCommand();
+            drop.CommandText = "DROP TRIGGER kernel_project_root_actor_list; DROP TRIGGER kernel_require_root_actor_list;";
+            await drop.ExecuteNonQueryAsync(cancellationToken);
+            Changed = true;
+            return result;
+        }
     }
 
     private static async Task<int> RunFoundationPeerAsync(string path, bool fenceInBatch, bool recovering, CancellationToken token)
@@ -286,13 +315,14 @@ internal static partial class SqliteHostLifetimeChecks
         await EfStore.InstallSqliteShippedAsync(db, partitions, token);
     }
 
-    private static KernelDb OpenFoundationDb(string path, SqliteAdmissionDefinitions? definitions = null)
+    private static KernelDb OpenFoundationDb(string path, SqliteAdmissionDefinitions? definitions = null, IInterceptor? interceptor = null)
     {
-        var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
+        var builder = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
         {
             DataSource = path, ForeignKeys = true, Pooling = false
-        }.ToString()).Options;
-        return definitions is not null ? KernelDb.ForSqliteRootRuntime(options, definitions) : KernelDb.ForSqliteRootShipped(options);
+        }.ToString());
+        if (interceptor is not null) builder.AddInterceptors(interceptor);
+        return definitions is not null ? KernelDb.ForSqliteRootRuntime(builder.Options, definitions) : KernelDb.ForSqliteRootShipped(builder.Options);
     }
 
     private static async Task<Contract.ActorRef> AdmitFoundationStartAsync(Contract.IIngress ingress, Contract.BoundScope scope, string id,
@@ -335,7 +365,6 @@ internal static partial class SqliteHostLifetimeChecks
     {
         public string Type { get; init; } = FoundationKind;
         internal TaskCompletionSource SlowEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal TaskCompletionSource SlowReturned { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource SiblingEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource ReleaseSlow { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource ReleaseSibling { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -357,7 +386,6 @@ internal static partial class SqliteHostLifetimeChecks
                 if (blocks) release.GetAwaiter().GetResult();
                 else await release.WaitAsync(token);
                 turn.State = WaitingState;
-                if (!sibling) SlowReturned.TrySetResult();
                 return;
             }
 

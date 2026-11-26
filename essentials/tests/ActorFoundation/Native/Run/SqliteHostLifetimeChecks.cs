@@ -123,8 +123,6 @@ internal static partial class SqliteHostLifetimeChecks
         var token = budget.Token;
         if (mode is "foundation-stuck" or "foundation-recover")
             return await RunFoundationPeerAsync(path, fenceInBatch, mode == "foundation-recover", token);
-        if (mode == "foundation-definition-drift")
-            return await CheckFoundationDefinitionDriftAsync(path, fenceInBatch, token);
 
         var actor = new WaitingActor(recovering: mode == "recover", blocks: mode == "stuck");
         var log = new LifetimeLog();

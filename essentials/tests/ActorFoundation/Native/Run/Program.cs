@@ -66,7 +66,7 @@ if (args is ["sqlite-host-lifetime", var sqliteFence and ("checked" or "in-batch
     return await SqliteHostLifetimeChecks.RunAsync(sqliteFence == "in-batch");
 if (args is ["sqlite-host-lifetime", var shippedSqliteFence and ("checked" or "in-batch"), "shipped"])
     return await SqliteHostLifetimeChecks.RunFoundationAsync(shippedSqliteFence == "in-batch");
-if (args is ["sqlite-host-lifetime-peer", var sqliteMode and ("refused" or "start" or "kill" or "dispose" or "fault" or "stuck" or "recover" or "foundation-stuck" or "foundation-recover" or "foundation-definition-drift"), var sqlitePath,
+if (args is ["sqlite-host-lifetime-peer", var sqliteMode and ("refused" or "start" or "kill" or "dispose" or "fault" or "stuck" or "recover" or "foundation-stuck" or "foundation-recover"), var sqlitePath,
     var peerFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunPeerAsync(sqliteMode, sqlitePath, peerFence == "in-batch");
 if (args is ["pg-preview-host-watchdog"]) return await PostgresPreviewHostChecks.RunAsync();

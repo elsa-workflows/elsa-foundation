@@ -350,8 +350,16 @@ public sealed partial class EfStore
         };
         var rows = await db.Database.SqlQueryRaw<SetRow>(sql, parameters).ToListAsync(cancellationToken);
         // Taken from another owner, so its lease had expired: one more attempt for what it had on trial in that partition.
-        if (rows.Where(r => r.Died).Select(r => FormattableString.Invariant($"""("Partition" = {r.Id} AND "Trial" = {r.Epoch - 1})""")).ToList() is { Count: > 0 } dead)
-            await db.Database.ExecuteSqlRawAsync(Q($"""UPDATE "Messages" SET "Attempts" = "Attempts" + 1 WHERE "Done" = {False} AND ({string.Join(" OR ", dead)})"""), cancellationToken);
+        var dead = rows.Where(row => row.Died).ToArray();
+        if (dead.Length > 0)
+        {
+            // A restored SQLite host can take the full set at once. Use pairs to stay within the expression depth limit.
+            var trials = db.Database.IsSqlite()
+                ? $"""("Partition", "Trial") IN (VALUES {string.Join(", ", dead.Select(row => FormattableString.Invariant($"({row.Id}, {row.Epoch - 1})")))})"""
+                : string.Join(" OR ", dead.Select(row => FormattableString.Invariant($"""("Partition" = {row.Id} AND "Trial" = {row.Epoch - 1})""")));
+            await db.Database.ExecuteSqlRawAsync(Q($"""UPDATE "Messages" SET "Attempts" = "Attempts" + 1 WHERE "Done" = {False} AND ({trials})"""),
+                cancellationToken);
+        }
         await transaction.CommitAsync(cancellationToken);
         return new([.. rows.OrderBy(r => r.Id).Select(r => new PartitionFence(r.Id, r.Epoch, r.Position))], rows.Count > 0 ? rows.Min(r => r.Now) : 0);
     }
