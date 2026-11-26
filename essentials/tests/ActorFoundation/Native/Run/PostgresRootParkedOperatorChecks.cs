@@ -394,10 +394,14 @@ internal static class PostgresRootParkedOperatorChecks
             set.Probe.Unreadable.Add(root.Id);
             Check(await set.OperateAsync(root, operation, Contract.Kinds.Delete, selection, keepFor: TimeSpan.Zero),
                 "an unreadable source refuses the first Delete before Open, with a short-lived receipt");
-            await set.DriveAsync(root, image => image is not null && image.Revision == park.Revision + 1);
+            var idle = await set.DriveAsync(root, image => image is not null && image.Revision == park.Revision + 1);
             Check(await set.ClearingAsync(root) == new Set.ClearingRow(null, null) &&
                 (await set.Cold.ReadJournalOfAsync(0, park.Actor.Id, 0, stop))[^1].Entries == unavailable,
                 "the first refusal committed without opening a clearing");
+            var stopEntry = FoundationRootParkFacts.ProtectionStopped(operation, cleared);
+            Check(!await set.TriggerProbeAsync(idle, stopEntry, Continue(idle)) &&
+                !await set.TriggerProbeEntriesAsync(idle, [unavailable, stopEntry], Continue(idle)),
+                "an idle Park refuses a stop outcome both alone and beside a valid refusal");
             set.Probe.Unreadable.Remove(root.Id);
             set.Probe.ReadableOnce.Add(root.Id);
             Check(await set.OperateAsync(root, operation, Contract.Kinds.Delete, selection, reply: true),
@@ -406,9 +410,13 @@ internal static class PostgresRootParkedOperatorChecks
             var firstFailure = park.Revision + 3;
             for (var refusal = 0; refusal < FoundationRootParkFacts.MaxProtectionRefusals - 1; refusal++)
             {
-                await set.DriveAsync(root, image => image is not null && image.Revision == firstFailure + refusal);
+                var current = await set.DriveAsync(root, image => image is not null && image.Revision == firstFailure + refusal);
                 Check(await set.ClearingAsync(root) == new Set.ClearingRow(operation, cleared),
                     "a final-page retry remains in the current clearing");
+                if (refusal == 0)
+                    Check(!await set.TriggerProbeAsync(current, stopEntry,
+                        Change(current, """ "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL """)),
+                        "the PostgreSQL guard rejects an exact clearing stop before the retry ceiling");
                 await set.ExecuteAsync($"""
                     UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {park.Actor.Id} AND "Kind" = {Kinds.Delete} AND NOT "Done"
                     """);
@@ -421,7 +429,7 @@ internal static class PostgresRootParkedOperatorChecks
                 await set.ParkAtAsync(stopped) == await set.ParkAtAsync(park) &&
                 await set.ClearingAsync(root) == new Set.ClearingRow(null, null) &&
                 outcomes[0] == unavailable && outcomes[2..^1].SequenceEqual(Enumerable.Repeat(unavailable, FoundationRootParkFacts.MaxProtectionRefusals - 1)) &&
-                outcomes[^1] == FoundationRootParkFacts.ProtectionStopped(operation, cleared) &&
+                outcomes[^1] == stopEntry &&
                 rows.Count(row => row.KeptBy is not null) == 1 && rows.All(row => row.Done) && ReferenceEquals(owner, set.Owner) && !set.StoodDown,
                 "the PostgreSQL ceiling counts only the current Open and leaves its last page and Park on the same owner");
             set.Answered(operation, "started");

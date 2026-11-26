@@ -101,24 +101,23 @@ public sealed partial class EfStore
     private static Task<long> ReadParkProtectionRefusalsAsync(KernelDb db, string actor, int partition, string operation, long before,
         CancellationToken token)
     {
-        var outcome = db.UsesSqliteRootRuntime ? RenderSqliteOutcomePrefixes(RootOutcomeEntry).Replace("{", "{{", StringComparison.Ordinal)
-            : RootOutcomeEntry;
-        const string opened = """j."Entries" LIKE '{{"Outcome":"clearing",%' """;
-        var opening = db.UsesSqliteRootRuntime ? RenderSqliteOutcomePrefixes(opened).Replace("{", "{{", StringComparison.Ordinal)
-            : opened;
-        // The latest Open starts a new retry budget, including when the operation ID has been reused.
-        var sql = $$"""
-            SELECT count(*) AS "Value" FROM "Journal"
-            WHERE "Instance" = {0} AND "Partition" = {1} AND "Revision" < {2}
-                AND {{outcome}} AND "Entries" = {3}
-                AND "Revision" > (
-                    SELECT max(j."Revision") FROM "Journal" j
-                    WHERE j."Instance" = {0} AND j."Partition" = {1} AND j."Revision" < {2}
-                        AND j.{{outcome}} AND {{opening}}
-                )
-            """;
+        var sql = ParkProtectionRefusalsSql("{0}", "{1}", "{2}", """r."Entries" = {3}""");
+        if (db.UsesSqliteRootRuntime)
+            sql = RenderSqliteOutcomePrefixes(sql).Replace("GLOB '{", "GLOB '{{", StringComparison.Ordinal);
         return db.Database.SqlQueryRaw<long>(sql, actor, partition, before, FoundationRootParkFacts.ProtectionRefusal(operation)).SingleAsync(token);
     }
+
+    // The latest Open starts a new retry budget, including when the operation ID has been reused.
+    private static string ParkProtectionRefusalsSql(string actor, string partition, string before, string matchesRefusal) => $$$"""
+        SELECT count(*) AS "Value" FROM "Journal" r
+        WHERE r."Instance" = {{{actor}}} AND r."Partition" = {{{partition}}} AND r."Revision" < {{{before}}}
+            AND r.{{{RootOutcomeEntry}}} AND {{{matchesRefusal}}}
+            AND r."Revision" > (
+                SELECT max(j."Revision") FROM "Journal" j
+                WHERE j."Instance" = {{{actor}}} AND j."Partition" = {{{partition}}} AND j."Revision" < {{{before}}}
+                    AND j.{{{RootOutcomeEntry}}} AND j."Entries" LIKE '{{"Outcome":"clearing",%'
+            )
+        """;
 
     // The polled envelope carries the Park facts read with it; the stored row does not.
     private static Message? WithoutParkFacts(Message? message) => message?.Operator is { RootParkFacts: not null } command
@@ -206,28 +205,8 @@ public sealed partial class EfStore
         var discard = db.UsesRootRetirement ? " OR /*discard-end*/ " + End(
             """OLD."Status" = 2 AND NEW."Status" = 2 AND NEW."Suspended" = OLD."Suspended" AND OLD."FoundationParkClearing" IS NOT NULL """, Kinds.Delete,
             """j."Entries" LIKE '{{"Outcome":"protected","Disposition":"discarded",%' """) : "";
-        var stopEntry = db.UsesSqliteShippedInstall
-            ? """
-                json_extract(j."Entries", '$.Operation') = OLD."FoundationParkClearing"
-                    AND json_extract(j."Entries", '$.Reason') = 'unavailable'
-                    AND json_extract(j."Entries", '$.Cleared') = OLD."FoundationParkCleared"
-                """
-            : """
-                (j."Entries"::jsonb ->> 'Operation') = OLD."FoundationParkClearing"
-                    AND (j."Entries"::jsonb ->> 'Reason') = 'unavailable'
-                    AND (j."Entries"::jsonb ->> 'Cleared') = OLD."FoundationParkCleared"::text
-                """;
-        var stops = db.UsesRootRetirement ? $$$"""
-            OR (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
-                AND OLD."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkClearing" IS NULL
-                AND NEW."FoundationParkCleared" IS NULL{{{SqliteClearingKindMatches(db, $"'{Kinds.Delete}'")}}}
-                {{{Parked}}}
-                AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
-                    AND j."Revision" = NEW."Revision" AND j."Entries" LIKE '{{"Outcome":"clearing-stopped",%'
-                    AND {{{stopEntry}}}))
-            """ : "";
         return End("""OLD."Status" = 2 AND NEW."Status" = 3 AND NOT NEW."Suspended" """, Kinds.Terminate,
-            """j."Entries" LIKE '{{"Outcome":"terminated",%' OR j."Entries" LIKE '{{"Outcome":"protected","Disposition":"terminated",%' """) + discard + stops + $$$"""
+            """j."Entries" LIKE '{{"Outcome":"terminated",%' OR j."Entries" LIKE '{{"Outcome":"protected","Disposition":"terminated",%' """) + discard + $$$"""
 
             OR /*clearing-open*/ (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
                 AND OLD."FoundationParkClearing" IS NULL AND NEW."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkCleared" > 0
@@ -240,6 +219,41 @@ public sealed partial class EfStore
                 {{{Parked}}}
                 AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
                     AND j."Revision" = NEW."Revision"))
+            """;
+    }
+
+    // Select the stop transition before ordinary checkpoint branches can accept the same journal revision.
+    private static string ParkClearingStopWrite(KernelDb db)
+    {
+        string Field(string alias, string field) => db.UsesSqliteShippedInstall
+            ? $"json_extract({alias}.\"Entries\", '$.{field}')"
+            : $"({alias}.\"Entries\"::jsonb ->> '{field}')";
+        var entry = $"""
+            {Field("j", "Operation")} = OLD."FoundationParkClearing"
+                AND {Field("j", "Reason")} = 'unavailable'
+                AND {Field("j", "Cleared")} = OLD."FoundationParkCleared"{(db.UsesSqliteShippedInstall ? "" : "::text")}
+            """;
+        var matchesRefusal = $$$"""
+            CASE WHEN r."Entries" LIKE '{{"Outcome":"refused",%' THEN
+                {{{Field("r", "Operation")}}} = OLD."FoundationParkClearing" AND {{{Field("r", "Reason")}}} = 'unavailable'
+            ELSE false END
+            """;
+        var priorRefusals = ParkProtectionRefusalsSql("""NEW."Id" """, """NEW."Partition" """, """NEW."Revision" """, matchesRefusal);
+        const string atRevision = """j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id" AND j."Revision" = NEW."Revision" """;
+        var stopped = atRevision + """AND j."Entries" LIKE '{{"Outcome":"clearing-stopped",%' """;
+        var kind = db.UsesSqliteShippedInstall
+            ? $""" AND OLD."FoundationParkClearingKind" = '{Kinds.Delete}' AND NEW."FoundationParkClearingKind" IS NULL """
+            : "";
+        return $$$"""
+            CASE WHEN EXISTS (SELECT 1 FROM "Journal" j WHERE {{{stopped}}}) THEN
+                OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
+                AND OLD."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkClearing" IS NULL
+                AND NEW."FoundationParkCleared" IS NULL{{{kind}}}
+                {{{ParkedClearingRow(db)}}}
+                AND EXISTS (SELECT 1 FROM "Journal" j WHERE {{{stopped}}} AND {{{entry}}})
+                AND (SELECT count(*) FROM "Journal" j WHERE {{{atRevision}}}) = 1
+                AND ({{{priorRefusals}}}) >= {{{FoundationRootParkFacts.MaxProtectionRefusals - 1}}}
+            ELSE
             """;
     }
 

@@ -211,6 +211,16 @@ internal static class SqliteShippedInstallChecks
         await RefusedAsync<SqliteException>(() => JournalAsync("refusal", revision: 2, """{"Outcome":"REFUSED","Reason":"parked"}"""),
             "the journal guard compares outcome prefixes using ordinal case");
         const string refused = """{"Outcome":"refused","Reason":"parked"}""";
+        var stopped = FoundationRootParkFacts.ProtectionStopped("operator/test", 1);
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("refusal", revision: 2, stopped);
+            await JournalAsync("refusal", revision: 2, refused);
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+                UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2 WHERE "Id" = 'refusal'
+                """, token), "a valid refusal beside a stop outcome cannot authorize a revision on an idle Park");
+            await write.RollbackAsync(token);
+        }
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
             await JournalAsync("refusal", revision: 2, refused);
@@ -316,6 +326,15 @@ internal static class SqliteShippedInstallChecks
         Require(await ReadProjectionAsync("projected") is { ParkAt: 200, ParkFault: "opened", ParkRevision: 2 },
             "opening a clearing commits its outcome and preserves the projected Park mark");
 
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("projected", revision: 4, stopped);
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+                UPDATE "Instances" SET "Revision" = 4, "FoundationWriteRevision" = 4, "FoundationParkClearing" = NULL,
+                    "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL WHERE "Id" = 'projected'
+                """, token), "the SQLite guard rejects an exact clearing stop before the retry ceiling");
+            await write.RollbackAsync(token);
+        }
         await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
             UPDATE "Instances" SET "Revision" = 4, "FoundationWriteRevision" = 4, "FoundationParkCleared" = 2,
                 "FoundationParkClearingKind" = 'kernel.terminate' WHERE "Id" = 'projected'
