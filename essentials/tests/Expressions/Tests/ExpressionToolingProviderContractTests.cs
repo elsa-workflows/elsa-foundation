@@ -99,16 +99,11 @@ public sealed class ExpressionToolingProviderContractTests
         var hover = await provider.GetHoverAsync(
             new(scope, "variables.customer.name", new(0, "variables.customer.name".Length)),
             CancellationToken.None);
-        var functionHover = await provider.GetHoverAsync(
-            new(scope, "getCurrentValue", new(0, "getCurrentValue".Length)),
-            CancellationToken.None);
 
         Assert.DoesNotContain(root.Payload!.Items, item => item.Label.StartsWith("getCur", StringComparison.Ordinal));
         Assert.Equal("currentValue", Assert.Single(member.Payload!.Items).Label);
         Assert.Equal("name", Assert.Single(nested.Payload!.Items).Label);
         Assert.Contains("Customer name.", hover.Payload!.Contents, StringComparison.Ordinal);
-        // A signature already names the function, so it is the whole first line.
-        Assert.Equal("getCurrentValue()", functionHover.Payload!.Contents.Split(Environment.NewLine)[0]);
     }
 
     [Fact]

@@ -25,9 +25,13 @@ public sealed class NativeHostAdapterTests
     }
 
     [Fact]
-    public async Task A_program_that_writes_its_arguments_throws()
+    public async Task A_program_that_writes_its_arguments_changes_only_its_own_copy()
     {
-        await Assert.ThrowsAnyAsync<Exception>(async () => await Scripts.EvaluateAsync("args.a = 1; return 1;", new JsonObject { ["a"] = 0 }, CancellationToken.None));
+        // Spec 1228: a script's args are its own copy; a change is not a write and never reaches the caller's document.
+        var arguments = new JsonObject { ["a"] = 0 };
+        var value = await Scripts.EvaluateAsync("args.a = 1; return args.a;", arguments, CancellationToken.None);
+        Assert.Equal("1", value?.ToJsonString());
+        Assert.Equal(0, arguments["a"]!.GetValue<int>());
     }
 
     [Fact]
