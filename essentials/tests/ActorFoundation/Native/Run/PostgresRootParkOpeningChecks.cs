@@ -1080,10 +1080,14 @@ internal static class PostgresRootParkOpeningChecks
     {
         internal IKernelStore Store = null!;
         internal Func<CommitBatch, CancellationToken, ValueTask<Committed>> Write = null!;
+        internal Func<int, long, TimeSpan, int, CancellationToken, ValueTask<Polled>>? Poll;
         protected override object? Invoke(MethodInfo? method, object?[]? args) =>
             method!.Name == nameof(IKernelStore.CommitAsync)
                 ? Write((CommitBatch)args![0]!, (CancellationToken)args[1]!)
-                : method.Invoke(Store, args);
+                : method.Name == nameof(IKernelStore.PollAsync) && Poll is { } poll && args is
+                    [int partition, long epoch, TimeSpan horizon, int limit, CancellationToken token]
+                    ? poll(partition, epoch, horizon, limit, token)
+                    : method.Invoke(Store, args);
     }
 
     private sealed class Probe(string original, string fault) : Contract.IActorType

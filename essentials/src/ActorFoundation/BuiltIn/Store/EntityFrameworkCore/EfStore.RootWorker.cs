@@ -493,7 +493,7 @@ public sealed partial class EfStore
             RootTimedJobs && !RootTimedJobPreviewEnabled && turn.Expected is null && !RootJobTicket.StartsTimedPair(turn.Sent, root.Actor, row.Model)) throw RootShape();
         var wires = RootTimedJobs ? EncodeRootTimedSends(turn.Sent) :
             turn.Sent.Select((message, index) => RootJobsEnabled && message.Kind == Kinds.Job
-                ? EncodeRootJob(message, root, row.Model) : EncodeRootSelf(root, row.Revision, index, message)).ToArray();
+                ? EncodeRootJob(message, root, row.Model) : EncodeRootSelf(root.Actor, row.Revision, index, message)).ToArray();
         var jobState = RootJobsEnabled ? new RootJobState(row.Jobs, row.NextJobGeneration) : null;
         PreparedRoot WithSends(PreparedRoot prepared) => wires.Length == 0 ? prepared :
             prepared with { JournalTurn = prepared.JournalTurn! with { Sent = wires } };

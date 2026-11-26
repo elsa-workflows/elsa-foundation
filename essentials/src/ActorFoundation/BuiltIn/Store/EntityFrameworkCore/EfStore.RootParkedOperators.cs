@@ -337,7 +337,7 @@ public sealed partial class EfStore
             // Without Park arrivals, or while its Park is being cleared, the parked root withholds its ordinary inputs, so the
             // settled prefix is its operator rows. The envelope comparison binds a held command's exact reply address.
             if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
-                    suspended: !db.UsesRootParkArrivals || prior.Clearing, token)) return false;
+                    suspended: !db.UsesRootParkArrivals || prior.Clearing, token, includePrivateInputs: false)) return false;
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision}
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
@@ -410,7 +410,7 @@ public sealed partial class EfStore
             // multi-page Open the page count stays the same, so the digest is the only check there.
             if (KeptSetDigest(kept) != KeptDigest || page.Length != Count || Ends != (page.Length == kept.Count) ||
                 !await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
-                    suspended: !db.UsesRootParkArrivals || prior.Clearing, token)) return false;
+                    suspended: !db.UsesRootParkArrivals || prior.Clearing, token, includePrivateInputs: false)) return false;
             var window = Command.Operator!.RootParkWindow!.Value;
             var cleared = page.Select(row => row.Id).ToArray();
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -442,8 +442,10 @@ public sealed partial class EfStore
             if (Clearing is null && !Ends && ClearsParkInPages(db))
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     UPDATE "Messages" SET "Seen" = 0, "Trial" = 0
-                    WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
-                        AND "EventMatch" IS NULL AND NOT "Done" AND "Id" NOT LIKE 'operator/%'
+                    WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
+                        AND "EventMatch" IS NULL AND NOT "Done"
+                        AND ("InboxScope" IN ({RootSelfScope}, {RootJobScope}, {RootTimedJobScope})
+                            OR "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" NOT LIKE 'operator/%')
                     """, token);
             if (!Ends)
             {

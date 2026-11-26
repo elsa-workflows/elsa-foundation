@@ -81,10 +81,10 @@ public sealed partial class EfStore
         return key.Id.StartsWith(prefix, StringComparison.Ordinal) && FoundationSelfSend.IsHandle(key.Id[prefix.Length..]) ? actor : null;
     }
 
-    private Message EncodeRootSelf(WorkerRoot root, long revision, int ordinal, Message m)
+    internal Message EncodeRootSelf(string actor, long revision, int ordinal, Message m)
     {
-        if (RootSelfIssuer is null || !RootSelfIssuer.Allows(m.Due) || !FoundationSelfSend.IsSelfInput(m, root.Actor, 1) ||
-            m.Id != FoundationSelfSend.Issue(RootSelfIssuer.Handle, CreationProtocol.Origin(root.Actor, 1), revision, ordinal, m.Due)) throw RootShape();
+        if (RootSelfIssuer is null || !RootSelfIssuer.Allows(m.Due) || !FoundationSelfSend.IsSelfInput(m, actor, 1) ||
+            m.Id != FoundationSelfSend.Issue(RootSelfIssuer.Handle, CreationProtocol.Origin(actor, 1), revision, ordinal, m.Due)) throw RootShape();
         // Leave ordinary payloads verbatim, including embedded newlines. A missing separator encodes null.
         var escaped = m.Payload is not null && (m.Payload.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(m.Payload));
         var header = (escaped ? "B" : "T") + DurableKeyJson.Write(new RootSelfHeader(revision, ordinal, m.Kind, m.Due));
