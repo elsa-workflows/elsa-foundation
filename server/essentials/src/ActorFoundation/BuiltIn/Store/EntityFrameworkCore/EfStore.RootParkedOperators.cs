@@ -210,10 +210,10 @@ public sealed partial class EfStore
         string Row(string side) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal);
         var keptScope = db.UsesSqliteShippedInstall ? "" : """k."InboxScope" = -4 AND """;
+        const string pageKind = """ AND NEW."FoundationParkClearingKind" = OLD."FoundationParkClearingKind" """;
         string End(string ended, string kind, string entries) => $$$"""
             ({{{ended}}} AND NOT NEW."Retired"
-                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 AND OLD."FoundationTerminalRevision" IS NULL
-                AND (OLD."FoundationParkClearingKind" IS NULL OR OLD."FoundationParkClearingKind" = '{{{kind}}}')
+                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 AND OLD."FoundationTerminalRevision" IS NULL{{{ClearingKindMatches($"'{kind}'")}}}
                 AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
                 AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
                 AND NEW."Jobs" IS NULL AND NEW."Children" IS NULL AND NEW."CustomHandles" IS NULL AND OLD."Fault" IS NOT NULL
@@ -237,8 +237,7 @@ public sealed partial class EfStore
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
                     AND j."Revision" = NEW."Revision" AND j."Entries" LIKE '{{"Outcome":"clearing",%'))
             OR /*clearing-page*/ (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
-                AND OLD."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkClearing" = OLD."FoundationParkClearing"
-                AND NEW."FoundationParkClearingKind" = OLD."FoundationParkClearingKind"
+                AND OLD."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkClearing" = OLD."FoundationParkClearing"{{{pageKind}}}
                 AND NEW."FoundationParkCleared" > OLD."FoundationParkCleared"
                 {{{Parked}}}
                 AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
@@ -267,12 +266,12 @@ public sealed partial class EfStore
         const string atRevision = """j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id" AND j."Revision" = NEW."Revision" """;
         // Repeat the partial index's predicate so the probe seeks to this revision of the actor, including on ordinary turns.
         var stopped = atRevision + $"AND j.{RootOutcomeEntry} " + """AND j."Entries" LIKE '{{"Outcome":"clearing-stopped",%' """;
+        var kind = $""" AND OLD."FoundationParkClearingKind" = '{Kinds.Delete}' AND NEW."FoundationParkClearingKind" IS NULL """;
         return $$$"""
             CASE WHEN EXISTS (SELECT 1 FROM "Journal" j WHERE {{{stopped}}}) THEN
                 OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
                 AND OLD."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkClearing" IS NULL
-                AND NEW."FoundationParkCleared" IS NULL AND OLD."FoundationParkClearingKind" = '{{{Kinds.Delete}}}'
-                AND NEW."FoundationParkClearingKind" IS NULL
+                AND NEW."FoundationParkCleared" IS NULL{{{kind}}}
                 {{{ParkedClearingRow(db)}}}
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE {{{stopped}}}
                     AND CASE WHEN {{{ValidParkOutcomeJson(db, "j")}}} THEN {{{entry}}} ELSE false END)
@@ -285,9 +284,10 @@ public sealed partial class EfStore
     // S5b-2: an open clearing's columns stay as they are, and a root whose Park is being cleared moves only beside a refused
     // entry, so no keep lands while a clearing is open.
     private const string ParkedClearingPinned = """
-        AND ROW(NEW."FoundationParkClearing", NEW."FoundationParkCleared", NEW."FoundationParkClearingKind")
-            IS NOT DISTINCT FROM ROW(OLD."FoundationParkClearing", OLD."FoundationParkCleared", OLD."FoundationParkClearingKind")
+        AND ROW(NEW."FoundationParkClearing", NEW."FoundationParkCleared") IS NOT DISTINCT FROM ROW(OLD."FoundationParkClearing", OLD."FoundationParkCleared")
         """;
+    private static string ParkedClearingUnchanged(KernelDb db) => ParkedClearingPinned + (db.UsesSqliteShippedInstall ? "" :
+        """ AND NEW."FoundationParkClearingKind" IS NOT DISTINCT FROM OLD."FoundationParkClearingKind" """);
     private const string ParkedClearingKeeps = """
         AND (OLD."FoundationParkClearing" IS NULL OR EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition"
             AND j."Instance" = NEW."Id" AND j."Revision" = NEW."Revision" AND j."Entries" LIKE '{{"Outcome":"refused",%'))
@@ -309,12 +309,15 @@ public sealed partial class EfStore
     // Park retirement adds its Park mark and kept-input conditions to the common retirement footprint checks.
     // S5b-3b: a Delete retires it the same way, still Faulted; a Terminate-then-delete needs its capability.
     private static string ParkedRetirementCheckpoint(KernelDb db) => ParkedRetirementSql
-        .Replace("/*retired-status*/", db.UsesRootTerminateThenDelete ? "IN (2, 3)" : "= 2", StringComparison.Ordinal);
+        .Replace("/*retired-status*/", db.UsesRootTerminateThenDelete ? "IN (2, 3)" : "= 2", StringComparison.Ordinal)
+        .Replace("/*retired-clearing-kind*/", ClearingKindMatches(
+            $"""CASE WHEN NEW."Status" = 3 THEN '{Kinds.Terminate}' ELSE '{Kinds.Delete}' END"""), StringComparison.Ordinal);
 
-    private static readonly string ParkedRetirementSql = $$"""
-        (OLD."Status" = 2 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationTerminalRevision" IS NULL
-            AND (OLD."FoundationParkClearingKind" IS NULL OR OLD."FoundationParkClearingKind" =
-                CASE WHEN NEW."Status" = 3 THEN '{{Kinds.Terminate}}' ELSE '{{Kinds.Delete}}' END)
+    private static string ClearingKindMatches(string kind) =>
+        $""" AND (OLD."FoundationParkClearingKind" IS NULL OR OLD."FoundationParkClearingKind" = {kind})""";
+
+    private static readonly string ParkedRetirementSql = """
+        (OLD."Status" = 2 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationTerminalRevision" IS NULL/*retired-clearing-kind*/
             AND NEW."Status" /*retired-status*/ AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
             AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
             /*retire-kept*/ AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
@@ -341,8 +344,8 @@ public sealed partial class EfStore
         string Row(string side) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
             .Replace("/*park-revision*/", db.RecordsRootParkRevision ? $""", {side}."FoundationParkRevision" """ : "", StringComparison.Ordinal)
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal)
-            .Replace("/*clearing*/", $""", {side}."FoundationParkClearing", {side}."FoundationParkCleared", {side}."FoundationParkClearingKind" """,
-                StringComparison.Ordinal);
+            .Replace("/*clearing*/", $""", {side}."FoundationParkClearing", {side}."FoundationParkCleared" """ +
+                $""", {side}."FoundationParkClearingKind" """, StringComparison.Ordinal);
         // The raw command is formatted, so the literal brace is doubled.
         return $$$"""
             AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
@@ -402,7 +405,7 @@ public sealed partial class EfStore
                     AND "FoundationParkClearingKind" IN ('{{Kinds.Terminate}}', '{{Kinds.Delete}}')));
             """, token);
 
-    private sealed record LockedParkedRoot(long At, string Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion, bool Clearing);
+    private sealed record LockedParkedRoot(long At, string Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion, string? ClearingKind);
 
     private sealed record RootParkedRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended, long? ProtectionRefusals)
         : QualifiedRootCheckpoint(checked(Expected + 1))
@@ -421,7 +424,7 @@ public sealed partial class EfStore
             var locked = await db.Database.SqlQuery<LockedParkedRoot>($"""
                 SELECT i."FoundationParkAt" AS "At", i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
                     sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion",
-                    i."FoundationParkClearing" IS NOT NULL AS "Clearing"
+                    i."FoundationParkClearingKind" AS "ClearingKind"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
@@ -438,7 +441,7 @@ public sealed partial class EfStore
             // Without Park arrivals, or while its Park is being cleared, the parked root withholds its ordinary inputs, so the
             // settled prefix is its operator rows. The envelope comparison binds a held command's exact reply address.
             if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
-                    suspended: !db.UsesRootParkArrivals || prior.Clearing, token, includePrivateInputs: false)) return false;
+                    suspended: !db.UsesRootParkArrivals || prior.ClearingKind is not null, token, includePrivateInputs: false)) return false;
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "FoundationParkClearing" = CASE WHEN {Stops} THEN NULL ELSE "FoundationParkClearing" END,
@@ -468,7 +471,8 @@ public sealed partial class EfStore
                         AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest})
                     AND (NOT {db.UsesRootParkInspection} OR EXISTS (SELECT 1 FROM "FoundationActorList"
                         WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference} AND "Status" = {(int)InstanceStatus.Faulted}
-                            AND "ParkAt" = {prior.At} AND "ParkFault" = {prior.Fault}))
+                            AND "ParkAt" = {prior.At} AND "ParkFault" = {prior.Fault}
+                            AND "ParkResolution" IS NOT DISTINCT FROM {ParkResolutionFor(Stops ? null : prior.ClearingKind)}::text))
                 AS "Value"
                 """).SingleAsync(token);
         }
@@ -487,7 +491,7 @@ public sealed partial class EfStore
             var locked = await db.Database.SqlQuery<LockedParkedRoot>($"""
                 SELECT i."FoundationParkAt" AS "At", i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
                     sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion",
-                    i."FoundationParkClearing" IS NOT NULL AS "Clearing"
+                    i."FoundationParkClearingKind" AS "ClearingKind"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
@@ -510,7 +514,7 @@ public sealed partial class EfStore
             // multi-page Open the page count stays the same, so the digest is the only check there.
             if (KeptSetDigest(kept) != KeptDigest || page.Length != Count || Ends != (page.Length == kept.Count) ||
                 !await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
-                    suspended: !db.UsesRootParkArrivals || prior.Clearing, token, includePrivateInputs: false)) return false;
+                    suspended: !db.UsesRootParkArrivals || prior.ClearingKind is not null, token, includePrivateInputs: false)) return false;
             var window = Command.Operator!.RootParkWindow!.Value;
             var cleared = page.Select(row => row.Id).ToArray();
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -578,6 +582,7 @@ public sealed partial class EfStore
                     AND (NOT {db.UsesRootParkInspection} OR EXISTS (SELECT 1 FROM "FoundationActorList"
                         WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference}
                             AND "Status" = {(int)status}
+                            AND "ParkResolution" IS NOT DISTINCT FROM {ParkResolutionFor(Ends ? null : Command.Kind)}::text
                             AND ("ParkAt" IS NULL) = {Ends} AND ("EndedAt" IS NOT NULL) = {Ends}))
                 AS "Value"
                 """).SingleAsync(token);

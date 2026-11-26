@@ -4,6 +4,9 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
+    private const string ParkTerminating = "terminating";
+    private const string ParkDeleting = "deleting";
+
     internal static Task InstallRootParkReadModelAsync(KernelDb db, CancellationToken token)
     {
         var clearing = db.UsesRootParkedOperators;
@@ -64,8 +67,16 @@ public sealed partial class EfStore
     }
 
     private static string ParkResolutionSql(string row) => $"""
-        CASE {row}."FoundationParkClearingKind" WHEN '{Kinds.Terminate}' THEN 'terminating' WHEN '{Kinds.Delete}' THEN 'deleting' END
+        CASE {row}."FoundationParkClearingKind" WHEN '{Kinds.Terminate}' THEN '{ParkTerminating}' WHEN '{Kinds.Delete}' THEN '{ParkDeleting}' END
         """;
+
+    private static string? ParkResolutionFor(string? kind) => kind switch
+    {
+        Kinds.Terminate => ParkTerminating,
+        Kinds.Delete => ParkDeleting,
+        null => null,
+        _ => throw RootShape()
+    };
 
     internal static Task InstallRootParkArrivalReasonAsync(KernelDb db, CancellationToken token) =>
         db.Database.ExecuteSqlRawAsync("""

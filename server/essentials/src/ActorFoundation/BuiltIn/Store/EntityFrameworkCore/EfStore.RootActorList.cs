@@ -394,7 +394,7 @@ public sealed partial class EfStore
             throw new StoreFormatException("The actor list terminal mark is incomplete.");
         if (parkAt is not null ? parkAt <= 0 || status != (int)InstanceStatus.Faulted || parkFault is null || parkRevision <= 0 : parkFault is not null || parkRevision is not null)
             throw new StoreFormatException("The actor list Park mark is incomplete.");
-        if (parkResolution is not null && (parkResolution is not ("terminating" or "deleting") || parkAt is null || parkRevision is not > 0))
+        if (parkResolution is not null && (parkResolution is not (ParkTerminating or ParkDeleting) || parkAt is null || parkRevision is not > 0))
             throw new StoreFormatException("The actor list Park resolution is invalid.");
         var header = DurableKeyJson.Read<RootHeader>(encodedHeader);
         return new(reference, header.Model, (InstanceStatus)status, endedAt, terminalRevision, qualified, header.TypeData,

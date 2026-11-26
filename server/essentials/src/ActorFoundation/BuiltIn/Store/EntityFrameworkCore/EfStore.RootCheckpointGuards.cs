@@ -155,8 +155,8 @@ public sealed partial class EfStore
         .Replace("/*root-parked-retirement*/", db.UsesRootParkedOperators && db.UsesRootRetirement ? ParkedRetirementCheckpoint(db) : "false",
             StringComparison.Ordinal)
         // S5b-2: a refusal leaves an open clearing as it is, and no keep or other write moves a root whose Park is being cleared.
-        .Replace("/*parked-clearing-continues*/", db.UsesRootParkedOperators ? ParkedClearingPinned + ParkedClearingKeeps : "", StringComparison.Ordinal)
-        .Replace("/*parked-clearing-pinned*/", db.UsesRootParkedOperators ? ParkedClearingPinned : "", StringComparison.Ordinal)
+        .Replace("/*parked-clearing-continues*/", db.UsesRootParkedOperators ? ParkedClearingUnchanged(db) + ParkedClearingKeeps : "", StringComparison.Ordinal)
+        .Replace("/*parked-clearing-pinned*/", db.UsesRootParkedOperators ? ParkedClearingUnchanged(db) : "", StringComparison.Ordinal)
         .Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
         .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
         .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
