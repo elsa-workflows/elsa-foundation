@@ -61,7 +61,7 @@ Child outputs in `Result.outputs` come from `WorkflowOutputSource`, which projec
 
 - By default each value is a preview envelope (`DefaultDiagnosticSnapshotFactory`), with strings cut at 256 characters
   and objects at 32 properties, depth 6 or 16 KB.
-- A name containing `token`, `password` or `secret` is redacted.
+- A name containing `password`, `secret`, `token`, `apikey`, `api_key`, `authorization` or `credential` is redacted.
 
 `Result.outputs` is therefore a diagnostics view, and `Output` must read the committed values (plan D-2). The existing
 dispatch tests use stub output sources, so nothing showed this.

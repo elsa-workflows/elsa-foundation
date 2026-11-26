@@ -86,18 +86,25 @@ A child's Set Output keeps the value protection policy of what it wrote. Two kin
 
 - an output whose policy protects it: marked sensitive, required to be encrypted, or carrying a redaction mode or a
   retention policy;
-- an output that is not stored inline.
+- an output that is not stored inline: no inline payload, or a policy whose minimum storage is not inline.
+
+Set Output refuses a withheld value, so an encryption-required output can only be an explicit null.
 
 Carrying these raw would put them in the resume intent, the bookmark stimulus and the parent's variable, where the
 child's policy no longer applies. [ADR 0045](../../docs/adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) §9
 forbids that downgrade. The current projection pipeline gives an output one static policy, so it cannot carry a
 per-value policy.
 
-So the omission is a declared loss under [ADR 0046](../../docs/adr/0046-output-binding-coercion-uses-pinned-value-representations.md) V6, not a
-silent one:
+Leaving a value out is not a downgrade, but ADR 0045 §9 also says it must not happen silently. So the omission is
+loud in two ways:
 
-- the `Output` contract description states it;
-- `Result.outputs` still lists every such output by name, because the projection never drops a name.
+- **At design time.** The `Output` contract description states it: a declared loss under
+  [ADR 0046](../../docs/adr/0046-output-binding-coercion-uses-pinned-value-representations.md) V6.
+- **In each run.** When the dispatch resumes, it reports one execution warning that names every output it left out. It
+  uses the protected form of the existing warning pattern, so the warning carries names and never a value.
+
+`Result.outputs` is not that signal. It keeps every name, but today it carries a preview of a redaction-mode or
+retention-governed value. That existing gap is #5851, and it is not fixed here.
 
 Elsa 3 had no such policies, so no converted workflow loses a value by this rule. A host that wants protected child
 outputs to reach a parent needs per-value policy propagation through captures. That is new ADR 0045 §9 work, and it is
@@ -138,8 +145,8 @@ parent that dispatches it with `WaitForCompletion` true, captures `Output` into 
    `token` (a string), **When** the parent captures `Output`, **Then** both values arrive unchanged. `Result.outputs`
    still shows its diagnostic view of them.
 4. **Given** a child output marked sensitive, or required to be encrypted, or carrying a redaction mode or a retention policy, or not stored inline, **When** the parent
-   captures `Output`, **Then** that output is left out of the object, and `Result.outputs` still lists it by name. There
-   is one test per kind.
+   captures `Output`, **Then** that output is left out of the object, and the dispatch reports one execution warning
+   naming it, without its value. There is one test per kind; for encryption the value is an explicit null.
 5. **Given** a child that faults or is cancelled, **When** the dispatch resumes, **Then** `Output` is absent and a
    capture of it leaves its variable unchanged, as for any other output an activity does not produce.
 6. **Given** `WaitForCompletion` false, **When** the dispatch completes with `Dispatched`, **Then** `Output` is absent.
@@ -261,8 +268,10 @@ faults.
 - **FR-003**: `Output` MUST be built from the child's committed workflow output values. It MUST NOT be built from the
   diagnostics capture policy or from `Result.outputs`, so no diagnostics setting changes it.
   - An output marked sensitive, or required to be encrypted, or carrying a redaction mode or a retention policy (its value protection policy), or not stored inline, MUST be left out.
-  - The `Output` contract description MUST state that protected and externally stored outputs are left out, and that
-    `Result.outputs` lists them by name (ADR 0046 V6: a declared loss).
+  - The `Output` contract description MUST state that protected and externally stored outputs are left out (ADR 0046
+    V6: a declared loss).
+  - When an output is left out, the dispatch MUST report one execution warning on resume. It names each left-out
+    output, in protected form, with no value (ADR 0045 §9: not silent).
   - A completed child with no outputs gives `{}`.
   - The values MUST be replay-stable: a resumed or retried parent gets the same `Output` (spec 099 FR-008).
 - **FR-004**: `Result` and `ChildWorkflowExecutionId` MUST keep their current shape and behaviour.
@@ -310,8 +319,8 @@ faults.
   - The child gets no `ParentInstanceId` input.
   - An output read must match the output name's case.
 - **FR-011a**: Spec 236's member map (`specs/236-elsa3-activity-map/member-map.md`) MUST be amended in place for the
-  `DispatchWorkflow.Result`, `DispatchWorkflow outcome Done` and `ExecuteWorkflow → DispatchWorkflow` rows, citing spec
-  1245, as spec 258 amended the Event row.
+  `DispatchWorkflow.Result`, `DispatchWorkflow outcome Done` and `ExecuteWorkflow → DispatchWorkflow` rows, and the
+  null-member row for `ExecuteWorkflow.WaitForCompletion`, citing spec 1245, as spec 258 amended the Event row.
 - **FR-012**: Converter tests MUST cover each FR-006 to FR-010 case. Runtime tests MUST cover FR-001 to FR-004 on the
   current core, including restart of a waiting parent, where the existing waited-dispatch tests already run.
 - **FR-013**: The S-15 ledger MUST be updated in the S-15 session, not in this PR.

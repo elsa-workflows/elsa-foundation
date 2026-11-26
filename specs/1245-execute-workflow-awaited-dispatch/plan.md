@@ -48,14 +48,20 @@ compatibility shims.
      - a value whose `DurableValuePolicies.Read(row)` is protected: `IsSensitive`, `RequiresEncryption`, a
        `RedactionMode` or a `RetentionPolicy`, the same test as `StepWorkflowState.Protected` plus retention;
      - a value not stored inline.
-   - Raw values now reach three surfaces that held only policy-filtered snapshots before: the outbox intent payload,
-     the bookmark-resume stimulus input (`ParentResumeExecutor`) and the parent's activity result envelope. The
-     protected-value exclusion is what keeps those surfaces safe.
+   - Raw values now reach three surfaces: the outbox intent payload, the bookmark-resume stimulus input
+     (`ParentResumeExecutor`) and the parent's activity result envelope. The protected-value exclusion keeps protected
+     values off them. `Result.outputs` already leaks redaction-mode and retention values onto the same surfaces; that is
+     #5851, and it is out of scope.
+   - "Not stored inline" means `!row.InlineValue.HasValue || DurableValuePolicies.Read(row).Storage != Inline`. That
+     covers a null row whose minimum storage is External, which the existing projection reports as inline.
+   - The payload also carries the names left out (`WithheldOutputs`, names only), so that `ResumeAsync` can report one
+     execution warning in protected form (`ExecutionWarning.ProtectedForm`, as `RuntimeOutputCaptureProjector` does).
+     Check that the resume context exposes the warning sink; if it does not, report from the resume handler.
    - Update the "payload-safe" doc comment on `WorkflowDispatchParentResumePayload` to say what `Output` carries. Fix
      the two stale comments in `RuntimeWorkflowOutputStateProjection` ("nothing writes it yet" and "nothing writes
      externalized workflow outputs yet"): Set Output writes both.
-   - The omission is a declared loss (ADR 0046 V6). The `Output` contract description states it, and `Result.outputs`
-     keeps each name. Carrying a per-value policy through a capture would be new ADR 0045 §9 work, and it is not built
+   - The omission is declared (ADR 0046 V6, in the contract description) and reported in each run (ADR 0045 §9, the
+     warning). Carrying a per-value policy through a capture would be new ADR 0045 §9 work, and it is not built
      here.
    - Expose that read as a separate method or contract beside the existing source, so the diagnostics read and the data
      read cannot be confused. Use the existing contracts in `Workflows.Runtime.Core`; no new pattern.

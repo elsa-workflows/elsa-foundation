@@ -18,12 +18,14 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
 - [ ] T003 Policy-free read of a child's committed workflow outputs (plan D-2). It selects the same outputs as
   `RuntimeWorkflowOutputStateProjection`, without `IRuntimePayloadCapturePolicy`. It leaves out values whose
   `DurableValuePolicies.Read` is protected (sensitive, encryption, redaction mode, retention) and values not stored
-  inline. Add unit tests beside the existing projection tests, one per exclusion. Fix both stale comments in
+  inline (`!InlineValue.HasValue || DurableValuePolicies.Read(row).Storage != Inline`). It returns the left-out names.
+  The encryption case and the null row with an External minimum are each tested with an explicit null. Add unit tests beside the existing projection tests, one per exclusion. Fix both stale comments in
   `RuntimeWorkflowOutputStateProjection`: "nothing writes it yet" (the sensitive marker) and "nothing writes
   externalized workflow outputs yet". Set Output writes both.
 - [ ] T003a `WorkflowDispatchCompletionEnricher` sets `WorkflowDispatchParentResumePayload.Output` for `Completed` from
   T003.
-  - The payload constructor rejects `Output` on any other status.
+  - The payload carries `WithheldOutputs` (names only).
+  - The payload constructor rejects `Output` and `WithheldOutputs` on any other status.
   - `WorkflowDispatchDeliveryFailureProjector` passes null, and `DispatchWorkflowResumeGuard` reads the member.
   - Update the "payload-safe" doc comment.
   - Enricher tests: the value is replay-stable; a conflicting re-enrichment fails closed; a payload with `Output` on
@@ -33,7 +35,8 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   - A child with output `Decision = "approved"` gives `{ "Decision": "approved" }`.
   - A 1,000-character `Summary` and an output named `token` arrive unchanged, while `Result.outputs` shows the
     diagnostic view.
-  - Outputs that are sensitive, encryption-required, redaction-moded or retention-governed are left out.
+  - Outputs that are sensitive, encryption-required, redaction-moded or retention-governed are left out. The dispatch
+    reports one execution warning naming them, and the warning text contains no value.
   - Two declared outputs with one set give one property.
   - A child with no outputs gives `{}`.
 - [ ] T004 [P] `DispatchWorkflowCheckpointTests`: a waiting parent resumed after a restart gives the same `Output`
@@ -82,7 +85,8 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   accepted differences (a faulted child's outputs, a cancelled child, a failed child start, `ParentInstanceId`,
   output-name case) with their Flowchart and Sequence behaviour, and Execute Workflow's always-wait.
 - [ ] T013a [P] Amend spec 236's `member-map.md` rows for `DispatchWorkflow.Result`, the `Done` outcome and
-  `ExecuteWorkflow` in place, citing spec 1245 (FR-011a). The `ExecuteWorkflow` row also corrects the default: Elsa 3
+  `ExecuteWorkflow` in place, and the null-member row for `ExecuteWorkflow.WaitForCompletion`, citing spec 1245
+  (FR-011a). The `ExecuteWorkflow` row also corrects the default: Elsa 3
   ran an unset `WaitForCompletion` as false, where today's `DefaultFlip(…, "true")` assumes true.
 - [ ] T014 Set the spec's status to `Implemented` in the implementation PR (not in a separate PR). Tell the S-15 session
   which adjusted-copy and ledger changes FR-013 allows. Do not edit the ledger here.
