@@ -66,7 +66,8 @@ internal static class PostgresRootParkedOperatorChecks
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         var capabilities = shippedSet ? RootProfiles.Shipped
             : RootProfiles.Formats[StoreFormat.RootOperatorReplies] | RootProfiles.Formats[StoreFormat.RootParkInspection];
-        KernelDb Open() => KernelDb.ForUnshippedComposition(options, Composed, capabilities);
+        KernelDb Open() => shippedSet ? KernelDb.ForPostgresRootShipped(options)
+            : KernelDb.ForUnshippedComposition(options, Composed, capabilities);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(240));
         var stop = timeout.Token;
         await using var db = Open();
@@ -364,6 +365,18 @@ internal static class PostgresRootParkedOperatorChecks
         {
             Check(true, "format 22 refuses a stored Terminate at decode");
         }
+        if (shippedSet)
+        {
+            var root = await main.StartAsync("shipped-paged-delete");
+            var payload = Json.Write(new string('x', ParkRecoveryCredit.LimitBytes / 2 + 1_024));
+            Check(await main.SendAsync(root, "shipped-large-1", "fail", payload: payload) &&
+                await main.SendAsync(root, "shipped-large-2", "fail", payload: payload),
+                "the shipped profile admits both inputs whose retained bytes exceed one page");
+            var shippedPark = await main.DriveAsync(root, image => image is { Status: InstanceStatus.Faulted });
+            Check((await main.InputsAsync(root)).Count(row => row.KeptBy == (short)ParkKeepReason.Consumed) == 2,
+                "one shipped faulting turn retains both inputs");
+            await CheckProtectionCeilingAsync(main, root, shippedPark, cleared: 1);
+        }
         await RecoverNeverMeetsSuspendedPark();
         await ArrivalsSet();
         await RereadAcrossFormats();
@@ -372,6 +385,51 @@ internal static class PostgresRootParkedOperatorChecks
         await DeleteSet();
         await JobsInspection();
         return 0;
+
+        async Task CheckProtectionCeilingAsync(Set set, Contract.ActorRef root, EfStore.RootImage park, int cleared)
+        {
+            const string operation = "delete-with-reused-operation";
+            var selection = await set.ParkSelectionAsync(root, 2);
+            var unavailable = FoundationRootParkFacts.ProtectionRefusal(operation);
+            set.Probe.Unreadable.Add(root.Id);
+            Check(await set.OperateAsync(root, operation, Contract.Kinds.Delete, selection, keepFor: TimeSpan.Zero),
+                "an unreadable source refuses the first Delete before Open, with a short-lived receipt");
+            await set.DriveAsync(root, image => image is not null && image.Revision == park.Revision + 1);
+            Check(await set.ClearingAsync(root) == new Set.ClearingRow(null, null) &&
+                (await set.Cold.ReadJournalOfAsync(0, park.Actor.Id, 0, stop))[^1].Entries == unavailable,
+                "the first refusal committed without opening a clearing");
+            set.Probe.Unreadable.Remove(root.Id);
+            set.Probe.ReadableOnce.Add(root.Id);
+            Check(await set.OperateAsync(root, operation, Contract.Kinds.Delete, selection, reply: true),
+                "the same operation opens after its earlier receipt expires");
+            var owner = set.Owner;
+            var firstFailure = park.Revision + 3;
+            for (var refusal = 0; refusal < FoundationRootParkFacts.MaxProtectionRefusals - 1; refusal++)
+            {
+                await set.DriveAsync(root, image => image is not null && image.Revision == firstFailure + refusal);
+                Check(await set.ClearingAsync(root) == new Set.ClearingRow(operation, cleared),
+                    "a final-page retry remains in the current clearing");
+                await set.ExecuteAsync($"""
+                    UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {park.Actor.Id} AND "Kind" = {Kinds.Delete} AND NOT "Done"
+                    """);
+            }
+            var stopped = await set.DriveAsync(root, image => image is not null &&
+                image.Revision == firstFailure + FoundationRootParkFacts.MaxProtectionRefusals - 1);
+            var outcomes = Outcomes(await set.Cold.ReadJournalOfAsync(0, park.Actor.Id, 0, stop));
+            var rows = await set.InputsAsync(root);
+            Check(stopped is { Status: InstanceStatus.Faulted, TerminalRevision: null } &&
+                await set.ParkAtAsync(stopped) == await set.ParkAtAsync(park) &&
+                await set.ClearingAsync(root) == new Set.ClearingRow(null, null) &&
+                outcomes[0] == unavailable && outcomes[2..^1].SequenceEqual(Enumerable.Repeat(unavailable, FoundationRootParkFacts.MaxProtectionRefusals - 1)) &&
+                outcomes[^1] == FoundationRootParkFacts.ProtectionStopped(operation, cleared) &&
+                rows.Count(row => row.KeptBy is not null) == 1 && rows.All(row => row.Done) && ReferenceEquals(owner, set.Owner) && !set.StoodDown,
+                "the PostgreSQL ceiling counts only the current Open and leaves its last page and Park on the same owner");
+            set.Answered(operation, "started");
+            set.Probe.Unreadable.Remove(root.Id);
+            Check(await set.OperateAsync(root, "delete-after-ceiling", Contract.Kinds.Delete, selection),
+                "the same Park selection admits a new Delete after the source returns");
+            await set.RetiredAsync(root);
+        }
 
         // A Park can be suspended only where Suspend is admitted. Every set with Park recovery, shipped or composed with
         // termination, admits Recover and no other operator command, so Recover never reaches a suspended Park.
@@ -1295,40 +1353,9 @@ internal static class PostgresRootParkedOperatorChecks
                 "once the protection could be read the last page retired the root, and the arrivals were settled by the retirement");
             set.Answered("del-kept-large", "started");
 
-            var exhausted = await set.StartAsync("del-protection-exhausted");
-            var exhaustedPark = await ParkLargeAsync(exhausted, "exhausted", copied: 169);
-            var selection = await set.ParkSelectionAsync(exhausted, 2);
-            const string exhaustedOperation = "del-protection-exhausted";
-            opened[exhaustedOperation] = () => set.Probe.Unreadable.Add(exhausted.Id);
-            Check(await set.OperateAsync(exhausted, exhaustedOperation, Contract.Kinds.Delete, selection, reply: true),
-                "the composed Delete opens before the protection source becomes unreadable");
-            var openedOwner = set.Owner;
-            var expected = exhaustedPark.Revision + 3;
-            for (var refusal = 0; refusal < FoundationRootParkFacts.MaxProtectionRefusals - 1; refusal++)
-            {
-                await set.DriveAsync(exhausted, image => image is not null && image.Revision >= expected + refusal);
-                await set.ExecuteAsync($"""
-                    UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {exhaustedPark.Actor.Id}
-                        AND "Kind" = {Kinds.Delete} AND NOT "Done"
-                    """);
-            }
-            var stopped = await set.DriveAsync(exhausted, image => image is not null &&
-                image.Revision == expected + FoundationRootParkFacts.MaxProtectionRefusals - 1);
-            var outcomes = Outcomes(await set.Cold.ReadJournalOfAsync(0, exhaustedPark.Actor.Id, 0, stop));
-            var rows = await set.InputsAsync(exhausted);
-            Check(stopped is { Status: InstanceStatus.Faulted, TerminalRevision: null } &&
-                await set.ParkAtAsync(stopped) == await set.ParkAtAsync(exhaustedPark) &&
-                await set.ClearingAsync(exhausted) is { Clearing: null, Cleared: null } &&
-                outcomes.Count(entry => entry == FoundationRootParkFacts.ProtectionRefusal(exhaustedOperation)) == FoundationRootParkFacts.MaxProtectionRefusals - 1 &&
-                outcomes[^1] == FoundationRootParkFacts.ProtectionStopped(exhaustedOperation, 170) &&
-                rows.Count(row => row.KeptBy is not null) == 1 && rows.All(row => row.Done) &&
-                ReferenceEquals(openedOwner, set.Owner) && !set.StoodDown,
-                "the PostgreSQL retry ceiling keeps the remaining page and releases the clearing on its current owner");
-            set.Answered(exhaustedOperation, "started");
-            set.Probe.Unreadable.Remove(exhausted.Id);
-            Check(await set.OperateAsync(exhausted, "del-after-ceiling", Contract.Kinds.Delete, selection),
-                "the same Park selection admits a new Delete after the source returns");
-            await set.RetiredAsync(exhausted);
+            var exhausted = await set.StartAsync("composed-paged-delete");
+            await ParkLargeAsync(exhausted, "exhausted", copied: 169);
+            await CheckProtectionCeilingAsync(set, exhausted, await set.ImageAsync(exhausted), cleared: InMemoryStore.ParkPageLimit);
 
             // A Park selection the owner finds stale is refused there as "selection", and the held caller answered once.
             Check(await set.SendAsync(stale, "del-stale-fail", "fail"), "the Delete set admits a failing input for the stale root");
@@ -1990,8 +2017,8 @@ internal static class PostgresRootParkedOperatorChecks
         internal async Task<EfStore.RootImage> ImageAsync(Contract.ActorRef root) =>
             await Cold.ReadFirstRootAsync(tenant.Tenant, root.Id, stop) ?? throw new InvalidOperationException($"The root {root.Id} has no checkpoint.");
 
-        internal async Task<bool> SendAsync(Contract.ActorRef root, string id, string kind, long? dueAt = null) =>
-            await _ingress.SendAsync(tenant, new Contract.Target.Ref(root), id, kind, "{}", dueAt is null ? null : new(DueAt: dueAt), stop) is
+        internal async Task<bool> SendAsync(Contract.ActorRef root, string id, string kind, long? dueAt = null, string payload = "{}") =>
+            await _ingress.SendAsync(tenant, new Contract.Target.Ref(root), id, kind, payload, dueAt is null ? null : new(DueAt: dueAt), stop) is
                 { Outcome: Contract.AdmissionOutcome.Accepted };
 
         internal async Task<bool> TerminateAsync(Contract.ActorRef root, string id, string? selection = null) =>
@@ -2042,10 +2069,10 @@ internal static class PostgresRootParkedOperatorChecks
 
         // Admission without the ingress: Suspend and Resume, held commands and Terminate and delete.
         internal async Task<bool> OperateAsync(Contract.ActorRef root, string id, string kind, string? selection = null, bool reply = false,
-            bool thenDelete = false)
+            bool thenDelete = false, TimeSpan? keepFor = null)
         {
             var deadline = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 600_000;
-            return await Admission.AdmitRootOperatorAsync(tenant.Tenant, root.Id, id, kind, null, null, stop, selection, thenDelete,
+            return await Admission.AdmitRootOperatorAsync(tenant.Tenant, root.Id, id, kind, null, keepFor, stop, selection, thenDelete,
                 reply: reply ? new(ReplyTo.Of(HeldCaller, id, deadline), deadline) : null) is { Duplicate: false };
         }
 
@@ -2368,8 +2395,13 @@ internal static class PostgresRootParkedOperatorChecks
         public HashSet<string> Protects { get; } = [];
         // A root whose protection cannot be read: ProtectsDeletion throws, which the adapter answers as ProtectionUnavailable.
         public HashSet<string> Unreadable { get; } = [];
-        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) =>
-            Unreadable.Contains(header.Ref.Id) ? throw new InvalidOperationException("The fixture's protection cannot be read.") : Protects.Contains(header.Ref.Id);
+        public HashSet<string> ReadableOnce { get; } = [];
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now)
+        {
+            if (Unreadable.Contains(header.Ref.Id)) throw new InvalidOperationException("The fixture's protection cannot be read.");
+            if (ReadableOnce.Remove(header.Ref.Id)) Unreadable.Add(header.Ref.Id);
+            return Protects.Contains(header.Ref.Id);
+        }
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
 

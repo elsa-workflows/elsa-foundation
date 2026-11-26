@@ -233,7 +233,7 @@ internal static class PostgresShippedFormatChecks
         await using var db = open();
         var sql = EfStore.RenderPostgresFirstRootGuards(db).ReplaceLineEndings("\n");
         var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
-        Require(fingerprint == "01952f871066ceecbfef28c303000a5651b13157c0f02323ed767c06a522b634",
+        Require(fingerprint == "35dfa5a09e638228bd09061f08c27007d5782ce3e42a2ac52f8e9281cd760801",
             $"the complete emitted PostgreSQL guard installation batch matches its revision ({fingerprint})");
         var bodies = await db.Database.SqlQueryRaw<string>("""
             SELECT md5(p.prosrc) AS "Value"
@@ -242,7 +242,7 @@ internal static class PostgresShippedFormatChecks
                 AND p.proname IN ('kernel_require_root_checkpoint_writer', 'kernel_require_root_journal_revision')
             ORDER BY p.proname
             """).ToListAsync(token);
-        Require(bodies is ["c1c1b59c33a6d7089ec69286de2bbde8", "b8adb6d016ff58efc1a496a316309a74"],
+        Require(bodies is ["015d6bc942556e3a72abdc2923d7da33", "7829d29ab00156e60c67f2e41f3be22d"],
             "the installed PostgreSQL checkpoint and journal function bodies match their revision");
     }
 
@@ -255,6 +255,8 @@ internal static class PostgresShippedFormatChecks
         await RequireMarkerRefusedAsync(db, "PostgreSQL treats an absent marker as legacy revision 1 and refuses it after the revision advances", token);
         db.StoreVersions.Add(expected);
         await db.SaveChangesAsync(token);
+        await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol - 1), token);
+        await RequireMarkerRefusedAsync(db, "PostgreSQL refuses the previous install-only definitions revision", token);
         await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol + 1), token);
         try
         {
