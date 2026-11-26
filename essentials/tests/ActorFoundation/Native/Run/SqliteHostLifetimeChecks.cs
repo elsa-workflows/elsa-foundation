@@ -130,7 +130,16 @@ internal static class SqliteHostLifetimeChecks
         if (mode == "refused")
         {
             await RequireRefusedAsync(service, token);
-            return 0;
+            try
+            {
+                await SqliteEmbeddedHosting.OpenFoundationAsync(path, "lifetime", cancellationToken: token);
+            }
+            catch (SqliteHostLockException)
+            {
+                Require(true, "a second process also cannot open ingress while the runtime holds the file");
+                return 0;
+            }
+            throw new InvalidOperationException("The second process opened SQLite ingress while the runtime held its file.");
         }
 
         var store = Store(path, fenceInBatch);

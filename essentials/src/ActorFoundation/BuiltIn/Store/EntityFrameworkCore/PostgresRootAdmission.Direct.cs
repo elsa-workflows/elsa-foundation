@@ -1,16 +1,11 @@
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using static Kernel.EntityFramework.RootAdmissionWire;
 
 namespace Kernel.EntityFramework;
 
 internal sealed partial class PostgresRootAdmission
 {
-    private const string DirectPrefix = "!kernel-direct/1:";
-    private const string HeldDirectPrefix = "!kernel-held-direct/1:";
-    private sealed record StoredDirect(string Operation, long Creation, bool EscapedPayload, bool ExplicitZeroDue,
-        string? EscapedKind = null);
-
     private static Task InstallDirectReceiptsAsync(KernelDb db, CancellationToken cancellationToken) =>
         db.Database.ExecuteSqlRawAsync("""
             CREATE TABLE IF NOT EXISTS "FoundationDirectReceipts" (
@@ -69,8 +64,7 @@ internal sealed partial class PostgresRootAdmission
     {
         if (!FoundationRootCreator.IsGeneratedReference(reference) || !FoundationMetadataLimits.IsOutsideMessageId(id) || !FoundationMetadataLimits.IsOrdinaryKind(kind) ||
             !FoundationMetadataLimits.FitsContent(payload)) return DirectResult.Refused;
-        var window = keepFor is { } requested && requested < deduplicationWindow ? requested : deduplicationWindow;
-        ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
+        var window = ReceiptWindow(deduplicationWindow, keepFor);
         var windowMs = (long)window.TotalMilliseconds;
         var digest = FoundationRootCreator.OperationDigest(id);
         await using var db = create();
@@ -129,20 +123,15 @@ internal sealed partial class PostgresRootAdmission
         }
 
         var occurrence = $"{reference}/{digest}/{Guid.NewGuid():N}";
-        var escaped = payload is not null && (payload.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(payload));
-        var body = escaped ? DurableKeyJson.Write(payload) : payload;
-        var escapedKind = kind.Contains('\0') ? kind : null;
-        var header = (reply is null ? DirectPrefix : HeldDirectPrefix) + DurableKeyJson.Write(new StoredDirect(id, address.Creation, escaped, due == 0, escapedKind));
-        if (Encoding.UTF8.GetByteCount(header) + (body is null ? 0L : Encoding.UTF8.GetByteCount(body)) +
-            (reply is null ? 0 : Encoding.UTF8.GetByteCount(reply.Address)) >
-            16 * 1024 * 1024 - 24 * 1024)
+        var (header, body, storedKind) = EncodeDirect(id, address.Creation, kind, payload, due, held: reply is not null);
+        if (!FitsEnvelope(header, body, reply?.Address))
             return await RefuseAsync(DirectResult.Refused);
 
         var target = new InstanceRef(address.Id);
         db.Messages.Add(new MessageEntity
         {
             Id = occurrence, InboxScope = InboxKey.FoundationOccurrenceScope, Target = target.Id, Partition = target.Partition,
-            Kind = escapedKind is null ? kind : "input", Payload = body, Start = header, Due = due ?? 0,
+            Kind = storedKind, Payload = body, Start = header, Due = due ?? 0,
             KeepUntil = receipt.Single(), ReplyTo = reply?.Address
         });
         await db.SaveChangesAsync(cancellationToken);

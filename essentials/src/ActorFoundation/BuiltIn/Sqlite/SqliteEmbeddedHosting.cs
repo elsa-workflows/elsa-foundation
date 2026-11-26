@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -13,10 +12,11 @@ using Microsoft.Win32.SafeHandles;
 namespace Kernel.Foundation.Sqlite;
 
 /// <summary>Starts one Embedded node against an installed SQLite kernel qualification store.</summary>
-public static class SqliteEmbeddedHosting
+public static partial class SqliteEmbeddedHosting
 {
-    // A fault or kill may leave work running after StopAsync returns. Hold the lock through process exit in that case.
-    private static readonly ConcurrentDictionary<string, FileStream> HeldLocks = new(StringComparer.Ordinal);
+    // A fault or kill may leave work running. Its runtime lease remains held through process exit.
+    private static readonly object FileGate = new();
+    private static readonly Dictionary<string, ActiveFile> ActiveFiles = new(StringComparer.Ordinal);
 
     /// <summary>Starts a node over a local database file. The process policy must terminate the process if the watchdog
     /// cannot clear a stuck owner call. A clean stop releases the file for another host.</summary>
@@ -35,24 +35,11 @@ public static class SqliteEmbeddedHosting
             RuntimeNode.Cadence(Defaults.Lease, options) < millisecond)
             throw new ArgumentException("Configure positive millisecond loop intervals and a membership window of at least two balance rounds.", nameof(options));
 
-        var path = Path.GetFullPath(databasePath);
-        if (!File.Exists(path))
-            throw new FileNotFoundException("An installed SQLite kernel database is required.", path);
-        path = OperatingSystem.IsWindows() ? ResolveWindowsPath(path) : ResolvePath(new FileInfo(path));
-        var connectionString = new SqliteConnectionStringBuilder
-        {
-            DataSource = path,
-            Mode = SqliteOpenMode.ReadWrite,
-            DefaultTimeout = 2,
-            ForeignKeys = true
-        }.ToString();
-
         cancellationToken.ThrowIfCancellationRequested();
-        var fileLock = AcquireLock(path + ".host-lock");
+        var file = AcquireFile(databasePath, forRuntime: true);
         try
         {
-            var dbOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connectionString).Options;
-            KernelDb Open() => new(dbOptions);
+            KernelDb Open() => new(file.Options);
 
             int partitions;
             await using (var db = Open())
@@ -83,7 +70,7 @@ public static class SqliteEmbeddedHosting
             var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
                 beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault)
             {
-                AfterCleanStop = Release
+                AfterCleanStop = file.Dispose
             };
             Volatile.Write(ref reporter, runtime);
             try
@@ -99,18 +86,86 @@ public static class SqliteEmbeddedHosting
         }
         catch
         {
-            Release();
+            file.Dispose();
             throw;
         }
+    }
 
-        void Release()
+    private static FileLease AcquireFile(string databasePath, bool forRuntime = false)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        var path = Path.GetFullPath(databasePath);
+        if (!File.Exists(path))
+            throw new FileNotFoundException("An installed SQLite kernel database is required.", path);
+        path = OperatingSystem.IsWindows() ? ResolveWindowsPath(path) : ResolveUnixPath(path);
+
+        lock (FileGate)
         {
-            try
+            if (!ActiveFiles.TryGetValue(path, out var file))
             {
-                using var connection = new SqliteConnection(connectionString);
-                SqliteConnection.ClearPool(connection);
+                var identity = ReadLinuxIdentity(path);
+                if (identity is not null)
+                    file = ActiveFiles.Values.FirstOrDefault(open => open.LinuxIdentity == identity);
+                if (file is null)
+                {
+                    var connectionString = new SqliteConnectionStringBuilder
+                    {
+                        DataSource = path,
+                        Mode = SqliteOpenMode.ReadWrite,
+                        DefaultTimeout = 2,
+                        ForeignKeys = true
+                    }.ToString();
+                    var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connectionString).Options;
+                    file = new(path, connectionString, options, AcquireLock(path + ".host-lock"), identity);
+                    ActiveFiles.Add(path, file);
+                }
             }
-            finally { ReleaseLock(fileLock); }
+            if (forRuntime && file.Runtime)
+                throw new SqliteHostLockException(file.Lock.Name);
+
+            if (forRuntime) file.Runtime = true;
+            file.Users++;
+            return new(file, forRuntime);
+        }
+    }
+
+    private sealed class ActiveFile(string path, string connectionString, DbContextOptions<KernelDb> options, FileStream sidecar,
+        LinuxFileIdentity? linuxIdentity)
+    {
+        internal string Path => path;
+        internal string ConnectionString => connectionString;
+        internal DbContextOptions<KernelDb> Options => options;
+        internal SqliteAdmissionDefinitions AdmissionDefinitions { get; } = new();
+        internal FileStream Lock => sidecar;
+        internal LinuxFileIdentity? LinuxIdentity => linuxIdentity;
+        internal int Users { get; set; }
+        internal bool Runtime { get; set; }
+    }
+
+    private sealed class FileLease(ActiveFile file, bool forRuntime) : IDisposable
+    {
+        private ActiveFile? _file = file;
+        internal string Path => Current.Path;
+        internal DbContextOptions<KernelDb> Options => Current.Options;
+        internal SqliteAdmissionDefinitions AdmissionDefinitions => Current.AdmissionDefinitions;
+        private ActiveFile Current => _file ?? throw new ObjectDisposedException(nameof(FileLease));
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _file, null) is not { } held) return;
+            lock (FileGate)
+            {
+                if (forRuntime) held.Runtime = false;
+                if (--held.Users != 0) return;
+
+                ActiveFiles.Remove(held.Path);
+                try
+                {
+                    using var connection = new SqliteConnection(held.ConnectionString);
+                    SqliteConnection.ClearPool(connection);
+                }
+                finally { held.Lock.Dispose(); }
+            }
         }
     }
 
@@ -132,15 +187,53 @@ public static class SqliteEmbeddedHosting
     [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern uint GetFinalPathNameByHandle(SafeFileHandle handle, [Out] StringBuilder path, uint capacity, uint flags);
 
-    private static string ResolvePath(FileSystemInfo entry)
+    private static string ResolveUnixPath(string path)
     {
-        var parent = entry is DirectoryInfo directory ? directory.Parent : ((FileInfo)entry).Directory;
-        if (parent is null) return entry.FullName;
-
-        var path = Path.Combine(ResolvePath(parent), entry.Name);
-        FileSystemInfo canonical = entry is DirectoryInfo ? new DirectoryInfo(path) : new FileInfo(path);
-        return canonical.ResolveLinkTarget(returnFinalTarget: true) is { } target ? ResolvePath(target) : path;
+        // Resolve symlinks. Darwin also supplies the filesystem's spelling for case aliases.
+        var resolved = UnixRealPath(path, IntPtr.Zero);
+        if (resolved == IntPtr.Zero)
+            throw new IOException($"Cannot resolve the SQLite database path '{path}'.", new Win32Exception(Marshal.GetLastPInvokeError()));
+        try { return Marshal.PtrToStringUTF8(resolved)!; }
+        finally { FreeUnixPath(resolved); }
     }
+
+    [DllImport("libc", EntryPoint = "realpath", SetLastError = true)]
+    private static extern IntPtr UnixRealPath([MarshalAs(UnmanagedType.LPUTF8Str)] string path, IntPtr resolved);
+
+    [DllImport("libc", EntryPoint = "free")]
+    private static extern void FreeUnixPath(IntPtr path);
+
+    private readonly record struct LinuxFileIdentity(uint DeviceMajor, uint DeviceMinor, ulong Inode);
+
+    // The Linux statx ABI has the same layout across architectures. Only the identity fields are used here.
+    [StructLayout(LayoutKind.Explicit, Size = 256)]
+    private struct LinuxFileStat
+    {
+        [FieldOffset(0)] internal uint Mask;
+        [FieldOffset(32)] internal ulong Inode;
+        [FieldOffset(136)] internal uint DeviceMajor;
+        [FieldOffset(140)] internal uint DeviceMinor;
+    }
+
+    private static LinuxFileIdentity? ReadLinuxIdentity(string path)
+    {
+        if (!OperatingSystem.IsLinux()) return null;
+        // Linux canonicalizes links but can preserve the lookup spelling on casefold filesystems.
+        // Join an already-open inode through its original SQLite filename and pool.
+        const int currentDirectory = -100;
+        const uint inode = 0x100;
+        try
+        {
+            if (LinuxStatx(currentDirectory, path, 0, inode, out var status) == 0 && (status.Mask & inode) != 0)
+                return new(status.DeviceMajor, status.DeviceMinor, status.Inode);
+        }
+        catch (EntryPointNotFoundException) { } // An older libc can still use its canonical path.
+        return null;
+    }
+
+    [DllImport("libc", EntryPoint = "statx")]
+    private static extern int LinuxStatx(int directory, [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        int flags, uint mask, out LinuxFileStat status);
 
     // Use an explicit Unix flock: the CLR can be configured to skip the implicit lock from FileShare.None.
     [DllImport("libc", EntryPoint = "flock", SetLastError = true)]
@@ -159,8 +252,6 @@ public static class SqliteEmbeddedHosting
             if (!OperatingSystem.IsWindows() && UnixLockFile(stream.SafeFileHandle.DangerousGetHandle().ToInt32(), exclusiveNonBlocking) != 0)
                 throw new SqliteHostLockException(path, new Win32Exception(Marshal.GetLastPInvokeError()));
 
-            if (!HeldLocks.TryAdd(path, stream))
-                throw new SqliteHostLockException(path);
             return stream;
         }
         catch
@@ -170,11 +261,6 @@ public static class SqliteEmbeddedHosting
         }
     }
 
-    private static void ReleaseLock(FileStream stream)
-    {
-        HeldLocks.TryRemove(stream.Name, out _);
-        stream.Dispose();
-    }
 }
 
 internal sealed class SqliteHostLockException(string path, Exception? cause = null)
