@@ -220,6 +220,7 @@ public sealed class ActivityTemplatePlacer(
         var visible = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
         var requests = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
         var authored = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
+        var iteration = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
         if (authoredRoot is not null && structures is not null)
         {
             var pending = new Stack<ActivityNode>();
@@ -228,6 +229,10 @@ public sealed class ActivityTemplatePlacer(
             {
                 if (!authored.TryAdd(current.NodeId, structures.ProjectScopedVariables(current).Select(x => x.ReferenceKey).ToArray()))
                     throw Rejected(current.NodeId, "ActivityDataSelection/VariableScopeAmbiguous", "The authored variable scope is not unique.");
+                // A loop's iteration values (spec 1222 FR-004a) are variables the loop node declares for its body only.
+                // Its compiled structure carries no declarations for them; the scheduler supplies them per pass.
+                if (structures.ProjectIterationVariables(current) is { Count: > 0 } values)
+                    iteration[current.NodeId] = values.Select(x => x.ReferenceKey).ToArray();
                 foreach (var child in structures.ProjectChildren(current).SelectMany(x => x.Activities))
                     pending.Push(child);
             }
@@ -273,6 +278,8 @@ public sealed class ActivityTemplatePlacer(
                     throw Rejected(node.AuthoredActivityId, "ActivityDataSelection/VariableDeclarationMismatch", "The compiled scope does not preserve its actual authored declarations.");
                 scoped = actual;
             }
+            if (!current.InClosedBody && !IsClosedScope(node.Descriptor) && iteration.TryGetValue(node.AuthoredActivityId, out var values))
+                scoped = scoped.Concat(values).ToArray();
             if (scoped.Count != 0)
             {
                 AddDeclaration(node.ExecutableNodeId, scoped, node.AuthoredActivityId);

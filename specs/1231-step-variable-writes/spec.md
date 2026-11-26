@@ -431,7 +431,8 @@ and run the converted scripts.
   existing refusal, with guidance naming a `RunJavaScript` step). *(Amended 2026-11-20 by the coordinator, #4899: a
   computed setter name was first refused.)* *(Implementation notes, 2026-11-20: every write form in a reusable
   workflow's script is refused too (faithful-or-refuse: a step cannot write a graph body's variables yet, #4805, so the
-  converted script would fail every run); no Elsa 3 variable converts to a transient one today (authored storage always
+  converted script would fail every run; superseded by [spec 1241](../1241-closed-scope-step-writes/spec.md), which
+  converts them and refuses only a write to the reusable workflow's input); no Elsa 3 variable converts to a transient one today (authored storage always
   has the Instance lifecycle), so the transient-setter refusal has no input, and publication's `VF-WRITE-003` refuses
   such a write should one appear.)*
 - **FR-034**: `setOutput`, `setInput`, `setResult`, `setCorrelationId` and `setWorkflowInstanceName` MUST stay refused
