@@ -90,7 +90,7 @@ internal static partial class SqliteHostLifetimeChecks
 
             var exact = new Contract.Target.Ref(first);
             var checkpoint = (await store.ReadFirstRootAsync(scope.Tenant, first.Id, token))!;
-            var deferredId = await InsertLaterOperatorAsync(db, scope.Tenant, first.Id, checkpoint.Actor.Id, token);
+            var deferredId = await InsertLaterOperatorAsync(db, first.Id, checkpoint.Actor.Id, token);
             Require(await ingress.SendAsync(scope, exact, "future", "record", options: new(DueAt: long.MaxValue), cancellationToken: token) is
                 { Outcome: Contract.AdmissionOutcome.Accepted }, "an earlier future input is admitted");
             Require(await ingress.SendAsync(scope, exact, "ordinary", "record", cancellationToken: token) is
@@ -119,8 +119,8 @@ internal static partial class SqliteHostLifetimeChecks
             Require(await db.Messages.CountAsync(row => row.Target == ended.Actor.Id && !row.Done, token) == 2 &&
                 await db.Messages.AllAsync(row => row.InboxScope != InboxKey.FoundationOccurrenceScope || !row.Done ||
                     row.Start == null && row.Payload == null && row.ReplyTo == null, token), "each settled occurrence is scrubbed and later inputs remain pending");
-            Require(await db.Messages.AsNoTracking().SingleAsync(row => row.Id == deferredId, token) is { Done: false, Seen: 0, ReplyTo: not null },
-                "a held operator from a later slice stays pending and cannot block the staged FIFO");
+            Require(await db.Messages.AsNoTracking().SingleAsync(row => row.Id == deferredId, token) is { Done: false, Seen: 0, Start: not null },
+                "a Park-selected operator from a later slice stays pending and cannot block the staged FIFO");
             await replacement.StopAsync(token);
             Require(replacement.LastError is null, "the replacement owner stops cleanly");
             return 0;
@@ -145,21 +145,21 @@ internal static partial class SqliteHostLifetimeChecks
         finally { folder.Delete(recursive: true); }
     }
 
-    private static async Task<string> InsertLaterOperatorAsync(KernelDb db, string tenant, string reference, string actor, CancellationToken token)
+    private static async Task<string> InsertLaterOperatorAsync(KernelDb db, string reference, string actor, CancellationToken token,
+        string? replyTo = null)
     {
-        const string operation = "later-held-terminate";
+        const string operation = "later-park-terminate";
         var deadline = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 60_000;
-        var caller = new Requests().OpenBound(operation, deadline, tenant, null);
-        var route = caller.ReplyAddress("later-stage");
         var digest = FoundationRootCreator.OperationDigest(operation);
-        var (id, header) = PostgresRootAdmission.EncodeOperator(reference, operation, digest, 1, Kinds.Terminate, null, replyAddress: route);
+        var (id, header) = PostgresRootAdmission.EncodeOperator(reference, operation, digest, 1, Kinds.Terminate, null,
+            park: new(1, deadline - 60_000), window: 60_000, replyAddress: replyTo);
         var home = new InstanceRef(actor).Partition;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Seq", "Kind", "Due", "Start",
                 "Done", "Seen", "Attempts", "Trial", "JobGeneration", "KeepUntil", "ReplyTo")
             VALUES ({id}, {InboxKey.FoundationOccurrenceScope}, {actor}, {home},
                 (SELECT coalesce(max("Seq"), 0) + 1 FROM "Messages"), {Kinds.Terminate}, 0, {header},
-                0, 0, 0, 0, 0, {deadline}, {route})
+                0, 0, 0, 0, 0, {deadline}, {replyTo})
             """, token);
         return id;
     }
