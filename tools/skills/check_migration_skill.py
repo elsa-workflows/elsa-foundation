@@ -268,6 +268,32 @@ class CheckMigrationSkillTests(unittest.TestCase):
         self.assertTrue(any("region case-01 is defined twice" in error for error in errors))
         self.assertTrue(any("region case-02 has no end" in error for error in errors))
 
+    def test_region_end_without_begin_fails(self):
+        errors = check(self.tree(self.catalog({}), {f"{SAMPLE_ROOT.as_posix()}/A.cs": "x\n// catalog:case-03 end\n"}))
+        self.assertTrue(any("region case-03 ends without a begin" in error for error in errors))
+
+    def test_marker_without_code_fence_fails(self):
+        text = self.catalog({}).replace("## Case 05: Title 5\n\n**Verdict**: redesign\n",
+                                        "## Case 05: Title 5\n\n**Verdict**: redesign\n\n<!-- sample: case-05 -->\n\nplain text\n")
+        errors = check(self.tree(text, self.sample({})))
+        self.assertTrue(any("block case-05 is not followed by a code fence" in error for error in errors))
+
+    def test_unclosed_code_fence_fails(self):
+        text = self.catalog({}) + "\n<!-- sample: case-19 -->\n\n```csharp\nx\n"
+        errors = check(self.tree(text, self.sample({19: "x\n"})))
+        self.assertTrue(any("the code fence of block case-19 is not closed" in error for error in errors))
+
+    def test_block_appearing_twice_fails(self):
+        block = "<!-- sample: case-01 -->\n\n```csharp\nx\n```\n"
+        text = self.catalog({}).replace("## Case 01: Title 1\n\n**Verdict**: redesign\n",
+                                        f"## Case 01: Title 1\n\n**Verdict**: port\n\n{block}\n{block}")
+        errors = check(self.tree(text, self.sample({1: "x\n"})))
+        self.assertTrue(any("block case-01 appears twice" in error for error in errors))
+
+    def test_case_outside_the_range_fails(self):
+        root = self.tree(self.catalog({}, order=[*range(1, CASE_COUNT + 1), 20]), self.sample({}))
+        self.assertTrue(any("case 20 is not one of 01-19" in error for error in check(root)))
+
     def test_diagnostic_code_literals_in_the_skill_folder_fail(self):
         prefixes = ["ELS3", "VF"]
         literals = [f"{prefix}-X-1" for prefix in prefixes]

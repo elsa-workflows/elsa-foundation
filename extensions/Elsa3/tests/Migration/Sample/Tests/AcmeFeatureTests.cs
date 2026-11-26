@@ -34,7 +34,6 @@ public sealed class AcmeFeatureTests
         var descriptor = Assert.Single(new AcmeVariableTypes().GetDescriptors());
 
         Assert.Equal("acme.Invoice", descriptor.Alias);
-        Assert.Contains('.', descriptor.Alias);
         Assert.Equal(typeof(Invoice), descriptor.ClrType);
     }
 
@@ -87,16 +86,18 @@ public sealed class AcmeFeatureTests
         Assert.False(new InvoiceReceivedStimulusProvider().Describe(Node("Acme.Other", "x")).IsRecognized);
     }
 
-    [Fact]
-    public void Stimulus_provider_declares_no_start_stimulus_for_a_mid_flow_wait()
+    [Theory]
+    [InlineData(false)]
+    [InlineData("false")]
+    public void Stimulus_provider_declares_no_start_stimulus_for_a_mid_flow_wait(object canStartWorkflow)
     {
-        var result = new InvoiceReceivedStimulusProvider().Describe(Node(InvoiceReceived.ActivityType, "invoices@acme.test", canStartWorkflow: false));
+        var result = new InvoiceReceivedStimulusProvider().Describe(Node(InvoiceReceived.ActivityType, "invoices@acme.test", canStartWorkflow));
 
         Assert.True(result.IsRecognized);
         Assert.Empty(result.Descriptors);
     }
 
-    private static ExecutableNode Node(string activityType, string mailbox, bool? canStartWorkflow = null)
+    private static ExecutableNode Node(string activityType, string mailbox, object? canStartWorkflow = null)
     {
         var bindings = new Dictionary<string, RuntimeInputBinding>
         {

@@ -178,7 +178,11 @@ each:
 6. **Redesign.** When a case's verdict for this component is *redesign*, write no workaround code. Record the
    alternatives from the case, let the user decide, and set the status to `redesign` (or `dropped`) with the decision
    in Notes.
-7. **Interview.** A storage driver is answered by the case 17 interview, once per driver type, covering every
+7. **Elsa 3 built-in activities.** An activity type in an `Elsa.` namespace that the report still names is one of Elsa
+   3's own activities that Elsa 4 does not map. There is no source to port and no catalog case: record the user's
+   decision (rebuild the step with Elsa 4's own activities, or drop the definitions that use it) and set the status to
+   `redesign` or `dropped`.
+8. **Interview.** A storage driver is answered by the case 17 interview, once per driver type, covering every
    variable, input and output the report flags for it. Record the goal, the decision and the Elsa 4 feature chosen or
    the link to the user's own plan, and set the status to `interviewed`. Write no workaround code.
 

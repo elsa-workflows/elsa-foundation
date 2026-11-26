@@ -7,8 +7,9 @@ using Xunit;
 namespace Elsa3.Migration.Sample.Tests;
 
 /// <summary>
-/// Cases 02, 04 and 06: the names the converter matches Elsa 3 workflows against (activity type, output keys and
-/// outcomes) are what the catalog says they are.
+/// Cases 02, 04 and 06: the sample keeps the authored shape the catalog teaches (full name, replaced-type marker,
+/// output keys, declared outcomes), so an edit that drops one fails here. How the CLR scanner and the converter read
+/// that shape is covered by their own tests.
 /// </summary>
 public sealed class ActivityShapeTests
 {

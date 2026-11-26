@@ -497,12 +497,15 @@ internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulus
 
     public ActivityTriggerStimulusResult Describe(ExecutableNode node)
     {
+        ArgumentNullException.ThrowIfNull(node);
         if (!StringComparer.Ordinal.Equals(node.ActivityType, InvoiceReceived.ActivityType))
             return ActivityTriggerStimulusResult.NotRecognized;
 
         // A mid-flow wait: recognised, but it starts nothing.
         var canStart = node.InputBindings.GetValueOrDefault(nameof(InvoiceReceived.CanStartWorkflow));
-        if (canStart?.Source == RuntimeInputBindingSource.Literal && canStart.LiteralValue is { ValueKind: JsonValueKind.False })
+        if (canStart?.Source == RuntimeInputBindingSource.Literal && canStart.LiteralValue is { } flag &&
+            (flag.ValueKind == JsonValueKind.False ||
+             (flag.ValueKind == JsonValueKind.String && bool.TryParse(flag.GetString(), out var parsed) && !parsed)))
             return ActivityTriggerStimulusResult.Recognized([]);
 
         // The stimulus is fixed at publish time, so the mailbox must be a literal.
@@ -1041,7 +1044,9 @@ public class AcmeFeature : IShellFeature
 
 **Steps**:
 1. Create a class library for the feature in your own repository, referencing the Elsa 4 projects your components use
-   (the activity authoring contracts, and the JavaScript or variable-type contracts when you need them).
+   (the activity authoring contracts, and the JavaScript or variable-type contracts when you need them) and the NuGet
+   package `CShells.Abstractions` (for `[ShellFeature]` and `IShellFeature`), at the version the clone's
+   `Directory.Packages.props` pins.
 2. Write one `IShellFeature` marked `[ShellFeature("<name>")]`. Register services, stimulus providers, host functions
    and variable type providers in `ConfigureServices`. Activities need no registration: they are found in the
    feature's assembly.

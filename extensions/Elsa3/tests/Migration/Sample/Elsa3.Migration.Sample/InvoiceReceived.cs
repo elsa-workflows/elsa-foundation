@@ -58,12 +58,15 @@ internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulus
 
     public ActivityTriggerStimulusResult Describe(ExecutableNode node)
     {
+        ArgumentNullException.ThrowIfNull(node);
         if (!StringComparer.Ordinal.Equals(node.ActivityType, InvoiceReceived.ActivityType))
             return ActivityTriggerStimulusResult.NotRecognized;
 
         // A mid-flow wait: recognised, but it starts nothing.
         var canStart = node.InputBindings.GetValueOrDefault(nameof(InvoiceReceived.CanStartWorkflow));
-        if (canStart?.Source == RuntimeInputBindingSource.Literal && canStart.LiteralValue is { ValueKind: JsonValueKind.False })
+        if (canStart?.Source == RuntimeInputBindingSource.Literal && canStart.LiteralValue is { } flag &&
+            (flag.ValueKind == JsonValueKind.False ||
+             (flag.ValueKind == JsonValueKind.String && bool.TryParse(flag.GetString(), out var parsed) && !parsed)))
             return ActivityTriggerStimulusResult.Recognized([]);
 
         // The stimulus is fixed at publish time, so the mailbox must be a literal.
