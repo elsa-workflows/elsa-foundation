@@ -851,6 +851,9 @@ class OrchestrationTests(unittest.TestCase):
                     self.write_gallery_fixture(args, env)
                     return
                 if args[:2] == ['pnpm', 'exec']:
+                    profile_variable = f"UX_PLAYBACK_PROFILES={env['UX_PLAYBACK_PROFILES']}"
+                    self.assertLess(len(profile_variable.encode()) + 1, 128 * 1024,
+                                    'Playback profile routing must fit in one browser environment entry on CI')
                     events.append(('browser', {key: env.get(key) for key in env if key.startswith(('UX_', 'ELSA_'))}))
                     manifest = Path(env['UX_WORKFLOW_ASSET_MANIFEST'])
                     self.assertEqual(Path(env['UX_ACCEPTANCE_OWNED_ROOT']), manifest.parent)
@@ -862,6 +865,9 @@ class OrchestrationTests(unittest.TestCase):
                 destination.mkdir(parents=True)
                 for name in ('appsettings.json', 'shells.json'):
                     (destination / name).write_bytes((project.parent / name).read_bytes())
+                if destination.parent.name == 'playback-disabled' and destination.name == 'studio':
+                    for index in range(1500):
+                        (destination / f'synthetic-playback-module-{index:04d}.js').touch()
 
             def fake_restrict(root):
                 events.append(('restrict', root.name))
@@ -897,13 +903,16 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual((owned[3][3], owned[2][3]), (browser['UX_RUNTIME_STUDIO_URL'], browser['UX_RUNTIME_BACKEND_URL']))
         profiles = json.loads(browser['UX_PLAYBACK_PROFILES'])
         self.assertEqual({'disabled', 'uncaptured', 'unsupported'}, set(profiles))
+        profile_receipts = report['playbackHostProfiles']
+        self.assertGreater(len(json.dumps(profile_receipts).encode()), 128 * 1024)
         for index, name in enumerate(('disabled', 'uncaptured', 'unsupported')):
             backend, studio = owned[4 + index * 2:6 + index * 2]
             self.assertEqual(('dashboard-reader', 'history-reader'), backend[9])
             self.assertEqual('/__qualification/ready', backend[8])
             self.assertEqual(backend[3], studio[6])
-            self.assertEqual((backend[3], studio[3]), (profiles[name]['backendUrl'], profiles[name]['studioUrl']))
-            self.assertTrue(all(profiles[name]['binaryAndConfigHashes'].values()))
+            self.assertEqual({'backendUrl': backend[3], 'studioUrl': studio[3],
+                              'removedFeatures': profile_receipts[name]['removedFeatures']}, profiles[name])
+            self.assertTrue(all(profile_receipts[name]['binaryAndConfigHashes'].values()))
         self.assertEqual({'Enabled': False}, owned[4][10]['history'])
         self.assertIsNone(owned[6][10]['history'])
         self.assertIs(owned[8][10]['omitted'], True)
