@@ -36,7 +36,12 @@ internal static class SqliteRootIngressChecks
             await EfStore.InstallSqliteShippedAsync(db, 2, token);
             var foundation = await SqliteEmbeddedHosting.OpenFoundationAsync(path, ActorType, cancellationToken: token);
             var start = new Contract.Target.Start(new(ActorType, "definition", Payload));
-            var starts = await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => Task.Run(() => StartAsync("start"), token)));
+            var aliasPath = Path.Combine(folder.FullName, "KERNEL.DB");
+            var alias = File.Exists(aliasPath)
+                ? await SqliteEmbeddedHosting.OpenFoundationAsync(aliasPath, ActorType, cancellationToken: token)
+                : foundation;
+            var starts = await Task.WhenAll(Enumerable.Range(0, 6).Select(index =>
+                Task.Run(() => StartAsync("start", index % 2 == 0 ? alias : foundation), token)));
             var root = starts.Single(result => result.Outcome == Contract.AdmissionOutcome.Accepted).Actor!.Value;
             Require(starts.Count(result => result.Outcome == Contract.AdmissionOutcome.Duplicate) == 5 &&
                 starts.All(result => result.Actor == root) && FoundationRootCreator.IsGeneratedReference(root.Id),
@@ -60,7 +65,7 @@ internal static class SqliteRootIngressChecks
                 decoded.Payload == Payload && initial.KeepUntil > 0 && initial.Seq > creatorRow.Seq,
                 "the direct occurrence preserves the envelope, retention bound, and creator-before-input order");
 
-            var admission = new SqliteRootAdmission(Open, TimeSpan.FromHours(1));
+            var admission = new SqliteRootAdmission(Open, TimeSpan.FromHours(1), new());
             Require(await admission.SendAsync("another-tenant", root, "send", "advance", null, null, null, token) is
                 { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch },
                 "a tenant mismatch discloses no receipt for an otherwise valid reference");
@@ -73,20 +78,19 @@ internal static class SqliteRootIngressChecks
             Require(directKeys.Count == 2 && directKeys[0] == initial.Id && directKeys[1] != initial.Id,
                 "the new occurrence has a distinct stored identity");
 
-            await db.Database.ExecuteSqlRawAsync("""
-                CREATE TRIGGER test_reject_creator BEFORE INSERT ON "Messages" WHEN NEW."InboxScope" = 0
-                BEGIN SELECT RAISE(ABORT, 'fixture stops enqueue'); END
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Messages" SET "Seq" = {long.MaxValue} WHERE "Id" = {creatorRow.Id} AND "InboxScope" = 0
                 """, token);
             await RefusedAsync<SqliteException>(() => StartAsync("retry"),
-                "an enqueue failure rolls back start admission");
+                "a sequence outside the strict integer domain fails enqueue and rolls back start admission");
             var failedDigest = FoundationRootCreator.OperationDigest("retry");
             Require(!await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "FoundationRootReceipts" WHERE "Operation" = {failedDigest})
                     OR (SELECT count(*) FROM "FoundationRootBirths") <> 1 AS "Value"
                 """).SingleAsync(token), "a failed creator leaves neither its receipt nor its birth");
-            await RefusedAsync<StoreFormatException>(() => SqliteEmbeddedHosting.OpenFoundationAsync(path, ActorType, cancellationToken: token),
-                "opening ingress verifies the exact installed definitions");
-            await db.Database.ExecuteSqlRawAsync("DROP TRIGGER test_reject_creator", token);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Messages" SET "Seq" = {creatorRow.Seq} WHERE "Id" = {creatorRow.Id} AND "InboxScope" = 0
+                """, token);
             Require(await StartAsync("retry") is { Outcome: Contract.AdmissionOutcome.Accepted },
                 "a retry after the rolled back enqueue admits a new root");
 
@@ -122,13 +126,23 @@ internal static class SqliteRootIngressChecks
 
             await RefusedAsync<NotSupportedException>(() => foundation.RequestAsync(scope, target, "held", "advance", null, null, new(null, 1), token).AsTask(),
                 "staged SQLite ingress requires the later held-reply slice before it accepts requests");
+            var projector = await db.Database.SqlQueryRaw<string>("""
+                SELECT sql AS "Value" FROM main.sqlite_schema WHERE name = 'kernel_project_root_actor_list'
+                """).SingleAsync(token);
+            await db.Database.ExecuteSqlRawAsync("DROP TRIGGER kernel_project_root_actor_list", token);
+            await RefusedAsync<StoreFormatException>(() => StartAsync("after-ddl"),
+                "an already open ingress rechecks the definitions after reacquiring the file");
+            await RefusedAsync<StoreFormatException>(() => SqliteEmbeddedHosting.OpenFoundationAsync(path, ActorType, cancellationToken: token),
+                "opening ingress verifies the exact installed definitions");
+            await db.Database.ExecuteSqlRawAsync(projector, token);
+
             var marker = StoreDefinitionsRevision.Seed(db)!;
             await db.StoreVersions.Where(row => row.Id == marker.Id).ExecuteDeleteAsync(token);
             await RefusedAsync<StoreFormatException>(() => SendAsync("after-marker-change"),
                 "an already open ingress rechecks the store stamp in its write transaction");
             return 0;
 
-            Task<Contract.Admission> StartAsync(string id) => foundation.SendAsync(scope, start, id, Contract.Kinds.Start,
+            Task<Contract.Admission> StartAsync(string id, Contract.IIngress? route = null) => (route ?? foundation).SendAsync(scope, start, id, Contract.Kinds.Start,
                 options: new(DueAt: 0), cancellationToken: token).AsTask();
 
             Task<Contract.Admission> SendAsync(string id) => foundation.SendAsync(scope, target, id, "advance", Payload,

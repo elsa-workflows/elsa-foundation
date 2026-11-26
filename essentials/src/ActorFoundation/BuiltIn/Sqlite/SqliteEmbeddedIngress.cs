@@ -19,7 +19,7 @@ public static partial class SqliteEmbeddedHosting
         cancellationToken.ThrowIfCancellationRequested();
 
         using var file = AcquireFile(databasePath);
-        var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window);
+        var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
         await admission.VerifyAsync(cancellationToken);
         return new Ingress(file.Path, actorType, window);
     }
@@ -37,7 +37,7 @@ public static partial class SqliteEmbeddedHosting
             if (Contract.Kinds.IsCommand(kind)) return new(Contract.AdmissionOutcome.Refused);
 
             using var file = AcquireFile(path);
-            var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window);
+            var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
             if (target is Contract.Target.Start start)
             {
                 var spec = start.Spec;

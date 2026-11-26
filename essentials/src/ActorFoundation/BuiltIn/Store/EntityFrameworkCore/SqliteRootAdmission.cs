@@ -5,14 +5,13 @@ using static Kernel.EntityFramework.RootAdmissionWire;
 
 namespace Kernel.EntityFramework;
 
-internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow)
+internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow, SqliteAdmissionDefinitions definitions)
 {
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record Target(string Actor, int Partition, bool HasCheckpoint, int? Status, bool Terminal, bool Pending);
 
     internal Task VerifyAsync(CancellationToken token) => WriteAsync(async (db, _, ct) =>
     {
-        await EfStore.RequireSqliteRootAdmissionDefinitionsAsync(db, ct);
         var issuer = await ReadIssuerAsync(db, ct);
         if (!await db.Database.SqlQuery<bool>($"""
             SELECT (count(*) = {issuer.Partitions} AND min("Id") = 0 AND max("Id") = {issuer.Partitions - 1}) AS "Value"
@@ -115,6 +114,7 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
         await using var transaction = ((SqliteConnection)db.Database.GetDbConnection()).BeginTransaction(deferred: false);
         await using var enlistment = await db.Database.UseTransactionAsync(transaction, token);
         await EfStore.RequireSqliteRootAdmissionAsync(db, token);
+        await definitions.RequireAsync(db, token);
         var now = await db.Database.SqlQueryRaw<long>(
             """SELECT CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) AS "Value" """).SingleAsync(token);
         var result = await write(db, now, token);

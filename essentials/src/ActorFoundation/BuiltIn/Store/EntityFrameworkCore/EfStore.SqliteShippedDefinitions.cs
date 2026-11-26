@@ -100,7 +100,7 @@ public sealed partial class EfStore
                 AND NOT EXISTS (SELECT 1 FROM pragma_database_list WHERE name NOT IN ('main', 'temp'))
                 AS "Value"
             """).SingleAsync(token))
-            throw new StoreFormatException("The SQLite installer requires a durable journal, foreign keys and CHECK constraints, and a dedicated database without temporary objects or attachments.");
+            throw new StoreFormatException("The SQLite shipped store requires a durable journal, foreign keys and CHECK constraints, and a dedicated database without temporary objects or attachments.");
     }
 
     private static Task<List<SqliteDefinition>> ReadSqliteDefinitionsAsync(KernelDb db, CancellationToken token) =>
@@ -295,4 +295,20 @@ public sealed partial class EfStore
 
     private static SqliteDefinition Index(string name, string table, string columns) =>
         new("index", name, table, $"""CREATE INDEX "{name}" ON "{table}" {columns}""");
+}
+
+internal sealed class SqliteAdmissionDefinitions
+{
+    // A validation lives for one file lease interval. SQLite changes this schema version with DDL.
+    private long _verifiedVersion = long.MinValue;
+
+    internal async Task RequireAsync(KernelDb db, CancellationToken token)
+    {
+        var version = await db.Database.SqlQueryRaw<long>("""
+            SELECT schema_version AS "Value" FROM pragma_schema_version
+            """).SingleAsync(token);
+        if (version == Volatile.Read(ref _verifiedVersion)) return;
+        await EfStore.RequireSqliteRootAdmissionDefinitionsAsync(db, token);
+        Volatile.Write(ref _verifiedVersion, version);
+    }
 }

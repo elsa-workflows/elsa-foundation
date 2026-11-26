@@ -97,7 +97,7 @@ public static partial class SqliteEmbeddedHosting
         var path = Path.GetFullPath(databasePath);
         if (!File.Exists(path))
             throw new FileNotFoundException("An installed SQLite kernel database is required.", path);
-        path = OperatingSystem.IsWindows() ? ResolveWindowsPath(path) : ResolvePath(new FileInfo(path));
+        path = OperatingSystem.IsWindows() ? ResolveWindowsPath(path) : ResolveUnixPath(path);
 
         lock (FileGate)
         {
@@ -128,6 +128,7 @@ public static partial class SqliteEmbeddedHosting
         internal string Path => path;
         internal string ConnectionString => connectionString;
         internal DbContextOptions<KernelDb> Options => options;
+        internal SqliteAdmissionDefinitions AdmissionDefinitions { get; } = new();
         internal FileStream Lock => sidecar;
         internal int Users { get; set; }
         internal bool Runtime { get; set; }
@@ -138,6 +139,7 @@ public static partial class SqliteEmbeddedHosting
         private ActiveFile? _file = file;
         internal string Path => Current.Path;
         internal DbContextOptions<KernelDb> Options => Current.Options;
+        internal SqliteAdmissionDefinitions AdmissionDefinitions => Current.AdmissionDefinitions;
         private ActiveFile Current => _file ?? throw new ObjectDisposedException(nameof(FileLease));
 
         public void Dispose()
@@ -177,15 +179,21 @@ public static partial class SqliteEmbeddedHosting
     [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern uint GetFinalPathNameByHandle(SafeFileHandle handle, [Out] StringBuilder path, uint capacity, uint flags);
 
-    private static string ResolvePath(FileSystemInfo entry)
+    private static string ResolveUnixPath(string path)
     {
-        var parent = entry is DirectoryInfo directory ? directory.Parent : ((FileInfo)entry).Directory;
-        if (parent is null) return entry.FullName;
-
-        var path = Path.Combine(ResolvePath(parent), entry.Name);
-        FileSystemInfo canonical = entry is DirectoryInfo ? new DirectoryInfo(path) : new FileInfo(path);
-        return canonical.ResolveLinkTarget(returnFinalTarget: true) is { } target ? ResolvePath(target) : path;
+        // The filesystem supplies the actual spelling where lookups are case-insensitive.
+        var resolved = UnixRealPath(path, IntPtr.Zero);
+        if (resolved == IntPtr.Zero)
+            throw new IOException($"Cannot resolve the SQLite database path '{path}'.", new Win32Exception(Marshal.GetLastPInvokeError()));
+        try { return Marshal.PtrToStringUTF8(resolved)!; }
+        finally { FreeUnixPath(resolved); }
     }
+
+    [DllImport("libc", EntryPoint = "realpath", SetLastError = true)]
+    private static extern IntPtr UnixRealPath([MarshalAs(UnmanagedType.LPUTF8Str)] string path, IntPtr resolved);
+
+    [DllImport("libc", EntryPoint = "free")]
+    private static extern void FreeUnixPath(IntPtr path);
 
     // Use an explicit Unix flock: the CLR can be configured to skip the implicit lock from FileShare.None.
     [DllImport("libc", EntryPoint = "flock", SetLastError = true)]
