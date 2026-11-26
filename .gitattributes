@@ -10,3 +10,6 @@
 /specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/current-native/** -text
 /specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/current-prior-cancellation/** -text
 /specs/1207-json-data-integrity-baseline/evidence/fixtures/etl/** -text
+
+# The migration report template is embedded as is; LF keeps report.html identical across platforms (spec 1237).
+/extensions/Elsa3/src/Migration/Tooling/Report/report.html text eol=lf

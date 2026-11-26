@@ -20,14 +20,26 @@ internal sealed record ExportInput(IReadOnlyList<ExportItem> Items, IReadOnlyLis
 /// </summary>
 internal static class ExportInputReader
 {
-    public static (ExportInput? Input, MigrationRefusal? Refusal) Read(string exportPath)
+    /// <param name="exportPath">A folder or a .zip file.</param>
+    /// <param name="excludedFolder">
+    /// A folder inside an export folder that is not read: the run's own output folder, so a run whose <c>--out</c> lies
+    /// inside the export does not read its previous report and migrated content as input.
+    /// </param>
+    public static (ExportInput? Input, MigrationRefusal? Refusal) Read(string exportPath, string? excludedFolder = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(exportPath);
 
         IReadOnlyList<(string File, byte[] Content)> files;
         if (Directory.Exists(exportPath))
         {
-            files = ReadFolder(exportPath);
+            try
+            {
+                files = ReadFolder(exportPath, excludedFolder);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return (null, new(MigrationRefusal.InputUnreadable, "A file or folder in the export folder cannot be read."));
+            }
         }
         else if (File.Exists(exportPath) && string.Equals(Path.GetExtension(exportPath), ".zip", StringComparison.OrdinalIgnoreCase))
         {
@@ -50,10 +62,9 @@ internal static class ExportInputReader
         foreach (var (file, content) in files)
         {
             var definitions = Parse(content, out var code);
-            if (definitions is null)
-                findings.Add(new(file, InputFinding(code!)));
-            else
-                items.AddRange(definitions.Select(definition => new ExportItem(file, definition)));
+            if (code is not null)
+                findings.Add(new(file, InputFinding(code)));
+            items.AddRange(definitions.Select(definition => new ExportItem(file, definition)));
         }
 
         return items.Count == 0
@@ -61,19 +72,28 @@ internal static class ExportInputReader
             : (new ExportInput(items, findings), null);
     }
 
-    /// <summary>Parses one file; returns null with the finding code when the file holds no usable definition.</summary>
-    internal static IReadOnlyList<Elsa3WorkflowDefinition>? Parse(byte[] content, out string? findingCode)
+    /// <summary>
+    /// Parses one file into the definitions it holds. A file that is not valid JSON yields none and
+    /// <see cref="Elsa3MigrationToolingCodes.InputUnreadable"/>; an element that is no Elsa 3 definition is left out, and
+    /// the file then carries one <see cref="Elsa3MigrationDiagnosticCodes.UnsupportedInputKind"/> finding, while its other
+    /// definitions are still read. A UTF-8 byte order mark is accepted, as the startup import accepts it.
+    /// </summary>
+    internal static IReadOnlyList<Elsa3WorkflowDefinition> Parse(byte[] content, out string? findingCode)
     {
         findingCode = null;
+        var json = content.AsMemory();
+        if (json.Span.StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]))
+            json = json[3..];
+
         JsonDocument document;
         try
         {
-            document = JsonDocument.Parse(content);
+            document = JsonDocument.Parse(json);
         }
         catch (JsonException)
         {
             findingCode = Elsa3MigrationToolingCodes.InputUnreadable;
-            return null;
+            return [];
         }
 
         using (document)
@@ -85,21 +105,32 @@ internal static class ExportInputReader
                 _ => []
             };
 
-            if (elements.Length == 0 || !elements.All(IsDefinition))
+            var definitions = new List<Elsa3WorkflowDefinition>();
+            foreach (var element in elements)
             {
-                findingCode = Elsa3MigrationDiagnosticCodes.UnsupportedInputKind;
-                return null;
+                if (TryRead(element) is { } definition)
+                    definitions.Add(definition);
+                else
+                    findingCode = Elsa3MigrationDiagnosticCodes.UnsupportedInputKind;
             }
 
-            try
-            {
-                return elements.Select(element => element.Deserialize<Elsa3WorkflowDefinition>(JsonBaseline.Options)!).ToArray();
-            }
-            catch (JsonException)
-            {
+            if (elements.Length == 0)
                 findingCode = Elsa3MigrationDiagnosticCodes.UnsupportedInputKind;
-                return null;
-            }
+            return definitions;
+        }
+    }
+
+    private static Elsa3WorkflowDefinition? TryRead(JsonElement element)
+    {
+        if (!IsDefinition(element))
+            return null;
+        try
+        {
+            return element.Deserialize<Elsa3WorkflowDefinition>(JsonBaseline.Options);
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
@@ -114,12 +145,26 @@ internal static class ExportInputReader
         // The text comes from the code table's fixed text; nothing of the file's content is kept.
         new(code, FindingSeverity.Error, FindingStage.Input, null, null, code, null);
 
-    private static IReadOnlyList<(string File, byte[] Content)> ReadFolder(string root) =>
-        Directory.EnumerateFiles(root, "*.json", SearchOption.AllDirectories)
+    // *.json in any letter case on every platform, as the zip path matches it, so folder input reads the same files
+    // on Windows and Linux (FR-022). Unreadable entries throw, and the caller refuses the run.
+    private static readonly EnumerationOptions JsonFiles = new()
+    {
+        RecurseSubdirectories = true,
+        MatchCasing = MatchCasing.CaseInsensitive,
+        IgnoreInaccessible = false,
+        AttributesToSkip = 0,
+    };
+
+    private static IReadOnlyList<(string File, byte[] Content)> ReadFolder(string root, string? excludedFolder)
+    {
+        var excluded = excludedFolder is null ? null : Path.TrimEndingDirectorySeparator(Path.GetFullPath(excludedFolder)) + Path.DirectorySeparatorChar;
+        return Directory.EnumerateFiles(root, "*.json", JsonFiles)
+            .Where(path => excluded is null || !Path.GetFullPath(path).StartsWith(excluded, StringComparison.OrdinalIgnoreCase))
             .Select(path => (File: Path.GetRelativePath(root, path).Replace('\\', '/'), Path: path))
             .OrderBy(file => file.File, StringComparer.Ordinal)
             .Select(file => (file.File, File.ReadAllBytes(file.Path)))
             .ToArray();
+    }
 
     private static IReadOnlyList<(string File, byte[] Content)> ReadZip(string path)
     {

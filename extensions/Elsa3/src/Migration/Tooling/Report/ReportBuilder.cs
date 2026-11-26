@@ -203,6 +203,9 @@ internal static class ReportBuilder
 
             if (sourceVersions.TryGetValue(sourceVersionId, out var blocker) && blocker.BlockedBy.Count > 0)
             {
+                // A blocker that is itself blocked is a root only when it was also refused for a finding of its own.
+                if (HasOwnError(blocker))
+                    roots.Add(sourceVersionId);
                 foreach (var next in blocker.BlockedBy)
                     pending.Push(next);
             }
@@ -214,6 +217,10 @@ internal static class ReportBuilder
 
         return [.. roots];
     }
+
+    private static bool HasOwnError(CollectedDefinition definition) => definition.Findings.Any(finding =>
+        finding.Severity == FindingSeverity.Error
+        && !string.Equals(finding.Code, Elsa3.Activities.Design.Import.Reconciliation.Models.Elsa3ReconciliationDiagnosticCodes.BlockedByDependency, StringComparison.Ordinal));
 
     private static IEnumerable<ReportFinding> OrderFindings(IEnumerable<ReportFinding> findings) => findings
         .OrderBy(finding => finding.Stage, StringComparer.Ordinal)

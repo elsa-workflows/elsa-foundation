@@ -129,6 +129,18 @@ public sealed class ReportBuilderTests
     }
 
     [Fact]
+    public void A_blocked_blocker_with_an_error_of_its_own_is_a_root_too()
+    {
+        var blocked = Finding(Elsa3ReconciliationDiagnosticCodes.BlockedByDependency, FindingSeverity.Error, FindingStage.Import);
+        var report = Build(
+            Definition("root", findings: [Finding(Elsa3ActivityDiagnosticCodes.NoCounterpart, FindingSeverity.Error)]),
+            Definition("middle", blockedBy: ["root-v1"], findings: [blocked, Finding(Elsa3ActivityDiagnosticCodes.UnknownMember, FindingSeverity.Error)]),
+            Definition("leaf", blockedBy: ["middle-v1"], findings: [blocked]));
+
+        Assert.Equal(["middle-v1", "root-v1"], report.Definitions.Single(definition => definition.DefinitionId == "leaf").BlockedBy);
+    }
+
+    [Fact]
     public void Component_inventory_counts_usages_and_lists_only_used_components()
     {
         var report = Build(

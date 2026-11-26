@@ -76,6 +76,42 @@ public sealed class ExportInputTests : IDisposable
         Assert.StartsWith("elsa3-migration: refused: input-empty: ", refusal!.ToLine(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void A_byte_order_mark_is_accepted()
+    {
+        File.WriteAllBytes(Path.Combine(_root, "bom.json"), [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(Definition("bom", 1))]);
+
+        var (input, refusal) = ExportInputReader.Read(_root);
+
+        Assert.Null(refusal);
+        Assert.Equal("bom", Assert.Single(input!.Items).Definition.DefinitionId);
+        Assert.Empty(input.InputFindings);
+    }
+
+    [Fact]
+    public void An_unusable_element_leaves_the_other_definitions_of_its_file()
+    {
+        Write("mixed.json", $"[{Definition("a", 1)},{{\"definitionId\":\"b\",\"root\":null}},{Definition("c", 1)}]");
+
+        var (input, _) = ExportInputReader.Read(_root);
+
+        Assert.Equal(["a", "c"], input!.Items.Select(item => item.Definition.DefinitionId));
+        Assert.Equal(("mixed.json", Elsa3MigrationDiagnosticCodes.UnsupportedInputKind), (Assert.Single(input.InputFindings).File, input.InputFindings[0].Finding.Code));
+    }
+
+    [Fact]
+    public void The_output_folder_inside_the_export_is_not_read_and_case_does_not_matter()
+    {
+        Write("a.JSON", Definition("a", 1));
+        Write("out/report.json", "{\"schemaVersion\":1}");
+        Write("out/migrated/workflows/a.json", "[]");
+
+        var (input, _) = ExportInputReader.Read(_root, Path.Combine(_root, "out"));
+
+        Assert.Equal(["a.JSON"], input!.Items.Select(item => item.File));
+        Assert.Empty(input.InputFindings);
+    }
+
     internal static string Definition(string definitionId, int version, bool published = true, string? versionId = null, string rootActivities = "", bool reusable = false)
     {
         var options = reusable ? "{\"usableAsActivity\":true}" : "{}";
