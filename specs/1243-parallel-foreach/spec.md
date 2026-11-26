@@ -49,7 +49,7 @@ break behaviour); see [research.md](research.md) R-1 to R-4.
 | Faults | A faulted pass does not stop the others. The loop does not complete, and the incident strategy decides what happens to the instance. |
 | Break | `ParallelForEach` does not handle `Break`. The signal passes through it. Every `Sequence` on the way up marks itself as breaking and lets the signal go on, until the nearest enclosing `For`, `ForEach` or `While` stops it. So a `Break` in one pass also cuts short a `Sequence` around the loop, and the enclosing loop. |
 | Shared variables | Passes read and write the same workflow variables live and in memory. With no suspension, `count = count + 1` in every pass gives N. |
-| Limits | No maximum degree of parallelism. |
+| Limits | No item cap and no maximum degree of parallelism. |
 
 ## Rule and boundary
 
@@ -60,15 +60,22 @@ The new activity applies existing decisions and needs **no ADR and no ADR amendm
   names the loop activities of its time, and a new loop follows the same contract.
 - [ADR 0092](../../docs/adr/0092-variable-reads-and-writes-share-one-versioned-lifecycle.md) and
   [spec 266](../266-capture-concurrency/spec.md): passes are unordered with each other. A body write to a variable
-  outside the loop is therefore an unordered write. Spec 266's check needs one refinement (FR-010): a variable declared
-  inside the body is per pass, so writing it is not an unordered write. It gets the `ValueFlow/ConcurrentWrite` warning at publish and,
-  when the base it read is stale, the lost-update warning at run time, with last commit wins. None of this changes.
+  outside the loop is therefore an unordered write. It gets the `ValueFlow/ConcurrentWrite` warning at publish and,
+  when the base it read is stale, the lost-update warning at run time, with last commit wins. Spec 266's check needs one
+  refinement (FR-010): a variable declared inside the body is per pass, so writing it is not an unordered write.
 - [ADR 0090](../../docs/adr/0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) and
   specs [1221](../1221-variable-lifecycle-model/spec.md), [1231](../1231-step-variable-writes/spec.md) and
   [1241](../1241-closed-scope-step-writes/spec.md): step writes, session writes and closed-scope writes in a body work
   as in any other body. The loop item and index stay read-only.
 - [ADR 0093](../../docs/adr/0093-background-execution-eligibility-is-one-set-of-criteria.md): the loop is structural,
   so it is never a background candidate (C1). Its leaf body steps keep their own eligibility.
+- The owner's large fan-out decision 1 (17 November 2026,
+  [large fan-out](../../docs/architecture/large-fan-out.md#release-1-a-documented-cap) and the
+  [decision register](../../docs/architecture/decisions.md), row "ForEach cap"): the release 1 parallel ForEach runs its
+  bodies inside one instance, takes at most **1,000 items** (`ParallelForEachCapExceeded` above that), and has a
+  `MaxDegreeOfParallelism` input, **default 16, from 1 to 64**. The state-size benchmark may lower the cap before
+  release. This spec adopts the decision as it stands. It is an owner decision about the activity's shape, so it is not
+  a runtime knob this spec adds. Its decision 2 (the distributed form, after release 1) is out of scope.
 - The runtime's incident strategies (`docs/runtime-fault-behavior.md`) and the rejoin of a retried faulted child
   (#3135) set the fault rule. Like `Sequence`, the loop keeps waiting for a faulted pass and accepts its retry. The instance's
   fault strategy, not the loop, decides what a fault does to the instance, as Elsa 3's incident strategy did.
@@ -77,7 +84,8 @@ The new activity applies existing decisions and needs **no ADR and no ADR amendm
 
 - **Join semantics.** Wait-any, thresholds, and cancelling the other passes when one finishes all belong to the joins
   initiative #4193. This loop always waits for all passes.
-- **A maximum degree of parallelism**, batching, or any other runtime knob for authors.
+- **Any concurrency setting beyond `MaxDegreeOfParallelism`**: no author-set cap, batching or join mode. The
+  distributed form (large fan-out decision 2) comes after release 1.
 - **Running passes on parallel threads.** The instance queue stays single-threaded, as in Elsa 3.
 - **BulkDispatchWorkflows**: spec 1242 (#5833) may map onto this activity. That mapping is decided there.
 
@@ -97,8 +105,8 @@ written, and the loop completes with `Done` once the last pass completes.
 
 **Acceptance Scenarios**:
 
-1. **Given** a `ParallelForEach` over three items whose body suspends on a bookmark, **When** the workflow runs,
-   **Then** all three passes are started and suspended before any of them resumes. Each resumes on its own bookmark,
+1. **Given** a `ParallelForEach` over three items (fewer than the default degree, 16) whose body suspends on a
+   bookmark, **When** the workflow runs, **Then** all three passes are started and suspended before any of them resumes. Each resumes on its own bookmark,
    and the loop completes with `Done` only after the third pass completes.
 2. **Given** a body that reads `currentItem` and `currentIndex`, **When** the passes run, **Then** each pass reads its
    own item and index (ADR 0028), never another pass's.
@@ -111,6 +119,15 @@ written, and the loop completes with `Done` once the last pass completes.
 6. **Given** a loop with no body, **When** it runs, **Then** it completes with `Done` at once.
 7. **Given** a body that declares its own variables (a `Sequence` or `Flowchart` with variables), **When** passes run
    at the same time, **Then** each pass has its own copy of those variables.
+8. **Given** `MaxDegreeOfParallelism = 2` over five items whose body suspends, **When** the workflow runs, **Then**
+   passes 0 and 1 start. Each time a pass completes, the next item's pass starts, in item order. At most two passes are
+   running at any time.
+9. **Given** a collection of 1,001 items, **When** the loop runs, **Then** it faults with `ParallelForEachCapExceeded`
+   before any pass starts. **Given** a literal collection above the cap, or a literal `MaxDegreeOfParallelism` outside
+   1 to 64, **When** the workflow is validated, **Then** designer validation reports it. A degree outside the range
+   from an expression faults the loop when it is evaluated.
+10. **Given** a collection that holds a JSON `null` item, **When** its pass runs, **Then** `currentItem` is an explicit
+    null, as in `ForEach`.
 
 ---
 
@@ -130,7 +147,8 @@ alteration. Its successor completes, and the loop completes with `Done`.
 **Acceptance Scenarios**:
 
 1. **Given** one faulted pass and two running, **When** the fault is recorded, **Then** the other passes are not
-   cancelled and run on, and the loop stays running. It neither faults nor completes.
+   cancelled and run on, and the loop stays running. It neither faults nor completes. The faulted pass keeps its place
+   under the degree until it is retried, as a parked child keeps its parent waiting (large fan-out decision 5).
 2. **Given** a faulted pass that is retried with `RetryFaultedActivity` and then completes, **When** every pass has
    completed, **Then** the loop completes with `Done`, and the retried pass counts once, for its own item.
 3. **Given** the default incident strategy (`Fault`), **When** a pass faults, **Then** the instance faults, as for a
@@ -185,7 +203,9 @@ for ParallelForEach is gone, and the loop is an Elsa 4 `ParallelForEach` with `C
 2. **Given** a body script that reads `getVariable("CurrentValue")` or `getVariable("CurrentIndex")`, **When** it is
    converted, **Then** the read becomes `variables.currentItem` or `variables.currentIndex`, pinned to the loop node.
    It does so even when the workflow declares a variable of the same name, because in Elsa 3 the per-pass variable is
-   nearer. Only a variable declared inside the body takes precedence. The same holds for the other read forms the
+   nearer. A variable declared inside the body takes precedence. So does an Elsa 3 `For` or `ForEach` between the read
+   and the `ParallelForEach`, which declares its own per-pass `CurrentValue`: that read keeps the converter's existing
+   handling for that loop. The same holds for the other read forms the
    converter already accepts for a variable read by name (spec 1222).
 3. **Given** a body script that writes `CurrentValue` or `CurrentIndex`, for example
    `setVariable("CurrentValue", x)`, **When** it is converted, **Then** it is refused with
@@ -201,7 +221,11 @@ for ParallelForEach is gone, and the loop is an Elsa 4 `ParallelForEach` with `C
    passes, so the author should decide whether the loop should run at all, and give `Items` an expression if so. An
    `Items` expression converts without a warning. The run-time difference for an expression that returns a
    non-list is documented with the converter's behaviour notes.
-7. **Given** the converted definition, **When** it is published and run with the JTest request body, **Then** the
+7. **Given** any converted `ParallelForEach`, **When** it is converted, **Then** it carries one
+   `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED` warning: Elsa 3 started every pass at once with no item limit, while Elsa 4
+   runs at most 16 passes at once by default and faults above 1,000 items. The warning says how to raise the degree to
+   64, or how to split larger work into batches.
+8. **Given** the converted definition, **When** it is published and run with the JTest request body, **Then** the
    loop completes, its captured `Collection` input holds both items, and the body `WriteLine` completes twice.
 
 ---
@@ -220,7 +244,8 @@ loop with its own item and index.
 **Acceptance Scenarios**:
 
 1. **Given** the toolbox, **When** an author searches "parallel", **Then** `ParallelForEach` is offered, with a body
-   slot and the same `Collection` and `ExposeIndex` inputs as `ForEach`.
+   slot, the same `Collection` and `ExposeIndex` inputs as `ForEach`, and `MaxDegreeOfParallelism` showing its default
+   and range.
 2. **Given** a body expression, **When** the author types `variables.`, **Then** `currentItem` and `currentIndex` are
    offered, as in a `ForEach` body.
 3. **Given** a run, **When** the operator opens the loop, **Then** each pass shows its item, index and status, and a
@@ -229,9 +254,10 @@ loop with its own item and index.
 ### Edge Cases
 
 - **One item.** One pass. The loop completes with `Done` after it.
-- **Large collections.** Every pass is scheduled at start. The collection is read once and indexed per pass. A pass
-  completion costs the same whatever the number of items: it never lists or materialises all passes, so the total cost
-  grows linearly with the number of items.
+- **Large collections.** Up to 1,000 items. Above that, the loop faults with `ParallelForEachCapExceeded` and the
+  documentation shows the batching patterns from the large fan-out page. The collection is read once and indexed per
+  pass. A pass completion costs the same whatever the number of items: it never lists or materialises all passes, so
+  the total cost grows linearly with the number of items.
 - **Collection changes after start.** The collection is evaluated once, at start. A later write to the variable it
   came from does not add or remove passes.
 - **Nested loops.** A `ParallelForEach` inside a `ParallelForEach` (or a `ForEach`) gets its own iteration frame per
@@ -255,9 +281,11 @@ loop with its own item and index.
 **Activity**
 
 - **FR-001**: Elsa 4 MUST provide a `ParallelForEach` activity in the control-flow activities, with the inputs
-  `Collection` and `ExposeIndex` (default `true`) evaluated as in `ForEach`, one optional body in the child slot
+  `Collection` and `ExposeIndex` (default `true`) evaluated as in `ForEach`, `MaxDegreeOfParallelism` (default 16,
+  from 1 to 64), one optional body in the child slot
   `ParallelForEach.Body`, no outputs, and the single outcome `Done`.
-- **FR-002**: On start, the activity MUST schedule one pass of the body per item, all at once, in item order. Each pass
+- **FR-002**: On start, the activity MUST schedule the passes of the first `min(items, degree)` items, in item order.
+  Each time a pass completes, it MUST schedule the pass of the next unstarted item, until every item has a pass. Each pass
   MUST get its own iteration identity and its own iteration frame holding `currentItem` and, when `ExposeIndex` is
   `true`, `currentIndex` (ADR 0028).
 - **FR-003**: Passes MUST run interleaved on the instance's queue. A pass that suspends MUST NOT hold back the others.
@@ -274,8 +302,12 @@ loop with its own item and index.
   or cancel other passes.
 - **FR-008**: The activity MUST read its collection once per run. Handling one pass completion MUST NOT list or
   materialise all passes or all items, so a run of N items costs O(N) in total.
-- **FR-009**: The activity MUST NOT offer a maximum degree of parallelism, a join mode or any other concurrency setting
-  to authors.
+- **FR-009**: The activity MUST NOT offer a join mode, an author-set cap or any concurrency setting other than
+  `MaxDegreeOfParallelism`.
+- **FR-009a**: A collection of more than 1,000 items MUST fault the activity with `ParallelForEachCapExceeded` before
+  any pass is scheduled. A degree outside 1 to 64 MUST fault the activity when evaluated. Designer validation MUST
+  report a literal collection above the cap and a literal degree outside the range. The cap is a product constant,
+  set by large fan-out decision 1, and the state-size benchmark may lower it.
 
 **Publish-time checks**
 
@@ -289,11 +321,15 @@ loop with its own item and index.
 **Converter**
 
 - **FR-012**: The Elsa 3 activity map MUST map `Elsa.ParallelForEach` to `ParallelForEach`, with `Items` → `Collection`
-  (a null `Items` emits nothing, because both engines complete at once) and `Body` → the `ParallelForEach.Body` slot.
+  (a null `Items` emits nothing, because both engines complete at once), `Body` → the `ParallelForEach.Body` slot,
+  and `MaxDegreeOfParallelism` left at its default. Every converted loop MUST carry the
+  `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED` warning (US4 scenario 7).
   `ELS3-ACTIVITY-NO-COUNTERPART` MUST no longer be raised for it.
 - **FR-013**: A body read of the Elsa 3 per-pass variable `CurrentValue` or `CurrentIndex` by name MUST convert to
   `variables.currentItem` or `variables.currentIndex`, pinned to the loop node, ahead of any workflow variable or
-  variable of an enclosing scope with that name. Only a variable declared inside the body may take precedence.
+  variable of an enclosing scope with that name. A variable declared inside the body takes precedence. So does an
+  Elsa 3 `For` or `ForEach` between the read and the `ParallelForEach`, whose read keeps today's handling for that
+  loop.
   The Elsa 4 run-time lookup of a computed name (`getVariable(expr)`, spec 1222 FR-027) does not know the Elsa 3
   names, so a computed name in a `ParallelForEach` body MUST be refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` and
   guidance to use a literal name.
@@ -317,15 +353,17 @@ loop with its own item and index.
 
 **Documentation and evidence**
 
-- **FR-020**: The activity's README MUST state the execution model (interleaved, not threaded), the fault and Break
-  rules, the concurrent-write warning, and the exclusions, and MUST link #4193 for join behaviour.
+- **FR-020**: The activity's README MUST state the execution model (interleaved, not threaded), the cap and the
+  degree, the fault and Break rules, the concurrent-write warning, and the exclusions, and MUST link #4193 for join
+  behaviour. The large fan-out page MUST stop saying Elsa 4 has no parallel ForEach, and its effect-key row for the
+  in-instance parallel ForEach MUST move from proposed to built.
 - **FR-021**: The activity contract surface baseline and the Elsa 3 parity evidence MUST list the new activity. The
   #1152 row for ParallelForEach MUST be closed by the implementing PR.
 
 ### Key Entities
 
-- **ParallelForEach**: a loop activity. Its inputs are `Collection` and `ExposeIndex`, it has one body slot, and its
-  outcome is `Done`.
+- **ParallelForEach**: a loop activity. Its inputs are `Collection`, `ExposeIndex` and `MaxDegreeOfParallelism`, it
+  has one body slot, and its outcome is `Done`.
 - **Pass**: one body execution for one item, with its own iteration identity and iteration frame. Its status is one of
   running, suspended, completed, faulted or cancelled.
 
@@ -334,13 +372,14 @@ loop with its own item and index.
 ### Measurable Outcomes
 
 - **SC-001**: Converting `single-outcome-activities.json` raises no `ELS3-ACTIVITY-NO-COUNTERPART`. The converter
-  test corpus has no ParallelForEach refusal left, other than the refusals FR-014 and FR-017 define.
+  test corpus has no ParallelForEach refusal left, other than the refusals FR-013 (computed names), FR-014 and FR-017
+  define.
 - **SC-002**: On Elsa 4, `single-outcome/single-outcome-tests.json` passes its ParallelForEach steps: the loop completes,
   its captured collection holds both items, and the body completes twice. Other blockers recorded for that suite,
   such as value capture (#5647), are tracked against their own issues.
 - **SC-003**: With a body that waits 1 second per item, a 10-item loop completes in under 3 seconds of wall time, where
   a `ForEach` takes at least 10.
-- **SC-004**: A 1,000-item loop with an inline body completes, and the time spent evaluating pass completions grows
+- **SC-004**: A 1,000-item loop (the cap) with an inline body completes, and the time spent evaluating pass completions grows
   linearly with the item count (1,000 items take at most about 10 times as long as 100 items).
 - **SC-005**: Every publish of a body that writes an outer variable shows exactly one concurrent-write warning per
   variable. A body that writes only its own variables shows none.
@@ -361,15 +400,24 @@ loop with its own item and index.
 
 ## Open questions for the coordinator
 
-1. **A separate activity, or a switch on `ForEach`?** Recommendation: a separate `ParallelForEach`. Running passes at
+1. **Adopt the owner's release 1 shape (large fan-out decision 1)?** It caps the loop at 1,000 items and adds
+   `MaxDegreeOfParallelism` (default 16, 1 to 64). Recommendation: adopt it as this spec now does. It is a recorded
+   owner decision with a reason (one instance's state and inbox), and contradicting it would need the owner. It also
+   bounds what an Elsa 3 loop with an unbounded list can do to one instance. The cost is two Elsa 3 differences the
+   converter reports (FR-012).
+2. **Converter degree: default 16, or the maximum 64?** Recommendation: the default, with the warning saying how to
+   raise it. 64 is closer to Elsa 3's "all at once", but it would make every imported loop use the ceiling instead of
+   the product default.
+3. **A separate activity, or a switch on `ForEach`?** Recommendation: a separate `ParallelForEach`, which is also what
+   the large fan-out page describes for release 1. Running passes at
    the same time changes what the body may safely do (concurrent-write warnings, Break), so it should be visible on
    the canvas rather than hidden in a setting. It also keeps the Elsa 3 name, which makes the conversion one to one.
    A switch on `ForEach` would be the kind of runtime knob authors should not get.
-2. **Fault rule: wait like `Sequence`, or fault like `Parallel`?** Recommendation: wait (FR-006). It is what Elsa 3 did
+4. **Fault rule: wait like `Sequence`, or fault like `Parallel`?** Recommendation: wait (FR-006). It is what Elsa 3 did
    (the other passes went on and the loop did not complete). It also keeps a retry of the single faulted pass
    possible, because the runtime refuses a retry once the parent has stopped running. The instance's fault strategy
    still decides the instance's fate. Faulting like `Parallel` would end the loop on the first fault and leave no
-   way to retry the pass.
-3. **Elsa 3's silent zero passes for a non-array `Items` expression.** Recommendation: convert without a warning and
+   way to retry the pass. Large fan-out decision 5 (a parked child keeps its parent waiting) points the same way.
+5. **Elsa 3's silent zero passes for a non-array `Items` expression.** Recommendation: convert without a warning and
    document the difference (FR-017 refuses only literals, which Elsa 3 always read as text). A warning on every `Items` expression would fire on almost
    every definition and teach people to ignore it. In practice, the expression returns a list.

@@ -5,8 +5,9 @@
 ## Summary
 
 Add a `ParallelForEach` loop to the control-flow activities. It reuses `ForEach`'s collection resolution and
-per-pass iteration frames, schedules every pass at start, and completes when every pass has completed, counting passes
-by iteration id from the durable store. Like `Sequence`, it waits for a faulted pass and accepts its retry. The shared
+per-pass iteration frames. It schedules up to `MaxDegreeOfParallelism` passes at once (default 16, at most 64, cap
+1,000 items, per the owner's large fan-out decision 1), starts the next item's pass as each one completes, and
+completes when every pass has completed. Passes are counted by iteration id through a new store count query. Like `Sequence`, it waits for a faulted pass and accepts its retry. The shared
 loop structure handler reports this loop's body as unordered with itself, so spec 266's concurrent-write warning
 applies. The Elsa 3 converter then maps `Elsa.ParallelForEach` onto it, rewrites the per-pass `CurrentValue` and
 `CurrentIndex` reads, and reports the behaviours Elsa 4 does not keep. Studio offers and inspects the loop.
@@ -40,20 +41,32 @@ concurrency setting (FR-009)
 - Extract `ForEach`'s `ForEachCollection`, `ToItemEnvelope` and `ToEnvelope` into a shared internal helper in
   `ControlFlow/Loops/` (for example `LoopCollection`), so both loops resolve, refuse and envelope items identically
   (FR-005). Messages keep the `ForEach` wording, with the activity name as a parameter.
+- `MaxDegreeOfParallelism` input (`int`, default 16). Range check (1 to 64) when evaluated, and the cap check (1,000
+  items, `ParallelForEachCapExceeded`) before any pass is scheduled (FR-009a). The cap is a named constant, so the
+  state-size benchmark can lower it in one place. Designer validation for literal values goes in the activity's
+  design-side validation, the same place `ForEach`'s literal checks live.
 - `ExecuteStructureAsync`: resolve the collection once. If it is empty or there is no body, return `Complete()`.
-  Otherwise schedule every pass in item order, each with
+  Otherwise schedule the passes for items `0 .. min(N, degree) - 1`, each with
   `StructuredExecutionIdentity.Iteration(parentExecutionId, index)` and a `LoopIterationScopeRequest`, then return
   `Defer`. Give `StructuredExecutionIdentity` a neutral iteration prefix, or a loop-kind parameter, so pass ids do not
   read `foreach-iteration`. Keep `ForEach`'s existing ids unchanged.
-- `OnChildCompletedAsync`: decide completion in O(1) per completion (FR-008). `Parallel`'s
-  `ListAllByParentAsync` read returns every pass row on every completion, which is O(N²) for N items, so do not copy
-  it. Preferred: a store query that counts this parent's completed, non-superseded body executions by distinct
-  `IterationId` (an indexed count, not a row list), compared with the item count (`Collection` length, O(1) on a JSON
-  array). Alternative, if the store cannot count cheaply: a durable per-loop completed-pass counter, committed with
-  each parent evaluation and keyed by iteration id so a re-delivered completion is not counted twice. A retried pass's
-  successor carries the same `IterationId` and iteration request (`ActivitySuccessorStaging.cs:75-91`). The superseded
-  row is excluded by its own status (`ActivitySuccessorStaging.cs:176`). The Break outcome needs no special case
-  (FR-007).
+- `OnChildCompletedAsync`: decide in O(1) per completion (FR-008). `Parallel`'s `ListAllByParentAsync` read returns
+  every pass row on every completion, which is O(N²) for N items, so do not copy it.
+  - Add a member to `IActivityExecutionStateStore`, for example `CountCompletedChildIterationsAsync(workflowExecutionId,
+    parentActivityExecutionId, executableNodeId)`. It counts the distinct `IterationId`s with a `Completed`,
+    non-superseded row, as an indexed count rather than a row list. Implement it in the EF Core store (with an index
+    on parent id, node id and status, plus a migration) and in the in-memory store, with a contract test shared by
+    both. Update the store's `EXTENSION_POINTS.md`.
+  - With `c` completed passes counted after this completion: if `c` equals `N`, complete with `Done`. Otherwise, if
+    `degree + c - 1 < N`, schedule the pass for item `degree + c - 1`. Each completion frees exactly one slot, so the
+    next unstarted item follows from `c` alone, and the loop keeps no state of its own. A completion that is
+    re-delivered is already dropped once per child (`WorkflowParentActivityCompletionSchedulerWorkHandler.cs:134`,
+    `ParentCompletionProcessedWorkItemId`).
+  - A faulted pass is never counted, so it holds its slot until its retry completes (US2 scenario 1). A retried pass's
+    successor keeps the iteration through `source with` (`ActivitySuccessorStaging.cs:108`) and the provenance built in
+    `RetryFaultedActivityAlterationHandler.cs:200-209`, so it counts once for its item. A superseded row is excluded by
+    its own status (`ActivitySuccessorStaging.cs:176`).
+  - The Break outcome needs no special case (FR-007).
 - The retry path is `RetryFaultedActivity` under `WaitForIntervention` (`RetryFaultedActivityAlterationHandler.cs:119-125`).
   `RescheduleActivity` refuses a source that has a blocking incident (`RescheduleActivityAlterationHandler.cs:57-59`).
   Test that a retried pass keeps its `IterationId` and iteration frame and that its successor's completion completes
@@ -78,7 +91,10 @@ concurrency setting (FR-009)
 - `Elsa3BuiltInActivityMap.Entries.cs`: replace the `NoCounterpart("ParallelForEach", …)` entry with
   `Catalog("ParallelForEach", ParallelForEach, [Carry("Items", "Collection"), Slot("Body", "ParallelForEach.Body")])`,
   plus the no-body warning (FR-016) and the literal-value refusal (FR-017) as member rules.
-- Per-pass names (FR-013): `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1106-1162) resolves only variables declared
+- Per-pass names (FR-013): walk up from the read to the nearest Elsa 3 `For`, `ForEach` or `ParallelForEach`. All
+  three declare a per-pass `CurrentValue` and `CurrentIndex` on the body's context (`ForEachT.cs:97-100`, `For.cs:107`,
+  `ParallelForEachT.cs`). If the nearest one is not a `ParallelForEach`, keep today's handling for that loop
+  (`Elsa3ValueFlowLowerer.cs:1127-1137`). `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1106-1162) resolves only variables declared
   in the definition, so `CurrentValue` returns `MissingAmbient` today, and a workflow variable of that name would match
   first. Add a resolution branch for `CurrentValue` and `CurrentIndex` that runs before workflow and enclosing-scope
   variables when the reference sits in a `ParallelForEach` body. It yields a `VariableExpressionParameterBinding` to
@@ -92,8 +108,9 @@ concurrency setting (FR-009)
 - `Elsa3ActivityNormalizer.ApplyEntryWarnings`: the Break warning's ancestor test also accepts the `ParallelForEach`
   type key, with a message variant for it (FR-015).
 - Literal `Items` (FR-017): a member rule that refuses any non-null Literal or Object expression on `Items`.
-- New behaviour code for FR-016, for example `ELS3-BEHAVIOUR-PARALLEL-FOREACH-NO-BODY`, in
-  `Elsa3ActivityDiagnosticCodes` with its message, and in the spec 236 diagnostic-codes contract.
+- New behaviour codes in `Elsa3ActivityDiagnosticCodes`, with messages, also added to the spec 236 diagnostic-codes
+  contract: `ELS3-BEHAVIOUR-PARALLEL-FOREACH-NO-BODY` (FR-016) and `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED` (FR-012,
+  one per converted loop, naming the default degree and the cap).
 - Remove `"Elsa.ParallelForEach"` from any list that treats it as unsupported. Keep the value-flow lowerer's message
   for its item reads (`Elsa3ValueFlowLowerer.cs:1663`).
 
@@ -110,6 +127,8 @@ concurrency setting (FR-009)
 
 - `ControlFlow/ParallelForEach/README.md` (FR-020), the control-flow `EXTENSION_POINTS.md`, and the module README's
   activity list.
+- `docs/architecture/large-fan-out.md`: the "What exists today" row that says Elsa 4 has none, and the effect-key row
+  that says the parallel activity is not built (FR-020).
 - Baselines: `essentials/tests/Activities/Design/Tests/Contracts/activity-contract-surface.baseline.json` and
   `docs/reports/evidence/activity-contract-parity/elsa4-surface.json`.
 - JTest: rerun `single-outcome` on Elsa 4 and record the result in the S-15 ledger (`suites.md`, `dispositions.md`), on
@@ -128,6 +147,8 @@ essentials/src/Activities/ControlFlow/
   Results/StructuredExecutionIdentity.cs                 changed (iteration prefix)
   ActivitiesControlFlowFeature.cs                        changed
 essentials/tests/Activities/ControlFlow/Tests/ParallelForEach/   new
+essentials/src/Workflows/Runtime/Core/Contracts/IActivityExecutionStateStore.cs   changed (count member)
+  + its EF Core and in-memory implementations, index and migration, contract test
 extensions/Elsa3/src/Mapping/...                         changed (map entry, rewrite, normalizer, codes)
 extensions/Elsa3/tests/Mapping/Tests/                    new cases
 Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/blockPromotion.ts   changed
@@ -135,5 +156,6 @@ Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/blockProm
 
 ## Complexity Tracking
 
-None. The only new shared code is the collection helper extracted from `ForEach`, so that the two loops cannot drift
-apart.
+- The store count member is a new contract member with two implementations. It is the smallest way to meet FR-008
+  without giving structural activities a state bag of their own.
+- The collection helper extracted from `ForEach` keeps the two loops from drifting apart.

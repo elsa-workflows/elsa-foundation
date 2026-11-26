@@ -12,18 +12,28 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
 - [ ] T002 Give `StructuredExecutionIdentity` an iteration id for the new loop without changing `ForEach`'s ids; unit
   test both forms round-trip through `TryReadIteration`.
 - [ ] T003 Add `LoopKind.ParallelForEach` (iteration names, `ExposeIndex` switch, `PassesUnordered = true`).
+- [ ] T003a Add `CountCompletedChildIterationsAsync` to `IActivityExecutionStateStore`, implemented in the EF Core store
+  (index and migration) and the in-memory store, with a shared contract test (distinct iteration ids, superseded rows
+  excluded); update the store's `EXTENSION_POINTS.md`.
 
 ## Phase 2: Runtime activity (US1, US2)
 
-- [ ] T004 [US1] Tests first in `essentials/tests/Activities/ControlFlow/Tests/ParallelForEach/`: all passes scheduled
-  at start in item order; each pass reads its own `currentItem`/`currentIndex`; empty, null and no body complete with
-  `Done`; a string, object or number faults with the shared message; nested loops read the right item; per-pass body
-  container variables are isolated.
-- [ ] T005 [US1] Implement `ParallelForEach` (plan "Runtime activity"): scheduling, O(1)-per-completion counting of
-  completed passes by iteration id (store count query or durable counter), Break outcome counted as completed.
+- [ ] T004 [US1] Tests first in `essentials/tests/Activities/ControlFlow/Tests/ParallelForEach/`: the first
+  `min(N, degree)` passes scheduled at start in item order, then one per completion (degree 2 over 5 items); each pass
+  reads its own `currentItem`/`currentIndex`; a JSON `null` item is an explicit null; empty, null and no body complete
+  with `Done`; a string, object or number faults with the shared message; 1,001 items fault with
+  `ParallelForEachCapExceeded` before any pass; a degree of 0 or 65 faults; nested loops read the right item; per-pass
+  body container variables are isolated; a body ending with `Break` counts as completed and the loop neither ends
+  early nor cancels other passes (FR-007).
+- [ ] T005 [US1] Implement `ParallelForEach` (plan "Runtime activity"): cap and degree checks, scheduling under the
+  degree, O(1)-per-completion counting through T003a.
+- [ ] T005a [US1] Designer validation for a literal collection above the cap and a literal degree outside 1 to 64
+  (FR-009a), with tests.
 - [ ] T006 [US1] Runtime test: three passes suspended on bookmarks are all started before any resumes, each resumes on
-  its own bookmark, and the loop completes after the last one. Also a restart mid-run counts no pass twice.
+  its own bookmark, and the loop completes after the last one. Also a restart mid-run counts no pass twice, and an
+  instance cancel cancels every running pass.
 - [ ] T007 [US2] Tests under `WaitForIntervention`: one faulted pass leaves the loop running and the others complete;
+  with degree 1 the faulted pass holds the only slot until retried;
   `RetryFaultedActivity` on the faulted pass keeps its iteration id and frame, and the loop then completes with
   `Done`.
 - [ ] T008 [US2] Tests: under the default strategy the instance faults and the loop is marked `Faulted`; under
@@ -45,11 +55,12 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
 
 ## Phase 4: Converter (US4)
 
-- [ ] T013 [US4] Map `Elsa.ParallelForEach` (FR-012) and update the activity-map tests that expected
-  `ELS3-ACTIVITY-NO-COUNTERPART`.
+- [ ] T013 [US4] Map `Elsa.ParallelForEach` (FR-012) with the `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED` warning per
+  loop; update the activity-map tests that expected `ELS3-ACTIVITY-NO-COUNTERPART`.
 - [ ] T014 [US4] Per-pass names (FR-013): a resolution branch in `Elsa3ValueFlowLowerer.ResolveAmbient` ahead of
   workflow and enclosing-scope variables; `getVariable("CurrentValue"|"CurrentIndex")` and the other by-name read forms;
-  a workflow variable named `CurrentValue` does not win; a body-declared one does; a computed name is refused.
+  a workflow variable named `CurrentValue` does not win; a body-declared one does; an Elsa 3 `For` or `ForEach`
+  between the read and the loop keeps today's handling; a computed name is refused.
 - [ ] T015 [US4] Refuse writes to the per-pass names (FR-014).
 - [ ] T016 [US4] Break warning with a `ParallelForEach` ancestor (FR-015); no-body behaviour code and message (FR-016),
   added to the spec 236 diagnostic-codes contract; refusal of every non-null literal `Items` (FR-017).
@@ -64,7 +75,8 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
 
 ## Phase 6: Docs, evidence, close-out
 
-- [ ] T020 README and `EXTENSION_POINTS.md` for the new activity (FR-020); control-flow module README list.
+- [ ] T020 README and `EXTENSION_POINTS.md` for the new activity (FR-020); control-flow module README list; the two
+  `docs/architecture/large-fan-out.md` rows that say the parallel ForEach does not exist.
 - [ ] T021 Regenerate the activity contract surface baseline and the Elsa 4 parity surface evidence (FR-021).
 - [ ] T022 Run the JTest `single-outcome` suite on Elsa 4; record the ParallelForEach steps in the S-15 ledger
   (SC-002); name remaining blockers with their issues.

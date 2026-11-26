@@ -90,8 +90,11 @@ The converter already warns `ELS3-BEHAVIOUR-BREAK-STOPS-AT-PARALLEL` for a `Brea
   O(N²), which is acceptable for a handful of `Parallel` branches, not for a list of items.
 - **Background.** ADR 0093 C1 requires a leaf, so a structural loop is never a candidate. Leaf body steps keep C1–C10.
 - **Converter.** `Elsa3BuiltInActivityMap.Entries.cs:55` maps ParallelForEach as `NoCounterpart`.
-  `Elsa3LoopVariableReferencesRewrite` maps ForEach's `CurrentValue` **output** to `currentItem`. Elsa 3
-  ParallelForEach has no output, so its reads go through `getVariable("CurrentValue")`. `Elsa3ExpressionRewriter`
+  `Elsa3LoopVariableReferencesRewrite` maps ForEach's `CurrentValue` **output** to `currentItem`. Elsa 3 `For` and
+  `ForEach` also declare per-pass `CurrentValue` and `CurrentIndex` variables on their body (`ForEachT.cs:97-100`,
+  `For.cs:107`), and the converter keeps refusing by-name reads of those (`Elsa3ValueFlowLowerer.cs:1127-1137`). So the
+  nearest Elsa 3 loop of any kind owns a by-name read. Elsa 3 ParallelForEach has no output, so its reads go through
+  `getVariable("CurrentValue")`. `Elsa3ExpressionRewriter`
   hands that to the ambient resolver (`AddResolvedEdit`). `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1106-1162)
   knows only declared variables, so the run-time name is missing today, and a workflow variable named `CurrentValue`
   would match first. `Elsa3DefinitionConverter.AncestorScopeNames` carries Elsa 4 names for shadowing checks only.
@@ -105,9 +108,23 @@ sharing `Loops/` (`LoopKind`, `LoopNavigator`, `LoopStructureHandler`). It regis
 registration. Studio lists loop structure kinds and safe activities in
 `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/blockPromotion.ts:20,25`.
 
+## R-6a The owner's release 1 decision
+
+`docs/architecture/large-fan-out.md` ("Release 1: a documented cap", decisions 1, 2 and 5) and
+`docs/architecture/decisions.md` (row "ForEach cap") are an approved design (gate 2, 18 November 2026). Release 1 gets
+a parallel ForEach that runs its bodies inside one instance, with `Items` capped at 1,000 (`ParallelForEachCapExceeded`)
+and `MaxDegreeOfParallelism` (default 16, 1 to 64). The reason is one instance's state and inbox. The distributed form
+is an explicit option after release 1, and a parked child keeps its parent waiting. The page's "What exists today"
+still says Elsa 4 has no parallel ForEach. Spec 1243 adopts decision 1 and leaves decision 2 for later.
+
+With a degree, the next pass follows from the completed count alone. The first `d` passes start together, and each
+completion frees one slot, so after `c` completions the next unstarted item is `d + c - 1`. That needs a cheap count,
+and `IActivityExecutionStateStore` has none today. It has only list and page reads (`ListByParentPageAsync`, line 58).
+
 ## R-7 ADR need
 
 None. ADR 0028 defines the per-pass frame for "a loop activity", and its isolation is by frame instance, which holds
 for concurrent passes. ADR 0092 and spec 266 already cover unordered writes. The structure handler has to report the
 new ordering, and spec 266's self-overlap check needs a bound at the declaring scope, which is a spec-level
-refinement, not a decision change. The fault rule reuses an existing runtime capability. Join semantics are excluded (#4193).
+refinement, not a decision change. The cap and degree come from an existing owner decision (R-6a), which the spec
+adopts rather than changes. The fault rule reuses an existing runtime capability. Join semantics are excluded (#4193).
