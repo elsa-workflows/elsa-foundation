@@ -95,7 +95,7 @@ public sealed partial class ArchitectureGuardTests
     [Fact]
     public void Shared_persistence_resolution_does_not_depend_on_feature_assemblies()
     {
-        var policy = Path.Combine(RepoRoot, "server", "server", "essentials", "src", "Persistence", "EntityFramework");
+        var policy = Path.Combine(RepoRoot, "server", "essentials", "src", "Persistence", "EntityFramework");
         var project = XDocument.Load(Path.Join(policy, "Elsa.Persistence.EntityFramework.csproj"));
         // Its three project references are no feature assembly: Elsa.Primitives, the root of the Line A contract baseline,
         // holds the write refusal's persistence-agnostic base that the domain APIs answer, and

@@ -45,7 +45,7 @@ public sealed partial class ArchitectureGuardTests
     public void Every_production_project_is_built_before_the_architecture_tests()
     {
         var built = new HashSet<string>(StringComparer.Ordinal);
-        var pending = new Stack<string>([Path.GetFullPath(Path.Join(RepoRoot, "server", "server", "essentials", "tests", "Architecture", "Tests", "Elsa.Architecture.Tests.csproj"))]);
+        var pending = new Stack<string>([Path.GetFullPath(Path.Join(RepoRoot, "server", "essentials", "tests", "Architecture", "Tests", "Elsa.Architecture.Tests.csproj"))]);
         while (pending.TryPop(out var project))
         {
             if (built.Add(project))

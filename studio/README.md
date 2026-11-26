@@ -130,7 +130,7 @@ values fail host startup with a `Themes:ThemesMode` configuration error.
 > The `.NET` commands below are existing developer commands; the scoped checks do not establish a complete fresh-machine setup or source-edit journey.
 
 ```bash
-cd Studio
+cd studio
 pnpm install
 pnpm build
 dotnet build Elsa.Studio.slnx
@@ -140,7 +140,7 @@ dotnet test Elsa.Studio.slnx
 ## Run
 
 ```bash
-cd Studio
+cd studio
 dotnet run --project src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj
 ```
 
@@ -217,8 +217,8 @@ Build an image from the repository root (the build context must be the repo root
 Essentials and Foundation Dockerfiles sit beside their projects in the same way:
 
 ```bash
-pnpm --dir Studio install --frozen-lockfile
-pnpm --dir Studio build
+pnpm --dir studio install --frozen-lockfile
+pnpm --dir studio build
 docker build -f studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local .
 docker run --rm -p 8080:8080 \
   -e Studio__BackendBaseUrl=https://your-elsa-server:443 \

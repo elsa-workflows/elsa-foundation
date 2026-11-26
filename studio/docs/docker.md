@@ -100,8 +100,8 @@ must sign in before the Studio management and console surfaces can be used.
 From the repository root:
 
 ```bash
-pnpm --dir Studio install --frozen-lockfile
-pnpm --dir Studio build
+pnpm --dir studio install --frozen-lockfile
+pnpm --dir studio build
 docker build -f studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local .
 docker build -f studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile -t elsa-studio-essentials:local .
 docker build -f studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile -t elsa-studio-foundation:local .

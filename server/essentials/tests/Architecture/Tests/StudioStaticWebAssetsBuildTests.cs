@@ -64,7 +64,7 @@ public sealed class StudioStaticWebAssetsBuildTests
         }
 
         var content = Assert.Single(root.GetProperty("Items").GetProperty("Content").EnumerateArray());
-        var expectedContentPath = Path.GetFullPath(Path.Join(studioDirectory, "src", "server", "apps", "Elsa.Studio.Workbench.Host", "nuplane-management.json"));
+        var expectedContentPath = Path.GetFullPath(Path.Join(studioDirectory, "src", "apps", "Elsa.Studio.Workbench.Host", "nuplane-management.json"));
         Assert.Equal(expectedContentPath, content.GetProperty("FullPath").GetString());
     }
 

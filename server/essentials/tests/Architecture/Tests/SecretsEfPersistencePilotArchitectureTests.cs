@@ -363,7 +363,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     [Fact]
     public void Policy_and_module_packages_stay_provider_free()
     {
-        var policy = PackageIncludes(RepoPath("server", "server", "essentials", "src", "Persistence", "EntityFramework", "Elsa.Persistence.EntityFramework.csproj"));
+        var policy = PackageIncludes(RepoPath("server", "essentials", "src", "Persistence", "EntityFramework", "Elsa.Persistence.EntityFramework.csproj"));
         var module = PackageIncludes(RepoPath("extensions", "Secrets", "src", "Persistence", "EntityFrameworkCore", "Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"));
 
         Assert.Equal(PolicyPackages, policy);
@@ -455,7 +455,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     [Fact]
     public void Workbench_enables_the_secrets_ef_module_by_default()
     {
-        var workbench = XDocument.Load(RepoPath("server", "server", "apps", "Elsa.Workbench.Host", "Elsa.Workbench.Host.csproj"));
+        var workbench = XDocument.Load(RepoPath("server", "apps", "Elsa.Workbench.Host", "Elsa.Workbench.Host.csproj"));
         var references = workbench.Descendants("ProjectReference")
             .Select(element => element.Attribute("Include")?.Value)
             .OfType<string>()
