@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
 from pathlib import Path
 import re
 import sys
+import tarfile
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -15,6 +17,7 @@ from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
 import studio_docker_publish as publish
+from studio_profile_candidate import saved_configs
 
 
 REPOSITORY = "elsa-workflows/elsa-foundation"
@@ -541,6 +544,40 @@ class StudioDockerPublishTests(unittest.TestCase):
                 os.environ, {"SOURCE_SHA": source_sha, "MAIN_SHA": main_sha}, clear=True
             ), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 self.assertEqual(expected, publish.main(["is-current"]))
+
+
+class StudioCandidateArchiveTests(unittest.TestCase):
+    def test_saved_manifest_must_match_the_verified_config(self) -> None:
+        def digest(data):
+            return "sha256:" + hashlib.sha256(data).hexdigest()
+
+        config = json.dumps({"os": "linux", "architecture": "arm64", "rootfs": {"diff_ids": []}}).encode()
+        config_id = digest(config)
+        manifest = json.dumps({"config": {"digest": config_id}}).encode()
+        manifest_id = digest(manifest)
+        manifest_path = manifest_id.replace(":", "/", 1)
+        image = "studio:qualification"
+        files = {
+            "manifest.json": json.dumps([{"RepoTags": [image], "Config": "config.json"}]).encode(),
+            "config.json": config,
+            "index.json": json.dumps({"manifests": [{"digest": manifest_id}]}).encode(),
+            f"blobs/{manifest_path}": manifest,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "images.tar.gz"
+            for valid in (True, False):
+                with self.subTest(valid=valid):
+                    with tarfile.open(path, "w:gz") as archive:
+                        for name, contents in files.items():
+                            data = contents + b" " if not valid and name.endswith(manifest_path) else contents
+                            info = tarfile.TarInfo(name)
+                            info.size = len(data)
+                            archive.addfile(info, io.BytesIO(data))
+                    if valid:
+                        self.assertEqual({config_id, manifest_id}, saved_configs(path, {"profile": image}, "arm64")[image]["identities"])
+                    else:
+                        with self.assertRaisesRegex(ValueError, "Saved manifest digest mismatch"):
+                            saved_configs(path, {"profile": image}, "arm64")
 
 
 if __name__ == "__main__":
