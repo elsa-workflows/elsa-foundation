@@ -86,8 +86,8 @@ applies. The Elsa 3 converter then maps `Elsa.ParallelForEach` onto it, rewrites
     - In-memory store.
     - `CoalescingActivityExecutionStateStore` (`CoalescingRuntimeStateStores.cs:85`): adjust the inner count as its
       `CountAsync` does (`:136-157`). First keep only the session upserts whose parent id and node id match; a row's parent and node never
-      change, so no other upsert can affect the count, and FR-008's per-completion cost stays independent of
-      unrelated session rows. For each kept upsert and each tombstone, look up the inner row, subtract it when it
+      change, so no other upsert can affect the count, and unrelated upserts cost nothing. Tombstones carry only an id, so each
+      still needs one inner lookup. They are rare within a run. For each kept upsert and each tombstone, look up the inner row, subtract it when it
       matched the predicate (node, `Completed`, processed, not superseded), and add the session row when it matches. Without this, a staged but unflushed marker is
       missed, `p` is too low, and an item is started twice.
     - Every other implementer of the interface, test doubles included (about ten in essentials, for example

@@ -220,7 +220,8 @@ for ParallelForEach is gone, and the loop is an Elsa 4 `ParallelForEach` with `C
    refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. The guidance says Elsa 3 read the literal as text and ran zero
    passes, so the author should decide whether the loop should run at all, and give `Items` an expression if so. An
    `Items` expression converts without a warning about non-list values. The run-time difference for an expression that returns a
-   non-list is documented with the converter's behaviour notes.
+   non-list is documented in the converter's README
+   (`extensions/Elsa3/src/Mapping/README.md`).
 7. **Given** any converted `ParallelForEach`, **When** it is converted, **Then** it carries one
    `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED` warning: Elsa 3 started every pass at once with no item limit, while Elsa 4
    runs at most 16 passes at once by default and faults above 1,000 items. The warning says how to raise the degree to

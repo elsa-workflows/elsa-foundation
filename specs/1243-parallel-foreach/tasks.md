@@ -68,7 +68,9 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
   between the read and the loop keeps today's handling; a computed name is refused.
 - [ ] T015 [US4] Refuse writes to the per-pass names (FR-014).
 - [ ] T016 [US4] Break warning with a `ParallelForEach` ancestor (FR-015); no-body behaviour code and message (FR-016),
-  added to the spec 236 diagnostic-codes contract; refusal of every non-null literal `Items` (FR-017).
+  added to the spec 236 diagnostic-codes contract; refusal of every non-null literal `Items` (FR-017); a note in
+  `extensions/Elsa3/src/Mapping/README.md` on the run-time difference for an `Items` expression that returns a non-list
+  (US4 scenario 6).
 - [ ] T017 [US4] Convert `single-outcome-activities.json` in a converter test: no NO-COUNTERPART, loop and slot as
   expected (SC-001).
 
