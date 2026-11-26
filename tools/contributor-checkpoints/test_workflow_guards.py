@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from textwrap import dedent
 import unittest
 
 import workflow_guards as guards
@@ -175,6 +176,116 @@ class WorkflowGuardTests(unittest.TestCase):
         self.assertFalse(contract(docker.replace("    needs: versions\n", "    needs: admission\n", 1)))
         self.assertFalse(contract(docker.replace("needs: [versions, stage-profile-images]", "needs: versions", 1)))
         self.assertFalse(contract(docker.replace('[ "$current" != "$GITHUB_SHA" ]', "false", 1)))
+
+    def test_essentials_writer_requires_the_qualified_registry_receipt(self) -> None:
+        workflow = (SCRIPT.parents[2] / ".github/workflows/docker.yml").read_text()
+
+        def run_step(name: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+            step = workflow.split(f"      - name: {name}\n", 1)[1].split("\n      - ", 1)[0]
+            commands = dedent(step.split("        run: |\n", 1)[1])
+            return subprocess.run(["bash", "-c", docker_fixture + "\n" + commands],
+                                  env=os.environ | env, capture_output=True, text=True, check=False)
+
+        docker_fixture = r'''
+docker() {
+  case "$1 $2 ${3:-}" in
+    "load -i "*) loaded_arch=$(basename "$(dirname "$3")") ;;
+    "image inspect --format")
+      if [ "$4" = '{{.Id}}' ]; then echo "$LOCAL_ID"; else echo "linux/$loaded_arch"; fi ;;
+    "image inspect "*) jq -nc --arg base "$FOUNDATION_IMAGE" '[{Config:{Labels:{"org.opencontainers.image.base.name":$base}}}]' ;;
+    "tag "*|"image rm "*) ;;
+    "push "*)
+      if [[ "$2" == *-amd64 ]]; then pushed=$AMD64; else pushed=$ARM64; fi
+      printf '%s: digest: %s size: 123\n' "${2##*:}" "$pushed" ;;
+    "buildx imagetools inspect")
+      case "$4" in
+        *-amd64) jq -nc --arg digest "$AMD64" '{digest:$digest}' ;;
+        *-arm64) jq -nc --arg digest "$NATIVE_READBACK" '{digest:$digest}' ;;
+        *:latest)
+          digest=$PREVIOUS
+          if grep -q 'latest written' "$PUBLISH_LOG"; then digest=$INDEX; fi
+          jq -nc --arg digest "$digest" '{digest:$digest}' ;;
+        *) jq -nc --arg digest "$INDEX_READBACK" '{digest:$digest,manifests:[
+              {platform:{os:"linux",architecture:"amd64"}},{platform:{os:"linux",architecture:"arm64"}}]}' ;;
+      esac ;;
+    "buildx imagetools create")
+      printf '%s\n' "$*" >> "$PUBLISH_LOG"
+      if [ "$4" = --metadata-file ]; then
+        test "$8" = "$REPOSITORY@$AMD64" && test "$9" = "$REPOSITORY@$ARM64" || return 10
+        jq -nc --arg digest "$INDEX" '{"containerimage.descriptor":{digest:$digest}}' > "$5"
+      else
+        test "${!#}" = "$REPOSITORY@$INDEX" || return 11
+        if [ "$5" = "$REPOSITORY:latest" ]; then
+          grep -q "Previous latest $REPOSITORY@$PREVIOUS" "$GITHUB_STEP_SUMMARY" || return 12
+          echo 'latest written' >> "$PUBLISH_LOG"
+        fi
+      fi ;;
+    *) return 13 ;;
+  esac
+}
+python3() { test "$3" = "$IMAGE" && test "$4" = "$LOCAL_ID" && test "$5" = "$LOCAL_ID"; }
+gh() { echo "$MAIN_COMMIT"; }
+'''
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            receipt = directory / "essentials-native-receipt" / "staged.json"
+            publish_log = directory / "publication.log"
+            repository = "elsaworkflows/elsa-essentials-host"
+            version = "4.0.0-preview.10.1"
+            image = "elsa-server-essentials-curated:4.0.0-preview.10"
+            base = "elsaworkflows/elsa-foundation-host@sha256:" + "1" * 64
+            amd64, arm64, local_id, index, previous, retag = ("sha256:" + value * 64 for value in "234567")
+            env = {
+                "RUNNER_TEMP": temporary, "ARTIFACT": "elsa-server-essentials-curated", "IMAGE": image,
+                "TARGET": f"{repository}:profile-{version}", "VERSION": version, "REPOSITORY": repository,
+                "RECORD_ESSENTIALS_RECEIPT": "true", "FOUNDATION_IMAGE": base, "GITHUB_SHA": SHA,
+                "GITHUB_REPOSITORY": "elsa-workflows/elsa-foundation", "GITHUB_RUN_NUMBER": "10",
+                "MAIN_COMMIT": SHA,
+                "GITHUB_STEP_SUMMARY": str(directory / "summary"), "PUBLISH_LOG": str(publish_log),
+                "AMD64": amd64, "ARM64": arm64, "LOCAL_ID": local_id, "INDEX": index, "PREVIOUS": previous,
+                "NATIVE_READBACK": arm64, "INDEX_READBACK": index,
+            }
+            for arch in ("amd64", "arm64"):
+                bundle = directory / "artifacts" / arch
+                bundle.mkdir(parents=True)
+                data = f"{arch} archive".encode()
+                (bundle / "image.tar.gz").write_bytes(data)
+                (bundle / "build.json").write_text(json.dumps({
+                    "image": image, "platform": f"linux/{arch}", "foundationImage": base, "commit": SHA,
+                    "imageId": local_id, "archiveSha256": hashlib.sha256(data).hexdigest(),
+                }))
+                (bundle / "smoke.jsonl").write_text(json.dumps({"imageId": local_id}) + "\n")
+
+            stage = "Push the tested native images under architecture-specific tags"
+            publish = "Verify the native image pair and publish the existing release tags"
+            manual = run_step(stage, env | {"RECORD_ESSENTIALS_RECEIPT": "false", "NATIVE_READBACK": retag})
+            self.assertEqual(0, manual.returncode, manual.stderr)
+            self.assertFalse(receipt.exists())
+            rejected = run_step(stage, env | {"NATIVE_READBACK": retag})
+            self.assertNotEqual(0, rejected.returncode)
+            self.assertFalse(receipt.exists())
+            staged = run_step(stage, env)
+            self.assertEqual(0, staged.returncode, staged.stderr)
+            saved = receipt.read_text()
+            self.assertEqual({"repository": repository, "version": version, "commit": SHA,
+                              "nativeDigests": {"amd64": amd64, "arm64": arm64}}, json.loads(saved))
+
+            receipt.write_text(saved + saved)
+            self.assertNotEqual(0, run_step(publish, env).returncode)
+            self.assertFalse(publish_log.exists())
+            receipt.write_text(saved)
+            self.assertNotEqual(0, run_step(publish, env | {"INDEX_READBACK": retag}).returncode)
+            self.assertEqual(1, len(publish_log.read_text().splitlines()))
+            publish_log.write_text("")
+            stale = run_step(publish, env | {"MAIN_COMMIT": "b" * 40})
+            self.assertEqual(0, stale.returncode, stale.stderr)
+            self.assertNotIn("latest written", publish_log.read_text())
+            publish_log.write_text("")
+            promoted = run_step(publish, env)
+            self.assertEqual(0, promoted.returncode, promoted.stderr)
+            self.assertIn(f"{repository}:4.0.0-preview.10", publish_log.read_text())
+            self.assertIn(f"{repository}:sha-{SHA[:7]}", publish_log.read_text())
+            self.assertIn("latest written", publish_log.read_text())
 
 
 class ServerProfileArchiveTests(unittest.TestCase):

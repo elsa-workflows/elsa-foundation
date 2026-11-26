@@ -438,6 +438,8 @@ jobs:
       ARTIFACT: ${{ matrix.image }}
       IMAGE: ${{ matrix.image }}:4.0.0-preview.${{ github.run_number }}
       TARGET: ${{ matrix.destination }}${{ needs.versions.outputs.profile-version }}
+      VERSION: ${{ needs.versions.outputs.profile-version }}
+      RECORD_ESSENTIALS_RECEIPT: ${{ matrix.image == 'elsa-server-essentials-curated' && !(inputs.build_profiles || inputs.publish_profiles) }}
       FOUNDATION_IMAGE: elsaworkflows/elsa-foundation-host@${{ needs.build-and-push-foundation-host.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
@@ -456,9 +458,12 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Push the tested native images under architecture-specific tags
+        shell: bash
         run: |
+          set -euo pipefail
           foundation_label='org.opencontainers.image.base.name'
           if [ "$ARTIFACT" = elsa-profile-builder ]; then foundation_label='io.elsaworkflows.profile.foundation-image'; fi
+          native_digests='{}'
           for arch in amd64 arm64; do
             bundle="$RUNNER_TEMP/artifacts/$arch"
             archive="$bundle/image.tar.gz"
@@ -478,10 +483,35 @@ jobs:
             if [ "$ARTIFACT" != elsa-profile-builder ]; then
               python3 tools/docker-profiles/archive_identity.py "$archive" "$IMAGE" "$image_id" "$loaded_id"
             fi
-            docker tag "$loaded_id" "$TARGET-$arch"
-            docker push "$TARGET-$arch"
+            staged_tag="$TARGET-$arch"
+            docker tag "$loaded_id" "$staged_tag"
+            if [ "$RECORD_ESSENTIALS_RECEIPT" = true ]; then
+              push_log="$RUNNER_TEMP/essentials-$arch-push.log"
+              docker push "$staged_tag" 2>&1 | tee "$push_log"
+              pushed_digest=$(awk '$2 == "digest:" {print $3}' "$push_log")
+              [[ "$pushed_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+              staged_digest=$(docker buildx imagetools inspect "$staged_tag" --format '{{json .Manifest}}' | jq -er .digest)
+              test "$staged_digest" = "$pushed_digest"
+              native_digests=$(jq -c --arg arch "$arch" --arg digest "$pushed_digest" '. + {($arch): $digest}' <<< "$native_digests")
+            else
+              docker push "$staged_tag"
+            fi
             docker image rm "$IMAGE"
           done
+          if [ "$RECORD_ESSENTIALS_RECEIPT" = true ]; then
+            mkdir -p "$RUNNER_TEMP/essentials-native-receipt"
+            jq -n --arg repository "${TARGET%:*}" --arg version "$VERSION" --arg commit "$GITHUB_SHA" \
+              --argjson nativeDigests "$native_digests" '{repository: $repository, version: $version, commit: $commit, nativeDigests: $nativeDigests}' \
+              > "$RUNNER_TEMP/essentials-native-receipt/staged.json"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: env.RECORD_ESSENTIALS_RECEIPT == 'true'
+        with:
+          name: elsa-essentials-native-receipt-${{ needs.versions.outputs.profile-version }}
+          path: ${{ runner.temp }}/essentials-native-receipt/staged.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
 
   publish-profile-release:
     name: Publish the matched profile release
@@ -525,6 +555,10 @@ jobs:
       REPOSITORY: elsaworkflows/elsa-essentials-host
       VERSION: ${{ needs.versions.outputs.profile-version }}
     steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: elsa-essentials-native-receipt-${{ needs.versions.outputs.profile-version }}
+          path: ${{ runner.temp }}/essentials-native-receipt
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -533,11 +567,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          native_digests=$(jq -ser --arg repository "$REPOSITORY" --arg version "$VERSION" --arg commit "$GITHUB_SHA" '
+            select(length == 1) | .[0] |
+            select(.repository == $repository and .version == $version and .commit == $commit) |
+            [.nativeDigests.amd64, .nativeDigests.arm64] |
+            select(all(.[]; type == "string" and test("^sha256:[0-9a-f]{64}$")) and .[0] != .[1]) | @tsv' \
+            "$RUNNER_TEMP/essentials-native-receipt/staged.json")
+          read -r amd64_digest arm64_digest <<< "$native_digests"
           staged="$REPOSITORY:profile-$VERSION"
-          docker buildx imagetools create -t "$staged" "$staged-amd64" "$staged-arm64"
+          metadata="$RUNNER_TEMP/essentials-index.json"
+          docker buildx imagetools create --metadata-file "$metadata" -t "$staged" \
+            "$REPOSITORY@$amd64_digest" "$REPOSITORY@$arm64_digest"
+          digest=$(jq -er '."containerimage.descriptor".digest | select(test("^sha256:[0-9a-f]{64}$"))' "$metadata")
           manifest=$(docker buildx imagetools inspect "$staged" --format '{{json .Manifest}}')
+          test "$(jq -er .digest <<< "$manifest")" = "$digest"
           jq -e '([.manifests[] | select(.annotations["vnd.docker.reference.type"] != "attestation-manifest") | (.platform.os + "/" + .platform.architecture)] | sort) == ["linux/amd64","linux/arm64"]' <<< "$manifest"
-          digest=$(jq -er .digest <<< "$manifest")
           source="$REPOSITORY@$digest"
           docker buildx imagetools create \
             -t "$REPOSITORY:4.0.0-preview.$GITHUB_RUN_NUMBER" \
