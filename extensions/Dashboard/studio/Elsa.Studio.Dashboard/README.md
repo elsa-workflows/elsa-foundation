@@ -1,6 +1,6 @@
 # Studio questions and dashboards
 
-`Elsa.Studio.Dashboard` adds saved questions and named dashboards: the `/questions` and `/dashboards` entries, each with Mine and Shared with me collections. It needs the backend's `elsa.api.studio-dashboard` capability and ships as a feed add-on for Studio Essentials. Home is not part of this module: the Studio shell owns Home and its widget area in every flavor (see [Home in the SDK guide](../../../../Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/README.md#home-widget-and-section-contributions)). Named dashboards keep saved question references separately from Home widgets and the Home layout.
+`Elsa.Studio.Dashboard` adds saved questions and named dashboards: the `/questions` and `/dashboards` entries, each with Mine and Shared with me collections. It needs the backend's `elsa.api.studio-dashboard` capability and ships as a feed add-on for Studio Essentials. Home is not part of this module: the Studio shell owns Home and its widget area in every flavor (see [Home in the SDK guide](../../../../studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/README.md#home-widget-and-section-contributions)). Named dashboards keep saved question references separately from Home widgets and the Home layout.
 
 ## Saved questions and named dashboards
 

@@ -4,7 +4,7 @@ A standalone model of the execution kernel ([DESIGN.md](DESIGN.md): the design a
 sketch, in three layers), the stores it runs on, the native Elsa workflow model on it, and a simulation that tries to
 break it all. The prototype keeps its own build settings. The relational provider imports the repository's
 central package versions. Its projects reference the backend
-[Actor Foundation packages](../../essentials/src/ActorFoundation/README.md), so the public contracts and Embedded
+[Actor Foundation packages](../../server/essentials/src/ActorFoundation/README.md), so the public contracts and Embedded
 tenant binding use the same assemblies as a package consumer.
 
 What was found is in [FINDINGS.md](FINDINGS.md) (section 27: the runtime conformance suite and the Orleans adapter;
@@ -18,26 +18,26 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 
 | Path | What |
 |---|---|
-| `../../essentials/src/ActorFoundation/BuiltIn/Runtime` | Layer 1, the actor runtime: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal, and `PartitionRuntime`, the built-in runtime (balancer, activations, one pass at a time per partition); addresses, flaws, the owner's defaults |
-| `../../essentials/src/ActorFoundation/BuiltIn/Durable` | Layer 2, durable actors: `Worker` (a partition's activation: inbox, fenced commit, timers, background jobs, events, poison, journal), `DurableHost`, the seam to layer 3 (`IActorType`, `DurableTurn`), the store contract, the in-memory store, the projector, reply addresses for live output |
-| `../../essentials/tests/ActorFoundation/Legacy/Workflows` | Legacy test adapter: `WorkflowInstance` (status, definition, parent and children, suspend, resume, terminate, rebind, delete, the history envelope) and the execution-model contract (`IExecutionModel`, `ITurn`) |
-| `../../essentials/tests/ActorFoundation/Simulation` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
-| [`Graph`](../../essentials/src/Workflows/Runtime/Graph) | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
-| `../../essentials/tests/Workflows/Runtime/Graph/Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
-| [Workflow actor](../../essentials/src/Workflows/Runtime/WorkflowActor) | Hosts an Elsa execution model as a durable actor through the Actor Foundation contract |
-| [Native model](../../essentials/src/Workflows/Runtime/Native/Model) | Native workflow definitions, interpretation and structural activities, including Flowchart on the graph engine |
-| [Native activities](../../essentials/src/Workflows/Runtime/Native/Activities) | Activity contracts, bindings and built-in leaf activities |
-| `../../essentials/tests/Workflows/Runtime/Native/Legacy` | Nonpackable adapter that runs Native through the legacy simulation turn contract |
-| `../../essentials/tests/ActorFoundation/Native/Run` | Native smoke tests, HTTP host and live output (`Live.cs`), cost and memory measurements, PostgreSQL Core Preview |
-| `../../essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs`; the commit as the store's own SQL in `EfStore.Owned.cs` and the `*CommitDialect.cs` files ([COMMIT-SQL.md](COMMIT-SQL.md)) |
+| `../../server/essentials/src/ActorFoundation/BuiltIn/Runtime` | Layer 1, the actor runtime: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal, and `PartitionRuntime`, the built-in runtime (balancer, activations, one pass at a time per partition); addresses, flaws, the owner's defaults |
+| `../../server/essentials/src/ActorFoundation/BuiltIn/Durable` | Layer 2, durable actors: `Worker` (a partition's activation: inbox, fenced commit, timers, background jobs, events, poison, journal), `DurableHost`, the seam to layer 3 (`IActorType`, `DurableTurn`), the store contract, the in-memory store, the projector, reply addresses for live output |
+| `../../server/essentials/tests/ActorFoundation/Legacy/Workflows` | Legacy test adapter: `WorkflowInstance` (status, definition, parent and children, suspend, resume, terminate, rebind, delete, the history envelope) and the execution-model contract (`IExecutionModel`, `ITurn`) |
+| `../../server/essentials/tests/ActorFoundation/Simulation` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
+| [`Graph`](../../server/essentials/src/Workflows/Runtime/Graph) | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
+| `../../server/essentials/tests/Workflows/Runtime/Graph/Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
+| [Workflow actor](../../server/essentials/src/Workflows/Runtime/WorkflowActor) | Hosts an Elsa execution model as a durable actor through the Actor Foundation contract |
+| [Native model](../../server/essentials/src/Workflows/Runtime/Native/Model) | Native workflow definitions, interpretation and structural activities, including Flowchart on the graph engine |
+| [Native activities](../../server/essentials/src/Workflows/Runtime/Native/Activities) | Activity contracts, bindings and built-in leaf activities |
+| `../../server/essentials/tests/Workflows/Runtime/Native/Legacy` | Nonpackable adapter that runs Native through the legacy simulation turn contract |
+| `../../server/essentials/tests/ActorFoundation/Native/Run` | Native smoke tests, HTTP host and live output (`Live.cs`), cost and memory measurements, PostgreSQL Core Preview |
+| `../../server/essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs`; the commit as the store's own SQL in `EfStore.Owned.cs` and the `*CommitDialect.cs` files ([COMMIT-SQL.md](COMMIT-SQL.md)) |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`) |
-| `../../essentials/tests/ActorFoundation/Store/EntityFramework` | The conformance suite against the EF store, every engine |
-| `../../essentials/tests/ActorFoundation/Store/Conformance` | The store conformance suite: semantic cases, the stress test, the cost runs, for any provider |
+| `../../server/essentials/tests/ActorFoundation/Store/EntityFramework` | The conformance suite against the EF store, every engine |
+| `../../server/essentials/tests/ActorFoundation/Store/Conformance` | The store conformance suite: semantic cases, the stress test, the cost runs, for any provider |
 | `conformance/Kernel.Store.Conformance.Run` | The suite against the in-memory store |
 | `conformance/Kernel.Runtime.Conformance` | The runtime conformance suite: semantic cases, the fence broken on purpose, the stress test, for any actor runtime |
 | `conformance/Kernel.Runtime.Conformance.Run` | The runtime suite against the built-in runtime |
-| `../../essentials/src/ActorFoundation/BuiltIn/Durable/ActorContract` | The shared actor-turn adapter and header checks consumed by the built-in providers |
-| `../../essentials/src/ActorFoundation/BuiltIn/Hosting` | `RuntimeNode`: the built-in runtime of one node on a clock |
+| `../../server/essentials/src/ActorFoundation/BuiltIn/Durable/ActorContract` | The shared actor-turn adapter and header checks consumed by the built-in providers |
+| `../../server/essentials/src/ActorFoundation/BuiltIn/Hosting` | `RuntimeNode`: the built-in runtime of one node on a clock |
 | `mongo/Kernel.Mongo` | The storage interface on MongoDB |
 | `mongo/Kernel.Mongo.Run` | The suite against MongoDB, its connection killer, probes |
 | `experiments/VirtualPartitions` | Round 5 A: the two fence granularities of virtual partitions (per virtual partition, per owned range) as EF stores, the measurement harness and the ownership simulation; results in [PARTITIONS.md](PARTITIONS.md) |
@@ -54,8 +54,8 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 One project at a time (they share `obj/` folders through project references):
 
 ```
-for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run ef/Kernel.Ef.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
-dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release      # the graph engine's corpus
+for p in ../../server/essentials/tests/ActorFoundation/Simulation ../../server/essentials/tests/ActorFoundation/Native/Run ef/Kernel.Ef.Run ../../server/essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
+dotnet test ../../server/essentials/tests/Workflows/Runtime/Graph/Tests -c Release      # the graph engine's corpus
 ```
 
 ## Inspect and retry parked work
@@ -63,8 +63,8 @@ dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release     
 From `prototypes/kernel-model`, run:
 
 ```bash
-dotnet restore ../../essentials/tests/ActorFoundation/Simulation --locked-mode
-dotnet run -c Release --no-restore --project ../../essentials/tests/ActorFoundation/Simulation -- --park-operator-demo
+dotnet restore ../../server/essentials/tests/ActorFoundation/Simulation --locked-mode
+dotnet run -c Release --no-restore --project ../../server/essentials/tests/ActorFoundation/Simulation -- --park-operator-demo
 ```
 
 An approval actor parks when its service is unavailable. The operator lists parked actors through
@@ -91,7 +91,7 @@ in-memory actor-backed runs and their own read route.
 Run the Native workflow witness from `prototypes/kernel-model`.
 
 ```sh
-dotnet run --project ../../essentials/tests/ActorFoundation/Simulation -c Release -- --workflow-run-history-check
+dotnet run --project ../../server/essentials/tests/ActorFoundation/Simulation -c Release -- --workflow-run-history-check
 ```
 
 ## Migration plan outcomes from the journal
@@ -99,7 +99,7 @@ dotnet run --project ../../essentials/tests/ActorFoundation/Simulation -c Releas
 From `prototypes/kernel-model`, run:
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --migration-plan-reads
+dotnet run -c Release --project ../../server/essentials/tests/Workflows/Runtime/Native/Migration/Run -- --migration-plan-reads
 ```
 
 This K9 example projects one plan's committed journal through `IActorReads`, using its opaque page token.
@@ -121,8 +121,8 @@ and operator controls.
 From `prototypes/kernel-model`, build the runner and give it a new SQLite file:
 
 ```sh
-dotnet restore ../../essentials/tests/ActorFoundation/Native/Run --locked-mode
-dotnet build -c Release ../../essentials/tests/ActorFoundation/Native/Run --no-restore
+dotnet restore ../../server/essentials/tests/ActorFoundation/Native/Run --locked-mode
+dotnet build -c Release ../../server/essentials/tests/ActorFoundation/Native/Run --no-restore
 dll=../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll
 scratch=$(mktemp -d)
 dotnet "$dll" sqlite-plan-projection build "$scratch/plan.db"
@@ -161,7 +161,7 @@ tenant and reads the view file locally. Application hosting and operator authent
 From `prototypes/kernel-model`:
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --migration-plan-dispatch
+dotnet run -c Release --project ../../server/essentials/tests/Workflows/Runtime/Native/Migration/Run -- --migration-plan-dispatch
 ```
 
 This K11 dispatch example reads a committed batch and sends `Migrate` outside actor turns to its exact actor refs.
@@ -178,7 +178,7 @@ remain separate K11 work.
 ### Validate a waiting Native checkpoint
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --native-migration-validation
+dotnet run -c Release --project ../../server/essentials/tests/Workflows/Runtime/Native/Migration/Run -- --native-migration-validation
 ```
 
 This K11 check loads real Balanced and Durable checkpoints through the in-memory Actor Foundation.
@@ -192,7 +192,7 @@ outstanding jobs, Flowchart and StateMachine compatibility are separate work.
 ### Apply a compatible Native migration
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --native-migration-apply
+dotnet run -c Release --project ../../server/essentials/tests/Workflows/Runtime/Native/Migration/Run -- --native-migration-apply
 ```
 
 The public in-memory command suspends a waiting Native workflow, rebinds a compatible Sequence and
@@ -207,7 +207,7 @@ exercises real actor delivery. Declaration mapping and graph and statechart migr
 ### Dispatch a real migration plan
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --migration-plan-actor
+dotnet run -c Release --project ../../server/essentials/tests/Workflows/Runtime/Native/Migration/Run -- --migration-plan-actor
 ```
 
 The in-memory demo pages two Native workflows from the public instance read model. The plan model
@@ -227,7 +227,7 @@ automatic selection scheduling and provider qualification remain separate work.
 ### Run migration selection and completion
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --migration-plan-runner
+dotnet run -c Release --project ../../server/essentials/tests/Workflows/Runtime/Native/Migration/Run -- --migration-plan-runner
 ```
 
 The in-memory operator service selects through the public actor list, dispatches the committed
@@ -255,8 +255,8 @@ terminate a version 1 pending plan within its original terminal state reserve.
 From `prototypes/kernel-model`, set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database:
 
 ```sh
-dotnet restore ../../essentials/tests/ActorFoundation/Native/Run --locked-mode
-dotnet build -c Release ../../essentials/tests/ActorFoundation/Native/Run --no-restore
+dotnet restore ../../server/essentials/tests/ActorFoundation/Native/Run --locked-mode
+dotnet build -c Release ../../server/essentials/tests/ActorFoundation/Native/Run --no-restore
 dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-timed-job-worker owned checked
 ```
 
@@ -287,7 +287,7 @@ public qualified-command ordering have separate cases.
 The store conformance runner uses the same Worker fixture. From `prototypes/kernel-model`:
 
 ```sh
-project=../../essentials/tests/ActorFoundation/Store/EntityFramework
+project=../../server/essentials/tests/ActorFoundation/Store/EntityFramework
 dotnet restore "$project" --locked-mode
 dotnet build -c Release "$project" --no-restore
 runner=$project/bin/Release/net10.0/Kernel.Ef.Conformance.dll
@@ -432,7 +432,7 @@ Set `KERNEL_PREVIEW_POSTGRES` to the connection string of an empty PostgreSQL 17
 Run this from `prototypes/kernel-model` with the SDK in [global.json](global.json).
 
 ```bash
-../../essentials/tests/ActorFoundation/Native/Run/run-core-preview.sh
+../../server/essentials/tests/ActorFoundation/Native/Run/run-core-preview.sh
 ```
 
 The first Embedded host starts a Native approval workflow through the public Foundation contract, records Ada's approval,
@@ -532,7 +532,7 @@ To measure TCP turns as well, use a dedicated loopback database with `Host=127.0
 and refuses `GSS Encryption Mode=Require`.
 
 ```bash
-KERNEL_PREVIEW_MEASURE_WIRE=1 ../../essentials/tests/ActorFoundation/Native/Run/run-core-preview.sh
+KERNEL_PREVIEW_MEASURE_WIRE=1 ../../server/essentials/tests/ActorFoundation/Native/Run/run-core-preview.sh
 ```
 
 The meter counts the client's first send and each subsequent send after a server response. Pipelined requests can
@@ -566,7 +566,7 @@ checks, up from three. The general journal reader, view reader and sweeper each 
 The public preview uses separate tenant-scoped checkpoint and journal queries.
 
 To run two tenants' Native approvals on the same Embedded worker, use a fresh dedicated database. After building
-`../../essentials/tests/ActorFoundation/Native/Run` in Release, run the following commands from `prototypes/kernel-model`. Supply the three
+`../../server/essentials/tests/ActorFoundation/Native/Run` in Release, run the following commands from `prototypes/kernel-model`. Supply the three
 references printed by the first process to the second. The third identifies a root outside the owner's set.
 
 ```bash
@@ -598,7 +598,7 @@ Each tenant uses its own fixed-scope public client process. To select a writer a
 and `in-batch` or `checked` to both commands. This preview runs one registered workflow actor type on its dedicated database.
 
 To run two processes under the built-in Cluster runtime, point `KERNEL_PREVIEW_POSTGRES` at a fresh dedicated
-PostgreSQL database and run the following after building `../../essentials/tests/ActorFoundation/Native/Run` in Release:
+PostgreSQL database and run the following after building `../../server/essentials/tests/ActorFoundation/Native/Run` in Release:
 
 ```bash
 dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-roots 1024
@@ -648,7 +648,7 @@ spans process loss and replay.
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
 ```bash
-../../essentials/tests/ActorFoundation/Native/Run/run-core-preview-failover.py
+../../server/essentials/tests/ActorFoundation/Native/Run/run-core-preview-failover.py
 ```
 
 The fixture starts two Embedded host processes for the same root. The first keeps renewing its lease at the second
@@ -712,7 +712,7 @@ public preview budget has its own command.
 
 Orderly shutdown of an idle set host releases the owned fences together. The runtime conformance runner's
 `set-release` case covers a cancelled drain, overlapping stop calls and the fixed-host path. To check the full
-1,024-row release and a stale epoch on SQLite, run `dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Store/EntityFramework --
+1,024-row release and a stale epoch on SQLite, run `dotnet run -c Release --project ../../server/essentials/tests/ActorFoundation/Store/EntityFramework --
 sqlite release-set --owned-commit --fence-in-batch` from `prototypes/kernel-model`. The same check accepts
 `--checked-fence`.
 
@@ -727,7 +727,7 @@ From this directory, set `KERNEL_PREVIEW_POSTGRES` to a fresh disposable Postgre
 loopback (`Host=127.0.0.1`, `SSL Mode=Disable`). Use a fresh database for each writer and fence combination.
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Native/Run -- pg-write-budget owned in-batch
+dotnet run -c Release --project ../../server/essentials/tests/ActorFoundation/Native/Run -- pg-write-budget owned in-batch
 ```
 
 Use `ef` for the EF writer, or `checked` for a separate fence statement. The measured interval starts at public
@@ -748,7 +748,7 @@ can reuse the original reference without uploading another body.
 Set `KERNEL_PREVIEW_POSTGRES` to a fresh PostgreSQL database and run from `prototypes/kernel-model`:
 
 ```bash
-../../essentials/tests/ActorFoundation/Native/Run/run-core-preview.sh pg-flowchart-preview
+../../server/essentials/tests/ActorFoundation/Native/Run/run-core-preview.sh pg-flowchart-preview
 ```
 
 The Flowchart routes an amount of 750 to the approval path and persists a second approval wait. A new process
@@ -764,11 +764,11 @@ remain part of K7.
 Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database and run from `prototypes/kernel-model`:
 
 ```sh
-../../essentials/tests/ActorFoundation/Native/Run/run-statechart-preview.sh
+../../server/essentials/tests/ActorFoundation/Native/Run/run-statechart-preview.sh
 ```
 
 The Embedded processes use Balanced persistence and run the same Native order chart as the
-[public in-memory example](../../essentials/tests/Workflows/Runtime/Statecharts/Run/README.md#order-statemachine-on-the-public-actor-foundation).
+[public in-memory example](../../server/essentials/tests/Workflows/Runtime/Statecharts/Run/README.md#order-statemachine-on-the-public-actor-foundation).
 The first process starts the order through `WorkflowRuntime`. A declined payment enters
 `ReleasingShipment` and runs the shipment release activity. The process admits the shipment acknowledgement
 through the public Foundation ingress and exits before offering it to the machine.
@@ -787,7 +787,7 @@ invariants, Durable persistence and Cluster qualification have separate K7 accep
 Use a fresh dedicated database in `KERNEL_PREVIEW_POSTGRES` for each run. From `prototypes/kernel-model`:
 
 ```sh
-../../essentials/tests/ActorFoundation/Native/Run/run-flowchart-preview.sh manual
+../../server/essentials/tests/ActorFoundation/Native/Run/run-flowchart-preview.sh manual
 ```
 
 The public runtime starts a Native purchase Flowchart. A decision selects manual risk review while finance waits in
@@ -797,7 +797,7 @@ last live branch. The journal shows one join, and the terminal checkpoint contai
 
 Run with `automatic` on a separate fresh database to select the bypass path. Finance still has to finish. The inactive risk branch cannot hold the join open.
 
-For Durable persistence, run `../../essentials/tests/ActorFoundation/Native/Run/run-flowchart-preview.sh manual durable` (or `automatic durable`).
+For Durable persistence, run `../../server/essentials/tests/ActorFoundation/Native/Run/run-flowchart-preview.sh manual durable` (or `automatic durable`).
 The first Embedded process exits with an immediate self-send in the inbox. The fixture checks that this envelope
 and the initial checkpoint share a PostgreSQL transaction ID. The next process picks up the continuation and runs
 to the finance wait. A third process resumes the same workflow using its saved journal cursor. The manual route
@@ -827,7 +827,7 @@ replaces the join with a merge. The waiting assertion detects the premature fini
 On a fresh dedicated PostgreSQL database set `KERNEL_PREVIEW_POSTGRES` and run:
 
 ```sh
-../../essentials/tests/ActorFoundation/Native/Run/run-delay-preview.sh owned checked
+../../server/essentials/tests/ActorFoundation/Native/Run/run-delay-preview.sh owned checked
 ```
 
 The Delay profile seeds schema 3, message protocol 4 and journal codec 1. An existing schema-2 Delay store
@@ -846,7 +846,7 @@ whether the early-input check ran. The
 fixture checks the public journal after another worker pass. Use `ef` for the EF writer or `in-batch` for the batch
 fence. This preview exercises a single generated root, one partition and a clean process restart.
 
-Run `../../essentials/tests/ActorFoundation/Native/Run/run-delay-preview.sh owned checked recall` on another fresh database to let a public approval
+Run `../../server/essentials/tests/ActorFoundation/Native/Run/run-delay-preview.sh owned checked recall` on another fresh database to let a public approval
 win a Native Parallel join before the sibling Delay fires. Its checkpoint recalls the persisted timer. A cold process
 keeps the same actor, delivers an independently admitted notice at the original deadline and finishes on a second
 approval. The journal records the cancelled frame once. This Embedded preview supports recall of already persisted
@@ -858,7 +858,7 @@ recovery fall outside this case.
 Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated PostgreSQL database and run from `prototypes/kernel-model`:
 
 ```sh
-../../essentials/tests/ActorFoundation/Native/Run/run-root-job-preview.sh checked
+../../server/essentials/tests/ActorFoundation/Native/Run/run-root-job-preview.sh checked
 ```
 
 Use `in-batch` on another fresh database to exercise the other owned SQL fence. The first Embedded process starts
@@ -921,7 +921,7 @@ The fixture counts durable outcomes. The completion case deliberately executes t
 
 ### PostgreSQL Suspend and Resume preview
 
-On a fresh dedicated PostgreSQL database, set `KERNEL_PREVIEW_POSTGRES` and run `../../essentials/tests/ActorFoundation/Native/Run/run-root-operator-preview.sh [owned|ef] [checked|in-batch]`.
+On a fresh dedicated PostgreSQL database, set `KERNEL_PREVIEW_POSTGRES` and run `../../server/essentials/tests/ActorFoundation/Native/Run/run-root-operator-preview.sh [owned|ef] [checked|in-batch]`.
 
 The first process starts Native workflows and admits one-way Suspend and Resume through an explicitly authorized
 host. Receipts are scoped to the tenant and operation, including concurrent retries with changed targets. A second
@@ -945,8 +945,8 @@ Set `KERNEL_PREVIEW_POSTGRES` to the connection string of a fresh, empty Postgre
 `prototypes/kernel-model`:
 
 ```bash
-dotnet restore ../../essentials/tests/ActorFoundation/Native/Run --locked-mode
-dotnet run -c Release --no-restore --project ../../essentials/tests/ActorFoundation/Native/Run -- pg-runtime-cluster 1024
+dotnet restore ../../server/essentials/tests/ActorFoundation/Native/Run --locked-mode
+dotnet run -c Release --no-restore --project ../../server/essentials/tests/ActorFoundation/Native/Run -- pg-runtime-cluster 1024
 ```
 
 Omit the partition count for the eight-partition smoke. Append `wake` to use the optional PostgreSQL wake transport. The two processes listen on separate
@@ -1004,10 +1004,10 @@ $SIM --contract-jobs --seed 1 --tree-stall           # an uncooperative job keep
 $SIM --job-trial-check                               # counted withdrawal, cancellation and lost-ack boundaries
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
 $SIM --host-job-drain-check                          # entered job cleanup, persistence, restart and shutdown cancellation
-dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --retention-pass-check
+dotnet run -c Release --project ../../server/essentials/tests/Workflows/Runtime/Native/Migration/Run -- --retention-pass-check
 $SIM --public-owner-check                            # FC-1 per-owner serialization and fenced takeover
 $SIM --public-owner-check --flaw IgnoreLeaseDeadline,CommitDespiteFence
-$SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (../../essentials/src/ActorFoundation/BuiltIn/Runtime/VirtualPartitions.cs)
+$SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (../../server/essentials/src/ActorFoundation/BuiltIn/Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
 $SIM --native-mutations --seeds 20000                # break the native model on purpose
 $SIM --native --native-flaw ResumeAnyChild --seed 1  # replay one native flaw
@@ -1059,7 +1059,7 @@ obligation held, and the recorded parent's terminate which starts the cascade. I
 two-page cascades across takeover, an exact registry hand-off, and root retirement. Park drains, ThenDelete,
 and physical-provider qualification have separate cases.
 
-The focused [held request cases](../../essentials/tests/ActorFoundation/Simulation/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
+The focused [held request cases](../../server/essentials/tests/ActorFoundation/Simulation/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
 response after takeover and an input that stays durable across local reset. The seeded actor workload
 uses already-started counter receivers and one state version. The other legacy actor and transport
 mixes continue to use their separate simulation and case suites.
@@ -1149,8 +1149,8 @@ $MOR "$MO" probe crash|limits
 Place the format command before the fence option. From `prototypes/kernel-model`, for example:
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Store/EntityFramework -- sqlite version-services --checked-fence
-dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Store/EntityFramework -- postgres "$PG" version-services --checked-fence
+dotnet run -c Release --project ../../server/essentials/tests/ActorFoundation/Store/EntityFramework -- sqlite version-services --checked-fence
+dotnet run -c Release --project ../../server/essentials/tests/ActorFoundation/Store/EntityFramework -- postgres "$PG" version-services --checked-fence
 ```
 
 Repeat with `--fence-in-batch`. Use a disposable server for network providers. SQLite uses a temporary file.
@@ -1165,7 +1165,7 @@ From `prototypes/kernel-model`, use an isolated TLS-enabled MySQL test server wi
 connection. Build the EF conformance runner with a locked restore, then run:
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Store/EntityFramework -- mysql "$MY" lease-cancellation --owned-commit --checked-fence
+dotnet run -c Release --project ../../server/essentials/tests/ActorFoundation/Store/EntityFramework -- mysql "$MY" lease-cancellation --owned-commit --checked-fence
 ```
 
 Repeat with `--fence-in-batch`. This check injects a throwing cancellation callback at heartbeat connection
@@ -1235,7 +1235,7 @@ $SIM --native-mutations --seeds 20000
 dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic
 $EFC sqlite --checked-fence semantic; $EFC sqlite --fence-in-batch semantic
 $NAT smoke; $NAT cost sqlite
-dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release
+dotnet test ../../server/essentials/tests/Workflows/Runtime/Graph/Tests -c Release
 mkdir -p .out; $EFR x cost sqlite "Data Source=.out/cost.db" fence=checked                # and fence=batch; delete .out/cost.db* between runs
 $EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 fence=checked                     # and fence=batch; and commit=ef for the reference path
 $EFC postgres "$PG" --checked-fence semantic; $EFC postgres "$PG" --fence-in-batch semantic
@@ -1298,7 +1298,7 @@ MySQL prepares the two additive columns on a separate connection while the migra
 An interrupted preparation can be retried. Reopening requires a reader for the resulting three-part format.
 
 To check a real PostgreSQL predecessor, build its Native runner and this checkout's Native and EF conformance
-runners in Release. Run `bash ../../essentials/tests/ActorFoundation/Store/EntityFramework/check-generation-profiles.sh /absolute/path/to/old/Kernel.Native.Run.dll`
+runners in Release. Run `bash ../../server/essentials/tests/ActorFoundation/Store/EntityFramework/check-generation-profiles.sh /absolute/path/to/old/Kernel.Native.Run.dll`
 from this prototype. The script uses a disposable PostgreSQL 17 container and three fresh databases. It starts each
 workflow with the old executable and completes the same wait or pending private input after the schema upgrade.
 
@@ -1312,7 +1312,7 @@ the qualified relational writer.
 From `prototypes/kernel-model`, run this with Docker and the locked .NET SDK.
 
 ```sh
-bash ../../essentials/tests/ActorFoundation/Store/EntityFramework/check-mixed-version-rehearsal.sh
+bash ../../server/essentials/tests/ActorFoundation/Store/EntityFramework/check-mixed-version-rehearsal.sh
 ```
 
 The script builds its process driver against archived runtime sources at schema-2 revision `08caf14c0e`, schema-3

@@ -61,7 +61,7 @@ def main():
     producer.mkdir()
     with tarfile.open(archive) as bundle:
         bundle.extractall(producer, filter="data")
-    projects = {p.stem: p for p in (producer / "essentials/src").rglob("*.csproj")}
+    projects = {p.stem: p for p in (producer / "server/essentials/src").rglob("*.csproj")}
     selected, seen = [], set()
 
     def visit(project):

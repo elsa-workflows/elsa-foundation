@@ -40,7 +40,7 @@ This feature implements a contributor contract from another domain:
 
 - **`IStartupTask`** *(Core, `Elsa.Tasks.Core`)*: `BridgeStartupTask` attaches the engine-span listener at shell start.
   - Known impl: `BridgeStartupTask`.
-  - Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../../../../essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md)
+  - Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../../../../server/essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md)
 
 ## Why a separate project
 

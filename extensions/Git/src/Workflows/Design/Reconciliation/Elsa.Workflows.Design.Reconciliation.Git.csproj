@@ -1,12 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Serialization\Core\Elsa.Serialization.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="..\..\..\Elsa.Git\Elsa.Git.csproj" />
   </ItemGroup>
 

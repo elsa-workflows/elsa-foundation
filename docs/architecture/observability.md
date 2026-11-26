@@ -24,24 +24,24 @@ work extends the owner's 13 November Park decision; the owner adopted the extens
 
 ## What is built
 
-- **No trace context.** `Message` in [Messages.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Messages.cs) has no
+- **No trace context.** `Message` in [Messages.cs](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/Messages.cs) has no
   headers; the sketch's `message` table lists `headers`, and its contract says the kernel owns trace headers on
   messages.
 - **No metric instruments.** The harnesses count commands, round trips, takes, resets and deadlocks
   ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md), [ENGINES.md](../../prototypes/kernel-model/ENGINES.md)),
   which shows where each number comes from.
-- **Park**, in `WorkflowInstance.Park` ([WorkflowInstance.cs](../../essentials/tests/ActorFoundation/Legacy/Workflows/WorkflowInstance.cs);
+- **Park**, in `WorkflowInstance.Park` ([WorkflowInstance.cs](../../server/essentials/tests/ActorFoundation/Legacy/Workflows/WorkflowInstance.cs);
   [DESIGN.md](../../prototypes/kernel-model/DESIGN.md), "Park"). Unrelated jobs already entered keep their tickets and
   completion path (`RemainingJobs`). A timer not yet due stays a row; when it comes due it is a message to a faulted
   instance and is dropped.
 - **Control kinds** `kernel.suspend`, `kernel.resume`, `kernel.terminate`, `kernel.delete` (`Kinds` in Messages.cs). The
   actor type handles each alone and in order; no model sees them.
 - **The inputs of projector lag:** the partition position and the projection cursor (`IKernelStore.ProjectedAsync` in
-  [Store.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Store.cs)), and the viewer's tail read
-  ([Viewer.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Viewer.cs)).
+  [Store.cs](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/Store.cs)), and the viewer's tail read
+  ([Viewer.cs](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/Viewer.cs)).
 - **Releasing a partition:** `IKernelStore.ReleaseAsync` and `Worker.ReleaseAsync`, used by balancing.
 - **Not built:** recovery or discard of parked work, inbox inspection, an operator API, a handover command. The
-  [native intervention experiment](../../essentials/tests/Workflows/Runtime/Native/Recovery/Run/README.md) retries a fault
+  [native intervention experiment](../../server/essentials/tests/Workflows/Runtime/Native/Recovery/Run/README.md) retries a fault
   inside a still-running model; it does not recover a parked instance.
 
 ## Trace context on every message
@@ -155,10 +155,10 @@ Restore and recovery, the remaining resolution kinds and the physical providers 
    within their window, have no `KeptBy` and are never restored, so none is applied twice (invariant 4).
 
    **Rows are told apart by the kept reason and by their full key, never by id.** The store keys a message by
-   `(Id, Scope, Match)` ([Messages.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Messages.cs), `InboxKey`), so
+   `(Id, Scope, Match)` ([Messages.cs](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/Messages.cs), `InboxKey`), so
    two rows can share a wire id: a private delivery and an ordinary one, or two event matches. The conformance suite
    creates such twins and consumes them one at a time
-   ([PhysicalRetirementChecks.cs](../../essentials/tests/ActorFoundation/Store/Conformance/PhysicalRetirementChecks.cs)).
+   ([PhysicalRetirementChecks.cs](../../server/essentials/tests/ActorFoundation/Store/Conformance/PhysicalRetirementChecks.cs)).
    Every place that names a kept row uses a **delivery handle**: an opaque string that layer 2 encodes from the full
    key (`Id`, `Scope` and the exact `Match`) and only layer 2 decodes. The Park's journal entry lists the handles of
    the rows it consumed (bounded by the parking turn's inbox), operators select by handle, the waits lookup below goes
@@ -332,7 +332,7 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     a coordinator design choice ([register](decisions.md#the-gate-2-fix-round-17-november)). The terminates a cascade
     sends carry the cascade origin mark, and every recipient checks the parent binding on them in every state, a
     running one included ("Cascade terminates are parent-bound in every state" below, fifth review R5-M5).
-    The K3 [open-drain fixture](../../essentials/tests/ActorFoundation/Simulation/ParkDrainCascadeChecks.cs) runs a parent's
+    The K3 [open-drain fixture](../../server/essentials/tests/ActorFoundation/Simulation/ParkDrainCascadeChecks.cs) runs a parent's
     terminate during discard and expiry, and an operator's current selection during discard, through the
     built-in Worker. The refusal commits a cascade while preserving the drain. The fixture rejects cascade
     authority for an operator command selected before the actor parked. The original drain completes as Faulted.
@@ -361,7 +361,7 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     give; the operator terminates each child by its own selection. The marker's shape, its bound and when the
     obligation clears are on the data lifecycle page ([the qualified
     delete](data-lifecycle.md#proposed-the-qualified-delete)).
-    The K3 [retirement fixture](../../essentials/tests/ActorFoundation/Simulation/RetirementCascadeChecks.cs) runs the
+    The K3 [retirement fixture](../../server/essentials/tests/ActorFoundation/Simulation/RetirementCascadeChecks.cs) runs the
     in-memory Worker through qualified Delete of an already-ended child with live descendants. An operator
     terminate leaves its obligation held. The recorded parent's terminate opens it, and one-page and
     two-page schedules check progress across takeover and one send per exact child. The fixture also checks
@@ -759,7 +759,7 @@ Park decision.
   payload, creations and `seq`, so an authenticated kind still passes its check: a child completion to a
   creation-qualified parent needs its terminal-notice id, `Sender` and creations (`WorkflowInstance.cs`, the
   `ChildFinished` check), and a copy under a new id would be refused by `CreationProtocol.Refuse`
-  ([Creation.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Creation.cs)). Nothing is handed over in memory
+  ([Creation.cs](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/Creation.cs)). Nothing is handed over in memory
   ahead of the disk, so invariant 9 holds.
 - **Eligibility during a recover drain: released rows only.** The instance runs from the open commit. While the
   recover Resolution is open, the owner gives the instance a row only when the row is a control kind (below) or its
@@ -1194,7 +1194,7 @@ Park decision.
       ticket id. The returned event id is still the ticket id prefixed with `~`. Typed ticket metadata carries
       the author commit's acceptance time and distinguishes the duration in the new frame from the absolute
       expiry in older frames. Its first fenced step inserts the event row and rewrites the ticket without the
-      payload. [The in-memory fixture](../../essentials/tests/ActorFoundation/Simulation/EventIdentityChecks.cs) exercises the
+      payload. [The in-memory fixture](../../server/essentials/tests/ActorFoundation/Simulation/EventIdentityChecks.cs) exercises the
       Native and direct payload boundaries, restored waits, lost insert and match answers, and recovery of
       a Park-kept ticket. Provider frame and key-width evidence stays at K4.
       - **A generated event id counts inside `C`.** A turn's `Publish` takes no event id from the model: the event id
@@ -1708,7 +1708,7 @@ calls one new model hook.
         byte allowance lets it reach one wait before the second matches both. The first publication's next page
         reaches the remaining wait. The test reads opposite broadcast orders from the two actors and confirms
         that two subsequent direct sends from one actor arrive in authored order. The in-memory run is in
-        [FoundationEventSendChecks](../../essentials/tests/ActorFoundation/Simulation/FoundationEventSendChecks.cs). K4 also
+        [FoundationEventSendChecks](../../server/essentials/tests/ActorFoundation/Simulation/FoundationEventSendChecks.cs). K4 also
         races two transactions matching the same wait. Pause the first while it assigns inbox order and let the
         second try to commit. The resulting delivery order must follow commit visibility. If the provider serializes
         order assignment for that wait, verify that the second transaction waits and that the first delivery stays first.
@@ -2378,7 +2378,7 @@ store conformance suite need it:
   page at the row's revision plus one, the obligation kept on the marker by a delete while `Discharging`, a root
   included (fifth review R5-B2), and in the simulation, invariant 17 widened so that at quiescence no `Cascade`
   obligation remains `Discharging` on any instance row or marker and no `kernel.cascade` is pending (today I17 checks
-  only that no terminated tree instance runs or lists `Children`, existing prototype behaviour, [Checks.cs](../../essentials/tests/ActorFoundation/Simulation/Checks.cs)
+  only that no terminated tree instance runs or lists `Children`, existing prototype behaviour, [Checks.cs](../../server/essentials/tests/ActorFoundation/Simulation/Checks.cs)
   676–680);
 - the idempotent cancel of a job ticket by its exact key (instance, creation, job key, `JobGeneration`), shared by
   the live terminate, the open-drain refusal cascade and the marker's cascade: a pending ticket consumed and counted,
@@ -2488,7 +2488,7 @@ call takes a `BoundScope`:
 
 - **Ids are opaque to layer 3.** Layer 3 stores and compares an `ActorRef` as a string and never parses it (FC-13).
   Today's `InstanceRef` embeds its partition (`3/order-17` in
-  [Addresses.cs](../../essentials/src/ActorFoundation/BuiltIn/Runtime/Addresses.cs)); that stays inside the built-in
+  [Addresses.cs](../../server/essentials/src/ActorFoundation/BuiltIn/Runtime/Addresses.cs)); that stays inside the built-in
   foundation, and K2 removes it from layer 3's reach.
 - **Where an operator finds a handle.** `InboxAsync` lists an actor's rows, in pages, each with its handle and state; a
   retry names at most 500 handles from there. It is eventually consistent: a row a drain has just restored or cleared

@@ -12,15 +12,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="ValenceWorks.MinimalEndpoints" />
   </ItemGroup>
 
-  <ItemGroup><ProjectReference Include="../../../../essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../../../server/essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" /></ItemGroup>
 </Project>

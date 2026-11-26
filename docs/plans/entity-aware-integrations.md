@@ -29,12 +29,12 @@ The paths below describe actual inspected source, rather than acceptance evidenc
 | Existing seam | What can be reused | Remaining gap |
 |---|---|---|
 | [Integrations SDK](../../Extensions/Integrations/README.md), [connector base](../../Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk/ConnectorActivity.cs) | Ordinary typed activities, HTTP transport, Connections/Secrets and faults | The SDK explicitly remains activities-only; no entity discovery, reference or external-event host |
-| [Activity reconciliation](../../Essentials/src/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) | Existing persisted activity catalog | Entity descriptors must not become a second activity catalog |
-| [Input options](../../Essentials/src/Workflows/Design/Core/Contracts/IActivityInputOptionsProvider.cs) | Dependent source/type/record/operation selection | Source authorization and schema-shaped arguments need entity-owned contributions |
+| [Activity reconciliation](../../server/essentials/src/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) | Existing persisted activity catalog | Entity descriptors must not become a second activity catalog |
+| [Input options](../../server/essentials/src/Workflows/Design/Core/Contracts/IActivityInputOptionsProvider.cs) | Dependent source/type/record/operation selection | Source authorization and schema-shaped arguments need entity-owned contributions |
 | [Connection resolution](../../extensions/Connections/src/Elsa.Connections/Services/DefaultConnectionResolver.cs), [connection identity](../../extensions/Connections/src/Core/Models/ConnectionModels.cs) | Tenant lookup, credentials, source-host rules and incarnation identity | Discovery cannot fabricate an activity context; source record/field authorization and source retargeting need explicit handling |
-| [Trigger provider](../../Essentials/src/Workflows/Runtime/Core/Contracts/IActivityTriggerStimulusProvider.cs) | Normal publication and start/wait routing | Authenticated, durable external acceptance is not supplied by the existing direct dispatch API |
-| [Internal delivery](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusDeliveryServices.cs) | Runtime-owned recipient retention and exact resume semantics | The current publisher/checkpoint boundary is workflow-owned; an external event cannot invent a publisher workflow |
-| [User Task forms](../../Essentials/src/Workflows/Runtime/Core/UserTasks/UserTaskContracts.cs) | Pinned form versions, validation and explicit prefill | Reference/attachment editors and authorized live dimensions are not built-in field types |
+| [Trigger provider](../../server/essentials/src/Workflows/Runtime/Core/Contracts/IActivityTriggerStimulusProvider.cs) | Normal publication and start/wait routing | Authenticated, durable external acceptance is not supplied by the existing direct dispatch API |
+| [Internal delivery](../../server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusDeliveryServices.cs) | Runtime-owned recipient retention and exact resume semantics | The current publisher/checkpoint boundary is workflow-owned; an external event cannot invent a publisher workflow |
+| [User Task forms](../../server/essentials/src/Workflows/Runtime/Core/UserTasks/UserTaskContracts.cs) | Pinned form versions, validation and explicit prefill | Reference/attachment editors and authorized live dimensions are not built-in field types |
 
 The [owner selected](https://github.com/elsa-workflows/elsa-foundation/issues/3608#issuecomment-6672133904)
 **tenant/service connections first**, with current Elsa permissions checked as well. Current Connections do not establish delegated human
@@ -99,7 +99,7 @@ Primitives. No constitution amendment or unratified execution proposal is assume
 **Private source catalog admission remains unresolved.** A disposable public-extension experiment preserved
 separately typed operation inputs, exact decimals and immutable schemas through normal catalog/publication
 and runtime paths. That does not establish safe source-specific metadata exposure. The private-tenant
-case failed: [source publication](../../Essentials/src/Workflows/Publishing/Api/Services/SourceOwnedActivityVersionPublisher.cs)
+case failed: [source publication](../../server/essentials/src/Workflows/Publishing/Api/Services/SourceOwnedActivityVersionPublisher.cs)
 copied explicit tenant-owned entities through factories that dropped tenant ownership, producing a global
 definition visible to another tenant. Narrow prerequisite [#3917](https://github.com/elsa-workflows/elsa-foundation/issues/3917)
 owns that existing ownership defect. Availability filtering is also addability, not a source-disclosure

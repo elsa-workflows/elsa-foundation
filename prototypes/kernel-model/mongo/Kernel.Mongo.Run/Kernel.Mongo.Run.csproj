@@ -6,7 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Kernel.Mongo/Kernel.Mongo.csproj" />
-    <ProjectReference Include="../../../../essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
+    <ProjectReference Include="../../../../server/essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

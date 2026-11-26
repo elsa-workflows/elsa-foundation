@@ -10,7 +10,7 @@ Executable evidence for the termination findings of the fifth Astra High review 
 - **R5-m3:** RM-1's foreign-job mutation, with jobs that carry generations (RT-2).
 
 Every turn's write after setup is a `CommitBatch` handed to the real prototype `InMemoryStore.CommitAsync`
-([InMemoryStore.cs](../../../../essentials/src/ActorFoundation/BuiltIn/Durable/InMemoryStore.cs) 87–194). Setup seeds instance rows directly into the
+([InMemoryStore.cs](../../../../server/essentials/src/ActorFoundation/BuiltIn/Durable/InMemoryStore.cs) 87–194). Setup seeds instance rows directly into the
 store, outside commands enter through the real `AddAsync`, the first keyed start enters through the real
 `AcceptAsync`, and the proposed state (obligations, `KeptBy`, marks) is kept beside the rows. The commit checks the partition fence and
 counts every consumed input: a consume of a row that is missing or done raises

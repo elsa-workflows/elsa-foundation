@@ -35,7 +35,7 @@ record() { printf '%s=%s\n' "$1" "$2" >> "$state/env"; }
 
 find_studio() {
   local candidate
-  for candidate in "${STUDIO_DIR:-}" "$root/Studio"; do
+  for candidate in "${STUDIO_DIR:-}" "$root/studio"; do
     if [ -n "$candidate" ] && [ -f "$candidate/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj" ]; then
       (cd "$candidate" && pwd)
       return 0
@@ -109,7 +109,7 @@ echo "node $(node --version), pnpm $(cd "$studio" && pnpm --version), dotnet $(d
 } > "$state/env"
 
 step workbench-build
-dotnet build "$root/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj" -p:RestoreLockedMode=true -v:q -nologo > "$logs/workbench-build.log" 2>&1 \
+dotnet build "$root/server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj" -p:RestoreLockedMode=true -v:q -nologo > "$logs/workbench-build.log" 2>&1 \
   || { tail -40 "$logs/workbench-build.log" >&2; false; }
 
 step studio-install
@@ -130,9 +130,9 @@ step browser-install
 
 step workbench-start
 # The Workbench writes its Nuplane lock file into the project on startup; teardown removes it when this run created it.
-lock_file="$root/apps/Elsa.Workbench.Host/nuplane.lock.json"
+lock_file="$root/server/apps/Elsa.Workbench.Host/nuplane.lock.json"
 [ -e "$lock_file" ] || record GENERATED_LOCK_FILE "$lock_file"
-dotnet run --no-build --project "$root/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj" --launch-profile http \
+dotnet run --no-build --project "$root/server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj" --launch-profile http \
   > "$logs/workbench.log" 2>&1 &
 workbench_pid=$!
 record WORKBENCH_PID "$workbench_pid"

@@ -15,7 +15,7 @@ ROOTS = [
     'extensions/Identity/src/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj',
     'extensions/Identity/src/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj',
     'extensions/Identity/src/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj',
-    'essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj',
+    'server/essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj',
 ]
 
 

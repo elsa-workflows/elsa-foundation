@@ -32,7 +32,7 @@ Run the whole stack straight from these images.
 > `elsaworkflows/elsa-studio` publishes the Studio Essentials app, the pair of `elsaworkflows/elsa-essentials-host`
 > ([#5768](https://github.com/elsa-workflows/elsa-foundation/issues/5768)). Against Workbench it shows the screens of the modules
 > it compiles in. The Studio app with every module compiled in publishes as `elsaworkflows/elsa-studio-workbench`, and the bare
-> shell as `elsaworkflows/elsa-studio-foundation`; see [Studio Docker](../../Studio/docs/docker.md).
+> shell as `elsaworkflows/elsa-studio-foundation`; see [Studio Docker](../../studio/docs/docker.md).
 
 For a pinned, isolated check that Studio can create and run a workflow against Workbench, see
 [Verify the published Studio–Workbench pair](../../docs/contributing/published-image-pair.md).
@@ -168,7 +168,7 @@ Demo credentials and the demo-only warning are the same as the [table in section
   docker compose version
   ```
 
-- **For the full stack:** Studio is included under `Studio/` in this same repository.
+- **For the full stack:** Studio is included under `studio/` in this same repository.
 - **No credentials required.** All NuGet feeds used by the image builds are public, so the builds
   work on a clean machine with no `~/.nuget` setup.
 

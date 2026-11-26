@@ -6,7 +6,7 @@ Enable Dashboard persistence as well. The API diagnoses missing or duplicate act
 
 ## Cross-domain contributions
 
-`DashboardResourcesApiFeature.ConfigureServices` registers [`DashboardResourcePermissionContributor`](DashboardApiActor.cs) through `services.AddPermissionContributor<DashboardResourcePermissionContributor>()`. It contributes the ten question/dashboard resource-operation permission declarations through `IPermissionContributor` to Foundation Identity's `CompositePermissionCatalog`. The [Identity extension-points catalog](../../../../essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md#ipermissioncontributor) owns the shared contract, registration and aggregation rules. Native resource ownership and source-data authorization govern each operation independently.
+`DashboardResourcesApiFeature.ConfigureServices` registers [`DashboardResourcePermissionContributor`](DashboardApiActor.cs) through `services.AddPermissionContributor<DashboardResourcePermissionContributor>()`. It contributes the ten question/dashboard resource-operation permission declarations through `IPermissionContributor` to Foundation Identity's `CompositePermissionCatalog`. The [Identity extension-points catalog](../../../../server/essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md#ipermissioncontributor) owns the shared contract, registration and aggregation rules. Native resource ownership and source-data authorization govern each operation independently.
 
 ## Identity and access
 

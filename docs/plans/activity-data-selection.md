@@ -12,7 +12,7 @@
 ## Recommendation
 
 Deliver the focused program for selecting data at activity inputs. Start with a bounded proof in the real
-Studio/Workbench, then review the source/binding contract and distribute production work. The interaction
+studio/Workbench, then review the source/binding contract and distribute production work. The interaction
 direction is clear enough to build against; a second standalone visual prototype would not resolve the
 remaining integration questions.
 
@@ -71,13 +71,13 @@ These are source findings, not execution acceptance. The live issue/PR observati
 | Area | Existing basis | Work or uncertainty |
 |---|---|---|
 | Value semantics | Accepted [ADR 0045](../adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) distinguishes immutable results from variables and resolves causal occurrences. | Preserve its rules; a reference never means the newest execution of a node. |
-| Direct result input | [RuntimeInputBindingCompiler](../../Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs) compiles `ActivityResult` with producer, projection and optionality; a declared producer scope is optional and legacy, and the server's own bindings carry none ([binding contract](../../specs/1215-activity-data-selection/contracts/binding-contract.md#1-authored-wire)). | It selects a declared projection key; arbitrary nested member paths are not currently a field on that reference. |
-| Expression bindings | [ExpressionDefinition](../../Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs) supports activity-result parameters. [#3501](https://github.com/elsa-workflows/elsa-foundation/issues/3501) and merged [PR #3502](https://github.com/elsa-workflows/elsa-foundation/pull/3502) delivered a workflow-input argument picker. | Reuse portable parameter handling. Define nested selection separately from the installed language adapter used for transformations. |
-| Source discovery | [PersistedExpressionAuthoringContextSource](../../Essentials/src/Workflows/Design/Api/Services/PersistedExpressionAuthoringContextSource.cs) supplies typed available outputs; [expressionToolingClient](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/expression-tooling/expressionToolingClient.ts) projects them to Studio. | Prove current-draft, non-code input usage. CLR member discovery is bounded; it is not general dynamic JSON-schema discovery. |
+| Direct result input | [RuntimeInputBindingCompiler](../../server/essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs) compiles `ActivityResult` with producer, projection and optionality; a declared producer scope is optional and legacy, and the server's own bindings carry none ([binding contract](../../specs/1215-activity-data-selection/contracts/binding-contract.md#1-authored-wire)). | It selects a declared projection key; arbitrary nested member paths are not currently a field on that reference. |
+| Expression bindings | [ExpressionDefinition](../../server/essentials/src/Expressions/Core/Models/ExpressionDefinition.cs) supports activity-result parameters. [#3501](https://github.com/elsa-workflows/elsa-foundation/issues/3501) and merged [PR #3502](https://github.com/elsa-workflows/elsa-foundation/pull/3502) delivered a workflow-input argument picker. | Reuse portable parameter handling. Define nested selection separately from the installed language adapter used for transformations. |
+| Source discovery | [PersistedExpressionAuthoringContextSource](../../server/essentials/src/Workflows/Design/Api/Services/PersistedExpressionAuthoringContextSource.cs) supplies typed available outputs; [expressionToolingClient](../../studio/src/essentials/Elsa.Studio.Workflows/Client/src/expression-tooling/expressionToolingClient.ts) projects them to Studio. | Prove current-draft, non-code input usage. CLR member discovery is bounded; it is not general dynamic JSON-schema discovery. |
 | Main canvas | #3094 identifies Sequence/structure-owned availability and omitted Flowchart producers. | Prove a simple linear Flowchart in the first milestone; specify general graph availability before production expansion. |
-| Editor and wire | [module](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/module.tsx) registers existing reference editors; [activityInputWire](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/activityInputWire.ts) preserves structured Variable/Input/Connection payloads. | Add the missing result authoring contribution and lossless structured result serialization; a new picker alone is insufficient. |
-| Graph operations | [duplicateActivities](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/duplicateActivities.ts) remaps node/structure identities. | Define traversal/remapping of producer references inside inputs and expression parameters. |
-| Input constraints | [ActivityPropertiesPanel](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx) honors secret-only, options-provider, masked and read-only contracts. | Apply Choose data only where the target's source contract permits it. |
+| Editor and wire | [module](../../studio/src/essentials/Elsa.Studio.Workflows/Client/src/module.tsx) registers existing reference editors; [activityInputWire](../../studio/src/essentials/Elsa.Studio.Workflows/Client/src/activityInputWire.ts) preserves structured Variable/Input/Connection payloads. | Add the missing result authoring contribution and lossless structured result serialization; a new picker alone is insufficient. |
+| Graph operations | [duplicateActivities](../../studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/duplicateActivities.ts) remaps node/structure identities. | Define traversal/remapping of producer references inside inputs and expression parameters. |
+| Input constraints | [ActivityPropertiesPanel](../../studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx) honors secret-only, options-provider, masked and read-only contracts. | Apply Choose data only where the target's source contract permits it. |
 
 #3094 was open, without an assignee, comments or a native parent at planning and establishment refresh. No open
 covering PR was found. Establishment links it to #3882 while preserving its original scope. #2310's GitHub parked label is stale relative to its accepted
@@ -106,7 +106,7 @@ records that authorization without expanding scope or waiving milestone gates.
 
 Record an owner amendment to ADR 0080 D0 naming this program and its sequencing, add its concise goal file
 and registry row, and open the program issue. Proposed sequencing: run alongside existing active programs,
-preserve consolidation's priority, coordinate shared Studio/runtime paths, and reactivate no unrelated work.
+preserve consolidation's priority, coordinate shared studio/runtime paths, and reactivate no unrelated work.
 
 Reuse #3094 and preserve its compensation relationship. Initially elaborate only the proof and the next
 contract/spec work. Create new issues as `needs-triage`; the maintainer controls readiness. Use existing

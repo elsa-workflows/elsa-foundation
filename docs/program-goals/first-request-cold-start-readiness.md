@@ -27,7 +27,7 @@ Readiness](workspace-launch-readiness.md): a launchable workspace must also *sta
 1. **Instrument (this unit — spec 129).** Opt-in `Elsa.Boot` phase-timing diagnostic + deterministic schema
    op-count baseline + measurement recipe + baseline report. Measurement only. Gates units 2–5.
 2. **ReadyToRun publish (spec 134 — DELIVERED).** R2R added to the container publish path
-   (`Essentials/apps/Elsa.Server/Dockerfile`, per-RID via `TARGETARCH`, framework-dependent, Dockerfile-scoped so dev
+   (`server/essentials/apps/Elsa.Server/Dockerfile`, per-RID via `TARGETARCH`, framework-dependent, Dockerfile-scoped so dev
    builds are untouched) to cut the JIT-bound host-build + Kestrel-startup share. TieredPGO left at its default-on
    value (R2R composes with tiered compilation); InvariantGlobalization rejected (host does auth + culture-
    sensitive work). Measured honestly in `specs/232-container-readytorun-publish/research.md` — the deterministic
@@ -96,14 +96,14 @@ These items preserve the former queue and do not authorize measurement or timing
 - Spec: `specs/133-schema-admission-skip-and-batch/` (unit 3 skip-if-current; batching proposal for Groundwork)
 - Report: `docs/reports/cold-start-readiness-2026-07.md`
 - Upstream proposal: `docs/reports/cshells-initializer-observer-proposal.md`
-- Eager activation: `Essentials/apps/Elsa.Server/Boot/EagerShellActivation*.cs`
+- Eager activation: `server/essentials/apps/Elsa.Server/Boot/EagerShellActivation*.cs`
 - Charter/precedent: `docs/reports/runtime-http-performance-2026-07.md`
-- Instrument: `Essentials/apps/Elsa.Server/Boot/`, `Essentials/apps/Elsa.Server/Program.cs`
+- Instrument: `server/essentials/apps/Elsa.Server/Boot/`, `server/essentials/apps/Elsa.Server/Program.cs`
 - Recipe: `tools/performance/measure-cold-start.sh`
-- Deterministic guard: `Essentials/tests/Persistence/Groundwork/Tests/ColdStartSchemaOperationCountTests.cs`
-- Skip-if-current guard: `Essentials/tests/Persistence/Groundwork/Tests/GroundworkAdmissionSkipStampTests.cs`
-- Skip-if-current impl: `Essentials/src/Persistence/Groundwork/Sqlite/SqliteGroundworkAdmissionStampStore.cs`,
-  `Essentials/src/Persistence/Groundwork/Unified/Composition/GroundworkAdmissionSkipStamp.cs`
+- Deterministic guard: `server/essentials/tests/Persistence/Groundwork/Tests/ColdStartSchemaOperationCountTests.cs`
+- Skip-if-current guard: `server/essentials/tests/Persistence/Groundwork/Tests/GroundworkAdmissionSkipStampTests.cs`
+- Skip-if-current impl: `server/essentials/src/Persistence/Groundwork/Sqlite/SqliteGroundworkAdmissionStampStore.cs`,
+  `server/essentials/src/Persistence/Groundwork/Unified/Composition/GroundworkAdmissionSkipStamp.cs`
 
 ## Removal or completion conditions
 

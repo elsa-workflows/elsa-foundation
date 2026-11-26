@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const repo = resolve(import.meta.dirname, "../../..");
-const { chromium, expect } = await import(pathToFileURL(join(repo, "Studio/node_modules/@playwright/test/index.mjs")));
+const { chromium, expect } = await import(pathToFileURL(join(repo, "studio/node_modules/@playwright/test/index.mjs")));
 const root = mkdtempSync(join(tmpdir(), "elsa-3579-workbench-"));
 console.log(`Owned Workbench qualification: ${root}`);
 mkdirSync(join(root, "packages"));
@@ -53,7 +53,7 @@ writeFileSync(join(root, "appsettings.json"), JSON.stringify({
 const log = openSync(join(root, "workbench.log"), "w", 0o600);
 const environment = { ...process.env, ASPNETCORE_ENVIRONMENT: "Development", DOTNET_ENVIRONMENT: "Development" };
 for (const name of Object.keys(environment)) if (/^(Elsa__|CShells__|ConnectionStrings__|ASPNETCORE_URLS)/i.test(name)) delete environment[name];
-const host = spawn("dotnet", [join(repo, "apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll"),
+const host = spawn("dotnet", [join(repo, "server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll"),
   "--contentRoot", root, "--urls", origin], { cwd: root, env: environment, stdio: ["ignore", log, log] });
 let browser;
 try {

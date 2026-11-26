@@ -7,7 +7,7 @@ import { runOwnedCommand } from "./ui-owned-command.mjs";
 import { absoluteToolPath, assertToolchain, captureToolchain, isExecutableIdentity } from "./ui-toolchain.mjs";
 
 const repo = resolve(import.meta.dirname, "../../..");
-const studioBin = "Studio/src/apps/Elsa.Studio.Workbench.Host/bin/Debug/net10.0";
+const studioBin = "studio/src/apps/Elsa.Studio.Workbench.Host/bin/Debug/net10.0";
 const probeProject = "tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj";
 const moduleRoot = "extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/wwwroot";
 // The retained 153 completed traces span 58m25s, after 6m24s of setup.

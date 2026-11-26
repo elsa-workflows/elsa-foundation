@@ -8,6 +8,6 @@
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Statecharts.OrderFixture" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
   </ItemGroup>
 </Project>

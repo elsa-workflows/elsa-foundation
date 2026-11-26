@@ -27,8 +27,8 @@ ROOTS = (
     "extensions/Examples/src/Acme.Processing/Module/Acme.Processing.csproj",
     "extensions/Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj",
     "extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj",
-    "essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj",
-    "essentials/src/Events/Elsa.Events/Elsa.Events.csproj",
+    "server/essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj",
+    "server/essentials/src/Events/Elsa.Events/Elsa.Events.csproj",
 )
 CASE_IDS = (
     "installed-module-bytes", "native-discovery", "native-business-record-create", "author-numerical-oracle",
@@ -179,7 +179,7 @@ class Probe:
         selected = self.closure()
         producer = self.root / "producer"; producer.mkdir()
         files = set()
-        for project in selected + [REPO / "essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj"]:
+        for project in selected + [REPO / "server/essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj"]:
             for path in project.parent.rglob("*"):
                 if path.is_file() and not {"bin", "obj", "node_modules", ".git"}.intersection(path.relative_to(project.parent).parts):
                     files.add(path)
@@ -198,7 +198,7 @@ class Probe:
             # Final qualification compiles the exact committed tree, even if the live checkout changes later.
             archive = self.root / "source.tar"
             directories = {project.parent.relative_to(REPO).as_posix() for project in selected}
-            directories.update({"essentials/build/Analyzers", "tools/studio/Dashboard.Conformance.Probe"})
+            directories.update({"server/essentials/build/Analyzers", "tools/studio/Dashboard.Conformance.Probe"})
             roots = {path.relative_to(REPO).as_posix() for path in files
                      if not any(path.relative_to(REPO).is_relative_to(Path(directory)) for directory in directories)}
             self.run("source-archive", ["git", "-c", "core.fsmonitor=false", "archive", "--format=tar", "--output=" + str(archive), self.source, *sorted(directories | roots)], REPO)

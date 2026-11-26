@@ -24,7 +24,7 @@
     <ProjectReference Include="..\Elsa.Connections\Elsa.Connections.csproj" />
     <ProjectReference Include="..\Core\Elsa.Connections.Core.csproj" />
     <ProjectReference Include="..\..\..\Http\src\Activities\Elsa.Activities.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
 </Project>

@@ -11,7 +11,7 @@
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <ProjectReference Include="../../src/Acme.Processing/Module/Acme.Processing.csproj" />
     <ProjectReference Include="../../../Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj" />

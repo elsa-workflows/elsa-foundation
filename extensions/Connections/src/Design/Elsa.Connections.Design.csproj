@@ -10,11 +10,11 @@
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Connections\Elsa.Connections.csproj" />
     <ProjectReference Include="..\Core\Elsa.Connections.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
 </Project>
