@@ -96,6 +96,8 @@ class WorkflowScopeTests(unittest.TestCase):
                          'server/essentials/Directory.Packages.props', 'server/essentials/Example.csproj',
                          'server/essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj',
                          'studio/src/Feature.ts', 'extensions/Weaver/src/Feature.cs',
+                         'extensions/Attention/src/Api/AttentionApiFeature.cs',
+                         'extensions/Attention/tests/Api/Tests/Elsa.Attention.Api.Tests.csproj',
                          'extensions/Dashboard/src/Core/Dataset.cs',
                          'extensions/Dashboard/tests/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj',
                          'extensions/Git/src/Elsa.Git/GitClient.cs',
@@ -103,6 +105,8 @@ class WorkflowScopeTests(unittest.TestCase):
                          'extensions/Http/tests/Tests/Elsa.Http.Tests.csproj',
                          'extensions/Secrets/src/Elsa.Secrets/Features/SecretsFeature.cs',
                          'extensions/Secrets/tests/Tests/Elsa.Secrets.Tests.csproj',
+                         'extensions/Tasks/src/Elsa.Tasks/TasksFeature.cs',
+                         'extensions/Tasks/tests/Execution/Tests/Elsa.Tasks.Execution.Tests.csproj',
                          'extensions/Directory.Build.props',
                          'extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client/src/module.ts',
                          'Directory.Build.props', 'tools/studio/Weaver.Conformance.Probe/browser.mjs']:
