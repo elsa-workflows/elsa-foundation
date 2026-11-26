@@ -71,9 +71,10 @@ internal sealed partial class ActorAdapter
             : row is not { Status: Durable.InstanceStatus.Faulted, Retired: false, Suspended: false } ||
                 facts.Mark != message.Operator.RootParkMark ? "selection"
             : facts.Clearing is not null ? "clearing"
-            : row.Jobs is not null || !RestoresNothing(row) ? "plan" : !facts.FitsPage ? "page" : null;
+            : !CanRecoverRootWaits(row, facts) ? "plan" : !facts.FitsPage ? "page" : null;
         var revision = checked(row.Revision + 1);
-        var next = reason is null ? row with { Status = Durable.InstanceStatus.Running, Fault = null, Revision = revision } : row with { Revision = revision };
+        var next = reason is null ? row with { Status = Durable.InstanceStatus.Running, Fault = null, Jobs = null, Revision = revision }
+            : row with { Revision = revision };
         return new(input.Actor)
         {
             Expected = row.Revision, Row = next, Revision = revision, Status = next.Status, Consumed = [recover],
@@ -229,9 +230,19 @@ internal sealed partial class ActorAdapter
         return refused;
     }
 
-    private bool RestoresNothing(Durable.InstanceRow row)
+    private bool CanRecoverRootWaits(Durable.InstanceRow row, Durable.FoundationRootParkFacts facts)
     {
-        try { return actor.RestoreWaits(RootHeader(row), row.State) is { Timers.Count: 0, Jobs.Count: 0, Subscriptions.Count: 0 }; }
+        if (row.Jobs != facts.ConsumedJobRegistry) return false;
+        try
+        {
+            var plan = actor.RestoreWaits(RootHeader(row), row.State);
+            if (plan is not { Timers.Count: 0, Subscriptions.Count: 0 }) return false;
+            var registered = Durable.JobRegistry.Read(row.Jobs);
+            return registered.Count == 0 ? plan.Jobs.Count == 0 :
+                registered is [var job] && plan.Jobs is [var recipe] && job.Key == recipe.Key &&
+                job.Generation >= 0 && job.Generation < (row.NextJobGeneration ?? 1) &&
+                Durable.InMemoryStore.FitsSingleParkJobRecipe(row, new(recipe.Key, recipe.Arguments, recipe.Deadline));
+        }
         catch (Exception) { return false; }
     }
 

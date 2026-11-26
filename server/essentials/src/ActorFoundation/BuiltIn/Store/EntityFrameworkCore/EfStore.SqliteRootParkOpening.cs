@@ -46,9 +46,10 @@ public sealed partial class EfStore
         var parkAt = prior?.At ?? at;
         var openRevision = prior?.Revision ?? revision;
         var priorStatus = park.Opening ? InstanceStatus.Running : InstanceStatus.Faulted;
-        if (await db.Database.ExecuteSqlInterpolatedAsync($"""
+        var pinsResult = recorded && RecordsConsumedRootJob(db);
+        var write = WithParkJobResult(db, $"""
             UPDATE "Instances" SET "Status" = {(int)InstanceStatus.Faulted}, "Fault" = {park.EncodedFault},
-                "Revision" = {revision}, "FoundationWriteRevision" = {revision}, "FoundationParkAt" = {parkAt}, "FoundationParkRevision" = {openRevision}
+                "Revision" = {revision}, "FoundationWriteRevision" = {revision}, "FoundationParkAt" = {parkAt}, "FoundationParkRevision" = {openRevision} /*park-job-result*/
             WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" = {park.Expected}
                 AND "Status" = {(int)priorStatus} AND NOT "Retired" AND "Suspended" = {park.Suspended}
                 AND "FoundationParkAt" IS NOT DISTINCT FROM {prior?.At} AND "FoundationParkRevision" IS NOT DISTINCT FROM {prior?.Revision}
@@ -58,7 +59,10 @@ public sealed partial class EfStore
                 AND "FoundationTenant" = {root.Tenant} AND "FoundationReference" = {root.Reference}
                 AND EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Actor" = {root.Actor} AND "Partition" = {root.Partition}
                     AND "Tenant" = {root.Tenant} AND "Reference" = {root.Reference} AND "Creation" = 1 AND "Fingerprint" = {root.Fingerprint})
-            """, token) != 1 || !await KeepSqliteParkInputsAsync(db, root.Actor, root.Partition, scope, ids, park.Reason, token))
+            """, pinsResult ? ids[0] : null);
+        if (!pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1) return false;
+        if (!await KeepSqliteParkInputsAsync(db, root.Actor, root.Partition, scope, ids, park.Reason, token) ||
+            pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1)
             return false;
 
         if (park.Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync(WithSqliteOperatorPredicate(db, $"""

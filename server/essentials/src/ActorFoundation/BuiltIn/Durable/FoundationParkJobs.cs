@@ -37,10 +37,9 @@ public sealed partial class InMemoryStore
         var nextGeneration = row.NextJobGeneration ?? 1;
         foreach (var recipe in recipes)
         {
-            if (recipe.Key is null || !FoundationMetadataLimits.FitsName(recipe.Key, preservesCodeUnits: true) ||
-                !FoundationMetadataLimits.FitsContent(recipe.Arguments) || !byKey.TryAdd(recipe.Key, recipe))
+            if (!FitsParkJobRecipe(recipe) || !byKey.TryAdd(recipe.Key, recipe))
                 return null;
-            if (!registeredKeys.Contains(recipe.Key) && !Charge(EncodeRecipe(recipe, nextGeneration, out _))) return null;
+            if (!registeredKeys.Contains(recipe.Key) && !Charge(EncodeParkJobRecipe(row, recipe, nextGeneration, out _))) return null;
         }
         if (registered.Count == 0) return new(recipes, row.Jobs, row.NextJobGeneration, null, [], [], [], [], [], bytes);
         var markedSelection = retry?.Marked.Select(row => row.Key).ToHashSet();
@@ -75,7 +74,7 @@ public sealed partial class InMemoryStore
                 var oldDeadline = InboxKey.Issued(oldTimer);
 
                 var digest = JobRestartDigest(key);
-                var payload = EncodeRecipe(recipe, nextGeneration, out var timerId);
+                var payload = EncodeParkJobRecipe(row, recipe, nextGeneration, out var timerId);
                 if (!Charge(payload)) return null;
                 if (mode != ParkRecoveryMode.RetryAll && result is { KeptBy: ParkKeepReason.Consumed } &&
                     markedSelection?.Contains(resultKey) != true)
@@ -152,17 +151,29 @@ public sealed partial class InMemoryStore
         return writes.Any(message => !FoundationMetadataLimits.FitsComposed(message)) ? null :
             new(recipes, JobRegistry.Write(registered), nextGeneration, WriteJobRestarts(restarts), pending, retained, recalls, deadlineRearms, writes, bytes);
 
-        string EncodeRecipe(ParkJobRecipe recipe, long generation, out string? timerId)
-        {
-            timerId = recipe.Deadline is null ? null : DurableTurn.FoundationJobDeadlineId(row.Id, row.Creation, generation);
-            return Json.Write(new JobTicket(row.Model, recipe.Key, recipe.Arguments, recipe.Deadline, timerId));
-        }
-
         bool Charge(string payload)
         {
-            bytes += RestoreWaitAllowance + Encoding.UTF8.GetByteCount(payload);
+            bytes += ParkJobRecipeBytes(payload);
             return bytes <= MaxRestoreBytes && FoundationMetadataLimits.FitsContent(payload);
         }
+    }
+
+    internal static bool FitsSingleParkJobRecipe(InstanceRow row, ParkJobRecipe recipe)
+    {
+        if (!FitsParkJobRecipe(recipe)) return false;
+        var payload = EncodeParkJobRecipe(row, recipe, row.NextJobGeneration ?? 1, out _);
+        return ParkJobRecipeBytes(payload) <= MaxRestoreBytes && FoundationMetadataLimits.FitsContent(payload);
+    }
+
+    private static bool FitsParkJobRecipe(ParkJobRecipe recipe) => recipe.Key is not null &&
+        FoundationMetadataLimits.FitsName(recipe.Key, preservesCodeUnits: true) && FoundationMetadataLimits.FitsContent(recipe.Arguments);
+
+    private static int ParkJobRecipeBytes(string payload) => RestoreWaitAllowance + Encoding.UTF8.GetByteCount(payload);
+
+    private static string EncodeParkJobRecipe(InstanceRow row, ParkJobRecipe recipe, long generation, out string? timerId)
+    {
+        timerId = recipe.Deadline is null ? null : DurableTurn.FoundationJobDeadlineId(row.Id, row.Creation, generation);
+        return Json.Write(new JobTicket(row.Model, recipe.Key, recipe.Arguments, recipe.Deadline, timerId));
     }
 
     private static bool IsJobEnvelope(Message message, InstanceRow row, string kind, long generation) =>
