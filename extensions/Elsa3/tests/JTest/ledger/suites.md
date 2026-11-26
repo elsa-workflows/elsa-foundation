@@ -37,7 +37,7 @@ One row per suite file under `tests/` (spec 1235, data-model.md). Results: see d
 | `javascript/elsa-functions-tests.json` | javascript-elsa-functions.json | pass | blocked: #5686 (the made-compatible copy converts; publish fails with VF-STATE-002 on `Body`) | 11, 34 |
 | `javascript/json-methods-tests.json` | javascript-json-methods.json | pass | pass | 11, 29 |
 | `javascript/object-methods-tests.json` | javascript-object-methods.json | pass | blocked: #5686 (publish fails with VF-STATE-002 on `Body`) | 11, 29 |
-| `javascript/script-handler-functions-tests.json` | javascript-script-handler-functions.json | pass (base64 cases; `getConfiguration` cases removed, B14) | incompatible (`VF-IMP-005`: unknown host function `getConfiguration`) | 11, 29 |
+| `javascript/script-handler-functions-tests.json` | javascript-script-handler-functions.json | pass (base64 cases; `getConfiguration` cases removed, B14) | pass (made-compatible copy, run 34) | 11, 34 |
 | `javascript/specialized-methods-tests.json` | javascript-specialized-methods-workflow.json | pass | blocked: #5687 (a Promise result evaluates to `{}`) and #5818 (the top-level-await busy-wait exceeds the script memory limit and faults the workflow) | 11, 29 |
 | `logging/logging-tests.json` | logging-workflow.json | pass | blocked: #5686 (publish fails with VF-STATE-002 on `Headers`) | 11, 29 |
 | `performance/baseline-dispatch-tests.json` | performance-baseline-dispatch-sub.json, performance-baseline-dispatch.json | excluded | excluded | - |
