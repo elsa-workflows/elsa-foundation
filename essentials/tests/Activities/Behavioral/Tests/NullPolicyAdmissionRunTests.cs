@@ -35,7 +35,7 @@ public sealed class NullPolicyAdmissionRunTests
             new Dictionary<string, ExpressionParameterBinding> { ["value"] = new WorkflowRequestExpressionParameterBinding("value") },
             JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         var root = new ActivityNode("reader", "boolean-reader",
-            [new("Value", new ArgumentValue(expression, "JavaScript"), null, null, null, null)], []);
+            [new("Value", ArgumentValue.FromClr(expression, "JavaScript"), null, null, null, null)], []);
         var executable = await publication.Compile(root, inputs:
             [new("value", "value", new(alias), null, "Value", null, IsNullable: false)]);
         await using var harness = Harness();
@@ -56,7 +56,7 @@ public sealed class NullPolicyAdmissionRunTests
             (typeof(BooleanReader), "boolean-reader", [ReaderInput()]));
         var root = new ActivityNode("reader", "boolean-reader",
             [new("Value", literal ? new ArgumentValue(JsonSerializer.SerializeToElement<object?>(null), "Literal")
-                : new ArgumentValue("null", "JavaScript"), null, null, null, null)], []);
+                : ArgumentValue.FromClr("null", "JavaScript"), null, null, null, null)], []);
         var executable = await publication.Compile(root, strategies: new()
         {
             NullHandling = new() { DefaultOnNull = true }
@@ -145,7 +145,7 @@ public sealed class NullPolicyAdmissionRunTests
                 new("script", "script", new("String"), null, "Script", null, false, IsRequired: true),
                 new("arguments", "arguments", new("Any"), null, "Arguments", null, true)]));
         var root = new ActivityNode("script", "script-version", [
-            new("script", new ArgumentValue(body, "Literal"), null, null, null, null),
+            new("script", ArgumentValue.FromClr(body, "Literal"), null, null, null, null),
             new("arguments", new ArgumentValue(JsonSerializer.SerializeToElement(new { order = new { } }), "Literal"), null, null, null, null)], []);
         var declaration = new VariableDefinition(name, name, new(alias), null,
             new ArgumentValue(alias == "String" ? JsonSerializer.SerializeToElement("keep") : JsonSerializer.SerializeToElement(3), "Literal"));

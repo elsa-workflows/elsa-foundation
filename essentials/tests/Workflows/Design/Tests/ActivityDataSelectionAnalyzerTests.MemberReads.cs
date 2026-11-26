@@ -307,7 +307,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         {
             var stored = await Analyzer(provider).AnalyzeAsync(VariableDocument(Input(VariableMember("customer", "workflow", [path]))));
             var offered = await Analyzer(provider).AnalyzeAsync(VariableDocument(), new("consumer", "CustomerId"),
-                new() { Source = new(new VariableReference("customer", "workflow"), "Variable"), MemberPath = [path] });
+                new() { Source = ArgumentValue.FromClr(new VariableReference("customer", "workflow"), "Variable"), MemberPath = [path] });
 
             Assert.Empty(stored.Findings);
             Assert.Empty(stored.MemberReads);

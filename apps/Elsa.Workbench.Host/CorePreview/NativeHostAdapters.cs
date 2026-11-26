@@ -17,7 +17,7 @@ internal sealed class JintNativeScripts(IJavaScriptScriptEvaluator evaluator) : 
     public async ValueTask<JsonNode?> EvaluateAsync(string script, JsonObject arguments, CancellationToken cancellationToken)
     {
         var result = await evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(script, JsonSerializer.SerializeToElement(arguments), cancellationToken));
-        return result is { } value ? JsonNode.Parse(value.GetRawText()) : null;
+        return result.Value is { } value ? JsonNode.Parse(value.GetRawText()) : null;
     }
 }
 

@@ -47,9 +47,10 @@ internal sealed class PortableNativeExpressions(Func<(IServiceProvider Services,
                 new TypeReference(resultType),
                 values.ToDictionary(p => p.Key, p => (ExpressionParameterBinding)new LiteralExpressionParameterBinding(p.Value), StringComparer.Ordinal),
                 expression.Options is { } options ? JsonSerializer.SerializeToElement(options) : NoOptions,
-                ExpressionCapabilityProfiles.BindingPureV1);
+                ExpressionCapabilityProfiles.BindingReadonlyV1);
             var ambient = StringComparer.OrdinalIgnoreCase.Equals(expression.Language, "JavaScript") ? AmbientVariables.Referenced(expression.Text, variables) : null;
-            var pending = evaluator.EvaluateAsync(new ExpressionEvaluationRequest(definition, values, ambient, cancellationToken));
+            var reader = ambient is null ? null : new AmbientVariableReader(ambient);
+            var pending = evaluator.EvaluateAsync(new ExpressionEvaluationRequest(definition, values, reader, cancellationToken));
             if (!pending.IsCompleted)
             {
                 // Observe the abandoned evaluation so that its failure is not left unobserved.
@@ -98,4 +99,16 @@ internal static class AmbientVariables
         Regex.IsMatch(source, @"getVariable\s*\(\s*[^'"")\s]", RegexOptions.CultureInvariant);
 
     private static string ToPascalCase(string name) => name.Length == 0 ? name : $"{char.ToUpperInvariant(name[0])}{name[1..]}";
+}
+
+/// <summary>
+/// Serves the visible variables a kernel expression references as its variable reads (spec 1222 FR-008): the kernel holds
+/// them in memory before evaluation, so a read is a lookup, and a name the source does not reference is missing.
+/// </summary>
+internal sealed class AmbientVariableReader(IReadOnlyDictionary<string, JsonElement> variables) : IExpressionVariableReader
+{
+    public IReadOnlyList<string> CandidateNames { get; } = variables.Keys.ToArray();
+
+    public ExpressionVariableRead Read(string name) =>
+        variables.TryGetValue(name, out var value) ? ExpressionVariableRead.Present(value) : ExpressionVariableRead.Missing;
 }

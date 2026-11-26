@@ -235,7 +235,7 @@ public sealed class CompensationHandlerVariableValidatorTests : IDisposable
         [.. await _validator.Validate(new StubDraft(new WorkflowDefinitionState([], root, [], [], null)), CancellationToken.None)];
 
     private static ArgumentValue Variable(string referenceKey, string declaringScopeId) =>
-        new(new VariableReference(referenceKey, declaringScopeId), "Variable");
+        ArgumentValue.FromClr(new VariableReference(referenceKey, declaringScopeId), "Variable");
 
     private static ActivityNode Leaf(string nodeId, ArgumentValue? input = null) =>
         new(nodeId, "activity-version-leaf", input is null ? [] : [new ArgumentState("value", input, null, null, null, null)], []);

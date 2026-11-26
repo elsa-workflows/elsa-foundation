@@ -84,10 +84,10 @@
       "classification": "json_routed",
       "reason": "Uppercase SHA-256 of the ordered normal JSON array [selected scope, actor ID, tenant ID, artifact ID, invariant decimal page limit]. Context performs scope/access checks before hashing and binds the returned catalog cursor to this digest. BpmnCatalogTests pins the actual returned cursor binding.",
       "sources": [
-        "essentials/src/Activities/Bpmn/Api/Endpoints/BpmnCatalog.cs"
+        "extensions/Bpmn/src/Api/Endpoints/BpmnCatalog.cs"
       ],
       "goldenEvidence": [
-        "essentials/tests/Activities/Bpmn/Tests/BpmnCatalogTests.cs"
+        "extensions/Bpmn/tests/Tests/BpmnCatalogTests.cs"
       ],
       "sites": [
         {
@@ -107,10 +107,10 @@
       "classification": "json_routed",
       "reason": "Two JSON inputs: tenant/actor/request publication ID array and publication-intent object; shared routing retains prefix, supplied-intent flag and nullable expectations.",
       "sources": [
-        "essentials/src/Activities/Bpmn/Interchange/Services/BpmnAuthoredDirectPublisher.cs"
+        "extensions/Bpmn/src/Interchange/Services/BpmnAuthoredDirectPublisher.cs"
       ],
       "goldenEvidence": [
-        "essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnAuthoredDirectPublisherTests.cs",
+        "extensions/Bpmn/tests/Interchange/Tests/BpmnAuthoredDirectPublisherTests.cs",
         "specs/1207-json-data-integrity-baseline/evidence/bpmn-publication-hash-vectors.json",
         "specs/1207-json-data-integrity-baseline/evidence/generate-bpmn-publication-hash-vectors.py"
       ],
@@ -142,7 +142,7 @@
       "classification": "non_json",
       "reason": "UTF-8 named-event routing identity; BPMN and ordinary Event deliberately share the event-name byte recipe.",
       "sources": [
-        "essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnStartTriggerStimulus.cs"
+        "extensions/Bpmn/src/Elsa.Activities.Bpmn/Internal/BpmnStartTriggerStimulus.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -161,7 +161,7 @@
       "classification": "non_json",
       "reason": "BinaryWriter length-framed exact UTF-16 code units of BPMN model identity parts; no JSON serialization.",
       "sources": [
-        "essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelIdentity.cs"
+        "extensions/Bpmn/src/Elsa.Activities.Bpmn/Internal/BpmnModelIdentity.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -180,7 +180,7 @@
       "classification": "non_json",
       "reason": "BPMN timer element ID plus normalized recurrence expression separated by newline; no JSON serialization.",
       "sources": [
-        "essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnStartTriggerStimulus.cs"
+        "extensions/Bpmn/src/Elsa.Activities.Bpmn/Internal/BpmnStartTriggerStimulus.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -1651,7 +1651,7 @@
       "classification": "non_json",
       "reason": "Secret lookup key hashes case-folded connection identity text; no secret/document JSON preimage.",
       "sources": [
-        "essentials/src/Connections/Persistence/EntityFrameworkCore/Stores/ConnectionKeys.cs"
+        "extensions/Connections/src/Persistence/EntityFrameworkCore/Stores/ConnectionKeys.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -1845,7 +1845,7 @@
       "classification": "non_json",
       "reason": "OpenTelemetry tenant/scope/source binding uses strict UTF-8 length-prefixed scalar frames; Add is the same binary framing helper.",
       "sources": [
-        "essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/EfOpenTelemetryBinding.cs"
+        "extensions/Diagnostics.OpenTelemetry/src/Persistence/EntityFrameworkCore/EfOpenTelemetryBinding.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -1872,7 +1872,7 @@
       "classification": "non_json",
       "reason": "OpenTelemetry tenant/scope/source binding uses strict UTF-8 length-prefixed scalar frames; Add is the same binary framing helper.",
       "sources": [
-        "essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/EfOpenTelemetryBinding.cs"
+        "extensions/Diagnostics.OpenTelemetry/src/Persistence/EntityFrameworkCore/EfOpenTelemetryBinding.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -1899,7 +1899,7 @@
       "classification": "non_json",
       "reason": "OpenTelemetry indexed search keys hash normalized scalar service/resource/signal keys; no serialized telemetry payload.",
       "sources": [
-        "essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/OpenTelemetrySearchKeys.cs"
+        "extensions/Diagnostics.OpenTelemetry/src/Persistence/EntityFrameworkCore/OpenTelemetrySearchKeys.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -1918,7 +1918,7 @@
       "classification": "non_json",
       "reason": "Capture ID hashes 16 GUID bytes plus little-endian batch index and truncates to GUID; no JSON.",
       "sources": [
-        "essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Stores/EfOpenTelemetryStore.cs"
+        "extensions/Diagnostics.OpenTelemetry/src/Persistence/EntityFrameworkCore/Stores/EfOpenTelemetryStore.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -1937,7 +1937,7 @@
       "classification": "json_routed",
       "reason": "Lowercase canonical SHA-256 of the opaque {Resources,Instruments,Traces,Spans,MetricPoints,Logs} batch projection, preserving collection order and nullable fields. opentelemetry-batch/* constructs the actual store with binding/options and populates all six signal groups, including events/links/attributes; store scope is not added to content.",
       "sources": [
-        "essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Stores/EfOpenTelemetryStore.cs"
+        "extensions/Diagnostics.OpenTelemetry/src/Persistence/EntityFrameworkCore/Stores/EfOpenTelemetryStore.cs"
       ],
       "goldenEvidence": [
         "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
@@ -1970,7 +1970,7 @@
       "classification": "non_json",
       "reason": "API-key equality hashes provided and expected UTF-8 credential bytes before fixed-time comparison; preserve credential/security purpose.",
       "sources": [
-        "essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/Ingestion/OtlpIngestionSecurity.cs"
+        "extensions/Diagnostics.OpenTelemetry/src/Elsa.Diagnostics.OpenTelemetry/Ingestion/OtlpIngestionSecurity.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -1997,7 +1997,7 @@
       "classification": "non_json",
       "reason": "Structured-log replay binding hashes length-framed tenant/scope/stream strings, then Base64url encodes; no entry JSON payload.",
       "sources": [
-        "essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Stores/EfReplayCursorCodec.cs"
+        "extensions/Diagnostics.StructuredLogs/src/Persistence/EntityFrameworkCore/Stores/EfReplayCursorCodec.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -2016,7 +2016,7 @@
       "classification": "non_json",
       "reason": "Structured-log EF Hash is only category/source scalar search-key hashing; entry payload and append JSON fingerprints are separate owners.",
       "sources": [
-        "essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Stores/EfStructuredLogStore.cs"
+        "extensions/Diagnostics.StructuredLogs/src/Persistence/EntityFrameworkCore/Stores/EfStructuredLogStore.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -2035,10 +2035,10 @@
       "classification": "json_routed",
       "reason": "Uppercase SHA-256 of the UTF-8 frame made by appending UTF-16 character-count:value for binding tenant/scope/stream, then each ordered item RecordToken and canonical payload JSON text. StructuredLogAppendFingerprintTests pins actual multi-item Compute with structured-log-hash-vectors, supplementary Unicode length, reorder/boundary and malformed controls.",
       "sources": [
-        "essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Stores/StructuredLogAppendFingerprint.cs"
+        "extensions/Diagnostics.StructuredLogs/src/Persistence/EntityFrameworkCore/Stores/StructuredLogAppendFingerprint.cs"
       ],
       "goldenEvidence": [
-        "essentials/tests/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/StructuredLogAppendFingerprintTests.cs",
+        "extensions/Diagnostics.StructuredLogs/tests/Persistence/EntityFrameworkCore/Tests/StructuredLogAppendFingerprintTests.cs",
         "specs/1207-json-data-integrity-baseline/evidence/generate-structured-log-hash-vectors.py",
         "specs/1207-json-data-integrity-baseline/evidence/structured-log-hash-vectors.json"
       ],
@@ -2066,7 +2066,7 @@
       "classification": "non_json",
       "reason": "Structured-log replay binding hashes length-framed tenant/scope/stream strings, then Base64url encodes; no entry JSON payload.",
       "sources": [
-        "essentials/src/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/Storage/InMemoryReplayCursorCodec.cs"
+        "extensions/Diagnostics.StructuredLogs/src/Elsa.Diagnostics.StructuredLogs/Storage/InMemoryReplayCursorCodec.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -4478,7 +4478,7 @@
       "classification": "non_json",
       "reason": "Secrets attention generation hashes condition kind/version/occurrence scalar text; no secret JSON value.",
       "sources": [
-        "essentials/src/Secrets/Elsa.Secrets/Attention/SecretsAttentionContributor.cs"
+        "extensions/Secrets/src/Elsa.Secrets/Attention/SecretsAttentionContributor.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -4497,7 +4497,7 @@
       "classification": "non_json",
       "reason": "Secret key-ring derivation hashes configured key material UTF-8 bytes; cryptographic key derivation, not JSON integrity.",
       "sources": [
-        "essentials/src/Secrets/Elsa.Secrets/Services/DefaultSecretKeyRing.cs"
+        "extensions/Secrets/src/Elsa.Secrets/Services/DefaultSecretKeyRing.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -4941,7 +4941,7 @@
       "classification": "json_routed",
       "reason": "Dashboard audience cursor signs/verifies retained Cursor(scope,skip) JSON through keyed shared input; same key, Base64 envelope and normalized invalid-token refusal.",
       "sources": [
-        "essentials/src/Studio/Dashboard/Api/DashboardAudienceDirectory.cs"
+        "extensions/Dashboard/src/Api/DashboardAudienceDirectory.cs"
       ],
       "goldenEvidence": [
         "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
@@ -4964,7 +4964,7 @@
       "classification": "json_routed",
       "reason": "Audience scope hashes tenant,user,kind,search JSON string array through shared input; existing null-search normalization is retained.",
       "sources": [
-        "essentials/src/Studio/Dashboard/Api/DashboardAudienceDirectory.cs"
+        "extensions/Dashboard/src/Api/DashboardAudienceDirectory.cs"
       ],
       "goldenEvidence": [
         "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
@@ -4989,7 +4989,7 @@
       "classification": "json_routed",
       "reason": "Dashboard audience cursor signs/verifies retained Cursor(scope,skip) JSON through keyed shared input; same key, Base64 envelope and normalized invalid-token refusal.",
       "sources": [
-        "essentials/src/Studio/Dashboard/Api/DashboardAudienceDirectory.cs"
+        "extensions/Dashboard/src/Api/DashboardAudienceDirectory.cs"
       ],
       "goldenEvidence": [
         "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
@@ -5012,10 +5012,10 @@
       "classification": "json_routed",
       "reason": "Query preparation hashes selected scope/request/parameters/evaluatedAt/periods JSON through shared input; no private wire profile remains in hash recipe. Actual owner/helper recipes and caller controls: Elsa.Studio.Dashboard.Management.Query.DashboardQueryService::PrepareAsync.",
       "sources": [
-        "essentials/src/Studio/Dashboard/Management/Query/DashboardQueryService.cs"
+        "extensions/Dashboard/src/Management/Query/DashboardQueryService.cs"
       ],
       "goldenEvidence": [
-        "essentials/tests/Studio/Dashboard/QueryTests/DashboardQueryTests.cs"
+        "extensions/Dashboard/tests/QueryTests/DashboardQueryTests.cs"
       ],
       "sites": [
         {
@@ -5035,7 +5035,7 @@
       "classification": "json_routed",
       "reason": "Dashboard resource collection/mutation Fingerprint hashes selected JSON material through shared input; scope, expected revision and input selections retained.",
       "sources": [
-        "essentials/src/Studio/Dashboard/Management/Resources/DashboardResourceService.cs"
+        "extensions/Dashboard/src/Management/Resources/DashboardResourceService.cs"
       ],
       "goldenEvidence": [
         "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
@@ -5060,7 +5060,7 @@
       "classification": "non_json",
       "reason": "Dashboard EF Hash length-frames tenant/owner/kind/resource/operation scalar keys; serialized resource ContentJson is not a caller.",
       "sources": [
-        "essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/EfDashboardResourceStore.cs"
+        "extensions/Dashboard/src/Persistence/EntityFrameworkCore/EfDashboardResourceStore.cs"
       ],
       "goldenEvidence": [],
       "sites": [
@@ -7045,7 +7045,7 @@
         "essentials/src/Workflows/Runtime/Core/Models/RuntimeExecutionMaterial.cs"
       ],
       "goldenEvidence": [
-        "essentials/tests/Activities/Bpmn/Tests/BpmnServiceFaultPolicyTests.cs",
+        "extensions/Bpmn/tests/Tests/BpmnServiceFaultPolicyTests.cs",
         "essentials/tests/Workflows/Runtime/Tests/RuntimeModelMaterialTests.cs",
         "specs/1207-json-data-integrity-baseline/evidence/generate-model-material-hash-vectors.py",
         "specs/1207-json-data-integrity-baseline/evidence/model-material-hash-vectors.json"

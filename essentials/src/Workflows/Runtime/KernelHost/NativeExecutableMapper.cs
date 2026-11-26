@@ -536,8 +536,8 @@ public static class NativeExecutableMapper
             var expression = binding.Expression!;
             if (!string.Equals(expression.Language, "JavaScript", StringComparison.OrdinalIgnoreCase) && !string.Equals(expression.Language, "Liquid", StringComparison.OrdinalIgnoreCase))
                 throw NativeMappingRefusedException.Binding(node, input, $"{expression.Language} expressions do not run on this host. Use JavaScript or Liquid.");
-            if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.BindingPureV1))
-                throw NativeMappingRefusedException.Binding(node, input, $"This host evaluates expressions under {ExpressionCapabilityProfiles.BindingPureV1} only, not {expression.CapabilityProfile}. Use a binding expression.");
+            if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.BindingReadonlyV1))
+                throw NativeMappingRefusedException.Binding(node, input, $"This host evaluates expressions under {ExpressionCapabilityProfiles.BindingReadonlyV1} only, not {expression.CapabilityProfile}. Use a binding expression.");
             var parameters = new List<Native.HostParameter>();
             foreach (var (name, parameter) in expression.Parameters)
             {

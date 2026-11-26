@@ -73,7 +73,7 @@ public sealed class ConnectionDraftValidatorTests
             [
                 new ArgumentState(
                     "Connection",
-                    new Elsa.Expressions.Core.Models.ArgumentValue("Bearer sk-live", "Literal"),
+                    Elsa.Expressions.Core.Models.ArgumentValue.FromClr("Bearer sk-live", "Literal"),
                     null,
                     null,
                     null,
@@ -169,7 +169,7 @@ public sealed class ConnectionDraftValidatorTests
     private static ArgumentState Bound(string key, string connectionName) =>
         new(
             key,
-            new Elsa.Expressions.Core.Models.ArgumentValue(
+            Elsa.Expressions.Core.Models.ArgumentValue.FromClr(
                 new Dictionary<string, string?> { ["connection"] = connectionName, ["type"] = "http" },
                 "Connection"),
             null,

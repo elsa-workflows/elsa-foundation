@@ -202,7 +202,7 @@
       ]
     },
     {
-      "identity": "Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/module.tsx::register",
+      "identity": "extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/module.tsx::register",
       "classification": "random_identity",
       "reason": "Dashboard authoring client identity from Weaver clientId or fresh UUID.",
       "goldenEvidence": [],
@@ -216,7 +216,7 @@
       ]
     },
     {
-      "identity": "Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/native/DashboardDependencyReview.tsx::copy",
+      "identity": "extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/DashboardDependencyReview.tsx::copy",
       "classification": "random_identity",
       "reason": "Copy idempotency UUID retained per accepted name for retry; no question JSON preimage.",
       "goldenEvidence": [],
@@ -230,7 +230,7 @@
       ]
     },
     {
-      "identity": "Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/native/NamedDashboards.tsx::uuid",
+      "identity": "extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/NamedDashboards.tsx::uuid",
       "classification": "random_identity",
       "reason": "Native question/dashboard mutation UUID helper, unrelated to content.",
       "goldenEvidence": [],
@@ -244,7 +244,7 @@
       ]
     },
     {
-      "identity": "Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/native/weaverAuthoring.tsx::dispatch",
+      "identity": "extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/weaverAuthoring.tsx::dispatch",
       "classification": "random_identity",
       "reason": "dashboards-authoring: UUID requestId; bound origin/interpretation JSON is separate.",
       "goldenEvidence": [],

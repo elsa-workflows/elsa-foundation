@@ -9,5 +9,17 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// </summary>
 public static class JintScriptEvaluators
 {
-    public static IJavaScriptScriptEvaluator Create(FeatureOptions options) => new JintJavaScriptScriptEvaluator(Microsoft.Extensions.Options.Options.Create(options));
+    /// <remarks>
+    /// It takes the shell's defaults for the replacement contracts and the built-in functions only: the copy-compare-patch
+    /// value bridge, the refusing precision policy (spec 1228), and no host functions beside the built-ins (spec 1223).
+    /// </remarks>
+    public static IJavaScriptScriptEvaluator Create(FeatureOptions options)
+    {
+        var featureOptions = Microsoft.Extensions.Options.Options.Create(options);
+        return new JintJavaScriptScriptEvaluator(
+            featureOptions,
+            new CopyComparePatchValueBridge(featureOptions),
+            new RefusingPrecisionPolicy(),
+            new JavaScriptHostFunctions(JavaScriptBuiltIns.Declarations));
+    }
 }

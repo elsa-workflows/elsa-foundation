@@ -84,7 +84,7 @@ public sealed class DelayDrive : IActivityDrive
             resumeTargetId: scopedResumeTargetId,
             stimulusType: "DurableTimer",
             stimulusHash: timerId,
-            input: System.Text.Json.Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(timerId)));
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(timerId)));
 
         recorder.Record(ActivityType, resumed, nodeId);
         Assert.Equal(ActivityExecutionStatus.Completed, resumed.State(nodeId).Status);

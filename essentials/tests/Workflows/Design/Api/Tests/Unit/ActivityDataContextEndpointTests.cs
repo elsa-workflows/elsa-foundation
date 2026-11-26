@@ -374,7 +374,7 @@ public sealed class ActivityDataContextEndpointTests
 
         var whole = await host.Invoke(host.Request() with { Snapshot = snapshot });
         var member = await host.Invoke(host.Request() with { Snapshot = snapshot, Query = new() {
-            Source = new(new VariableReference("customer", "workflow"), "Variable"), MemberPath = ["city"] } });
+            Source = ArgumentValue.FromClr(new VariableReference("customer", "workflow"), "Variable"), MemberPath = ["city"] } });
 
         Assert.Equal("supported", whole.Body.State);
         var source = Assert.Single(whole.Body.Analysis!.Sources, source => source.Id.EndsWith(":customer", StringComparison.Ordinal));
