@@ -32,8 +32,29 @@ def _child_text(parent: ElementTree.Element, name: str) -> str | None:
     return None
 
 
+def _studio_root(root: Path) -> Path:
+    candidates = [entry for entry in root.iterdir() if entry.name in {"Studio", "studio"} and entry.is_dir()]
+    if len(candidates) != 1:
+        raise ValueError("Expected exactly one Studio source root in the selected checkout.")
+    return candidates[0]
+
+
+def _source_project_path(path: str, studio: Path) -> str:
+    if studio.name == "studio":
+        return path
+    for prefix, legacy_prefix in (
+        ("studio/", "Studio/"),
+        ("server/essentials/src/Preferences/", "essentials/src/Studio/Preferences/"),
+        ("server/essentials/", "essentials/"),
+        ("server/apps/", "apps/"),
+    ):
+        if path.startswith(prefix):
+            return legacy_prefix + path[len(prefix):]
+    return path
+
+
 def _studio_projects(root: Path) -> set[str]:
-    paths = set((root / "Studio").rglob("*.csproj"))
+    paths = set(_studio_root(root).rglob("*.csproj"))
     paths.update(path for extension in (root / "extensions").glob("*/studio") for path in extension.rglob("*.csproj"))
     return {path.relative_to(root).as_posix() for path in paths}
 
@@ -49,8 +70,8 @@ def _verify_extension_studio_props(root: Path, project: Path) -> None:
     expression = imports[0].attrib.get("Project", "")
     prefix = wrapper.parent.as_posix() + "/"
     resolved = Path(expression.replace("$(MSBuildThisFileDirectory)", prefix)).resolve()
-    if resolved != (root / "Studio/Directory.Build.props").resolve():
-        raise ValueError(f"{wrapper.relative_to(root)} does not import Studio/Directory.Build.props.")
+    if resolved != (_studio_root(root) / "Directory.Build.props").resolve():
+        raise ValueError(f"{wrapper.relative_to(root)} does not import studio/Directory.Build.props.")
     overrides = {"PackageId", "AssemblyName", "PackageIcon", "PackageLicenseExpression"}
     if any(_local_name(node.tag) in overrides for node in document.iter()):
         raise ValueError(f"{wrapper.relative_to(root)} overrides shared Studio package metadata.")
@@ -58,7 +79,7 @@ def _verify_extension_studio_props(root: Path, project: Path) -> None:
 
 def _normalize_layout_target(target: str) -> str:
     root, separator, remainder = target.partition("/")
-    if root in {"Essentials", "Extensions"}:
+    if root in {"Essentials", "Extensions", "Studio"}:
         root = root.lower()
     return root + separator + remainder
 
@@ -114,14 +135,16 @@ def verify_project_inventory(root: Path) -> dict:
     root = root.resolve()
     inventory = json.loads(IDENTITY_FILE.read_text())
     _verify_pinned_layout(root, inventory)
+    studio = _studio_root(root)
     packable = inventory["packable_projects"]
     non_packable = inventory["non_packable_projects"]
-    # Manual image qualification checks the exact producer checkout. A path-only move keeps the
-    # prior source location valid for older artifacts with the same pinned package identity.
-    for item in packable + non_packable:
+    for item in packable + non_packable + inventory["support_projects"]:
+        item["project"] = _source_project_path(item["project"], studio)
         previous = item.get("renamed_from")
-        if previous and Path(previous).stem == item["id"] and not (root / item["project"]).is_file() and (root / previous).is_file():
-            item["project"] = previous
+        if previous and Path(previous).stem == item["id"]:
+            previous = _source_project_path(previous, studio)
+            if not (root / item["project"]).is_file() and (root / previous).is_file():
+                item["project"] = previous
 
     expected_paths = {item["project"] for item in packable + non_packable}
     actual_paths = _studio_projects(root)
@@ -151,14 +174,14 @@ def verify_project_inventory(root: Path) -> dict:
         if item in non_packable and properties.get("IsPackable", "").lower() != "false":
             raise ValueError(f"Non-packable Studio project {item['project']} must explicitly set IsPackable=false.")
 
-    studio_props = ElementTree.parse(root / "Studio/Directory.Build.props").getroot()
+    studio_props = ElementTree.parse(studio / "Directory.Build.props").getroot()
     studio_properties = {
         _local_name(node.tag): (node.text or "").strip()
         for node in studio_props.iter()
         if _local_name(node.tag) in {"PackageId", "AssemblyName", "PackageIcon", "PackageLicenseExpression"}
     }
     if "PackageId" in studio_properties or "AssemblyName" in studio_properties:
-        raise ValueError("Studio/Directory.Build.props overrides SDK-default package identity values.")
+        raise ValueError("studio/Directory.Build.props overrides SDK-default package identity values.")
     if studio_properties.get("PackageLicenseExpression") != inventory["package_license_expression"]:
         raise ValueError("Studio package license metadata does not match the package identity manifest.")
     if studio_properties.get("PackageIcon") != inventory["package_icon"]:
@@ -170,13 +193,13 @@ def verify_project_inventory(root: Path) -> dict:
         and node.attrib.get("PackagePath") == ""
         for node in none_items
     ):
-        raise ValueError("Studio/Directory.Build.props must pack its shared icon.png at the package root.")
+        raise ValueError("studio/Directory.Build.props must pack its shared icon.png at the package root.")
     for item in packable:
         if item["project"].startswith("extensions/"):
             _verify_extension_studio_props(root, Path(item["project"]))
-    icon = root / "Studio" / inventory["package_icon"]
+    icon = studio / inventory["package_icon"]
     if not icon.is_file():
-        raise ValueError(f"Studio package icon source is missing: Studio/{inventory['package_icon']}.")
+        raise ValueError(f"Studio package icon source is missing: studio/{inventory['package_icon']}.")
     return inventory
 
 
@@ -224,7 +247,7 @@ def _dependency_contract(root: Path, item: dict, version: str) -> tuple[str, dic
     if not target or "$" in target:
         raise ValueError(f"Expected one literal TargetFramework for {item['id']}.")
     pins = {node.attrib["Include"]: node.attrib["Version"]
-            for node in ElementTree.parse(root / "Studio/Directory.Packages.props").getroot().iter()
+            for node in ElementTree.parse(_studio_root(root) / "Directory.Packages.props").getroot().iter()
             if _local_name(node.tag) == "PackageVersion" and "Include" in node.attrib and "Version" in node.attrib}
     dependencies, frameworks = {}, set()
     for group in project:
@@ -262,11 +285,12 @@ def _asset_contract(root: Path, inventory: dict) -> dict[str, dict[str, Path]]:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     roots = {item["id"]: Path(item["project"]).parent / "wwwroot" for item in inventory["packable_projects"]}
-    for required in module.EXPECTED_ASSETS:
+    studio_root = _studio_root(root).name
+    for required in module.expected_assets(studio_root):
         owners = [name for name, folder in roots.items() if Path(required).is_relative_to(folder)]
         if len(owners) != 1 or not (root / required).is_file():
             raise ValueError(f"Missing or unowned generated Studio asset: {required}.")
-    module.verify_entry_styles(root)
+    module.verify_entry_styles(root, studio_root)
     return {name: {"staticwebassets/" + path.relative_to(root / folder).as_posix(): path
                    for path in (root / folder).rglob("*") if path.is_file() and ".vite" not in path.relative_to(root / folder).parts}
             for name, folder in roots.items()}

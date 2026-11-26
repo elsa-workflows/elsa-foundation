@@ -14,7 +14,7 @@
     <ProjectReference Include="..\..\..\..\Diagnostics\src\Persistence\Elsa.Diagnostics.Persistence.csproj" />
     <ProjectReference Include="..\..\Elsa.Diagnostics.StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
     <ProjectReference Include="..\..\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\essentials\src\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\..\..\..\server\essentials\src\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="nuplane.json" Pack="true" PackagePath="/" />

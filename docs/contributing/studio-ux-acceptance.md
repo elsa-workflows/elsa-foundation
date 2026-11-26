@@ -7,7 +7,7 @@ A visible feature is complete when its user journey and rendered experience have
 Put a short acceptance record in the issue or spec:
 
 - **User goal:** what a person is trying to accomplish, including the starting point and successful outcome.
-- **Reference:** an existing good screen or shared component. Use Workflow Definitions or Connections for collection structure; link [module UI guidance](../../Studio/docs/module-ui.md) for the shared controls. Prefer those components over new local styling.
+- **Reference:** an existing good screen or shared component. Use Workflow Definitions or Connections for collection structure; link [module UI guidance](../../studio/docs/module-ui.md) for the shared controls. Prefer those components over new local styling.
 - **Observable states:** the normal path and the states the change introduces or can break. Consider empty/populated, no matches, validation/recovery, denied/read-only, loading and narrow layouts. Name exclusions with a reason; do not silently omit them.
 - **Coverage:** the smallest journeys that can disprove those expectations. New create/edit flows earn persistence, cancellation/focus and keyboard checks. A small icon correction earns rendered composition and an accessible name check; it does not require every permutation of the entire app.
 
@@ -18,8 +18,8 @@ Acceptance criteria describe outcomes such as “Create returns to the updated l
 From the repository root, after installing Studio dependencies and Playwright Chromium:
 
 ```bash
-pnpm --dir Studio install --frozen-lockfile
-pnpm --dir Studio exec playwright install chromium
+pnpm --dir studio install --frozen-lockfile
+pnpm --dir studio exec playwright install chromium
 python3 tools/ux-acceptance/run.py --output /tmp/studio-ux-<unique-run>
 ```
 

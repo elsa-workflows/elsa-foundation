@@ -8,7 +8,7 @@
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Design" />
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Tests" />
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Interchange.Tests" />
-    <ProjectReference Include="../../../../essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="../../../../server/essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 </Project>

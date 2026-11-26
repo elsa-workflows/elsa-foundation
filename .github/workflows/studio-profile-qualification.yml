@@ -170,16 +170,16 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          package_json_file: Studio/package.json
+          package_json_file: studio/package.json
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: Studio/pnpm-lock.yaml
+          cache-dependency-path: studio/pnpm-lock.yaml
 
       - name: Generate the Foundation frontend assets from the selected source
-        working-directory: Studio
+        working-directory: studio
         run: |
           pnpm install --frozen-lockfile
           pnpm build
@@ -195,14 +195,14 @@ jobs:
           etl=$(jq -er '.[] | select(.id == "Elsa.Studio.Etl") | .name' "$PACKAGES/nuget-subjects.json")
           cp "$PACKAGES/$etl" "$BUNDLE/fixtures/"
           echo "ETL_ARCHIVE=$BUNDLE/fixtures/$etl" >> "$GITHUB_ENV"
-          python3 Studio/docker/profiles/essentials/prepare.py "$PACKAGES" --version "$VERSION" --output "$BUNDLE/context"
-          cp Studio/docker/profiles/essentials/smoke.py "$BUNDLE/"
+          python3 studio/docker/profiles/essentials/prepare.py "$PACKAGES" --version "$VERSION" --output "$BUNDLE/context"
+          cp studio/docker/profiles/essentials/smoke.py "$BUNDLE/"
           options=(--load --provenance=false --platform "linux/$ARCH" --progress plain
             --label "org.opencontainers.image.revision=$GITHUB_SHA"
             --label "org.opencontainers.image.version=$VERSION")
           docker buildx build "${options[@]}" --metadata-file "$BUNDLE/foundation-metadata.json" \
             --build-arg "STUDIO_VERSION=$VERSION" \
-            -f Studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile -t "$FOUNDATION_IMAGE" . \
+            -f studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile -t "$FOUNDATION_IMAGE" . \
             2>&1 | tee "$RUNNER_TEMP/studio-profile-foundation-build.log"
           docker buildx build "${options[@]}" --metadata-file "$BUNDLE/profile-metadata.json" --network none \
             --build-arg "FOUNDATION_IMAGE=$FOUNDATION_IMAGE" -t "$PROFILE_IMAGE" "$BUNDLE/context" \

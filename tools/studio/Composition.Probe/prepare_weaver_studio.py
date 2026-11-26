@@ -16,11 +16,11 @@ def prepare(output: Path, version: str) -> dict:
     if output.exists() and any(output.iterdir()):
         raise ValueError("Use a new or empty owned output directory; existing fixture state is preserved.")
     output.mkdir(parents=True, exist_ok=True)
-    source_core = repository / "Studio/src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj"
+    source_core = repository / "studio/src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj"
     if not source_core.is_file():
         raise ValueError(f"The public Studio Core project is unavailable: {source_core}")
     project = (templates / "WeaverJourney.Studio.csproj.in").read_text()
-    packages = ET.parse(repository / "Studio/Directory.Packages.props").getroot()
+    packages = ET.parse(repository / "studio/Directory.Packages.props").getroot()
     cshells = next(item.attrib["Version"] for item in packages.iter("PackageVersion") if item.attrib.get("Include") == "CShells.Abstractions")
     references = f'    <ProjectReference Include="{escape(str(source_core))}" />\n    <PackageReference Include="CShells.Abstractions" Version="{escape(cshells)}" />'
     project = project.replace("__REFERENCES__", references)

@@ -10,11 +10,11 @@ The [walkthrough](../reports/clean-slate-kernel/walkthrough.html) shows how the 
 Use the [Elsa glossary](../glossary/elsa.md) and [framework glossary](../glossary/root.md) for canonical terms;
 this page is a reference for persisted records, their writers and their query paths.
 
-The physical inventory below comes from [KernelDb and EfStore](../../essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/EfStore.cs),
-[SQL engine mappings](../../essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Engines.cs) and
+The physical inventory below comes from [KernelDb and EfStore](../../server/essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/EfStore.cs),
+[SQL engine mappings](../../server/essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Engines.cs) and
 [MongoStore](../../prototypes/kernel-model/mongo/Kernel.Mongo/MongoStore.cs).
-The [store contract](../../essentials/src/ActorFoundation/BuiltIn/Durable/Store.cs) states the operations independently of either provider.
-The [in-memory store](../../essentials/src/ActorFoundation/BuiltIn/Durable/InMemoryStore.cs) is the executable reference,
+The [store contract](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/Store.cs) states the operations independently of either provider.
+The [in-memory store](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/InMemoryStore.cs) is the executable reference,
 not another physical schema.
 
 ## Providers
@@ -66,7 +66,7 @@ acceptance receipt: a repeat returns its original target. These objects support 
 The allocator/stripe objects are installed by store initialization and are not swept. Consuming a sequence value
 does not itself establish a retained receipt. The initializers create fresh schemas; they do not migrate an old
 database's message primary key, backfill scoped identity or qualify old/new reader coexistence.
-Source: [EventInsert](../../essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/EventInsert.cs) and the provider initializers.
+Source: [EventInsert](../../server/essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/EventInsert.cs) and the provider initializers.
 
 ### Inbox identity and public names
 
@@ -106,10 +106,10 @@ SQL row mutations also check the expected match, so a reused physical scope cann
 Child addresses are bounded issuer identities containing destination partition, issuer partition, fenced epoch
 and checked ordinal. They do not recursively concatenate their parent's address. Event starts use a provider
 sequence/counter. The associated creator message handle still has the provider's own key-width limit.
-See [Messages](../../essentials/src/ActorFoundation/BuiltIn/Durable/Messages.cs),
-[IssuedMailKey](../../essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/IssuedMailKey.cs),
-[DurableKeyJson](../../essentials/src/ActorFoundation/BuiltIn/Durable/DurableKeyJson.cs) and
-[ChildIssuer](../../essentials/src/ActorFoundation/BuiltIn/Durable/ChildIssuer.cs).
+See [Messages](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/Messages.cs),
+[IssuedMailKey](../../server/essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/IssuedMailKey.cs),
+[DurableKeyJson](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/DurableKeyJson.cs) and
+[ChildIssuer](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/ChildIssuer.cs).
 
 ### Values and embedded shape
 
@@ -142,7 +142,7 @@ row's `ReleasedBy` marker and uses `seq` only to order its pages
 SQL Server/MySQL/PostgreSQL assign message sequence values through engine generation; SQLite assigns them explicitly.
 A sequence value and a journal position have different allocation rules.
 
-The [checkpoint contract](../../essentials/src/ActorFoundation/BuiltIn/Durable/Store.cs) deliberately keeps workflow
+The [checkpoint contract](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/Store.cs) deliberately keeps workflow
 fields and durable-layer fields in one instance row. There is no separate physical record per activity or variable
 in these providers. The kernel does not search inside model state.
 The separate [values-by-reference witness](../../prototypes/kernel-model/models/Values/VALUES.md) does not add a values table or
@@ -156,10 +156,10 @@ recover's `ParkRecord` always fits ([observability](observability.md#recover)).
 
 The [shared commit-clock probe](../../prototypes/kernel-model/models/Clock.Run/README.md) is the canonical account
 of the optional API and its qualification limits. The logical
-[instance row](../../essentials/src/ActorFoundation/BuiltIn/Durable/Store.cs) now has nullable `CommitTimes`, separate
+[instance row](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/Store.cs) now has nullable `CommitTimes`, separate
 from opaque `State`: a serialized map of reference strings to nullable 64-bit epoch milliseconds. New requests
 carry null until stamped; retained committed facts carry their immutable timestamp. The implementation is in
-[CommitClock.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/CommitClock.cs).
+[CommitClock.cs](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/CommitClock.cs).
 
 `IKernelStore.CommitClockAvailable` defaults to false. The in-memory prototype advertises support and stamps new
 facts in the same synchronous atomic apply as the checkpoint; it returns that authoritative time in `Committed.Now`,
@@ -189,7 +189,7 @@ fence explicitly updates them. A deferred constraint trigger checks database tim
 an expired interval rolls the transaction back with the distinct `WindowExpired` outcome. The worker then resets
 and rereads under a new take, rather than retrying the same time-dependent decision. The stored bounds are not
 immutable commit timestamps. This experiment does not qualify portable clock facts, exactly-once external effects,
-or a standalone job-actor budget. See [PgCommitWindow](../../essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/PgCommitWindow.cs).
+or a standalone job-actor budget. See [PgCommitWindow](../../server/essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/PgCommitWindow.cs).
 
 ## Record lifecycles
 
@@ -298,8 +298,8 @@ Its aggregate first returns the primary's time through the partition document, t
 SQL returns database time through a left join, including the empty-inbox result.
 There is no poll predicate on `KeepUntil`, target status, suspension, job state, attempts or trial.
 
-After the poll, the [owner loop](../../essentials/src/ActorFoundation/BuiltIn/Durable/Worker.cs) and
-[workflow actor](../../essentials/tests/ActorFoundation/Legacy/Workflows/WorkflowInstance.cs) do the remaining work:
+After the poll, the [owner loop](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/Worker.cs) and
+[workflow actor](../../server/essentials/tests/ActorFoundation/Legacy/Workflows/WorkflowInstance.cs) do the remaining work:
 
 - Deliver future timers only when due, even if they entered memory inside the horizon.
 - Hold suspended instances' ordinary messages while allowing their control commands through.
@@ -382,7 +382,7 @@ The [qualification findings](../../prototypes/kernel-model/FINDINGS.md) retain k
 
 ### Viewer read
 
-The [viewer](../../essentials/src/ActorFoundation/BuiltIn/Durable/Viewer.cs) reads the projection cursor, the instance's
+The [viewer](../../server/essentials/src/ActorFoundation/BuiltIn/Durable/Viewer.cs) reads the projection cursor, the instance's
 projected view, then `ReadJournalOfAsync(partition, instance, after)` for a consistent per-instance journal tail.
 These are three logical store reads. A projector round can commit between them; the in-memory merge ignores
 revisions already represented in the view, applies deletion markers and resets the previous run's view and count.

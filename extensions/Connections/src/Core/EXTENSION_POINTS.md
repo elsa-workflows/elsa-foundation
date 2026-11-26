@@ -62,7 +62,7 @@ database connection string, or `RuntimeConnectionToken`.
 - Runtime resolution returns secrets only through `ISecretValueResolver` or
   `IConnectionCredentialSource`, wrapped in `SensitiveValue`.
 - The workflow connection adapter registers injected token values with
-  [`IRuntimeSecretMask`](../../../../essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeSecretMask.cs) for activity fault
+  [`IRuntimeSecretMask`](../../../../server/essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeSecretMask.cs) for activity fault
   handling. That mask is not a general logger, trace, console, output or persisted-state scrubber.
   Non-workflow consumers such as ETL must enforce their own diagnostic boundary; using Connections
   does not require coupling their runtime to workflow fault handling.

@@ -174,17 +174,17 @@ that runs the recurring-trigger pump before relying on the guarantee, or stop th
 
 | Role | Types | Location |
 |---|---|---|
-| `Delay` activity | `Delay`, `DelayState`, `DurableTimerElapsed` | `Essentials/src/Activities/Scheduling/Activities/Delay.cs` (package `Elsa.Activities.Scheduling`) |
-| Scheduling a timer | `IDurableTimerScheduler.ScheduleAsync` | `Essentials/src/Workflows/Runtime/Core/Contracts/` |
-| Timer record | `DurableTimer { TimerId, WorkflowExecutionId, StimulusType, StimulusHash, DueTime, CreatedAt, … }`, keyed by `(WorkflowExecutionId, TimerId)` | `Essentials/src/Workflows/Runtime/Core/Models/` |
-| Timer store | `IDurableTimerStore` (`ClaimDueAsync`, `CompleteClaimAsync`; `ListDueAsync` fallback, `DeleteAsync`); `InMemoryDurableTimerStore` (default) and `EfDurableTimerStore` (registered by `AddRuntimeEntityFrameworkCore`) both set `SupportsClaimTransitions` | `Essentials/src/Workflows/Runtime/` |
-| Timer pump | `DurableTimerPumpTask : IRecurringTask` with `MaxTimersPerTick`, `ClaimVisibilityTimeout`, `NotFoundGrace`, `MaxConcurrentDispatches` (default 1; one execution's timers keep provider order); feature in `Elsa.Workflows.Runtime.Scheduling` | `Essentials/src/Workflows/Runtime/Scheduling/DurableTimerPumpTask.cs`, `WorkflowsRuntimeSchedulingFeature.cs` |
-| Resume path | `IBookmarkResumeDispatcher.DispatchAsync(ResumeBookmark)`; `WorkflowSchedulerCommandRouter.ProcessAsync` queues via `EnqueueAsync(workItem)` before draining | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/` |
+| `Delay` activity | `Delay`, `DelayState`, `DurableTimerElapsed` | `server/essentials/src/Activities/Scheduling/Activities/Delay.cs` (package `Elsa.Activities.Scheduling`) |
+| Scheduling a timer | `IDurableTimerScheduler.ScheduleAsync` | `server/essentials/src/Workflows/Runtime/Core/Contracts/` |
+| Timer record | `DurableTimer { TimerId, WorkflowExecutionId, StimulusType, StimulusHash, DueTime, CreatedAt, … }`, keyed by `(WorkflowExecutionId, TimerId)` | `server/essentials/src/Workflows/Runtime/Core/Models/` |
+| Timer store | `IDurableTimerStore` (`ClaimDueAsync`, `CompleteClaimAsync`; `ListDueAsync` fallback, `DeleteAsync`); `InMemoryDurableTimerStore` (default) and `EfDurableTimerStore` (registered by `AddRuntimeEntityFrameworkCore`) both set `SupportsClaimTransitions` | `server/essentials/src/Workflows/Runtime/` |
+| Timer pump | `DurableTimerPumpTask : IRecurringTask` with `MaxTimersPerTick`, `ClaimVisibilityTimeout`, `NotFoundGrace`, `MaxConcurrentDispatches` (default 1; one execution's timers keep provider order); feature in `Elsa.Workflows.Runtime.Scheduling` | `server/essentials/src/Workflows/Runtime/Scheduling/DurableTimerPumpTask.cs`, `WorkflowsRuntimeSchedulingFeature.cs` |
+| Resume path | `IBookmarkResumeDispatcher.DispatchAsync(ResumeBookmark)`; `WorkflowSchedulerCommandRouter.ProcessAsync` queues via `EnqueueAsync(workItem)` before draining | `server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/` |
 | Crash recovery | `IRuntimeResumptionService.SweepAsync`, `ListClaimableWorkflowExecutionIdsAsync` | see [durable resumption](runtime-durable-resumption.md) |
-| Recurring start triggers | `IRecurringTriggerScheduleStore`, `RecurringTriggerPumpTask`, feature `WorkflowsRuntimeRecurringTriggers` | `Essentials/src/Workflows/Runtime/Scheduling/` |
-| Tests | `DurableTimerRestartCrashTests` | `Essentials/tests/Activities/Scheduling/Tests/DurableTimerRestartCrashTests.cs` |
+| Recurring start triggers | `IRecurringTriggerScheduleStore`, `RecurringTriggerPumpTask`, feature `WorkflowsRuntimeRecurringTriggers` | `server/essentials/src/Workflows/Runtime/Scheduling/` |
+| Tests | `DurableTimerRestartCrashTests` | `server/essentials/tests/Activities/Scheduling/Tests/DurableTimerRestartCrashTests.cs` |
 
-Related: [Elsa glossary](glossary/elsa.md) · [Runtime extension points](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) · [Recovering after a crash](runtime-durable-resumption.md) · [Bookmark expiration](bookmark-expiration.md)
+Related: [Elsa glossary](glossary/elsa.md) · [Runtime extension points](../server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) · [Recovering after a crash](runtime-durable-resumption.md) · [Bookmark expiration](bookmark-expiration.md)
 
 ## Background
 

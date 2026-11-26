@@ -36,7 +36,7 @@ are built as general Elsa modules that Flowchart can use too.
 
 - The BPMN runtime module (`extensions/Bpmn/src/`) and its interchange adapter.
 - Upstream changes to `valence-works/bpmn` that the engine needs, and the package bumps that consume them.
-- Studio BPMN authoring and run views (`Studio/`).
+- Studio BPMN authoring and run views (`studio/`).
 - Designs for the platform modules BPMN depends on: job workers and external tasks, user tasks and forms,
   message correlation with buffering, and connectors.
 

@@ -83,7 +83,7 @@ wait for the rest of the stack.
 
 **Consequences:** The program is active again under the 23 October amendment to
 [ADR 0080 D0](../../adr/0080-elsa-4-simplification-decisions.md#d0--focus). #2373, #2378 and #2380 stay open as
-the source for later rebuilds; their history predates the move into `Essentials/` and `Studio/`.
+the source for later rebuilds; their history predates the move into `server/essentials/` and `studio/`.
 
 **Revisit:** When milestone 1 is rebased onto the new layout.
 
