@@ -233,12 +233,28 @@ internal static class SqliteShippedInstallChecks
         }
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
+            await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Instances" WHERE "Id" = 'first-bind'""", token);
+            await JournalAsync("first-bind", revision: 2, refused);
+            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Instances" ("Id", "Partition", "Model", "Definition", "State", "Status", "Revision",
+                    "StateVersion", "Suspended", "Retired", "History", "NextJobGeneration",
+                    "FoundationReference", "FoundationTenant", "FoundationHeader")
+                SELECT 'first-bind', "Partition", "Model", "Definition", "State", "Status", "Revision",
+                    "StateVersion", "Suspended", "Retired", "History", "NextJobGeneration",
+                    'first-bind', 'tenant', {ProjectionHeader}
+                FROM "Instances" WHERE "Id" = 'direct'
+                """, token), "inserting a qualified root refuses a previously journalled outcome at the wrong revision");
+            await write.RollbackAsync(token);
+        }
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
             await JournalAsync("first-bind", revision: 1, refused);
             await BindAsync("first-bind", InstanceStatus.Running);
             await write.CommitAsync(token);
         }
-        Require(await db.Journal.AnyAsync(entry => entry.Instance == "first-bind" && entry.Revision == 1, token),
-            "binding a fresh root commits its matching journal outcome");
+        Require(await db.Journal.AnyAsync(entry => entry.Instance == "first-bind" && entry.Revision == 1, token)
+            && await ReadProjectionAsync("first-bind") is { Status: InstanceStatus.Running, Header: ProjectionHeader },
+            "binding a fresh root commits its matching journal outcome and actor projection");
 
         await SeedAsync("projected", InstanceStatus.Running);
         var initial = await ReadProjectionAsync("projected");
