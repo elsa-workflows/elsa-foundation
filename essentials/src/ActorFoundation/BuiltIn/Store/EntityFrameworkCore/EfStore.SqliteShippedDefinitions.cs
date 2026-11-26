@@ -52,10 +52,7 @@ public sealed partial class EfStore
             }
             await RequireInstalledStoreVersionsAsync(db, FormatLock.None, token);
 
-            var expectedByName = expected.ToDictionary(definition => definition.Name, StringComparer.Ordinal);
-            if (installed.Count != expectedByName.Count ||
-                installed.Any(definition => !expectedByName.TryGetValue(definition.Name, out var match) || definition != match))
-                throw new StoreFormatException("The installed SQLite store definitions differ from this build. Recreate or migrate the database.");
+            RequireSqliteDefinitions(installed, expected);
             if (!await db.Database.SqlQuery<bool>($"""
                 SELECT
                     (SELECT count(*) FROM "Partitions") = {partitions}
@@ -69,6 +66,28 @@ public sealed partial class EfStore
             await transaction.CommitAsync(token);
         }
         finally { await db.Database.CloseConnectionAsync(); }
+    }
+
+    internal static async Task RequireSqliteRootAdmissionAsync(KernelDb db, CancellationToken token)
+    {
+        if (!db.UsesSqliteShippedInstall)
+            throw new NotSupportedException("Root admission requires the SQLite shipped context.");
+        await RequireSqliteInstallConnectionAsync(db, token);
+        await RequireInstalledStoreVersionsAsync(db, FormatLock.None, token);
+    }
+
+    internal static async Task RequireSqliteRootAdmissionDefinitionsAsync(KernelDb db, CancellationToken token)
+    {
+        var installed = await ReadSqliteDefinitionsAsync(db, token);
+        RequireSqliteDefinitions(installed, SqliteBaseDefinitions(db).Concat(SqliteRootDefinitions(db)));
+    }
+
+    private static void RequireSqliteDefinitions(IReadOnlyList<SqliteDefinition> installed, IEnumerable<SqliteDefinition> expected)
+    {
+        var expectedByName = expected.ToDictionary(definition => definition.Name, StringComparer.Ordinal);
+        if (installed.Count != expectedByName.Count ||
+            installed.Any(definition => !expectedByName.TryGetValue(definition.Name, out var match) || definition != match))
+            throw new StoreFormatException("The installed SQLite store definitions differ from this build. Recreate or migrate the database.");
     }
 
     private static async Task RequireSqliteInstallConnectionAsync(KernelDb db, CancellationToken token)
