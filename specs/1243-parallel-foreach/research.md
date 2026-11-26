@@ -91,9 +91,10 @@ The converter already warns `ELS3-BEHAVIOUR-BREAK-STOPS-AT-PARALLEL` for a `Brea
 - **Background.** ADR 0093 C1 requires a leaf, so a structural loop is never a candidate. Leaf body steps keep C1–C10.
 - **Converter.** `Elsa3BuiltInActivityMap.Entries.cs:55` maps ParallelForEach as `NoCounterpart`.
   `Elsa3LoopVariableReferencesRewrite` maps ForEach's `CurrentValue` **output** to `currentItem`. Elsa 3 `For` and
-  `ForEach` also declare per-pass `CurrentValue` and `CurrentIndex` variables on their body (`ForEachT.cs:97-100`,
-  `For.cs:107`), and the converter keeps refusing by-name reads of those (`Elsa3ValueFlowLowerer.cs:1127-1137`). So the
-  nearest Elsa 3 loop of any kind owns a by-name read. Elsa 3 ParallelForEach has no output, so its reads go through
+  `ForEach` also declare per-pass variables on their body: `ForEach` declares `CurrentValue` and `CurrentIndex`
+  (`ForEachT.cs:97-98`), while `For` declares `CurrentValue` only (`For.cs:105-108`). The converter keeps refusing by-name
+  reads of those (`Elsa3ValueFlowLowerer.cs:1127-1137`). So the nearest Elsa 3 loop that declares the name owns a
+  by-name read. Elsa 3 ParallelForEach has no output, so its reads go through
   `getVariable("CurrentValue")`. `Elsa3ExpressionRewriter`
   hands that to the ambient resolver (`AddResolvedEdit`). `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1106-1162)
   knows only declared variables, so the run-time name is missing today, and a workflow variable named `CurrentValue`

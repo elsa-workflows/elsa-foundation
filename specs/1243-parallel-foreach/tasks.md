@@ -14,8 +14,10 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
 - [ ] T003 Add `LoopKind.ParallelForEach` (iteration names, `ExposeIndex` switch, `PassesUnordered = true`).
 - [ ] T003a Add `CountProcessedCompletedChildIterationsAsync` (completed iterations carrying the
   `ParentCompletionProcessedWorkItemId` marker) to `IActivityExecutionStateStore`, implemented in the EF Core store
-  (index and migration) and the in-memory store, with a shared contract test (distinct iteration ids, superseded rows
-  excluded, unprocessed completions not counted); update the store's `EXTENSION_POINTS.md`.
+  (node id, iteration id and processed-flag columns, index, migration), the in-memory store, the coalescing store
+  (session overlay) and the test doubles, with a contract test shared by the three stores (distinct iteration ids,
+  superseded rows excluded, unprocessed completions not counted, staged but unflushed markers counted); update the
+  store's `EXTENSION_POINTS.md`.
 
 ## Phase 2: Runtime activity (US1, US2)
 
@@ -62,7 +64,7 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
   loop; update the activity-map tests that expected `ELS3-ACTIVITY-NO-COUNTERPART`.
 - [ ] T014 [US4] Per-pass names (FR-013): a resolution branch in `Elsa3ValueFlowLowerer.ResolveAmbient` ahead of
   workflow and enclosing-scope variables; `getVariable("CurrentValue"|"CurrentIndex")` and the other by-name read forms;
-  a workflow variable named `CurrentValue` does not win; a body-declared one does; an Elsa 3 `For` or `ForEach`
+  a workflow variable named `CurrentValue` does not win; a body-declared one does; an Elsa 3 `ForEach` (both names) or `For` (`CurrentValue` only; a `CurrentIndex` read inside a `For` inside the loop maps to the loop's index)
   between the read and the loop keeps today's handling; a computed name is refused.
 - [ ] T015 [US4] Refuse writes to the per-pass names (FR-014).
 - [ ] T016 [US4] Break warning with a `ParallelForEach` ancestor (FR-015); no-body behaviour code and message (FR-016),
@@ -73,7 +75,8 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
 ## Phase 5: Studio (US5)
 
 - [ ] T018 [US5] `blockPromotion.ts`: safe activity and loop kind; Studio unit test.
-- [ ] T019 [US5] Composed-host check per Studio UX acceptance: toolbox, body slot, `variables.` completion, instance
+- [ ] T019 [US5] Composed-host check per Studio UX acceptance: toolbox, body slot, `MaxDegreeOfParallelism` default
+  and range, `variables.` completion, instance
   view per pass with retry. Screenshots on the PR.
 
 ## Phase 6: Docs, evidence, close-out

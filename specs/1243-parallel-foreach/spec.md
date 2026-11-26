@@ -203,9 +203,9 @@ for ParallelForEach is gone, and the loop is an Elsa 4 `ParallelForEach` with `C
 2. **Given** a body script that reads `getVariable("CurrentValue")` or `getVariable("CurrentIndex")`, **When** it is
    converted, **Then** the read becomes `variables.currentItem` or `variables.currentIndex`, pinned to the loop node.
    It does so even when the workflow declares a variable of the same name, because in Elsa 3 the per-pass variable is
-   nearer. A variable declared inside the body takes precedence. So does an Elsa 3 `For` or `ForEach` between the read
-   and the `ParallelForEach`, which declares its own per-pass `CurrentValue`: that read keeps the converter's existing
-   handling for that loop. The same holds for the other read forms the
+   nearer. A variable declared inside the body takes precedence. So does an Elsa 3 loop between the read and the
+   `ParallelForEach` that declares the same name: a `ForEach` declares both names, a `For` only `CurrentValue`. That
+   read keeps the converter's existing handling for that loop. The same holds for the other read forms the
    converter already accepts for a variable read by name (spec 1222).
 3. **Given** a body script that writes `CurrentValue` or `CurrentIndex`, for example
    `setVariable("CurrentValue", x)`, **When** it is converted, **Then** it is refused with
@@ -219,7 +219,7 @@ for ParallelForEach is gone, and the loop is an Elsa 4 `ParallelForEach` with `C
 6. **Given** a non-null literal `Items` (a list, an object, a string or a number), **When** it is converted, **Then** it is
    refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. The guidance says Elsa 3 read the literal as text and ran zero
    passes, so the author should decide whether the loop should run at all, and give `Items` an expression if so. An
-   `Items` expression converts without a warning. The run-time difference for an expression that returns a
+   `Items` expression converts without a warning about non-list values. The run-time difference for an expression that returns a
    non-list is documented with the converter's behaviour notes.
 7. **Given** any converted `ParallelForEach`, **When** it is converted, **Then** it carries one
    `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED` warning: Elsa 3 started every pass at once with no item limit, while Elsa 4
@@ -331,8 +331,8 @@ loop with its own item and index.
 - **FR-013**: A body read of the Elsa 3 per-pass variable `CurrentValue` or `CurrentIndex` by name MUST convert to
   `variables.currentItem` or `variables.currentIndex`, pinned to the loop node, ahead of any workflow variable or
   variable of an enclosing scope with that name. A variable declared inside the body takes precedence. So does an
-  Elsa 3 `For` or `ForEach` between the read and the `ParallelForEach`, whose read keeps today's handling for that
-  loop.
+  Elsa 3 loop between the read and the `ParallelForEach` that declares the same name (`ForEach`: both names; `For`:
+  `CurrentValue` only), whose read keeps today's handling for that loop.
   The Elsa 4 run-time lookup of a computed name (`getVariable(expr)`, spec 1222 FR-027) does not know the Elsa 3
   names, so a computed name in a `ParallelForEach` body MUST be refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` and
   guidance to use a literal name.
@@ -358,7 +358,7 @@ loop with its own item and index.
 
 - **FR-020**: The activity's README MUST state the execution model (interleaved, not threaded), the cap and the
   degree, the fault and Break rules, the concurrent-write warning, and the exclusions, and MUST link #4193 for join
-  behaviour. The large fan-out page MUST stop saying Elsa 4 has no parallel ForEach, and its effect-key row for the
+  behaviour. The large fan-out page MUST stop saying Elsa 4 has no parallel ForEach, MUST name the input `Collection`, and its effect-key row for the
   in-instance parallel ForEach MUST move from proposed to built.
 - **FR-021**: The activity contract surface baseline and the Elsa 3 parity evidence MUST list the new activity. The
   #1152 row for ParallelForEach MUST be closed by the implementing PR.

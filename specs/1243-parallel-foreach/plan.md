@@ -18,8 +18,7 @@ applies. The Elsa 3 converter then maps `Elsa.ParallelForEach` onto it, rewrites
 **Primary Dependencies**: existing runtime scheduler, iteration-frame primitive (ADR 0028), value-flow validation
 **Testing**: xunit only (no FluentAssertions); converter corpus tests; one e2e run of the JTest `single-outcome` suite
 **Project Type**: modular framework (Design/Runtime split)
-**Constraints**: Runtime never references Design (Elsa §E2.2); no new extension-point kind; no author-facing
-concurrency setting (FR-009)
+**Constraints**: Runtime never references Design (Elsa §E2.2); no new extension-point kind; no concurrency setting other than `MaxDegreeOfParallelism` (FR-009)
 
 ## Constitution Check
 
@@ -77,9 +76,21 @@ concurrency setting (FR-009)
     input snapshot, so they do not change between evaluations.
   - Add the count as one member of `IActivityExecutionStateStore`, for example
     `CountProcessedCompletedChildIterationsAsync(workflowExecutionId, parentActivityExecutionId, executableNodeId)`.
-    It is an indexed count, never a row list. Implement it in the EF Core store (with an index on parent id and node
-    id, plus a migration) and in the in-memory store, with a contract test shared by both. Update the store's
-    `EXTENSION_POINTS.md`.
+    It is a count, never a row list. Implementations:
+    - EF Core: `ActivityExecutionStateEntity` keeps the node id, the iteration id and the marker only inside
+      `ContentJson` (`ActivityExecutionEntityConfigurations.cs:15-46`). Add columns for the executable node id, the
+      iteration id and a "parent completion processed" flag, written on every upsert from the state, with an index on
+      (parent id, node id, status, processed). Add a migration. Existing rows need no backfill: no row written before
+      the migration can belong to a `ParallelForEach`, the only caller, and the project is pre-stable.
+    - In-memory store.
+    - `CoalescingActivityExecutionStateStore` (`CoalescingRuntimeStateStores.cs:85`): count from the inner store,
+      leaving out rows that have a session upsert or tombstone, and add the matching session upserts, as its
+      `ListByParentPageAsync` overlay already does (around line 177). Without this, a staged but unflushed marker is
+      missed, `p` is too low, and an item is started twice.
+    - The interface's test doubles (Agent, Etl and Rules test projects).
+    - One contract test shared by the EF Core, in-memory and coalescing stores, and the store's `EXTENSION_POINTS.md`.
+    - If this proves heavier than planned, the measured fallback is the paged parent read (`ListByParentPageAsync`),
+      whose cost the 1,000-item cap bounds. T009 records which was used.
   - Decision, with `c = p + 1`: if `c` equals `N`, complete with `Done`. Otherwise, if `p + degree < N`, schedule the
     pass for item `p + degree`, then defer. Every item is started exactly once, in item order, and at most `degree` run
     at a time, for inline and suspending bodies alike. The loop keeps no state of its own. A re-delivered completion is
@@ -114,9 +125,10 @@ concurrency setting (FR-009)
 - `Elsa3BuiltInActivityMap.Entries.cs`: replace the `NoCounterpart("ParallelForEach", …)` entry with
   `Catalog("ParallelForEach", ParallelForEach, [Carry("Items", "Collection"), Slot("Body", "ParallelForEach.Body")])`,
   plus the no-body warning (FR-016) and the literal-value refusal (FR-017) as member rules.
-- Per-pass names (FR-013): walk up from the read to the nearest Elsa 3 `For`, `ForEach` or `ParallelForEach`. All
-  three declare a per-pass `CurrentValue` and `CurrentIndex` on the body's context (`ForEachT.cs:97-100`, `For.cs:107`,
-  `ParallelForEachT.cs`). If the nearest one is not a `ParallelForEach`, keep today's handling for that loop
+- Per-pass names (FR-013): the owner is decided per name. Walk up from the read to the nearest Elsa 3 loop that
+  declares that name on its body's context. For `CurrentValue`, that is `For`, `ForEach` or `ParallelForEach`. For
+  `CurrentIndex`, it is `ForEach` or `ParallelForEach` only, because `For` declares `CurrentValue` alone
+  (`For.cs:105-108`, `ForEachT.cs:97-98`, `ParallelForEachT.cs`). If the nearest one is not a `ParallelForEach`, keep today's handling for that loop
   (`Elsa3ValueFlowLowerer.cs:1127-1137`). `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1106-1162) resolves only variables declared
   in the definition, so `CurrentValue` returns `MissingAmbient` today, and a workflow variable of that name would match
   first. Add a resolution branch for `CurrentValue` and `CurrentIndex` that runs before workflow and enclosing-scope
