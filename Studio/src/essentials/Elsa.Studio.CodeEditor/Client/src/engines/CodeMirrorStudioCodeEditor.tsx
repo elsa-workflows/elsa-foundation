@@ -18,6 +18,7 @@ import { useEffect, useRef } from "react";
 import { applyCodeMirrorDiagnostics } from "./codeMirrorDiagnostics";
 import { markCodeEditorReady } from "./markCodeEditorReady";
 import {
+  abortCodeMirrorCompletionRequests,
   cancelCodeMirrorIntelligence,
   clearCodeMirrorCompletionMessage,
   createCodeMirrorCodeIntelligenceExtensions,
@@ -343,6 +344,7 @@ function createEntryState(props: StudioCodeEditorEngineProps, entry: CodeMirrorS
             return false;
           },
           blur: (_event, view) => {
+            abortCodeMirrorCompletionRequests(view);
             clearCodeMirrorCompletionMessage(view);
             entry.runtime.explicitCompletion = false;
             entry.runtime.tabEscapeArmed = false;

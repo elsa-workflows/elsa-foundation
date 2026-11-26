@@ -395,6 +395,37 @@ describe("StudioCodeEditor", () => {
     }
   }, 20000);
 
+  it.each(["Escape", "blur"])("discards a pending empty completion after %s", async dismissal => {
+    let resolveCompletion!: (items: []) => void;
+    const pending = new Promise<[]>(resolve => { resolveCompletion = resolve; });
+    const completionProvider = vi.fn(() => pending);
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: "variables.plain." }),
+      languageAdapter: javaScriptLanguageAdapter,
+      completionProvider
+    });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-content"));
+      const content = container.querySelector<HTMLElement>(".cm-content")!;
+      content.focus();
+      key(content, " ", { code: "Space", ctrlKey: true });
+      await vi.waitFor(() => expect(completionProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: true })));
+
+      if (dismissal === "Escape") key(content, "Escape");
+      else {
+        content.blur();
+        content.focus();
+      }
+      resolveCompletion([]);
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(container.querySelector(".studio-code-editor-completion-status")?.textContent).toBe("");
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
   it("shows and announces hover help from the keyboard before Escape arms focus exit", async () => {
     const { container, unmount } = renderEditor({
       document: codeDocument({ value: "formatTotal" }),

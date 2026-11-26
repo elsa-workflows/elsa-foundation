@@ -264,6 +264,7 @@ function createSignaturePanel(signature: StudioCodeSignature) {
 /** Dismisses completion, keyboard-hover, or signature UI before Escape arms Tab-focus escape. */
 export function dismissCodeMirrorIntelligence(view: EditorView) {
   const completion = completionStatus(view.state);
+  abortCodeMirrorCompletionRequests(view);
   if (completion) closeCompletion(view);
   // A pending query has no visible UI to dismiss. Cancel it so it cannot reopen after Escape,
   // but still let this Escape arm keyboard focus exit.
@@ -300,9 +301,13 @@ export function clearCodeMirrorCompletionMessage(view: EditorView) {
   if (view.state.field(emptyCompletion, false)) view.dispatch({ effects: setEmptyCompletion.of(false) });
 }
 
+export function abortCodeMirrorCompletionRequests(view: EditorView) {
+  for (const controller of completionRequestSets.get(view) ?? []) controller.abort();
+}
+
 /** Cancels every source-bearing request owned by a view before it is destroyed or revoked. */
 export function cancelCodeMirrorIntelligence(view: EditorView) {
-  for (const controller of completionRequestSets.get(view) ?? []) controller.abort();
+  abortCodeMirrorCompletionRequests(view);
   completionRequestSets.delete(view);
   if (completionStatus(view.state)) closeCompletion(view);
   keyboardHoverRequests.get(view)?.abort();

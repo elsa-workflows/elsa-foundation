@@ -66,9 +66,11 @@ export function planActivityExpressionInsertion({ value, syntax, snapshot, resul
     return refuse("The portable result type does not match this input. The authored definition is preserved.");
   const candidates = Object.entries(definition.parameters).filter(([, binding]) => sameParameterSource(binding, parameter)).map(([alias]) => alias);
   const baseAlias = parameter.kind === "Variable" ? variableArgumentName(source.displayName) : "data";
-  let nextAlias = baseAlias, suffix = 2;
-  while (Object.prototype.hasOwnProperty.call(definition.parameters, nextAlias)) nextAlias = `${baseAlias}${suffix++}`;
-  candidates.push(nextAlias);
+  for (const name of new Set([baseAlias, "data"])) {
+    let nextAlias = name, suffix = 2;
+    while (Object.prototype.hasOwnProperty.call(definition.parameters, nextAlias)) nextAlias = `${name}${suffix++}`;
+    candidates.push(nextAlias);
+  }
   let lastReason = "This syntax cannot insert the selected reference at this position.";
   for (const alias of candidates) {
     let rendered: ReturnType<StudioExpressionSourceInsertion["render"]>;
