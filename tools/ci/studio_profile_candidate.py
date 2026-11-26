@@ -72,6 +72,24 @@ def bundle_for(root, arch, run_id, attempt, source_commit):
     return bundle, {"id": artifact["id"], "digest": artifact["digest"]}
 
 
+def saved_manifest_digests(archive):
+    # Containerd can report an OCI manifest ID after loading a classic builder's archive.
+    try:
+        index = json.load(archive.extractfile("index.json"))
+    except KeyError:
+        return {}
+    manifests = {}
+    for descriptor in index["manifests"]:
+        identity = descriptor["digest"]
+        require(DIGEST.fullmatch(identity), f"Invalid saved manifest digest: {identity}")
+        blob = archive.extractfile("blobs/" + identity.replace(":", "/", 1)).read()
+        require("sha256:" + hashlib.sha256(blob).hexdigest() == identity, f"Saved manifest digest mismatch: {identity}")
+        config = json.loads(blob).get("config")
+        if config:
+            manifests.setdefault(config["digest"], set()).add(identity)
+    return manifests
+
+
 def saved_configs(archive_path, images, arch):
     # A Docker archive retains config bytes. Their digests stay stable even if
     # the registry exporter changes a manifest's media type or layer compression.
@@ -79,13 +97,19 @@ def saved_configs(archive_path, images, arch):
         manifest = json.load(archive.extractfile("manifest.json"))
         require(sorted(row["RepoTags"] for row in manifest) == sorted([image] for image in images.values()),
                 f"Image archive contains unexpected tags for linux/{arch}")
+        digests = saved_manifest_digests(archive)
         result = {}
         for row in manifest:
             config = archive.extractfile(row["Config"]).read()
             document = json.loads(config)
             require(document["os"] == "linux" and document["architecture"] == arch,
                     f"Image config in {row['RepoTags'][0]} targets the wrong platform")
-            result[row["RepoTags"][0]] = "sha256:" + hashlib.sha256(config).hexdigest()
+            config_digest = "sha256:" + hashlib.sha256(config).hexdigest()
+            result[row["RepoTags"][0]] = {
+                "digest": config_digest,
+                "identities": {config_digest, *digests.get(config_digest, ())},
+                "layers": document["rootfs"]["diff_ids"],
+            }
         return result
 
 
@@ -121,15 +145,22 @@ def verify_bundle(bundle, arch, run_id, attempt, provenance):
         image_id = build[f"{role}ImageId"]
         manifest_digest = build[f"{role}Digest"]
         metadata = read_json(bundle / f"{role}-metadata.json")
-        require(DIGEST.fullmatch(image_id) and configs[image] == image_id and DIGEST.fullmatch(manifest_digest)
-                and metadata["containerimage.digest"] == manifest_digest, f"Inconsistent image digests for {image}")
+        config = configs[image]
+        metadata_config = metadata.get("containerimage.config.digest")
+        require(image_id in config["identities"] and manifest_digest in config["identities"]
+                and metadata["containerimage.digest"] == manifest_digest
+                and metadata_config in (None, config["digest"]), f"Inconsistent image digests for {image}")
         loaded = read_command("docker", "image", "inspect", image)[0]
         labels = loaded["Config"]["Labels"]
-        require((loaded["Id"], loaded["Os"], loaded["Architecture"], labels["org.opencontainers.image.revision"],
-                 labels["org.opencontainers.image.version"]) == (image_id, "linux", arch, provenance["sourceCommit"], version),
+        loaded_id = loaded["Id"]
+        # Docker's image stores can report either a config ID or a manifest ID after loading the same archive.
+        require(loaded_id in config["identities"] and loaded["RootFS"]["Layers"] == config["layers"]
+                and (loaded["Os"], loaded["Architecture"], labels["org.opencontainers.image.revision"],
+                     labels["org.opencontainers.image.version"]) == ("linux", arch, provenance["sourceCommit"], version),
                 f"Loaded image does not match qualification evidence: {image}")
-        layers[role] = loaded["RootFS"]["Layers"]
-        verified[role] = {"image": image, "imageId": image_id, "buildDigest": manifest_digest, "configDigest": configs[image]}
+        layers[role] = config["layers"]
+        verified[role] = {"image": image, "imageId": image_id, "loadedImageId": loaded_id,
+                          "buildDigest": manifest_digest, "configDigest": config["digest"]}
 
     foundation = layers["foundation"]
     profile = layers["profile"]
@@ -165,7 +196,7 @@ def registry_digest(reference):
 
 
 def publish_image(reference, native):
-    run("docker", "image", "tag", native["imageId"], reference)
+    run("docker", "image", "tag", native["loadedImageId"], reference)
     run("docker", "image", "push", reference)
     manifest_digest = registry_digest(reference)
     manifest = read_command("docker", "buildx", "imagetools", "inspect", "--raw", f"{IMAGE}@{manifest_digest}")

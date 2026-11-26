@@ -63,7 +63,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.repository == 'elsa-workflows/elsa-foundation' && github.ref == 'refs/heads/main' && inputs.publish_essentials_profile_candidate == true && inputs.publish == false
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    environment: studio-publish
+    environment: studio-images
     env:
       PACKAGES_RUN_ID: ${{ inputs.packages_run_id }}
       PRODUCER_ARTIFACT_ID: ${{ needs.qualify_profile.outputs.producer_artifact_id }}

@@ -48,7 +48,7 @@ gh workflow run studio-docker.yml --ref main \
   -f packages_run_id="$packages_run_id" -f publish=false -f publish_essentials_profile_candidate=true
 ```
 
-Both native qualification jobs must succeed in the same attempt before the `studio-publish` job loads the bundles and writes to Docker Hub. Each attempt creates unique multi-platform tags in `elsaworkflows/elsa-studio`:
+Both native qualification jobs must succeed in the same attempt before the candidate job loads the bundles and writes to Docker Hub using `studio-images`. Each attempt creates unique multi-platform tags in `elsaworkflows/elsa-studio`:
 
 - `foundation-candidate-<version>-<run>-<attempt>`
 - `essentials-candidate-<version>-<run>-<attempt>`
