@@ -15,7 +15,7 @@ import zipfile
 
 
 PROFILE = Path(__file__).resolve().parent
-ESSENTIALS = PROFILE.parents[2] / "src/apps/Elsa.Studio.Essentials.Host"
+SETTINGS = PROFILE / "settings"
 FEED_NAME = "studio-essentials-packages"
 PROFILE_ROOT = "/studio-profile"
 PROFILE_TIME = "1970-01-01T00:00:00Z"
@@ -68,20 +68,21 @@ def stage_packages(archives, version, output):
 
 
 def stage_configuration(output):
-    settings = json.loads((ESSENTIALS / "appsettings.json").read_text(encoding="utf-8"))
+    settings = json.loads((SETTINGS / "appsettings.json").read_text(encoding="utf-8"))
     nuplane = settings.setdefault("Nuplane", {})
     nuplane["Convergence"] = {"Manifest": {"Enabled": True, "Path": f"{PROFILE_ROOT}/desired.json"}}
     nuplane["LockFile"] = {"Mode": "Enforce", "Path": f"{PROFILE_ROOT}/nuplane.lock.json", "FailOnHashMismatch": True}
     write_json(output / "appsettings.json", settings)
 
-    management = json.loads((ESSENTIALS / "nuplane-management.json").read_text(encoding="utf-8"))
+    management = json.loads((SETTINGS / "nuplane-management.json").read_text(encoding="utf-8"))
     management["Nuplane"]["Setup"]["Feeds"].append({
         "Name": FEED_NAME,
         "DirectoryPath": f"{PROFILE_ROOT}/packages",
         "Directory": {"Role": "Cache", "Watch": False},
     })
     write_json(output / "nuplane-management.json", management)
-    shutil.copyfile(ESSENTIALS / "shells.json", output / "shells.json")
+    for name in ("shells.json", "appsettings.Development.json"):
+        shutil.copyfile(SETTINGS / name, output / name)
 
 
 def main():

@@ -12,4 +12,4 @@ RUN version=$(cat /studio-profile/version) \
     && grep -Fq "\"Elsa.Studio.Core/$version\"" /app/Elsa.Studio.Foundation.Host.deps.json \
     || { echo "The Studio Foundation image must provide Elsa.Studio.Core $version." >&2; exit 1; }
 
-COPY --chown=app:app appsettings.json nuplane-management.json shells.json /app/
+COPY --chown=app:app appsettings.json appsettings.Development.json nuplane-management.json shells.json /app/

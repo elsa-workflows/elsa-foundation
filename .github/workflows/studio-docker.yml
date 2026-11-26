@@ -32,6 +32,11 @@ on:
         required: false
         type: boolean
         default: false
+      publish_essentials_profile_candidate:
+        description: 'On main, qualify and publish versioned Studio Foundation and Essentials profile candidates.'
+        required: false
+        type: boolean
+        default: false
       preview_image_tag:
         description: 'Required for a main image push. Check all three Studio images on Docker Hub (elsa-studio, elsa-studio-workbench, elsa-studio-foundation) and enter a 4.0.0-preview.N tag above the highest of them.'
         required: false
@@ -45,17 +50,66 @@ permissions:
 jobs:
   qualify_profile:
     name: Qualify the derived Studio Essentials profile
-    if: github.event_name == 'workflow_dispatch' && inputs.qualify_essentials_profile == true
+    if: github.event_name == 'workflow_dispatch' && (inputs.qualify_essentials_profile == true || inputs.publish_essentials_profile_candidate == true)
     uses: ./.github/workflows/studio-profile-qualification.yml
     with:
       packages_run_id: ${{ inputs.packages_run_id }}
       publish: ${{ inputs.publish }}
+      publish_candidate: ${{ inputs.publish_essentials_profile_candidate }}
+
+  publish_profile_candidate:
+    name: Publish verified Studio profile candidates
+    needs: qualify_profile
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'elsa-workflows/elsa-foundation' && github.ref == 'refs/heads/main' && inputs.publish_essentials_profile_candidate == true && inputs.publish == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: studio-publish
+    env:
+      PACKAGES_RUN_ID: ${{ inputs.packages_run_id }}
+      PRODUCER_ARTIFACT_ID: ${{ needs.qualify_profile.outputs.producer_artifact_id }}
+      PRODUCER_ARTIFACT_DIGEST: ${{ needs.qualify_profile.outputs.producer_artifact_digest }}
+    steps:
+      - name: Require the dedicated Studio profile image publishing switch
+        env:
+          PROFILE_PUBLISHING_ENABLED: ${{ vars.ELSA_STUDIO_PROFILE_PUBLISHING }}
+        run: |
+          if [ "$PROFILE_PUBLISHING_ENABLED" != true ]; then
+            echo "::error::Studio candidate image publishing requires ELSA_STUDIO_PROFILE_PUBLISHING=true."
+            exit 1
+          fi
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify and load both tested native image bundles
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/studio_profile_candidate.py verify
+
+      - name: Authenticate the candidate writer with Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Publish and verify both multi-platform candidates
+        run: python3 tools/ci/studio_profile_candidate.py publish
+
+      - name: Retain candidate publication evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-profile-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/studio-profile-publication/publication.json
+          if-no-files-found: error
+          retention-days: 7
 
   build:
     name: Build & optionally publish Studio ${{ matrix.flavor }}
     if: >-
       github.ref == 'refs/heads/main' &&
-      ((github.event_name == 'workflow_dispatch' && inputs.qualify_essentials_profile != true) ||
+      ((github.event_name == 'workflow_dispatch' && inputs.qualify_essentials_profile != true && inputs.publish_essentials_profile_candidate != true) ||
        (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
         github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' &&
         github.event.workflow_run.head_repository.full_name == github.repository &&

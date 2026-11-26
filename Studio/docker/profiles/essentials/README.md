@@ -37,3 +37,24 @@ profile=$(jq -r .profileImage build.json)
 test "$(docker image inspect --format '{{.Id}}' "$profile")" = "$(jq -r .profileImageId build.json)"
 python3 smoke.py "$profile" --context context --etl fixtures/Elsa.Studio.Etl.*.nupkg --output replay
 ```
+
+## Publish versioned candidates
+
+From `main`, obtain the successful build-only Studio Packages run for the current commit and dispatch the profile candidate path.
+
+```sh
+gh workflow run studio-packages.yml --ref main -f publish_target=none
+gh workflow run studio-docker.yml --ref main \
+  -f packages_run_id="$packages_run_id" -f publish=false -f publish_essentials_profile_candidate=true
+```
+
+Both native qualification jobs must succeed in the same attempt before the `studio-publish` job loads the bundles and writes to Docker Hub. Each attempt creates unique multi-platform tags in `elsaworkflows/elsa-studio`:
+
+- `foundation-candidate-<version>-<run>-<attempt>`
+- `essentials-candidate-<version>-<run>-<attempt>`
+
+The job first stages the manifests using the corresponding `-amd64` and `-arm64` tags. Use the index digests from the Actions summary or `publication.json` to pin both candidates. The ordinary Studio release tags and moving aliases retain their current publication paths. To retry a failed publication, rerun all jobs so both qualifying bundles come from the retry attempt.
+
+The `ELSA_STUDIO_PROFILE_PUBLISHING` repository variable controls versioned candidate image publication.
+Set it to `true` to enable this path. Unset it to stop further candidate writes while checking registry state.
+The separate consolidated package publisher retains its existing authorization.

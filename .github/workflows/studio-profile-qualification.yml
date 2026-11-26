@@ -11,6 +11,16 @@ on:
         description: 'Profile qualification requires publish to be false.'
         required: true
         type: boolean
+      publish_candidate:
+        description: 'Authorize candidate publication after both architectures qualify.'
+        required: false
+        default: false
+        type: boolean
+    outputs:
+      producer_artifact_id:
+        value: ${{ jobs.source.outputs.artifact_id }}
+      producer_artifact_digest:
+        value: ${{ jobs.source.outputs.archive_digest }}
 
 permissions:
   actions: read
@@ -34,11 +44,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE_RUN_ID: ${{ inputs.packages_run_id }}
           PUBLISH: ${{ inputs.publish }}
+          PUBLISH_CANDIDATE: ${{ inputs.publish_candidate }}
         run: |
           set -euo pipefail
           if [[ "$PUBLISH" == "true" ]]; then
             echo "::error::Set publish to false for Studio Essentials profile qualification."
             exit 1
+          fi
+          if [[ "$PUBLISH_CANDIDATE" == "true" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$GITHUB_REPOSITORY" != "elsa-workflows/elsa-foundation" || "$GITHUB_REF" != "refs/heads/main" ]]; then
+              echo "::error::Studio profile candidates can be published only by a manual dispatch on main."
+              exit 1
+            fi
           fi
           if [[ ! "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
             echo "::error::packages_run_id must be a numeric Actions run ID."
