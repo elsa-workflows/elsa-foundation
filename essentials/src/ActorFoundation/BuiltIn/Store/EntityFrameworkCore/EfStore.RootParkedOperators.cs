@@ -101,15 +101,31 @@ public sealed partial class EfStore
     private static Task<long> ReadParkProtectionRefusalsAsync(KernelDb db, string actor, int partition, string operation, long before,
         CancellationToken token)
     {
-        var sql = ParkProtectionRefusalsSql("{0}", "{1}", "{2}", """r."Entries" = {3}""");
+        var sql = ParkProtectionRefusalsSql("{0}", "{1}", "{2}", MatchesParkProtectionRefusal(db, "{3}"));
         if (db.UsesSqliteRootRuntime)
             sql = RenderSqliteOutcomePrefixes(sql).Replace("GLOB '{", "GLOB '{{", StringComparison.Ordinal);
-        return db.Database.SqlQueryRaw<long>(sql, actor, partition, before, FoundationRootParkFacts.ProtectionRefusal(operation)).SingleAsync(token);
+        return db.Database.SqlQueryRaw<long>(sql, actor, partition, before, operation).SingleAsync(token);
+    }
+
+    private static string MatchesParkProtectionRefusal(KernelDb db, string operation)
+    {
+        var fields = db.UsesSqliteShippedInstall
+            ? $$"""
+                json_extract(r."Entries", '$.Operation') = {{operation}}
+                    AND json_extract(r."Entries", '$.Reason') = 'unavailable'
+                    AND json_remove(r."Entries", '$.Outcome', '$.Operation', '$.Reason') = json_object()
+                """
+            : $$"""
+                r."Entries"::jsonb = jsonb_build_object('Outcome', 'refused', 'Operation', {{operation}}::text, 'Reason', 'unavailable')
+                """;
+        return $$$"""
+            CASE WHEN r."Entries" LIKE '{{"Outcome":"refused",%' THEN {{{fields}}} ELSE false END
+            """;
     }
 
     // The latest Open starts a new retry budget, including when the operation ID has been reused.
     private static string ParkProtectionRefusalsSql(string actor, string partition, string before, string matchesRefusal) => $$$"""
-        SELECT count(*) AS "Value" FROM "Journal" r
+        SELECT count(DISTINCT r."Revision") AS "Value" FROM "Journal" r
         WHERE r."Instance" = {{{actor}}} AND r."Partition" = {{{partition}}} AND r."Revision" < {{{before}}}
             AND r.{{{RootOutcomeEntry}}} AND {{{matchesRefusal}}}
             AND r."Revision" > (
@@ -233,14 +249,11 @@ public sealed partial class EfStore
                 AND {Field("j", "Reason")} = 'unavailable'
                 AND {Field("j", "Cleared")} = OLD."FoundationParkCleared"{(db.UsesSqliteShippedInstall ? "" : "::text")}
             """;
-        var matchesRefusal = $$$"""
-            CASE WHEN r."Entries" LIKE '{{"Outcome":"refused",%' THEN
-                {{{Field("r", "Operation")}}} = OLD."FoundationParkClearing" AND {{{Field("r", "Reason")}}} = 'unavailable'
-            ELSE false END
-            """;
+        var matchesRefusal = MatchesParkProtectionRefusal(db, """OLD."FoundationParkClearing" """);
         var priorRefusals = ParkProtectionRefusalsSql("""NEW."Id" """, """NEW."Partition" """, """NEW."Revision" """, matchesRefusal);
         const string atRevision = """j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id" AND j."Revision" = NEW."Revision" """;
-        var stopped = atRevision + """AND j."Entries" LIKE '{{"Outcome":"clearing-stopped",%' """;
+        // Repeat the partial index's predicate so the probe seeks to this revision of the actor, including on ordinary turns.
+        var stopped = atRevision + $"AND j.{RootOutcomeEntry} " + """AND j."Entries" LIKE '{{"Outcome":"clearing-stopped",%' """;
         var kind = db.UsesSqliteShippedInstall
             ? $""" AND OLD."FoundationParkClearingKind" = '{Kinds.Delete}' AND NEW."FoundationParkClearingKind" IS NULL """
             : "";

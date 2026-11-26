@@ -233,7 +233,7 @@ internal static class PostgresShippedFormatChecks
         await using var db = open();
         var sql = EfStore.RenderPostgresFirstRootGuards(db).ReplaceLineEndings("\n");
         var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
-        Require(fingerprint == "af2da6ca3d12e0ca8d05b22b000fdb959ea32b44b403ed54f1b3625272296ec2",
+        Require(fingerprint == "48873290cc132072d8cc098414d81a9b640328765d57ae182747151896ada70a",
             $"the complete emitted PostgreSQL guard installation batch matches its revision ({fingerprint})");
         var bodies = await db.Database.SqlQueryRaw<string>("""
             SELECT md5(p.prosrc) AS "Value"
@@ -242,7 +242,7 @@ internal static class PostgresShippedFormatChecks
                 AND p.proname IN ('kernel_require_root_checkpoint_writer', 'kernel_require_root_journal_revision', 'kernel_require_root_outcome_checkpoint')
             ORDER BY p.proname
             """).ToListAsync(token);
-        Require(bodies is ["244e5e591931a2db1ddfe0a8fff3188f", "7829d29ab00156e60c67f2e41f3be22d", "4422f56b0cd80c905e3d21e30a7cd610"],
+        Require(bodies is ["22ee310deb556f4521461bfd3a6af5f5", "dc59bbf4e6ab2ed76822721cdb89069a", "4422f56b0cd80c905e3d21e30a7cd610"],
             "the installed PostgreSQL checkpoint, journal and deferred outcome function bodies match their revision");
     }
 

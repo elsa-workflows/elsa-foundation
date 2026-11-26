@@ -129,6 +129,7 @@ internal static class SqliteShippedInstallChecks
 
     private static async Task CheckGuardsAsync(KernelDb db, CancellationToken token)
     {
+        await CheckStopLookupPlanAsync();
         await SeedAsync("direct", InstanceStatus.Running, qualified: false);
         await SeedAsync("atomic", InstanceStatus.Running);
         await SeedAsync("parked", InstanceStatus.Faulted);
@@ -214,13 +215,15 @@ internal static class SqliteShippedInstallChecks
         var stopped = FoundationRootParkFacts.ProtectionStopped("operator/test", 1);
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
-            await JournalAsync("refusal", revision: 2, stopped);
             await JournalAsync("refusal", revision: 2, refused);
-            await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
-                UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2 WHERE "Id" = 'refusal'
-                """, token), "a valid refusal beside a stop outcome cannot authorize a revision on an idle Park");
+            await RefusedAsync<SqliteException>(() => JournalAsync("refusal", revision: 2, stopped),
+                "the journal cannot add a stop outcome to an idle Park beside a valid refusal");
             await write.RollbackAsync(token);
         }
+        await SeedAsync("first-park", InstanceStatus.Faulted, qualified: false);
+        await RefusedAsync<SqliteException>(() => JournalAsync("first-park", revision: 1, stopped),
+            "a stop outcome cannot be attached before a root is first bound");
+        await BindAsync("first-park", InstanceStatus.Faulted);
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
             await JournalAsync("refusal", revision: 2, refused);
@@ -328,11 +331,25 @@ internal static class SqliteShippedInstallChecks
 
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
-            await JournalAsync("projected", revision: 4, stopped);
+            var unavailable = FoundationRootParkFacts.ProtectionRefusal("operator/test");
+            for (var copy = 0; copy < FoundationRootParkFacts.MaxProtectionRefusals - 1; copy++)
+                await JournalAsync("projected", revision: 4, unavailable);
+            await db.Database.ExecuteSqlRawAsync("""
+                UPDATE "Instances" SET "Revision" = 4, "FoundationWriteRevision" = 4 WHERE "Id" = 'projected'
+                """, token);
+            const string extraField = """{"Outcome":"refused","Operation":"operator/test","Reason":"unavailable","Extra":true}""";
+            for (var revision = 5; revision <= 7; revision++)
+            {
+                await JournalAsync("projected", revision, extraField);
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision} WHERE "Id" = 'projected'
+                    """, token);
+            }
+            await JournalAsync("projected", revision: 8, stopped);
             await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
-                UPDATE "Instances" SET "Revision" = 4, "FoundationWriteRevision" = 4, "FoundationParkClearing" = NULL,
+                UPDATE "Instances" SET "Revision" = 8, "FoundationWriteRevision" = 8, "FoundationParkClearing" = NULL,
                     "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL WHERE "Id" = 'projected'
-                """, token), "the SQLite guard rejects an exact clearing stop before the retry ceiling");
+                """, token), "duplicate or noncanonical refusal rows cannot authorize an early SQLite clearing stop");
             await write.RollbackAsync(token);
         }
         await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
@@ -441,6 +458,33 @@ internal static class SqliteShippedInstallChecks
                 "FoundationHeader" = NULL, "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL
             WHERE "Id" = {id}
             """, token);
+
+        async Task CheckStopLookupPlanAsync()
+        {
+            var trigger = await db.Database.SqlQueryRaw<string>("""
+                SELECT sql AS "Value" FROM sqlite_master WHERE name = 'kernel_require_root_checkpoint_writer'
+                """).SingleAsync(token);
+            const string prefix = """CASE WHEN EXISTS (SELECT 1 FROM "Journal" j WHERE """;
+            var start = trigger.IndexOf(prefix, StringComparison.Ordinal);
+            Require(start >= 0, "the checkpoint guard selects a stop outcome before ordinary writes");
+            var predicateStart = start + prefix.Length;
+            var end = trigger.IndexOf(") THEN", predicateStart, StringComparison.Ordinal);
+            var predicate = trigger[predicateStart..end]
+                .Replace("""NEW."Partition" """, "0 ", StringComparison.Ordinal)
+                .Replace("""NEW."Id" """, "'fixture' ", StringComparison.Ordinal)
+                .Replace("""NEW."Revision" """, "1 ", StringComparison.Ordinal);
+            await db.Database.OpenConnectionAsync(token);
+            try
+            {
+                await using var plan = db.Database.GetDbConnection().CreateCommand();
+                plan.CommandText = """EXPLAIN QUERY PLAN SELECT 1 FROM "Journal" j WHERE """ + predicate;
+                await using var reader = await plan.ExecuteReaderAsync(token);
+                Require(await reader.ReadAsync(token) &&
+                    reader.GetString(3).Contains("IX_FoundationRootJournal_Outcome (Instance=? AND Partition=? AND Revision=?)", StringComparison.Ordinal),
+                    "the stop-outcome guard seeks the actor's exact journal revision through the partial index");
+            }
+            finally { await db.Database.CloseConnectionAsync(); }
+        }
 
         Task<int> JournalAsync(string id, long revision, string entries) =>
             db.Database.ExecuteSqlInterpolatedAsync($"""

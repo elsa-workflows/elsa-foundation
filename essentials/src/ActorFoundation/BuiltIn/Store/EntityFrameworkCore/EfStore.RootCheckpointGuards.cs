@@ -32,6 +32,7 @@ public sealed partial class EfStore
                 AND NOT (/*root-park-journal*/ OR (/*root-retirement*/ AND i."Retired" AND i."Partition" = NEW."Partition" AND NEW."Revision" = -1
                     AND NEW."Entries" = '["delete"]' AND NOT EXISTS (
                         SELECT 1 FROM "Journal" j WHERE j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j."Revision" = -1))))
+        /*park-clearing-stop-journal*/
         """;
 
     private const string PostgresFirstRootGuards = """
@@ -142,6 +143,13 @@ public sealed partial class EfStore
         .Replace("/*root-parked-terminate*/", db.UsesRootParkedOperators ? ParkedTerminateCheckpoint(db) : "false", StringComparison.Ordinal)
         .Replace("/*park-clearing-stop-write*/", db.UsesRootParkedOperators && db.UsesRootRetirement ? ParkClearingStopWrite(db) : "", StringComparison.Ordinal)
         .Replace("/*park-clearing-stop-end*/", db.UsesRootParkedOperators && db.UsesRootRetirement ? "END" : "", StringComparison.Ordinal)
+        // A stopped outcome requires an already-qualified checkpoint with an open clearing when it is journalled.
+        .Replace("/*park-clearing-stop-journal*/", db.UsesRootParkedOperators && db.UsesRootRetirement ? """
+            OR (NEW."Entries" LIKE '{{"Outcome":"clearing-stopped",%' AND NOT EXISTS (
+                SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance" AND i."Partition" = NEW."Partition"
+                    AND i."FoundationReference" IS NOT NULL AND i."Revision" + 1 = NEW."Revision"
+                    AND i."FoundationParkClearing" IS NOT NULL))
+            """ : "", StringComparison.Ordinal)
         // S5b-3a: a Terminate-then-delete retires a parked root, Cancelled with its terminal mark and its Park cleared.
         // S5b-3b: a Delete retires it still Faulted, under its terminal mark.
         .Replace("/*root-parked-retirement*/", db.UsesRootParkedOperators && db.UsesRootRetirement ? ParkedRetirementCheckpoint(db) : "false",
