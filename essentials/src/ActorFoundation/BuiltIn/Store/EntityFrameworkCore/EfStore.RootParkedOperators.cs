@@ -111,17 +111,24 @@ public sealed partial class EfStore
     {
         var fields = db.UsesSqliteShippedInstall
             ? $$"""
-                json_extract(r."Entries", '$.Operation') = {{operation}}
+                json_type(r."Entries", '$.Operation') = 'text'
+                    AND json_extract(r."Entries", '$.Operation') = {{operation}}
                     AND json_extract(r."Entries", '$.Reason') = 'unavailable'
                     AND json_remove(r."Entries", '$.Outcome', '$.Operation', '$.Reason') = json_object()
                 """
             : $$"""
-                r."Entries"::jsonb = jsonb_build_object('Outcome', 'refused', 'Operation', {{operation}}::text, 'Reason', 'unavailable')
+                r."Entries"::jsonb = pg_catalog.jsonb_build_object('Outcome', 'refused', 'Operation', {{operation}}::text, 'Reason', 'unavailable')
                 """;
         return $$$"""
-            CASE WHEN r."Entries" LIKE '{{"Outcome":"refused",%' THEN {{{fields}}} ELSE false END
+            CASE WHEN r."Entries" LIKE '{{"Outcome":"refused",%' AND {{{ValidParkOutcomeJson(db, "r")}}}
+                THEN {{{fields}}} ELSE false END
             """;
     }
+
+    // The outcome prefix indexes a journal entry. Its JSON must also decode before it can count as a refusal.
+    private static string ValidParkOutcomeJson(KernelDb db, string journal) => db.UsesSqliteShippedInstall
+        ? $"""json_valid({journal}."Entries")"""
+        : $"""{journal}."Entries" IS JSON OBJECT WITH UNIQUE KEYS AND pg_catalog.pg_input_is_valid({journal}."Entries", 'jsonb')""";
 
     // The latest Open starts a new retry budget, including when the operation ID has been reused.
     private static string ParkProtectionRefusalsSql(string actor, string partition, string before, string matchesRefusal) => $$$"""
@@ -241,14 +248,19 @@ public sealed partial class EfStore
     // Select the stop transition before ordinary checkpoint branches can accept the same journal revision.
     private static string ParkClearingStopWrite(KernelDb db)
     {
-        string Field(string alias, string field) => db.UsesSqliteShippedInstall
-            ? $"json_extract({alias}.\"Entries\", '$.{field}')"
-            : $"({alias}.\"Entries\"::jsonb ->> '{field}')";
-        var entry = $"""
-            {Field("j", "Operation")} = OLD."FoundationParkClearing"
-                AND {Field("j", "Reason")} = 'unavailable'
-                AND {Field("j", "Cleared")} = OLD."FoundationParkCleared"{(db.UsesSqliteShippedInstall ? "" : "::text")}
-            """;
+        var entry = db.UsesSqliteShippedInstall
+            ? """
+                json_type(j."Entries", '$.Operation') = 'text'
+                    AND json_extract(j."Entries", '$.Operation') = OLD."FoundationParkClearing"
+                    AND json_extract(j."Entries", '$.Reason') = 'unavailable'
+                    AND json_type(j."Entries", '$.Cleared') = 'integer'
+                    AND json_extract(j."Entries", '$.Cleared') = OLD."FoundationParkCleared"
+                    AND json_remove(j."Entries", '$.Outcome', '$.Operation', '$.Reason', '$.Cleared') = json_object()
+                """
+            : """
+                j."Entries"::jsonb = pg_catalog.jsonb_build_object('Outcome', 'clearing-stopped',
+                    'Operation', OLD."FoundationParkClearing", 'Reason', 'unavailable', 'Cleared', OLD."FoundationParkCleared")
+                """;
         var matchesRefusal = MatchesParkProtectionRefusal(db, """OLD."FoundationParkClearing" """);
         var priorRefusals = ParkProtectionRefusalsSql("""NEW."Id" """, """NEW."Partition" """, """NEW."Revision" """, matchesRefusal);
         const string atRevision = """j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id" AND j."Revision" = NEW."Revision" """;
@@ -263,7 +275,8 @@ public sealed partial class EfStore
                 AND OLD."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkClearing" IS NULL
                 AND NEW."FoundationParkCleared" IS NULL{{{kind}}}
                 {{{ParkedClearingRow(db)}}}
-                AND EXISTS (SELECT 1 FROM "Journal" j WHERE {{{stopped}}} AND {{{entry}}})
+                AND EXISTS (SELECT 1 FROM "Journal" j WHERE {{{stopped}}}
+                    AND CASE WHEN {{{ValidParkOutcomeJson(db, "j")}}} THEN {{{entry}}} ELSE false END)
                 AND (SELECT count(*) FROM "Journal" j WHERE {{{atRevision}}}) = 1
                 AND ({{{priorRefusals}}}) >= {{{FoundationRootParkFacts.MaxProtectionRefusals - 1}}}
             ELSE

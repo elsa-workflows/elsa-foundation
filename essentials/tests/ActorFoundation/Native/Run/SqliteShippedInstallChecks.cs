@@ -212,7 +212,7 @@ internal static class SqliteShippedInstallChecks
         await RefusedAsync<SqliteException>(() => JournalAsync("refusal", revision: 2, """{"Outcome":"REFUSED","Reason":"parked"}"""),
             "the journal guard compares outcome prefixes using ordinal case");
         const string refused = """{"Outcome":"refused","Reason":"parked"}""";
-        var stopped = FoundationRootParkFacts.ProtectionStopped("operator/test", 1);
+        var stopped = FoundationRootParkFacts.ProtectionStopped("123", 1);
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
             await JournalAsync("refusal", revision: 2, refused);
@@ -303,7 +303,7 @@ internal static class SqliteShippedInstallChecks
             && await db.Instances.Where(row => row.Id == "other").Select(row => row.Revision).SingleAsync(token) == 1,
             "rolling back an unpaired outcome also rolls back the checkpoint of the other actor");
 
-        const string clearing = """{"Outcome":"clearing","Operation":"operator/test","Cleared":1}""";
+        const string clearing = """{"Outcome":"clearing","Operation":"123","Cleared":1}""";
         const string terminated = """{"Outcome":"terminated","Operation":"operator/test","Cleared":1}""";
         const string discarded = """{"Outcome":"protected","Disposition":"discarded","Operation":"operator/test","Cleared":1}""";
         await using (var write = await db.Database.BeginTransactionAsync(token))
@@ -321,7 +321,7 @@ internal static class SqliteShippedInstallChecks
             await JournalAsync("projected", revision: 3, clearing);
             await db.Database.ExecuteSqlRawAsync("""
                 UPDATE "Instances" SET "Revision" = 3, "FoundationWriteRevision" = 3,
-                    "FoundationParkClearing" = 'operator/test', "FoundationParkClearingKind" = 'kernel.delete', "FoundationParkCleared" = 1
+                    "FoundationParkClearing" = '123', "FoundationParkClearingKind" = 'kernel.delete', "FoundationParkCleared" = 1
                 WHERE "Id" = 'projected'
                 """, token);
             await write.CommitAsync(token);
@@ -331,16 +331,22 @@ internal static class SqliteShippedInstallChecks
 
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
-            var unavailable = FoundationRootParkFacts.ProtectionRefusal("operator/test");
+            var unavailable = FoundationRootParkFacts.ProtectionRefusal("123");
             for (var copy = 0; copy < FoundationRootParkFacts.MaxProtectionRefusals - 1; copy++)
                 await JournalAsync("projected", revision: 4, unavailable);
             await db.Database.ExecuteSqlRawAsync("""
                 UPDATE "Instances" SET "Revision" = 4, "FoundationWriteRevision" = 4 WHERE "Id" = 'projected'
                 """, token);
-            const string extraField = """{"Outcome":"refused","Operation":"operator/test","Reason":"unavailable","Extra":true}""";
-            for (var revision = 5; revision <= 7; revision++)
+            string[] invalidRefusals =
+            [
+                """{"Outcome":"refused","Operation":"123","Reason":"unavailable","Extra":true}""",
+                """{"Outcome":"refused","Operation":123,"Reason":"unavailable"}""",
+                """{"Outcome":"refused","Operation":"123","Reason":"unavailable", """
+            ];
+            for (var index = 0; index < invalidRefusals.Length; index++)
             {
-                await JournalAsync("projected", revision, extraField);
+                var revision = 5 + index;
+                await JournalAsync("projected", revision, invalidRefusals[index]);
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision} WHERE "Id" = 'projected'
                     """, token);
