@@ -157,6 +157,9 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             "Nuplane.Store.Maintenance.PackageStoreEnrollmentPreviewService",
             "Nuplane.Store.Maintenance.PackageStoreRootResolver"),
         Entries(
+            "Nuplane's internal concrete registration only backs its public reader. The public IPackageArchiveReader is shared from the host.",
+            "Nuplane.PackageArchives.PackageArchiveReader"),
+        Entries(
             UnreachableFromShells,
         "Nuplane.Abstractions.IActivePackageCatalog", "Nuplane.Abstractions.ICycleFailureContributor", "Nuplane.Abstractions.IDesiredPackageSource", "Nuplane.Abstractions.IDesiredStateContributor", "Nuplane.Abstractions.INuplaneObserver", "Nuplane.Abstractions.IPackageResolver",
         "Nuplane.Capabilities.CapabilityContributionLedger", "Nuplane.Capabilities.CapabilityDesiredStateContributor",

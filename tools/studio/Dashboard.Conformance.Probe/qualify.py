@@ -25,8 +25,8 @@ REPO = Path(__file__).resolve().parents[3]
 FIXTURES = Path(__file__).with_name("fixtures")
 ROOTS = (
     "extensions/Examples/src/Acme.Processing/Module/Acme.Processing.csproj",
-    "essentials/src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj",
-    "essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj",
+    "extensions/Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj",
+    "extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj",
     "essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj",
     "essentials/src/Events/Elsa.Events/Elsa.Events.csproj",
 )

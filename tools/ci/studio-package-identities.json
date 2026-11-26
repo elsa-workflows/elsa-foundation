@@ -55,7 +55,7 @@
     { "id": "Elsa.Studio.Hosting.Nuplane", "project": "Studio/src/essentials/Elsa.Studio.Hosting.Nuplane/Elsa.Studio.Hosting.Nuplane.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Backends", "project": "Studio/src/essentials/Elsa.Studio.Backends/Elsa.Studio.Backends.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Hosting.Distribution", "project": "Studio/src/essentials/Elsa.Studio.Hosting.Distribution/Elsa.Studio.Hosting.Distribution.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
-    { "id": "Elsa.Studio.Dashboard", "project": "Studio/src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" },
+    { "id": "Elsa.Studio.Dashboard", "project": "extensions/Dashboard/studio/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj", "renamed_from": "Studio/src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" },
     { "id": "Elsa.Studio.UserTasks", "project": "extensions/UserTasks/studio/Elsa.Studio.UserTasks/Elsa.Studio.UserTasks.csproj", "introduced_after_consolidation": true, "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Workflows", "project": "Studio/src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj" },
     { "id": "Elsa.Studio.Attention", "project": "extensions/Attention/studio/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj" },

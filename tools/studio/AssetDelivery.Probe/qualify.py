@@ -110,7 +110,7 @@ def main() -> None:
     source_revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     inputs = {
         "Hosting": (REPO / "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot", "/"),
-        "Dashboard": (REPO / "Studio/src/essentials/Elsa.Studio.Dashboard/wwwroot", "_content/Elsa.Studio.Dashboard"),
+        "Dashboard": (REPO / "extensions/Dashboard/studio/Elsa.Studio.Dashboard/wwwroot", "_content/Elsa.Studio.Dashboard"),
     }
     check((inputs["Hosting"][0] / "studio/vendor/react.js").is_file(), "Build the actual Hosting browser shell first.")
     check((inputs["Dashboard"][0] / "studio/modules/dashboard/module.js").is_file(), "Build Dashboard first.")

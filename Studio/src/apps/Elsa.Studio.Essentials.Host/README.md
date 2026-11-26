@@ -51,10 +51,9 @@ watcher and a one-minute poll. Add a module in one of two ways:
 - Upload its `.nupkg` on the Modules page (`/modules`), then enable its feature on the Features page (`/features`).
 - Copy its `.nupkg` into `packages`. The watcher reconciles it within seconds. Then enable its feature on the Features page.
 
-No rebuild or restart is needed. `EssentialsStudioAddOnTests` in `Studio/tests/Elsa.Studio.Tests` proves this path with the ETL
-module: the package loads, its feature enables and the module is listed. One gap remains: the app's package store is not an
-enrolled coordinated store, so Nuplane refuses to serve an installed module's browser assets and its screens do not load yet
-(#5778).
+No rebuild or restart is needed. `EssentialsStudioAddOnTests` in `Studio/tests/Elsa.Studio.Tests` uses the ETL module to verify
+that the package loads, the feature can be enabled, and the running app serves the module's JavaScript and stylesheets from
+its verified package archive.
 
 ## Run it
 
@@ -92,5 +91,4 @@ The Dockerfile copies only this app's project closure: the shared Studio project
 `.github/workflows/studio-docker.yml` publishes it with the other two flavors; [Studio Docker](../../../docs/docker.md) covers
 the runtime settings.
 
-In the image, an add-on's browser files answer 503 until [valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands. Nuplane serves an installed package's files only
-from an enrolled extracted store, and that store does not qualify a container's filesystem. The compiled-in modules are unaffected.
+The image serves installed add-on browser files from verified package archives.

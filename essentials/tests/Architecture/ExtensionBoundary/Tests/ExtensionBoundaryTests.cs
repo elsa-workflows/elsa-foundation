@@ -52,7 +52,26 @@ public sealed class ExtensionBoundaryTests
     /// edge is legitimate, in the same spirit as <c>EfCoreDependencyGuardTests.AllowedEfConsumers</c>:
     /// the point is that the list is short and argued, not that it is absent.
     /// </remarks>
-    private static readonly (string From, string To)[] DeclaredExtensionEdges = [];
+    private static readonly (string From, string To)[] DeclaredExtensionEdges =
+    [
+        // Weaver and the Acme example contribute to saved dashboard contracts.
+        ("Elsa.Weaver.Dashboard", "Elsa.Studio.Dashboard.Core"),
+        ("Acme.Processing", "Elsa.Studio.Dashboard.Core"),
+        // Agent and ETL use the shared service connection contracts.
+        ("Elsa.Agent.Api", "Elsa.Connections.Core"),
+        ("Elsa.Agent.Connections", "Elsa.Connections.Core"),
+        ("Elsa.Etl.Runtime", "Elsa.Connections.Core"),
+        // Connector providers register and resolve connections. OAuth2 also uses the built-in connection services.
+        ("Elsa.Integrations.Connectors.Microsoft365", "Elsa.Connections.Core"),
+        ("Elsa.Integrations.Connectors.OAuth2", "Elsa.Connections"),
+        ("Elsa.Integrations.Connectors.OAuth2", "Elsa.Connections.Core"),
+        ("Elsa.Integrations.Connectors.Slack", "Elsa.Connections.Core"),
+        // The two EF adapters reuse diagnostics retention infrastructure, which uses both telemetry contracts.
+        ("Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore", "Elsa.Diagnostics.Persistence"),
+        ("Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore", "Elsa.Diagnostics.Persistence"),
+        ("Elsa.Diagnostics.Persistence", "Elsa.Diagnostics.OpenTelemetry.Core"),
+        ("Elsa.Diagnostics.Persistence", "Elsa.Diagnostics.StructuredLogs.Core"),
+    ];
 
     private static readonly string RepoRoot = FindRepoRoot();
 

@@ -88,6 +88,8 @@
     "extensions/*/studio/**",
     "extensions/Agent/**",
     "extensions/Weaver/**",
+    "extensions/Dashboard/src/**",
+    "extensions/Dashboard/tests/**/*.csproj",
     "extensions/FeatureManagement/**",
     "Studio/**",
     "essentials/*",

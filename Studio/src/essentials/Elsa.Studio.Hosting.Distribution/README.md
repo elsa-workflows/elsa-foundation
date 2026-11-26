@@ -31,6 +31,9 @@ the Backends one, so an app passes only the modules it adds. Every other module 
 before `Build`. `UseElsaStudioDistribution` calls `UseElsaStudio`, `MapElsaStudio` and `MapElsaStudioNuplane`. Map any
 app-specific endpoints after it.
 
+Nuplane reads installed add-on metadata and browser files from the acquired `.nupkg` after verifying its recorded SHA-512 hash.
+The shipped apps use this reader with their ordinary package stores.
+
 The app supplies three files beside its `Program.cs`, as the shipped apps do:
 
 - `shells.json` enables the shell features, at least `StudioApi`.

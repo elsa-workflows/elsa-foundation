@@ -596,6 +596,9 @@ public sealed class FeatureCompositionTests
             services.AddSingleton(new Elsa.Workflows.Runtime.KernelHost.KernelServing());
             services.AddSingleton<Elsa.Workflows.Runtime.KernelHost.IScheduleActors>(
                 new Elsa.Workflows.Runtime.KernelHost.UnavailableScheduleActors("The composition test runs no schedule actor."));
+            // The kernel's run list reads the runs the host's foundation holds; the composition test opens none.
+            services.AddSingleton(new Elsa.Workflows.Runtime.KernelHost.KernelRuns(Elsa.ActorFoundation.Hosting.EmbeddedTenant.Bind("default"),
+                _ => throw new NotSupportedException("The composition test reads no kernel run.")));
         }
 
         private static void Compose(

@@ -20,7 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Sdk\Elsa.Integrations.Sdk\Elsa.Integrations.Sdk.csproj" />
     <ProjectReference Include="..\..\..\..\..\essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\..\essentials\src\Connections\Core\Elsa.Connections.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Connections\src\Core\Elsa.Connections.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
