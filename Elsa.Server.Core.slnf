@@ -6,6 +6,7 @@
       "extensions/Http/src/Core/Elsa.Http.Core.csproj",
       "extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj",
       "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj",
+      "extensions/Tasks/tests/Execution/Tests/Elsa.Tasks.Execution.Tests.csproj",
       "server/essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj",
       "server/essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj",
       "server/essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj",
