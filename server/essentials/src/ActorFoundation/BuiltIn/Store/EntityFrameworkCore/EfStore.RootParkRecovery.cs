@@ -75,10 +75,11 @@ public sealed partial class EfStore
         return $"""AND (i."FoundationParkAt" IS NOT NULL {withheld} OR {NoEarlierReleasedCohort})""";
     }
 
-    private sealed record CohortSample(long Epoch, long Through = -1, long ReadyThrough = 0, long Seen = 0, long Due = 0, long Seq = 0);
-    private sealed record CohortFence(int Partition, long Epoch, long Through, long ReadyThrough, long Seen, long Due, long Seq);
+    private sealed record CohortSample(long Epoch, long Through = -1, long ReadyThrough = 0, long Seen = 0,
+        long Due = long.MinValue, long Seq = 0, long ScanSeq = 0);
+    private sealed record CohortFence(int Partition, long Epoch, long Through, long ReadyThrough, long Seen, long Due, long Seq, long ScanSeq);
     private sealed record CohortCandidate(int Partition, long Through, long ReadyThrough, long? SeenGroup, long? DueGroup,
-        long? Seq, bool More, string? Actor, long? Revision, string? Tenant, string? Reference, string? Header);
+        long? Seq, bool More, int Spare, long? ScanTail, string? Actor, long? Revision, string? Tenant, string? Reference, string? Header);
     private readonly ConcurrentDictionary<int, CohortSample> _cohortSamples = new();
     private int _cohortPartitionWindow;
 
@@ -117,7 +118,7 @@ public sealed partial class EfStore
             var sample = _cohortSamples.GetOrAdd(fence.Partition, _ => new(fence.Epoch));
             if (sample.Epoch > fence.Epoch) continue;
             var cursor = sample.Epoch == fence.Epoch ? sample : new(fence.Epoch);
-            windows.Add(new(fence.Partition, fence.Epoch, cursor.Through, cursor.ReadyThrough, cursor.Seen, cursor.Due, cursor.Seq));
+            windows.Add(new(fence.Partition, fence.Epoch, cursor.Through, cursor.ReadyThrough, cursor.Seen, cursor.Due, cursor.Seq, cursor.ScanSeq));
             sampled.Add(fence.Partition, (fence.Epoch, sample));
         }
         if (windows.Count == 0) return ([], []);
@@ -129,13 +130,14 @@ public sealed partial class EfStore
         {
             var (epoch, previous) = sampled[page.Key];
             var row = page.First();
+            var scan = row is { DueGroup: not null, Spare: > 0 } ? row.ScanTail ?? 0 : previous.Epoch == epoch ? previous.ScanSeq : 0;
             var next = row switch
             {
                 { SeenGroup: null } => new CohortSample(epoch),
-                { SeenGroup: { } seen, DueGroup: null } => new(epoch, row.Through, row.ReadyThrough, checked(seen + 1)),
+                { SeenGroup: { } seen, DueGroup: null } => new(epoch, row.Through, row.ReadyThrough, checked(seen + 1), ScanSeq: scan),
                 { SeenGroup: { } seen, DueGroup: { } due, Seq: { } last, More: true } =>
-                    new(epoch, row.Through, row.ReadyThrough, seen, due, last),
-                _ => new(epoch, row.Through, row.ReadyThrough, row.SeenGroup!.Value, checked(row.DueGroup!.Value + 1))
+                    new(epoch, row.Through, row.ReadyThrough, seen, due, last, scan),
+                _ => new(epoch, row.Through, row.ReadyThrough, row.SeenGroup!.Value, checked(row.DueGroup!.Value + 1), ScanSeq: scan)
             };
             _cohortSamples.AddOrUpdate(page.Key, next, (_, current) => current.Epoch < epoch || ReferenceEquals(current, previous) ? next : current);
         }

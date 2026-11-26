@@ -250,7 +250,7 @@ internal static partial class SqliteHostLifetimeChecks
                 }
 
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {restored.Actor.Id} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                    UPDATE "Messages" SET "Due" = -1 WHERE "Target" = {restored.Actor.Id} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
                     """, token);
                 await using var replacement = await OwnAsync("authored-next");
                 var partition = new InstanceRef(restored.Actor.Id).Partition;
@@ -270,7 +270,7 @@ internal static partial class SqliteHostLifetimeChecks
                     await db.Database.SqlQuery<bool>($"""
                         SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {settled.Actor.Id} AND "Kind" = 'cohort-arrival'
                             AND NOT "Done" AND "FoundationKeptBy" IS NULL AND "FoundationReleasedBy" = 1 AND "Payload" = {payload}) AS "Value"
-                        """).SingleAsync(token), "a cold owner settles the stale control while the withheld arrival retains its released generation");
+                        """).SingleAsync(token), "a cold owner settles the stale control with a negative due time and preserves the released arrival");
                 Require(cohortPlan.Plan.Any(step => step.Contains("IX_FoundationRootInbox_CohortGroups", StringComparison.Ordinal) &&
                     step.Contains("Partition=? AND Seen=? AND Due=? AND Seq>? AND Seq<?", StringComparison.Ordinal)),
                     "the SQLite cohort sampler seeks waiting controls inside the sequence ceiling");

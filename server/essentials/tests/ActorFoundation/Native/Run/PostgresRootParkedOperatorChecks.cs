@@ -1035,6 +1035,7 @@ internal static class PostgresRootParkedOperatorChecks
                     FROM generate_series(1, 2048) key
                     """);
                 await set.ExecuteAsync($"""ANALYZE "Messages" """);
+                observation.CohortPlanPartition = partition;
                 observation.ObserveCohortPlan = true;
                 await set.DriveAsync(withheld, row => row is { Revision: 6, Status: InstanceStatus.Running });
                 set.Answered("younger-control", "StaleSelection");
@@ -1140,13 +1141,26 @@ internal static class PostgresRootParkedOperatorChecks
                 var found = false;
                 for (var pass = 0; pass < 8 && !found; pass++)
                 {
-                    Check(await set.TerminateAsync(tail, $"new-tail-{pass}"),
-                        "another control is admitted while the bounded candidate window advances");
+                    Check(await set.OperateAsync(tail, $"new-tail-{pass}", Kinds.Terminate, set.Selections[tail], dueAt: pass + 1),
+                        "another backdated control is admitted with a distinct due group");
                     var offered = await sampler.PollAsync(fences, TimeSpan.Zero, 1, stop);
                     found = offered.Messages is [{ Message: { Kind: Kinds.Terminate } message }] &&
                         message.Target.Id == waiting.Actor.Id && message.Operator?.RootParkFacts is not null;
                 }
                 Check(found, "the sampler revisits the missed control despite observed controls, future controls and continued admissions");
+
+                await set.ExecuteAsync($"""
+                    INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
+                    SELECT 'operator/earlier-due-' || row, {InboxKey.FoundationOccurrenceScope}, {partition}, 'other-source',
+                        {Kinds.Terminate}, -64 + row, 0, 0, 0, false FROM generate_series(1, 32) row
+                    """);
+                var wideSampler = new EfStore(OpenSample, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
+                await wideSampler.EnableRootJobsAsync(stop);
+                wideSampler.BindWorkerNode(set.Probe.Withholds);
+                var loaded = await wideSampler.PollAsync(fences, TimeSpan.Zero, 128, stop);
+                Check(loaded.Messages.Any(row => row.Message.Kind == Kinds.Terminate &&
+                    row.Message.Target.Id == waiting.Actor.Id && row.Message.Operator?.RootParkFacts is not null),
+                    "one loaded poll reaches a selected control behind many distinct due groups");
 
                 Task MarkReleasedAsync(long seen) => set.ExecuteAsync($"""
                     UPDATE "Messages" SET "Seen" = {seen} WHERE "Target" = {waiting.Actor.Id} AND "Kind" = 'withheld-cohort' AND NOT "Done"
@@ -3147,6 +3161,7 @@ internal static class PostgresRootParkedOperatorChecks
         // Commands of the set that a trigger refused: a commit lock refuses before any write, so it adds none.
         internal int TriggerRefusals => Volatile.Read(ref _refused);
         internal bool ObserveCohortPlan { get; set; }
+        internal int? CohortPlanPartition { get; set; }
         internal List<(int[] Partitions, int PerPartition)> CohortWindows { get; } = [];
         internal List<string> CohortPlan { get; } = [];
 
@@ -3162,8 +3177,9 @@ internal static class PostgresRootParkedOperatorChecks
             if (command is NpgsqlCommand cohort &&
                 cohort.CommandText.Contains("/* root-cohort-waiting */", StringComparison.Ordinal))
             {
-                CohortWindows.Add(((int[])cohort.Parameters[0].Value!, (int)cohort.Parameters[7].Value!));
-                if (!ObserveCohortPlan) return result;
+                var partitions = (int[])cohort.Parameters[0].Value!;
+                CohortWindows.Add((partitions, (int)cohort.Parameters[8].Value!));
+                if (!ObserveCohortPlan || CohortPlanPartition is int partition && !partitions.Contains(partition)) return result;
                 ObserveCohortPlan = false;
                 var planOptions = new NpgsqlConnectionStringBuilder(connection) { Options = "-c enable_seqscan=off" };
                 await using var source = new NpgsqlConnection(planOptions.ConnectionString);

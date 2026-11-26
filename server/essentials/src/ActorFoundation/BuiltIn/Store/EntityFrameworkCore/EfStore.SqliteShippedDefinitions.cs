@@ -326,6 +326,9 @@ public sealed partial class EfStore
             yield return Index("IX_FoundationRootInbox_CohortGroups", "Messages", $"""
                 ("Partition", "Seen", "Due", "Seq", "Target") WHERE {SqliteCohortWaitingWork}
                 """);
+            yield return Index("IX_FoundationRootInbox_CohortSequence", "Messages", $"""
+                ("Partition", "Seq", "Target", "Due", "Seen") WHERE {SqliteCohortWaitingWork}
+                """);
         }
         yield return Index("IX_FoundationRootOperators_Pending", "Messages", """
             ("Partition", "Target", "Seq", "Due")
