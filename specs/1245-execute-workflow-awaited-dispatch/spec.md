@@ -89,8 +89,19 @@ A child's Set Output keeps the value protection policy of what it wrote. Two kin
 - an output that is not stored inline.
 
 Carrying these raw would put them in the resume intent, the bookmark stimulus and the parent's variable, where the
-child's policy no longer applies. Elsa 3 had no such policies, so no converted workflow loses a value by this rule.
-Applying the existing policy needs no new value-policy rule.
+child's policy no longer applies. [ADR 0045](../../docs/adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) §9
+forbids that downgrade. The current projection pipeline gives an output one static policy, so it cannot carry a
+per-value policy.
+
+So the omission is a declared loss under [ADR 0046](../../docs/adr/0046-output-binding-coercion-uses-pinned-value-representations.md) V6, not a
+silent one:
+
+- the `Output` contract description states it;
+- `Result.outputs` still lists every such output by name, because the projection never drops a name.
+
+Elsa 3 had no such policies, so no converted workflow loses a value by this rule. A host that wants protected child
+outputs to reach a parent needs per-value policy propagation through captures. That is new ADR 0045 §9 work, and it is
+not built here: no one needs it yet.
 
 No ADR or ADR amendment is needed. This adds an activity output and converter rules. It applies
 [ADR 0091](../../docs/adr/0091-json-data-passes-through-unchanged-and-every-serializer-derives-from-one-baseline.md):
@@ -127,7 +138,8 @@ parent that dispatches it with `WaitForCompletion` true, captures `Output` into 
    `token` (a string), **When** the parent captures `Output`, **Then** both values arrive unchanged. `Result.outputs`
    still shows its diagnostic view of them.
 4. **Given** a child output marked sensitive, or required to be encrypted, or carrying a redaction mode or a retention policy, or not stored inline, **When** the parent
-   captures `Output`, **Then** that output is left out of the object. There is one test per kind.
+   captures `Output`, **Then** that output is left out of the object, and `Result.outputs` still lists it by name. There
+   is one test per kind.
 5. **Given** a child that faults or is cancelled, **When** the dispatch resumes, **Then** `Output` is absent and a
    capture of it leaves its variable unchanged, as for any other output an activity does not produce.
 6. **Given** `WaitForCompletion` false, **When** the dispatch completes with `Dispatched`, **Then** `Output` is absent.
@@ -249,6 +261,8 @@ faults.
 - **FR-003**: `Output` MUST be built from the child's committed workflow output values. It MUST NOT be built from the
   diagnostics capture policy or from `Result.outputs`, so no diagnostics setting changes it.
   - An output marked sensitive, or required to be encrypted, or carrying a redaction mode or a retention policy (its value protection policy), or not stored inline, MUST be left out.
+  - The `Output` contract description MUST state that protected and externally stored outputs are left out, and that
+    `Result.outputs` lists them by name (ADR 0046 V6: a declared loss).
   - A completed child with no outputs gives `{}`.
   - The values MUST be replay-stable: a resumed or retried parent gets the same `Output` (spec 099 FR-008).
 - **FR-004**: `Result` and `ChildWorkflowExecutionId` MUST keep their current shape and behaviour.

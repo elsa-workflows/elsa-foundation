@@ -6,7 +6,8 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
 
 ## Phase 1: Runtime `Output` (US1; FR-001 to FR-005)
 
-- [ ] T001 `DispatchWorkflowActivityResult`: add `Output` (`JsonElement?`,
+- [ ] T001 `DispatchWorkflowActivityResult`: add `Output`, with the FR-003 contract description (the declared
+  loss), (`JsonElement?`,
   `[Output(Key = "Output", Path = "output", IsRequired = false)]`), left out of the serialized result when null (plan
   D-1). Contract test in `DispatchWorkflowContractTests`: the output is declared, it is optional, and the descriptor
   lists it.
@@ -17,8 +18,9 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
 - [ ] T003 Policy-free read of a child's committed workflow outputs (plan D-2). It selects the same outputs as
   `RuntimeWorkflowOutputStateProjection`, without `IRuntimePayloadCapturePolicy`. It leaves out values whose
   `DurableValuePolicies.Read` is protected (sensitive, encryption, redaction mode, retention) and values not stored
-  inline. Add unit tests beside the existing projection tests, one per exclusion. Fix the stale "nothing writes it
-  yet" comment.
+  inline. Add unit tests beside the existing projection tests, one per exclusion. Fix both stale comments in
+  `RuntimeWorkflowOutputStateProjection`: "nothing writes it yet" (the sensitive marker) and "nothing writes
+  externalized workflow outputs yet". Set Output writes both.
 - [ ] T003a `WorkflowDispatchCompletionEnricher` sets `WorkflowDispatchParentResumePayload.Output` for `Completed` from
   T003.
   - The payload constructor rejects `Output` on any other status.
@@ -69,12 +71,18 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
 
 - [ ] T012 Import integration (`DispatchWorkflowCallTests` with `dispatch-caller.json`): add an awaited Elsa 3 dispatch
   that captures `Result` into an `Object` variable and one into an `ObjectDictionary` variable, and reads a child output
-  by name. Import, publish and run it on the import host, then assert the value (FR-001 capture at publish, SC-002 on
-  the import path). Add one Sequence-parent case: a faulted child runs the next step.
+  by name. Import, publish and run it on the import host, then assert the value (FR-001 capture at publish, FR-006,
+  US2 scenario 2). Run Flowchart-parent cases at run time:
+  - a faulted child runs the node on Elsa 3's `Done`, for Execute Workflow and for an awaited Dispatch Workflow
+    (FR-007, FR-009, US3 scenario 3, US4 scenario 2);
+  - a cancelled child ends the branch (FR-011).
+
+  Keep one Sequence-parent case as a regression check that a faulted child still runs the next step.
 - [ ] T013 [P] Converter README (`extensions/Elsa3/src/Mapping/README.md`): add the FR-006 to FR-011 rows, the five
   accepted differences (a faulted child's outputs, a cancelled child, a failed child start, `ParentInstanceId`,
   output-name case) with their Flowchart and Sequence behaviour, and Execute Workflow's always-wait.
 - [ ] T013a [P] Amend spec 236's `member-map.md` rows for `DispatchWorkflow.Result`, the `Done` outcome and
-  `ExecuteWorkflow` in place, citing spec 1245 (FR-011a).
+  `ExecuteWorkflow` in place, citing spec 1245 (FR-011a). The `ExecuteWorkflow` row also corrects the default: Elsa 3
+  ran an unset `WaitForCompletion` as false, where today's `DefaultFlip(…, "true")` assumes true.
 - [ ] T014 Set the spec's status to `Implemented` in the implementation PR (not in a separate PR). Tell the S-15 session
   which adjusted-copy and ledger changes FR-013 allows. Do not edit the ledger here.

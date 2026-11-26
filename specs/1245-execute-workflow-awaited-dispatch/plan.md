@@ -52,7 +52,11 @@ compatibility shims.
      the bookmark-resume stimulus input (`ParentResumeExecutor`) and the parent's activity result envelope. The
      protected-value exclusion is what keeps those surfaces safe.
    - Update the "payload-safe" doc comment on `WorkflowDispatchParentResumePayload` to say what `Output` carries. Fix
-     the stale "nothing writes it yet" comment in `RuntimeWorkflowOutputStateProjection`: Set Output writes it.
+     the two stale comments in `RuntimeWorkflowOutputStateProjection` ("nothing writes it yet" and "nothing writes
+     externalized workflow outputs yet"): Set Output writes both.
+   - The omission is a declared loss (ADR 0046 V6). The `Output` contract description states it, and `Result.outputs`
+     keeps each name. Carrying a per-value policy through a capture would be new ADR 0045 §9 work, and it is not built
+     here.
    - Expose that read as a separate method or contract beside the existing source, so the diagnostics read and the data
      read cannot be confused. Use the existing contracts in `Workflows.Runtime.Core`; no new pattern.
 4. The enricher puts that object on `WorkflowDispatchParentResumePayload` as a new `Output` (`JsonElement?`). It is set
