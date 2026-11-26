@@ -1016,9 +1016,11 @@ internal static class PostgresRootParkedOperatorChecks
                 observation.ObserveCohortPlan = true;
                 await set.DriveAsync(withheld, row => row is { Revision: 6, Status: InstanceStatus.Running });
                 set.Answered("younger-control", "StaleSelection");
-                Check(observation.CohortPlan.Any(line => line.Contains("IX_FoundationRootInbox_CohortWaiting", StringComparison.Ordinal) &&
+                var candidatePlan = observation.CohortPlan.SkipWhile(line => line.Trim() != "CTE candidates").Skip(1)
+                    .TakeWhile(line => line.StartsWith("    ", StringComparison.Ordinal)).ToArray();
+                Check(candidatePlan.Any(line => line.Contains("IX_FoundationRootInbox_CohortWaiting", StringComparison.Ordinal) &&
                         (line.Contains("Index Scan", StringComparison.Ordinal) || line.Contains("Index Only Scan", StringComparison.Ordinal))) &&
-                    observation.CohortPlan.Any(line => line.Contains("->  Limit", StringComparison.Ordinal)),
+                    candidatePlan.Any(line => line.Contains("->  Limit", StringComparison.Ordinal)),
                     "the bounded cohort window seeks the waiting-control index and limits candidates");
                 Check(!set.AnsweredAny("older-control") && await set.ImageAsync(offerable) is { Revision: 4 } &&
                     !set.Probe.Saw(withheld, "withheld-cohort") && !set.StoodDown,
@@ -1046,12 +1048,14 @@ internal static class PostgresRootParkedOperatorChecks
                 var fences = (await owner.TakeAsync(Enumerable.Range(0, count).ToArray(), "wide-idle", FixtureLease, stop)).Taken;
                 try
                 {
-                    var before = commands.CohortReads;
-                    for (var pass = 0; pass < 2; pass++)
-                        Check((await owner.PollAsync(fences, TimeSpan.Zero, 1, stop)).Messages.Count == 0,
+                    const int limit = 500;
+                    for (var pass = 0; pass < 3; pass++)
+                        Check((await owner.PollAsync(fences, TimeSpan.Zero, limit, stop)).Messages.Count == 0,
                             "the default-sized idle owner returns an empty page");
-                    Check(fences.Count == count && commands.CohortReads - before == 2,
-                        "each poll samples all 1,024 owned partitions in one cohort query");
+                    Check(fences.Count == count && commands.CohortWindows.Count == 3 &&
+                        commands.CohortWindows.All(window => window.Partitions.Length * window.PerPartition <= limit) &&
+                        commands.CohortWindows.SelectMany(window => window.Partitions).Distinct().Count() == count,
+                        "one bounded query per poll rotates across all 1,024 owned partitions");
                 }
                 finally { await owner.ReleaseAsync(fences, stop); }
             }
@@ -1076,7 +1080,7 @@ internal static class PostgresRootParkedOperatorChecks
                 await sampler.EnableRootJobsAsync(stop);
                 sampler.BindWorkerNode(set.Probe.Withholds);
                 await MarkReleasedAsync(0);
-                for (var pass = 0; pass < 2; pass++)
+                for (var pass = 0; pass < 4; pass++)
                 {
                     var offered = await sampler.PollAsync(fences, TimeSpan.Zero, 1, stop);
                     Check(offered.Messages is [{ Message.Kind: "withheld-cohort" }],
@@ -1084,7 +1088,7 @@ internal static class PostgresRootParkedOperatorChecks
                 }
                 await MarkReleasedAsync(epoch);
                 var found = false;
-                for (var pass = 0; pass < 4 && !found; pass++)
+                for (var pass = 0; pass < 8 && !found; pass++)
                 {
                     Check(await set.TerminateAsync(tail, $"new-tail-{pass}"),
                         "another control is admitted while the bounded candidate window advances");
@@ -3093,7 +3097,7 @@ internal static class PostgresRootParkedOperatorChecks
         // Commands of the set that a trigger refused: a commit lock refuses before any write, so it adds none.
         internal int TriggerRefusals => Volatile.Read(ref _refused);
         internal bool ObserveCohortPlan { get; set; }
-        internal int CohortReads { get; private set; }
+        internal List<(int[] Partitions, int PerPartition)> CohortWindows { get; } = [];
         internal List<string> CohortPlan { get; } = [];
 
         public override Task CommandFailedAsync(DbCommand command, CommandErrorEventData eventData, CancellationToken cancellationToken = default)
@@ -3108,7 +3112,7 @@ internal static class PostgresRootParkedOperatorChecks
             if (command is NpgsqlCommand cohort &&
                 cohort.CommandText.Contains("/* root-cohort-waiting */", StringComparison.Ordinal))
             {
-                CohortReads++;
+                CohortWindows.Add(((int[])cohort.Parameters[0].Value!, (int)cohort.Parameters[4].Value!));
                 if (!ObserveCohortPlan) return result;
                 ObserveCohortPlan = false;
                 var planOptions = new NpgsqlConnectionStringBuilder(connection) { Options = "-c enable_seqscan=off" };

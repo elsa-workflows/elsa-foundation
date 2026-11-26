@@ -78,6 +78,7 @@ public sealed partial class EfStore
     private sealed record CohortCandidate(int Partition, long Through, long? Seq, string? Actor, long? Revision,
         string? Tenant, string? Reference, string? Header);
     private readonly ConcurrentDictionary<int, CohortSample> _cohortSamples = new();
+    private int _cohortPartitionWindow;
 
     private static readonly string CohortWaitingWork = $"""
         "EventMatch" IS NULL AND NOT "Done" AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" LIKE 'operator/%'
@@ -88,13 +89,20 @@ public sealed partial class EfStore
     private async Task<(string[] Actors, long[] Revisions)> ReadWithheldCohortsAsync(KernelDb db, IReadOnlyCollection<PartitionFence> fences,
         int limit, CancellationToken token)
     {
-        var partitions = new List<int>(fences.Count);
-        var epochs = new List<long>(fences.Count);
-        var after = new List<long>(fences.Count);
-        var through = new List<long>(fences.Count);
-        var sampled = new Dictionary<int, (long Epoch, CohortSample Previous)>(fences.Count);
-        foreach (var fence in fences)
+        // Bound the whole owner's sample. Rotate the included partitions when there are fewer slots than fences.
+        var ordered = fences.OrderBy(fence => fence.Partition).ToArray();
+        var width = Math.Min(limit, ordered.Length);
+        if (width == 0) return ([], []);
+        var offset = width == ordered.Length ? 0 :
+            (int)((uint)(Interlocked.Add(ref _cohortPartitionWindow, width) - width) % ordered.Length);
+        var partitions = new List<int>(width);
+        var epochs = new List<long>(width);
+        var after = new List<long>(width);
+        var through = new List<long>(width);
+        var sampled = new Dictionary<int, (long Epoch, CohortSample Previous)>(width);
+        for (var index = 0; index < width; index++)
         {
+            var fence = ordered[(offset + index) % ordered.Length];
             var sample = _cohortSamples.GetOrAdd(fence.Partition, _ => new(fence.Epoch));
             if (sample.Epoch > fence.Epoch) continue;
             partitions.Add(fence.Partition);
@@ -141,7 +149,7 @@ public sealed partial class EfStore
             FROM bounds b LEFT JOIN tail t ON t."Partition" = b."Partition"
             LEFT JOIN eligible e ON e."Partition" = b."Partition"
             /* root-cohort-waiting */
-            """, partitions.ToArray(), epochs.ToArray(), after.ToArray(), through.ToArray(), limit)).ToArrayAsync(token);
+            """, partitions.ToArray(), epochs.ToArray(), after.ToArray(), through.ToArray(), limit / width)).ToArrayAsync(token);
         foreach (var page in candidates.GroupBy(candidate => candidate.Partition))
         {
             var (epoch, previous) = sampled[page.Key];
