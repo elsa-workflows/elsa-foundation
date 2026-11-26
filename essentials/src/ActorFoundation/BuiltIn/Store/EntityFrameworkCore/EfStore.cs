@@ -120,11 +120,13 @@ public class KernelDb : DbContext
     // same creation transaction as the schema. An existing database keeps its original marker.
     public KernelDb(DbContextOptions<KernelDb> options) : this(options, StoreFormat.Current, RootCapabilities.None) { }
 
-    private KernelDb(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities, bool sqliteShippedInstall = false) : base(options)
+    private KernelDb(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities,
+        bool sqliteShippedInstall = false, bool sqliteRootRuntime = false) : base(options)
     {
         RequiredFormat = format;
         Capabilities = capabilities;
         SqliteShippedInstall = sqliteShippedInstall;
+        SqliteRootRuntime = sqliteRootRuntime;
         RootStateFamily = RootStateFamily.Of(capabilities);
     }
 
@@ -143,6 +145,8 @@ public class KernelDb : DbContext
 
     internal bool SqliteShippedInstall { get; }
     internal bool UsesSqliteShippedInstall => SqliteShippedInstall && Database.IsSqlite();
+    private bool SqliteRootRuntime { get; }
+    internal bool UsesSqliteRootRuntime => SqliteRootRuntime && UsesSqliteShippedInstall;
     internal StoreFormat RequiredFormat { get; }
     internal RootCapabilities Capabilities { get; }
     // The one state family this set writes and reads, with its terminal statuses.
@@ -173,6 +177,8 @@ public class KernelDb : DbContext
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
     internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options) =>
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true);
+    internal static KernelDb ForSqliteRootRuntime(DbContextOptions<KernelDb> options) =>
+        new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRootRuntime: true);
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
@@ -428,7 +434,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     }
 
     // Database time in milliseconds.
-    private string Now => Engine is not null ? Engine.Now : postgres ? "(extract(epoch from clock_timestamp()) * 1000)::bigint" : "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+    private string Now => Engine is not null ? Engine.Now : postgres ? "(extract(epoch from clock_timestamp()) * 1000)::bigint" : SqliteCommitDialect.MillisecondClock;
     private string False => postgres && Engine is null ? "false" : "0";
     private string Q(string sql) => Engine?.Sql(sql) ?? sql;
 
@@ -827,7 +833,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (root.Discover)
             {
                 var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
-                return await WithRootParkFactsAsync(db, ToGeneratedPoll(page, root, db), cancellationToken);
+                var result = ToGeneratedPoll(page, root, db);
+                return db.UsesSqliteRootRuntime ? result : await WithRootParkFactsAsync(db, result, cancellationToken);
             }
             return await WithRootParkFactsAsync(db, ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db), cancellationToken);
         }
@@ -837,7 +844,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
     private string RootInputScopes => $"{InboxKey.FoundationOccurrenceScope}, {RootSelfScope}" +
         (RootTimedJobSettlementEnabled ? $", {RootTimedJobScope}" : RootJobsEnabled ? $", {RootJobScope}" : "");
-    private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" :
+    private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" : db.UsesSqliteRootRuntime ? SqliteOrdinaryRootPollFilter :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
              {(db.UsesRootOperatorProtocol ? db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
@@ -907,7 +914,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string PollSql(KernelDb db) => Engine?.Poll ??
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration", {PollSplitEventPayload} AS "SplitEventPayload"{PollBirthColumns}
-         FROM (SELECT {(db.UsesRootOperatorProtocol || RootTimedJobSettlementEnabled || RootSelfIssuer is { SupportsTimers: true } ? RootClockMilliseconds : Now)} AS now) t
+         FROM (SELECT {(postgres && (db.UsesRootOperatorProtocol || RootTimedJobSettlementEnabled || RootSelfIssuer is { SupportsTimers: true }) ? RootClockMilliseconds : Now)} AS now) t
          LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter(db)}
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;

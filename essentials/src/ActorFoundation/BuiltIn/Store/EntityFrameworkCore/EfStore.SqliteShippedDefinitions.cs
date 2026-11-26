@@ -12,12 +12,13 @@ public sealed partial class EfStore
 {
     internal static void RefuseSqliteShippedRuntime(KernelDb db)
     {
-        if (db.UsesSqliteShippedInstall)
-            throw new NotSupportedException("The SQLite shipped format is available for install verification only.");
+        if (db.UsesSqliteShippedInstall && !db.UsesSqliteRootRuntime)
+            throw new NotSupportedException("The staged SQLite context is available for install verification and ingress only.");
     }
 
     private static Task RequireSqliteOperationalFormatAsync(KernelDb db, CancellationToken token) =>
-        db.Database.IsSqlite() ? RequireStoreVersionsAsync(db, token) : Task.CompletedTask;
+        db.UsesSqliteRootRuntime ? RequireSqliteRootAdmissionAsync(db, token)
+        : db.Database.IsSqlite() ? RequireStoreVersionsAsync(db, token) : Task.CompletedTask;
 
     private sealed record SqliteDefinition(string Type, string Name, string Table, string Sql);
 

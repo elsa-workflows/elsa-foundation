@@ -5,8 +5,10 @@ namespace Kernel.EntityFramework;
 /// statement, but one command, where EF sent one command per row. RETURNING as on PostgreSQL. The store assigns seq
 /// inside the insert, max + 1 per row, so a multi-row insert of messages gets increasing seqs in send order.
 /// </summary>
-internal sealed class SqliteCommitDialect() : ReturningDialect("CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)", "1", "0")
+internal sealed class SqliteCommitDialect() : ReturningDialect(SqliteCommitDialect.MillisecondClock, "1", "0")
 {
+    internal const string MillisecondClock = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+
     /// <summary>Row i of a message insert takes max(Seq) + i: SQLite evaluates the uncorrelated subquery once per statement.</summary>
     public override string? Seq(int ordinal) => FormattableString.Invariant($"""(SELECT COALESCE(MAX("Seq"), 0) FROM "Messages") + {ordinal}""");
 

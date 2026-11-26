@@ -8,6 +8,7 @@ using Kernel.Runtime.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Win32.SafeHandles;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Foundation.Sqlite;
 
@@ -20,13 +21,30 @@ public static partial class SqliteEmbeddedHosting
 
     /// <summary>Starts a node over a local database file. The process policy must terminate the process if the watchdog
     /// cannot clear a stuck owner call. A clean stop releases the file for another host.</summary>
-    public static async Task<RuntimeNode> StartAsync(string databasePath, string node, IActorType actor,
+    public static Task<RuntimeNode> StartAsync(string databasePath, string node, IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
         CancellationToken cancellationToken = default, Action<Exception>? onFault = null)
     {
+        ArgumentNullException.ThrowIfNull(actor);
+        return StartCoreAsync(databasePath, node, _ => actor, shipped: false, endProcess, options, fenceInBatch, cancellationToken, onFault);
+    }
+
+    /// <summary>Starts an Embedded node on the shipped format for durable creators and ordinary root turns.</summary>
+    public static Task<RuntimeNode> StartFoundationAsync(string databasePath, string node, Contract.IActorType actor,
+        Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
+        CancellationToken cancellationToken = default, Action<Exception>? onFault = null)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        return StartCoreAsync(databasePath, node, store => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode()), actor),
+            shipped: true, endProcess, options, fenceInBatch, cancellationToken, onFault);
+    }
+
+    private static async Task<RuntimeNode> StartCoreAsync(string databasePath, string node, Func<EfStore, IActorType> createActor,
+        bool shipped, Action<string> endProcess, LoopOptions? options, bool fenceInBatch, CancellationToken cancellationToken,
+        Action<Exception>? onFault)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
-        ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(endProcess);
         options ??= new LoopOptions();
         var millisecond = TimeSpan.FromMilliseconds(1);
@@ -39,15 +57,23 @@ public static partial class SqliteEmbeddedHosting
         var file = AcquireFile(databasePath, forRuntime: true);
         try
         {
-            KernelDb Open() => new(file.Options);
+            KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options) : new(file.Options);
 
             int partitions;
             await using (var db = Open())
             {
-                await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
-                partitions = await db.Partitions.CountAsync(cancellationToken);
-                if (partitions == 0)
-                    throw new InvalidOperationException("The SQLite kernel database has no installed partitions.");
+                if (shipped)
+                {
+                    var admission = new SqliteRootAdmission(Open, TimeSpan.Zero, file.AdmissionDefinitions);
+                    partitions = await admission.VerifyAsync(cancellationToken);
+                }
+                else
+                {
+                    await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
+                    partitions = await db.Partitions.CountAsync(cancellationToken);
+                    if (partitions == 0)
+                        throw new InvalidOperationException("The SQLite kernel database has no installed partitions.");
+                }
 
                 await db.Database.OpenConnectionAsync(cancellationToken);
                 await using var wal = db.Database.GetDbConnection().CreateCommand();
@@ -66,7 +92,7 @@ public static partial class SqliteEmbeddedHosting
                 Partitions = partitions,
                 OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error)
             };
-            var host = DurableHost.ForNode(node, watched, actor, partitions, workers);
+            var host = DurableHost.ForNode(node, watched, createActor(store), partitions, workers);
             var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
                 beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault)
             {

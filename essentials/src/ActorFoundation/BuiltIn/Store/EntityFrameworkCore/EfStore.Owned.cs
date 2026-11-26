@@ -44,7 +44,7 @@ public sealed partial class EfStore
         db.Database.AutoSavepointsEnabled = false;
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         await RequireSqliteOperationalFormatAsync(db, cancellationToken);
-        if (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
+        if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
             await PinRootNamespaceForCommitAsync(db, cancellationToken);
         var commands = new List<OwnedCommand>();
         var c = new OwnedCommand(dialect) { HasFence = true };

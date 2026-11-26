@@ -13,6 +13,7 @@ public sealed partial class EfStore
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
+            if (db.UsesSqliteRootRuntime) return await BindSqliteRootTurnAsync(db, this, cancellationToken);
             var family = RootStatePrefix(db);
             var jobs = JobState is null ? Current.Jobs : JobState.Jobs;
             var terminalHeader = db.UsesRootTermination && Status == InstanceStatus.Running
@@ -108,6 +109,10 @@ public sealed partial class EfStore
     private static async Task<bool> SettleRootInputsAsync(KernelDb db, string reference, CreationAddress actor, IReadOnlyList<InboxKey> expected,
         Message[]? expectedEnvelopes, FoundationSelfIssuer? issue, bool suspended, CancellationToken cancellationToken)
     {
+        if (db.UsesSqliteRootRuntime)
+            return issue is null && !suspended && await SettleSqliteRootInputsAsync(db, reference, actor, expected,
+                expectedEnvelopes, cancellationToken);
+
         var home = new InstanceRef(actor.Id).Partition;
         var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
         var operatorOnly = suspended ? """AND "Id" LIKE 'operator/%'""" : "";
@@ -162,7 +167,7 @@ public sealed partial class EfStore
         RootJobState? jobState = null, RootJobCompletion? jobCompletion = null, bool timedJob = false,
         IReadOnlyList<FoundationValue>? values = null, bool operatorTermination = false, long terminalGrowth = 0, string[]? settledJobs = null)
     {
-        if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
+        RequireQualifiedRootWriter();
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
             new InstanceRef(current.Actor.Id).Partition != fence.Partition ||
             status is not (InstanceStatus.Running or InstanceStatus.Finished) &&
