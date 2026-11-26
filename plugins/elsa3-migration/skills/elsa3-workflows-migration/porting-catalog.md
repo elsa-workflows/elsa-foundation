@@ -94,8 +94,10 @@ public sealed record SendInvoiceResult(
    (case 04): the activity returns all its outputs at once. The property that holds Elsa 3's `Result` keeps that name
    with `[Output(Key = "Result")]`.
 3. Override `ExecuteAsync(ActivityExecutionContext context)` and return a transition (case 05).
-   The examples need `using Elsa.Activities.Runtime.Core.Attributes;` and `using Elsa.Activities.Runtime.Core.Models;`
-   (the attributes, including Elsa 4's own `[Required]`, and the base classes).
+   The examples need `using Elsa.Activities.Runtime.Core;` (`ActivityInputUIHints`),
+   `using Elsa.Activities.Runtime.Core.Attributes;` (the attributes, including Elsa 4's own `[Required]`) and
+   `using Elsa.Activities.Runtime.Core.Models;` (the base classes and transitions); tests also need
+   `using Elsa.Activities.Runtime.Core.Contracts;` (`IActivity`).
 4. An activity that waits for something from outside derives from a stateful base class instead (cases 08 and 09).
 
 ## Case 02: Type name and the exact-name rule
@@ -1047,8 +1049,11 @@ public class AcmeFeature : IShellFeature
 ```
 
 **Steps**:
-1. Create a class library for the feature in your own repository, referencing the Elsa 4 projects your components use
-   (the activity authoring contracts, and the JavaScript or variable-type contracts when you need them) and the NuGet
+1. Create a class library for the feature in your own repository, referencing the Elsa 4 projects in your clone that
+   your components use: `essentials/src/Activities/Runtime/Core` (activity authoring, always),
+   `essentials/src/Workflows/Runtime/Core` (trigger stimulus providers, case 09),
+   `essentials/src/Expressions/JavaScript/Core` (host functions, case 14) and `essentials/src/Expressions/Core`
+   (variable types, case 16); and the NuGet
    package `CShells.Abstractions` (for `[ShellFeature]` and `IShellFeature`), at the version the clone's
    `Directory.Packages.props` pins.
 2. Write one `IShellFeature` marked `[ShellFeature("<name>")]`. Register services, stimulus providers, host functions

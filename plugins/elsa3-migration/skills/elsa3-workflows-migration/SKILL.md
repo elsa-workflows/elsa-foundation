@@ -207,7 +207,7 @@ When every component is `ported`, `redesign`, `dropped` or `interviewed`, set `S
    1. findings that belong to no definition: `inputFindings` (for example an unreadable export file) and `runFindings`
       (a refusal of the shared import);
    2. per definition, Must fix, then Reconsider, then Take into account;
-   3. root causes before the definitions they block: a definition with `blockedBy` set waits until its root is fixed;
+   3. root causes before the definitions they block: a definition whose `blockedBy` list is not empty waits until its root is fixed;
       do not work on it directly.
 
    For each finding:
