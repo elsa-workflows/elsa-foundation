@@ -13,7 +13,7 @@ Three ways to run, fastest first:
   Hub and run them; no clone, no build. See [Quick start — published images](#quick-start--published-images-no-clone-or-build)
   right below. Best for just trying the stack.
 - **Fast path (build)** — Postgres + Elsa.Workbench only, built from this repo. Good for API/backend work.
-- **Full stack (build)** — adds the Elsa Studio management UI, whose image is built from a *sibling* repo.
+- **Full stack (build)** — adds Studio Workbench, built from the same checkout.
 
 > This is a quickstart. For the full container/image reference — the complete environment-variable
 > surface, mounts, the demo persistence composition, and troubleshooting — see
