@@ -37,6 +37,106 @@
   overflow: auto;
 }
 
+.wf-executable-activity {
+  min-inline-size: 0;
+  padding: var(--studio-space-4);
+  overflow-wrap: anywhere;
+}
+
+.wf-executable-activity-heading {
+  display: grid;
+  gap: var(--studio-space-2);
+}
+
+.wf-executable-activity-heading h4,
+.wf-executable-activity-heading p,
+.wf-executable-activity-section h5,
+.wf-executable-activity-section p {
+  margin: 0;
+}
+
+.wf-executable-activity-heading h4 {
+  font-size: var(--studio-section-title-size);
+  line-height: 1.35;
+}
+
+.wf-executable-activity-heading p,
+.wf-executable-activity-section p {
+  color: var(--studio-text-muted);
+}
+
+.wf-executable-activity-section {
+  margin-top: var(--studio-space-4);
+}
+
+.wf-executable-activity-section h5 {
+  padding-block-end: var(--studio-space-2);
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+}
+
+.wf-executable-bindings,
+.wf-executable-activity-identity {
+  margin: 0;
+}
+
+.wf-executable-activity-identity {
+  display: grid;
+  grid-template-columns: minmax(0, 7rem) minmax(0, 1fr);
+  gap: var(--studio-space-2);
+  font-size: var(--studio-label-size);
+}
+
+.wf-executable-activity-identity dt {
+  color: var(--studio-text-muted);
+}
+
+.wf-executable-activity-identity dd,
+.wf-executable-bindings dd {
+  min-inline-size: 0;
+  margin: 0;
+}
+
+.wf-executable-bindings > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--studio-space-2);
+  padding-block: var(--studio-space-3);
+  border-block-start: 1px solid var(--studio-edge-subtle);
+}
+
+.wf-executable-bindings dt {
+  font-weight: 600;
+}
+
+.wf-executable-bindings dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--studio-space-2);
+  font-size: var(--studio-label-size);
+}
+
+.wf-executable-bindings .studio-technical-details {
+  flex: 1 1 100%;
+  min-inline-size: 0;
+}
+
+.wf-executable-binding-value {
+  display: block;
+  flex: 1 1 100%;
+  min-inline-size: 0;
+  padding: var(--studio-space-2);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface-muted);
+  color: var(--studio-text);
+  font-family: var(--studio-font-mono);
+  font-size: var(--studio-label-size);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 html:not([data-workspace-style]) .wf-page--executable-inspector > .wf-executable-workbench {
   margin: 0 20px 16px;
   border: 1px solid var(--studio-edge-subtle);

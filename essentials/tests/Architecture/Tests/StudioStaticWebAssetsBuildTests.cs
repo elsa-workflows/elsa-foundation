@@ -1,4 +1,5 @@
 using System.Security;
+using System.Text.Json;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
@@ -6,6 +7,67 @@ namespace Elsa.Architecture.Tests;
 
 public sealed class StudioStaticWebAssetsBuildTests
 {
+    [Theory]
+    [InlineData("Studio")]
+    [InlineData("studio")]
+    [InlineData(".")]
+    [InlineData(null)]
+    public void Consumer_uses_solution_or_repository_Studio_path_for_references_and_content(string? solutionDirectory)
+    {
+        var lowercaseStudio = Path.Join(RepoRoot, "studio");
+        var standaloneStudio = File.Exists(Path.Join(lowercaseStudio, "Elsa.Studio.slnx"))
+            ? lowercaseStudio
+            : Path.Join(RepoRoot, "Studio");
+        var studioDirectory = solutionDirectory is "Studio" or "studio" && File.Exists(Path.Join(RepoRoot, solutionDirectory, "Elsa.Studio.slnx"))
+            ? Path.Join(RepoRoot, solutionDirectory)
+            : standaloneStudio;
+        var project = Path.Join(RepoRoot, "tools", "ux-acceptance", "StudioConsumer", "Acme.TriggerStudioConsumer.csproj");
+        var arguments = new List<string>
+        {
+            "msbuild",
+            project,
+            "-nologo",
+            "-getProperty:StudioDirectory",
+            "-getItem:ProjectReference,Content"
+        };
+
+        if (solutionDirectory is not null)
+            arguments.Add($"-p:SolutionDir={Path.Join(RepoRoot, solutionDirectory)}{Path.DirectorySeparatorChar}");
+
+        var (exitCode, output) = ChildProcess.Dotnet(arguments.ToArray());
+
+        Assert.True(exitCode == 0, output);
+
+        using var document = JsonDocument.Parse(output);
+        var root = document.RootElement;
+        var actualStudioDirectory = root.GetProperty("Properties").GetProperty("StudioDirectory").GetString();
+        Assert.Equal(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(studioDirectory)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(actualStudioDirectory!)));
+
+        var projectReferences = root.GetProperty("Items").GetProperty("ProjectReference");
+        var expectedProjects = new[]
+        {
+            "Elsa.Studio.Api",
+            "Elsa.Studio.Hosting",
+            "Elsa.Studio.Backends",
+            "Elsa.Studio.Hosting.Themes",
+            "Elsa.Studio.Hosting.Nuplane",
+            "Elsa.Studio.Core",
+            "Elsa.Studio.Workflows"
+        };
+
+        foreach (var name in expectedProjects)
+        {
+            var expectedPath = Path.GetFullPath(Path.Join(studioDirectory, "src", "essentials", name, $"{name}.csproj"));
+            Assert.Contains(projectReferences.EnumerateArray(), item => item.GetProperty("FullPath").GetString() == expectedPath);
+        }
+
+        var content = Assert.Single(root.GetProperty("Items").GetProperty("Content").EnumerateArray());
+        var expectedContentPath = Path.GetFullPath(Path.Join(studioDirectory, "src", "apps", "Elsa.Studio.Workbench.Host", "nuplane-management.json"));
+        Assert.Equal(expectedContentPath, content.GetProperty("FullPath").GetString());
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

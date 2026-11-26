@@ -96,6 +96,13 @@ class WorkflowScopeTests(unittest.TestCase):
                          'essentials/Directory.Packages.props', 'essentials/Example.csproj',
                          'essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj',
                          'Studio/src/Feature.ts', 'extensions/Weaver/src/Feature.cs',
+                         'extensions/Dashboard/src/Core/Dataset.cs',
+                         'extensions/Dashboard/tests/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj',
+                         'extensions/Git/src/Elsa.Git/GitClient.cs',
+                         'extensions/Http/src/Activities/ActivitiesHttpFeature.cs',
+                         'extensions/Http/tests/Tests/Elsa.Http.Tests.csproj',
+                         'extensions/Secrets/src/Elsa.Secrets/Features/SecretsFeature.cs',
+                         'extensions/Secrets/tests/Tests/Elsa.Secrets.Tests.csproj',
                          'extensions/Directory.Build.props',
                          'extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client/src/module.ts',
                          'Directory.Build.props', 'tools/studio/Weaver.Conformance.Probe/browser.mjs']:

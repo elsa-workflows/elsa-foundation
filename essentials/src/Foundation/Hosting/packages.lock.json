@@ -28,46 +28,46 @@
       },
       "Nuplane": {
         "type": "Direct",
-        "requested": "[0.0.13, )",
-        "resolved": "0.0.13",
-        "contentHash": "G8tJJPIyNYTI+RUUtzN8zT3KAysJU3LAf61Og6W0xjTRt/2Til9cWDRRNCCKzq+/NF59h8zaOkVkyTfmPvuIqQ==",
+        "requested": "[0.0.15, )",
+        "resolved": "0.0.15",
+        "contentHash": "psdnr45tl3YlgI2HiRjU/EgBmO3BulZIFi9vxnYbEY9H6UA3cLL92vODg1TgNWeksHJiMUurUYuBZmeRsEVTIA==",
         "dependencies": {
           "Microsoft.Extensions.Resilience": "10.1.0",
           "NuGet.Frameworks": "6.13.1",
           "NuGet.Protocol": "6.13.1",
           "NuGet.Resolver": "6.13.1",
           "NuGet.Versioning": "6.13.1",
-          "Nuplane.Abstractions": "0.0.13",
+          "Nuplane.Abstractions": "0.0.15",
           "Polly.Extensions": "8.6.5"
         }
       },
       "Nuplane.Admin": {
         "type": "Direct",
-        "requested": "[0.0.13, )",
-        "resolved": "0.0.13",
-        "contentHash": "mP+/UQ9+/ycLZ4uWEteJWK5u/3Vf6gDaVZlYu1260C21wMe1Jx0toqxgCni73UZgijn33xqN+5qjJ7bPqMiY8w==",
+        "requested": "[0.0.15, )",
+        "resolved": "0.0.15",
+        "contentHash": "rn5LhqpTOc6CSW+rL5aTmrT44/49580nR6nAV9BCuXe1i+jfeFTMNd0SGECLMJBEeq6OnQ4CItcxAHsBrShRCQ==",
         "dependencies": {
-          "Nuplane": "0.0.13"
+          "Nuplane": "0.0.15"
         }
       },
       "Nuplane.Loading": {
         "type": "Direct",
-        "requested": "[0.0.13, )",
-        "resolved": "0.0.13",
-        "contentHash": "bR3r96hHBBc4HN1MXw7GJOCu+XIaK+jKeiSJoA9enw4PGF/TA7LNNvbVEok2xcy9HUukKVbatpta86sw+TWBxg==",
+        "requested": "[0.0.15, )",
+        "resolved": "0.0.15",
+        "contentHash": "/5+EqI1eyBk/us1tCVSRAUVMZsYgctJtgeoJvZMqxe2zXazDelTmhJ2pDXZuceh24PzDlDNxfU5MkjtjnH/I9g==",
         "dependencies": {
-          "Nuplane": "0.0.13",
-          "Nuplane.Abstractions": "0.0.13",
-          "Nuplane.Loading.Abstractions": "0.0.13"
+          "Nuplane": "0.0.15",
+          "Nuplane.Abstractions": "0.0.15",
+          "Nuplane.Loading.Abstractions": "0.0.15"
         }
       },
       "Nuplane.Sources.Directory": {
         "type": "Direct",
-        "requested": "[0.0.13, )",
-        "resolved": "0.0.13",
-        "contentHash": "rcrDjEkhEQafWSWnjLKkd/iavTdr2PJ7XY1AXecYNfSFiCYXs8ncEOAXLjTzXGm6D2hKvaGn45gvGjAJdQONbA==",
+        "requested": "[0.0.15, )",
+        "resolved": "0.0.15",
+        "contentHash": "GJCZSTvXt5B9ImmYz9vkwtj76ff2tR6AaB01pMCeU4+gmSdx9Q55LLKpkB36UWMseZCpD0PtJC2tziQ+D0B8qA==",
         "dependencies": {
-          "Nuplane": "0.0.13"
+          "Nuplane": "0.0.15"
         }
       },
       "JetBrains.Annotations": {
@@ -165,8 +165,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.13",
-        "contentHash": "3QaKweEyDncmytmpGKT9I0zYtpRg2ZSgzzU092yo/iVeon3d7q9LBW7J79yB7kDzQMxEriP8pl1VfrmkezQxTw=="
+        "resolved": "0.0.15",
+        "contentHash": "IGmLRHXJ/BcHWmjfilrikRFCkkJOyb5V7KoRld+yxGB0PzmWxEaBUWsz0+FXEIrmDz7lOoDESq7MI8XADRUoNA=="
       },
       "Polly.Core": {
         "type": "Transitive",
@@ -248,11 +248,11 @@
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.13, )",
-        "resolved": "0.0.13",
-        "contentHash": "HC2V7HnZXL6p2SHkn7ronHT8qZhgiW9HTkULJ+Y8TfCZjdev9aD43ST44Gws7Dh2/sG5SVCiilOJx+LtR6ZGRw==",
+        "requested": "[0.0.15, )",
+        "resolved": "0.0.15",
+        "contentHash": "lDjC7irExdJXl2Br9kiOz9hhYewlXLEgpw8hi2S0DILX3JRbhNl/pTcj62fEntLAYa5zBMGBmO+/zezdJLRnMA==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.13"
+          "Nuplane.Abstractions": "0.0.15"
         }
       },
       "System.Security.Cryptography.Pkcs": {

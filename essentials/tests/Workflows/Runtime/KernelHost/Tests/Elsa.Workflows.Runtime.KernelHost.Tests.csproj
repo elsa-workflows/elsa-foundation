@@ -19,8 +19,8 @@
     <!-- The in-memory slot authority, switch, projection stores and executable store the coordinator checks run on. -->
     <ProjectReference Include="../../../../../src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
     <!-- The old core's HTTP route-table observer, which the kernel feature leaves out of a shell. -->
-    <ProjectReference Include="../../../../../src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj" />
+    <ProjectReference Include="../../../../../../extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />
     <!-- The old core's HTTP endpoint middleware, which the kernel feature unmounts from a shell. -->
-    <ProjectReference Include="../../../../../src/Activities/Http/Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="../../../../../../extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
   </ItemGroup>
 </Project>

@@ -9,7 +9,7 @@ import { WorkflowExecutables } from "../../src/essentials/Elsa.Studio.Workflows/
 import { RuntimeDiagnosticsSettingsPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/RuntimeDiagnosticsSettingsPage";
 import { AgentsPage } from "../../../extensions/Agent/studio/Elsa.Studio.Agent/Client/src/AgentsPage";
 import { ConnectionList } from "../../../extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionList";
-import { NamedDashboardsRoute } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/NamedDashboards";
+import { NamedDashboardsRoute } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/NamedDashboards";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 import "../../../extensions/Agent/studio/Elsa.Studio.Agent/Client/src/styles.css";

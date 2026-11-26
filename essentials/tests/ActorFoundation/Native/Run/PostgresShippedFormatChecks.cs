@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -57,6 +58,8 @@ internal static class PostgresShippedFormatChecks
         await store.InstallPreviewRootSchemaAsync(stop);
         await store.InstallPreviewRootSchemaAsync(stop);
         Require(true, "the shipped schema and its workflow history install, and install again over themselves");
+        await CheckGuardBodyParityAsync(Open, stop);
+        await CheckDefinitionRevisionAsync(Open, store, stop);
         await RefusalsAsync(connection, options, stop);
 
         var registry = new WorkflowRegistry()
@@ -219,6 +222,91 @@ internal static class PostgresShippedFormatChecks
             return await db.Database.SqlQuery<int>($"""
                 SELECT count(*)::integer AS "Value" FROM "FoundationWorkflowHistory" WHERE "Tenant" = {scope.Tenant} AND "Reference" = {root.Id}
                 """).SingleAsync(stop);
+        }
+    }
+
+    // PostgreSQL 16 and 17 reported these same function-body bytes before the renderer was shared with SQLite.
+    private static async Task CheckGuardBodyParityAsync(Func<KernelDb> open, CancellationToken token)
+    {
+        await using var db = open();
+        var sql = EfStore.RenderPostgresFirstRootGuards(db).ReplaceLineEndings("\n");
+        var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
+        Require(fingerprint == "73a8c69e2daa2e7417ddc7fb4c5f54f3894a30256ae8f0c72a8f254443d1e5cf",
+            "the complete emitted PostgreSQL guard installation batch retains its published bytes");
+        var bodies = await db.Database.SqlQueryRaw<string>("""
+            SELECT md5(p.prosrc) AS "Value"
+            FROM pg_catalog.pg_proc p
+            WHERE p.pronamespace = pg_catalog.current_schema()::regnamespace
+                AND p.proname IN ('kernel_require_root_checkpoint_writer', 'kernel_require_root_journal_revision')
+            ORDER BY p.proname
+            """).ToListAsync(token);
+        Require(bodies is ["75c81a5014d62f9c35319e65b9e0c975", "b8adb6d016ff58efc1a496a316309a74"],
+            "the shipped PostgreSQL checkpoint and journal function bodies retain their published bytes");
+    }
+
+    private static async Task CheckDefinitionRevisionAsync(Func<KernelDb> open, EfStore store, CancellationToken token)
+    {
+        await using var db = open();
+        var expected = StoreDefinitionsRevision.Seed(db)!;
+        var marker = db.StoreVersions.Where(row => row.Id == expected.Id);
+        Require(await marker.ExecuteDeleteAsync(token) == 1, "new PostgreSQL installs have a definitions marker");
+        await EfStore.RequireStoreVersionsAsync(db, token);
+        Require(await store.PartitionCountAsync(token) == 1,
+            "PostgreSQL reads a pre-revision marker as its legacy definitions revision");
+        db.StoreVersions.Add(expected);
+        await db.SaveChangesAsync(token);
+        await marker.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, expected.MessageProtocol + 1), token);
+        try
+        {
+            await RequireMarkerRefusedAsync(db, "PostgreSQL refuses an unsupported definitions revision", token);
+            await RefusesRevisionAsync(() => store.PartitionCountAsync(token).AsTask());
+            await RefusesRevisionAsync(() => store.ReadRootActorAsync("tenant", "missing", token));
+            await RefusesRevisionAsync(() => store.ReadRootActorListAsync("tenant", "", null, null, [], null, null, 1, token));
+            await RefusesRevisionAsync(() => store.ReadRootJournalAsync("tenant", "missing", 1, 1, token));
+            await RefusesRevisionAsync(() => store.ReadRootInboxAsync("tenant", "missing", 0, "", 1, token));
+            await RefusesRevisionAsync(() => store.ReadRootWorkflowHistoryAsync("tenant", "type", null, null, null, null, null, null, 1, token));
+            Require(true, "the owner and all shipped snapshot readers reject a mismatched definitions revision");
+        }
+        finally
+        {
+            await marker.ExecuteDeleteAsync(token);
+        }
+
+        // An operation that waits for the shared marker must see a definitions row inserted by the locker.
+        await using var advancing = open();
+        await using var advance = await advancing.Database.BeginTransactionAsync(token);
+        await advancing.Database.ExecuteSqlInterpolatedAsync($"""
+            SELECT "Id" FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId} FOR UPDATE
+            """, token);
+        await advancing.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "KernelStoreVersions" ("Id", "StoreSchema", "MessageProtocol", "JournalCodec")
+            VALUES ({expected.Id}, {expected.StoreSchema}, {expected.MessageProtocol + 1}, {expected.JournalCodec})
+            """, token);
+        var blocker = ((NpgsqlConnection)advancing.Database.GetDbConnection()).ProcessID;
+        var waiting = store.PartitionCountAsync(token).AsTask();
+        while (!waiting.IsCompleted && !await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM pg_stat_activity
+                WHERE datname = current_database() AND {blocker} = ANY(pg_blocking_pids(pid))) AS "Value"
+            """).SingleAsync(token))
+            await Task.Delay(20, token);
+        Require(!waiting.IsCompleted, "the operation waits for the shared PostgreSQL marker lock");
+        await advance.CommitAsync(token);
+        try
+        {
+            await RefusesRevisionAsync(() => waiting);
+            Require(true, "the operation sees the new definitions revision after its marker lock wait");
+        }
+        finally
+        {
+            // Exercise the rest of the hosted journey against a pre-revision installation.
+            await marker.ExecuteDeleteAsync(token);
+        }
+
+        static async Task RefusesRevisionAsync(Func<Task> query)
+        {
+            try { await query(); }
+            catch (StoreFormatException) { return; }
+            throw new InvalidOperationException("The shipped query accepted a mismatched definitions revision.");
         }
     }
 

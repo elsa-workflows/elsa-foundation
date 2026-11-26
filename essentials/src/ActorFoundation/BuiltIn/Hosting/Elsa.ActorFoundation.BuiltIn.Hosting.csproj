@@ -7,6 +7,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <ProjectReference Include="../Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj" />
   </ItemGroup>
   <ItemGroup>
@@ -15,5 +16,6 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Sim" />     <!-- test-only witness hooks, such as LoopOptions.ErrorReportClock -->
     <InternalsVisibleTo Include="Kernel.Foundation.Postgres" />     <!-- the hosted node reports its drains' retried store errors (RecordLoopError) -->
+    <InternalsVisibleTo Include="Kernel.Foundation.Sqlite" />
   </ItemGroup>
 </Project>

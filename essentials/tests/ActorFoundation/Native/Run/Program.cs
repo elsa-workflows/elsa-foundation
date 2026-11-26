@@ -38,6 +38,7 @@ if (args is ["pg-root-operators", var operatorWriter and ("owned" or "ef"), var 
         return await PostgresRootOperatorChecks.RunAsync([a, b, c], operatorWriter == "owned", operatorFence == "in-batch", operatorPhase == "resume");
 }
 if (args is ["sqlite-plan-projection", ..]) return await SqlitePlanFixtureCommand.RunAsync(args);
+if (args is ["sqlite-shipped-install"]) return await SqliteShippedInstallChecks.RunAsync();
 if (args is ["pg-http-owner-loss", var ownerFence and ("checked" or "in-batch"), var loss and ("before" or "before-late" or "after")])
     return await PostgresHttpOwnerLoss.RunAsync(ownerFence, loss);
 if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batch"), var pause and ("before" or "after" or "resume"), var ownerRef])
@@ -60,6 +61,11 @@ if (args is [var chartMode and ("pg-cluster-statechart" or "pg-cluster-statechar
 if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flowchart-peer"), var flowSize] && int.TryParse(flowSize, out var flowPartitions))
     return await PostgresClusterChecks.RunAsync(flowPartitions, flowClusterMode == "pg-cluster-flowchart-peer", flowchart: true);
 if (args is ["pg-preview-host-lifetime"]) return await PostgresPreviewLifetimeChecks.RunAsync();
+if (args is ["sqlite-host-lifetime", var sqliteFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunAsync(sqliteFence == "in-batch");
+if (args is ["sqlite-host-lifetime-peer", var sqliteMode and ("refused" or "start" or "kill" or "dispose" or "fault" or "stuck" or "recover"), var sqlitePath,
+    var peerFence and ("checked" or "in-batch")])
+    return await SqliteHostLifetimeChecks.RunPeerAsync(sqliteMode, sqlitePath, peerFence == "in-batch");
 if (args is ["pg-preview-host-watchdog"]) return await PostgresPreviewHostChecks.RunAsync();
 if (args is [var clusterMode and ("pg-cluster-roots" or "pg-cluster-peer" or "pg-cluster-crash"), var size] && int.TryParse(size, out var clusterPartitions))
     return await PostgresClusterChecks.RunAsync(clusterPartitions, clusterMode == "pg-cluster-peer", clusterMode == "pg-cluster-crash");

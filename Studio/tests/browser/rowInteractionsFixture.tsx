@@ -4,13 +4,13 @@ import { AnonymousAuthProvider, type ElsaStudioModuleApi } from "@elsa-workflows
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import { DecisionsPage } from "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/DecisionsPage";
-import { NamedDashboardsRoute } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/NamedDashboards";
+import { NamedDashboardsRoute } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/NamedDashboards";
 import { ConnectionList } from "../../../extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionList";
 import { OpenTelemetryPage, register as registerTelemetry } from "../../../extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client/src/module";
 import "../../../extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client/src/styles.css";
 import "../../../extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
-import "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/native.css";
+import "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/native.css";
 import "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/styles.css";
 
 const params = new URLSearchParams(location.search);

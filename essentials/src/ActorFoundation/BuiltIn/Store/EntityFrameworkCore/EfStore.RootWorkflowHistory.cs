@@ -10,7 +10,7 @@ public sealed partial class EfStore
     internal sealed record RootWorkflowHistoryItem(string Reference, InstanceStatus Status, string? Definition, long UpdatedAt);
     internal sealed record RootWorkflowHistoryPage(IReadOnlyList<RootWorkflowHistoryItem> Items, long AsOf);
     private sealed record RootWorkflowHistoryRow(string? Reference, int? Status, string? Header, long? UpdatedAt,
-        int? Version, bool TriggerEnabled, int? StoreSchema, int? MessageProtocol, int? JournalCodec, long AsOf);
+        int? Version, bool TriggerEnabled, int? StoreSchema, int? MessageProtocol, int? JournalCodec, string? DefinitionStamp, long AsOf);
 
     internal async Task InstallRootWorkflowHistoryAsync(CancellationToken token = default)
     {
@@ -115,7 +115,7 @@ public sealed partial class EfStore
         List<RootWorkflowHistoryRow> rows;
         try
         {
-            rows = await db.Database.SqlQuery<RootWorkflowHistoryRow>($"""
+            rows = await db.Database.SqlQuery<RootWorkflowHistoryRow>(StoreDefinitionsRevision.AddPostgresStamp($"""
                 WITH kernel AS (
                     SELECT "StoreSchema", "MessageProtocol", "JournalCodec" FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
                 ), format AS (
@@ -155,22 +155,19 @@ public sealed partial class EfStore
                             h."UpdatedAt" = {afterTime} AND h."Reference" > {afterRef})
                     ORDER BY h."UpdatedAt" DESC, h."Reference" LIMIT {limit}
                 )
-                SELECT page.*, kernel.*, (SELECT "Version" FROM format) AS "Version",
+                SELECT page.*, kernel.*, /*definitions-stamp*/ AS "DefinitionStamp", (SELECT "Version" FROM format) AS "Version",
                     (SELECT "TriggerEnabled" FROM readiness) AS "TriggerEnabled",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
                 FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN kernel ON true
                 ORDER BY page."UpdatedAt" DESC, page."Reference" COLLATE "C"
-                """).ToListAsync(token);
+                """)).ToListAsync(token);
         }
         catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedFunction)
         {
             throw new StoreFormatException("The qualified workflow history projection is missing.", error);
         }
         var first = rows[0];
-        if (first.StoreSchema is not { } schema || first.MessageProtocol is not { } protocol || first.JournalCodec is not { } codec)
-            throw new StoreFormatException("The kernel store version marker is missing.");
-        var stored = new StoreFormat(schema, protocol, codec);
-        if (stored != expected) throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {expected}.");
+        RequireSnapshotFormat(db, first.StoreSchema, first.MessageProtocol, first.JournalCodec, first.DefinitionStamp);
         RequireHistoryVersion(first.Version);
         if (!first.TriggerEnabled) throw new StoreFormatException("The workflow history source or one of its projection triggers is missing or disabled.");
         var items = rows.Where(row => row.Reference is not null).Select(row =>
