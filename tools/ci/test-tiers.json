@@ -166,7 +166,7 @@
       "medianMinutes": 3.83
     },
     {
-      "project": "server/essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj",
+      "project": "extensions/Attention/tests/Api/Tests/Elsa.Attention.Api.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.01
     },
@@ -495,7 +495,12 @@
     {
       "project": "server/essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj",
       "tier": "pr",
-      "medianMinutes": 0.17
+      "medianMinutes": 0.02
+    },
+    {
+      "project": "extensions/Tasks/tests/Execution/Tests/Elsa.Tasks.Execution.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.15
     },
     {
       "project": "server/essentials/tests/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj",
@@ -1024,6 +1029,7 @@
           "server/essentials/tests/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj",
           "server/essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
           "server/essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj",
+          "extensions/Tasks/tests/Execution/Tests/Elsa.Tasks.Execution.Tests.csproj",
           "server/essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj",
           "server/essentials/tests/Foundation/Hosting/Tests/Elsa.Foundation.Hosting.Tests.csproj",
           "extensions/Dashboard/tests/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
@@ -1043,7 +1049,7 @@
           "server/essentials/tests/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj",
           "server/essentials/tests/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj",
           "extensions/Http/tests/Tests/Elsa.Http.Tests.csproj",
-          "server/essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj",
+          "extensions/Attention/tests/Api/Tests/Elsa.Attention.Api.Tests.csproj",
           "extensions/Weaver/tests/Persistence/Tests/Elsa.Weaver.Persistence.Tests.csproj",
           "extensions/Decisions/tests/Design/Tests/Elsa.Decisions.Design.Tests.csproj"
         ]

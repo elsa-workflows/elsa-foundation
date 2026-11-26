@@ -320,7 +320,6 @@
   </Folder>
   <Folder Name="/server/essentials/src/Attention/">
     <Project Path="server/essentials/src/Attention/Core/Elsa.Attention.Core.csproj" />
-    <Project Path="server/essentials/src/Attention/Api/Elsa.Attention.Api.csproj" />
   </Folder>
   <Folder Name="/server/essentials/src/Api/">
     <Project Path="server/essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
@@ -482,6 +481,12 @@
     <Project Path="server/essentials/src/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj" />
     <Project Path="server/essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
   </Folder>
+  <Folder Name="/extensions/Attention/src/">
+    <Project Path="extensions/Attention/src/Api/Elsa.Attention.Api.csproj" />
+  </Folder>
+  <Folder Name="/extensions/Tasks/src/">
+    <Project Path="extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj" />
+  </Folder>
   <Folder Name="/extensions/Secrets/src/">
     <Project Path="extensions/Secrets/src/Api/Elsa.Secrets.Api.csproj" />
     <Project Path="extensions/Secrets/src/Core/Elsa.Secrets.Core.csproj" />
@@ -509,7 +514,6 @@
   </Folder>
   <Folder Name="/server/essentials/src/Tasks/">
     <Project Path="server/essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
-    <Project Path="server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj" />
     <Project Path="server/essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj" />
   </Folder>
   <Folder Name="/server/essentials/src/Workflows/">
@@ -782,9 +786,6 @@
     <Project Path="server/essentials/tests/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj" />
   </Folder>
   <Folder Name="/server/essentials/tests/Attention/" />
-  <Folder Name="/server/essentials/tests/Attention/Api/">
-    <Project Path="server/essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj" />
-  </Folder>
   <Folder Name="/server/essentials/tests/Foundation/Identity/AspNetCoreIdentity/" />
   <Folder Name="/server/essentials/tests/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/">
     <Project Path="server/essentials/tests/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj" />
@@ -836,6 +837,12 @@
   </Folder>
   <Folder Name="/server/essentials/tests/Persistence/EntityFrameworkCore/MySql/">
     <Project Path="server/essentials/tests/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj" />
+  </Folder>
+  <Folder Name="/extensions/Attention/tests/Api/">
+    <Project Path="extensions/Attention/tests/Api/Tests/Elsa.Attention.Api.Tests.csproj" />
+  </Folder>
+  <Folder Name="/extensions/Tasks/tests/Execution/">
+    <Project Path="extensions/Tasks/tests/Execution/Tests/Elsa.Tasks.Execution.Tests.csproj" />
   </Folder>
   <Folder Name="/extensions/Secrets/tests/">
     <Project Path="extensions/Secrets/tests/Tests/Elsa.Secrets.Tests.csproj" />
