@@ -42,20 +42,14 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   const source = async () => { const stored = (await s.stored(created))?.value; return typeof stored === "string" ? stored : (stored as { source: string }).source; };
   const list = () => page.locator(".cm-tooltip-autocomplete");
   const options = () => list().getByRole("option");
-  // Right after autosave refreshes the authoring context, an explicit request can be dropped before it is sent (#5760).
-  // Press again, at most twice, and keep the count in the proof.
   async function complete(prefix: string) {
-    for (let press = 1; press <= 3; press++) {
-      const answered = page.waitForResponse(response => isTooling(response) && response.url().endsWith("/completions") &&
-        JSON.stringify(response.request().postDataJSON()).includes(prefix), { timeout: 10_000 }).catch(() => null);
-      await page.keyboard.press("Control+Space");
-      const response = await answered;
-      if (!response) continue;
-      expect(response.ok()).toBe(true);
-      presses.push({ prefix, presses: press });
-      return;
-    }
-    throw new Error(`Ctrl+Space sent no completion request for ${prefix} after three presses`);
+    presses.push({ prefix, presses: 1 });
+    const [response] = await Promise.all([
+      page.waitForResponse(response => isTooling(response) && response.url().endsWith("/completions") &&
+        JSON.stringify(response.request().postDataJSON()).includes(prefix), { timeout: 10_000 }),
+      page.keyboard.press("Control+Space")
+    ]);
+    expect(response.ok(), `Completion for ${prefix} after one Ctrl+Space press`).toBe(true);
   }
   async function expectConnectionMembers() {
     await expect(list()).toBeVisible();
