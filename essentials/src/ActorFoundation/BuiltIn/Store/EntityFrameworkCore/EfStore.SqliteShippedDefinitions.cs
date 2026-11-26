@@ -151,6 +151,12 @@ public sealed partial class EfStore
                     yield return new("table", table.Name, table.Name, Render(table) + options);
                     break;
                 case CreateIndexOperation index:
+                    // The deletion index also bounds each shipped actor's journal continuation.
+                    if (index.Table == "Journal" && index.Columns.SequenceEqual(["Partition", "Instance"], StringComparer.Ordinal))
+                    {
+                        index.Name = "IX_Journal_Partition_Instance_Position";
+                        index.Columns = ["Partition", "Instance", "Position"];
+                    }
                     yield return new("index", index.Name, index.Table, Render(index));
                     break;
                 case InsertDataOperation { Table: StoreVersionEntity.Table }:
@@ -288,8 +294,7 @@ public sealed partial class EfStore
             WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND (NOT "Done" OR "FoundationKeptBy" = 0)
             """);
         yield return Index("IX_FoundationRootInbox_Kept", "Messages", """
-            ("Partition", "Target", "Seq", "Id", "InboxScope")
-            WHERE "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" IS NOT NULL
+            ("Partition", "Target", "Seq", "Id", "InboxScope") WHERE "FoundationKeptBy" IS NOT NULL
             """);
         yield return Index("IX_FoundationRootOperators_Pending", "Messages", """
             ("Partition", "Target", "Seq", "Due")

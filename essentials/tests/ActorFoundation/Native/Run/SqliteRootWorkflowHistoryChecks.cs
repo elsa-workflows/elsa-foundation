@@ -59,6 +59,15 @@ internal static partial class SqliteHostLifetimeChecks
             Require(paged.SequenceEqual(baseline.Items) && paged.SequenceEqual(paged.OrderByDescending(row => row.UpdatedAt)
                 .ThenBy(row => row.Reference, StringComparer.Ordinal)), "bounded history pages follow time and ordinal reference without duplicates");
 
+            var observation = new ParkReadObservation("/* sqlite-root-workflow-history */");
+            observation.Resume.TrySetResult();
+            var probe = new EfStore(() => OpenFoundationDb(file, definitions, observation), postgres: false, fenceInBatch);
+            await probe.ReadRootWorkflowHistoryAsync(tenant.Tenant, ActorReadsKind, null, null,
+                1, null, paged[0].UpdatedAt, paged[0].Reference, 1, token);
+            Require(observation.Plan.Any(row => row.Contains("IX_FoundationWorkflowHistory_Chronology (Tenant=? AND UpdatedAt>? AND UpdatedAt<?)",
+                    StringComparison.Ordinal)) && observation.Plan.All(row => !row.Contains("TEMP B-TREE", StringComparison.Ordinal)),
+                "history seeks the tenant and bounded time window without a temporary sort");
+
             await TurnAsync(first, "silent", 2);
             await using (var db = OpenFoundationDb(file, definitions))
                 Require(await db.Database.SqlQuery<int>($"""

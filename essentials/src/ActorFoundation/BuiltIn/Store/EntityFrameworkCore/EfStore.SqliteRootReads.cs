@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,17 +29,26 @@ public sealed partial class EfStore
             var encodedType = type is null ? null : DurableKeyJson.Write(type);
             var encodedLabels = DurableKeyJson.Write(labels);
             // Compare each encoded label object. Extracting its key or value as SQL text would lose escaped code units.
-            var rows = await db.Database.SqlQuery<SqliteActorProjection>($"""
+            FormattableString query = $"""
+                /* sqlite-root-actor-list */
                 SELECT l."Reference", l."Status", l."EndedAt", l."TerminalRevision", l."Header", l."ParkAt", l."ParkFault", l."ParkRevision", l."ParkResolution"
                 FROM "FoundationActorList" l WHERE l."Tenant" = {tenant} AND l."Reference" > {after}
                     AND ({encodedType} IS NULL OR l."Type" COLLATE BINARY = {encodedType})
                     AND ({status} IS NULL OR l."Status" = {status})
                     AND ({endedBefore} IS NULL OR l."EndedAt" < {endedBefore})
-                    AND ({parked} IS NULL OR (l."ParkAt" IS NOT NULL) = {parked})
+                    /* park filter */
                     AND NOT EXISTS (SELECT 1 FROM json_each({encodedLabels}) criterion
                         WHERE NOT EXISTS (SELECT 1 FROM json_each(l."Labels") label WHERE label.value COLLATE BINARY = criterion.value))
                 ORDER BY l."Reference" LIMIT {limit}
-                """).ToListAsync(token);
+                """;
+            var parkFilter = parked switch
+            {
+                true => """AND l."ParkAt" IS NOT NULL""",
+                false => """AND l."ParkAt" IS NULL""",
+                null => ""
+            };
+            var sql = query.Format.Replace("/* park filter */", parkFilter, StringComparison.Ordinal);
+            var rows = await db.Database.SqlQuery<SqliteActorProjection>(FormattableStringFactory.Create(sql, query.GetArguments())).ToListAsync(token);
             return new RootListPage(rows.Select(ToSqliteRootListItem).ToArray(), at);
         }, token);
 
@@ -56,13 +66,17 @@ public sealed partial class EfStore
         long fromPosition, int limit, CancellationToken token) => ReadSqliteRootSnapshotAsync(db, async at =>
     {
         var rows = await db.Database.SqlQuery<RootJournalEntry>($"""
-            SELECT j."Position", j."Revision", j."Entries"
-            FROM "FoundationRootBirths" b JOIN "Instances" i
-                ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
-                AND i."FoundationTenant" = b."Tenant" AND i."FoundationReference" = b."Reference"
-            JOIN "Journal" j ON j."Instance" = i."Id" AND j."Partition" = i."Partition"
-            WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
-                AND j."Position" >= {fromPosition} AND j."Revision" BETWEEN 1 AND i."Revision"
+            /* sqlite-root-journal */
+            WITH root AS MATERIALIZED (
+                SELECT b."Partition", b."Actor", i."Revision"
+                FROM "FoundationRootBirths" b JOIN "Instances" i
+                    ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
+                    AND i."FoundationTenant" = b."Tenant" AND i."FoundationReference" = b."Reference"
+                WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
+            )
+            SELECT j."Position", j."Revision", j."Entries" FROM "Journal" j
+            WHERE (j."Partition", j."Instance") = (SELECT "Partition", "Actor" FROM root)
+                AND j."Position" >= {fromPosition} AND j."Revision" BETWEEN 1 AND (SELECT "Revision" FROM root)
             ORDER BY j."Position" LIMIT {limit}
             """).ToListAsync(token);
         return new RootJournalPage(rows, at);

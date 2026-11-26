@@ -44,14 +44,17 @@ public sealed partial class EfStore
         {
             var encodedType = DurableKeyJson.Write(type);
             var encodedDefinition = definition is null ? null : DurableKeyJson.Write(new KeyValuePair<string, string>("definition", definition));
+            var earliest = from ?? long.MinValue;
+            var latest = Math.Min(to ?? long.MaxValue, afterTime ?? long.MaxValue);
             var rows = await db.Database.SqlQuery<SqliteWorkflowHistoryRow>($"""
+                /* sqlite-root-workflow-history */
                 SELECT h."Reference", l."Status", l."Header", h."UpdatedAt"
                 FROM "FoundationWorkflowHistory" h JOIN "FoundationActorList" l USING ("Tenant", "Reference")
                 WHERE h."Tenant" = {tenant} AND l."Type" COLLATE BINARY = {encodedType}
                     AND ({encodedDefinition} IS NULL OR EXISTS (SELECT 1 FROM json_each(l."Labels") label
                         WHERE label.value COLLATE BINARY = {encodedDefinition}))
                     AND ({status} IS NULL OR l."Status" = {status})
-                    AND ({from} IS NULL OR h."UpdatedAt" >= {from}) AND ({to} IS NULL OR h."UpdatedAt" <= {to})
+                    AND h."UpdatedAt" BETWEEN {earliest} AND {latest}
                     AND ({afterTime} IS NULL OR h."UpdatedAt" < {afterTime} OR h."UpdatedAt" = {afterTime} AND h."Reference" > {afterRef})
                 ORDER BY h."UpdatedAt" DESC, h."Reference" LIMIT {limit}
                 """).ToListAsync(token);

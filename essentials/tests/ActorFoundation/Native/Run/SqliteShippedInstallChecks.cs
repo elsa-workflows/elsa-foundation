@@ -327,6 +327,28 @@ internal static class SqliteShippedInstallChecks
                 "an open Delete cannot commit a Terminate checkpoint");
             await write.RollbackAsync(token);
         }
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await RefusedAsync<SqliteException>(() => RetireClearingAsync(InstanceStatus.Cancelled),
+                "an open Delete cannot retire with a compound Terminate disposition");
+            Require(await RetireClearingAsync(InstanceStatus.Faulted) == 1, "the matching Delete disposition retires the open clearing");
+            await write.RollbackAsync(token);
+        }
+        await SeedAsync("kept-creator", InstanceStatus.Faulted);
+        await db.Database.ExecuteSqlRawAsync("""
+            INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Seq", "Kind", "Due", "Start",
+                "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
+            VALUES ('root:kept-creator', 0, 'kept-creator', 0, 1, 'start', 0, 'kept', 1, 0, 0, 0, 0, 0)
+            """, token);
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("kept-creator", revision: 2, terminated);
+            await RefusedAsync<SqliteException>(() => EndParkAsync("kept-creator", 2, InstanceStatus.Cancelled),
+                "a Park cannot end while a retained creator is still present");
+            await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" = 'root:kept-creator' AND "InboxScope" = 0""", token);
+            Require(await EndParkAsync("kept-creator", 2, InstanceStatus.Cancelled) == 1, "the Park can end after the kept creator leaves");
+            await write.CommitAsync(token);
+        }
         await SeedAsync("mixed", InstanceStatus.Faulted);
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
@@ -383,6 +405,15 @@ internal static class SqliteShippedInstallChecks
                 "FoundationTerminalRevision" = {revision}, "FoundationTerminalAt" = 300, "FoundationParkAt" = NULL,
                 "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL
             WHERE "Id" = {id}
+            """, token);
+
+        Task<int> RetireClearingAsync(InstanceStatus status) => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Instances" SET "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL,
+                "Model" = '', "Definition" = '', "Fault" = NULL, "StateVersion" = 1, "History" = {(int)History.Minimal}, "NextJobGeneration" = NULL,
+                "Suspended" = 0, "Retired" = 1, "Revision" = 4, "FoundationWriteRevision" = 4, "Status" = {(int)status},
+                "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL,
+                "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL, "FoundationTerminalRevision" = 4, "FoundationTerminalAt" = 300
+            WHERE "Id" = 'projected'
             """, token);
 
         Task<int> RetireAsync(string id) => db.Database.ExecuteSqlInterpolatedAsync($"""
