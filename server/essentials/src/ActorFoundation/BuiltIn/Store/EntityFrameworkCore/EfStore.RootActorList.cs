@@ -11,6 +11,7 @@ public sealed partial class EfStore
         string TypeData, IReadOnlyDictionary<string, string> Labels, long? ParkAt, string? ParkFault)
     {
         internal long? ParkRevision { get; init; }
+        internal string? ParkResolution { get; init; }
     }
     internal sealed record RootListPage(IReadOnlyList<RootListItem> Items, long AsOf);
 

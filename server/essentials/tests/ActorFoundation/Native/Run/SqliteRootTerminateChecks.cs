@@ -90,7 +90,7 @@ internal static partial class SqliteHostLifetimeChecks
 
             var exact = new Contract.Target.Ref(first);
             var checkpoint = (await store.ReadFirstRootAsync(scope.Tenant, first.Id, token))!;
-            var deferredId = await InsertLaterOperatorAsync(db, first.Id, checkpoint.Actor.Id, token);
+            var deferredId = await InsertLaterOperatorAsync(db, first.Id, checkpoint.Actor.Id, token, kind: Kinds.Suspend);
             Require(await ingress.SendAsync(scope, exact, "future", "record", options: new(DueAt: long.MaxValue), cancellationToken: token) is
                 { Outcome: Contract.AdmissionOutcome.Accepted }, "an earlier future input is admitted");
             Require(await ingress.SendAsync(scope, exact, "ordinary", "record", cancellationToken: token) is
@@ -120,7 +120,7 @@ internal static partial class SqliteHostLifetimeChecks
                 await db.Messages.AllAsync(row => row.InboxScope != InboxKey.FoundationOccurrenceScope || !row.Done ||
                     row.Start == null && row.Payload == null && row.ReplyTo == null, token), "each settled occurrence is scrubbed and later inputs remain pending");
             Require(await db.Messages.AsNoTracking().SingleAsync(row => row.Id == deferredId, token) is { Done: false, Seen: 0, Start: not null },
-                "a Park-selected operator from a later slice stays pending and cannot block the staged FIFO");
+                "an unsupported Suspend stays pending and cannot block the selected Terminate FIFO");
             await replacement.StopAsync(token);
             Require(replacement.LastError is null, "the replacement owner stops cleanly");
             return 0;
@@ -146,19 +146,20 @@ internal static partial class SqliteHostLifetimeChecks
     }
 
     private static async Task<string> InsertLaterOperatorAsync(KernelDb db, string reference, string actor, CancellationToken token,
-        string? replyTo = null)
+        string? replyTo = null, string kind = Kinds.Terminate)
     {
-        const string operation = "later-park-terminate";
+        var operation = kind == Kinds.Terminate ? "later-park-terminate" : "unsupported-suspend";
         var deadline = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 60_000;
         var digest = FoundationRootCreator.OperationDigest(operation);
-        var (id, header) = PostgresRootAdmission.EncodeOperator(reference, operation, digest, 1, Kinds.Terminate, null,
-            park: new(1, deadline - 60_000), window: 60_000, replyAddress: replyTo);
+        var (id, header) = PostgresRootAdmission.EncodeOperator(reference, operation, digest, 1, kind, null,
+            park: kind == Kinds.Terminate ? new(1, deadline - 60_000) : null,
+            window: kind == Kinds.Terminate ? 60_000 : null, replyAddress: replyTo);
         var home = new InstanceRef(actor).Partition;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Seq", "Kind", "Due", "Start",
                 "Done", "Seen", "Attempts", "Trial", "JobGeneration", "KeepUntil", "ReplyTo")
             VALUES ({id}, {InboxKey.FoundationOccurrenceScope}, {actor}, {home},
-                (SELECT coalesce(max("Seq"), 0) + 1 FROM "Messages"), {Kinds.Terminate}, 0, {header},
+                (SELECT coalesce(max("Seq"), 0) + 1 FROM "Messages"), {kind}, 0, {header},
                 0, 0, 0, 0, 0, {deadline}, {replyTo})
             """, token);
         return id;

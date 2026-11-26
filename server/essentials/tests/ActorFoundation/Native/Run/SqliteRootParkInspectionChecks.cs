@@ -169,7 +169,7 @@ internal static partial class SqliteHostLifetimeChecks
         finally { directory.Delete(recursive: true); }
     }
 
-    private sealed class ParkReadObservation : DbCommandInterceptor
+    private sealed class ParkReadObservation(string planMarker = "WITH page AS") : DbCommandInterceptor
     {
         public TaskCompletionSource ClockSampled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Resume { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -186,7 +186,7 @@ internal static partial class SqliteHostLifetimeChecks
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
             CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            if (!command.CommandText.Contains("WITH page AS", StringComparison.Ordinal)) return result;
+            if (!command.CommandText.Contains(planMarker, StringComparison.Ordinal)) return result;
             await using var explain = command.Connection!.CreateCommand();
             explain.Transaction = command.Transaction;
             explain.CommandText = "EXPLAIN QUERY PLAN " + command.CommandText;

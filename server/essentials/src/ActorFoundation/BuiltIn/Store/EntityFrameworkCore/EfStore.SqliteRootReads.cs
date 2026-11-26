@@ -6,7 +6,7 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     private sealed record SqliteActorProjection(string Reference, int Status, long? EndedAt, long? TerminalRevision,
-        string Header, long? ParkAt, string? ParkFault, long? ParkRevision);
+        string Header, long? ParkAt, string? ParkFault, long? ParkRevision, string? ParkResolution);
 
     private sealed record SqliteInboxProjection(long Seq, string Occurrence, string Kind, string? Header, long Due, int Attempts,
         long Size, bool HasReply, bool SupportedShape, short? KeptBy);
@@ -15,14 +15,16 @@ public sealed partial class EfStore
         CancellationToken token) => await ReadSqliteRootSnapshotAsync<(RootListItem, long)?>(db, async at =>
     {
         var row = await db.Database.SqlQuery<SqliteActorProjection>($"""
-            SELECT "Reference", "Status", "EndedAt", "TerminalRevision", "Header", "ParkAt", "ParkFault", "ParkRevision"
+            SELECT "Reference", "Status", "EndedAt", "TerminalRevision", "Header", "ParkAt", "ParkFault", "ParkRevision", "ParkResolution"
             FROM "FoundationActorList" WHERE "Tenant" = {tenant} AND "Reference" = {reference}
             """).SingleOrDefaultAsync(token);
         if (row is null) return null;
-        if (row.ParkAt is not null && row.ParkRevision is not > 0)
-            throw new StoreFormatException("The SQLite actor projection is missing its Park opening revision.");
+        if (row.ParkAt is not null && row.ParkRevision is not > 0 ||
+            row.ParkAt is null && row.ParkResolution is not null ||
+            row.ParkResolution is not (null or "terminating" or "deleting"))
+            throw new StoreFormatException("The SQLite actor projection has an incomplete Park mark or resolution.");
         return (ToRootListItem(row.Reference, row.Status, row.EndedAt, row.TerminalRevision, row.Header,
-            qualified: true, row.ParkAt, row.ParkFault, row.ParkRevision), at);
+            qualified: true, row.ParkAt, row.ParkFault, row.ParkRevision) with { ParkResolution = row.ParkResolution }, at);
     }, token);
 
     private static Task<RootInboxPage> ReadSqliteRootInboxAsync(KernelDb db, string tenant, string reference, long afterSeq,

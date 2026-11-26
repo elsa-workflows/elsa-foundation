@@ -178,6 +178,7 @@ public sealed partial class EfStore
             Add("FoundationParkAt", "INTEGER");
             Add("FoundationParkRevision", "INTEGER");
             Add("FoundationParkClearing", "TEXT");
+            Add("FoundationParkClearingKind", "TEXT");
             Add("FoundationParkCleared", "INTEGER");
 
             table.ForeignKeys.Add(new AddForeignKeyOperation
@@ -190,9 +191,11 @@ public sealed partial class EfStore
             });
             Check("CK_Instances_FoundationParkRevision", """ "FoundationParkRevision" > 0 """);
             Check("CK_Instances_FoundationBoolean", """ "Retired" IN (0, 1) AND "Suspended" IN (0, 1) """);
-            Check("CK_FoundationParkClearing", """
+            Check("CK_FoundationParkClearing", $"""
                 ("FoundationParkClearing" IS NULL) = ("FoundationParkCleared" IS NULL)
-                AND ("FoundationParkClearing" IS NULL OR "Status" = 2 AND "FoundationParkAt" IS NOT NULL AND "FoundationParkCleared" > 0)
+                AND ("FoundationParkClearing" IS NULL) = ("FoundationParkClearingKind" IS NULL)
+                AND ("FoundationParkClearing" IS NULL OR "Status" = 2 AND "FoundationParkAt" IS NOT NULL AND "FoundationParkCleared" > 0
+                    AND "FoundationParkClearingKind" IN ('{Kinds.Terminate}', '{Kinds.Delete}'))
                 """);
         }
         if (table.Name == "Messages")
@@ -270,6 +273,7 @@ public sealed partial class EfStore
             "ParkAt" INTEGER,
             "ParkFault" TEXT,
             "ParkRevision" INTEGER,
+            "ParkResolution" TEXT,
             PRIMARY KEY ("Tenant", "Reference")
             """);
         yield return Index("IX_FoundationRootReceipts_Until", "FoundationRootReceipts", """("Until")""");
@@ -282,6 +286,9 @@ public sealed partial class EfStore
         yield return Index("IX_FoundationRootInbox_Inspectable", "Messages", """
             ("Partition", "Target", "Seq", "Id")
             WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND (NOT "Done" OR "FoundationKeptBy" = 0)
+            """);
+        yield return Index("IX_FoundationRootInbox_Kept", "Messages", """
+            ("Partition", "Target", "Seq", "Id", "InboxScope") WHERE "FoundationKeptBy" IS NOT NULL
             """);
         yield return Index("IX_FoundationRootOperators_Pending", "Messages", """
             ("Partition", "Target", "Seq", "Due")

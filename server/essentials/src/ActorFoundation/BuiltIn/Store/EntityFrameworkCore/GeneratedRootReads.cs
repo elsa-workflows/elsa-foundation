@@ -58,7 +58,7 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
                 PostgresRootSelection.SealPark(cursor, scope.Tenant, row.Reference, parkRevision, parkedAt),
             _ => null
         };
-        return new(header, selection, row.ParkAt is { } parkAt ? new(parkAt, null) : null, asOf);
+        return new(header, selection, row.ParkAt is { } parkAt ? new(parkAt, row.ParkResolution) : null, asOf);
     }
 
     public async ValueTask<Page<JournalEntry>> TailAsync(BoundScope scope, ActorRef actor, PageToken? from = null,

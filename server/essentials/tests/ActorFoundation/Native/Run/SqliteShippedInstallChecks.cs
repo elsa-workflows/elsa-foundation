@@ -308,7 +308,7 @@ internal static class SqliteShippedInstallChecks
             await JournalAsync("projected", revision: 3, clearing);
             await db.Database.ExecuteSqlRawAsync("""
                 UPDATE "Instances" SET "Revision" = 3, "FoundationWriteRevision" = 3,
-                    "FoundationParkClearing" = 'operator/test', "FoundationParkCleared" = 1
+                    "FoundationParkClearing" = 'operator/test', "FoundationParkClearingKind" = 'kernel.delete', "FoundationParkCleared" = 1
                 WHERE "Id" = 'projected'
                 """, token);
             await write.CommitAsync(token);
@@ -316,17 +316,51 @@ internal static class SqliteShippedInstallChecks
         Require(await ReadProjectionAsync("projected") is { ParkAt: 200, ParkFault: "opened", ParkRevision: 2 },
             "opening a clearing commits its outcome and preserves the projected Park mark");
 
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "Revision" = 4, "FoundationWriteRevision" = 4, "FoundationParkCleared" = 2,
+                "FoundationParkClearingKind" = 'kernel.terminate' WHERE "Id" = 'projected'
+            """, token), "a continuation must keep its original clearing kind");
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
             await JournalAsync("projected", revision: 4, terminated);
-            await JournalAsync("projected", revision: 4, discarded);
-            Require(await EndParkAsync("projected", 4, InstanceStatus.Cancelled) == 1, "the terminated outcome admits the matching checkpoint update");
+            await RefusedAsync<SqliteException>(() => EndParkAsync("projected", 4, InstanceStatus.Cancelled),
+                "an open Delete cannot commit a Terminate checkpoint");
+            await write.RollbackAsync(token);
+        }
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await RefusedAsync<SqliteException>(() => RetireClearingAsync(InstanceStatus.Cancelled),
+                "an open Delete cannot retire with a compound Terminate disposition");
+            Require(await RetireClearingAsync(InstanceStatus.Faulted) == 1, "the matching Delete disposition retires the open clearing");
+            await write.RollbackAsync(token);
+        }
+        await SeedAsync("kept-creator", InstanceStatus.Faulted);
+        await db.Database.ExecuteSqlRawAsync("""
+            INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Seq", "Kind", "Due", "Start",
+                "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
+            VALUES ('root:kept-creator', 0, 'kept-creator', 0, 1, 'start', 0, 'kept', 1, 0, 0, 0, 0, 0)
+            """, token);
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("kept-creator", revision: 2, terminated);
+            await RefusedAsync<SqliteException>(() => EndParkAsync("kept-creator", 2, InstanceStatus.Cancelled),
+                "a Park cannot end while a retained creator is still present");
+            await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" = 'root:kept-creator' AND "InboxScope" = 0""", token);
+            Require(await EndParkAsync("kept-creator", 2, InstanceStatus.Cancelled) == 1, "the Park can end after the kept creator leaves");
+            await write.CommitAsync(token);
+        }
+        await SeedAsync("mixed", InstanceStatus.Faulted);
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await JournalAsync("mixed", revision: 2, terminated);
+            await JournalAsync("mixed", revision: 2, discarded);
+            Require(await EndParkAsync("mixed", 2, InstanceStatus.Cancelled) == 1, "the terminated outcome admits the matching checkpoint update");
             await RefusedAsync<SqliteException>(() => write.CommitAsync(token),
                 "the paired revision cannot commit an additional protected outcome with the wrong terminal disposition", ForeignKeyConstraint);
             await write.RollbackAsync(token);
         }
-        Require(!await db.Journal.AnyAsync(entry => entry.Instance == "projected" && entry.Revision == 4, token)
-            && await ReadProjectionAsync("projected") is { Status: InstanceStatus.Faulted, ParkAt: 200, TerminalRevision: null },
+        Require(!await db.Journal.AnyAsync(entry => entry.Instance == "mixed" && entry.Revision == 2, token)
+            && await ReadProjectionAsync("mixed") is { Status: InstanceStatus.Faulted, ParkAt: not null, TerminalRevision: null },
             "a failed outcome commit preserves the parked checkpoint, projection, and earlier journal");
 
         await using (var write = await db.Database.BeginTransactionAsync(token))
@@ -369,8 +403,17 @@ internal static class SqliteShippedInstallChecks
         Task<int> EndParkAsync(string id, long revision, InstanceStatus status) => db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Instances" SET "Status" = {(int)status}, "Revision" = {revision}, "FoundationWriteRevision" = {revision},
                 "FoundationTerminalRevision" = {revision}, "FoundationTerminalAt" = 300, "FoundationParkAt" = NULL,
-                "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL
+                "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL
             WHERE "Id" = {id}
+            """, token);
+
+        Task<int> RetireClearingAsync(InstanceStatus status) => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Instances" SET "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL,
+                "Model" = '', "Definition" = '', "Fault" = NULL, "StateVersion" = 1, "History" = {(int)History.Minimal}, "NextJobGeneration" = NULL,
+                "Suspended" = 0, "Retired" = 1, "Revision" = 4, "FoundationWriteRevision" = 4, "Status" = {(int)status},
+                "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL,
+                "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL, "FoundationTerminalRevision" = 4, "FoundationTerminalAt" = 300
+            WHERE "Id" = 'projected'
             """, token);
 
         Task<int> RetireAsync(string id) => db.Database.ExecuteSqlInterpolatedAsync($"""
