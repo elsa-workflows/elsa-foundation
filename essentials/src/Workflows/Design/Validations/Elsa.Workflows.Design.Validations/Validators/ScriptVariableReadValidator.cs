@@ -36,8 +36,8 @@ public sealed class ScriptVariableReadValidator(
 {
     public const string UnresolvedReadType = "Scripts/UnresolvedVariableRead";
     public const string ComputedReadType = "Scripts/ComputedVariableRead";
-    public const string RefusedWriteType = "Scripts/RefusedVariableWrite";
-    public const string ComputedWriteType = "Scripts/ComputedVariableWrite";
+    public const string RefusedWriteType = StepVariableWriteRules.RefusedScriptWrite;
+    public const string ComputedWriteType = StepVariableWriteRules.ComputedScriptWrite;
 
     public async ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {

@@ -2,7 +2,7 @@
 
 The per-domain catalog (framework §2.22.1) of everything you can implement or override in the draft-validation sub-domain, plus the events it publishes. Anchored at `Elsa.Workflows.Design.Validations` — the composition root where `WorkflowDesignValidationsFeature` wires the aggregating handler `ExecuteValidations` and its baseline validators. Three sections:
 
-- **Overridable contracts**: `ICredentialLiteralValidator`, the scoped `IActivityDataSelectionAnalyzer` authority, the `IUnorderedVariableWriteAnalyzer` (spec 266), the `IScriptVariableRenamePlanner` (spec 1222) and the `IScriptBodyWriteAnalyzer` (spec 1231).
+- **Overridable contracts**: `ICredentialLiteralValidator`, the scoped `IActivityDataSelectionAnalyzer` authority, the `IUnorderedVariableWriteAnalyzer` (spec 266), the `IScriptVariableRenamePlanner` (spec 1222), the `IScriptBodyWriteAnalyzer` (spec 1231) and the `IStepVariableWriteAnalyzer` (spec 1241).
 - **Implementable contributor interfaces** — draft validators, provider-owned analysis projections and input-source restrictions.
 - **Events** — validation, input-constraint collection and outcome notification.
 
@@ -30,7 +30,7 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 - **Kind/signature:** one singleton replacement; `UnorderedVariableWriteAnalysis Analyze(ActivityNode root, IActivityStructureService structures, bool includeIntrinsics, CancellationToken cancellationToken = default)`, and (spec 1231) `Analyze(ActivityNode root, IActivityStructureService structures, bool includeIntrinsics, StepVariableWriteFacts stepWrites, CancellationToken cancellationToken = default)`, whose default interface body ignores `stepWrites` and calls the first. A replacement that does not override the step-aware overload reports no step-write findings.
 - **Default/registration:** internal `UnorderedVariableWriteAnalyzer`, installed with `TryAddSingleton`. A single-implementation replacement contract (framework §2.6.2): `DataSelectionAnalyzerCompositionCheck` fails shell Prepare unless exactly one singleton is composed. Singleton because the singleton graph provider consumes it.
 - **Behaviour (spec 266):** reports, per variable, every node whose declared write (an output capture and, with `includeIntrinsics`, a Set, Merge or Reduce intrinsic) has no order fixed by the definition, plus duplicate capture targets on one node. The step-aware overload also counts step writers (spec 1231 FR-028): `StepVariableWriteFacts` holds, per node, its `StepVariableWriters` (the `StepVariableWriteTarget`s of its writable variable references and of a script body's may-write set, and whether it may write every visible variable, as an `[AccessesUndeclaredVariables]` activity or a script with a computed or opaque write does; an analyzed script body, not the engine script activity's type-level marker, decides that); such a node counts as writing each variable visible to it: those the definition writes, the workflow variables, and the variables its enclosing containers declare. All ordering knowledge comes from `IActivityStructureHandler.RelateChildren` and `CompletesAfterItsChildren`; it knows no structure kind. Findings carry the author-facing message.
-- **Consumers:** `ValueFlowValidator` (`ValueFlow/ConcurrentWrite` and `ValueFlow/DuplicateCaptureTarget`, severity `Warning`; it calls the step-aware overload with the facts `StepVariableWriteValidation` derives from the activity catalog) and Graph Design's `GraphActivityProvider` (draft validation and compilation warnings), which `GraphActivitiesDesignFeature` composes with the required analyzer. The graph provider calls the capture-only overload: step writers in a reusable activity's body are not counted yet (spec 1231 follow-up, #4805).
+- **Consumers:** `ValueFlowValidator` (`ValueFlow/ConcurrentWrite` and `ValueFlow/DuplicateCaptureTarget`, severity `Warning`; it calls the step-aware overload with the facts `StepVariableWriteValidation` derives from the activity catalog) and Graph Design's `GraphActivityProvider` (draft validation and compilation warnings), which `GraphActivitiesDesignFeature` composes with the required analyzer. The graph provider calls the step-aware overload too, with the facts `IStepVariableWriteAnalyzer` derives for the body (spec 1241).
 
 ### `IActivityBindingConversionPreviewer` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
 
@@ -77,6 +77,22 @@ The optional scoped Publishing implementation resolves a selected whole activity
   may-write set from `ScriptVariableReadResolver` and `ScriptVariableReadPlan.MayWrite()` themselves, so a replacement
   that disagrees with them shows a set the concurrent-write warning and the pinned `runtime.mayWriteVariables` do not
   use.
+
+### `IStepVariableWriteAnalyzer` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
+
+- **Kind:** replacement contract, exactly one per host. `StepVariableWriteAnalyzer` is the default, registered with
+  `TryAddScoped` by this feature (it reads the scoped activity catalog); a missing or second registration fails the
+  shell at start (`DataSelectionAnalyzerCompositionCheck`).
+- **Contract:** `AnalyzeAsync(root, rootVariables)` checks the step writes of a body that is not a workflow draft, as
+  workflow draft validation checks a draft's (spec 1241 FR-009): variable references that are unbound, undeclared, not a
+  variable or of another type (`ValueFlow/VariableReference`), a step write that overlaps the node's own capture
+  (`ValueFlow/StepWriteOverlapsCapture`, a warning), a script body's refused literal write
+  (`Scripts/RefusedVariableWrite`) and its write by a computed name (`Scripts/ComputedVariableWrite`, a warning). It returns the step writers (`StepVariableWriteFacts`) the concurrent-write rule
+  counts. The default delegates to the same checks `ValueFlowValidator` runs.
+- **Consumer:** `GraphActivityProvider` (Activities.Graph.Design), in a reusable activity's draft validation and
+  compilation, through its service scope factory; only a provider built directly without one checks the body's captures only. It leaves the workflow-state findings (`VF-STATE-*`) to placement.
+- **Override when:** a host validates step writes differently; a replacement that disagrees with workflow draft
+  validation makes a graph body and a workflow with the same body report differently.
 
 
 ## Implementable contributor interfaces

@@ -54,7 +54,8 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   `runtime.variable.version/digest/writer`). A body node reads rows through a frame that carries those versions, so its
   read set records them, and a capture into a row is judged by the commit rule (`RuntimeOutputCaptureProjector`,
   `ClosedScopeVariableRows`); a refused row write refuses the completion. Intrinsics cannot write a closed scope's
-  variables yet, so captures are the only row writers.
+  variables yet, so captures are the only row writers. *(Superseded by [spec 1241](../1241-closed-scope-step-writes/spec.md):
+  a step's session writes rows too, through the same judgement.)*
 - **T021a:** the warning is its write-history entry, with both writers, both versions and the overwritten value; the
   API that exposes it is S-6, and the Studio presentation is follow-up work in this repository's `Studio/` (#4735; spec
   *Scope moved*). A
