@@ -65,6 +65,7 @@
         "Elsa.Serialization.Tests",
         "Elsa.Tasks",
         "Elsa.Tasks.Core",
+        "Elsa.Tasks.Execution.Tests",
         "Elsa.Tasks.Schedules",
         "Elsa.Tasks.Tests",
         "Elsa.Testing",

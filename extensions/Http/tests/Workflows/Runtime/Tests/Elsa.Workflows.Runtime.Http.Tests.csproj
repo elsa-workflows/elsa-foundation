@@ -27,7 +27,7 @@
     <ProjectReference Include="..\..\..\..\src\Core\Elsa.Http.Core.csproj" />
     <!-- The real Http (route table) and Tasks (recurring-task scheduling) features for the shell composition test. -->
     <ProjectReference Include="..\..\..\..\src\Elsa.Http\Elsa.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Tasks\src\Elsa.Tasks\Elsa.Tasks.csproj" />
   </ItemGroup>
 
 </Project>

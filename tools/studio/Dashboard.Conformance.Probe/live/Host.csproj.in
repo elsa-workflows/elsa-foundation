@@ -50,7 +50,7 @@
     <ProjectReference Include="__SOURCE_ROOT__/extensions/Weaver/src/Persistence/EntityFrameworkCore/Elsa.Weaver.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/server/essentials/src/Attention/Core/Elsa.Attention.Core.csproj" />
-    <ProjectReference Include="__SOURCE_ROOT__/server/essentials/src/Attention/Api/Elsa.Attention.Api.csproj" />
+    <ProjectReference Include="__SOURCE_ROOT__/extensions/Attention/src/Api/Elsa.Attention.Api.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/server/essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/server/essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/server/essentials/src/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj" />
@@ -156,7 +156,7 @@
     <ProjectReference Include="__SOURCE_ROOT__/extensions/Connections/src/Workflows/Elsa.Connections.Workflows.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/server/essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/server/essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj" />
-    <ProjectReference Include="__SOURCE_ROOT__/server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj" />
+    <ProjectReference Include="__SOURCE_ROOT__/extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/server/essentials/src/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/server/essentials/src/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />

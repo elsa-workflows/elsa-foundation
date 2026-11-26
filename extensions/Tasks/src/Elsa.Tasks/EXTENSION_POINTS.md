@@ -60,7 +60,7 @@ The whole guarantee, and nothing more (#2192):
   lock in the shared PostgreSQL, SQL Server or MySQL database. `FileSystemDistributedLocking`'s default folder is
   node-local, which is why a host that joined a cluster through a durable membership provider refuses it at startup;
   a SQLite composition keeps it and is single-node by definition. See the
-  [Locking catalog](../../Locking/FileSystem/EXTENSION_POINTS.md).
+  [Locking catalog](../../../../server/essentials/src/Locking/FileSystem/EXTENSION_POINTS.md).
 - It is meant for startup tasks. On a background or recurring task, each start, run and stop takes the lock the same
   way, which serializes the calls but elects no leader.
 
@@ -131,12 +131,12 @@ The nine shipped workers live in other domains: `RuntimeResumptionPumpTask`, `Du
 `IPersistenceScopeRunner` to visit fresh ordinary partitions, keeps independent finite keyset cursors
 for explicit tenant and legacy-null tenant keys, and delegates native/source eligibility plus
 conditional content purge to its scoped pruner. Its baseline interval is five minutes, with one-hour
-maximum failure backoff. See the [agent runtime catalog](../../../../../extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md).
+maximum failure backoff. See the [agent runtime catalog](../../../Agent/src/Elsa.Agent/EXTENSION_POINTS.md).
 
 ---
 
 ## Cross-references
 
 - `ITaskSchedule` lives in `Elsa.Tasks.Core`; the schedule classes in `Elsa.Tasks.Schedules` are internal and reached through `TaskSchedule`.
-- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
+- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.2 + §2.22.1.

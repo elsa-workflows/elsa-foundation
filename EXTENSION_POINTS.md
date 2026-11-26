@@ -55,7 +55,7 @@ not automatic constitution violations.
 | Events (substrate — `IEvent`, `IEventHandler<T>`, strategies) | [`server/essentials/src/Events/Elsa.Events/EXTENSION_POINTS.md`](server/essentials/src/Events/Elsa.Events/EXTENSION_POINTS.md) |
 | Mediator (command / request pipelines) | [`server/essentials/src/Mediator/Elsa.Mediator/EXTENSION_POINTS.md`](server/essentials/src/Mediator/Elsa.Mediator/EXTENSION_POINTS.md) |
 | Pipelines (middleware — Core-only, no feature project) | [`server/essentials/src/Pipelines/Core/EXTENSION_POINTS.md`](server/essentials/src/Pipelines/Core/EXTENSION_POINTS.md) |
-| Tasks (startup / recurring / background tasks) | [`server/essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md`](server/essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md) |
+| Tasks (startup / recurring / background tasks) | [`extensions/Tasks/src/Elsa.Tasks/EXTENSION_POINTS.md`](extensions/Tasks/src/Elsa.Tasks/EXTENSION_POINTS.md) |
 | Caching (cache manager + change-token signaling) | [`server/essentials/src/Caching/Memory/EXTENSION_POINTS.md`](server/essentials/src/Caching/Memory/EXTENSION_POINTS.md) |
 | Serialization (JSON converter sources) | [`server/essentials/src/Serialization/SystemText/EXTENSION_POINTS.md`](server/essentials/src/Serialization/SystemText/EXTENSION_POINTS.md) |
 | Locking (distributed lock provider) | [`server/essentials/src/Locking/FileSystem/EXTENSION_POINTS.md`](server/essentials/src/Locking/FileSystem/EXTENSION_POINTS.md) |

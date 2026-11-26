@@ -45,7 +45,7 @@ Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="Host=db;Databa
   start once the durable provider is enabled, naming both ways out: the database lock, or a `LocksFolderPath` every host
   shares. SQLite has no database lock, so a SQLite composition keeps the file-system lock and is single-node by
   definition: several processes on that machine share one explicit `LocksFolderPath`. What a lock guarantees to a
-  `[SingleNodeTask]` is one at a time, at shell start, and no more; see `Essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md`.
+  `[SingleNodeTask]` is one at a time, at shell start, and no more; see the [Tasks extension points](../../extensions/Tasks/src/Elsa.Tasks/EXTENSION_POINTS.md).
   The git workflow export takes no lock at all: every Writer node exports, and the fast-forward-only push keeps one
   writer per branch (#2197; see the section "Several Writer nodes of one catalog" in
   `extensions/Git/src/Workflows/Design/Reconciliation/README.md`).
