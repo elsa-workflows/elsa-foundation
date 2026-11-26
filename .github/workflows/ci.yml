@@ -192,6 +192,13 @@ jobs:
       - name: Check catalog and module README links
         run: python3 tools/maps/check-catalog-links.py
 
+      # The Elsa 3 migration skill's porting catalog equals the compiled sample's marked regions, and the skill holds no
+      # diagnostic code literal (spec 1238 FR-017). Runs here so a documentation-only catalog edit is still checked.
+      - name: Check the Elsa 3 migration skill
+        run: |
+          python3 tools/skills/check_migration_skill.py --self-test
+          python3 tools/skills/check_migration_skill.py
+
       - name: Exercise the tier tooling
         run: |
           python3 -m unittest discover -s tools/ci -p 'test_workflow_scope.py'

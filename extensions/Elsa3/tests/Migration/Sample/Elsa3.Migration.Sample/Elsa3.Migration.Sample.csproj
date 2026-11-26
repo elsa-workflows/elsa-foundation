@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The synthetic Acme Elsa 4 feature behind the Elsa 3 migration skill's porting catalog (spec 1238 FR-016).
+    Each catalog "port" case's "after" example is a marked region of this project or its tests
+    (// catalog:case-NN begin/end), compared with the catalog by tools/skills/check_migration_skill.py.
+    A test asset: never packed or published, and it references no Elsa 3 project.
+  -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Expressions\Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Expressions\JavaScript\Core\Elsa.Expressions.JavaScript.Core.csproj" />
+  </ItemGroup>
+
+</Project>

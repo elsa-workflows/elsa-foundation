@@ -129,6 +129,11 @@
   <Folder Name="/extensions/Elsa3/tests/Mapping/">
     <Project Path="extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj" />
   </Folder>
+  <Folder Name="/extensions/Elsa3/tests/Migration/" />
+  <Folder Name="/extensions/Elsa3/tests/Migration/Sample/">
+    <Project Path="extensions/Elsa3/tests/Migration/Sample/Elsa3.Migration.Sample/Elsa3.Migration.Sample.csproj" />
+    <Project Path="extensions/Elsa3/tests/Migration/Sample/Tests/Elsa3.Migration.Sample.Tests.csproj" />
+  </Folder>
   <Folder Name="/extensions/Integrations/" />
   <Folder Name="/extensions/Integrations/src/">
     <Project Path="extensions/Integrations/src/Templates/Elsa.Integrations.Templates.csproj" />
