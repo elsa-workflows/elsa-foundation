@@ -34,10 +34,10 @@ mono_crash.*
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
-!/server/essentials/src/Activities/Graph/Releases/
-!/server/essentials/src/Activities/Primitives/Releases/
-!/server/essentials/src/Workflows/Publishing/Releases/
-!/server/essentials/tests/Workflows/Publishing/Releases/
+!/essentials/src/Activities/Graph/Releases/
+!/essentials/src/Activities/Primitives/Releases/
+!/essentials/src/Workflows/Publishing/Releases/
+!/essentials/tests/Workflows/Publishing/Releases/
 !/tools/releases/
 
 [Dd]ebug/x64/
@@ -239,7 +239,7 @@ DocProject/Help/html
 publish/
 # Endpoint classes live in Endpoints/<Resource>/<Operation>/ folders, and "Publish" is a real
 # operation name; without this negation the Click-Once rule silently eats those sources on add.
-!server/essentials/src/**/Endpoints/**/[Pp]ublish/
+!essentials/src/**/Endpoints/**/[Pp]ublish/
 !Extensions/*/src/**/Endpoints/**/[Pp]ublish/
 !extensions/*/src/**/Endpoints/**/[Pp]ublish/
 
@@ -482,7 +482,7 @@ bench-*.sh
 bench-out-runner.sh
 
 # Contract-surface snapshot guard: the failing-run artifact written beside the committed baseline.
-server/essentials/tests/Activities/Design/Tests/Contracts/*.actual.json
+essentials/tests/Activities/Design/Tests/Contracts/*.actual.json
 
 # Local development shell overlay. Program.cs loads shells.{Environment}.json, so this file lets a
 # developer point the Workbench at their own database (provider and connection) without changing the

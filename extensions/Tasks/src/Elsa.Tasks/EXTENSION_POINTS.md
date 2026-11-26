@@ -60,7 +60,7 @@ The whole guarantee, and nothing more (#2192):
   lock in the shared PostgreSQL, SQL Server or MySQL database. `FileSystemDistributedLocking`'s default folder is
   node-local, which is why a host that joined a cluster through a durable membership provider refuses it at startup;
   a SQLite composition keeps it and is single-node by definition. See the
-  [Locking catalog](../../../../server/essentials/src/Locking/FileSystem/EXTENSION_POINTS.md).
+  [Locking catalog](../../../../essentials/src/Locking/FileSystem/EXTENSION_POINTS.md).
 - It is meant for startup tasks. On a background or recurring task, each start, run and stop takes the lock the same
   way, which serializes the calls but elects no leader.
 

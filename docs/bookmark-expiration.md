@@ -99,16 +99,16 @@ suspend/resume cycle.
 
 ## Where this lives in the code
 
-- [`BookmarkStimulusLookup`](../server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkStimulusLookup.cs) applies
+- [`BookmarkStimulusLookup`](../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkStimulusLookup.cs) applies
   the per-execution cutoff.
-- [`GlobalBookmarkStimulusLookup`](../server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/GlobalBookmarkStimulusLookup.cs)
+- [`GlobalBookmarkStimulusLookup`](../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/GlobalBookmarkStimulusLookup.cs)
   applies the same cutoff to cross-execution and type-scoped lookup.
-- [`BookmarkResumeDispatcher`](../server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs)
+- [`BookmarkResumeDispatcher`](../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs)
   evaluates lookup against the runtime clock and treats an expired bookmark as not found.
-- [`RuntimeDbContext`](../server/essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeDbContext.cs)
+- [`RuntimeDbContext`](../essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeDbContext.cs)
   declares bookmark indexes by workflow execution and stimulus identity, not by expiration.
-- [`RuntimeBookmarkStimulusResumeDispatchTests`](../server/essentials/tests/Workflows/Runtime/Tests/RuntimeBookmarkStimulusResumeDispatchTests.cs)
-  and [`GlobalBookmarkStimulusLookupTests`](../server/essentials/tests/Workflows/Runtime/Tests/GlobalBookmarkStimulusLookupTests.cs)
+- [`RuntimeBookmarkStimulusResumeDispatchTests`](../essentials/tests/Workflows/Runtime/Tests/RuntimeBookmarkStimulusResumeDispatchTests.cs)
+  and [`GlobalBookmarkStimulusLookupTests`](../essentials/tests/Workflows/Runtime/Tests/GlobalBookmarkStimulusLookupTests.cs)
   pin the non-expired matching rule.
 
-Related: [Elsa glossary](glossary/elsa.md) · [Runtime extension points](../server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) · [Durable timers](runtime-durable-timers.md)
+Related: [Elsa glossary](glossary/elsa.md) · [Runtime extension points](../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) · [Durable timers](runtime-durable-timers.md)

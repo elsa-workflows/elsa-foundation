@@ -16,9 +16,9 @@
   -->
   <ItemGroup>
     <!-- Shared typed endpoint ownership/security metadata and reusable host module-management endpoints. -->
-    <ProjectReference Include="../../essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="../../essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj" />
-    <ProjectReference Include="../../essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj" />
+    <ProjectReference Include="../../../essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../../essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj" />
+    <ProjectReference Include="../../../essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj" />
 
     <!-- CShells: AddCShellsAspNetCore, MapShells, per-shell IMiddlewareShellFeature (auto re-composed per
          generation on reload — hot, no restart). Brings CShells.Abstractions + CShells.AspNetCore.Abstractions
@@ -48,16 +48,16 @@
     does not compile a feature into this host; every actual feature still arrives only through the Nuplane feed.
   -->
   <ItemGroup>
-    <ProjectReference Include="../../essentials/src/Attention/Core/Elsa.Attention.Core.csproj" />
-    <ProjectReference Include="../../essentials/src/Caching/Core/Elsa.Caching.Core.csproj" />
-    <ProjectReference Include="../../essentials/src/Events/Core/Elsa.Events.Core.csproj" />
-    <ProjectReference Include="../../essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj" />
-    <ProjectReference Include="../../essentials/src/Locking/Core/Elsa.Locking.Core.csproj" />
-    <ProjectReference Include="../../essentials/src/Mediator/Core/Elsa.Mediator.Core.csproj" />
-    <ProjectReference Include="../../essentials/src/Pipelines/Core/Elsa.Pipelines.Core.csproj" />
-    <ProjectReference Include="../../essentials/src/Primitives/Primitives/Elsa.Primitives.csproj" />
-    <ProjectReference Include="../../essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
-    <ProjectReference Include="../../essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="../../../essentials/src/Attention/Core/Elsa.Attention.Core.csproj" />
+    <ProjectReference Include="../../../essentials/src/Caching/Core/Elsa.Caching.Core.csproj" />
+    <ProjectReference Include="../../../essentials/src/Events/Core/Elsa.Events.Core.csproj" />
+    <ProjectReference Include="../../../essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="../../../essentials/src/Locking/Core/Elsa.Locking.Core.csproj" />
+    <ProjectReference Include="../../../essentials/src/Mediator/Core/Elsa.Mediator.Core.csproj" />
+    <ProjectReference Include="../../../essentials/src/Pipelines/Core/Elsa.Pipelines.Core.csproj" />
+    <ProjectReference Include="../../../essentials/src/Primitives/Primitives/Elsa.Primitives.csproj" />
+    <ProjectReference Include="../../../essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="../../../essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
   </ItemGroup>
 
   <!--
@@ -74,9 +74,9 @@
     default (Elsa.Cluster.InProcess) and the dormancy check's source. None of them is a shell feature.
   -->
   <ItemGroup>
-    <ProjectReference Include="../../essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj" />
-    <ProjectReference Include="../../essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
-    <ProjectReference Include="../../essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj" />
+    <ProjectReference Include="../../../essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj" />
+    <ProjectReference Include="../../../essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
+    <ProjectReference Include="../../../essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj" />
   </ItemGroup>
 
   <!--
@@ -94,16 +94,16 @@
     leaves undeclared).
   -->
   <ItemGroup>
-    <ProjectReference Include="../../essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj" />
     <!--
       The host's Data Protection composition and its opt-in EF key store (#2191; ADR 0076, amended 2026-10-01): the key ring
       is the host's, as its membership is, so it is composed on this container and never arrives through a shell's feature
       list. It carries the same EF closure as the membership provider, and nothing more.
     -->
-    <ProjectReference Include="../../essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
     <!-- Root token storage serves every shell that opts into OpenIddict. Its shell feature arrives from the feed. -->
-    <ProjectReference Include="../../essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../essentials/src/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj" />
+    <ProjectReference Include="../../../essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../essentials/src/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj" />
     <!-- Keep the IdentityModel contracts shared with feed-loaded authentication packages at the ASP.NET auth version. -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <!-- The package runtime shares Microsoft.Extensions assemblies carried by the host. Keep HTTP diagnostics on one version. -->

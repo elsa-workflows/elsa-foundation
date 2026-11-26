@@ -44,8 +44,8 @@ def _source_project_path(path: str, studio: Path) -> str:
         return path
     for prefix, legacy_prefix in (
         ("studio/", "Studio/"),
-        ("server/essentials/src/Preferences/", "essentials/src/Studio/Preferences/"),
-        ("server/essentials/", "essentials/"),
+        ("essentials/src/Preferences/", "essentials/src/Studio/Preferences/"),
+        ("essentials/", "essentials/"),
         ("server/apps/", "apps/"),
     ):
         if path.startswith(prefix):

@@ -107,7 +107,7 @@ internal sealed class CommitSnapshot
     /// <summary>The backend projects in this commit: the projects the dependency map must describe.</summary>
     /// <remarks>
     /// Published history before the product split used repository-level <c>src/</c> and <c>tests/</c> roots. Newer
-    /// commits use <c>server/</c> and <c>extensions/&lt;capability&gt;/{src,tests}</c>. Choosing
+    /// commits use consolidated roots such as <c>essentials/</c> and <c>extensions/&lt;capability&gt;/{src,tests}</c>. Choosing
     /// by the commit's own tree lets a record compare across the cutover without reinterpreting historical paths.
     /// A mixed tree fails closed: leaving a project at an old root after the cutover would otherwise escape the new
     /// map's inventory and silently contribute no package inputs.
@@ -123,7 +123,7 @@ internal sealed class CommitSnapshot
                                                        path.StartsWith("Extensions/", StringComparison.Ordinal));
         if (consolidatedLayout && tree.Keys.Any(IsLegacyProjectPath))
             throw new InvalidOperationException(
-                $"Commit {Commit} has projects under legacy src/ or tests/ roots beside server/essentials/ or Extensions/. Every backend project must use the consolidated layout.");
+                $"Commit {Commit} has projects under legacy src/ or tests/ roots beside consolidated backend roots. Every backend project must use the consolidated layout.");
 
         return tree.Keys.Where(path => path.EndsWith(".csproj", StringComparison.Ordinal) &&
             (consolidatedLayout ? IsConsolidatedProjectPath(path) : IsLegacyProjectPath(path)));

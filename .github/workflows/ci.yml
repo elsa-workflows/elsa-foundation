@@ -110,7 +110,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
             if ! changed=$(git diff --name-only "$GITHUB_SHA^1" "$GITHUB_SHA"); then
               kernel=true
-            elif grep -Eq '^(prototypes/kernel-model/|server/apps/Elsa\.Workbench\.Host/CorePreview/|tools/ci/actor-foundation/(WorkbenchPostgresPreview\.cs|check-sqlite-shipped\.sh)$|server/essentials/(src|tests)/ActorFoundation/|server/essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts|WorkflowActor)/|server/essentials/build/Analyzers/|server/essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|tools/architecture/check-kernel-model-references\.targets$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+            elif grep -Eq '^(prototypes/kernel-model/|server/apps/Elsa\.Workbench\.Host/CorePreview/|tools/ci/actor-foundation/(WorkbenchPostgresPreview\.cs|check-sqlite-shipped\.sh)$|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts|WorkflowActor)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|tools/architecture/check-kernel-model-references\.targets$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
               kernel=true
             fi
           fi
@@ -311,7 +311,7 @@ jobs:
           projects = {
               "extensions/Bpmn/tests/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
               "extensions/Bpmn/tests/Tests/Elsa.Activities.Bpmn.Tests.csproj",
-              "server/essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj",
+              "essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj",
           }
           seen = set()
           failed = False
@@ -647,12 +647,12 @@ jobs:
         run: bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
 
       - name: Build the architecture guards
-        run: dotnet build server/essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+        run: dotnet build essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
       # Through the shard runner, so a failure gets the same single retry and quarantine as every PR-tier test (FR-004).
       - name: Run the architecture guards
         run: |
-          entry=$(python3 tools/ci/test_tiers.py entry --shard architecture-guards --project server/essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj)
+          entry=$(python3 tools/ci/test_tiers.py entry --shard architecture-guards --project essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj)
           python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the outcome
@@ -1494,7 +1494,7 @@ jobs:
         shell: bash
         run: |
           dotnet restore server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --locked-mode
-          dotnet restore server/essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
+          dotnet restore essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
 
       - name: Build Workbench with the documented command
         shell: bash
@@ -1508,7 +1508,7 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          runner=server/essentials/tests/ActorFoundation/Native/Run
+          runner=essentials/tests/ActorFoundation/Native/Run
           dotnet restore "$runner" --locked-mode
           dotnet build "$runner" -c Debug --no-restore
           dotnet "$runner/bin/Debug/net10.0/Kernel.Native.Run.dll" sqlite-workbench-core-preview \
@@ -1516,7 +1516,7 @@ jobs:
 
       - name: Run the focused WriteLine bound-input test
         shell: bash
-        run: dotnet test server/essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
+        run: dotnet test essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
 
       - name: Test strict result verdict and run the owned backend journey
         id: platform-journey
@@ -1822,7 +1822,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'server/essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'server/essentials/tests/Workflows/Runtime/Statecharts/Run/packages.lock.json', 'server/essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json', 'server/essentials/tests/Workflows/Runtime/Native/Recovery/Run/packages.lock.json', 'server/essentials/tests/Workflows/Runtime/Native/Migration/Run/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/Workflows/Runtime/Statecharts/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Recovery/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Migration/Run/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
@@ -1830,7 +1830,7 @@ jobs:
       # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
       - name: Build
         run: |
-          for p in ../../server/essentials/tests/ActorFoundation/Simulation ../../server/essentials/tests/ActorFoundation/Native/Run ../../server/essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../server/essentials/tests/Workflows/Runtime/Native/Migration/Run ../../server/essentials/tests/Workflows/Runtime/Statecharts/Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../server/essentials/tests/Workflows/Runtime/Graph/Tests; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/Workflows/Runtime/Native/Migration/Run ../../essentials/tests/Workflows/Runtime/Statecharts/Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1839,11 +1839,11 @@ jobs:
       # count-4096 job runs the integrated runtime suite at 4,096.
       - name: Simulation, kernel and native, plus the lease witness
         run: |
-          SIM="dotnet ../../server/essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
+          SIM="dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
           $SIM --seeds 10000
           $SIM --native --seeds 10000
           $SIM --lease-check
-          dotnet ../../server/essentials/tests/Workflows/Runtime/Native/Migration/Run/$BIN/Elsa.Workflows.Runtime.Native.Migration.Run.dll --retention-pass-check
+          dotnet ../../essentials/tests/Workflows/Runtime/Native/Migration/Run/$BIN/Elsa.Workflows.Runtime.Native.Migration.Run.dll --retention-pass-check
           $SIM --landed-check
           # K5: tenancy case T12, host-admin release and drain, then a kill and a takeover after lease expiry.
           $SIM --host-t12-check
@@ -1853,12 +1853,12 @@ jobs:
           code=0; out=$($SIM --placement-check --flaw ContiguousOnlyBalancer) || code=$?
           if [ "$code" -ne 1 ] || ! grep -Eq '^placement: [0-9]+ check\(s\) FAILED$' <<<"$out"; then echo "--placement-check did not catch ContiguousOnlyBalancer (exit $code)"; exit 1; fi
           # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
-          dotnet ../../server/essentials/tests/Workflows/Runtime/Native/Recovery/Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
-          dotnet ../../server/essentials/tests/Workflows/Runtime/Statecharts/Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
+          dotnet ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
+          dotnet ../../essentials/tests/Workflows/Runtime/Statecharts/Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
 
       - name: Public contract workloads
         run: |
-          SIM="dotnet ../../server/essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
+          SIM="dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
           $SIM --contract --seeds 100
           $SIM --contract-native --seeds 100
           $SIM --contract-actors --seeds 100 --actions 100
@@ -1912,10 +1912,10 @@ jobs:
       - name: Mutation checks
         run: |
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 48 -- \
-            dotnet ../../server/essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --mutations --seeds 20000
+            dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --mutations --seeds 20000
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
-            dotnet ../../server/essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --native-mutations --seeds 12000
-          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 7 -- dotnet ../../server/essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --node-lease-mutations
+            dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --native-mutations --seeds 12000
+          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 7 -- dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --node-lease-mutations
 
       # K1 slice 7: both witness cases must fail, each on the landed flush, with the k-row fence broken to land the part
       # of a flush still fenced.
@@ -1934,10 +1934,10 @@ jobs:
         run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic placement
 
       - name: SQLite shipped foundation
-        run: bash ../../tools/ci/actor-foundation/check-sqlite-shipped.sh "../../server/essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
+        run: bash ../../tools/ci/actor-foundation/check-sqlite-shipped.sh "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
 
       - name: Graph engine corpus
-        run: dotnet test ../../server/essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build
+        run: dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build
 
       - name: Gate script self-test
         working-directory: .
@@ -1980,13 +1980,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'server/essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'server/essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json', 'server/essentials/tests/ActorFoundation/Native/Run/packages.lock.json', 'server/essentials/tests/Workflows/Runtime/Statecharts/Run/packages.lock.json', 'server/essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json', 'server/essentials/tests/Workflows/Runtime/Native/Recovery/Run/packages.lock.json', 'server/essentials/tests/Workflows/Runtime/Native/Migration/Run/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json', 'essentials/tests/ActorFoundation/Native/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Statecharts/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Recovery/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Migration/Run/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
       - name: Build
         run: |
-          for p in ../../server/essentials/tests/ActorFoundation/Simulation ../../server/essentials/tests/ActorFoundation/Native/Run ../../server/essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../server/essentials/tests/Workflows/Runtime/Native/Migration/Run ../../server/essentials/tests/Workflows/Runtime/Statecharts/Run ../../server/essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../server/essentials/tests/Workflows/Runtime/Graph/Tests; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/Workflows/Runtime/Native/Migration/Run ../../essentials/tests/Workflows/Runtime/Statecharts/Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1994,7 +1994,7 @@ jobs:
       # The sizes of the README's refactor gates (The gates of a refactor).
       - name: Simulation, full sizes
         run: |
-          SIM="dotnet ../../server/essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
+          SIM="dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
           $SIM --seeds 200000
           $SIM --seeds 20000 --actions 1000
           $SIM --native --seeds 200000
@@ -2012,7 +2012,7 @@ jobs:
           code=0; out=$($SIM --job-trial-check --flaw NoResetAfterFailedCommit 2>&1) || code=$?
           if [ "$code" -ne 1 ] || ! grep -Fq "the job did not retry with a fresh physical attempt" <<<"$out"; then printf 'Unexpected job-trial control (exit %s): %s\n' "$code" "$out"; exit 1; fi
           $SIM --lease-check
-          dotnet ../../server/essentials/tests/Workflows/Runtime/Native/Migration/Run/$BIN/Elsa.Workflows.Runtime.Native.Migration.Run.dll --retention-pass-check
+          dotnet ../../essentials/tests/Workflows/Runtime/Native/Migration/Run/$BIN/Elsa.Workflows.Runtime.Native.Migration.Run.dll --retention-pass-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
           $SIM --placement-check
@@ -2020,21 +2020,21 @@ jobs:
           code=0; out=$($SIM --placement-check --flaw ContiguousOnlyBalancer) || code=$?
           if [ "$code" -ne 1 ] || ! grep -Eq '^placement: [0-9]+ check\(s\) FAILED$' <<<"$out"; then echo "--placement-check did not catch ContiguousOnlyBalancer (exit $code)"; exit 1; fi
           # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
-          dotnet ../../server/essentials/tests/Workflows/Runtime/Native/Recovery/Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
-          dotnet ../../server/essentials/tests/Workflows/Runtime/Statecharts/Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
+          dotnet ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
+          dotnet ../../essentials/tests/Workflows/Runtime/Statecharts/Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
 
       - name: Mutation checks, full size
         run: |
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 48 -- \
-            dotnet ../../server/essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --mutations --seeds 20000
+            dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --mutations --seeds 20000
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
-            dotnet ../../server/essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --native-mutations --seeds 20000
-          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 7 -- dotnet ../../server/essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --node-lease-mutations
+            dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --native-mutations --seeds 20000
+          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 7 -- dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --node-lease-mutations
 
       - name: Store conformance, in memory and EF on SQLite in both fence modes
         run: |
           dotnet conformance/Kernel.Store.Conformance.Run/$BIN/Kernel.Store.Conformance.Run.dll semantic
-          EFC="dotnet ../../server/essentials/tests/ActorFoundation/Store/EntityFramework/$BIN/Kernel.Ef.Conformance.dll"
+          EFC="dotnet ../../essentials/tests/ActorFoundation/Store/EntityFramework/$BIN/Kernel.Ef.Conformance.dll"
           $EFC sqlite --checked-fence semantic
           $EFC sqlite --fence-in-batch semantic
 
@@ -2055,7 +2055,7 @@ jobs:
       # K5 (#4229): graceful stop and host administration of ownership, tenancy case T12 among them.
       - name: K5, graceful stop and host administration
         run: |
-          SIM="dotnet ../../server/essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
+          SIM="dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
           $SIM --host-job-drain-check
           $SIM --host-drain-check
           $SIM --host-t12-check
@@ -2067,7 +2067,7 @@ jobs:
           PG_PORT: ${{ job.services.postgres.ports[5432] }}
           PG_ID: ${{ job.services.postgres.id }}
         run: |
-          NAT=(dotnet "../../server/essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll")
+          NAT=(dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll")
           failed=()
           for run in "pg-preview-host-lifetime" "pg-runtime-cluster 4 wake" "pg-runtime-cluster 1024 wake"; do
             db="k5_${run//[- ]/_}"
@@ -2085,16 +2085,16 @@ jobs:
 
       - name: Native model, smoke and cost
         run: |
-          NAT="dotnet ../../server/essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
+          NAT="dotnet ../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
           $NAT smoke
           $NAT profile-capabilities
           $NAT cost sqlite
           $NAT sqlite-host-lifetime checked
           $NAT sqlite-host-lifetime in-batch
-          bash ../../tools/ci/actor-foundation/check-sqlite-shipped.sh "../../server/essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
+          bash ../../tools/ci/actor-foundation/check-sqlite-shipped.sh "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
 
       - name: Graph engine corpus
-        run: dotnet test ../../server/essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build
+        run: dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build
 
   # K1 slice 7: the count of 4,096. The sim's --count only sizes the store's rows (PARTITIONS.md, slice 7), so it runs
   # here at reduced seeds; the integrated runtime suite qualifies 4,096 end to end. Estimate on a 4-core runner: build
@@ -2125,20 +2125,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'server/essentials/tests/ActorFoundation/Simulation/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
       - name: Build
         run: |
-          for p in ../../server/essentials/tests/ActorFoundation/Simulation conformance/Kernel.Runtime.Conformance.Run; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation conformance/Kernel.Runtime.Conformance.Run; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
 
       - name: Simulation at 4,096, kernel and native
         run: |
-          SIM="dotnet ../../server/essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
+          SIM="dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
           $SIM --seeds 20000 --count 4096
           $SIM --native --seeds 20000 --count 4096
           $SIM --contract --seeds 1000 --count 4096
@@ -2302,14 +2302,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'server/essentials/tests/ActorFoundation/Native/Run/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Native/Run/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
       - name: Build
         run: |
-          dotnet restore ../../server/essentials/tests/ActorFoundation/Native/Run --locked-mode
-          dotnet build ../../server/essentials/tests/ActorFoundation/Native/Run -c Release --no-restore
+          dotnet restore ../../essentials/tests/ActorFoundation/Native/Run --locked-mode
+          dotnet build ../../essentials/tests/ActorFoundation/Native/Run -c Release --no-restore
 
       # Every lane goes ahead; the step fails at the end if any phase's exit code was not 0.
       - name: Workflow history birth, restart and tenant
@@ -2317,7 +2317,7 @@ jobs:
           PG_PORT: ${{ job.services.postgres.ports[5432] }}
           PG_ID: ${{ job.services.postgres.id }}
         run: |
-          NAT=(dotnet "../../server/essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" pg-root-workflow-history)
+          NAT=(dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" pg-root-workflow-history)
           failed=()
           for writer in owned ef; do
             for fence in checked in-batch; do
@@ -2365,7 +2365,7 @@ jobs:
                 docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
                 export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
                 extra=(); [ "$set" = shipped ] && extra=(shipped)
-                if ! dotnet "../../server/essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" pg-root-state-family "$writer" "$fence" "${extra[@]}"; then
+                if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" pg-root-state-family "$writer" "$fence" "${extra[@]}"; then
                   echo "::error::Root state family failed: $set $writer $fence"
                   failed+=("$set $writer $fence")
                 fi
@@ -2392,7 +2392,7 @@ jobs:
                   docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
                   export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
                   extra=(); [ "$set" = shipped ] && extra=(shipped)
-                  if ! dotnet "../../server/essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "pg-root-$check" "$writer" "$fence" "${extra[@]}"; then
+                  if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "pg-root-$check" "$writer" "$fence" "${extra[@]}"; then
                     echo "::error::Root $check failed: $set $writer $fence"
                     failed+=("$check $set $writer $fence")
                   fi
@@ -2417,7 +2417,7 @@ jobs:
             docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE ${db:0:60}"
             export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=${db:0:60};SSL Mode=Disable;GSS Encryption Mode=Disable"
             read -ra arguments <<<"$run"
-            if ! dotnet "../../server/essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "${arguments[@]}"; then
+            if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "${arguments[@]}"; then
               echo "::error::Shipped format run failed: $run"
               failed+=("$run")
             fi
@@ -2457,13 +2457,13 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'server/essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
       - name: Build provider runners
         id: build
         run: |
-          for project in ../../server/essentials/tests/ActorFoundation/Store/EntityFramework ef/Kernel.Ef.Run; do
+          for project in ../../essentials/tests/ActorFoundation/Store/EntityFramework ef/Kernel.Ef.Run; do
             dotnet restore "$project" --locked-mode
             dotnet build "$project" -c Release --no-restore
           done
@@ -2476,7 +2476,7 @@ jobs:
           failed=0
           for writer in ef owned; do
             for fence in checked-fence fence-in-batch; do
-              dotnet "../../server/essentials/tests/ActorFoundation/Store/EntityFramework/$BIN/Kernel.Ef.Conformance.dll" mysql "$server" "--$writer-commit" "--$fence" semantic || failed=1
+              dotnet "../../essentials/tests/ActorFoundation/Store/EntityFramework/$BIN/Kernel.Ef.Conformance.dll" mysql "$server" "--$writer-commit" "--$fence" semantic || failed=1
             done
           done
           exit "$failed"

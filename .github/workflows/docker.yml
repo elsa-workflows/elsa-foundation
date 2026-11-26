@@ -16,7 +16,7 @@ name: Docker Images
 # manual dispatch for a commit on main (#2751). Pull requests build no image; until #2751 a PR that
 # changed a Dockerfile or another image input built both images without pushing. The cost is known:
 # a change that breaks an image build (a Dockerfile, Directory.Build.props, Directory.Packages.props,
-# the analyzers under server/essentials/build/Analyzers) is caught only by the post-merge build. #2087 is the
+# the analyzers under essentials/build/Analyzers) is caught only by the post-merge build. #2087 is the
 # precedent: it added a root props file the Dockerfiles did not copy, and main stayed red for three
 # merges before anyone saw it.
 # Docker's maintained builder fans the platforms out to native x64 and ARM64

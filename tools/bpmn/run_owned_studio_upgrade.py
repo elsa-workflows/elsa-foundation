@@ -38,7 +38,7 @@ HARNESS = ("tools/bpmn/", "e2e-tests/etl/", "specs/1184-direct-bpmn-studio/")
 
 def product_neutral(name):
     """Paths that no host or browser product is built from: harness, evidence, documentation and tests."""
-    return (name.startswith(HARNESS) or name.endswith(".md") or name.startswith(("server/essentials/tests/", "extensions/")) and "/tests/" in name
+    return (name.startswith(HARNESS) or name.endswith(".md") or name.startswith(("essentials/tests/", "extensions/")) and "/tests/" in name
             or "/__tests__/" in name)
 
 
