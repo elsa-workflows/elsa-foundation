@@ -154,11 +154,13 @@ internal sealed class SqliteRootAdmission(Func<KernelDb> create, TimeSpan dedupl
         token.ThrowIfCancellationRequested();
         // Competing callers serialize before any receipt or checkpoint is read. SQLite cannot upgrade a stale read snapshot.
         await using var transaction = ((SqliteConnection)db.Database.GetDbConnection()).BeginTransaction(deferred: false);
+        token.ThrowIfCancellationRequested();
         await using var enlistment = await db.Database.UseTransactionAsync(transaction, token);
         await EfStore.RequireSqliteRootAdmissionAsync(db, token);
         await definitions.RequireAsync(db, token);
         var now = await ReadClockAsync(db, token);
         var result = await write(db, now, token);
+        token.ThrowIfCancellationRequested();
         await transaction.CommitAsync(token);
         return result;
     }

@@ -1,5 +1,6 @@
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Microsoft.Data.Sqlite;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Foundation.Sqlite;
@@ -30,7 +31,7 @@ public static partial class SqliteEmbeddedHosting
         internal SqliteDirectRequests(string path, string node, string actorType, TimeSpan window)
         {
             (this.path, this.node, this.actorType, DeduplicationWindow) = (path, node, actorType, window);
-            admission = new(path, window);
+            admission = new(this, path, window);
             edge = new(admission, node, actorType);
         }
 
@@ -47,11 +48,15 @@ public static partial class SqliteEmbeddedHosting
 
         void IReplyTransport.Send(string destination, Reply reply) => edge.Send(destination, reply);
 
-        internal ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind, string? payload,
-            Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken token) =>
-            edge.RequestAsync(scope, target, id, kind, payload, add, request, token);
+        internal async ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind, string? payload,
+            Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            using var file = AcquireFile(path, requests: this);
+            return await edge.RequestAsync(scope, target, id, kind, payload, add, request, token);
+        }
 
-        private sealed class Admission(string path, TimeSpan window) : IHeldRootAdmission
+        private sealed class Admission(SqliteDirectRequests owner, string path, TimeSpan window) : IHeldRootAdmission
         {
             public async ValueTask<long> ReadClockAsync(CancellationToken token)
             {
@@ -59,18 +64,12 @@ public static partial class SqliteEmbeddedHosting
                 return await ForFile(file).ReadReplyTimeAsync(token);
             }
 
-            public async Task<string?> StartAsync(HeldRootRequest request, StartSpec spec, CancellationToken token)
-            {
-                using var file = AcquireFile(path);
-                return await ForFile(file).StartRequestAsync(request, spec, token);
-            }
+            public Task<string?> StartAsync(HeldRootRequest request, StartSpec spec, CancellationToken token) =>
+                WriteAsync((admission, ct) => admission.StartRequestAsync(request, spec, ct), token);
 
-            public async Task<HeldRootAdmission> SendAsync(HeldRootRequest request, string reference, string kind, string? payload,
-                CancellationToken token)
-            {
-                using var file = AcquireFile(path);
-                return await ForFile(file).SendRequestAsync(request, reference, kind, payload, token);
-            }
+            public Task<HeldRootAdmission> SendAsync(HeldRootRequest request, string reference, string kind, string? payload,
+                CancellationToken token) =>
+                WriteAsync((admission, ct) => admission.SendRequestAsync(request, reference, kind, payload, ct), token);
 
             public async ValueTask<Contract.ActorStatus?> ReadStatusAsync(string tenant, string reference, CancellationToken token)
             {
@@ -81,6 +80,43 @@ public static partial class SqliteEmbeddedHosting
 
             private SqliteRootAdmission ForFile(FileLease file) =>
                 new(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
+
+            private async Task<T> WriteAsync<T>(Func<SqliteRootAdmission, CancellationToken, Task<T>> admit, CancellationToken token)
+            {
+                // SQLite waits synchronously for BEGIN IMMEDIATE. Keep the caller's wait cancellable and give the
+                // background operation its own leases so it can roll back after the caller has gone.
+                var write = Task.Run(async () =>
+                {
+                    using var file = AcquireFile(path, requests: owner);
+                    await file.ReplyWrites.WaitAsync(token);
+                    try
+                    {
+                        var admission = ForFile(file);
+                        while (true)
+                        {
+                            token.ThrowIfCancellationRequested();
+                            try { return await admit(admission, token); }
+                            catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
+                            {
+                                await Task.Delay(25, token); // SQLITE_BUSY or SQLITE_LOCKED, with the original deadline.
+                            }
+                        }
+                    }
+                    finally { file.ReplyWrites.Release(); }
+                }, token);
+                try { return await write.WaitAsync(token); }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    _ = ObserveCancelledWriteAsync(write);
+                    throw;
+                }
+            }
+
+            private static async Task ObserveCancelledWriteAsync(Task write)
+            {
+                try { await write; }
+                catch (Exception) { } // The caller already observed cancellation. The operation owns its rollback.
+            }
         }
     }
 }

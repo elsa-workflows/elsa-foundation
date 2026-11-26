@@ -24,7 +24,7 @@ public static partial class SqliteEmbeddedHosting
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         cancellationToken.ThrowIfCancellationRequested();
 
-        using var file = AcquireFile(databasePath);
+        using var file = AcquireFile(databasePath, requests: requests);
         requests?.RequireBinding(file.Path, actorType);
         var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
         await admission.VerifyAsync(cancellationToken);
