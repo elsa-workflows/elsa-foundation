@@ -7,21 +7,25 @@ converter) needs the activity in the catalog.
 
 ## Phase 1: The Elsa 4 activity (US1, US2)
 
-- [ ] T001 Resolve research item R-1 (hidden node bindings, plan §1). Check which FR-024 pieces exist on the
+- [ ] T001 Resolve research item R-1 (synthesized node in `CompileExecutableStructure`, or the `ProjectChildren`
+  fallback, plan §1). Check which FR-024 pieces exist on the
   initiative branch: the neutral iteration-id prefix, `CountProcessedCompletedChildIterationsAsync` and
   `LoopCollection`. Build the missing ones here so spec 1243 can reuse them. Record the outcome in the PR.
 - [ ] T002 [US1] Add `BulkDispatchWorkflows` with its inputs, slots, type key, cap constant and `Done` outcome in
   `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/` (FR-001–FR-003, FR-009).
-- [ ] T003 [US1] Add the structure handler that keeps the hidden `DispatchWorkflow` node and binds its inputs (FR-004).
-  Register it in the DispatchWorkflow features.
+- [ ] T003 [US1] Add the structure handler that synthesizes the `{bulkNodeId}.dispatch` node with its bindings, and
+  extend `DispatchPinSource` to pin `Elsa.BulkDispatchWorkflows` nodes for that node id (FR-004). Register both in the
+  DispatchWorkflow features.
 - [ ] T004 [US1] [US2] Scheduling and completion:
-  - one dispatch child per item with iteration id and scope, all in one turn (FR-004, FR-005);
-  - wait and no-wait completion and branch routing (FR-006);
+  - one dispatch child per item with iteration id and scope; all at once without waiting, at most 16 outstanding with
+    waiting (FR-004, FR-005);
+  - wait and no-wait completion and branch routing, with the counter state of plan §2 (FR-006);
   - the cap (FR-007);
-  - slot faults (FR-008).
+  - dispatch-node and slot faults: absorb or intervene, plus rescheduled-child acceptance (FR-006, FR-008).
 - [ ] T005 [P] [US1] [US2] Runtime tests (plan, Test scope: Runtime).
-- [ ] T006 [P] [US1] Check in Studio that the activity shows its two slots through the generic rendering, and that the
-  hidden node is not shown. Add no Studio-specific code (FR-003).
+- [ ] T006 [P] [US1] Check in Studio that the designer shows only the two slots through the generic rendering, and
+  that the executable and instance views show the per-item dispatch executions under the bulk node (spec Edge Cases).
+  Add no Studio-specific code (FR-003).
 - [ ] T007 [P] Write the README section and update `EXTENSION_POINTS.md` (FR-023).
 
 ## Phase 2: Converter (US3, US4)

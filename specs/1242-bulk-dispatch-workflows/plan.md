@@ -32,12 +32,17 @@ the design side), and converter rules.
 
 - **Sanctioned patterns only**: the activity is a structural activity with a structure handler, as `If` and `ForEach`
   are. The converter change is a map entry and existing rule kinds. Pass.
-- **No runtime knob for authors**: no degree, batch or channel input. The cap is fixed (FR-007). Pass.
+- **No runtime knob for authors**: no degree, batch or channel input. The cap (FR-007) and the waiting degree of 16
+  (FR-005) are fixed constants. Pass.
 - **Refuse over workaround**: the converter refuses what it cannot map faithfully (spec FR-019), and Elsa 3 defects
   (the shared bookmark counter, the leaking `Input` dictionary) are not reproduced. Pass.
-- **ADR needed?** No. Each child keeps "one dispatch per activity execution" (spec 096 FR-012). Per-item iteration ids
-  and scopes follow ADR 0028. Concurrent passes of one node follow `docs/architecture/large-fan-out.md` (release 1,
-  cap 1,000). The rejected option B would have needed one.
+- **ADR needed?** No, with the recommended answer to Q4.
+  - Each child keeps "one dispatch per activity execution" (spec 096 FR-012).
+  - Per-item iteration ids and scopes follow ADR 0028.
+  - The cap of 1,000 and the degree of 16 follow `docs/architecture/large-fan-out.md` decision 1, which bounds
+    outstanding children by the degree.
+  - All-at-once dispatch with waiting (the alternative in Q4) would depart from decision 1 and needs a decision-register
+    entry or an ADR amendment first. The rejected option B would have needed an ADR.
 
 ## Design
 
@@ -49,41 +54,62 @@ the design side), and converter rules.
 - **Inputs**: the members of spec FR-002. `WorkflowDefinitionId` carries the same `[RefusesSecretBinding(…,
   FixedAtPublish)]` as `DispatchWorkflow`.
 - **Visible slots**: `ChildCompleted` and `ChildFaulted`, `[ActivityChildSlot(… Single)]`, both optional.
-- **Hidden dispatch node**:
-  - `BulkDispatchWorkflowsStructureHandler`, an `IActivityStructureHandler` modelled on `IfStructureHandler`, keeps a
-    `DispatchWorkflow` node in the authored structure under a slot the facets do not declare. That is the BPMN
-    importer's precedent (`BpmnDocumentImporter`, `BpmnElement`).
-  - Its inputs are bound from the bulk node's inputs when the structure is compiled.
-  - `DispatchPinSource` already walks every descendant `DispatchWorkflow` and pins it.
+- **Synthesized dispatch node** (decision, spec FR-004): the node is not authored. `BulkDispatchWorkflowsStructureHandler`
+  (an `IActivityStructureHandler` modelled on `IfStructureHandler`) adds it to the executable in
+  `CompileExecutableStructure`:
+  - node id `{bulkNodeId}.dispatch`, activity type `Elsa.DispatchWorkflow` at the catalog's current version;
+  - input bindings copied from the bulk node: `WorkflowDefinitionId` (literal), `Inputs`, `CorrelationId` and
+    `CancelChildOnParentCancellation`;
+  - `WaitForCompletion` bound to the value the bulk node evaluated once, which it puts in each pass's scope as
+    `waitForCompletion` next to `currentItem`.
+- **Pinning**: `DispatchPinSource.GetContributionAsync` also matches `Elsa.BulkDispatchWorkflows` nodes in
+  `context.RootActivity`. It pins their `WorkflowDefinitionId` and writes `PinnedTargetMetadataKey` for the node id
+  `{bulkNodeId}.dispatch`, so `DispatchWorkflow.ValidatePin` finds it at run time. This is the only change to a
+  dispatch service.
 
-Research item R-1: confirm that `CompileExecutableStructure` can bind the hidden node's `Inputs` and `CorrelationId` to
-the bulk node's expressions, and resolve them per pass inside the iteration scope. Also confirm that `WaitForCompletion`
-can be bound to the value the bulk node evaluated once. The candidate is a scope value set by the bulk node, read by
-the hidden node. If a binding cannot cross, the hidden node holds the expressions itself and the bulk node's inputs are
-a projection of them for the designer. Record the outcome in the PR.
+Research item R-1: confirm that `CompileExecutableStructure` can add a node that the authored structure does not
+contain, and that the compiler places it with its bindings and the pin metadata. The fallback is that
+`ProjectChildren` synthesizes the node into the authored structure under the same stable id, outside the declared
+slots, so publish sees it as authored. Either way the designer shows only the two slots. Record the outcome in the PR.
 
 ### 2. Scheduling and completion
 
-- **Start**: evaluate `Items`, refusing a value that is not a collection as `ForEach` does, and `WaitForCompletion`.
-  Check the cap (FR-007). Then schedule the hidden dispatch node once per item, each with
-  `IterationId = StructuredExecutionIdentity.Iteration(aeid, index)` and a `LoopIterationScopeRequest` carrying
-  `currentItem` and `currentIndex`, all in the same turn (FR-005).
-- **State**: the item count, kept in the activity's state. Ended passes are counted with
-  `CountProcessedCompletedChildIterationsAsync` (FR-024), which counts distinct iteration ids whose completion the
-  parent has processed. A raw count of completed rows runs ahead of the parent's evaluations, so a recount after
-  recovery would not be exact.
+- **Start**: evaluate `Items`, refusing a value that is not a collection as `ForEach` does, and evaluate
+  `WaitForCompletion`. Check the cap (FR-007). Then schedule the dispatch node, each with an iteration id and a
+  `LoopIterationScopeRequest` carrying `currentItem`, `currentIndex` and `waitForCompletion`:
+  - without waiting, for every item at once;
+  - with waiting, for the first min(N, 16) items (FR-005).
+- **Iteration ids**: an item-indexed id derived from the bulk activity execution id with the prefix
+  `bulk-dispatch-item`. A small local helper produces it, duplicated from `StructuredExecutionIdentity.Iteration`
+  rather than adding a reference from DispatchWorkflow.Runtime to `Elsa.Activities.ControlFlow` ("duplication beats
+  dependency"). Spec 1243's neutral-prefix change, if it lands first, can replace the helper.
+- **State**: one counter design, kept in the activity's structural state:
+  - the item count and the next item index to schedule;
+  - the set of ended item indexes. Marking an index twice is a no-op, so a repeated completion callback is safe.
+
+  The activity completes when the set holds every index. A full recount is done only on recovery, grouped by iteration
+  id (not by node id, since every pass shares the dispatch node), with `CountProcessedCompletedChildIterationsAsync`
+  (FR-024). The callbacks never list children, which would be quadratic, as `Parallel.cs` warns.
 - **`OnChildCompletedAsync`**:
   - For the hidden dispatch node, read the outcome.
     - Without waiting (`Dispatched`): mark the pass ended.
     - With waiting: `Completed` schedules `ChildCompleted` in the same iteration scope. `Faulted`, `Cancelled` and
       `DispatchFailed` schedule `ChildFaulted`. With no slot, the pass ends.
   - For a slot child: mark the pass ended.
+  - With waiting, each ended pass schedules the next unscheduled item, if any.
   - When every pass has ended, complete with `Done`.
-- **`OnChildFaultedAsync`**: a hidden dispatch node that faults (an input refused at dispatch) is handled like
-  `DispatchFailed`, so `ChildFaulted` runs. A slot child that faults faults the bulk activity (FR-008).
+- **`OnChildFaultedAsync`**:
+  - A dispatch node fault with waiting and a `ChildFaulted` slot: call `RequestChildFaultAbsorption` and schedule
+    `ChildFaulted` in that pass's scope.
+  - Any other dispatch node fault, and every slot fault: call `RequestChildFaultIntervention` and return `Defer`, so it
+    stays a blocking incident and the pass stays open (spec FR-006, FR-008).
+  - The activity implements `IRuntimeAcceptsRescheduledFaultedChild`, so a retry of the faulted child is accepted while
+    the activity runs. When the retried child ends, the pass ends as usual.
 - **Concurrent same-node scheduling**: no new scheduler (FR-024). Each `ScheduleChildActivity` call gets its own
   activity execution id, and work-item, command and idempotency ids derive from
-  `schedule-child:{nodeId}:{childActivityExecutionId}` (`SchedulerWorkItems.cs`). The shared pieces with spec 1243 are
+  `schedule-child:{nodeId}:{childActivityExecutionId}` (`SchedulerWorkItems.cs`). `BpmnProcessRuntime` already schedules
+  one bound node, its call-activity `DispatchWorkflow` included, once per instance with an `IterationId` and a
+  `LoopIterationScopeRequest`. Use it as the reference. The shared pieces with spec 1243 are
   the iteration-id prefix, the scope request, the processed-completion count and `LoopCollection`. Whichever spec is
   implemented first builds them.
 

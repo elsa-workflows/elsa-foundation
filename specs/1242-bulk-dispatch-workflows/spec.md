@@ -101,11 +101,12 @@ schedules one ordinary `DispatchWorkflow` child execution, with its own iteratio
 has optional `ChildCompleted` and `ChildFaulted` slots and completes with `Done`.
 
 - Each item's dispatch is a separate activity execution, so the dispatch identity scheme, specs 096–104 and every
-  dispatch consumer apply unchanged.
+  dispatch consumer apply unchanged. The one dispatch change is that `DispatchPinSource` also pins the bulk node's
+  target (FR-004).
 - Authors get one activity for "start this workflow per item". The converter maps the Elsa 3 node to it one to one.
-- The runtime work is in the activity itself: scheduling the same dispatch node once per item at the same time, under
-  distinct iteration ids, and counting the children. Spec 1243's parallel ForEach needs the same scheduling, so the two
-  specs share that piece (FR-014).
+- The runtime already schedules one node several times under distinct iteration ids: BPMN multi-instance loops do it
+  (`BpmnProcessRuntime`). The activity adds the scheduling policy and the counting. Spec 1243 shares those pieces
+  (FR-024).
 
 **B. One stateful activity that dispatches N children itself**, with item-keyed identities.
 
@@ -118,7 +119,7 @@ spec's first draft.
 - Elsa 4 authors would still have no bulk dispatch activity.
 - Every Elsa 3 rule would become converter machinery: outcome rewiring, current-item scope registration, per-pass
   re-evaluation of the wait.
-- The waiting path would inherit spec 1243's cap and degree. Rejected on review (coordinator, 2026-11-26).
+- Rejected on review (coordinator, 2026-11-26).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -136,20 +137,22 @@ An author adds `BulkDispatchWorkflows` to `acme.order-received`:
 **Why this priority**: This is the feature. Without it, Elsa 4 has no way to start N children and wait for them as one
 step.
 
-**Independent Test**: Run the workflow with three lines, one of whose children faults. Three children start at once,
-each with its own inputs and correlation id. `ChildFaulted` runs once, and the activity completes with `Done` after the
+**Independent Test**: Run the workflow with three lines, one of whose children faults. Three children start at once
+(three is below the degree, FR-005), each with its own inputs and correlation id. `ChildFaulted` runs once, and the activity completes with `Done` after the
 third child has ended.
 
 **Acceptance Scenarios**:
 
 1. **Given** three items, **When** the activity runs with waiting, **Then** three children start before any of them
    ends, and the activity completes with `Done` only after all three have ended.
-2. **Given** a child completes, **When** it ends, **Then** `ChildCompleted` runs once for it, with `currentItem` and
+2. **Given** 40 items and waiting, **When** the activity runs, **Then** at most 16 children are outstanding at once.
+   The next item's child starts as one ends, and all 40 are dispatched in item order.
+3. **Given** a child completes, **When** it ends, **Then** `ChildCompleted` runs once for it, with `currentItem` and
    `currentIndex` of that item in scope.
-3. **Given** a child faults, is cancelled, or cannot be dispatched (`DispatchFailed`), **When** it ends, **Then**
+4. **Given** a child faults, is cancelled, or cannot be dispatched (`DispatchFailed`), **When** it ends, **Then**
    `ChildFaulted` runs once for it. A cancelled child counts as faulted for this branch.
-4. **Given** an empty slot, **When** a child ends, **Then** nothing runs for it and it only counts toward completion.
-5. **Given** an empty or null `Items`, **When** the activity runs, **Then** it completes with `Done` at once.
+5. **Given** an empty slot, **When** a child ends, **Then** nothing runs for it and it only counts toward completion.
+6. **Given** an empty or null `Items`, **When** the activity runs, **Then** it completes with `Done` at once.
 
 ### User Story 2 - Fire and forget (Priority: P1)
 
@@ -205,9 +208,14 @@ and on-completed-callbacks suites pass.
   dispatched nothing; the converter documents the difference.
 - **Two waiting activities in one parent instance**: each keeps its own children. Elsa 3's shared per-instance
   bookmark and counter is not reproduced.
-- **A slot activity faults**, for example the `WriteLine` in `ChildFaulted`: the bulk activity faults, the same as when
-  an `If` branch faults. Other children keep running and their branches are not run while the instance is faulted. The
-  instance's fault strategy decides what happens next.
+- **A slot activity faults**, for example the `WriteLine` in `ChildFaulted`: it becomes a blocking incident on that
+  item's pass. The other passes keep running. The bulk activity does not complete until the incident is resolved, for
+  example by retrying the slot activity (FR-008).
+- **The hidden dispatch node itself faults** (an input the child does not declare, the nesting depth, a pin mismatch):
+  with waiting and a `ChildFaulted` slot, that slot runs and the fault is absorbed. Otherwise the fault stays a blocking
+  incident on that pass, with or without waiting (FR-006). Elsa 3 faulted the whole activity.
+- **Views**: the designer shows only the two slots. The executable and instance views show the per-item dispatch
+  executions under the bulk node, which is the inspection an operator needs.
 
 ## Requirements *(mandatory)*
 
@@ -235,19 +243,33 @@ and on-completed-callbacks suites pass.
   - the activity's `WorkflowDefinitionId`, `Inputs`, `CorrelationId`, `CancelChildOnParentCancellation` and evaluated
     `WaitForCompletion`.
 
-  That dispatch node is part of the activity's authored structure but not a visible slot, as the BPMN importer
-  generates its call-activity `DispatchWorkflow`. Publish therefore pins it, and the dispatch identity, stager, resume,
-  cancellation, audit, test-run scope and recovery apply unchanged.
-- **FR-005**: All dispatch child executions MUST be scheduled when the activity starts, so the children run at the same
-  time, as in Elsa 3.
+  The dispatch node is not authored. The activity's structure handler synthesizes it when the executable is
+  compiled:
+  - it gets the stable node id `{bulkNodeId}.dispatch`, the `DispatchWorkflow` catalog row, and bindings taken from the
+    bulk node's inputs;
+  - `DispatchPinSource` recognizes `Elsa.BulkDispatchWorkflows` nodes and writes the pinned-target metadata for that
+    synthesized node id, so publish pins the target and `DispatchWorkflow.ValidatePin` checks it at run time.
+
+  This pin-source change is the only change to the dispatch subsystem. Identity, stager, resume, cancellation, audit,
+  test-run scope and recovery apply unchanged, because each child is an ordinary `DispatchWorkflow` execution.
+- **FR-005**: Scheduling:
+  - **Without waiting**: every item's dispatch child is scheduled when the activity starts. Each one completes with
+    `Dispatched` in its own turn, so nothing stays outstanding.
+  - **With waiting**: at most 16 dispatch children are outstanding at once, in item order. The next item's child is
+    scheduled as one ends. 16 is the default degree of `docs/architecture/large-fan-out.md` decision 1, which bounds
+    outstanding children and inbox results by the degree. It is a fixed constant, not an author-facing input. Elsa 3
+    dispatched all at once, and the converter warns (FR-020). This is Q4.
 - **FR-006**: Completion:
   - **Without waiting**: each dispatch child ends with `Dispatched`, and the activity completes with `Done` once every
     item has been dispatched.
   - **With waiting**:
     - A dispatch child ending with `Completed` schedules `ChildCompleted`, when present, in that item's iteration scope.
-    - A dispatch child ending with `Faulted`, `Cancelled` or `DispatchFailed`, or faulting itself (for example on an
-      undeclared input name), schedules `ChildFaulted`, when present, in that item's iteration scope. The fault is
-      handled there and does not fault the bulk activity.
+    - A dispatch child ending with `Faulted`, `Cancelled` or `DispatchFailed` schedules `ChildFaulted`, when present,
+      in that item's iteration scope.
+    - A dispatch child that faults itself, for example on an input the child does not declare, is absorbed and routed
+      to `ChildFaulted` only when that slot is present.
+  - **A faulting dispatch child otherwise**, with no `ChildFaulted` slot or without waiting, stays a blocking incident
+    on its pass, as any faulted child does. It is never absorbed silently.
     - The activity completes with `Done` once every item's dispatch child, and its branch when one runs, has ended.
   - With no items, the activity completes with `Done` at once.
 - **FR-007**: The activity MUST fault with `BulkDispatchCapExceeded` before dispatching when `Items` has more than
@@ -255,8 +277,9 @@ and on-completed-callbacks suites pass.
   starting a child workflow per item stays inside the same cap. The cap is not an author-facing input. The cap itself
   is under question in #5875 (Elsa 3 had none), and this spec follows whatever #5875 decides. Whether it applies
   without waiting too is Q1.
-- **FR-008**: A slot activity that faults MUST fault the bulk activity through the ordinary child-fault path, as for
-  `If`. Retrying the faulted slot activity, where the runtime supports it, lets the bulk activity continue.
+- **FR-008**: A slot activity that faults MUST become a blocking incident through the child-fault intervention path.
+  The bulk activity requests intervention and defers; it does not fault. Retrying the faulted slot activity lets the
+  pass end and the bulk activity continue. The activity accepts a rescheduled faulted child for that.
 - **FR-009**: The activity has one outcome, `Done`.
 - **FR-010**: A branch reads its item as `variables.currentItem` and `variables.currentIndex`. Reading the dispatched
   child's result in the branch is not part of this spec (Out of Scope).
@@ -335,7 +358,8 @@ and on-completed-callbacks suites pass.
 | A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution. Guidance: remove the read; the child's result is not available in the branch yet |
 
 - **FR-020**: Every conversion MUST raise warning `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED`. It says that more than 1,000
-  items fault in Elsa 4 (FR-007), where Elsa 3 dispatched them all, and points to batching with a sequential `ForEach`
+  items fault in Elsa 4 (FR-007), and that a waiting activity keeps at most 16 children outstanding (FR-005), where
+  Elsa 3 dispatched them all at once, and points to batching with a sequential `ForEach`
   over batches.
 - **FR-021**: New codes go to `Elsa3ActivityDiagnosticCodes` and the spec 236 diagnostic-code contract, each in the
   task that first raises it.
@@ -376,22 +400,26 @@ and on-completed-callbacks suites pass.
 
 ### Measurable Outcomes
 
-- **SC-001**: An author starts N children (N ≤ 1,000) with one activity. All N start before the first one ends, and
-  with waiting the activity ends only after all N have ended.
+- **SC-001**: An author starts N children (N ≤ 1,000) with one activity. Without waiting, all N start in the
+  activity's first turn. With waiting, min(N, 16) start at once, the rest as earlier ones end, and the activity ends only
+  after all N have ended.
 - **SC-002**: `performance-concurrency.json` converts and publishes unchanged, and its 300 children reach `Finished`.
 - **SC-003**: The approved adjusted composition root converts and publishes. The correlation-id, input, channels and
   on-completed-callbacks suites pass, and so does the no-wait dataset of await-completion.
 - **SC-004**: No change to `WorkflowDispatchIdentity`, the dispatch stager, resume, cancellation, audit or recovery.
+  `DispatchPinSource` is the only dispatch service that changes.
 - **SC-005**: Every FR-017 and FR-019 row has a converter test with its code and guidance.
 
 ## Assumptions
 
-- A structural activity can generate a `DispatchWorkflow` node into its authored structure without a visible slot,
-  the way the BPMN importer generates its call-activity `DispatchWorkflow`, and publish then pins it.
-- Scheduling the same node concurrently under distinct iteration ids is new runtime behaviour. No ADR forbids it:
-  ADR 0028 gives each pass its own iteration id and scope, and large-fan-out.md plans per-item frames. No ADR is needed
-  unless the implementation has to depart from those.
-- The release 1 cap of 1,000 applies (FR-007, Q1).
+- The structure handler can add a synthesized node to the executable at compile time (plan R-1). If it cannot, it
+  synthesizes the node into the authored structure under a stable id when the structure is projected, and the designer
+  still shows only the two slots.
+- Scheduling one node under distinct iteration ids already exists (BPMN multi-instance). With the cap and the degree
+  of large-fan-out.md decision 1, the design stays within that approved decision and ADR 0028, so no ADR is needed. If
+  the coordinator prefers all-at-once dispatch with waiting (Q4), that departs from decision 1 and needs a decision
+  register entry or ADR amendment first.
+- The release 1 cap of 1,000 applies (FR-007, Q1, #5875).
 
 ## Out of Scope
 
@@ -403,9 +431,12 @@ and on-completed-callbacks suites pass.
 ## Open questions for the coordinator
 
 1. **Q1**: Does the 1,000-item cap apply without waiting too, once #5875 settles the cap itself? Recommendation:
-   yes, one rule. A fire-and-forget run
-   still writes one dispatch record and start intent per item in the parent's commit.
+   yes, one rule. Each child commits its own record, but every item's pass, with its scope and item copy, is held in
+   the parent instance's state.
 2. **Q2**: Converter: refuse a target outside the import (recommended), or warn? Without the target's declarations an
    undeclared item member faults the child's dispatch at run time.
 3. **Q3**: `ChildFaulted` for cancelled and undispatchable children (FR-006, FR-018), where Elsa 3 ran nothing.
    Recommendation: yes. An author needs one place to see every child that did not complete.
+4. **Q4**: With waiting, a fixed internal degree of 16 (recommended, FR-005), which stays within large-fan-out.md
+   decision 1 and needs no ADR? Or all children at once, as Elsa 3 did, which needs a decision-register entry or an ADR
+   amendment first?
