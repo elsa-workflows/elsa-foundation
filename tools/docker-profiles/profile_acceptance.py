@@ -128,7 +128,7 @@ def verify_secret_store(request_json):
     if value in json.dumps([created, tested]):
         raise RuntimeError("The secret API disclosed a stored value")
     if created["name"] != name or not tested["succeeded"]:
-        raise RuntimeError("Full could not store and resolve an encrypted secret")
+        raise RuntimeError("The profile could not store and resolve an encrypted secret")
     return {"encryptedStore": "verified"}
 
 
