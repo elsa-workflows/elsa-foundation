@@ -106,7 +106,6 @@ internal static class SqliteHostLifetimeChecks
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             directory.Delete(recursive: true);
         }
     }

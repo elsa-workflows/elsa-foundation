@@ -77,7 +77,12 @@ public static class SqliteEmbeddedHosting
             var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
                 beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault)
             {
-                AfterCleanStop = () => ReleaseLock(fileLock)
+                AfterCleanStop = () =>
+                {
+                    using var connection = new SqliteConnection(connectionString);
+                    SqliteConnection.ClearPool(connection);
+                    ReleaseLock(fileLock);
+                }
             };
             Volatile.Write(ref reporter, runtime);
             try
