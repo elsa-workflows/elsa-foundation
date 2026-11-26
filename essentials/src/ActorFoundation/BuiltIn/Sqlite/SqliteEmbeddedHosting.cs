@@ -26,23 +26,26 @@ public static partial class SqliteEmbeddedHosting
         CancellationToken cancellationToken = default, Action<Exception>? onFault = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
-        return StartCoreAsync(databasePath, node, _ => actor, shipped: false, endProcess, options, fenceInBatch, cancellationToken, onFault);
+        return StartCoreAsync(databasePath, node, _ => actor, rootType: null, endProcess, options, fenceInBatch, cancellationToken, onFault, null);
     }
 
-    /// <summary>Starts an Embedded node on the shipped format for durable creators and ordinary root turns.</summary>
+    /// <summary>Starts an Embedded node on the shipped format with root turns, timed jobs and optional held replies.</summary>
     internal static Task<RuntimeNode> StartFoundationAsync(string databasePath, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
-        CancellationToken cancellationToken = default, Action<Exception>? onFault = null)
+        CancellationToken cancellationToken = default, Action<Exception>? onFault = null, SqliteDirectRequests? requests = null,
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         RequireFoundationActorType(actor.Type);
-        return StartCoreAsync(databasePath, node, store => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode()), actor),
-            shipped: true, endProcess, options, fenceInBatch, cancellationToken, onFault);
+        return StartCoreAsync(databasePath, node, store => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode(actor.Withholds)), actor,
+                rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true,
+                retentionWindow: retentionWindow),
+            actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests);
     }
 
     private static async Task<RuntimeNode> StartCoreAsync(string databasePath, string node, Func<EfStore, IActorType> createActor,
-        bool shipped, Action<string> endProcess, LoopOptions? options, bool fenceInBatch, CancellationToken cancellationToken,
-        Action<Exception>? onFault)
+        string? rootType, Action<string> endProcess, LoopOptions? options, bool fenceInBatch, CancellationToken cancellationToken,
+        Action<Exception>? onFault, SqliteDirectRequests? requests)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -55,9 +58,11 @@ public static partial class SqliteEmbeddedHosting
             throw new ArgumentException("Configure positive millisecond loop intervals and a membership window of at least two balance rounds.", nameof(options));
 
         cancellationToken.ThrowIfCancellationRequested();
-        var file = AcquireFile(databasePath, forRuntime: true);
+        var file = AcquireFile(databasePath, forRuntime: true, requests: requests);
         try
         {
+            if (rootType is not null) requests?.RequireBinding(file.Path, rootType, node);
+            var shipped = rootType is not null;
             KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions) : new(file.Options);
 
             int partitions;
@@ -85,13 +90,15 @@ public static partial class SqliteEmbeddedHosting
             }
 
             var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch) { CommitSql = CommitSql.Owned };
+            if (shipped) await store.EnableRootJobsAsync(cancellationToken);
             var watchdog = new Watchdog(Defaults.Lease, endProcess);
             var watched = watchdog.Watch(store);
             RuntimeNode? reporter = null;
             var workers = new WorkerOptions
             {
                 Partitions = partitions,
-                OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error)
+                OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error),
+                Transport = requests
             };
             var host = DurableHost.ForNode(node, watched, createActor(store), partitions, workers);
             var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
@@ -118,7 +125,7 @@ public static partial class SqliteEmbeddedHosting
         }
     }
 
-    private static FileLease AcquireFile(string databasePath, bool forRuntime = false)
+    private static FileLease AcquireFile(string databasePath, bool forRuntime = false, SqliteDirectRequests? requests = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         var path = Path.GetFullPath(databasePath);
@@ -147,12 +154,21 @@ public static partial class SqliteEmbeddedHosting
                     ActiveFiles.Add(path, file);
                 }
             }
-            if (forRuntime && file.Runtime)
-                throw new SqliteHostLockException(file.Lock.Name);
-
-            if (forRuntime) file.Runtime = true;
+            if (forRuntime)
+            {
+                if (file.Runtime) throw new SqliteHostLockException(file.Lock.Name);
+                file.RequireReplyEdge(requests);
+                file.Runtime = true;
+                file.ReplyEdge = requests;
+            }
+            else if (requests is not null)
+            {
+                file.RequireReplyEdge(requests);
+                file.ReplyUsers++;
+                file.ReplyEdge = requests;
+            }
             file.Users++;
-            return new(file, forRuntime);
+            return new(file, forRuntime, forReplies: !forRuntime && requests is not null);
         }
     }
 
@@ -167,14 +183,24 @@ public static partial class SqliteEmbeddedHosting
         internal LinuxFileIdentity? LinuxIdentity => linuxIdentity;
         internal int Users { get; set; }
         internal bool Runtime { get; set; }
+        internal SqliteDirectRequests? ReplyEdge { get; set; }
+        internal int ReplyUsers { get; set; }
+        internal SemaphoreSlim ReplyWrites { get; } = new(1);
+
+        internal void RequireReplyEdge(SqliteDirectRequests? requested)
+        {
+            if ((Runtime || ReplyUsers != 0) && !ReferenceEquals(ReplyEdge, requested))
+                throw new ArgumentException("SQLite held requests and the Embedded owner must share one reply edge.");
+        }
     }
 
-    private sealed class FileLease(ActiveFile file, bool forRuntime) : IDisposable
+    private sealed class FileLease(ActiveFile file, bool forRuntime, bool forReplies) : IDisposable
     {
         private ActiveFile? _file = file;
         internal string Path => Current.Path;
         internal DbContextOptions<KernelDb> Options => Current.Options;
         internal SqliteAdmissionDefinitions AdmissionDefinitions => Current.AdmissionDefinitions;
+        internal SemaphoreSlim ReplyWrites => Current.ReplyWrites;
         private ActiveFile Current => _file ?? throw new ObjectDisposedException(nameof(FileLease));
 
         public void Dispose()
@@ -183,6 +209,8 @@ public static partial class SqliteEmbeddedHosting
             lock (FileGate)
             {
                 if (forRuntime) held.Runtime = false;
+                if (forReplies) held.ReplyUsers--;
+                if (!held.Runtime && held.ReplyUsers == 0) held.ReplyEdge = null;
                 if (--held.Users != 0) return;
 
                 ActiveFiles.Remove(held.Path);
@@ -191,7 +219,11 @@ public static partial class SqliteEmbeddedHosting
                     using var connection = new SqliteConnection(held.ConnectionString);
                     SqliteConnection.ClearPool(connection);
                 }
-                finally { held.Lock.Dispose(); }
+                finally
+                {
+                    held.ReplyWrites.Dispose();
+                    held.Lock.Dispose();
+                }
             }
         }
     }

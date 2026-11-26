@@ -157,6 +157,7 @@ public sealed class StudioModuleManifestProviderTests
     [InlineData("{\"version\":1,\"styles\":[\"../outside.css\"]}")]
     [InlineData("{\"version\":1,\"styles\":[\"https://example.com/style.css\"]}")]
     [InlineData("{\"version\":1,\"styles\":[\"module-missing.css\"]}")]
+    [InlineData("{\"version\":1,\"styles\":[\"module-entryHash.css\\n\"]}")]
     [InlineData("{\"version\":1,\"styles\":[\"module-entryHash.css\",\"module-entryHash.css\"]}")]
     [InlineData("{\"version\":1}")]
     [InlineData("invalid json")]
@@ -166,7 +167,8 @@ public sealed class StudioModuleManifestProviderTests
         var response = await GetModulesAsync(webAssets: new Dictionary<string, string[]>(), fileContents: new Dictionary<string, string>
         {
             [$"{directory}/entry-styles.json"] = contract,
-            [$"{directory}/module-entryHash.css"] = "entry"
+            [$"{directory}/module-entryHash.css"] = "entry",
+            [$"{directory}/module-entryHash.css\n"] = "invalid entry"
         });
         Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Contains(response.Diagnostics, x => x.ModuleId == "Elsa.Studio.Workflows" && x.Status == StudioModuleDiagnosticStatuses.Failed);

@@ -9,7 +9,8 @@ public sealed partial class EfStore
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
         string State, string Header, byte[]? Wire, long Growth, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
         bool? OperatorSuspension, bool OperatorTermination, RootJobState? JobState, RootJobCompletion? JobCompletion, bool TimedJob,
-        IReadOnlyList<FoundationValue>? Values, string[]? SettledJobs = null) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
+        IReadOnlyList<FoundationValue>? Values, string[]? SettledJobs = null, bool WithheldInputs = false)
+        : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -110,8 +111,8 @@ public sealed partial class EfStore
         Message[]? expectedEnvelopes, FoundationSelfIssuer? issue, bool suspended, CancellationToken cancellationToken)
     {
         if (db.UsesSqliteRootRuntime)
-            return issue is null && !suspended && await SettleSqliteRootInputsAsync(db, reference, actor, expected,
-                expectedEnvelopes, cancellationToken);
+            return issue is null && await SettleSqliteRootInputsAsync(db, reference, actor, expected,
+                expectedEnvelopes, suspended, cancellationToken);
 
         var home = new InstanceRef(actor.Id).Partition;
         var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
@@ -153,7 +154,11 @@ public sealed partial class EfStore
             RootTimedJobScope => timed ? DecodeRootTimedRow(row) : throw RootShape(),
             RootSelfScope => DecodeRootSelf(row, issue),
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
-                ? PostgresRootAdmission.DecodeOperator(db, row, reference) : PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol)
+                ? db.UsesSqliteRootRuntime
+                    ? PostgresRootAdmission.DecodeOperator(row, reference, terminations: true, retirements: true,
+                        terminateThenDelete: true, retentionDeletes: true)
+                    : PostgresRootAdmission.DecodeOperator(db, row, reference)
+                : PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol)
         };
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,
@@ -165,7 +170,8 @@ public sealed partial class EfStore
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,
         string typeData, IReadOnlyDictionary<string, string> labels, string? journal, string[]? recalls = null, bool? operatorSuspension = null,
         RootJobState? jobState = null, RootJobCompletion? jobCompletion = null, bool timedJob = false,
-        IReadOnlyList<FoundationValue>? values = null, bool operatorTermination = false, long terminalGrowth = 0, string[]? settledJobs = null)
+        IReadOnlyList<FoundationValue>? values = null, bool operatorTermination = false, long terminalGrowth = 0, string[]? settledJobs = null,
+        bool withheldInputs = false)
     {
         RequireQualifiedRootWriter();
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
@@ -189,7 +195,7 @@ public sealed partial class EfStore
             .WithFoundationState(stored);
         var root = new RootTurnCheckpoint(tenant, reference, current, status, StoredState.Encode(image),
             header, wire, terminalGrowth, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, operatorTermination, jobState, jobCompletion, timedJob, values,
-            settledJobs);
+            settledJobs, withheldInputs);
         var turn = new TurnCommit(image.Id, null, null, [], [], [], [], [], journal);
         return new(turn, root);
 

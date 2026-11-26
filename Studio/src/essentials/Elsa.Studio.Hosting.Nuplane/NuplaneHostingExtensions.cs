@@ -1,6 +1,7 @@
 using CShells.Nuplane;
 using CShells.Features;
 using CShells.AspNetCore.Features;
+using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Features;
 using Elsa.Studio.Core.Attributes;
 using Elsa.Modularity.Nuplane.Extensions;
@@ -49,15 +50,18 @@ public static class NuplaneHostingExtensions
         {
             throw new StudioHostingException($"Could not load Studio management configuration '{managementFile}'.", error);
         }
+        var configuration = studio.Configuration.GetSection("Nuplane");
+        var cacheOnlyFeeds = new Lazy<HashSet<string>>(() => StudioNuplaneSettings.ReadCacheOnlyFeedNames(configuration));
         var feedName = options.DirectoryFeedName?.Trim();
-        studio.Services.AddSingleton(provider => StudioNuplaneSettings.Create(managementFile, feedName, provider.GetRequiredService<IOptions<FeedResolutionOptions>>().Value));
+        studio.Services.AddSingleton(provider => StudioNuplaneSettings.Create(managementFile, feedName,
+            provider.GetRequiredService<IOptions<FeedResolutionOptions>>().Value, cacheOnlyFeeds.Value));
         // Validate the installed selection before Nuplane's reconciliation hosted services start.
         studio.Services.AddHostedService<NuplaneHostingStartup>();
         studio.Services.AddNuplaneAdmin();
         studio.Services.AddNuplanePackageStoreMaintenance();
         studio.Services.AddSingleton<PackageContentReader>();
+        studio.Services.AddSingleton<IStudioPackageEntryStyles, PackageEntryStyles>();
         studio.Services.AddSingleton<ManagementConfigurationStore>();
-        var configuration = studio.Configuration.GetSection("Nuplane");
         studio.Services.AddNuplane(configuration, nuplane =>
         {
             nuplane.UseBasePath(contentRoot);
@@ -80,7 +84,8 @@ public static class NuplaneHostingExtensions
         studio.Services.PostConfigure<FeedResolutionOptions>(value =>
         {
             value.PackageInstallRoot = Resolve(contentRoot, value.PackageInstallRoot ?? ".nuplane/packages");
-            if (value.Feeds.Any(feed => feed.Name != StudioNuplaneSettings.FallbackFeedName && feed.ServiceIndex.IsFile))
+            if (StudioNuplaneSettings.WritableDirectories(value, cacheOnlyFeeds.Value)
+                .Any(feed => feed.Name != StudioNuplaneSettings.FallbackFeedName))
                 value.Feeds.RemoveAll(feed => feed.Name == StudioNuplaneSettings.FallbackFeedName);
         });
         studio.Services.PostConfigure<StoreRegistryOptions>(value =>
@@ -114,6 +119,7 @@ public static class NuplaneHostingExtensions
             integration.AutoReload = true;
         }).ShareSingletonWithShells<StudioNuplaneSettings>()
           .ShareSingletonWithShells<PackageContentReader>()
+          .ShareSingletonWithShells<IStudioPackageEntryStyles>()
           .ShareSingletonWithShells<IShellFeatureConfigurationStore>());
         return studio;
     }

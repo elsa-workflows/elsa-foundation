@@ -5,6 +5,7 @@ using Elsa.Studio.Api.Authorization;
 using Elsa.Studio.Api.Contracts;
 using global::Nuplane.Admin;
 using global::Nuplane.Abstractions.PackageStoreProtection;
+using global::Nuplane.Feeds.Setup;
 
 namespace Elsa.Studio.Hosting.Nuplane;
 
@@ -40,13 +41,20 @@ internal static class ModuleManagementEndpoints
             foreach (var package in snapshot.Packages)
                 packages.Add(await PackageRegistryReader.ReadAsync(package, reader, diagnostics, context.RequestAborted));
             var policy = management.ReadRetention();
+            var feedDeclarations = NuplaneFeedSetupDeclarationReader.Read(configuration.GetSection(FeedPrefix)).Declarations;
+            var canManageFeeds = management.CanWrite(FeedPrefix) &&
+                feedDeclarations.All(feed => feed.SourceShape == NuplaneFeedSetupSourceShape.Array);
             return Results.Ok(new ModuleManagementRegistryResponse(
                 new("studio", "Studio", environment.ApplicationName, environment.ContentRootPath), DateTimeOffset.UtcNow,
                 modules.Modules.Select(module => ModuleManagementModule.FromStudioModule(module, environment.ApplicationName)).ToArray(),
-                packages, DropFolderPackages(settings.DropFolder), ReadFeeds(configuration),
+                packages, DropFolderPackages(settings.DropFolder), ReadFeeds(configuration, feedDeclarations),
                 new(policy.KeepNewestInactiveVersionsPerPackage, policy.Status),
-                new(true, management.CanWrite(FeedPrefix), true, true, true,
+                new(true, canManageFeeds, true, true, true,
                     management.CanWrite(ManagementConfigurationStore.RetentionPrefix)), diagnostics));
+        }
+        catch (StudioModuleDiscoveryBusyException)
+        {
+            return ActiveShellStudioApiEndpoint.Busy(context);
         }
         catch (PackageStoreAdmissionException error)
         {
@@ -145,7 +153,9 @@ internal static class ModuleManagementEndpoints
         {
             var index = IndexOf(feeds, name);
             if (index < 0) return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
-            feeds[index] = FeedJson(feed, name, feeds[index] as JsonObject);
+            var existing = feeds[index] as JsonObject;
+            if (IsCacheOnlyFeed(existing)) return ReadOnlyFeed(name);
+            feeds[index] = FeedJson(feed, name, existing);
             return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate registration changes."));
         });
     }
@@ -155,6 +165,7 @@ internal static class ModuleManagementEndpoints
         {
             var index = IndexOf(feeds, name);
             if (index < 0) return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
+            if (IsCacheOnlyFeed(feeds[index] as JsonObject)) return ReadOnlyFeed(name);
             feeds.RemoveAt(index);
             return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate registration changes."));
         });
@@ -167,24 +178,50 @@ internal static class ModuleManagementEndpoints
             await store.MutateIfAsync(FeedPrefix, document =>
             {
                 var setup = ManagementConfigurationStore.Object(ManagementConfigurationStore.Object(document, "Nuplane"), "Setup");
-                var feeds = setup["Feeds"] as JsonArray;
-                if (feeds is null) setup["Feeds"] = feeds = new JsonArray();
+                var existing = setup["Feeds"];
+                var feeds = existing switch
+                {
+                    JsonArray array => array,
+                    // Nuplane treats configuration keys made up entirely of ASCII digits as array entries.
+                    JsonObject keyed when keyed.All(entry => entry.Key.Length > 0 && entry.Key.All(char.IsAsciiDigit)) =>
+                        new JsonArray(keyed.OrderBy(entry => entry.Key, ConfigurationKeyComparer.Instance)
+                            .Select(entry => entry.Value?.DeepClone()).ToArray()),
+                    null => new JsonArray(),
+                    _ => null
+                };
+                if (feeds is null)
+                {
+                    result = ReadOnlyConfiguration("Studio feed management requires feeds to be configured as a JSON array.");
+                    return false;
+                }
+
                 result = mutate(feeds);
-                return result is IStatusCodeHttpResult { StatusCode: >= 200 and < 300 };
+                if (result is not IStatusCodeHttpResult { StatusCode: >= 200 and < 300 })
+                    return false;
+
+                if (existing is not JsonArray)
+                    setup["Feeds"] = feeds;
+                return true;
             }, token);
             return result;
         }
-        catch (ConfigurationReadOnlyException error) { return Results.Conflict(new { Error = error.Message, Code = "configuration-read-only" }); }
+        catch (ConfigurationReadOnlyException error) { return ReadOnlyConfiguration(error.Message); }
         catch (StudioHostingException error) { return Results.Json(new { Error = error.Message }, statusCode: StatusCodes.Status503ServiceUnavailable); }
     }
 
-    // The registry view never reads a feed's Credentials value: it stays in the host's configuration (#3735).
-    private static IReadOnlyList<ModuleManagementRegistryFeed> ReadFeeds(IConfiguration configuration) =>
-        configuration.GetSection(FeedPrefix).GetChildren().Select(feed => new ModuleManagementRegistryFeed(
-            feed["Name"] ?? "", feed["ServiceIndex"], feed["DirectoryPath"], feed.GetValue<bool>("IncludeAll"),
-            feed.GetSection("IncludePatterns").GetChildren().Select(item => item.Value).OfType<string>().ToArray(),
-            new(feed.GetValue<bool?>("Directory:Watch") ?? true, feed["Directory:DebounceWindow"] ?? "00:00:01")))
-        .Where(feed => !string.IsNullOrWhiteSpace(feed.Name)).OrderBy(feed => feed.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+    // The response projects public feed fields only; credentials stay in host configuration (#3735).
+    private static IReadOnlyList<ModuleManagementRegistryFeed> ReadFeeds(IConfiguration configuration,
+        IReadOnlyList<NuplaneFeedSetupDeclaration> declarations) =>
+        declarations.Where(declaration => !string.IsNullOrWhiteSpace(declaration.Name))
+            .OrderBy(declaration => declaration.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(declaration =>
+            {
+                var feed = configuration.GetSection(declaration.ConfigurationPath);
+                return new ModuleManagementRegistryFeed(
+                    declaration.Name, feed["ServiceIndex"], feed["DirectoryPath"], feed.GetValue<bool>("IncludeAll"),
+                    feed.GetSection("IncludePatterns").GetChildren().Select(item => item.Value).OfType<string>().ToArray(),
+                    new(feed.GetValue<bool?>("Directory:Watch") ?? true, feed["Directory:DebounceWindow"] ?? "00:00:01"));
+            }).ToArray();
 
     private static JsonObject FeedJson(ModuleManagementFeed feed, string name, JsonObject? previous = null)
     {
@@ -210,6 +247,16 @@ internal static class ModuleManagementEndpoints
             if (string.Equals((string?)feeds[index]?["Name"], name, StringComparison.OrdinalIgnoreCase)) return index;
         return -1;
     }
+
+    private static bool IsCacheOnlyFeed(JsonObject? feed) =>
+        !string.IsNullOrWhiteSpace((string?)feed?["DirectoryPath"]) &&
+        feed?["Directory"] is JsonObject directory && StudioNuplaneSettings.IsCacheRole(directory["Role"]?.ToString());
+
+    private static IResult ReadOnlyFeed(string name) =>
+        ReadOnlyConfiguration($"Cache-only feed '{name}' is read-only.");
+
+    private static IResult ReadOnlyConfiguration(string error) =>
+        Results.Conflict(new { Error = error, Code = "configuration-read-only" });
 
     private static string? FeedError(ModuleManagementFeed feed)
     {

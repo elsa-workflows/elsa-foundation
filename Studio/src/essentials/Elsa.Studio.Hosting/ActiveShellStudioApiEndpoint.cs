@@ -21,11 +21,22 @@ internal static class ActiveShellStudioApiEndpoint
                 ? Results.Ok(await manifests.GetModuleRegistry(context.RequestAborted))
                 : Results.Ok(await manifests.GetModules(context.RequestAborted));
         }
+        catch (StudioModuleDiscoveryBusyException)
+        {
+            return Busy(context);
+        }
         catch (StudioHostingException error)
         {
             context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(ActiveShellStudioApiEndpoint))
                 .LogWarning(error, "Studio shell {ShellName} is unavailable for module discovery.", settings.ShellName);
             return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
         }
+    }
+
+    internal static IResult Busy(HttpContext context)
+    {
+        context.Response.Headers.RetryAfter = "1";
+        context.Response.Headers.CacheControl = "no-store";
+        return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
     }
 }

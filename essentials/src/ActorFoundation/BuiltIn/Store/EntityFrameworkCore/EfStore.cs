@@ -844,7 +844,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
     private string RootInputScopes => $"{InboxKey.FoundationOccurrenceScope}, {RootSelfScope}" +
         (RootTimedJobSettlementEnabled ? $", {RootTimedJobScope}" : RootJobsEnabled ? $", {RootJobScope}" : "");
-    private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" : db.UsesSqliteRootRuntime ? SqliteOrdinaryRootPollFilter :
+    private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" : db.UsesSqliteRootRuntime ? SqliteRootPollFilter :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
              {(db.UsesRootOperatorProtocol ? db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
@@ -862,7 +862,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             """;
     // Commands are exposed only when database time makes them due. On a suspended root the
     // first due command can pass withheld ordinary inputs. Running roots first clear their ready FIFO prefix.
-    private static readonly string RootOperatorPollFilter = $"""
+    private static readonly string RootOperatorPollTemplate = $"""
          AND (m."InboxScope" = 0 OR EXISTS (
              SELECT 1 FROM "Instances" target
              WHERE target."Id" = m."Target" AND target."Partition" = m."Partition"
@@ -872,15 +872,27 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                        WHERE prior."Partition" = m."Partition" AND prior."Target" = m."Target" AND prior."Seq" < m."Seq"
                          AND prior."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND prior."EventMatch" IS NULL
                          AND NOT prior."Done" AND prior."Due" <= t.now
-                         AND (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running} OR prior."Id" LIKE 'operator/%')
+                         /*earlier-command-input*/
                          /*withheld-prior*/)
                    ELSE (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running}) AND (/*released-cohort*/ NOT EXISTS (
                        SELECT 1 FROM "Messages" op
                        WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
                          AND op."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND op."Id" LIKE 'operator/%'
-                         AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now))
+                         AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now /*supported-operator*/))
                    END)))
         """;
+    private static readonly string RootOperatorPollFilter = RootOperatorPollTemplate
+        .Replace("/*earlier-command-input*/",
+            $"""AND (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running} OR prior."Id" LIKE 'operator/%')""",
+            StringComparison.Ordinal)
+        .Replace(" /*supported-operator*/", "", StringComparison.Ordinal);
+
+    // SQLite exposes due controls alongside ready ordinary inputs so the actor's withholding rule can decide.
+    // The owned transaction still checks the appropriate FIFO before it consumes the command.
+    private static readonly string SqliteRootPollFilter = RootOperatorPollTemplate
+        .Replace("LIKE 'operator/%'", "GLOB 'operator/*'", StringComparison.Ordinal)
+        .Replace("/*earlier-command-input*/", "AND " + SqliteSupportedOperator("prior."), StringComparison.Ordinal)
+        .Replace("/*supported-operator*/", "AND " + SqliteSupportedOperator("op."), StringComparison.Ordinal) + SqliteRootPollScope();
     // A parked root without Park arrivals withholds its ordinary inputs, so only an earlier operator row holds a command back.
     // A held command admitted before the Park opened passes too: the owner refuses it there and answers its caller.
     private static bool WithholdsParkInputs(KernelDb db) => db.UsesRootParkedOperators && !db.UsesRootParkArrivals;
@@ -943,7 +955,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition) throw RootShape();
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     JobGeneration = r.JobGeneration!.Value, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
-                var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
+                var message = key.Scope == 0 ? (db?.UsesSqliteRootRuntime == true ? DecodeSqliteCreator(entity) : PostgresRootAdmission.DecodeCreator(entity))
+                    with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
                     : DecodeRootInput(db!, entity, root.Reference, RootSelfIssuer, RootJobsEnabled, RootTimedJobSettlementEnabled);
                 if (root != bindings.ForInput(message.InboxKey)) throw RootShape();
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value)

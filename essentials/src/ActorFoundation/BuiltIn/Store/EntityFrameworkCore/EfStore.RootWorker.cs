@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
 
@@ -32,6 +33,8 @@ public sealed partial class EfStore
         internal bool KeepsParkArrivals { get; set; }
         internal bool RecoversPark { get; set; }
         internal bool RefusesParkedOperators { get; set; }
+        internal bool SettlesEndedMailbox { get; init; }
+        internal Func<Contract.ActorHeader, bool>? AuthoredWithholds { get; init; }
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
         private readonly Dictionary<string, WorkerRoot> _actors = roots.ToDictionary(r => r.Actor, StringComparer.Ordinal);
         private readonly Dictionary<string, WorkerRoot> _references = roots.ToDictionary(r => r.Reference, StringComparer.Ordinal);
@@ -64,6 +67,7 @@ public sealed partial class EfStore
         public bool KeepsParkArrivals => roots.KeepsParkArrivals;
         public bool RecoversPark => roots.RecoversPark;
         public bool RefusesParkedOperators => roots.RefusesParkedOperators;
+        public bool SettlesEndedMailbox => roots.SettlesEndedMailbox;
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
             throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
@@ -105,9 +109,9 @@ public sealed partial class EfStore
         {
             if (_ordinaryRoots is not null)
                 throw new InvalidOperationException("The PostgreSQL owner is already bound.");
-            if (!db.UsesSqliteRootRuntime && (db.UsesRootJobProtocol != RootJobsEnabled || db.UsesRootTimedJobIssuance != RootTimedJobIssuanceEnabled ||
-                db.UsesRootTimedJobSettlement != RootTimedJobSettlementEnabled || db.UsesRootTimedJobPreview != RootTimedJobPreviewEnabled))
-                throw new StoreFormatException("The PostgreSQL owner must initialize its job capability before binding to the job profile.");
+            if (db.UsesRootJobProtocol != RootJobsEnabled || db.UsesRootTimedJobIssuance != RootTimedJobIssuanceEnabled ||
+                db.UsesRootTimedJobSettlement != RootTimedJobSettlementEnabled || db.UsesRootTimedJobPreview != RootTimedJobPreviewEnabled)
+                throw new StoreFormatException("The root owner must initialize its job capability before binding to the job profile.");
             if (RootTimedJobs && !RootTimedJobPreviewEnabled && (scope.Discover || scope.Actors.Length != 1))
                 throw new NotSupportedException("The timed job fixture binds exactly one generated root.");
             if (db.UsesRootValueProtocol != RootValuesEnabled)
@@ -179,8 +183,10 @@ public sealed partial class EfStore
         if (RootJobsEnabled)
         {
             var jobs = JobRegistry.Read(image.Jobs);
-            if (image.NextJobGeneration is not >= 0 || jobs.Count > 1 ||
-                jobs is [var job] && (job.Generation < 0 || job.Generation != image.NextJobGeneration - 1 ||
+            // The initial staged SQLite worker persisted no generation on roots without jobs.
+            var generation = !postgres && image.Jobs is null ? image.NextJobGeneration ?? 0 : image.NextJobGeneration;
+            if (generation is not >= 0 || jobs.Count > 1 ||
+                jobs is [var job] && (job.Generation < 0 || job.Generation != generation - 1 ||
                     image.Status != InstanceStatus.Running)) throw RootShape();
         }
         else if (image.Jobs is not null || image.NextJobGeneration is > 0) throw RootShape();
@@ -235,7 +241,7 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             var terminal = db.UsesSqliteRootRuntime
-                ? await ReadSqliteFinishedRevisionAsync(db, Root, cancellationToken)
+                ? await ReadSqliteTerminalRevisionAsync(db, Root, cancellationToken)
                 : await LockQualifiedTerminalAsync(db, Root, cancellationToken);
             if (terminal.Count != 1) return false;
             if (SettledJobs.Length > 0 && await db.Messages.AnyAsync(m => m.Target == Root.Actor && m.Partition == Root.Partition &&
@@ -299,11 +305,9 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             if (db.UsesSqliteRootRuntime != SqliteRuntime) return false;
-            // The SQLite worker executes ordinary turns while its shipped definitions already describe the later job slices.
-            if ((!SqliteRuntime && db.UsesRootJobProtocol) != JobProfile ||
-                (!SqliteRuntime && db.UsesRootTimedJobIssuance) != TimedJobIssuance ||
-                (!SqliteRuntime && db.UsesRootTimedJobSettlement) != TimedJobSettlement ||
-                (!SqliteRuntime && db.UsesRootTimedJobPreview) != TimedJobPreview || db.UsesRootValueProtocol != ValueProfile)
+            if (db.UsesRootJobProtocol != JobProfile || db.UsesRootTimedJobIssuance != TimedJobIssuance ||
+                db.UsesRootTimedJobSettlement != TimedJobSettlement || db.UsesRootTimedJobPreview != TimedJobPreview ||
+                db.UsesRootValueProtocol != ValueProfile)
                 return false;
             foreach (var command in Commands)
                 if (!await command.BindCheckpointAsync(db, cancellationToken)) return false;
@@ -394,8 +398,10 @@ public sealed partial class EfStore
 
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
-        if (!postgres && (turn.OpensPark || turn.FoundationKept is not null || turn.FoundationRootOperator is not null || turn.Delete))
-            throw new NotSupportedException("The staged SQLite root worker supports ordinary checkpoints.");
+        if (!postgres && (turn.OpensPark || turn.FoundationKept is not null ||
+            turn.FoundationRootOperator is { } sqliteCommand && (sqliteCommand.Kind is not (Kinds.Terminate or Kinds.Delete) ||
+                sqliteCommand.Operator is not { RootHeldReply: false, RootParkMark: null })))
+            throw new NotSupportedException("This SQLite root writer supports ordinary checkpoints, timed jobs and one-way root operators.");
         if (turn.FoundationRootOperator is { Kind: Kinds.Recover }) return await PrepareRootParkRecoverAsync(root, turn, cancellationToken);
         // A delete, or a retired marker, of an ended Faulted root goes on to retirement below.
         if (turn is { FoundationRootOperator: not null, Row: { Status: InstanceStatus.Faulted or InstanceStatus.Cancelled, Retired: false },
@@ -430,6 +436,9 @@ public sealed partial class EfStore
             if (turn != ended || turn.Done.Count + turn.Consumed.Count == 0 || turn.Sent.Count != 0 ||
                 turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
                 !InputsMatch(root, turn, jobs: RootTimedJobSettlementEnabled)) throw RootShape();
+            if (!postgres && turn.Done is [var refused] && turn.Consumed.Count == 0 && PostgresRootAdmission.IsOperatorOccurrence(refused) &&
+                await PrepareSqliteLiveCompoundRefusalAsync(root, refused, cancellationToken) is { } liveRefusal)
+                return new(null, liveRefusal);
             // A job that was running when its root ended (a Terminate or a Faulted end settled it) finishes where nothing waits
             // for it: its ticket and deadline rows left with the end, so the job's own input settles nothing.
             var settled = turn.Consumed.Where(key => key.Scope > 0).Select(StoredJobId).ToArray();
@@ -540,7 +549,8 @@ public sealed partial class EfStore
                     row.StateVersion != current.StateVersion || turn.Journal is null) throw RootShape();
                 return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
                     row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, operatorTermination: true,
-                    jobState: settledJobs is null ? null : new(null, current.NextJobGeneration), settledJobs: settledJobs);
+                    jobState: settledJobs is null ? null : new(null, current.NextJobGeneration), settledJobs: settledJobs,
+                    withheldInputs: !postgres && AuthoredSqliteWithholding(root, current));
             }
             if (!db.UsesRootOperatorProtocol || row.Status != InstanceStatus.Running ||
                 row.Suspended != (command.Kind == Kinds.Suspend) || row.StateVersion != current.StateVersion || state != current.State ||
