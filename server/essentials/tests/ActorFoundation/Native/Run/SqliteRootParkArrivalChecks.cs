@@ -179,6 +179,7 @@ internal static partial class SqliteHostLifetimeChecks
                 Require(rollback.Quote is [(ParkKeepReason.Consumed, false), (ParkKeepReason.Arrived, true), (ParkKeepReason.Arrived, false)],
                     "the Recover reader opens one quoted arrival body and skips the consumed and over-budget bodies");
                 await CheckCreatorRecoverAsync(recoveryOwner);
+                await CheckRecordedJobRecoverAsync(recoveryOwner);
                 await CheckReparkFifoAsync(recoveryOwner);
                 var guardFile = new SqliteConnectionStringBuilder(connection) { DataSource = Path.Combine(directory.FullName, "guard.db") };
                 var guardOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(guardFile.ConnectionString).Options;
@@ -205,6 +206,31 @@ internal static partial class SqliteHostLifetimeChecks
                 settled is { Done: true, Start: null, Payload: null, ReplyTo: null },
                 "the same owner settles the preadmitted held input after the Park ends without invoking the actor");
             return 0;
+
+            async Task CheckRecordedJobRecoverAsync(Worker owner)
+            {
+                var root = (await admission.StartAsync(scope.Tenant, "recorded-recover", new(fixture, SqliteArrivalActor.RecordedPlan),
+                    null, null, token)).Actor!.Value;
+                await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running });
+                Require(await admission.SendAsync(scope.Tenant, root, "issue-recorded", "issue-recorded", null, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the SQLite Recover fixture issues a timed job");
+                var park = await DriveAsync(owner, root, row => row is { Revision: 4, Status: InstanceStatus.Faulted });
+                var partition = new InstanceRef(park.Actor.Id).Partition;
+                Require(JobRegistry.Read(park.Jobs) is [{ Key: SqliteArrivalActor.RecordedJob, Generation: 0 }] &&
+                    await db.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {park.Actor.Id} AND "Partition" = {partition}
+                            AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {Kinds.JobFinished} AND "Done"
+                            AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}) AS "Value"
+                        """).SingleAsync(token), "a faulting job result remains consumed beside its registration");
+                var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                Require(await admission.OperateAsync(scope.Tenant, root, "resume-recorded", Kinds.Recover, selection, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the selected recorded-result Park accepts Recover");
+                var recovered = await DriveAsync(owner, root, row => row is { Revision: 5, Status: InstanceStatus.Running });
+                Require(recovered is { Jobs: null, NextJobGeneration: 1, ParkAt: null } && recovered.State == park.State &&
+                    executor.RecordedJobs == 1 && executor.RecordedResults == 1 &&
+                    !await db.Messages.AnyAsync(row => row.Target == park.Actor.Id && row.InboxScope == EfStore.RootTimedJobScope, token),
+                    "SQLite Recover clears the consumed result and registration without replay or generation reuse");
+            }
 
             async Task CheckCreatorRecoverAsync(Worker owner)
             {
@@ -334,19 +360,35 @@ internal static partial class SqliteHostLifetimeChecks
     private sealed class SqliteArrivalActor(string type) : Contract.IActorType
     {
         internal const string CreatorFault = """{"CreatorFault":true}""";
+        internal const string RecordedPlan = """{"RecordedPlan":true}""";
+        internal const string RecordedJob = "recorded-recover";
+        internal int RecordedJobs { get; private set; }
+        internal int RecordedResults { get; private set; }
         internal int OrdinaryTurns { get; private set; }
         internal int HeldTurns { get; private set; }
         internal List<string> Order { get; } = [];
         string Contract.IActorType.Type => type;
         public bool Withholds(Contract.ActorHeader header) => false;
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
+            header.TypeData == RecordedPlan ? new([], [new(RecordedJob, null)], []) : new([], [], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
-        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("The Park arrival fixture does not start jobs.");
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+        {
+            if (job.Key != RecordedJob) throw new InvalidOperationException("The Park Recover fixture received an unexpected job.");
+            RecordedJobs++;
+            return ValueTask.FromResult<object?>("recorded");
+        }
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
+            if (turn.Inbox is [{ Kind: "issue-recorded" }])
+                turn.StartJob(RecordedJob, timeout: TimeSpan.FromMinutes(1));
+            if (turn.Header.TypeData == RecordedPlan && turn.Inbox is [{ Kind: Contract.Kinds.JobFinished }])
+            {
+                RecordedResults++;
+                throw new InvalidOperationException("recorded result handler fault");
+            }
             if (turn.Inbox.Any(message => message.Kind is "fail" or "repark-fault" ||
                 message.Kind == Contract.Kinds.Start && turn.Header.TypeData == CreatorFault))
                 throw new InvalidOperationException("park arrival fixture fault");

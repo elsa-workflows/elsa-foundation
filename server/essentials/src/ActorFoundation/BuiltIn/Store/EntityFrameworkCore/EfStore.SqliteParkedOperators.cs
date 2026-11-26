@@ -19,7 +19,7 @@ public sealed partial class EfStore
                 EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
                     AND NOT m."Done" AND (m."InboxScope" <> {InboxKey.FoundationOccurrenceScope}
                         OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL)) AS "Residue",
-                i."FoundationParkClearing" AS "Clearing", i."FoundationParkCleared" AS "Cleared"
+                i."FoundationParkClearing" AS "Clearing", i."FoundationParkCleared" AS "Cleared", i."Jobs"
             FROM "Instances" i WHERE i."Id" = {actor} AND i."Partition" = {partition} AND NOT i."Retired"
             """).SingleOrDefaultAsync(token);
 

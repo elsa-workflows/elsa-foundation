@@ -124,7 +124,8 @@ public sealed partial class EfStore
             : db.UsesRootParkedOperators ? ParkedRefusalRow(db) : "", StringComparison.Ordinal)
         .Replace("/*root-park-recover*/", db.UsesRootParkRecovery ? """
             (OLD."Status" = 2 AND NEW."Status" = 0 AND NOT NEW."Retired" AND NOT OLD."Suspended" AND NOT NEW."Suspended"
-                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0/*park-recover-footprint*/
+                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 /*park-recover-footprint*/
+                AND NEW."Jobs" IS NULL AND NEW."NextJobGeneration" IS NOT DISTINCT FROM OLD."NextJobGeneration"
                 AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL AND NEW."Fault" IS NULL
                 AND NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" + 1
                 AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
@@ -132,15 +133,14 @@ public sealed partial class EfStore
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
                     AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/ AND j."Entries" LIKE '{{"Outcome":"recovered",%'))
             """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
-            .Replace("/*park-recover-footprint*/", db.UsesRootComposedParkRecovery
-                ? """ AND OLD."FoundationParkClearing" IS NULL AND OLD."Jobs" IS NULL""" : "", StringComparison.Ordinal)
+            .Replace("/*park-recover-footprint*/", RootRecoverFootprint(db, "OLD"), StringComparison.Ordinal)
             .Replace("/*sqlite-recover-footprint*/", db.UsesSqliteRootRuntime ? """
 
                 AND NEW."FoundationStateWire" IS NOT DISTINCT FROM OLD."FoundationStateWire"
                 AND NEW."FoundationTerminalRevision" IS NULL AND NEW."FoundationTerminalAt" IS NULL
                 AND NEW."FoundationParkClearing" IS NULL AND NEW."FoundationParkClearingKind" IS NULL AND NEW."FoundationParkCleared" IS NULL
-                AND ROW(NEW."Jobs", NEW."Children", NEW."Parent", NEW."Model", NEW."Definition", NEW."NextJobGeneration", NEW."CustomHandles")
-                    IS NOT DISTINCT FROM ROW(OLD."Jobs", OLD."Children", OLD."Parent", OLD."Model", OLD."Definition", OLD."NextJobGeneration", OLD."CustomHandles")
+                AND ROW(NEW."Children", NEW."Parent", NEW."Model", NEW."Definition", NEW."CustomHandles")
+                    IS NOT DISTINCT FROM ROW(OLD."Children", OLD."Parent", OLD."Model", OLD."Definition", OLD."CustomHandles")
                 """ : "", StringComparison.Ordinal)
             : "false", StringComparison.Ordinal)
         // A recovered entry is journaled only on the parked root it resolves.
@@ -150,8 +150,7 @@ public sealed partial class EfStore
                     AND i."Partition" = NEW."Partition" AND NEW."Revision" = i."Revision" + 1
                     AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0 /*park-recover-footprint*/))
             THEN RAISE EXCEPTION 'A recovered journal entry requires the parked checkpoint it resolves' USING ERRCODE = '23514'; END IF;
-            """.Replace("/*park-recover-footprint*/", db.UsesRootComposedParkRecovery
-                ? """AND i."FoundationParkClearing" IS NULL AND i."Jobs" IS NULL""" : "", StringComparison.Ordinal) : "", StringComparison.Ordinal)
+            """.Replace("/*park-recover-footprint*/", RootRecoverFootprint(db, "i"), StringComparison.Ordinal) : "", StringComparison.Ordinal)
         .Replace("/*root-park-recover-journal*/", db.UsesRootParkRecovery
             // The raw command is formatted, so the literal brace is doubled.
             ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'""" +
@@ -181,6 +180,16 @@ public sealed partial class EfStore
         .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
         .Replace("/*root-retirement-footprint*/", db.UsesRootRetirement ? RootRetirementFootprint : "", StringComparison.Ordinal)
         .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal);
+
+    private static string RootRecoverFootprint(KernelDb db, string actor) => !db.UsesRootComposedParkRecovery ? "" : $"""
+        AND {actor}."FoundationParkClearing" IS NULL
+        AND ({actor}."Jobs" IS NULL OR ({(db.UsesRootTimedJobSettlement ? "true" : "false")} AND EXISTS (
+            SELECT 1 FROM "Messages" m WHERE m."Target" = {actor}."Id" AND m."Partition" = {actor}."Partition"
+                AND m."InboxScope" = {RootTimedJobScope} AND m."Kind" = '{Kinds.JobFinished}' AND m."EventMatch" IS NULL AND m."Done"
+                AND m."FoundationKeptBy" = {(short)ParkKeepReason.Consumed} AND m."JobGeneration" = {actor}."NextJobGeneration" - 1
+                AND m."Due" = 0 AND m."Start" IS NULL AND m."Payload" IS NOT NULL AND m."Sender" = {actor}."Id"
+                AND m."ReplyTo" IS NULL AND m."KeepUntil" IS NULL)))
+        """;
 
     // Match the retirement lock's preconditions against the previous checkpoint and its persisted inputs.
     private static readonly string RootRetirementFootprint = """
