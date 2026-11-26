@@ -83,6 +83,17 @@ public sealed partial class EfStore
     private static readonly string CohortWaitingWork = $"""
         "EventMatch" IS NULL AND NOT "Done" AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" LIKE 'operator/%'
         """;
+    private static readonly string CohortEligibleRoots = $"""
+        SELECT i."Partition", i."Id" AS "Actor", i."Revision", i."FoundationTenant" AS "Tenant", i."FoundationReference" AS "Reference",
+            i."FoundationHeader" AS "Header"
+        FROM (SELECT DISTINCT "Partition", "Target" FROM candidates WHERE "Seen" < "Epoch") w
+        JOIN "Instances" i ON i."Id" = w."Target" AND i."Partition" = w."Partition"
+        WHERE i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired"
+            AND i."FoundationReference" IS NOT NULL AND i."FoundationParkGeneration" > 0
+            AND EXISTS (SELECT 1 FROM "Messages" c
+                WHERE c."Partition" = i."Partition" AND c."Target" = i."Id" AND c."EventMatch" IS NULL AND NOT c."Done"
+                    AND c."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND c."FoundationReleasedBy" = i."FoundationParkGeneration")
+        """;
 
     // Only roots with pending released inputs and waiting controls need an authored decision. The main poll accepts
     // each decision at the same revision. A sweep fixes a sequence ceiling so new admissions cannot prevent a wrap.
@@ -139,15 +150,7 @@ public sealed partial class EfStore
             ), tail AS (
                 SELECT DISTINCT ON ("Partition") "Partition", "Due", "Seq" FROM candidates ORDER BY "Partition", "Due" DESC, "Seq" DESC
             ), eligible AS (
-                SELECT i."Partition", i."Id" AS "Actor", i."Revision", i."FoundationTenant" AS "Tenant", i."FoundationReference" AS "Reference",
-                    i."FoundationHeader" AS "Header"
-                FROM (SELECT DISTINCT "Partition", "Target" FROM candidates WHERE "Seen" < "Epoch") w
-                JOIN "Instances" i ON i."Id" = w."Target" AND i."Partition" = w."Partition"
-                WHERE i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired"
-                    AND i."FoundationReference" IS NOT NULL AND i."FoundationParkGeneration" > 0
-                    AND EXISTS (SELECT 1 FROM "Messages" c
-                        WHERE c."Partition" = i."Partition" AND c."Target" = i."Id" AND c."EventMatch" IS NULL AND NOT c."Done"
-                            AND c."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND c."FoundationReleasedBy" = i."FoundationParkGeneration")
+                {CohortEligibleRoots}
             )
             SELECT b."Partition", b."Through", t."Due", t."Seq", e."Actor", e."Revision", e."Tenant", e."Reference", e."Header"
             FROM bounds b LEFT JOIN tail t ON t."Partition" = b."Partition"

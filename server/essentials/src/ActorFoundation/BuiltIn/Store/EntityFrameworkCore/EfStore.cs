@@ -858,9 +858,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string RootInputScopes => $"{InboxKey.FoundationOccurrenceScope}, {RootSelfScope}" +
         (RootTimedJobSettlementEnabled ? $", {RootTimedJobScope}" : RootJobsEnabled ? $", {RootJobScope}" : "");
     private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" :
-        db.UsesSqliteRootRuntime ? (db.UsesRootParkRecovery ? (SamplesAuthoredCohortWithholding(db)
-                ? SqliteAuthoredParkRecoveryPollFilter : SqliteParkRecoveryPollFilter)
-            : db.UsesRootParkArrivals ? SqliteParkArrivalsPollFilter : SqliteRootPollFilter) :
+        db.UsesSqliteRootRuntime ? SqlitePollFilter(db) :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
              {(db.UsesRootOperatorProtocol ? PostgresOperatorPollFilter(db) : "")}
@@ -927,6 +925,10 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private static readonly string SqliteParkArrivalsPollFilter = SqliteRootPoll(includeParkArrivals: true, recovery: false);
     private static readonly string SqliteParkRecoveryPollFilter = SqliteRootPoll(includeParkArrivals: true, recovery: true);
     private static readonly string SqliteAuthoredParkRecoveryPollFilter = SqliteRootPoll(includeParkArrivals: true, recovery: true, authoredCohort: true);
+
+    private string SqlitePollFilter(KernelDb db) => SamplesAuthoredCohortWithholding(db) ? SqliteAuthoredParkRecoveryPollFilter
+        : db.UsesRootParkRecovery ? SqliteParkRecoveryPollFilter
+        : db.UsesRootParkArrivals ? SqliteParkArrivalsPollFilter : SqliteRootPollFilter;
 
     private static string SqliteRootPoll(bool includeParkArrivals, bool recovery, bool authoredCohort = false) =>
         (recovery ? WithReleasedCohort(RootOperatorPollTemplate) : RootOperatorPollTemplate)
