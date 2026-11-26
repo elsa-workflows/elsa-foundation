@@ -1318,6 +1318,109 @@
       ]
     },
     {
+      "path": "extensions/Attention/src/Api/Elsa.Attention.Api.csproj",
+      "name": "Elsa.Attention.Api",
+      "kind": "source",
+      "domain": "Elsa.Attention",
+      "sub_domain": "Api",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Attention.Api",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "server/essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "server/essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Attention.Core",
+          "path": "server/essentials/src/Attention/Core/Elsa.Attention.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "server/essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "server/essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "ValenceWorks.MinimalEndpoints",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "path": "extensions/Attention/tests/Api/Tests/Elsa.Attention.Api.Tests.csproj",
+      "name": "Elsa.Attention.Api.Tests",
+      "kind": "test",
+      "domain": "Elsa.Attention",
+      "sub_domain": "Api.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Attention.Api",
+          "path": "extensions/Attention/src/Api/Elsa.Attention.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Testing",
+          "path": "server/essentials/tests/Testing/Elsa.Testing.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
       "path": "extensions/Bpmn/src/Api/Elsa.Activities.Bpmn.Api.csproj",
       "name": "Elsa.Activities.Bpmn.Api",
       "kind": "source",
@@ -6094,6 +6197,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.ControlFlow",
           "path": "server/essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj"
         },
@@ -6216,11 +6324,6 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "server/essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -7782,6 +7885,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Compensation",
           "path": "server/essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj"
         },
@@ -7844,11 +7952,6 @@
           "type": "internal",
           "id": "Elsa.Primitives.Hosting",
           "path": "server/essentials/src/Primitives/Hosting/Elsa.Primitives.Hosting.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -8820,6 +8923,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Design.Api",
           "path": "server/essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj"
         },
@@ -8922,11 +9030,6 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "server/essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -9372,7 +9475,7 @@
         {
           "type": "internal",
           "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -11139,6 +11242,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
           "path": "server/essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj"
         },
@@ -11201,11 +11309,6 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "server/essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -12325,6 +12428,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Design.Api",
           "path": "server/essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj"
         },
@@ -12387,11 +12495,6 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "server/essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -12481,6 +12584,144 @@
         {
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj",
+      "name": "Elsa.Tasks",
+      "kind": "source",
+      "domain": "Elsa.Tasks",
+      "sub_domain": "(root)",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Tasks",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "server/essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Locking.Core",
+          "path": "server/essentials/src/Locking/Core/Elsa.Locking.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Primitives",
+          "path": "server/essentials/src/Primitives/Primitives/Elsa.Primitives.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks.Core",
+          "path": "server/essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "extensions/Tasks/tests/Execution/Tests/Elsa.Tasks.Execution.Tests.csproj",
+      "name": "Elsa.Tasks.Execution.Tests",
+      "kind": "test",
+      "domain": "Elsa.Tasks",
+      "sub_domain": "Execution.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "server/essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Locking.Core",
+          "path": "server/essentials/src/Locking/Core/Elsa.Locking.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks.Testing",
+          "path": "server/essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Testing",
+          "path": "server/essentials/tests/Testing/Elsa.Testing.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
         },
         {
@@ -13874,6 +14115,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Attention.Api",
+          "path": "extensions/Attention/src/Api/Elsa.Attention.Api.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Bpmn.Api",
           "path": "extensions/Bpmn/src/Api/Elsa.Activities.Bpmn.Api.csproj"
         },
@@ -14139,6 +14385,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Weaver.Api",
           "path": "extensions/Weaver/src/Api/Elsa.Weaver.Api.csproj"
         },
@@ -14281,11 +14532,6 @@
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
           "path": "server/essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Attention.Api",
-          "path": "server/essentials/src/Attention/Api/Elsa.Attention.Api.csproj"
         },
         {
           "type": "internal",
@@ -14471,11 +14717,6 @@
           "type": "internal",
           "id": "Elsa.Tasks.Core",
           "path": "server/essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -16930,65 +17171,6 @@
           "type": "internal",
           "id": "Elsa.Events.Core",
           "path": "server/essentials/src/Events/Core/Elsa.Events.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Foundation.Identity.Core",
-          "path": "server/essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Foundation.Identity",
-          "path": "server/essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
-        }
-      ]
-    },
-    {
-      "path": "server/essentials/src/Attention/Api/Elsa.Attention.Api.csproj",
-      "name": "Elsa.Attention.Api",
-      "kind": "source",
-      "domain": "Elsa.Attention",
-      "sub_domain": "Api",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Attention.Api",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Api.AspNetCore",
-          "path": "server/essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Api.Capabilities",
-          "path": "server/essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Attention.Core",
-          "path": "server/essentials/src/Attention/Core/Elsa.Attention.Core.csproj"
         },
         {
           "type": "internal",
@@ -20174,80 +20356,6 @@
         {
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        }
-      ]
-    },
-    {
-      "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj",
-      "name": "Elsa.Tasks",
-      "kind": "source",
-      "domain": "Elsa.Tasks",
-      "sub_domain": "(root)",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Tasks",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Cluster.Core",
-          "path": "server/essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Locking.Core",
-          "path": "server/essentials/src/Locking/Core/Elsa.Locking.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Primitives",
-          "path": "server/essentials/src/Primitives/Primitives/Elsa.Primitives.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks.Core",
-          "path": "server/essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.Logging.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.12"
         }
       ]
@@ -24950,6 +25058,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.ControlFlow",
           "path": "server/essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj"
         },
@@ -25022,11 +25135,6 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "server/essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -26048,6 +26156,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Attention.Api",
+          "path": "extensions/Attention/src/Api/Elsa.Attention.Api.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Bpmn.Api",
           "path": "extensions/Bpmn/src/Api/Elsa.Activities.Bpmn.Api.csproj"
         },
@@ -26438,6 +26551,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Weaver.Anthropic",
           "path": "extensions/Weaver/src/Anthropic/Elsa.Weaver.Anthropic.csproj"
         },
@@ -26628,11 +26746,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Attention.Api",
-          "path": "server/essentials/src/Attention/Api/Elsa.Attention.Api.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Caching.Memory",
           "path": "server/essentials/src/Caching/Memory/Elsa.Caching.Memory.csproj"
         },
@@ -26800,11 +26913,6 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "server/essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -27030,50 +27138,6 @@
           "type": "external",
           "id": "YamlDotNet",
           "version": "16.3.0"
-        },
-        {
-          "type": "external",
-          "id": "coverlet.collector",
-          "version": "6.0.2"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "server/essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj",
-      "name": "Elsa.Attention.Api.Tests",
-      "kind": "test",
-      "domain": "Elsa.Attention",
-      "sub_domain": "Api.Tests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Attention.Api",
-          "path": "server/essentials/src/Attention/Api/Elsa.Attention.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Testing",
-          "path": "server/essentials/tests/Testing/Elsa.Testing.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
         },
         {
           "type": "external",
@@ -28304,6 +28368,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Events.Core",
           "path": "server/essentials/src/Events/Core/Elsa.Events.Core.csproj"
         },
@@ -28326,11 +28395,6 @@
           "type": "internal",
           "id": "Elsa.Tasks.Core",
           "path": "server/essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -29197,13 +29261,13 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Locking.Database",
-          "path": "server/essentials/src/Locking/Database/Elsa.Locking.Database.csproj"
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
+          "id": "Elsa.Locking.Database",
+          "path": "server/essentials/src/Locking/Database/Elsa.Locking.Database.csproj"
         },
         {
           "type": "internal",
@@ -29660,6 +29724,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
           "path": "server/essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj"
         },
@@ -29667,11 +29736,6 @@
           "type": "internal",
           "id": "Elsa.Persistence.EntityFramework",
           "path": "server/essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -30037,6 +30101,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Weaver.Persistence.EntityFrameworkCore",
           "path": "extensions/Weaver/src/Persistence/EntityFrameworkCore/Elsa.Weaver.Persistence.EntityFrameworkCore.csproj"
         },
@@ -30094,11 +30163,6 @@
           "type": "internal",
           "id": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore",
           "path": "server/essentials/src/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -30832,7 +30896,7 @@
         {
           "type": "internal",
           "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "external",
@@ -30860,38 +30924,13 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Cluster.Core",
-          "path": "server/essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Locking.Core",
-          "path": "server/essentials/src/Locking/Core/Elsa.Locking.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Tasks.Schedules",
           "path": "server/essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj"
         },
         {
           "type": "internal",
-          "id": "Elsa.Tasks.Testing",
-          "path": "server/essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Testing",
           "path": "server/essentials/tests/Testing/Elsa.Testing.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
         },
         {
           "type": "external",
@@ -31312,7 +31351,7 @@
         {
           "type": "internal",
           "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -31715,6 +31754,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Compensation",
           "path": "server/essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj"
         },
@@ -31802,11 +31846,6 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "server/essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -33170,6 +33209,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.ControlFlow",
           "path": "server/essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj"
         },
@@ -33182,11 +33226,6 @@
           "type": "internal",
           "id": "Elsa.Cluster.Readability",
           "path": "server/essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -33652,6 +33691,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.ControlFlow",
           "path": "server/essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj"
         },
@@ -33739,11 +33783,6 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "server/essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -33930,6 +33969,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.ControlFlow",
           "path": "server/essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj"
         },
@@ -34017,11 +34061,6 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "server/essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -34209,7 +34248,7 @@
         {
           "type": "internal",
           "id": "Elsa.Tasks",
-          "path": "server/essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
+          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
