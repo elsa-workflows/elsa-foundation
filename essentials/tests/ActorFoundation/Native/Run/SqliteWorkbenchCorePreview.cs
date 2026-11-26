@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.ActorFoundation.Hosting;
 using Kernel.Foundation.Sqlite;
+using Microsoft.Data.Sqlite;
 using Contract = Kernel.Foundation.Contracts;
 using WorkflowActorType = Kernel.WorkflowActor.WorkflowActor;
 
@@ -19,9 +20,11 @@ internal static partial class WorkbenchPostgresPreview
         try
         {
             var path = Path.Combine(workspace.FullName, "kernel.sqlite");
+            var alias = Path.Combine(workspace.FullName, "configured-kernel.sqlite");
+            File.CreateSymbolicLink(alias, path);
             string flowchart;
             string first;
-            using (var host = WorkbenchProcess.Start(executable, "", enabled: true, "publications", null, path, workspace))
+            using (var host = WorkbenchProcess.Start(executable, "", enabled: true, "publications", null, alias, workspace))
             {
                 await host.WaitReadyAsync(token);
                 Require((await host.WaitForKernelServingAsync(token)).Contains("shell default on the kernel", StringComparison.Ordinal),
@@ -39,26 +42,40 @@ internal static partial class WorkbenchPostgresPreview
                 await host.StopAsync();
             }
 
-            var reads = new SqliteEmbeddedFoundation(path, "sqlite-workbench-observer", WorkflowActorType.ActorType).CreateReads();
+            var observer = new SqliteEmbeddedFoundation(path, "sqlite-workbench-observer", WorkflowActorType.ActorType);
+            await observer.InstallShippedAsync(token);
+            var reads = observer.CreateReads();
             var tenant = EmbeddedTenant.Bind("default");
             Require(await reads.GetAsync(tenant, new(first), token) is { Header.Status: Contract.ActorStatus.Finished } &&
                 (await reads.TailAsync(tenant, new(first), cancellationToken: token)).Items.Count > 0,
                 "the stopped SQLite file contains the published flowchart checkpoint and journal");
 
+            var empty = Path.Combine(workspace.FullName, "empty.sqlite");
+            await SqliteEmbeddedHosting.InstallShippedAsync(empty, token);
+            await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = empty }.ConnectionString))
+            {
+                await db.OpenAsync(token);
+                await using var mode = db.CreateCommand();
+                mode.CommandText = "PRAGMA journal_mode";
+                Require(await mode.ExecuteScalarAsync(token) is "wal", "the shipped installer enables WAL before any owner or reader starts");
+            }
+
             var shellPath = Path.Combine(workspace.FullName, "shells.json");
             var shell = JsonNode.Parse(await File.ReadAllTextAsync(shellPath, token))!;
             shell["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject().Remove("DecisionsWorkflowsApi");
             await File.WriteAllTextAsync(shellPath, shell.ToJsonString(), token);
-            using (var host = WorkbenchProcess.Start(executable, "", enabled: true, "publications", null, path, workspace))
+            using (var host = WorkbenchProcess.Start(executable, "", enabled: true, "publications", null, alias, workspace))
             {
                 await host.WaitReadyAsync(token);
                 await host.WaitForKernelServingAsync(token);
                 using var client = await AuthenticateAsync(host);
                 Require((await FindRunsAsync(client, flowchart, 1)).Single() == first,
                     "the restarted SQLite Workbench returns the prior run through its runtime API");
+                File.Delete(alias);
+                File.CreateSymbolicLink(alias, empty);
                 var observations = await ReadAsync(client, PreviewRunsPath(flowchart));
                 Require(observations.GetProperty("asOf").GetInt64() > 0 && observations.GetProperty("items").EnumerateArray().Single()
-                    .GetProperty("ref").GetString() == first, "the opt-in reads observe the persisted run in a shell with ordinary resource policy");
+                    .GetProperty("ref").GetString() == first, "an opt-in reader opened after symlink retargeting still reads the installed file");
                 await RunFlowchartAsync(client);
                 var runs = await FindRunsAsync(client, flowchart, 2);
                 Require(runs.Contains(first, StringComparer.Ordinal) && runs.Distinct(StringComparer.Ordinal).Count() == 2,

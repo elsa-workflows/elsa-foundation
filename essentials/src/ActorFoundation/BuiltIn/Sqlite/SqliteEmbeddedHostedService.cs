@@ -26,14 +26,18 @@ public sealed class SqliteEmbeddedHostedService : IHostedService, IAsyncDisposab
     internal static SqliteEmbeddedHostedService ForFoundation(string databasePath, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true, ILogger<SqliteEmbeddedHostedService>? logger = null,
         SqliteEmbeddedHosting.SqliteDirectRequests? requests = null, Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null) =>
-        ForShipped(databasePath, node, actor, endProcess, options, fenceInBatch, logger, () => requests, retentionWindow);
+        ForShipped(node, actor, endProcess, options, fenceInBatch, logger, () => (databasePath, requests), retentionWindow);
 
-    internal static SqliteEmbeddedHostedService ForShipped(string databasePath, string node, Contract.IActorType actor,
+    internal static SqliteEmbeddedHostedService ForShipped(string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options, bool fenceInBatch, ILogger<SqliteEmbeddedHostedService>? logger,
-        Func<SqliteEmbeddedHosting.SqliteDirectRequests?> requests, Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null) =>
+        Func<(string Path, SqliteEmbeddedHosting.SqliteDirectRequests? Requests)> bind, Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null) =>
         new(new NodeHostedService("SQLite embedded", node, endProcess, (options ?? new LoopOptions()).DisposeDeadline,
-            (fault, escalate, token) => SqliteEmbeddedHosting.StartFoundationAsync(databasePath, node, actor, escalate, options,
-                fenceInBatch, token, fault, requests(), retentionWindow), logger));
+            (fault, escalate, token) =>
+            {
+                var (path, requests) = bind();
+                return SqliteEmbeddedHosting.StartFoundationAsync(path, node, actor, escalate, options,
+                    fenceInBatch, token, fault, requests, retentionWindow);
+            }, logger));
 
     /// <summary>The shutdown fault, if any, or the last fault recorded by the node.</summary>
     public Exception? LastError => _service.LastError;

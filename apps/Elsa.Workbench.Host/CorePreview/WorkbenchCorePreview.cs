@@ -236,7 +236,7 @@ internal static class WorkbenchCorePreview
                 {
                     // The release profile installs its format in an empty database and starts on one already installed; any
                     // other database is refused with what to do, and the process ends before its node starts.
-                    if (sqlitePath is not null) await SqliteEmbeddedHosting.InstallShippedAsync(sqlitePath, token);
+                    if (sqlite is not null) await sqlite.InstallShippedAsync(token);
                     else if (publications) await PostgresPreviewHosting.InstallShippedAsync(postgresOptions!, token);
                     edge?.StoreInstalled();
                     await shells.GetOrActivateAsync(shellName, token);

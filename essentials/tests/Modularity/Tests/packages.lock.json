@@ -1146,6 +1146,13 @@
       "elsa.actorfoundation.builtin.runtime": {
         "type": "Project"
       },
+      "elsa.actorfoundation.builtin.sqlite": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore": "[4.0.0-dev, )"
+        }
+      },
       "elsa.actorfoundation.builtin.store.entityframeworkcore": {
         "type": "Project",
         "dependencies": {
@@ -2631,6 +2638,7 @@
           "Elsa.Activities.Scheduling": "[4.0.0-dev, )",
           "Elsa.Activities.Sequence": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.BuiltIn.PostgreSql": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.BuiltIn.Sqlite": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
           "Elsa.Agent": "[4.0.0-dev, )",
           "Elsa.Agent.Anthropic": "[4.0.0-dev, )",
