@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 ARG ELSA_VERSION=specify-release
-ARG PROFILE_BUILDER_IMAGE=elsaworkflows/elsa-profile-builder:${ELSA_VERSION}
+ARG PROFILE_BUILDER_IMAGE=elsaworkflows/elsa-foundation-host:builder-${ELSA_VERSION}
 ARG FOUNDATION_IMAGE=elsaworkflows/elsa-foundation-host:${ELSA_VERSION}
 
 FROM ${PROFILE_BUILDER_IMAGE} AS profile-builder

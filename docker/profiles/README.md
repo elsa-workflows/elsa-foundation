@@ -10,7 +10,7 @@ A profile runs `Elsa.Foundation.Host.dll`. `packages.txt` selects the NuGet pack
 
 ## Use a released profile
 
-Select a published profile and set `ELSA_VERSION` to its release tag suffix, such as `4.0.0-preview.1234.1`. The same version identifies the paired images `elsaworkflows/elsa-profile-builder` and `elsaworkflows/elsa-foundation-host`. Each Elsa NuGet package has its own version, selected by the builder's release plan.
+Select a published profile and set `ELSA_VERSION` to its release tag suffix, such as `4.0.0-preview.1234.1`. The same release pairs `elsaworkflows/elsa-foundation-host:$ELSA_VERSION` with `elsaworkflows/elsa-foundation-host:builder-$ELSA_VERSION`. Each Elsa NuGet package has its own version, selected by the builder's release plan.
 
 ```sh
 image="elsaworkflows/elsa-foundation-host:essentials-${ELSA_VERSION}"

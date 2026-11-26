@@ -438,7 +438,7 @@ jobs:
       matrix:
         include:
           - image: elsa-profile-builder
-            destination: "elsaworkflows/elsa-profile-builder:"
+            destination: elsaworkflows/elsa-foundation-host:builder-
           - image: elsa-server-essentials
             destination: elsaworkflows/elsa-foundation-host:essentials-
           - image: elsa-server-elsa3-import
@@ -493,7 +493,7 @@ jobs:
           docker buildx imagetools create -t "$FOUNDATION:$VERSION" "$FOUNDATION@$DIGEST"
           actual=$(docker buildx imagetools inspect "$FOUNDATION:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
           test "$actual" = "$DIGEST"
-          for target in "elsaworkflows/elsa-profile-builder:$VERSION" \
+          for target in "$FOUNDATION:builder-$VERSION" \
             "$FOUNDATION:essentials-$VERSION" "$FOUNDATION:elsa3-import-$VERSION" "$FOUNDATION:full-$VERSION"; do
             docker buildx imagetools create -t "$target" "$target-amd64" "$target-arm64"
             manifest=$(docker buildx imagetools inspect "$target" --format '{{json .Manifest}}')
