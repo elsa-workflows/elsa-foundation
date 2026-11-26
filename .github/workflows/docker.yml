@@ -548,7 +548,8 @@ jobs:
             printf 'Versioned Essentials image retained for %s. Main is %s.\n' "$GITHUB_SHA" "$current" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          printf 'Previous latest %s@%s\n' "$REPOSITORY" "$previous" >> "$GITHUB_STEP_SUMMARY"
           docker buildx imagetools create -t "$REPOSITORY:latest" "$source"
           actual=$(docker buildx imagetools inspect "$REPOSITORY:latest" --format '{{json .Manifest}}' | jq -er .digest)
           test "$actual" = "$digest"
-          printf 'Published %s from %s\nPrevious latest %s@%s\n' "$source" "$GITHUB_SHA" "$REPOSITORY" "$previous" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Published %s from %s\n' "$source" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
