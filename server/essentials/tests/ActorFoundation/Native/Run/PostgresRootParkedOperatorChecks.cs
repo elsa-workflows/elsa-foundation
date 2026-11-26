@@ -786,6 +786,7 @@ internal static class PostgresRootParkedOperatorChecks
             var ingress = new PostgresRootIngress(set.Admission, Probe.Type, (_, _) => true, (_, _) => true, authorizeRecover: (_, _) => true);
             Contract.ActorRef recovering = default;
             Contract.ActorRef clearing = default;
+            EfStore.RootImage? withheldPark = null;
             EfStore.RootImage? parked = null;
             string? clearingSelection = null;
             var admittedAfterRecover = false;
@@ -795,7 +796,8 @@ internal static class PostgresRootParkedOperatorChecks
             {
                 var result = await writer.CommitAsync(batch, token);
                 if (result.Landed && parked is { } before &&
-                    batch.Turns.Any(turn => turn.Journal?.StartsWith("""{"Outcome":"recovered",""", StringComparison.Ordinal) == true))
+                    batch.Turns.Any(turn => turn.FoundationRootOperator?.Id == "recover" &&
+                        turn.Journal?.StartsWith("""{"Outcome":"recovered",""", StringComparison.Ordinal) == true))
                 {
                     // Mature the older delayed control after Recover lands and before the restored inputs run.
                     await using var write = OpenJoint();
@@ -804,6 +806,16 @@ internal static class PostgresRootParkedOperatorChecks
                         WHERE "Target" = {before.Actor.Id} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
                         """, token) == 1, "the delayed Park-selected Terminate matures behind the released cohort");
                     admittedAfterRecover = await set.SendAsync(recovering, "after-recover", "after-recover");
+                }
+                if (result.Landed && withheldPark is { } withheld &&
+                    batch.Turns.Any(turn => turn.FoundationRootOperator?.Id == "recover-withheld" &&
+                        turn.Journal?.StartsWith("""{"Outcome":"recovered",""", StringComparison.Ordinal) == true))
+                {
+                    await using var write = OpenJoint();
+                    Check(await write.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "Messages" SET "Due" = 0
+                        WHERE "Target" = {withheld.Actor.Id} AND ("Kind" = {Kinds.Terminate} OR "Kind" = 'withheld-ordinary') AND NOT "Done"
+                        """, token) == 2, "the earlier ordinary input and stale selected Terminate mature on the recovered withholding root");
                 }
                 if (result.Landed && batch.Turns.Any(turn => turn.FoundationRootOperator?.Id == "old-park-terminate"))
                     releasedBeforeControl = set.Probe.Saw(recovering, "arrival-1") && set.Probe.Saw(recovering, "arrival-2");
@@ -816,7 +828,12 @@ internal static class PostgresRootParkedOperatorChecks
             var owner = await set.OwnAsync();
             recovering = await set.StartAsync("cohort");
             Check(await set.SendAsync(recovering, "cohort-fault", "fail"), "the joint profile admits input that opens a Park");
+            Check(await set.HeldSendAsync(recovering, "held-before-park", null, "held-before-park") is not null,
+                "a held direct call is admitted behind the fault before the Park opens");
             parked = await set.DriveAsync(recovering, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await set.HeldSendAsync(recovering, "held-during-park", null, "held-during-park") is null &&
+                (await set.InputsAsync(recovering)).Any(input => input is { Kind: "held-before-park", Done: false, KeptBy: null }),
+                "held direct ingress refuses a fresh parked call and the preadmitted held occurrence remains pending");
             var selection = await set.ParkSelectionAsync(recovering, 2);
             Check(await set.OperateAsync(recovering, "old-park-terminate", Kinds.Terminate, selection, reply: true,
                     dueAt: parked.AsOf + 120_000), "the joint profile admits a delayed selected Terminate while parked");
@@ -839,11 +856,32 @@ internal static class PostgresRootParkedOperatorChecks
             set.Answered("old-park-terminate", "StaleSelection");
             Check(admittedAfterRecover && releasedBeforeControl && recovered is { Status: InstanceStatus.Running, ParkAt: null } &&
                 recovered.Revision > arrivalsKept.Revision && set.Probe.InputKinds(recovering) is
-                    [Contract.Kinds.Start, "fail", "arrival-1", "arrival-2", "after-recover"] &&
+                    [Contract.Kinds.Start, "fail", "arrival-1", "arrival-2", "held-before-park", "after-recover"] &&
                 ReferenceEquals(set.Owner, owner) && !set.StoodDown,
                 "Recover releases both arrivals in order ahead of the old control and post-recovery input");
             Check(await SendOperatorAsync(recovering, "stale-recover", Contract.Kinds.Recover, selection, stop) is { Outcome: Contract.AdmissionOutcome.Refused },
                 "public ingress refuses a spent Park selection");
+
+            var withheld = await set.StartAsync("withheld-cohort", Probe.WithheldBody);
+            set.Probe.FailsOn.Add((withheld.Id, Contract.Kinds.Terminate));
+            Check(await set.TerminateAsync(withheld, "faulting-control"),
+                "a selected control reaches a running actor that withholds by header");
+            withheldPark = await set.DriveAsync(withheld, image => image is { Revision: >= 3, Status: InstanceStatus.Faulted });
+            var withheldSelection = await set.ParkSelectionAsync(withheld, 2);
+            var due = withheldPark.AsOf + 120_000;
+            Check(await set.SendAsync(withheld, "earlier-withheld", "withheld-ordinary", due) &&
+                await set.OperateAsync(withheld, "stale-withheld-terminate", Kinds.Terminate, withheldSelection, reply: true, dueAt: due) &&
+                await SendOperatorAsync(withheld, "recover-withheld", Contract.Kinds.Recover, withheldSelection, stop) is { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                await SendOperatorAsync(withheld, "stale-withheld-recover", Contract.Kinds.Recover, withheldSelection, stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "the Park admits a future ordinary input, a delayed Terminate and two consecutive Recover commands");
+            await set.DriveAsync(withheld, image => image is { Revision: 6, Status: InstanceStatus.Running, Suspended: false });
+            set.Answered("stale-withheld-terminate", "StaleSelection");
+            Check(Outcomes(await set.Cold.ReadJournalOfAsync(0, withheldPark.Actor.Id, 0, stop)) is
+                    [.., """{"Outcome":"refused","Operation":"stale-withheld-terminate","Reason":"selection"}""",
+                     """{"Outcome":"refused","Operation":"stale-withheld-recover","Reason":"selection"}"""] &&
+                (await set.InputsAsync(withheld)).Any(input => input is { Kind: "withheld-ordinary", Done: false }) &&
+                !set.Probe.Saw(withheld, "withheld-ordinary") && ReferenceEquals(set.Owner, owner) && !set.StoodDown,
+                "both stale Park commands settle on the same owner while the earlier authored-withheld input remains pending");
 
             clearing = await set.StartAsync("clearing-and-recover");
             var payload = Json.Write(new string('x', ParkRecoveryCredit.LimitBytes / 2 + 1_024));
@@ -851,6 +889,11 @@ internal static class PostgresRootParkedOperatorChecks
                 await set.SendAsync(clearing, "clearing-2", "fail", payload: payload),
                 "the joint profile admits two inputs whose total exceeds one clearing page");
             var clearingPark = await set.DriveAsync(clearing, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(!await set.TriggerProbeEntriesAsync(clearingPark, [ProbeRefusal, ProbeClearing],
+                    Change(clearingPark, $$"""
+                        "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1, "FoundationParkClearingKind" = '{{Kinds.Terminate}}'
+                        """)),
+                "the composed checkpoint guard refuses an Open at a revision that carries a refusal");
             clearingSelection = await set.ParkSelectionAsync(clearing, clearingPark.Revision);
             Check(await set.OperateAsync(clearing, "start-clearing", Kinds.Terminate, clearingSelection, reply: true) &&
                 await SendOperatorAsync(clearing, "behind-clearing", Contract.Kinds.Recover, clearingSelection, stop) is { Outcome: Contract.AdmissionOutcome.Accepted },

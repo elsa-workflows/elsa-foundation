@@ -187,14 +187,16 @@ public sealed partial class EfStore
             current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))
             throw RootShape();
         return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
-            new RootParkRecover(root, expected, command, recovered, current.Status));
+            new RootParkRecover(root, expected, command, recovered, current.Status,
+                current.Status == InstanceStatus.Running && AuthoredWithholding(root, current)));
     }
 
     private sealed record LockedRecover(long? At, long? Revision, long Generation, string? Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
 
     // One fenced commit: the root becomes Running with its Park mark cleared, the arrivals return to the inbox as the
     // next generation's cohort, and the fault input stays settled. A refusal moves only the revision and settles the command.
-    private sealed record RootParkRecover(WorkerRoot Root, long Expected, Message Command, bool Recovered, InstanceStatus Prior)
+    private sealed record RootParkRecover(WorkerRoot Root, long Expected, Message Command, bool Recovered, InstanceStatus Prior,
+        bool WithheldInputs)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
@@ -223,7 +225,8 @@ public sealed partial class EfStore
                 return false;
             var envelope = Command with { Operator = Command.Operator with { RootParkFacts = null } };
             if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [envelope], null,
-                db.UsesRootComposedParkRecovery && facts.Clearing is not null, token))
+                WithheldInputs || db.UsesRootComposedParkRecovery && facts.Clearing is not null, token,
+                parked: Prior == InstanceStatus.Faulted))
                 return false;
 
             var generation = Recovered ? checked(prior.Generation + 1) : prior.Generation;
@@ -242,6 +245,14 @@ public sealed partial class EfStore
             if (arrived.Length + cleared.Length != kept.Count) return false;
             var restoredIds = arrived.Select(row => row.Id).ToArray();
             if (Recovered && !await RestoreAsync()) return false;
+            // The worker forgets inputs it read before Recover so the released cohort gets the first poll.
+            // Pending calls and controls must become visible again even when they were read before the Park.
+            if (Recovered && db.UsesRootComposedParkRecovery)
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Seen" = 0
+                    WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        AND "EventMatch" IS NULL AND NOT "Done" AND "Seen" <> 0
+                    """, token);
             long? at = Recovered ? null : prior.At, revision = Recovered ? null : prior.Revision;
             var fault = Recovered ? null : prior.Fault;
             var status = Recovered ? InstanceStatus.Running : Prior;

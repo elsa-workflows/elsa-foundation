@@ -124,7 +124,8 @@ public sealed partial class EfStore
                     !await ClearParkedAsync(parked))) return false;
             // A parked root without Park arrivals, or one being cleared, receives only its operator rows.
             if (!await SettleRootInputsAsync(db, Root.Reference, Current.Actor, [Command.InboxKey], [Command], null,
-                    Park is null ? running && (Current.Suspended || WithheldInputs) : !db.UsesRootParkArrivals || Park.Clearing is not null, token))
+                    Park is null ? running && (Current.Suspended || WithheldInputs) : !db.UsesRootParkArrivals || Park.Clearing is not null,
+                    token, parked: Park is not null))
                 return false;
 
             var revision = checked(Current.Revision + 1);

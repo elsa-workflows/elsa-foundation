@@ -69,7 +69,7 @@ public sealed partial class EfStore
         .Replace("/*journal-write-refused*/", RootJournalWriteRefused, StringComparison.Ordinal)
         .Replace("/*root-park-continues*/", db.UsesRootParkArrivals ? """
             (OLD."Status" = 2 AND NEW."Status" = OLD."Status" AND NOT NEW."Retired" /*parked-clearing-continues*/
-                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 /*park-recover-footprint*/
+                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
                 AND NEW."FoundationParkAt" = OLD."FoundationParkAt" AND NEW."FoundationParkRevision" = OLD."FoundationParkRevision"
                 AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
                 AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault" AND NEW."Suspended" = OLD."Suspended"
@@ -105,20 +105,24 @@ public sealed partial class EfStore
                         NEW."StateVersion", NEW."FoundationHeader", NEW."Fault", NEW."History", NEW."Jobs", NEW."Children", NEW."Parent",
                         NEW."FoundationParkAt", NEW."FoundationParkRevision", NEW."FoundationParkGeneration",
                         NEW."FoundationTerminalRevision", NEW."FoundationTerminalAt", NEW."Model", NEW."Definition",
-                        NEW."NextJobGeneration", NEW."CustomHandles" /*new-wire*/)
+                        NEW."NextJobGeneration", NEW."CustomHandles" /*new-wire*/ /*new-clearing*/)
                     IS DISTINCT FROM ROW(OLD."Status", OLD."Retired", OLD."Suspended", OLD."State",
                         OLD."StateVersion", OLD."FoundationHeader", OLD."Fault", OLD."History", OLD."Jobs", OLD."Children", OLD."Parent",
                         OLD."FoundationParkAt", OLD."FoundationParkRevision", OLD."FoundationParkGeneration",
                         OLD."FoundationTerminalRevision", OLD."FoundationTerminalAt", OLD."Model", OLD."Definition",
-                        OLD."NextJobGeneration", OLD."CustomHandles" /*old-wire*/) END)
+                        OLD."NextJobGeneration", OLD."CustomHandles" /*old-wire*/ /*old-clearing*/) END)
             """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
             // The state wire column exists only on stable-body profiles.
             .Replace("/*new-wire*/", db.UsesRootStableBody ? """, NEW."FoundationStateWire" """ : "", StringComparison.Ordinal)
             .Replace("/*old-wire*/", db.UsesRootStableBody ? """, OLD."FoundationStateWire" """ : "", StringComparison.Ordinal)
+            .Replace(" /*new-clearing*/", db.UsesRootComposedParkRecovery
+                ? """, NEW."FoundationParkClearing", NEW."FoundationParkClearingKind", NEW."FoundationParkCleared" """ : "", StringComparison.Ordinal)
+            .Replace(" /*old-clearing*/", db.UsesRootComposedParkRecovery
+                ? """, OLD."FoundationParkClearing", OLD."FoundationParkClearingKind", OLD."FoundationParkCleared" """ : "", StringComparison.Ordinal)
             : db.UsesRootParkedOperators ? ParkedRefusalRow(db) : "", StringComparison.Ordinal)
         .Replace("/*root-park-recover*/", db.UsesRootParkRecovery ? """
             (OLD."Status" = 2 AND NEW."Status" = 0 AND NOT NEW."Retired" AND NOT OLD."Suspended" AND NOT NEW."Suspended"
-                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
+                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0/*park-recover-footprint*/
                 AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL AND NEW."Fault" IS NULL
                 AND NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" + 1
                 AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
@@ -127,7 +131,7 @@ public sealed partial class EfStore
                     AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/ AND j."Entries" LIKE '{{"Outcome":"recovered",%'))
             """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
             .Replace("/*park-recover-footprint*/", db.UsesRootComposedParkRecovery
-                ? """AND OLD."FoundationParkClearing" IS NULL AND OLD."Jobs" IS NULL""" : "", StringComparison.Ordinal)
+                ? """ AND OLD."FoundationParkClearing" IS NULL AND OLD."Jobs" IS NULL""" : "", StringComparison.Ordinal)
             : "false", StringComparison.Ordinal)
         // A recovered entry is journaled only on the parked root it resolves.
         .Replace("/*root-park-recovered-journal*/", db.UsesRootParkRecovery ? """

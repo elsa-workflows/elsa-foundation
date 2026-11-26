@@ -857,12 +857,17 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                    {(WithholdsParkInputs(db) ? """AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4 AND m."Id" LIKE 'operator/%')"""
                        : db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL"""
                        : ClearsParkInPages(db) ? RootClearingInputFilter : "")}
-                   {(db.UsesRootComposedParkRecovery ? """AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4)""" : "")}
+                   {(db.UsesRootComposedParkRecovery ? """
+                     AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4 AND (m."ReplyTo" IS NULL OR m."Id" LIKE 'operator/%'))
+                     """ : "")}
                    {(db.UsesRootParkRecovery ? RootReleasedCohortFilter : "")})))
             """;
     private string PostgresOperatorPollFilter(KernelDb db)
     {
         var filter = db.UsesRootComposedParkRecovery ? WithReleasedCohort(RootClearingOperatorPollFilter)
+            .Replace("/*held-park-predecessor*/", """
+                AND (target."FoundationParkAt" IS NULL OR prior."ReplyTo" IS NULL OR prior."Id" LIKE 'operator/%')
+                """, StringComparison.Ordinal)
             : db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
             : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : ClearsParkInPages(db) ? RootClearingOperatorPollFilter
             : RootOperatorPollFilter;
@@ -886,7 +891,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                          AND NOT prior."Done" AND prior."Due" <= t.now
                          /*earlier-command-input*/
                          /*authored-withholding*/
-                         /*withheld-prior*/)
+                         /*withheld-prior*/
+                         /*held-park-predecessor*/)
                    ELSE (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running}) AND (/*released-cohort*/ NOT EXISTS (
                        SELECT 1 FROM "Messages" op
                        WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
