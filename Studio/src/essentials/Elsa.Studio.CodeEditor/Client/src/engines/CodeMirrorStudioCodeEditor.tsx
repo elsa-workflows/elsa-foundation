@@ -10,7 +10,7 @@ import {
   temporarilySetTabFocusMode,
   toggleTabFocusMode
 } from "@codemirror/commands";
-import { bracketMatching, HighlightStyle, foldGutter, indentOnInput, syntaxHighlighting, syntaxTree } from "@codemirror/language";
+import { bracketMatching, ensureSyntaxTree, HighlightStyle, foldGutter, indentOnInput, syntaxHighlighting, syntaxTree } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { Compartment, EditorState, Prec, Transaction } from "@codemirror/state";
 import { EditorView, type ViewUpdate, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, type KeyBinding } from "@codemirror/view";
@@ -530,8 +530,10 @@ function handleUpdate(update: ViewUpdate, entry: CodeMirrorSessionEntry) {
 
 function typedMemberAccess(update: ViewUpdate): boolean {
   const { empty, head } = update.state.selection.main;
-  return empty && update.transactions.some(transaction => transaction.isUserEvent("input.type")) &&
-    /[\p{ID_Continue}$)\]]\.$/u.test(update.state.sliceDoc(Math.max(0, head - 3), head));
+  if (!empty || !update.transactions.some(transaction => transaction.isUserEvent("input.type"))) return false;
+  const node = ensureSyntaxTree(update.state, head, 10)?.resolveInner(head, -1);
+  const dot = node?.name === "PropertyName" ? node.prevSibling : node;
+  return dot?.name === "." && dot.parent?.name === "MemberExpression";
 }
 
 function requestExpansion(runtime: CodeMirrorRuntime) {

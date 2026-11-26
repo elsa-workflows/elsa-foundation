@@ -1,4 +1,5 @@
 import { acceptCompletion, completionStatus, currentCompletions, startCompletion } from "@codemirror/autocomplete";
+import { syntaxTree } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -447,8 +448,13 @@ describe("StudioCodeEditor", () => {
     unmount();
   }, 20000);
 
-  it.each(["pending", "empty"] as const)("completes JavaScript members after a period and refresh of a %s query", async result => {
-    const source = "variables.customer";
+  it.each([
+    { scenario: "while the query is pending", prefix: "variables.customer", remaining: "", result: "pending", filter: "" },
+    { scenario: "after an empty result", prefix: "variables.customer", remaining: "", result: "empty", filter: "" },
+    { scenario: "while the author types a member prefix", prefix: "variables.customer", remaining: "", result: "pending", filter: "s" },
+    { scenario: "inside a template interpolation", prefix: "`Hi ${variables.customer", remaining: "}`", result: "pending", filter: "" }
+  ])("restores implicit member completion $scenario", async ({ prefix, remaining, result, filter }) => {
+    const source = prefix + remaining;
     const props = { document: codeDocument({ value: source }), languageAdapter: javaScriptLanguageAdapter };
     const originalProvider = vi.fn(({ signal }: StudioCodeCompletionRequest) => result === "pending"
       ? new Promise<never>((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }))
@@ -460,17 +466,21 @@ describe("StudioCodeEditor", () => {
       await waitFor(() => !!container.querySelector(".cm-content"));
       const content = container.querySelector<HTMLElement>(".cm-content")!;
       const view = EditorView.findFromDOM(content)!;
-      view.dispatch({ changes: { from: source.length, insert: "." }, selection: { anchor: source.length + 1 }, userEvent: "input.type" });
+      await vi.waitFor(() => expect(syntaxTree(view.state).type.name).toBe("Script"));
+      view.dispatch({ changes: { from: prefix.length, insert: "." }, selection: { anchor: prefix.length + 1 }, userEvent: "input.type" });
       await vi.waitFor(() => {
         expect(originalProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false }));
         expect(completionStatus(view.state)).toBe(result === "pending" ? "pending" : null);
       });
 
-      const edited = { ...props, document: { ...props.document, value: source + "." } };
+      if (filter) {
+        view.dispatch({ changes: { from: prefix.length + 1, insert: filter }, selection: { anchor: prefix.length + 1 + filter.length }, userEvent: "input.type" });
+      }
+      const edited = { ...props, document: { ...props.document, value: prefix + "." + filter + remaining } };
       rerender({ ...edited, completionProvider: refreshedProvider });
 
       await vi.waitFor(() => {
-        expect(refreshedProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false, position: source.length + 1 }));
+        expect(refreshedProvider).toHaveBeenCalledWith(expect.objectContaining({ explicit: false, position: prefix.length + 1 + filter.length }));
         expect(container.querySelector(".cm-completionLabel")?.textContent).toBe("street");
       });
       if (result === "pending") expect(originalProvider.mock.calls[0]![0].signal.aborted).toBe(true);
@@ -482,8 +492,28 @@ describe("StudioCodeEditor", () => {
     }
   }, 20000);
 
+  it.each(["string", "comment", "template"] as const)("clears implicit completion after a period in a JavaScript %s", async kind => {
+    const source = { string: '"variables.customer', comment: "// variables.customer", template: "`variables.customer" }[kind];
+    const props = { document: codeDocument({ value: source }), languageAdapter: javaScriptLanguageAdapter };
+    const { container, rerender, unmount } = renderEditor({ ...props, completionProvider: () => null });
+
+    try {
+      await waitFor(() => !!container.querySelector(".cm-editor"));
+      const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+      await vi.waitFor(() => expect(syntaxTree(view.state).type.name).toBe("Script"));
+      view.dispatch({ changes: { from: source.length, insert: "." }, selection: { anchor: source.length + 1 }, userEvent: "input.type" });
+      expect(completionStatus(view.state)).toBe("pending");
+
+      rerender({ ...props, document: { ...props.document, value: source + "." }, completionProvider: () => [{ label: "street" }] });
+
+      expect(completionStatus(view.state)).toBeNull();
+    } finally {
+      unmount();
+    }
+  }, 20000);
+
   it("formats an inline type alias in the completion note", async () => {
-    const text = "From the declared type `shop.customer`; the stored value may differ.";
+    const text = "Types `List<Customer>` and ``arr[`key`](x)``. Unpaired ``tick`.";
     const source = "variables.customer.";
     const { container, unmount } = renderEditor({
       document: codeDocument({ value: source }),
@@ -499,8 +529,8 @@ describe("StudioCodeEditor", () => {
 
       await vi.waitFor(() => {
         const note = container.querySelector(".cm-completionInfo");
-        expect(note?.querySelector("code")?.textContent).toBe("shop.customer");
-        expect(note?.textContent).toBe(text.replaceAll("`", ""));
+        expect(Array.from(note?.querySelectorAll("code") ?? [], code => code.textContent)).toEqual(["List<Customer>", "arr[`key`](x)"]);
+        expect(note?.textContent).toBe("Types List<Customer> and arr[`key`](x). Unpaired ``tick`.");
         expect(note?.querySelector("img")).toBeNull();
       });
     } finally {

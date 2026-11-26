@@ -1,7 +1,7 @@
 import { autocompletion, closeCompletion, completionStatus, type CompletionSource } from "@codemirror/autocomplete";
 import { StateEffect, StateField, type Extension } from "@codemirror/state";
 import { Direction, EditorView, hoverTooltip, panels, showPanel, ViewPlugin, type Rect, type ViewUpdate } from "@codemirror/view";
-import { sanitizeStudioCodeMarkdown } from "../StudioCodeDocumentation";
+import { sanitizeStudioCodeMarkdown, stripStudioCodeMarkdownMarkup } from "../StudioCodeDocumentation";
 import type {
   StudioCodeCompletion,
   StudioCodeCompletionProvider,
@@ -334,15 +334,17 @@ function toCodeMirrorCompletion(completion: StudioCodeCompletion) {
 function renderCompletionDocumentation(markdown: string) {
   const dom = document.createElement("div");
   dom.className = "studio-code-editor-completion-documentation";
-  const text = sanitizeStudioCodeMarkdown(markdown);
   let from = 0;
-  for (const match of text.matchAll(/(?<![\\`])(`+)([^\n]+?)\1(?!`)/g)) {
-    dom.append(text.slice(from, match.index));
+  // Match whole delimiter runs so nested backticks remain literal.
+  for (const match of markdown.matchAll(/(?<![\\`])(`+)(?!`)([^\n]+?)(?<!`)\1(?!`)/g)) {
+    const prose = stripStudioCodeMarkdownMarkup(markdown.slice(from, match.index));
+    dom.append(from === 0 ? prose.trimStart() : prose);
     const code = document.createElement("code");
     code.textContent = match[2]!;
     dom.append(code);
     from = match.index + match[0].length;
   }
-  dom.append(text.slice(from));
+  const tail = stripStudioCodeMarkdownMarkup(markdown.slice(from));
+  dom.append(from === 0 ? tail.trim() : tail.trimEnd());
   return dom;
 }
