@@ -79,15 +79,17 @@ applies. The Elsa 3 converter then maps `Elsa.ParallelForEach` onto it, rewrites
     It is a count, never a row list. Implementations:
     - EF Core: `ActivityExecutionStateEntity` keeps the node id, the iteration id and the marker only inside
       `ContentJson` (`ActivityExecutionEntityConfigurations.cs:15-46`). Add columns for the executable node id, the
-      iteration id and a "parent completion processed" flag, written on every upsert from the state, with an index on
-      (parent id, node id, status, processed). Add a migration. Existing rows need no backfill: no row written before
+      iteration id and a "parent completion processed" flag, written on every upsert from the state, with an index that
+      follows the existing hash-column pattern for MySQL's key limit (`ActivityExecutionEntityConfigurations.cs:28-31`):
+      scope hash, workflow execution id hash, parent id hash, node id (bounded length or a hash), status, processed. Add a migration. Existing rows need no backfill: no row written before
       the migration can belong to a `ParallelForEach`, the only caller, and the project is pre-stable.
     - In-memory store.
-    - `CoalescingActivityExecutionStateStore` (`CoalescingRuntimeStateStores.cs:85`): count from the inner store,
-      leaving out rows that have a session upsert or tombstone, and add the matching session upserts, as its
-      `ListByParentPageAsync` overlay already does (around line 177). Without this, a staged but unflushed marker is
+    - `CoalescingActivityExecutionStateStore` (`CoalescingRuntimeStateStores.cs:85`): adjust the inner count as its
+      `CountAsync` does (`:136-157`). For each session upsert and tombstone, look up the inner row, subtract it when it
+      matched the predicate (node, `Completed`, processed, not superseded), and add the session row when it matches. Without this, a staged but unflushed marker is
       missed, `p` is too low, and an item is started twice.
-    - The interface's test doubles (Agent, Etl and Rules test projects).
+    - Every other implementer of the interface, test doubles included (about ten in essentials, for example
+      `ParallelActivityTests.cs:302` and several in `Workflows/Runtime/Tests`, plus the Agent, Etl and Rules tests).
     - One contract test shared by the EF Core, in-memory and coalescing stores, and the store's `EXTENSION_POINTS.md`.
     - If this proves heavier than planned, the measured fallback is the paged parent read (`ListByParentPageAsync`),
       whose cost the 1,000-item cap bounds. T009 records which was used.
@@ -129,7 +131,9 @@ applies. The Elsa 3 converter then maps `Elsa.ParallelForEach` onto it, rewrites
   declares that name on its body's context. For `CurrentValue`, that is `For`, `ForEach` or `ParallelForEach`. For
   `CurrentIndex`, it is `ForEach` or `ParallelForEach` only, because `For` declares `CurrentValue` alone
   (`For.cs:105-108`, `ForEachT.cs:97-98`, `ParallelForEachT.cs`). If the nearest one is not a `ParallelForEach`, keep today's handling for that loop
-  (`Elsa3ValueFlowLowerer.cs:1127-1137`). `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1106-1162) resolves only variables declared
+  (`Elsa3ValueFlowLowerer.cs:1157-1161`): the read is refused with `MissingAmbient` when no declared variable has that
+  name, and binds to a declared variable of that name when one exists. That silent bind is an existing gap of the
+  `For`/`ForEach` conversion, which this spec does not fix. It is reported as a follow-up. `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1106-1162) resolves only variables declared
   in the definition, so `CurrentValue` returns `MissingAmbient` today, and a workflow variable of that name would match
   first. Add a resolution branch for `CurrentValue` and `CurrentIndex` that runs before workflow and enclosing-scope
   variables when the reference sits in a `ParallelForEach` body. It yields a `VariableExpressionParameterBinding` to
@@ -183,7 +187,7 @@ essentials/src/Activities/ControlFlow/
   ActivitiesControlFlowFeature.cs                        changed
 essentials/tests/Activities/ControlFlow/Tests/ParallelForEach/   new
 essentials/src/Workflows/Runtime/Core/Contracts/IActivityExecutionStateStore.cs   changed (count member)
-  + its EF Core and in-memory implementations, index and migration, contract test
+  + EF Core (columns, index, migration), in-memory and coalescing implementations, other implementers, contract test
 extensions/Elsa3/src/Mapping/...                         changed (map entry, rewrite, normalizer, codes)
 extensions/Elsa3/tests/Mapping/Tests/                    new cases
 Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/blockPromotion.ts   changed
@@ -191,6 +195,7 @@ Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/blockProm
 
 ## Complexity Tracking
 
-- The store count member is a new contract member with two implementations. It is the smallest way to meet FR-008
+- The store count member is a new contract member with three store implementations (EF Core, in-memory,
+  coalescing) and updates to every other implementer. It is the smallest way to meet FR-008
   without giving structural activities a state bag of their own.
 - The collection helper extracted from `ForEach` keeps the two loops from drifting apart.

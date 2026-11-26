@@ -92,8 +92,9 @@ The converter already warns `ELS3-BEHAVIOUR-BREAK-STOPS-AT-PARALLEL` for a `Brea
 - **Converter.** `Elsa3BuiltInActivityMap.Entries.cs:55` maps ParallelForEach as `NoCounterpart`.
   `Elsa3LoopVariableReferencesRewrite` maps ForEach's `CurrentValue` **output** to `currentItem`. Elsa 3 `For` and
   `ForEach` also declare per-pass variables on their body: `ForEach` declares `CurrentValue` and `CurrentIndex`
-  (`ForEachT.cs:97-98`), while `For` declares `CurrentValue` only (`For.cs:105-108`). The converter keeps refusing by-name
-  reads of those (`Elsa3ValueFlowLowerer.cs:1127-1137`). So the nearest Elsa 3 loop that declares the name owns a
+  (`ForEachT.cs:97-98`), while `For` declares `CurrentValue` only (`For.cs:105-108`). A by-name read of those today is refused with
+  `MissingAmbient` when no declared variable has the name, and binds silently to a declared variable of that name when
+  one exists (`Elsa3ValueFlowLowerer.cs:1157-1161`). The silent bind is an existing gap, outside this spec. So the nearest Elsa 3 loop that declares the name owns a
   by-name read. Elsa 3 ParallelForEach has no output, so its reads go through
   `getVariable("CurrentValue")`. `Elsa3ExpressionRewriter`
   hands that to the ambient resolver (`AddResolvedEdit`). `Elsa3ValueFlowLowerer.ResolveAmbient` (lines 1106-1162)

@@ -61,7 +61,7 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
 ## Phase 4: Converter (US4)
 
 - [ ] T013 [US4] Map `Elsa.ParallelForEach` (FR-012) with the `ELS3-BEHAVIOUR-PARALLEL-FOREACH-BOUNDED` warning per
-  loop; update the activity-map tests that expected `ELS3-ACTIVITY-NO-COUNTERPART`.
+  loop, added to `Elsa3ActivityDiagnosticCodes` and the spec 236 diagnostic-codes contract; update the activity-map tests that expected `ELS3-ACTIVITY-NO-COUNTERPART`.
 - [ ] T014 [US4] Per-pass names (FR-013): a resolution branch in `Elsa3ValueFlowLowerer.ResolveAmbient` ahead of
   workflow and enclosing-scope variables; `getVariable("CurrentValue"|"CurrentIndex")` and the other by-name read forms;
   a workflow variable named `CurrentValue` does not win; a body-declared one does; an Elsa 3 `ForEach` (both names) or `For` (`CurrentValue` only; a `CurrentIndex` read inside a `For` inside the loop maps to the loop's index)
