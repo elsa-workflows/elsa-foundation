@@ -70,7 +70,7 @@ export async function authoredActivityNamesJourney(page: Page, info: TestInfo, c
       return run.instance.status;
     }).toBe("Completed");
     expect(executionId).toBeTruthy();
-    await page.goto(`/workflows/instances/${runId}?selected=${executionId}`);
+    await page.goto(studioBackendLink(page, `/workflows/instances/${runId}?selected=${executionId}`));
     await expect(page.locator(".wf-activity-overview-title h4")).toHaveText(names[0]);
     await capture(page, info, "authored-run");
   } finally {

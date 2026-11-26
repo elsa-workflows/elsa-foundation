@@ -179,7 +179,7 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
     const path = info.outputPath("set-output-proof.json"); writeFileSync(path, JSON.stringify(proof, null, 2));
     await info.attach("set-output-proof.json", { path, contentType: "application/json" });
   }
-  await page.goto(`/workflows/instances/${started.workflowExecutionId}`);
+  await page.goto(studioBackendLink(page, `/workflows/instances/${started.workflowExecutionId}`));
   await expect(page.getByRole("region", { name: "Workflow run canvas", exact: true })).toBeVisible();
   await page.locator('.wf-sequence-step[data-id="call"], .react-flow__node[data-id="call"]').first().press("Enter");
   await page.getByRole("tab", { name: "Details", exact: true }).click();

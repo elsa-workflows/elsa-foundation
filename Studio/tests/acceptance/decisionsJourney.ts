@@ -95,7 +95,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   const capabilities = await page.request.get(`${backend}/capabilities`); expect(capabilities.ok()).toBe(true);
   expect((await capabilities.json()).capabilities).toEqual(expect.arrayContaining([expect.objectContaining({ id: "elsa.api.decisions", contractVersion: "1" })]));
 
-  await page.goto("/");
+  await page.goto(studioBackendLink(page, "/"));
   const sidebar = page.locator(".sidebar");
   const build = sidebar.getByRole("button", { name: "Build", exact: true });
   await expect(build).toBeVisible();

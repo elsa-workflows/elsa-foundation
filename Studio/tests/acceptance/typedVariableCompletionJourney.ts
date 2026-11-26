@@ -32,7 +32,7 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   const untyped = { referenceKey: "plain", name: "plain", type: { alias: "Object", collectionKind: "Single" }, storageDriverType: null };
   const consumer = s.line(); consumer.inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: "" } }];
   const created = await s.seed("typed completion", s.root([consumer]), [], [typed, untyped]);
-  // Open on the backend this session is signed in to. activityDataSupport.open still links the retired "legacy" profile id.
+  // Open on the backend this session is signed in to.
   const backend = new URL(page.url()).searchParams.get("backend");
   await page.goto(`/workflows/definitions?definition=${created.definition.id}${backend ? `&backend=${encodeURIComponent(backend)}` : ""}`);
   await expect(page.locator('.wf-sequence-step[data-id="consumer"]')).toBeAttached();

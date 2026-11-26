@@ -50,7 +50,7 @@ export async function executableActivityBindingsJourney(page: Page, info: TestIn
   });
   ownDefinition(submitted.definition.id);
   const published = await api<Published>("/publishing/workflows/" + submitted.version.id + "/publish", "POST", {});
-  await page.goto("/workflows/executables/" + published.artifactId + "?ref=" + encodeURIComponent(published.sourceReferenceId));
+  await page.goto(studioBackendLink(page, `/workflows/executables/${published.artifactId}?ref=${encodeURIComponent(published.sourceReferenceId)}`));
   const canvas = page.getByRole("region", { name: "Executable canvas", exact: true });
   await expect(canvas).toBeVisible();
   const expandInspector = page.getByRole("button", { name: "Expand inspector panel", exact: true });
