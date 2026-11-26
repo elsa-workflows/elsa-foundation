@@ -2,7 +2,7 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    private static IEnumerable<SqliteDefinition> SqliteRootOutcomes()
+    private static IEnumerable<SqliteDefinition> SqliteRootOutcomes(KernelDb db)
     {
         // An outcome creates a deferred foreign-key violation. The matching checkpoint resolves it before commit.
         // A successful commit leaves both tables empty. The batch admits one checkpoint mutation per actor.
@@ -34,7 +34,7 @@ public sealed partial class EfStore
                 END
                 """));
 
-        var resolved = SqliteParkedOutcomeCheckpoint("");
+        var resolved = SqliteParkedOutcomeCheckpoint(db, "", firstCheckpoint: false);
         yield return new("trigger", "kernel_resolve_root_pending_outcome", "Instances", $$"""
             CREATE TRIGGER kernel_resolve_root_pending_outcome AFTER UPDATE OF "Revision" ON "Instances"
             WHEN NEW."FoundationReference" IS NOT NULL AND NEW."Revision" IS DISTINCT FROM OLD."Revision"
@@ -53,7 +53,7 @@ public sealed partial class EfStore
                 AND NOT ((j."Partition" = NEW."Partition" AND j."Revision" = NEW."Revision" AND /*outcome-checkpoint*/) IS TRUE));
             """;
         var checkFirst = unpaired.Replace("/*outcome-entry*/", RenderSqliteOutcomePrefixes(RootOutcomeEntry), StringComparison.Ordinal)
-            .Replace("/*outcome-checkpoint*/", SqliteParkedOutcomeCheckpoint("j."), StringComparison.Ordinal);
+            .Replace("/*outcome-checkpoint*/", SqliteParkedOutcomeCheckpoint(db, "j.", firstCheckpoint: true), StringComparison.Ordinal);
         yield return new("trigger", "kernel_require_first_root_outcome_bind", "Instances", $$"""
             CREATE TRIGGER kernel_require_first_root_outcome_bind AFTER UPDATE OF "FoundationReference" ON "Instances"
             WHEN OLD."FoundationReference" IS NULL AND NEW."FoundationReference" IS NOT NULL
@@ -67,8 +67,12 @@ public sealed partial class EfStore
     }
 
     // The shared predicate refers to the checkpoint as i and the journal entry as NEW.
-    private static string SqliteParkedOutcomeCheckpoint(string journalAlias) =>
-        RenderSqliteOutcomePrefixes(RootParkedOutcomeCheckpoint + StoppedParkOutcomeCheckpoint)
+    private static string SqliteParkedOutcomeCheckpoint(KernelDb db, string journalAlias, bool firstCheckpoint) =>
+        RenderSqliteOutcomePrefixes(RootParkedOutcomeCheckpoint + StoppedParkOutcomeCheckpoint +
+            (!db.UsesRootParkRecovery ? "" : firstCheckpoint ? """ AND NEW."Entries" NOT LIKE '{{"Outcome":"recovered",%' """ : """
+                AND (NEW."Entries" NOT LIKE '{{"Outcome":"recovered",%' OR (i."Status" = 0 AND NOT i."Retired"
+                    AND i."FoundationParkAt" IS NULL AND i."FoundationParkRevision" IS NULL AND i."FoundationParkClearing" IS NULL))
+                """))
             .Replace("NEW.", journalAlias, StringComparison.Ordinal)
             .Replace("i.", "NEW.", StringComparison.Ordinal);
 }

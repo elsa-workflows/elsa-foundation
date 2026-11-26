@@ -120,7 +120,7 @@ public sealed partial class EfStore
         var operatorOnly = suspended ? """AND "Id" LIKE 'operator/%'""" : "";
         var parkArrivals = parked && db.UsesRootComposedParkRecovery ? """AND ("ReplyTo" IS NULL OR "Id" LIKE 'operator/%')""" : "";
         // The settled prefix follows the poll's order, which puts a pending released cohort first.
-        var cohort = db.UsesRootParkRecovery
+        var cohort = db.UsesRootParkRecovery && !(db.UsesRootComposedParkRecovery && (parked || suspended))
             ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter})""" : "";
         var rows = await db.Messages.FromSqlRaw($$"""
             SELECT * FROM {{source}} m WHERE "Target" = {0} AND "Partition" = {1}
@@ -158,7 +158,8 @@ public sealed partial class EfStore
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
                 ? db.UsesSqliteRootRuntime
                     ? PostgresRootAdmission.DecodeOperator(row, reference, terminations: true, retirements: true,
-                        terminateThenDelete: true, retentionDeletes: true, operatorReplies: true, parkedTerminate: true)
+                        terminateThenDelete: true, retentionDeletes: true, operatorReplies: true, parkedTerminate: true,
+                        parkRecovery: db.UsesRootParkRecovery, composedRecovery: db.UsesRootComposedParkRecovery)
                     : PostgresRootAdmission.DecodeOperator(db, row, reference)
                 : PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol)
         };

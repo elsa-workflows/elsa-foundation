@@ -128,12 +128,20 @@ public sealed partial class EfStore
                 AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL AND NEW."Fault" IS NULL
                 AND NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" + 1
                 AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
-                AND NEW."History" IS NOT DISTINCT FROM OLD."History"
+                AND NEW."History" IS NOT DISTINCT FROM OLD."History"/*sqlite-recover-footprint*/
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
                     AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/ AND j."Entries" LIKE '{{"Outcome":"recovered",%'))
             """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
             .Replace("/*park-recover-footprint*/", db.UsesRootComposedParkRecovery
                 ? """ AND OLD."FoundationParkClearing" IS NULL AND OLD."Jobs" IS NULL""" : "", StringComparison.Ordinal)
+            .Replace("/*sqlite-recover-footprint*/", db.UsesSqliteRootRuntime ? """
+
+                AND NEW."FoundationStateWire" IS NOT DISTINCT FROM OLD."FoundationStateWire"
+                AND NEW."FoundationTerminalRevision" IS NULL AND NEW."FoundationTerminalAt" IS NULL
+                AND NEW."FoundationParkClearing" IS NULL AND NEW."FoundationParkClearingKind" IS NULL AND NEW."FoundationParkCleared" IS NULL
+                AND ROW(NEW."Jobs", NEW."Children", NEW."Parent", NEW."Model", NEW."Definition", NEW."NextJobGeneration", NEW."CustomHandles")
+                    IS NOT DISTINCT FROM ROW(OLD."Jobs", OLD."Children", OLD."Parent", OLD."Model", OLD."Definition", OLD."NextJobGeneration", OLD."CustomHandles")
+                """ : "", StringComparison.Ordinal)
             : "false", StringComparison.Ordinal)
         // A recovered entry is journaled only on the parked root it resolves.
         .Replace("/*root-park-recovered-journal*/", db.UsesRootParkRecovery ? """

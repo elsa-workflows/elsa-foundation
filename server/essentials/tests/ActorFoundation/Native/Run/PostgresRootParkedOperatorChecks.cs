@@ -391,6 +391,8 @@ internal static class PostgresRootParkedOperatorChecks
             await RecordedResultParkSet(recovery: false);
             await RecordedResultParkSet(recovery: true);
             await ComposedParkRecoveryAsync();
+            await WithheldReleasedCohortAsync();
+            await ReleasedCohortCandidateProgressAsync();
         }
         await RecoverNeverMeetsSuspendedPark();
         await ArrivalsSet();
@@ -920,6 +922,189 @@ internal static class PostgresRootParkedOperatorChecks
             ValueTask<Contract.Admission> SendOperatorAsync(Contract.ActorRef actor, string operation, string kind, string parkSelection,
                 CancellationToken token) => ingress.SendAsync(tenant, new Contract.Target.Ref(actor), operation, kind,
                     Json.Write(new Contract.OperatorCommand(parkSelection, ExpectedTarget: actor)), cancellationToken: token);
+        }
+
+        async Task WithheldReleasedCohortAsync()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA withheld_cohort", stop);
+            var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "withheld_cohort" }.ConnectionString;
+            var cohortOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
+            var protocol = StoreFormat.Current with { MessageProtocol = 86 };
+            var capabilities = RootProfiles.Shipped | RootProfiles.Formats[StoreFormat.RootParkRecovery];
+            KernelDb OpenCohort() => KernelDb.ForUnshippedComposition(cohortOptions, protocol, capabilities);
+            await using var set = new Set("withheld-cohort", OpenCohort, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
+            await set.InstallAsync(createTables: true);
+            var first = (Worker)await set.OwnAsync();
+            var root = await set.StartAsync("withheld-released-cohort", Probe.WithheldBody);
+            set.Probe.FailsOn.Add((root.Id, Contract.Kinds.Terminate));
+            Check(await set.TerminateAsync(root, "faulting-control"), "a running withheld root accepts the control that opens its Park");
+            await set.DriveAsync(root, image => image is { Revision: 3, Status: InstanceStatus.Faulted });
+            Check(await set.SendAsync(root, "cohort-held", "cohort-held"), "the withholding fixture admits an arrival while parked");
+            var park = await set.DriveAsync(root, image => image is { Revision: 4, Status: InstanceStatus.Faulted });
+            var selection = await set.ParkSelectionAsync(root, 2);
+            Check(await set.OperateAsync(root, "old-control", Kinds.Terminate, selection, reply: true, dueAt: park.AsOf + 120_000) &&
+                await set.OperateAsync(root, "recover-cohort", Kinds.Recover, selection),
+                "the Park admits an immediate Recover and an earlier delayed Terminate");
+            await set.DriveAsync(root, image => image is { Revision: 5, Status: InstanceStatus.Running });
+            var epoch = first.Epoch;
+            await set.RetakeAsync();
+            var replacement = (Worker)set.Owner;
+            await set.ExecuteAsync($"""
+                UPDATE "Messages" SET "Due" = 0, "Seen" = 0
+                WHERE "Target" = {park.Actor.Id} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                """);
+            await set.DriveAsync(root, image => image is { Revision: 6, Status: InstanceStatus.Running, Suspended: false });
+            set.Answered("old-control", "StaleSelection");
+            await using var read = OpenCohort();
+            Check(replacement.Epoch > epoch && replacement.Owns && !set.Probe.Saw(root, "cohort-held") &&
+                await read.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {park.Actor.Id} AND "Kind" = 'cohort-held'
+                        AND NOT "Done" AND "FoundationKeptBy" IS NULL AND "FoundationReleasedBy" = 1) AS "Value"
+                    """).SingleAsync(stop),
+                "after takeover a selected control settles while the authored-withheld cohort keeps its exact release generation");
+        }
+
+        async Task ReleasedCohortCandidateProgressAsync()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA bounded_cohort_sample", stop);
+            var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "bounded_cohort_sample" }.ConnectionString;
+            var observation = new RaceHook(settings);
+            var sampleOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).AddInterceptors(observation).Options;
+            var protocol = StoreFormat.Current with { MessageProtocol = 86 };
+            var capabilities = RootProfiles.Shipped | RootProfiles.Formats[StoreFormat.RootParkRecovery];
+            KernelDb OpenSample() => KernelDb.ForUnshippedComposition(sampleOptions, protocol, capabilities);
+            await using var set = new Set("bounded-cohort-sample", OpenSample, owned, inBatch, tenant, stop)
+            {
+                UsesAuthoredWithholding = true, PollLimit = 1, PartitionCount = 2
+            };
+            await set.InstallAsync(createTables: true);
+            await set.OwnAsync();
+            var withheld = await set.StartAsync("withheld", Probe.WithheldBody);
+            var partition = new InstanceRef((await set.ImageAsync(withheld)).Actor.Id).Partition;
+            var offerable = await StartInPartitionAsync("offerable");
+            var tail = await StartInPartitionAsync("tail");
+            Check(set.Owner is Worker sampledOwner && sampledOwner.ClaimedPartitions().Order().SequenceEqual(new[] { 0, 1 }),
+                "the bounded cohort fixture polls under an owned set of two partitions");
+            set.Probe.FailsOn.Add((withheld.Id, Contract.Kinds.Terminate));
+            Check(await set.SendAsync(offerable, "offerable-fault", "fail") && await set.TerminateAsync(withheld, "withholding-fault"),
+                "two roots open their Parks under different withholding decisions");
+            await set.DriveAsync(offerable, row => row is { Revision: 2, Status: InstanceStatus.Faulted });
+            await set.DriveAsync(withheld, row => row is { Revision: 3, Status: InstanceStatus.Faulted });
+            Check(await set.SendAsync(offerable, "offerable-arrival", "blocking-cohort") &&
+                await set.SendAsync(withheld, "withheld-arrival", "withheld-cohort"),
+                "both Parks keep one arrival before Recover");
+            var older = await set.DriveAsync(offerable, row => row is { Revision: 3, Status: InstanceStatus.Faulted });
+            var younger = await set.DriveAsync(withheld, row => row is { Revision: 4, Status: InstanceStatus.Faulted });
+            var olderSelection = await set.ParkSelectionAsync(offerable, 2);
+            var youngerSelection = await set.ParkSelectionAsync(withheld, 2);
+            var due = younger.AsOf + 120_000;
+            for (var pass = 0; pass < 8; pass++)
+                Check(await set.OperateAsync(tail, $"future-tail-{pass}", Kinds.Terminate, set.Selections[tail], dueAt: due),
+                    "the shared partition has an earlier scheduled control that is still in the future");
+            Check(await set.OperateAsync(offerable, "older-control", Kinds.Terminate, olderSelection, reply: true, dueAt: due) &&
+                await set.OperateAsync(withheld, "younger-control", Kinds.Terminate, youngerSelection, reply: true, dueAt: due) &&
+                await set.OperateAsync(offerable, "older-recover", Kinds.Recover, olderSelection) &&
+                await set.OperateAsync(withheld, "younger-recover", Kinds.Recover, youngerSelection),
+                "both controls were admitted earlier and become due after recovery");
+            try
+            {
+                await set.DriveAsync(offerable, row => row is { Revision: 4, Status: InstanceStatus.Running });
+                await set.DriveAsync(withheld, row => row is { Revision: 5, Status: InstanceStatus.Running });
+                await set.PassUntilAsync(() => set.Probe.CohortEntered.Task.IsCompleted);
+                await set.ExecuteAsync($"""
+                    UPDATE "Messages" SET "Due" = 0
+                    WHERE "Target" IN ({older.Actor.Id}, {younger.Actor.Id}) AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                    """);
+                await ProbeSweepAsync(younger);
+                observation.ObserveCohortPlan = true;
+                await set.DriveAsync(withheld, row => row is { Revision: 6, Status: InstanceStatus.Running });
+                set.Answered("younger-control", "StaleSelection");
+                var candidatePlan = observation.CohortPlan.SkipWhile(line => line.Trim() != "CTE candidates").Skip(1)
+                    .TakeWhile(line => line.StartsWith("    ", StringComparison.Ordinal)).ToArray();
+                Check(candidatePlan.Any(line => line.Contains("IX_FoundationRootInbox_CohortWaiting", StringComparison.Ordinal) &&
+                        (line.Contains("Index Scan", StringComparison.Ordinal) || line.Contains("Index Only Scan", StringComparison.Ordinal))) &&
+                    candidatePlan.Any(line => line.Contains("->  Limit", StringComparison.Ordinal)),
+                    "the bounded cohort window seeks the waiting-control index and limits candidates");
+                Check(!set.AnsweredAny("older-control") && await set.ImageAsync(offerable) is { Revision: 4 } &&
+                    !set.Probe.Saw(withheld, "withheld-cohort") && !set.StoodDown,
+                    "a one-row poll skips a blocked older candidate and settles the younger root's control");
+            }
+            finally { set.Probe.ReleaseCohort.TrySetResult(); }
+            await set.DriveAsync(offerable, row => row is { Revision: 6, Status: InstanceStatus.Running });
+            set.Answered("older-control", "StaleSelection");
+            await ProbeWideIdleOwnerAsync();
+
+            async Task ProbeWideIdleOwnerAsync()
+            {
+                await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA wide_idle_cohort", stop);
+                var wideSettings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "wide_idle_cohort" }.ConnectionString;
+                var commands = new RaceHook(wideSettings);
+                var wideOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(wideSettings).AddInterceptors(commands).Options;
+                KernelDb OpenWide() => KernelDb.ForUnshippedComposition(wideOptions, protocol, capabilities);
+                await using (var context = OpenWide()) await context.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(stop);
+                var owner = new EfStore(OpenWide, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
+                const int count = 1_024;
+                await owner.CreateAsync(count);
+                await new PostgresRootAdmission(OpenWide, TimeSpan.FromHours(1)).InstallAsync(stop);
+                await owner.EnableRootJobsAsync(stop);
+                owner.BindWorkerNode(set.Probe.Withholds);
+                var fences = (await owner.TakeAsync(Enumerable.Range(0, count).ToArray(), "wide-idle", FixtureLease, stop)).Taken;
+                try
+                {
+                    const int limit = 500;
+                    for (var pass = 0; pass < 3; pass++)
+                        Check((await owner.PollAsync(fences, TimeSpan.Zero, limit, stop)).Messages.Count == 0,
+                            "the default-sized idle owner returns an empty page");
+                    Check(fences.Count == count && commands.CohortWindows.Count == 3 &&
+                        commands.CohortWindows.All(window => window.Partitions.Length * window.PerPartition <= limit) &&
+                        commands.CohortWindows.SelectMany(window => window.Partitions).Distinct().Count() == count,
+                        "one bounded query per poll rotates across all 1,024 owned partitions");
+                }
+                finally { await owner.ReleaseAsync(fences, stop); }
+            }
+
+            async Task<Contract.ActorRef> StartInPartitionAsync(string prefix)
+            {
+                for (var attempt = 0; attempt < 32; attempt++)
+                {
+                    var started = await set.StartAsync($"{prefix}-{attempt}");
+                    if (new InstanceRef((await set.ImageAsync(started)).Actor.Id).Partition == partition) return started;
+                }
+                throw new InvalidOperationException("The fixture did not place a root in the sampled partition.");
+            }
+
+            async Task ProbeSweepAsync(EfStore.RootImage waiting)
+            {
+                await using var source = OpenSample();
+                var fences = await source.Partitions.AsNoTracking().OrderBy(row => row.Id)
+                    .Select(row => new PartitionFence(row.Id, row.Epoch, row.Position)).ToArrayAsync(stop);
+                var epoch = fences.Single(fence => fence.Partition == partition).Epoch;
+                var sampler = new EfStore(OpenSample, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
+                await sampler.EnableRootJobsAsync(stop);
+                sampler.BindWorkerNode(set.Probe.Withholds);
+                await MarkReleasedAsync(0);
+                for (var pass = 0; pass < 4; pass++)
+                {
+                    var offered = await sampler.PollAsync(fences, TimeSpan.Zero, 1, stop);
+                    Check(offered.Messages is [{ Message.Kind: "withheld-cohort" }],
+                        "a released input takes the only output slot before the waiting control");
+                }
+                await MarkReleasedAsync(epoch);
+                var found = false;
+                for (var pass = 0; pass < 8 && !found; pass++)
+                {
+                    Check(await set.TerminateAsync(tail, $"new-tail-{pass}"),
+                        "another control is admitted while the bounded candidate window advances");
+                    var offered = await sampler.PollAsync(fences, TimeSpan.Zero, 1, stop);
+                    found = offered.Messages is [{ Message: { Kind: Kinds.Terminate } message }] &&
+                        message.Target.Id == waiting.Actor.Id && message.Operator?.RootParkFacts is not null;
+                }
+                Check(found, "the sampler revisits the missed control despite earlier future controls and continued new admissions");
+
+                Task MarkReleasedAsync(long seen) => set.ExecuteAsync($"""
+                    UPDATE "Messages" SET "Seen" = {seen} WHERE "Target" = {waiting.Actor.Id} AND "Kind" = 'withheld-cohort' AND NOT "Done"
+                    """);
+            }
         }
 
         async Task CheckProtectionCeilingAsync(Set set, Contract.ActorRef root, EfStore.RootImage park, int cleared)
@@ -2487,7 +2672,7 @@ internal static class PostgresRootParkedOperatorChecks
             if (createTables)
                 await using (var created = open()) await created.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(stop);
             Cold = Store();
-            await Cold.CreateAsync(1);
+            await Cold.CreateAsync(PartitionCount);
             Admission = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
             await Admission.InstallAsync(stop);
             _cursor = await Admission.OpenJournalCursorAsync(stop);
@@ -2503,6 +2688,8 @@ internal static class PostgresRootParkedOperatorChecks
         internal Func<EfStore, CommitBatch, CancellationToken, ValueTask<Committed>>? Write { get; set; }
         internal Func<Polled, Task>? HoldPoll { get; set; }
         internal bool UsesAuthoredWithholding { get; init; }
+        internal int PollLimit { get; init; } = new WorkerOptions().PollLimit;
+        internal int PartitionCount { get; init; } = 1;
 
         internal async Task<IScopeActivation> OwnAsync()
         {
@@ -2533,8 +2720,8 @@ internal static class PostgresRootParkedOperatorChecks
                 kernel = observed;
             }
             // One heartbeat covers the whole fixture: the default ten-second lease can lapse on a loaded machine.
-            var host = new DurableHost([new Worker(name, 0, kernel, adapter,
-                new WorkerOptions { Partitions = 1, Lease = FixtureLease, Transport = _replies })]);
+            var host = new DurableHost([new Worker(name, Enumerable.Range(0, PartitionCount).ToArray(), kernel, adapter,
+                new WorkerOptions { Partitions = PartitionCount, Lease = FixtureLease, Transport = _replies, PollLimit = PollLimit })]);
             await host.HeartbeatAsync(FixtureLease, stop);
             return _owner = await host.ActivateAsync(0, stop) ?? throw new InvalidOperationException("The fixture owner could not take its partition.");
         }
@@ -2912,6 +3099,9 @@ internal static class PostgresRootParkedOperatorChecks
         private int _refused;
         // Commands of the set that a trigger refused: a commit lock refuses before any write, so it adds none.
         internal int TriggerRefusals => Volatile.Read(ref _refused);
+        internal bool ObserveCohortPlan { get; set; }
+        internal List<(int[] Partitions, int PerPartition)> CohortWindows { get; } = [];
+        internal List<string> CohortPlan { get; } = [];
 
         public override Task CommandFailedAsync(DbCommand command, CommandErrorEventData eventData, CancellationToken cancellationToken = default)
         {
@@ -2922,6 +3112,20 @@ internal static class PostgresRootParkedOperatorChecks
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
             InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
+            if (command is NpgsqlCommand cohort &&
+                cohort.CommandText.Contains("/* root-cohort-waiting */", StringComparison.Ordinal))
+            {
+                CohortWindows.Add(((int[])cohort.Parameters[0].Value!, (int)cohort.Parameters[5].Value!));
+                if (!ObserveCohortPlan) return result;
+                ObserveCohortPlan = false;
+                var planOptions = new NpgsqlConnectionStringBuilder(connection) { Options = "-c enable_seqscan=off" };
+                await using var source = new NpgsqlConnection(planOptions.ConnectionString);
+                await source.OpenAsync(cancellationToken);
+                await using var explain = new NpgsqlCommand("EXPLAIN (COSTS OFF) " + cohort.CommandText, source);
+                foreach (NpgsqlParameter parameter in cohort.Parameters) explain.Parameters.Add(parameter.Clone());
+                await using var plan = await explain.ExecuteReaderAsync(cancellationToken);
+                while (await plan.ReadAsync(cancellationToken)) CohortPlan.Add(plan.GetString(0));
+            }
             if (_hold is { } hold && command.CommandText.Contains("""AS "Outstanding" """.TrimEnd(), StringComparison.Ordinal) &&
                 command.Parameters.Cast<DbParameter>().Any(parameter => Equals(parameter.Value, hold.Actor)))
             {
@@ -2972,6 +3176,8 @@ internal static class PostgresRootParkedOperatorChecks
         }
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
         internal TaskCompletionSource JobEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource CohortEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource ReleaseCohort { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
         {
             if (job.Key == FaultingJob) return "published";
@@ -2989,6 +3195,11 @@ internal static class PostgresRootParkedOperatorChecks
                 throw new InvalidOperationException(Fault);
             }
             turn.State = "{\"running\":true}";
+            if (turn.Inbox is [{ Kind: "blocking-cohort" }])
+            {
+                CohortEntered.TrySetResult();
+                return new(ReleaseCohort.Task.WaitAsync(cancellationToken));
+            }
             if (turn.Inbox.Any(input => input.Kind == Contract.Kinds.Terminate)) turn.End(Contract.ActorStatus.Cancelled);
             if (turn.Inbox is [{ Kind: "issue-job" }])
             {

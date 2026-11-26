@@ -55,6 +55,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootParkArrivals => Current with { MessageProtocol = 21 };
     internal static StoreFormat RootParkRecovery => Current with { MessageProtocol = 22 };
     internal static StoreFormat SqliteParkArrivalsQualification => Current with { MessageProtocol = 85 };
+    internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
 
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
@@ -365,7 +366,8 @@ internal static class StoreDefinitionsRevision
 
     internal static StoreVersionEntity? Seed(KernelDb db)
     {
-        var sqliteQualification = db.UsesSqliteShippedInstall && db.RequiredFormat == StoreFormat.SqliteParkArrivalsQualification;
+        var sqliteQualification = db.UsesSqliteShippedInstall &&
+            (db.RequiredFormat == StoreFormat.SqliteParkArrivalsQualification || db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification);
         if (db.RequiredFormat != StoreFormat.RootShipped && !sqliteQualification) return null;
         var sqlite = db.Database.IsSqlite();
         return new StoreVersionEntity
