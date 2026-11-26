@@ -91,5 +91,4 @@ The Dockerfile copies only this app's project closure: the shared Studio project
 `.github/workflows/studio-docker.yml` publishes it with the other two flavors; [Studio Docker](../../../docs/docker.md) covers
 the runtime settings.
 
-In the image, an add-on's browser files answer 503 until [valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands. Nuplane serves an installed package's files only
-from an enrolled extracted store, and that store does not qualify a container's filesystem. The compiled-in modules are unaffected.
+The image serves installed add-on browser files from verified package archives.
