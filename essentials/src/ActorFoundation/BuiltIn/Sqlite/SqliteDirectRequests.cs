@@ -48,13 +48,9 @@ public static partial class SqliteEmbeddedHosting
 
         void IReplyTransport.Send(string destination, Reply reply) => edge.Send(destination, reply);
 
-        internal async ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind, string? payload,
-            Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken token)
-        {
-            token.ThrowIfCancellationRequested();
-            using var file = AcquireFile(path, requests: this);
-            return await edge.RequestAsync(scope, target, id, kind, payload, add, request, token);
-        }
+        internal ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind, string? payload,
+            Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken token) =>
+            edge.RequestAsync(scope, target, id, kind, payload, add, request, token);
 
         private sealed class Admission(SqliteDirectRequests owner, string path, TimeSpan window) : IHeldRootAdmission
         {
@@ -87,22 +83,21 @@ public static partial class SqliteEmbeddedHosting
                 // background operation its own leases so it can roll back after the caller has gone.
                 var write = Task.Run(async () =>
                 {
-                    using var file = AcquireFile(path, requests: owner);
-                    await file.ReplyWrites.WaitAsync(token);
-                    try
+                    while (true)
                     {
-                        var admission = ForFile(file);
-                        while (true)
+                        token.ThrowIfCancellationRequested();
+                        try
                         {
-                            token.ThrowIfCancellationRequested();
-                            try { return await admit(admission, token); }
-                            catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
-                            {
-                                await Task.Delay(25, token); // SQLITE_BUSY or SQLITE_LOCKED, with the original deadline.
-                            }
+                            using var file = AcquireFile(path, requests: owner);
+                            await file.ReplyWrites.WaitAsync(token);
+                            try { return await admit(ForFile(file), token); }
+                            finally { file.ReplyWrites.Release(); }
+                        }
+                        catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
+                        {
+                            await Task.Delay(25, token); // SQLITE_BUSY or SQLITE_LOCKED, with the original deadline.
                         }
                     }
-                    finally { file.ReplyWrites.Release(); }
                 }, token);
                 try { return await write.WaitAsync(token); }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
