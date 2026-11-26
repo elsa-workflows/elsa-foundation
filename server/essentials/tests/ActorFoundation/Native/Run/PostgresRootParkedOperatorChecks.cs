@@ -395,6 +395,7 @@ internal static class PostgresRootParkedOperatorChecks
             await LiveJobParkSet(publishFirst: false);
             await LiveJobParkSet(publishFirst: true);
             await LiveJobParkSet(publishFirst: true, invalidResult: true);
+            await LiveJobParkSet(publishFirst: false, reversedPair: true);
             await ComposedParkRecoveryAsync();
             await WithheldReleasedCohortAsync();
             await ReleasedCohortCandidateProgressAsync();
@@ -808,14 +809,17 @@ internal static class PostgresRootParkedOperatorChecks
             }
         }
 
-        async Task LiveJobParkSet(bool publishFirst, bool invalidResult = false)
+        async Task LiveJobParkSet(bool publishFirst, bool invalidResult = false, bool reversedPair = false)
         {
-            var schema = invalidResult ? "live_job_invalid_result" :
+            var schema = invalidResult ? "live_job_invalid_result" : reversedPair ? "live_job_reversed_pair" :
                 publishFirst ? "live_job_published_before_park" : "live_job_pending_during_park";
             await db.Database.ExecuteSqlRawAsync(invalidResult ? "CREATE SCHEMA live_job_invalid_result" :
-                publishFirst ? "CREATE SCHEMA live_job_published_before_park" : "CREATE SCHEMA live_job_pending_during_park", stop);
+                reversedPair ? "CREATE SCHEMA live_job_reversed_pair" : publishFirst ? "CREATE SCHEMA live_job_published_before_park"
+                    : "CREATE SCHEMA live_job_pending_during_park", stop);
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = schema }.ConnectionString;
-            var jobOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
+            var gate = new LiveJobCommitGate();
+            var metadata = new LiveJobMetadataObservation();
+            var jobOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).AddInterceptors(gate, metadata).Options;
             var protocol = StoreFormat.Current with { MessageProtocol = 86 };
             var capabilities = RootProfiles.Shipped | RootProfiles.Formats[StoreFormat.RootParkRecovery];
             KernelDb OpenJob() => KernelDb.ForUnshippedComposition(jobOptions, protocol, capabilities);
@@ -845,21 +849,29 @@ internal static class PostgresRootParkedOperatorChecks
             var root = await set.StartAsync("live-job");
             actor = (await set.ImageAsync(root)).Actor.Id;
             set.Probe.LiveJobPlans.Add(root.Id);
+            if (publishFirst && !invalidResult) set.Probe.LiveJobResult = new string('r', ParkRecoveryCredit.LimitBytes + 1);
             Check(await set.SendAsync(root, "issue-live-job", "issue-live-job"), "the staged PostgreSQL root admits a timed job before Park");
             var issued = await set.DriveAsync(root, row => row is { Revision: 2, Status: InstanceStatus.Running });
             await set.PassUntilAsync(() => set.Probe.JobEntered.Task.IsCompleted);
+            if (reversedPair)
+                await set.ExecuteAsync($"""
+                    UPDATE "Messages" SET "Seq" = (SELECT max("Seq") + 100 FROM "Messages")
+                    WHERE "Target" = {actor} AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {Kinds.JobDeadline}
+                    """);
             Check(await set.SendAsync(root, "fault-while-live", "fail", dueAt: publishFirst ? issued.AsOf + 120_000 : null),
                 "an earlier ordinary fault is admitted while the live job is entered");
             if (publishFirst) set.Probe.ReleaseLiveJob.TrySetResult();
-            var park = await set.DriveAsync(root, row => row is { Status: InstanceStatus.Faulted });
+            var park = publishFirst || reversedPair ? await set.DriveAsync(root, row => row is { Status: InstanceStatus.Faulted })
+                : await ParkWithConcurrentDeadlineWriterAsync();
             var before = await ReadTimedRowsAsync();
             Check(park.Jobs == issued.Jobs && park.NextJobGeneration == issued.NextJobGeneration &&
                 JobRegistry.Read(park.Jobs) is [{ Key: Probe.LiveJob, Generation: 0 }] &&
                 (publishFirst ? movedFault && before is [{ Kind: Kinds.JobFinished, Due: 0, JobGeneration: 0, Payload: not null }] :
+                    reversedPair ? before is [{ Kind: Kinds.Job, Due: 0 }, { Kind: Kinds.JobDeadline, Due: > 0 }] :
                     before is [{ Kind: Kinds.JobDeadline, Due: > 0, JobGeneration: 0 }, { Kind: Kinds.Job, Due: 0, JobGeneration: 0 }]),
                 publishFirst ? "the ordinary Park leaves a previously published result pending" :
-                    "the ordinary Park keeps the entered ticket and its original deadline");
-            if (!invalidResult)
+                    "the ordinary Park keeps the entered ticket and its deadline");
+            if (!invalidResult && !reversedPair)
             {
                 await using var guards = OpenJob();
                 await RecordedJobRecoveryChecks.AssertLiveJobGuardsAsync(guards, park, publishFirst, Check, stop);
@@ -868,24 +880,64 @@ internal static class PostgresRootParkedOperatorChecks
             if (publishFirst) await set.RetakeAsync();
             Check(await set.OperateAsync(root, "recover-live-job", Kinds.Recover, selection),
                 "the live job Park admits Recover");
-            if (invalidResult)
+            if (invalidResult || reversedPair)
             {
                 var refused = await set.DriveAsync(root, row => row is { Status: InstanceStatus.Faulted } && row.Revision == park.Revision + 1);
                 var outcome = (await set.Cold.ReadJournalOfAsync(new InstanceRef(actor).Partition, actor, 0, stop))[^1];
                 Check(refused.Jobs == park.Jobs && refused.ParkAt == park.ParkAt && !set.StoodDown &&
                     outcome.Entries == Json.Write(new { Outcome = "refused", Operation = "recover-live-job", Reason = "plan" }) &&
                     set.Probe.Count(root, Contract.Kinds.JobFinished) == 0 && (await ReadTimedRowsAsync()).SequenceEqual(before),
-                    "Recover refuses an invalid timed result body at the correct physical ID and preserves the Park");
+                    reversedPair ? "Recover refuses a timed pair with the deadline sequenced after the ticket" :
+                        "Recover refuses an invalid timed result body at the correct physical ID and preserves the Park");
+                set.Probe.ReleaseLiveJob.TrySetResult();
                 return;
             }
             var recovered = await set.DriveAsync(root, row => row is { Status: InstanceStatus.Running } && row.Revision == park.Revision + 1);
             Check(recovered.Jobs == park.Jobs && recovered.NextJobGeneration == park.NextJobGeneration && recovered.ParkAt is null &&
                 (await ReadTimedRowsAsync()).SequenceEqual(before), "Recover keeps the exact pending timed rows and registration");
+            if (publishFirst)
+                Check(before is [{ Payload.Length: > ParkRecoveryCredit.LimitBytes }] && metadata.Columns.Count >= 2 &&
+                    metadata.Columns.All(columns => columns.SequenceEqual(new[] { "Id", "Kind", "Seq", "Due", "Valid" }, StringComparer.Ordinal)),
+                    "Recover polls and binds a result over the arrival-page budget using only scalar metadata");
             if (!publishFirst) set.Probe.ReleaseLiveJob.TrySetResult();
             var ended = await set.DriveAsync(root, row => row is { Status: InstanceStatus.Finished });
             Check(ended is { Jobs: null, NextJobGeneration: 1 } && set.Probe.Count(root, Contract.Kinds.JobFinished) == 1 &&
                 set.Probe.LiveInvocations == 1 && (await ReadTimedRowsAsync()).Count == 0,
                 "the recovered root applies the original timed outcome once and clears its registration");
+
+            async Task<EfStore.RootImage> ParkWithConcurrentDeadlineWriterAsync()
+            {
+                gate.Actor = actor;
+                var opening = set.DriveAsync(root, row => row is { Status: InstanceStatus.Faulted });
+                try
+                {
+                    await gate.Bound.Task.WaitAsync(stop);
+                    await using var contender = new NpgsqlConnection(settings);
+                    await contender.OpenAsync(stop);
+                    await using var update = new NpgsqlCommand("""
+                        UPDATE "Messages" SET "Due" = "Due" + 1
+                        WHERE "Target" = @actor AND "InboxScope" = @scope AND "Kind" = @kind
+                        """, contender);
+                    update.Parameters.AddWithValue("actor", actor);
+                    update.Parameters.AddWithValue("scope", EfStore.RootTimedJobScope);
+                    update.Parameters.AddWithValue("kind", Kinds.JobDeadline);
+                    var mutation = update.ExecuteNonQueryAsync(stop);
+                    await using var observer = new NpgsqlConnection(settings);
+                    await observer.OpenAsync(stop);
+                    await using var blocked = new NpgsqlCommand("SELECT cardinality(pg_blocking_pids(@pid)) > 0", observer);
+                    blocked.Parameters.AddWithValue("pid", contender.ProcessID);
+                    while (!mutation.IsCompleted && await blocked.ExecuteScalarAsync(stop) is not true)
+                        await Task.Delay(5, stop);
+                    Check(!mutation.IsCompleted, "the two PostgreSQL writes contend on the timed row while Park commits");
+                    gate.Resume.TrySetResult();
+                    var refused = false;
+                    try { await mutation; }
+                    catch (PostgresException error) when (error.SqlState == "23514") { refused = true; }
+                    Check(refused, "the timed row writer sees the committed Park and preserves the deadline");
+                    return await opening;
+                }
+                finally { gate.Resume.TrySetResult(); }
+            }
 
             async Task<IReadOnlyList<(string Id, string Kind, long Seq, long Due, long JobGeneration, string? Payload)>> ReadTimedRowsAsync()
             {
@@ -3322,8 +3374,48 @@ internal static class PostgresRootParkedOperatorChecks
             TriggerMessages.Contains(refused.MessageText);
     }
 
-    // Runs one raw write, with triggers off (so it also keeps the projection the triggers would), just before the next commit lock of the armed actor's checkpoint: after the
-    // owner read its Park facts and before its commit binds them.
+    private sealed class LiveJobCommitGate : DbTransactionInterceptor
+    {
+        internal string? Actor { get; set; }
+        internal TaskCompletionSource Bound { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Resume { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask<InterceptionResult> TransactionCommittingAsync(DbTransaction transaction,
+            TransactionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
+        {
+            if (Actor is not { } actor || Bound.Task.IsCompleted) return result;
+            await using var read = transaction.Connection!.CreateCommand();
+            read.Transaction = transaction;
+            read.CommandText = """
+                SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = @actor AND "FoundationParkLiveJob" IS NOT NULL)
+                """;
+            var parameter = read.CreateParameter();
+            parameter.ParameterName = "actor";
+            parameter.Value = actor;
+            read.Parameters.Add(parameter);
+            if (await read.ExecuteScalarAsync(cancellationToken) is true)
+            {
+                Bound.TrySetResult();
+                await Resume.Task.WaitAsync(cancellationToken);
+            }
+            return result;
+        }
+    }
+
+    private sealed class LiveJobMetadataObservation : DbCommandInterceptor
+    {
+        internal List<string[]> Columns { get; } = [];
+
+        public override ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command, CommandExecutedEventData eventData,
+            DbDataReader result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("/* bounded-live-job-metadata */", StringComparison.Ordinal))
+                Columns.Add(Enumerable.Range(0, result.FieldCount).Select(result.GetName).ToArray());
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    // Runs one raw change after the owner reads its Park facts and before the next checkpoint lock.
     private sealed class RaceHook(string connection) : DbCommandInterceptor
     {
         private (string Actor, string Sql)? _armed;
@@ -3419,6 +3511,7 @@ internal static class PostgresRootParkedOperatorChecks
         internal HashSet<string> RecordedJobPlans { get; } = [];
         internal HashSet<string> LiveJobPlans { get; } = [];
         internal TaskCompletionSource ReleaseLiveJob { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal string LiveJobResult { get; set; } = "live-result";
         private int _liveInvocations;
         internal int LiveInvocations => Volatile.Read(ref _liveInvocations);
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
@@ -3435,7 +3528,7 @@ internal static class PostgresRootParkedOperatorChecks
             {
                 Interlocked.Increment(ref _liveInvocations);
                 await ReleaseLiveJob.Task.WaitAsync(cancellationToken);
-                return "live-result";
+                return LiveJobResult;
             }
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return null;
@@ -3467,7 +3560,8 @@ internal static class PostgresRootParkedOperatorChecks
                 turn.StartJob(LiveJob, timeout: TimeSpan.FromMinutes(1));
             if (LiveJobPlans.Contains(turn.Header.Ref.Id) && turn.Inbox is [{ Kind: Contract.Kinds.JobFinished, Payload: { } outcome }])
             {
-                if (Json.Read<Contract.JobFinished>(outcome) is not { Key: LiveJob, Error: null, Result: "\"live-result\"" })
+                if (Json.Read<Contract.JobFinished>(outcome) is not { Key: LiveJob, Error: null } result ||
+                    result.Result != Json.Write(LiveJobResult))
                     throw new InvalidOperationException("The recovered actor received an unexpected live result.");
                 turn.End(Contract.ActorStatus.Finished);
             }

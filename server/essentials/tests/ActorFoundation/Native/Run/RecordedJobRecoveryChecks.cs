@@ -46,7 +46,7 @@ internal static class RecordedJobRecoveryChecks
             if (row != 1) throw new InvalidOperationException("Expected one kept job result in the guard fixture.");
         }
 
-        Task<int> BindRunningAsync() => BindWithoutRegistrationAsync(db, actor, partition, revision, token);
+        Task<int> BindRunningAsync() => RecordedJobRecoveryChecks.BindRunningAsync(db, actor, partition, revision, keepRegistration: false, token: token);
         Task<int> InsertRecoverAsync() => InsertRecoverEntryAsync(db, actor, partition, revision, entries, token);
     }
 
@@ -64,7 +64,7 @@ internal static class RecordedJobRecoveryChecks
                 UPDATE "Messages" SET "Seen" = 0 WHERE "Target" = {actor} AND "Partition" = {partition}
                     AND "InboxScope" = {EfStore.RootTimedJobScope} AND NOT "Done"
                 """, token);
-            await ExpectRefusalAsync(check, () => BindWithoutRegistrationAsync(db, actor, partition, revision, token),
+            await ExpectRefusalAsync(check, () => BindRunningAsync(db, actor, partition, revision, keepRegistration: false, token: token),
                 "the installed checkpoint guard requires the pending job registration to stay unchanged");
             await write.RollbackAsync(token);
         }
@@ -97,7 +97,43 @@ internal static class RecordedJobRecoveryChecks
                     AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {Kinds.JobDeadline}
                 """, token), "the installed guard preserves the original deadline after journaling Recover");
 
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await BindKeepingJobAsync();
+            await ExpectRefusalAsync(check, () => db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Messages" SET "Payload" = 'null'
+                WHERE "Target" = {actor} AND "Partition" = {partition}
+                    AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {kind}
+                """, token), "the live envelope remains protected after the matching recovery checkpoint");
+            await write.RollbackAsync(token);
+        }
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
+            await BindKeepingJobAsync();
+            var deleted = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                DELETE FROM "Messages" WHERE "Target" = {actor} AND "Partition" = {partition}
+                    AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {kind}
+                """, token);
+            check(deleted == 1, "the fixture removes a timed row after binding the recovery checkpoint");
+            var blocked = false;
+            try { await write.CommitAsync(token); }
+            catch (PostgresException error) when (error.SqlState == "23503") { blocked = true; }
+            catch (SqliteException error) when (error.SqliteExtendedErrorCode == 787) { blocked = true; }
+            check(blocked, "the deferred live job reference refuses to commit a missing envelope after Recover");
+        }
+
         Task<int> InsertRecoverAsync() => InsertRecoverEntryAsync(db, actor, partition, revision, entries, token);
+
+        async Task BindKeepingJobAsync()
+        {
+            await InsertRecoverAsync();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Messages" SET "Seen" = 0 WHERE "Target" = {actor} AND "Partition" = {partition}
+                    AND "InboxScope" = {EfStore.RootTimedJobScope} AND NOT "Done"
+                """, token);
+            check(await BindRunningAsync(db, actor, partition, revision, keepRegistration: true, token: token) == 1,
+                "the installed guard binds the unchanged live registration beside Recover");
+        }
 
         async Task RefuseChangeAsync(Func<Task<int>> update, string description)
         {
@@ -108,10 +144,10 @@ internal static class RecordedJobRecoveryChecks
         }
     }
 
-    private static Task<int> BindWithoutRegistrationAsync(KernelDb db, string actor, int partition, long revision, CancellationToken token) =>
+    private static Task<int> BindRunningAsync(KernelDb db, string actor, int partition, long revision, bool keepRegistration, CancellationToken token) =>
         db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision},
-                "Status" = {(int)InstanceStatus.Running}, "Fault" = NULL, "Jobs" = NULL,
+                "Status" = {(int)InstanceStatus.Running}, "Fault" = NULL, "Jobs" = CASE WHEN {keepRegistration} THEN "Jobs" ELSE NULL END,
                 "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkJobResult" = NULL, "FoundationParkLiveJob" = NULL,
                 "FoundationParkGeneration" = "FoundationParkGeneration" + 1
             WHERE "Id" = {actor} AND "Partition" = {partition}

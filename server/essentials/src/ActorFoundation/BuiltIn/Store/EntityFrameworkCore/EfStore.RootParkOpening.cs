@@ -149,6 +149,7 @@ public sealed partial class EfStore
                     .SequenceEqual(Inputs.OrderBy(input => input.InboxKey.Id, StringComparer.Ordinal)))
                 return false;
 
+            if (pinsResult) await ReleaseProtectedResultAsync(db, Root.Actor, keys[0], cancellationToken);
             var kept = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Done" = true, "Trial" = 0, "FoundationKeptBy" = {(short)Reason}
                 WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}

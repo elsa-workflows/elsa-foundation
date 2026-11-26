@@ -64,6 +64,7 @@ public sealed partial class EfStore
             """, pinsResult ? ids[0] : null);
         write = WithLiveParkJob(db, write, live?.Proof);
         if (!pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1) return false;
+        if (pinsResult) await ReleaseProtectedResultAsync(db, root.Actor, ids[0], token);
         if (!await KeepSqliteParkInputsAsync(db, root.Actor, root.Partition, scope, ids, park.Reason, token) ||
             pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1)
             return false;

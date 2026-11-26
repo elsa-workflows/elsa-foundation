@@ -64,7 +64,7 @@ public sealed partial class EfStore
     }
 
     private sealed record SqliteRecoverCheckpoint(long? At, long? Revision, long Generation, string? Clearing, long? NextJobGeneration,
-        string? Header, string? ParkJobResult, string? ParkLiveJob);
+        string? ParkJobResult, string? ParkLiveJob);
 
     private static async Task<bool> BindSqliteRootRecoverAsync(KernelDb db, RootParkRecover turn, CancellationToken token)
     {
@@ -72,7 +72,7 @@ public sealed partial class EfStore
         var facts = command.Operator!.RootParkFacts!;
         var prior = await db.Database.SqlQuery<SqliteRecoverCheckpoint>(SelectParkJobPins(db, $"""
             SELECT i."FoundationParkAt" AS "At", i."FoundationParkRevision" AS "Revision",
-                i."FoundationParkGeneration" AS "Generation", i."FoundationParkClearing" AS "Clearing", i."NextJobGeneration", i."FoundationHeader" AS "Header",
+                i."FoundationParkGeneration" AS "Generation", i."FoundationParkClearing" AS "Clearing", i."NextJobGeneration",
                 /*park-job-result*/ AS "ParkJobResult", /*park-live-job*/ AS "ParkLiveJob"
             FROM "Instances" i JOIN "FoundationRootBirths" b
                 ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
@@ -87,7 +87,7 @@ public sealed partial class EfStore
         var kept = turn.Recovered ? await ReadSqliteRecoveryRowsAsync(db, root.Actor, root.Partition, null, token) : [];
         var arrived = kept.Where(row => row.Facts.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
         var footprint = turn.Recovered
-            ? await ReadRecoverableRootJobAsync(db, root.Actor, root.Partition, prior.Header, facts.RecoverableJobRegistry, prior.ParkJobResult,
+            ? await ReadRecoverableRootJobAsync(db, root.Actor, root.Partition, facts.RecoverableJobRegistry, prior.ParkJobResult,
                 prior.ParkLiveJob, token)
             : new RecoverableRootJob();
         var keptJobs = kept.Where(row => row.Scope == RootTimedJobScope).ToArray();

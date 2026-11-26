@@ -193,7 +193,7 @@ public sealed partial class EfStore
     private sealed record KeptRow(string Id, short KeptBy, string Digest, string Envelope, long Bytes);
 
     private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding, bool Residue, string? Clearing, long? Cleared,
-        string? Header, string? Jobs, string? ParkJobResult, string? ParkLiveJob);
+        string? Jobs, string? ParkJobResult, string? ParkLiveJob);
 
     // A pending row other than a direct input: the parked retirement branch and the Park facts share it, and the C# retirement
     // lock (EfStore.RootRetirement.cs) states the same condition with the direct scope as a parameter.
@@ -262,7 +262,7 @@ public sealed partial class EfStore
                         OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding",
                     EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = "Instances"."Id" AND m."Partition" = "Instances"."Partition"
                         AND {PendingResidue}) AS "Residue",
-                    {clearing}, "FoundationHeader" AS "Header", "Jobs", {jobPin} AS "ParkJobResult", {livePin} AS "ParkLiveJob" FROM "Instances"
+                    {clearing}, "Jobs", {jobPin} AS "ParkJobResult", {livePin} AS "ParkLiveJob" FROM "Instances"
                 WHERE "Id" = {"{0}"} AND "Partition" = {"{1}"} AND NOT "Retired"
                 """, message.Target.Id, message.Target.Partition).SingleOrDefaultAsync(token);
             // A clearing's control reads only the next page and one more row: nothing is kept while a clearing is open.
@@ -283,7 +283,7 @@ public sealed partial class EfStore
                 ? await ReadParkProtectionRefusalsAsync(db, message.Target.Id, message.Target.Partition, message.Id, long.MaxValue, token) : 0;
             // Check the registered footprint even if the arrivals exceed one page, so a valid plan is refused for page size.
             var job = message.Kind == Kinds.Recover && park is { At: not null, Clearing: null, Jobs: { } registry }
-                ? await ReadRecoverableRootJobAsync(db, message.Target.Id, message.Target.Partition, park.Header, registry, park.ParkJobResult,
+                ? await ReadRecoverableRootJobAsync(db, message.Target.Id, message.Target.Partition, registry, park.ParkJobResult,
                     park.ParkLiveJob, token)
                 : null;
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
@@ -331,7 +331,7 @@ public sealed partial class EfStore
     }
 
     private sealed record LockedRecover(long? At, long? Revision, long Generation, string? Fault, byte[] StateDigest, byte[] HeaderDigest,
-        int StateVersion, long? NextJobGeneration, string? Header, string? ParkJobResult, string? ParkLiveJob);
+        int StateVersion, long? NextJobGeneration, string? ParkJobResult, string? ParkLiveJob);
 
     // One fenced commit: the root becomes Running with its Park mark cleared, the arrivals return to the inbox as the
     // next generation's cohort, and the fault input stays settled. A refusal moves only the revision and settles the command.
@@ -347,7 +347,7 @@ public sealed partial class EfStore
             FormattableString query = $"""
                 SELECT i."FoundationParkAt" AS "At", i."FoundationParkRevision" AS "Revision", i."FoundationParkGeneration" AS "Generation",
                     i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
-                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion", i."NextJobGeneration", i."FoundationHeader" AS "Header",
+                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion", i."NextJobGeneration",
                     /*park-job-result*/ AS "ParkJobResult", /*park-live-job*/ AS "ParkLiveJob"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
@@ -366,7 +366,7 @@ public sealed partial class EfStore
             if (Recovered && (facts.Mark != new FoundationParkMark(prior.Revision ?? 0, prior.At ?? 0) || KeptSetDigest(kept) != facts.KeptDigest))
                 return false;
             var footprint = Recovered
-                ? await ReadRecoverableRootJobAsync(db, Root.Actor, Root.Partition, prior.Header, facts.RecoverableJobRegistry, prior.ParkJobResult,
+                ? await ReadRecoverableRootJobAsync(db, Root.Actor, Root.Partition, facts.RecoverableJobRegistry, prior.ParkJobResult,
                     prior.ParkLiveJob, token)
                 : new RecoverableRootJob();
             if (footprint is not { } job || Recovered && (job.KeepsRegistration != facts.KeepsRegisteredJob ||

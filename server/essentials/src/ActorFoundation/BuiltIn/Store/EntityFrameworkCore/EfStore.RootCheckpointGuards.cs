@@ -44,6 +44,7 @@ public sealed partial class EfStore
                               ADD COLUMN IF NOT EXISTS "FoundationTerminalAt" bigint;
         CREATE OR REPLACE FUNCTION kernel_require_root_checkpoint_writer() RETURNS trigger LANGUAGE plpgsql AS $fn$
         BEGIN
+            /*lock-live-job-before-park*/
             IF TG_OP = 'UPDATE' AND /*checkpoint-write-allowed*/
             THEN RETURN NEW; END IF;
             RAISE EXCEPTION 'Qualified actor checkpoint requires a qualified update'
@@ -65,6 +66,13 @@ public sealed partial class EfStore
         """;
 
     private static string RenderRootGuards(KernelDb db, string template) => template
+        .Replace("    /*lock-live-job-before-park*/\n", RecordsConsumedRootJob(db) ? $"""
+            IF TG_OP = 'UPDATE' AND OLD."Status" = 0 AND NEW."Status" = 2 AND NEW."FoundationParkLiveJob" IS NOT NULL THEN
+                PERFORM 1 FROM "Messages" m WHERE m."Partition" = NEW."Partition" AND m."Target" = NEW."Id"
+                    AND m."JobGeneration" = NEW."NextJobGeneration" - 1 AND {IsLiveRootJob("m.")}
+                ORDER BY m."Seq", m."Id" LIMIT 3 FOR UPDATE OF m;
+            END IF;
+            """ + "\n" : "", StringComparison.Ordinal)
         .Replace("/*checkpoint-write-allowed*/", RootCheckpointWriteAllowed, StringComparison.Ordinal)
         .Replace("/*journal-write-refused*/", RootJournalWriteRefused, StringComparison.Ordinal)
         .Replace("/*root-park-continues*/", db.UsesRootParkArrivals ? """

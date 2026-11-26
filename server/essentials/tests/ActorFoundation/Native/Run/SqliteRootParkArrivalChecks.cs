@@ -342,7 +342,25 @@ internal static partial class SqliteHostLifetimeChecks
                 var recovered = await DriveAsync(owner, root, row => row.Status == InstanceStatus.Running && row.Revision == park.Revision + 1);
                 Require(recovered.Jobs == park.Jobs && recovered.NextJobGeneration == park.NextJobGeneration && recovered.ParkAt is null &&
                     (await ReadTimedRowsAsync()).SequenceEqual(rows), "Recover keeps the same timed rows, deadline and job generation");
-                if (!publishFirst) executor.ReleaseLiveJob.TrySetResult();
+                if (publishFirst)
+                {
+                    executor.FaultLiveResult = true;
+                    var newPark = await DriveAsync(owner, root, row => row is { Status: InstanceStatus.Faulted } && row.Revision > recovered.Revision);
+                    executor.FaultLiveResult = false;
+                    Require(newPark.Jobs == park.Jobs && executor.LiveResults == previousResults + 1 &&
+                        executor.LiveInvocations == previousInvocations + 1 && (await ReadTimedRowsAsync()).SequenceEqual(rows),
+                        "the recovered actor can Park the same recorded result if its application faults");
+                    var newSelection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                    Require(await admission.OperateAsync(scope.Tenant, root, "recover-consumed-live-job", Kinds.Recover, newSelection, null, null, token)
+                        is { Outcome: Contract.AdmissionOutcome.Accepted }, "the second Park accepts Recover after taking the recorded result");
+                    var final = await DriveAsync(owner, root, row => row is { Status: InstanceStatus.Running, Jobs: null });
+                    Require(final.NextJobGeneration == 1 && (await ReadTimedRowsAsync()).Count == 0 &&
+                        executor.LiveResults == previousResults + 1 && executor.LiveInvocations == previousInvocations + 1,
+                        "the second Recover discards the consumed result without another callback or application");
+                    return;
+                }
+
+                executor.ReleaseLiveJob.TrySetResult();
                 var ended = await DriveAsync(owner, root, row => row is { Status: InstanceStatus.Finished });
                 Require(ended is { Jobs: null, NextJobGeneration: 1 } && executor.LiveResults == previousResults + 1 &&
                     executor.LiveInvocations == previousInvocations + 1 && (await ReadTimedRowsAsync()).Count == 0,
@@ -614,6 +632,7 @@ internal static partial class SqliteHostLifetimeChecks
         private int _liveInvocations;
         internal int LiveInvocations => Volatile.Read(ref _liveInvocations);
         internal int LiveResults { get; private set; }
+        internal bool FaultLiveResult { get; set; }
         internal int RecordedJobs { get; private set; }
         internal int RecordedResults { get; private set; }
         internal int OrdinaryTurns { get; private set; }
@@ -656,6 +675,7 @@ internal static partial class SqliteHostLifetimeChecks
                 if (Json.Read<Contract.JobFinished>(outcome) is not { Key: LiveJob, Error: null, Result: "\"after-recover\"" })
                     throw new InvalidOperationException("The recovered actor received an unexpected timed outcome.");
                 LiveResults++;
+                if (FaultLiveResult) throw new InvalidOperationException("the previously published result faulted during application");
                 turn.End(Contract.ActorStatus.Finished);
                 return ValueTask.CompletedTask;
             }
