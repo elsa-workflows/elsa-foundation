@@ -1,6 +1,6 @@
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Cluster.Core.Contracts;
-using Elsa.Cluster.Core.Extensions;
+using Elsa.Cluster.Readability;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.InProcess;
 using Elsa.Cluster.Testing.Runtime;

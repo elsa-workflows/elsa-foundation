@@ -2,7 +2,6 @@ using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using Elsa.Attention.Core;
-using Elsa.Cluster.Core.Extensions;
 using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
 using Elsa.Foundation.DataProtection;

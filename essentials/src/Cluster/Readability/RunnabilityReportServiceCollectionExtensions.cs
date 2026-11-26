@@ -4,7 +4,7 @@ using Elsa.Cluster.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Elsa.Cluster.Core.Extensions;
+namespace Elsa.Cluster.Readability;
 
 public static class RunnabilityReportServiceCollectionExtensions
 {
