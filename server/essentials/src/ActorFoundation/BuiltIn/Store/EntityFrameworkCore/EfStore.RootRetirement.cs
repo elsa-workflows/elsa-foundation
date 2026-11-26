@@ -146,7 +146,8 @@ public sealed partial class EfStore
                 RETURNING terminal."At" AS "Value"
                 """;
             var updated = await db.Database.SqlQuery<long>(FormattableStringFactory.Create(retire.Format.Replace("/*park*/", Park is null ? "" : """
-                "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL,
+                "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL,
+                "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL,
                 """, StringComparison.Ordinal), retire.GetArguments())).ToListAsync(token);
             if (updated is not [var terminalAt]) return false;
 
@@ -228,6 +229,7 @@ public sealed partial class EfStore
                         AND "Revision" = {Current.Revision} AND "Status" = {(int)InstanceStatus.Faulted} AND "Fault" IS NOT NULL
                         AND "FoundationParkAt" = {parked.Mark.At} AND "FoundationParkRevision" = {parked.Mark.Revision}
                         AND "FoundationParkClearing" IS NOT DISTINCT FROM {parked.Clearing}::text
+                        AND ({parked.Clearing}::text IS NULL OR "FoundationParkClearingKind" = {Command.Kind})
                         AND coalesce("FoundationParkCleared", 0) = {parked.Cleared}) AS "Value"
                     """).SingleAsync(token)) return false;
                 var kept = await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token,

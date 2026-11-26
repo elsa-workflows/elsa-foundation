@@ -384,6 +384,7 @@ internal static class PostgresRootParkedOperatorChecks
         }
         if (shippedSet && owned)
         {
+            await ShippedParkResolutionAsync();
             await AuthoredWithholdingSet();
             await HostedAuthoredWithholdingAsync();
             await LiveCompoundRefusalSet();
@@ -398,6 +399,66 @@ internal static class PostgresRootParkedOperatorChecks
         await DeleteSet();
         await JobsInspection();
         return 0;
+
+        async Task ShippedParkResolutionAsync()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA park_resolution", stop);
+            var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "park_resolution" }.ConnectionString;
+            var projectionOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
+            KernelDb OpenProjection() => KernelDb.ForPostgresRootShipped(projectionOptions);
+            await using var set = new Set("park-resolution", OpenProjection, owned, inBatch, tenant, stop);
+            await set.InstallAsync(createTables: true);
+            var reads = await set.Cold.OpenPreviewRootReadsAsync(8, stop);
+            Contract.ActorRef root = default;
+            FoundationParkMark? mark = null;
+            string? resolution = null;
+            var observed = false;
+            set.Write = async (writer, batch, token) =>
+            {
+                var result = await writer.CommitAsync(batch, token);
+                if (result.Landed && batch.Turns.Any(turn => turn.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true))
+                {
+                    var point = await reads.GetAsync(tenant, root, token);
+                    var list = await reads.ListAsync(tenant, new(Parked: true), cancellationToken: token);
+                    var listed = list.Items.Single(item => item.Header.Ref == root);
+                    Check(mark is not null && point is { Park: { } pointPark } &&
+                        pointPark == new Contract.ParkView(mark.At, resolution) && listed.Park == pointPark &&
+                        set.OpensPark(root, point.Selection, mark) && set.OpensPark(root, listed.Selection, mark),
+                        $"point and list project {resolution} under the original Park selection at Open");
+                    observed = true;
+                }
+                return result;
+            };
+            await set.OwnAsync();
+            var payload = Json.Write(new string('x', ParkRecoveryCredit.LimitBytes / 2 + 1_024));
+            foreach (var (kind, value) in new[] { (Contract.Kinds.Terminate, "terminating"), (Contract.Kinds.Delete, "deleting") })
+            {
+                root = await set.StartAsync(value);
+                Check(await set.SendAsync(root, "fault-1", "fail", payload: payload) &&
+                    await set.SendAsync(root, "fault-2", "fail", payload: payload),
+                    $"the {value} fixture admits two inputs whose total exceeds a clearing page");
+                var parked = await set.DriveAsync(root, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+                mark = new(parked.Revision, (await set.ParkAtAsync(parked))!.Value);
+                Check((await reads.GetAsync(tenant, root, stop))?.Park == new Contract.ParkView(mark.At, null),
+                    $"the {value} fixture establishes an idle Park in the point read");
+                resolution = value;
+                observed = false;
+                Check(await set.OperateAsync(root, value, kind, await set.ParkSelectionAsync(root, parked.Revision)),
+                    $"the {value} fixture admits its selected operator");
+                if (kind == Contract.Kinds.Terminate)
+                    await set.DriveAsync(root, image => image is { Status: InstanceStatus.Cancelled });
+                else
+                    await set.RetiredAsync(root);
+                var after = await reads.GetAsync(tenant, root, stop);
+                var listedAfter = (await reads.ListAsync(tenant, new(), cancellationToken: stop)).Items.SingleOrDefault(item => item.Header.Ref == root);
+                Check(observed && (kind == Contract.Kinds.Terminate
+                        ? after is { Park: null, Header.Status: Contract.ActorStatus.Cancelled } &&
+                            listedAfter is { Park: null, Header.Status: Contract.ActorStatus.Cancelled } &&
+                            set.OpensTerminal(root, after.Selection) && set.OpensTerminal(root, listedAfter.Selection)
+                        : after is null && listedAfter is null),
+                    $"point and list reflect completion of the {value} clearing");
+            }
+        }
 
         async Task AuthoredWithholdingSet()
         {
@@ -708,7 +769,7 @@ internal static class PostgresRootParkedOperatorChecks
                     "a final-page retry remains in the current clearing");
                 if (refusal == 0)
                     Check(!await set.TriggerProbeAsync(current, stopEntry,
-                        Change(current, """ "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL """)),
+                        Change(current, """ "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL """)),
                         "the PostgreSQL guard rejects an exact clearing stop before the retry ceiling");
                 await set.ExecuteAsync($"""
                     UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {park.Actor.Id} AND "Kind" = {Kinds.Delete} AND NOT "Done"
@@ -716,6 +777,12 @@ internal static class PostgresRootParkedOperatorChecks
             }
             var stopped = await set.DriveAsync(root, image => image is not null &&
                 image.Revision == firstFailure + FoundationRootParkFacts.MaxProtectionRefusals - 1);
+            var reads = await set.Cold.OpenPreviewRootReadsAsync(64, stop);
+            var stopPoint = await reads.GetAsync(tenant, root, stop);
+            var stopList = (await reads.ListAsync(tenant, new(Parked: true), cancellationToken: stop)).Items.Single(item => item.Header.Ref == root);
+            Check(stopPoint is { Park: { At: > 0, OpenResolution: null } stopPark } &&
+                stopList.Park == stopPark && set.OpensPark(root, stopPoint.Selection),
+                "point and list return the idle Park after the Delete clearing stops");
             var outcomes = Outcomes(await set.Cold.ReadJournalOfAsync(0, park.Actor.Id, 0, stop));
             var rows = await set.InputsAsync(root);
             Check(stopped is { Status: InstanceStatus.Faulted, TerminalRevision: null } &&
@@ -969,18 +1036,19 @@ internal static class PostgresRootParkedOperatorChecks
                     !await set.TriggerProbeAsync(mid, """["x"]""", Raw(mid, """ "FoundationParkCleared" = "FoundationParkCleared" + 1 """)) &&
                     !await set.TriggerProbeAsync(mid, null, Raw(mid, """ "FoundationParkCleared" = "FoundationParkCleared" - 1 """)) &&
                     !await set.TriggerProbeAsync(mid, null, Raw(mid, """ "FoundationParkClearing" = 'other', "FoundationParkCleared" = "FoundationParkCleared" + 1 """)) &&
+                    !await set.TriggerProbeAsync(mid, null, Raw(mid, $$""" "FoundationParkClearingKind" = '{{Kinds.Delete}}', "FoundationParkCleared" = "FoundationParkCleared" + 1 """)) &&
                     !await set.TriggerProbeAsync(mid, null, Raw(mid, """ "FoundationParkCleared" = "FoundationParkCleared" + 1, "State" = "State" || ' ' """)) &&
                     !await set.TriggerProbeAsync(mid, null, Continue(mid)) &&
                     await set.TriggerProbeAsync(mid, ProbeRefusal, Continue(mid)) &&
                     !await set.TriggerProbeAsync(mid, ProbeRefusal, Raw(mid, """ "FoundationParkCleared" = "FoundationParkCleared" + 1 """)),
                 "mid-clearing the trigger takes a page write alone, and a refusal that moves only the revision, and nothing else");
-            Check(await set.TriggerProbeAsync(parkedProbe, ProbeClearing, Raw(parkedProbe, """ "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1 """)) &&
-                    !await set.TriggerProbeAsync(parkedProbe, null, Raw(parkedProbe, """ "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1 """)) &&
-                    !await set.TriggerProbeAsync(parkedProbe, ProbeClearing, Raw(parkedProbe, """ "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1, "Suspended" = NOT "Suspended" """)) &&
+            Check(await set.TriggerProbeAsync(parkedProbe, ProbeClearing, Raw(parkedProbe, $$""" "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1, "FoundationParkClearingKind" = '{{Kinds.Terminate}}' """)) &&
+                    !await set.TriggerProbeAsync(parkedProbe, null, Raw(parkedProbe, $$""" "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1, "FoundationParkClearingKind" = '{{Kinds.Terminate}}' """)) &&
+                    !await set.TriggerProbeAsync(parkedProbe, ProbeClearing, Raw(parkedProbe, $$""" "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1, "FoundationParkClearingKind" = '{{Kinds.Terminate}}', "Suspended" = NOT "Suspended" """)) &&
                     !await set.TriggerProbeAsync(parkedProbe, ProbeClearing, Continue(parkedProbe)),
                 "an Open passes only beside its clearing entry with the row kept, and a clearing entry needs the clearing it opens");
             Check(!await set.TriggerProbeEntriesAsync(parkedProbe, [ProbeRefusal, ProbeClearing],
-                    Raw(parkedProbe, """ "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1 """)),
+                    Raw(parkedProbe, $$""" "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1, "FoundationParkClearingKind" = '{{Kinds.Terminate}}' """)),
                 "an Open beside a refused entry at the same revision is refused: a refusal pins the clearing's columns");
             // A set without Terminate-then-delete takes no protected entry, even where a terminated one would end the root.
             await set.ExecuteAsync($"""UPDATE "Messages" SET "FoundationKeptBy" = NULL WHERE "Target" = {parkedProbe.Actor.Id} AND "FoundationKeptBy" IS NOT NULL""");
@@ -1696,7 +1764,7 @@ internal static class PostgresRootParkedOperatorChecks
             // A discard is the last page of a clearing: without an open clearing it is refused, so a single page never discards.
             Check(!await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe)),
                 "a discard of a parked root with no open clearing is refused");
-            await set.BypassAsync(parkedProbe, """ "FoundationParkClearing" = 'del-probe-clearing', "FoundationParkCleared" = 1 """);
+            await set.BypassAsync(parkedProbe, $$""" "FoundationParkClearing" = 'del-probe-clearing', "FoundationParkCleared" = 1, "FoundationParkClearingKind" = '{{Kinds.Delete}}' """);
             bool[] clearingProbes;
             try
             {
@@ -1709,7 +1777,7 @@ internal static class PostgresRootParkedOperatorChecks
                     !await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe, terminal: false))
                 ];
             }
-            finally { await set.BypassAsync(parkedProbe, """ "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL """); }
+            finally { await set.BypassAsync(parkedProbe, """ "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL """); }
             Check(clearingProbes.All(passed => passed),
                 "with an open clearing, a discarded entry passes beside the discard end only: its entry, Suspended kept and a new terminal mark");
             Check(!await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, End(parkedProbe)) &&
@@ -2155,20 +2223,20 @@ internal static class PostgresRootParkedOperatorChecks
     private static FormattableString Retire(EfStore.RootImage root) => Change(root, """
         "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL, "Model" = '', "Definition" = '', "Fault" = NULL,
         "StateVersion" = 1, "History" = 2, "NextJobGeneration" = NULL, "Suspended" = false, "Retired" = true, "Status" = 3,
-        "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL,
+        "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL,
         "FoundationTerminalRevision" = "Revision" + 1, "FoundationTerminalAt" = 1
         """);
 
     // S5b-3b: a protected Delete's end: the Park and its mark cleared, a new terminal mark, the row otherwise as it was.
     private static FormattableString Discard(EfStore.RootImage root, string extra = "", bool terminal = true) => Change(root, """
-        "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL
+        "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL
         """ + (terminal ? """, "FoundationTerminalRevision" = "Revision" + 1, "FoundationTerminalAt" = 1""" : "") + extra);
 
     // A parked root's retirement as a Delete writes it: still Faulted, with or without its terminal mark.
     private static FormattableString RetireFaulted(EfStore.RootImage root, bool terminal = true) => Change(root, """
         "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL, "Model" = '', "Definition" = '', "Fault" = NULL,
         "StateVersion" = 1, "History" = 2, "NextJobGeneration" = NULL, "Suspended" = false, "Retired" = true,
-        "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL
+        "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL
         """ + (terminal ? """, "FoundationTerminalRevision" = "Revision" + 1, "FoundationTerminalAt" = 1""" : ""));
 
     private static FormattableString Change(EfStore.RootImage root, string change) => FormattableStringFactory.Create(
@@ -2468,8 +2536,10 @@ internal static class PostgresRootParkedOperatorChecks
         }
 
         internal async Task<string> SelectionAsync(Contract.ActorRef root) => (await _reads.GetAsync(tenant, root, stop))!.Selection!;
-        internal bool OpensPark(Contract.ActorRef root, string selection) => PostgresRootSelection.OpenPark(_cursor, selection, tenant.Tenant, root.Id) is not null;
-        internal bool OpensTerminal(Contract.ActorRef root, string selection) => PostgresRootSelection.OpenTerminal(_cursor, selection, tenant.Tenant, root.Id) is not null;
+        internal bool OpensPark(Contract.ActorRef root, string? selection, FoundationParkMark? expected = null) =>
+            PostgresRootSelection.OpenPark(_cursor, selection, tenant.Tenant, root.Id) is { } mark && (expected is null || mark == expected);
+        internal bool OpensTerminal(Contract.ActorRef root, string? selection) =>
+            PostgresRootSelection.OpenTerminal(_cursor, selection, tenant.Tenant, root.Id) is not null;
 
         internal sealed record ClearingRow(string? Clearing, long? Cleared);
         // The root's open clearing: the Terminate's operation and the rows cleared so far.
