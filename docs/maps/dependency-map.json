@@ -924,16 +924,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Api",
-          "path": "essentials/src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Studio.Preferences.Api",
           "path": "essentials/src/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj"
         },
@@ -971,11 +961,6 @@
           "type": "internal",
           "id": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore",
           "path": "essentials/src/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Dashboard.Queries",
-          "path": "essentials/src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj"
         },
         {
           "type": "internal",
@@ -1201,6 +1186,21 @@
           "type": "internal",
           "id": "Elsa.Diagnostics.ConsoleLogStreaming",
           "path": "extensions/ConsoleStream/src/Elsa.Diagnostics.ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Api",
+          "path": "extensions/Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
+          "path": "extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Dashboard.Queries",
+          "path": "extensions/Dashboard/src/Workflows/Queries/Elsa.Workflows.Dashboard.Queries.csproj"
         },
         {
           "type": "internal",
@@ -7298,267 +7298,6 @@
       ]
     },
     {
-      "path": "essentials/src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj",
-      "name": "Elsa.Studio.Dashboard.Api",
-      "kind": "source",
-      "domain": "Elsa.Studio",
-      "sub_domain": "Dashboard.Api",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Studio.Dashboard.Api",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Api.AspNetCore",
-          "path": "essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Api.Capabilities",
-          "path": "essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Foundation.Identity.Core",
-          "path": "essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Foundation.Identity",
-          "path": "essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Core",
-          "path": "essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Management",
-          "path": "essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "ValenceWorks.MinimalEndpoints",
-          "version": "1.0.0"
-        }
-      ]
-    },
-    {
-      "path": "essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj",
-      "name": "Elsa.Studio.Dashboard.Core",
-      "kind": "source",
-      "domain": "Elsa.Studio",
-      "sub_domain": "Dashboard.Core",
-      "role": "contract",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Studio.Dashboard.Core",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Events.Core",
-          "path": "essentials/src/Events/Core/Elsa.Events.Core.csproj"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        }
-      ]
-    },
-    {
-      "path": "essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj",
-      "name": "Elsa.Studio.Dashboard.Management",
-      "kind": "source",
-      "domain": "Elsa.Studio",
-      "sub_domain": "Dashboard.Management",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Studio.Dashboard.Management",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Core",
-          "path": "essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
-          "version": "10.0.12"
-        }
-      ]
-    },
-    {
-      "path": "essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj",
-      "name": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
-      "kind": "source",
-      "domain": "Elsa.Studio",
-      "sub_domain": "Dashboard.Persistence.EntityFrameworkCore",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Persistence.EntityFramework",
-          "path": "essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Core",
-          "path": "essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Relational",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "CShells",
-          "version": "0.0.31"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Caching.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Caching.Memory",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.EnvironmentVariables",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Json",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Hosting.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
-          "version": "10.0.12"
-        }
-      ]
-    },
-    {
       "path": "essentials/src/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj",
       "name": "Elsa.Studio.Preferences.Api",
       "kind": "source",
@@ -8126,50 +7865,6 @@
           "type": "pinned-transitive",
           "id": "ValenceWorks.MinimalEndpoints",
           "version": "1.0.0"
-        }
-      ]
-    },
-    {
-      "path": "essentials/src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj",
-      "name": "Elsa.Workflows.Dashboard.Queries",
-      "kind": "source",
-      "domain": "Elsa.Workflows",
-      "sub_domain": "Dashboard.Queries",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Workflows.Dashboard.Queries",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Core",
-          "path": "essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Design.Core",
-          "path": "essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Design.Persistence.Core",
-          "path": "essentials/src/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Inspection.Core",
-          "path": "essentials/src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
         }
       ]
     },
@@ -14771,26 +14466,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Api",
-          "path": "essentials/src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Core",
-          "path": "essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Management",
-          "path": "essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Studio.Preferences.Api",
           "path": "essentials/src/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj"
         },
@@ -14818,11 +14493,6 @@
           "type": "internal",
           "id": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore",
           "path": "essentials/src/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Dashboard.Queries",
-          "path": "essentials/src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj"
         },
         {
           "type": "internal",
@@ -15108,6 +14778,31 @@
           "type": "internal",
           "id": "Elsa.Diagnostics.ConsoleLogStreaming",
           "path": "extensions/ConsoleStream/src/Elsa.Diagnostics.ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Api",
+          "path": "extensions/Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Core",
+          "path": "extensions/Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Management",
+          "path": "extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
+          "path": "extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Dashboard.Queries",
+          "path": "extensions/Dashboard/src/Workflows/Queries/Elsa.Workflows.Dashboard.Queries.csproj"
         },
         {
           "type": "internal",
@@ -15729,11 +15424,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore",
           "path": "essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj"
         },
@@ -15766,6 +15456,11 @@
           "type": "internal",
           "id": "Elsa.Agent.Persistence.EntityFrameworkCore",
           "path": "extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
+          "path": "extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -19835,243 +19530,6 @@
       ]
     },
     {
-      "path": "essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj",
-      "name": "Elsa.Studio.Dashboard.Persistence.ProviderTests",
-      "kind": "test",
-      "domain": "Elsa.Studio",
-      "sub_domain": "Dashboard.Persistence.ProviderTests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Management",
-          "path": "essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.SqlServer",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Sqlite",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "MySql.EntityFrameworkCore",
-          "version": "10.0.9"
-        },
-        {
-          "type": "external",
-          "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
-          "version": "10.0.0"
-        },
-        {
-          "type": "external",
-          "id": "Testcontainers.MsSql",
-          "version": "4.15.0"
-        },
-        {
-          "type": "external",
-          "id": "Testcontainers.MySql",
-          "version": "4.15.0"
-        },
-        {
-          "type": "external",
-          "id": "Testcontainers.PostgreSql",
-          "version": "4.15.0"
-        },
-        {
-          "type": "external",
-          "id": "Xunit.SkippableFact",
-          "version": "1.5.23"
-        },
-        {
-          "type": "external",
-          "id": "coverlet.collector",
-          "version": "6.0.2"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
-      "name": "Elsa.Studio.Dashboard.QueryTests",
-      "kind": "test",
-      "domain": "Elsa.Studio",
-      "sub_domain": "Dashboard.QueryTests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Events",
-          "path": "essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Management",
-          "path": "essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.Logging",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.TimeProvider.Testing",
-          "version": "10.8.0"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "coverlet.collector",
-          "version": "6.0.2"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
-      "name": "Elsa.Studio.Dashboard.ResourceTests",
-      "kind": "test",
-      "domain": "Elsa.Studio",
-      "sub_domain": "Dashboard.ResourceTests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Events",
-          "path": "essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Api",
-          "path": "essentials/src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Management",
-          "path": "essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "CShells.AspNetCore",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.AspNetCore.OpenApi",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.AspNetCore.TestHost",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Design",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.SqlServer",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Sqlite",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "MySql.EntityFrameworkCore",
-          "version": "10.0.9"
-        },
-        {
-          "type": "external",
-          "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
-          "version": "10.0.0"
-        },
-        {
-          "type": "external",
-          "id": "coverlet.collector",
-          "version": "6.0.2"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
       "path": "essentials/tests/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "name": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests",
       "kind": "test",
@@ -20839,60 +20297,6 @@
           "type": "external",
           "id": "coverlet.collector",
           "version": "6.0.2"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
-      "name": "Elsa.Workflows.Dashboard.QueryTests",
-      "kind": "test",
-      "domain": "Elsa.Workflows",
-      "sub_domain": "Dashboard.QueryTests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Events",
-          "path": "essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Studio.Dashboard.Management",
-          "path": "essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Dashboard.Queries",
-          "path": "essentials/src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime",
-          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.TimeProvider.Testing",
-          "version": "10.8.0"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
         },
         {
           "type": "external",
@@ -27057,6 +26461,602 @@
       ]
     },
     {
+      "path": "extensions/Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj",
+      "name": "Elsa.Studio.Dashboard.Api",
+      "kind": "source",
+      "domain": "Elsa.Studio",
+      "sub_domain": "Dashboard.Api",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Studio.Dashboard.Api",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Core",
+          "path": "extensions/Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Management",
+          "path": "extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "ValenceWorks.MinimalEndpoints",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "path": "extensions/Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj",
+      "name": "Elsa.Studio.Dashboard.Core",
+      "kind": "source",
+      "domain": "Elsa.Studio",
+      "sub_domain": "Dashboard.Core",
+      "role": "contract",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Studio.Dashboard.Core",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Events.Core",
+          "path": "essentials/src/Events/Core/Elsa.Events.Core.csproj"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj",
+      "name": "Elsa.Studio.Dashboard.Management",
+      "kind": "source",
+      "domain": "Elsa.Studio",
+      "sub_domain": "Dashboard.Management",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Studio.Dashboard.Management",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Core",
+          "path": "extensions/Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj",
+      "name": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
+      "kind": "source",
+      "domain": "Elsa.Studio",
+      "sub_domain": "Dashboard.Persistence.EntityFrameworkCore",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Persistence.EntityFramework",
+          "path": "essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Core",
+          "path": "extensions/Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Relational",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Memory",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.EnvironmentVariables",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Json",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "extensions/Dashboard/src/Workflows/Queries/Elsa.Workflows.Dashboard.Queries.csproj",
+      "name": "Elsa.Workflows.Dashboard.Queries",
+      "kind": "source",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Dashboard.Queries",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Workflows.Dashboard.Queries",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Core",
+          "path": "essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Persistence.Core",
+          "path": "essentials/src/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Inspection.Core",
+          "path": "essentials/src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Core",
+          "path": "extensions/Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        }
+      ]
+    },
+    {
+      "path": "extensions/Dashboard/tests/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj",
+      "name": "Elsa.Studio.Dashboard.Persistence.ProviderTests",
+      "kind": "test",
+      "domain": "Elsa.Studio",
+      "sub_domain": "Dashboard.Persistence.ProviderTests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Management",
+          "path": "extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
+          "path": "extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.SqlServer",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "MySql.EntityFrameworkCore",
+          "version": "10.0.9"
+        },
+        {
+          "type": "external",
+          "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
+          "version": "10.0.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.MsSql",
+          "version": "4.15.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.MySql",
+          "version": "4.15.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.PostgreSql",
+          "version": "4.15.0"
+        },
+        {
+          "type": "external",
+          "id": "Xunit.SkippableFact",
+          "version": "1.5.23"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "extensions/Dashboard/tests/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
+      "name": "Elsa.Studio.Dashboard.QueryTests",
+      "kind": "test",
+      "domain": "Elsa.Studio",
+      "sub_domain": "Dashboard.QueryTests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Events",
+          "path": "essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Management",
+          "path": "extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.TimeProvider.Testing",
+          "version": "10.8.0"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "extensions/Dashboard/tests/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
+      "name": "Elsa.Studio.Dashboard.ResourceTests",
+      "kind": "test",
+      "domain": "Elsa.Studio",
+      "sub_domain": "Dashboard.ResourceTests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Events",
+          "path": "essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Api",
+          "path": "extensions/Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Management",
+          "path": "extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
+          "path": "extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.AspNetCore.OpenApi",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.AspNetCore.TestHost",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Design",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.SqlServer",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "MySql.EntityFrameworkCore",
+          "version": "10.0.9"
+        },
+        {
+          "type": "external",
+          "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
+          "version": "10.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "extensions/Dashboard/tests/Workflows/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
+      "name": "Elsa.Workflows.Dashboard.QueryTests",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Dashboard.QueryTests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Events",
+          "path": "essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime",
+          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Management",
+          "path": "extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Dashboard.Queries",
+          "path": "extensions/Dashboard/src/Workflows/Queries/Elsa.Workflows.Dashboard.Queries.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.TimeProvider.Testing",
+          "version": "10.8.0"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
       "path": "extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj",
       "name": "Elsa.Decisions.Api",
       "kind": "source",
@@ -31617,7 +31617,7 @@
         {
           "type": "internal",
           "id": "Elsa.Studio.Dashboard.Core",
-          "path": "essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj"
+          "path": "extensions/Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj"
         },
         {
           "type": "internal",
@@ -31661,12 +31661,12 @@
         {
           "type": "internal",
           "id": "Elsa.Studio.Dashboard.Api",
-          "path": "essentials/src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj"
+          "path": "extensions/Dashboard/src/Api/Elsa.Studio.Dashboard.Api.csproj"
         },
         {
           "type": "internal",
           "id": "Elsa.Studio.Dashboard.Management",
-          "path": "essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj"
+          "path": "extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj"
         },
         {
           "type": "internal",
@@ -33908,7 +33908,7 @@
         {
           "type": "internal",
           "id": "Elsa.Studio.Dashboard.Core",
-          "path": "essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj"
+          "path": "extensions/Dashboard/src/Core/Elsa.Studio.Dashboard.Core.csproj"
         },
         {
           "type": "internal",
@@ -34437,12 +34437,12 @@
         {
           "type": "internal",
           "id": "Elsa.Studio.Dashboard.Management",
-          "path": "essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj"
+          "path": "extensions/Dashboard/src/Management/Elsa.Studio.Dashboard.Management.csproj"
         },
         {
           "type": "internal",
           "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
+          "path": "extensions/Dashboard/src/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
