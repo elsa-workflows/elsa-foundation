@@ -151,6 +151,12 @@ public sealed partial class EfStore
                     yield return new("table", table.Name, table.Name, Render(table) + options);
                     break;
                 case CreateIndexOperation index:
+                    // The deletion index also bounds each shipped actor's journal continuation.
+                    if (index.Table == "Journal" && index.Columns.SequenceEqual(["Partition", "Instance"], StringComparer.Ordinal))
+                    {
+                        index.Name = "IX_Journal_Partition_Instance_Position";
+                        index.Columns = ["Partition", "Instance", "Position"];
+                    }
                     yield return new("index", index.Name, index.Table, Render(index));
                     break;
                 case InsertDataOperation { Table: StoreVersionEntity.Table }:
@@ -178,6 +184,7 @@ public sealed partial class EfStore
             Add("FoundationParkAt", "INTEGER");
             Add("FoundationParkRevision", "INTEGER");
             Add("FoundationParkClearing", "TEXT");
+            Add("FoundationParkClearingKind", "TEXT");
             Add("FoundationParkCleared", "INTEGER");
 
             table.ForeignKeys.Add(new AddForeignKeyOperation
@@ -190,9 +197,11 @@ public sealed partial class EfStore
             });
             Check("CK_Instances_FoundationParkRevision", """ "FoundationParkRevision" > 0 """);
             Check("CK_Instances_FoundationBoolean", """ "Retired" IN (0, 1) AND "Suspended" IN (0, 1) """);
-            Check("CK_FoundationParkClearing", """
+            Check("CK_FoundationParkClearing", $"""
                 ("FoundationParkClearing" IS NULL) = ("FoundationParkCleared" IS NULL)
-                AND ("FoundationParkClearing" IS NULL OR "Status" = 2 AND "FoundationParkAt" IS NOT NULL AND "FoundationParkCleared" > 0)
+                AND ("FoundationParkClearing" IS NULL) = ("FoundationParkClearingKind" IS NULL)
+                AND ("FoundationParkClearing" IS NULL OR "Status" = 2 AND "FoundationParkAt" IS NOT NULL AND "FoundationParkCleared" > 0
+                    AND "FoundationParkClearingKind" IN ('{Kinds.Terminate}', '{Kinds.Delete}'))
                 """);
         }
         if (table.Name == "Messages")
@@ -270,6 +279,7 @@ public sealed partial class EfStore
             "ParkAt" INTEGER,
             "ParkFault" TEXT,
             "ParkRevision" INTEGER,
+            "ParkResolution" TEXT,
             PRIMARY KEY ("Tenant", "Reference")
             """);
         yield return Index("IX_FoundationRootReceipts_Until", "FoundationRootReceipts", """("Until")""");
@@ -283,6 +293,9 @@ public sealed partial class EfStore
             ("Partition", "Target", "Seq", "Id")
             WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND (NOT "Done" OR "FoundationKeptBy" = 0)
             """);
+        yield return Index("IX_FoundationRootInbox_Kept", "Messages", """
+            ("Partition", "Target", "Seq", "Id", "InboxScope") WHERE "FoundationKeptBy" IS NOT NULL
+            """);
         yield return Index("IX_FoundationRootOperators_Pending", "Messages", """
             ("Partition", "Target", "Seq", "Due")
             WHERE "InboxScope" = -4 AND "Id" GLOB 'operator/*' AND NOT "Done"
@@ -294,6 +307,7 @@ public sealed partial class EfStore
         yield return new("trigger", "kernel_job_generation", "Instances", "CREATE TRIGGER " + SqliteGenerationClause);
         foreach (var guard in SqliteFirstRootGuards(db)) yield return guard;
         foreach (var projector in SqliteRootProjectors()) yield return projector;
+        foreach (var history in SqliteRootWorkflowHistoryDefinitions()) yield return history;
         foreach (var outcome in SqliteRootOutcomes()) yield return outcome;
     }
 

@@ -45,6 +45,51 @@ public sealed partial class EfStore
             new RootParkedRefusal(root, expected, WithoutParkFacts(command)!, row.Suspended, retries));
     }
 
+    private async Task<PreparedRoot?> PrepareRecoveredParkRefusalAsync(WorkerRoot root, TurnCommit turn, Message command, CancellationToken token)
+    {
+        await using var db = create();
+        if (!db.UsesRootParkRecovery || !db.UsesRootParkedOperators ||
+            turn.Row is not { Status: InstanceStatus.Running, FoundationDispatchHeader: { Terminal: null } header } row ||
+            turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
+            !PostgresRootAdmission.IsOperatorOccurrence(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
+            turn.Journal != Json.Write(new { Outcome = "refused", Operation = command.Id, Reason = "selection" }) ||
+            turn.Consumed.Count + turn.Sent.Count + turn.Subscribed.Count + turn.Unsubscribed.Count != 0 ||
+            turn.Held is { Count: > 0 } || turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
+                turn.Journal, Held: turn.Held)
+                { FoundationRootOperator = command })
+            throw RootShape();
+
+        var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
+        if (current is not { Status: InstanceStatus.Running, ParkAt: null, TerminalRevision: null, TerminalAt: null } || current.Revision != expected)
+            return null;
+        if (row != WorkerRow(root, current) with { Revision = checked(expected + 1), FoundationDispatchHeader = header } ||
+            header.Tenant != root.Tenant || header.Reference != root.Reference)
+            throw RootShape();
+        return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
+            new RecoveredParkRefusal(root, expected, WithoutParkFacts(command)!, current.Suspended, RootSelfIssuer));
+    }
+
+    private sealed record RecoveredParkRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended, FoundationSelfIssuer? Issue)
+        : QualifiedRootCheckpoint(checked(Expected + 1))
+    {
+        internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
+        {
+            if (!db.UsesRootParkRecovery || !db.UsesRootParkedOperators) return false;
+            var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision}
+                WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
+                    AND "Status" = {(int)InstanceStatus.Running} AND NOT "Retired" AND "Suspended" = {Suspended}
+                    AND "FoundationParkAt" IS NULL AND "FoundationParkRevision" IS NULL
+                    AND "FoundationTerminalAt" IS NULL AND "FoundationTerminalRevision" IS NULL
+                    AND "FoundationTenant" = {Root.Tenant} AND "FoundationReference" = {Root.Reference}
+                    AND EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Tenant" = {Root.Tenant}
+                        AND "Reference" = {Root.Reference} AND "Actor" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Creation" = 1)
+                """, token);
+            return updated == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command],
+                Issue, Suspended, token);
+        }
+    }
+
     // S5b-3b: the backoff before a Delete's last page runs again after its protection could not be read: one second,
     // doubling with each earlier refusal of that page, at most thirty seconds.
     internal static long ParkRetryDelay(int refusals) => Math.Min(1_000L << Math.Min(refusals, 5), 30_000L);
@@ -116,24 +161,26 @@ public sealed partial class EfStore
             """;
         string Row(string side) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal);
-        string End(string ended, string entries) => $$$"""
+        var keptScope = db.UsesSqliteShippedInstall ? "" : """k."InboxScope" = -4 AND """;
+        var pageKind = db.UsesSqliteShippedInstall ? """ AND NEW."FoundationParkClearingKind" = OLD."FoundationParkClearingKind" """ : "";
+        string End(string ended, string kind, string entries) => $$$"""
             ({{{ended}}} AND NOT NEW."Retired"
-                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 AND OLD."FoundationTerminalRevision" IS NULL
+                AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 AND OLD."FoundationTerminalRevision" IS NULL{{{SqliteClearingKindMatches(db, $"'{kind}'")}}}
                 AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
                 AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
                 AND NEW."Jobs" IS NULL AND NEW."Children" IS NULL AND NEW."CustomHandles" IS NULL AND OLD."Fault" IS NOT NULL
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = NEW."Id")
                 AND {{{Row("NEW")}}} IS NOT DISTINCT FROM {{{Row("OLD")}}}
                 AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
-                    AND k."InboxScope" = -4 AND k."FoundationKeptBy" IS NOT NULL)
+                    AND {{{keptScope}}}k."FoundationKeptBy" IS NOT NULL)
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
                     AND j."Revision" = NEW."Revision" AND ({{{entries}}})))
             """;
         // A discard is the last page of a clearing: a single page checked protection at its Open and never discards.
         var discard = db.UsesRootRetirement ? " OR /*discard-end*/ " + End(
-            """OLD."Status" = 2 AND NEW."Status" = 2 AND NEW."Suspended" = OLD."Suspended" AND OLD."FoundationParkClearing" IS NOT NULL """,
+            """OLD."Status" = 2 AND NEW."Status" = 2 AND NEW."Suspended" = OLD."Suspended" AND OLD."FoundationParkClearing" IS NOT NULL """, Kinds.Delete,
             """j."Entries" LIKE '{{"Outcome":"protected","Disposition":"discarded",%' """) : "";
-        return End("""OLD."Status" = 2 AND NEW."Status" = 3 AND NOT NEW."Suspended" """,
+        return End("""OLD."Status" = 2 AND NEW."Status" = 3 AND NOT NEW."Suspended" """, Kinds.Terminate,
             """j."Entries" LIKE '{{"Outcome":"terminated",%' OR j."Entries" LIKE '{{"Outcome":"protected","Disposition":"terminated",%' """) + discard + $$$"""
 
             OR /*clearing-open*/ (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
@@ -142,7 +189,7 @@ public sealed partial class EfStore
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
                     AND j."Revision" = NEW."Revision" AND j."Entries" LIKE '{{"Outcome":"clearing",%'))
             OR /*clearing-page*/ (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
-                AND OLD."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkClearing" = OLD."FoundationParkClearing"
+                AND OLD."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkClearing" = OLD."FoundationParkClearing"{{{pageKind}}}
                 AND NEW."FoundationParkCleared" > OLD."FoundationParkCleared"
                 {{{Parked}}}
                 AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
@@ -176,9 +223,15 @@ public sealed partial class EfStore
     // Park retirement adds its Park mark and kept-input conditions to the common retirement footprint checks.
     // S5b-3b: a Delete retires it the same way, still Faulted; a Terminate-then-delete needs its capability.
     private static string ParkedRetirementCheckpoint(KernelDb db) => ParkedRetirementSql
-        .Replace("/*retired-status*/", db.UsesRootTerminateThenDelete ? "IN (2, 3)" : "= 2", StringComparison.Ordinal);
+        .Replace("/*retired-status*/", db.UsesRootTerminateThenDelete ? "IN (2, 3)" : "= 2", StringComparison.Ordinal)
+        .Replace("/*retired-clearing-kind*/", SqliteClearingKindMatches(db,
+            $"""CASE WHEN NEW."Status" = 3 THEN '{Kinds.Terminate}' ELSE '{Kinds.Delete}' END"""), StringComparison.Ordinal);
+
+    private static string SqliteClearingKindMatches(KernelDb db, string kind) => db.UsesSqliteShippedInstall
+        ? $""" AND (OLD."FoundationParkClearingKind" IS NULL OR OLD."FoundationParkClearingKind" = {kind})""" : "";
+
     private static readonly string ParkedRetirementSql = """
-        (OLD."Status" = 2 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationTerminalRevision" IS NULL
+        (OLD."Status" = 2 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationTerminalRevision" IS NULL/*retired-clearing-kind*/
             AND NEW."Status" /*retired-status*/ AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
             AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
             /*retire-kept*/ AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
@@ -204,7 +257,8 @@ public sealed partial class EfStore
         string Row(string side) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
             .Replace("/*park-revision*/", db.RecordsRootParkRevision ? $""", {side}."FoundationParkRevision" """ : "", StringComparison.Ordinal)
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal)
-            .Replace("/*clearing*/", $""", {side}."FoundationParkClearing", {side}."FoundationParkCleared" """, StringComparison.Ordinal);
+            .Replace("/*clearing*/", $""", {side}."FoundationParkClearing", {side}."FoundationParkCleared" """ +
+                (db.UsesSqliteShippedInstall ? $""", {side}."FoundationParkClearingKind" """ : ""), StringComparison.Ordinal);
         // The raw command is formatted, so the literal brace is doubled.
         return $$$"""
             AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
@@ -330,6 +384,7 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
         {
             if (!db.UsesRootParkedOperators) return false;
+            if (db.UsesSqliteRootRuntime) return await BindSqliteParkedTerminateAsync(db, this, token);
             var locked = await db.Database.SqlQuery<LockedParkedRoot>($"""
                 SELECT i."FoundationParkAt" AS "At", i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
                     sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion",

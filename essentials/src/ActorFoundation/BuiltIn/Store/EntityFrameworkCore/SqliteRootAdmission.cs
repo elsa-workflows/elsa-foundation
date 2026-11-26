@@ -197,7 +197,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             """).SingleOrDefaultAsync(token);
     }
 
-    private static async Task EnqueueAsync(KernelDb db, string actor, int partition, string id, long scope, string kind,
+    internal static async Task EnqueueAsync(KernelDb db, string actor, int partition, string id, long scope, string kind,
         string header, string? payload, long? due, long? keepUntil, string? replyTo, CancellationToken token)
     {
         RequireOne(await db.Database.ExecuteSqlInterpolatedAsync($"""
