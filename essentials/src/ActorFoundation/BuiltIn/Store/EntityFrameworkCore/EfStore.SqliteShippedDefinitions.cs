@@ -120,7 +120,9 @@ public sealed partial class EfStore
             {
                 case CreateTableOperation table:
                     AddSqliteRootColumns(table);
-                    yield return new("table", table.Name, table.Name, Render(table) + " STRICT");
+                    // The qualified checkpoint's Id is its only row identity, including during SQLite conflict handling.
+                    var options = table.Name == "Instances" ? " STRICT, WITHOUT ROWID" : " STRICT";
+                    yield return new("table", table.Name, table.Name, Render(table) + options);
                     break;
                 case CreateIndexOperation index:
                     yield return new("index", index.Name, index.Table, Render(index));

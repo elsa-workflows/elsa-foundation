@@ -172,6 +172,9 @@ internal static class SqliteShippedInstallChecks
             "the physical guard accepts qualified running and parked atomic retirements");
 
         await SeedAsync("checkpoint", InstanceStatus.Running);
+        Require(await db.Database.SqlQueryRaw<bool>("""
+            SELECT wr AS "Value" FROM pragma_table_list WHERE schema = 'main' AND name = 'Instances'
+            """).SingleAsync(token), "the SQLite checkpoint table uses only its declared primary key for row identity");
         await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
             UPDATE "Instances" SET "State" = '[]' WHERE "Id" = 'checkpoint'
             """, token), "the checkpoint guard refuses an update without a qualified revision");
