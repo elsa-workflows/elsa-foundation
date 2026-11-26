@@ -70,7 +70,7 @@ public sealed partial class EfStore
                     !await ClearParkedAsync(parked))) return false;
             // A parked root without Park arrivals, or one being cleared, receives only its operator rows.
             if (!await SettleRootInputsAsync(db, Root.Reference, Current.Actor, [Command.InboxKey], [Command], null,
-                    Park is null ? running && Current.Suspended : !db.UsesRootParkArrivals || Park.Clearing is not null, token))
+                    Park is null ? running && (Current.Suspended || WithheldInputs) : !db.UsesRootParkArrivals || Park.Clearing is not null, token))
                 return false;
 
             var revision = checked(Current.Revision + 1);
@@ -234,6 +234,6 @@ public sealed partial class EfStore
             throw RootShape();
 
         return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal), new RootRetirement(root, current, command,
-            WithheldInputs: !postgres && current.Status == InstanceStatus.Running && AuthoredSqliteWithholding(root, current)));
+            WithheldInputs: current.Status == InstanceStatus.Running && AuthoredWithholding(root, current)));
     }
 }

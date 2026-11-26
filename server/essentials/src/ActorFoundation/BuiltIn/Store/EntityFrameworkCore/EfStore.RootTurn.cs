@@ -65,7 +65,7 @@ public sealed partial class EfStore
                     !await ConsumeRootJobAsync(db, Current.Actor, completed.Original, cancellationToken)) return false;
             }
             else if (!await SettleRootInputsAsync(db, Reference, Current.Actor, Inputs.Select(input => input.InboxKey).ToArray(), Inputs, Issue,
-                         Current.Suspended, cancellationToken)) return false;
+                         Current.Suspended || WithheldInputs, cancellationToken)) return false;
             if (Recalls is { Length: > 0 })
             {
                 // A recall is idempotent. Only an existing private row addressed by this creation changes.

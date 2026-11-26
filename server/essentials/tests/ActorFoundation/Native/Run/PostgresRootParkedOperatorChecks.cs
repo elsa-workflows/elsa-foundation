@@ -2,6 +2,8 @@ using System.Data.Common;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Postgres;
+using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -377,6 +379,11 @@ internal static class PostgresRootParkedOperatorChecks
                 "one shipped faulting turn retains both inputs");
             await CheckProtectionCeilingAsync(main, root, shippedPark, cleared: 1);
         }
+        if (shippedSet && owned)
+        {
+            await AuthoredWithholdingSet();
+            await HostedAuthoredWithholdingAsync();
+        }
         await RecoverNeverMeetsSuspendedPark();
         await ArrivalsSet();
         await RereadAcrossFormats();
@@ -385,6 +392,138 @@ internal static class PostgresRootParkedOperatorChecks
         await DeleteSet();
         await JobsInspection();
         return 0;
+
+        async Task AuthoredWithholdingSet()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA authored_withholding", stop);
+            var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "authored_withholding" }.ConnectionString;
+            var ownOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
+            KernelDb OpenAuthored() => KernelDb.ForPostgresRootShipped(ownOptions);
+            await using var set = new Set("authored-withholding", OpenAuthored, owned, inBatch, tenant, stop) { UsesAuthoredWithholding = true };
+            const string operation = "terminate-author-withheld";
+            const string ordinaryOperation = "terminate-deliverable";
+            const string compoundOperation = "compound-author-withheld";
+            const string laterOperation = "terminate-after-compound";
+            var attemptedExpected = new Dictionary<string, long?>();
+            var observedEarlyPoll = false;
+            var observedCompoundPoll = false;
+            string? withheldActor = null;
+            long due = 0;
+            set.Write = async (owner, batch, token) =>
+            {
+                var command = batch.Turns.SingleOrDefault(turn => turn.FoundationRootOperator is { } input &&
+                    input.Id is operation or ordinaryOperation && turn.Expected is not null);
+                if (command is not null)
+                {
+                    var selected = command.FoundationRootOperator!;
+                    attemptedExpected.Add(selected.Id, command.Expected);
+                    if (selected.Id == operation)
+                    {
+                        Check(!(await owner.CommitAsync(batch with { Epoch = batch.Epoch - 1 }, token)).Landed,
+                            "a selected Terminate passing authored withholding still requires its exact epoch");
+                        var stale = command with { Expected = command.Expected + 1, Row = command.Row! with { Revision = command.Row!.Revision + 1 } };
+                        Check(!(await owner.CommitAsync(batch with
+                        {
+                            Turns = [.. batch.Turns.Select(turn => turn == command ? stale : turn)]
+                        }, token)).Landed, "the withheld-input Terminate still requires its exact checkpoint revision");
+                    }
+                }
+                return await owner.CommitAsync(batch, token);
+            };
+            set.HoldPoll = sample =>
+            {
+                if (due > 0 && sample.Now < due && sample.Messages.Any(item =>
+                    item.Message.Target.Id == withheldActor && item.Message.Id == "earlier-withheld"))
+                {
+                    Check(sample.Messages.All(item => item.Message.Id != operation),
+                        "the PostgreSQL poll withholds a selected command before the database due time");
+                    observedEarlyPoll = true;
+                }
+                if (sample.Messages.Any(item => item.Message.Id == compoundOperation))
+                {
+                    Check(sample.Messages.All(item => item.Message.Id != laterOperation),
+                        "the authored poll exposes the earlier due operator before a second due operator");
+                    observedCompoundPoll = true;
+                }
+                return Task.CompletedTask;
+            };
+            await set.InstallAsync(createTables: true);
+            var owner = await set.OwnAsync();
+            var withheld = await set.StartAsync("withheld-by-header", Probe.WithheldBody);
+            var deliverable = await set.StartAsync("deliverable-by-header");
+            var initial = await set.ImageAsync(withheld);
+            withheldActor = initial.Actor.Id;
+            Check(initial is { Revision: 1, Suspended: false, TypeData: Probe.WithheldBody },
+                "the running root commits the actor's withholding header with physical suspension clear");
+            due = initial.AsOf + 5_000;
+            Check(await set.SendAsync(withheld, "earlier-withheld", "ordinary") &&
+                await set.OperateAsync(withheld, operation, Contract.Kinds.Terminate, set.Selections[withheld], reply: true, dueAt: due) &&
+                await set.SendAsync(deliverable, "earlier-deliverable", "ordinary") &&
+                await set.OperateAsync(deliverable, ordinaryOperation, Contract.Kinds.Terminate, set.Selections[deliverable], reply: true),
+                "selected Terminate commands are admitted behind ordinary inputs on both running roots");
+            await set.PassUntilAsync(() => observedEarlyPoll);
+            var withheldEnd = await set.DriveAsync(withheld, image => image is { Status: InstanceStatus.Cancelled });
+            var deliverableEnd = await set.DriveAsync(deliverable, image => image is { Status: InstanceStatus.Cancelled });
+            await set.SettledInputsAsync(withheld);
+            await set.SettledInputsAsync(deliverable);
+            set.Answered(operation, "terminated");
+            set.Answered(ordinaryOperation, "terminated");
+            Check(withheldEnd is { Revision: 2, TerminalRevision: 2, Suspended: false, TerminalAt: var endedAt } && endedAt >= due &&
+                deliverableEnd is { Revision: 3, TerminalRevision: 3 } &&
+                attemptedExpected.GetValueOrDefault(operation) == 1 && attemptedExpected.GetValueOrDefault(ordinaryOperation) == 2 &&
+                !set.Probe.Saw(withheld, "ordinary") && set.Probe.Saw(deliverable, "ordinary") && ReferenceEquals(owner, set.Owner) && !set.StoodDown,
+                "the due command passes only authored withholding, and a deliverable input commits on the same owner before its command");
+            Check(await set.Admission.AdmitRootOperatorAsync(tenant.Tenant, withheld.Id, operation, Kinds.Terminate,
+                due, null, stop, set.Selections[withheld]) is { Duplicate: true } &&
+                (await set.ImageAsync(withheld)).Revision == withheldEnd.Revision,
+                "replaying the terminated command returns its prior receipt without a new revision");
+
+            var compound = await set.StartAsync("compound-withheld-by-header", Probe.WithheldBody);
+            var compoundImage = await set.ImageAsync(compound);
+            Check(await set.SendAsync(compound, "ordinary-before-compound", "ordinary") &&
+                await set.OperateAsync(compound, compoundOperation, Contract.Kinds.Terminate, set.Selections[compound], reply: true, thenDelete: true) &&
+                await set.OperateAsync(compound, laterOperation, Contract.Kinds.Terminate, set.Selections[compound], reply: true),
+                "the withheld root admits ordinary input, compound Terminate and a later due operator");
+            await set.RetiredAsync(compound);
+            set.Answered(compoundOperation, "deleted");
+            set.AnsweredError(laterOperation, "missing");
+            Check(observedCompoundPoll && !set.Probe.Saw(compound, "ordinary") && ReferenceEquals(owner, set.Owner) && !set.StoodDown &&
+                await set.IsRetiredAtAsync(compoundImage.Actor.Id, 2),
+                "the compound operator retires on its first revision past withheld input and settles the younger operator");
+        }
+
+        async Task HostedAuthoredWithholdingAsync()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA hosted_authored_withholding", stop);
+            var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "hosted_authored_withholding" }.ConnectionString;
+            var hostOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
+            KernelDb OpenHosted() => PostgresPreviewHosting.CreateShippedContext(hostOptions);
+            await using var set = new Set("hosted-authored", OpenHosted, owned, inBatch, tenant, stop);
+            await set.InstallAsync(createTables: true);
+
+            const string name = "authored-host";
+            var actor = new Probe();
+            var requests = PostgresPreviewHosting.CreateRequests(OpenHosted, name, Probe.Type);
+            var api = await PostgresPreviewHosting.OpenFoundationAsync(OpenHosted, Probe.Type, requests, cancellationToken: stop);
+            using var witness = CancellationTokenSource.CreateLinkedTokenSource(stop);
+            witness.CancelAfter(TimeSpan.FromSeconds(12));
+            var token = witness.Token;
+            await using var host = await PostgresPreviewHosting.StartAsync(OpenHosted, name, actor,
+                reason => throw new InvalidOperationException(reason),
+                new LoopOptions { BalanceEvery = TimeSpan.FromMilliseconds(50), PollInterval = TimeSpan.FromMilliseconds(30) },
+                cancellationToken: token, requests: requests);
+            var root = (await api.SendAsync(tenant, new Contract.Target.Start(new(Probe.Type, Probe.WithheldBody)), "hosted-withhold-start",
+                Contract.Kinds.Start, cancellationToken: token)).Actor!.Value;
+            while (await api.GetAsync(tenant, root, token) is null) await Task.Delay(25, token);
+            Check(await set.SendAsync(root, "hosted-withheld-ordinary", "ordinary") &&
+                await set.OperateAsync(root, "hosted-withheld-terminate", Contract.Kinds.Terminate, await set.SelectionAsync(root)),
+                "the hosted shipped runtime admits a Terminate behind ordinary input on the withholding root");
+            while (await api.GetAsync(tenant, root, token) is not { Header.Status: Contract.ActorStatus.Cancelled })
+                await Task.Delay(25, token);
+            Check(await set.ImageAsync(root) is { Revision: 2, Suspended: false, TerminalRevision: 2 } && !actor.Saw(root, "ordinary"),
+                "the normal PostgreSQL host wires authored withholding into the worker and commits the selected Terminate");
+            await host.StopAsync(token);
+        }
 
         async Task CheckProtectionCeilingAsync(Set set, Contract.ActorRef root, EfStore.RootImage park, int cleared)
         {
@@ -1959,13 +2098,16 @@ internal static class PostgresRootParkedOperatorChecks
         // Sees every commit an owner of the set writes, with that owner's store.
         internal Func<EfStore, CommitBatch, CancellationToken, ValueTask<Committed>>? Write { get; set; }
         internal Func<Polled, Task>? HoldPoll { get; set; }
+        internal bool UsesAuthoredWithholding { get; init; }
 
         internal async Task<IScopeActivation> OwnAsync()
         {
             var store = Store();
             await using (var profile = open())
                 if (profile.UsesRootSelfProtocol) await store.EnableRootSelfSendsAsync(stop);
-            var scope = (await ShippedComposition.BindWorkerPartitionAsync(store, open, 0, stop)).Scope;
+            if (UsesAuthoredWithholding) await store.EnableRootJobsAsync(stop);
+            var scope = UsesAuthoredWithholding ? store.BindWorkerNode(Probe.Withholds)
+                : (await ShippedComposition.BindWorkerPartitionAsync(store, open, 0, stop)).Scope;
             // A set with direct held replies dispatches held inputs, as PostgresPreviewHosting wires its owner.
             bool heldReplies;
             await using (var profile = open()) heldReplies = profile.UsesRootReplyProtocol;
@@ -2013,13 +2155,19 @@ internal static class PostgresRootParkedOperatorChecks
             }
         }
 
-        internal async Task<Contract.ActorRef> StartAsync(string id)
+        internal async Task<Contract.ActorRef> StartAsync(string id, string typeData = "{}")
         {
-            var root = (await _ingress.SendAsync(tenant, new Contract.Target.Start(new(Probe.Type, "{}")), id, Contract.Kinds.Start, cancellationToken: stop)).Actor!.Value;
+            var root = (await _ingress.SendAsync(tenant, new Contract.Target.Start(new(Probe.Type, typeData)), id, Contract.Kinds.Start, cancellationToken: stop)).Actor!.Value;
             _names[root.Id] = id;
             _running[root] = await DriveAsync(root, image => image is { Revision: 1, Status: InstanceStatus.Running });
             Selections[root] = (await _reads.GetAsync(tenant, root, stop))!.Selection!;
             return root;
+        }
+
+        internal async Task<bool> IsRetiredAtAsync(string actor, long revision)
+        {
+            await using var read = open();
+            return await read.Instances.AsNoTracking().AnyAsync(row => row.Id == actor && row.Retired && row.Revision == revision, stop);
         }
 
         internal async Task<EfStore.RootImage> ImageAsync(Contract.ActorRef root) =>
@@ -2077,10 +2225,10 @@ internal static class PostgresRootParkedOperatorChecks
 
         // Admission without the ingress: Suspend and Resume, held commands and Terminate and delete.
         internal async Task<bool> OperateAsync(Contract.ActorRef root, string id, string kind, string? selection = null, bool reply = false,
-            bool thenDelete = false, TimeSpan? keepFor = null)
+            bool thenDelete = false, TimeSpan? keepFor = null, long? dueAt = null)
         {
             var deadline = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 600_000;
-            return await Admission.AdmitRootOperatorAsync(tenant.Tenant, root.Id, id, kind, null, keepFor, stop, selection, thenDelete,
+            return await Admission.AdmitRootOperatorAsync(tenant.Tenant, root.Id, id, kind, dueAt, keepFor, stop, selection, thenDelete,
                 reply: reply ? new(ReplyTo.Of(HeldCaller, id, deadline), deadline) : null) is { Duplicate: false };
         }
 
@@ -2394,11 +2542,12 @@ internal static class PostgresRootParkedOperatorChecks
     private sealed class Probe : Contract.IActorType
     {
         internal const string Type = "postgres-parked-operators";
+        internal const string WithheldBody = """{"Withholds":true}""";
         private readonly List<(string Actor, string Kind)> _seen = [];
         public HashSet<(string Actor, string Kind)> FailsOn { get; } = [];
         public bool Saw(Contract.ActorRef actor, string kind) => _seen.Contains((actor.Id, kind));
         string Contract.IActorType.Type => Type;
-        public bool Withholds(Contract.ActorHeader header) => false;
+        public bool Withholds(Contract.ActorHeader header) => header.TypeData == WithheldBody;
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public HashSet<string> Protects { get; } = [];
         // A root whose protection cannot be read: ProtectsDeletion throws, which the adapter answers as ProtectionUnavailable.
