@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "500c92ceb5864cd30958e980b8daa9e50908f89e",
+  "last_publish_commit": "22b7ca6320949c163478374d517dffac9987e1e0",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -144,18 +144,18 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Durable",
-      "version": "4.0.22-preview",
-      "commit": "61bb7a97e4140084e4d43fc4476e2557990202af"
+      "version": "4.0.23-preview",
+      "commit": "22b7ca6320949c163478374d517dffac9987e1e0"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Hosting",
-      "version": "4.0.6-preview",
-      "commit": "61bb7a97e4140084e4d43fc4476e2557990202af"
+      "version": "4.0.7-preview",
+      "commit": "22b7ca6320949c163478374d517dffac9987e1e0"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
-      "version": "4.0.9-preview",
-      "commit": "99e6f01b32e885b227eaa5c3b58bb07126ce2d3c"
+      "version": "4.0.10-preview",
+      "commit": "22b7ca6320949c163478374d517dffac9987e1e0"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Runtime",
@@ -163,9 +163,14 @@
       "commit": "61bb7a97e4140084e4d43fc4476e2557990202af"
     },
     {
+      "package_id": "Elsa.ActorFoundation.BuiltIn.Sqlite",
+      "version": "4.0.0-preview",
+      "commit": "22b7ca6320949c163478374d517dffac9987e1e0"
+    },
+    {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
-      "version": "4.0.29-preview",
-      "commit": "61bb7a97e4140084e4d43fc4476e2557990202af"
+      "version": "4.0.30-preview",
+      "commit": "22b7ca6320949c163478374d517dffac9987e1e0"
     },
     {
       "package_id": "Elsa.ActorFoundation.Contracts",
