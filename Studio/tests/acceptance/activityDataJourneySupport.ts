@@ -10,7 +10,8 @@ export type Node = { nodeId: string; activityVersionId: string; inputs: { refere
 export type State = { rootActivity: Node; variables: unknown[]; inputs: unknown[]; outputs: unknown[] };
 export type Created = { definition: { id: string }; draftId: string };
 type Draft = { state: State; layout: unknown; activityPresentation: unknown };
-export type Context = { request: { definitionId: string; nodeId: string; inputKey: string; documentRevision: string; query?: { source?: Binding; memberPath?: string[] }; snapshot: State };
+export type Context = { request: { definitionId: string; nodeId: string; inputKey: string; documentRevision: string;
+  query?: { source?: Binding; parameterSource?: unknown; expressionType?: string; memberPath?: string[] }; snapshot: State };
   response: { state: string; documentRevision: string; analysis?: { memberReadsEnabled?: boolean; sources: { binding: Binding | null; shape?: { state: string; kind: string } }[] } } };
 type Execution = { activityExecutionId: string; authoredActivityId: string; status: string };
 
@@ -168,7 +169,8 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   async function chooseWholeExpressionSource(created: Created, source: Locator) {
     await settleContext();
     const listing = [...contexts].reverse().find(item => item.request.definitionId === created.definition.id &&
-      item.request.inputKey === "text" && !item.request.query?.source && item.response.state === "supported");
+      item.request.nodeId === "consumer" && item.request.inputKey === "text" && item.request.query?.expressionType === "JavaScript" &&
+      !item.request.query.source && !item.request.query.parameterSource && item.response.state === "supported");
     const memberReads = listing?.response.analysis?.memberReadsEnabled;
     expect(typeof memberReads, "The chooser reports whether member reads are enabled").toBe("boolean");
     await source.press("Enter");
@@ -176,7 +178,9 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
       // An advisory declared type leaves the Activity Data source unknown. The host offers literal member entry.
       await expect(memberName()).toBeVisible();
       await expect(chooser().getByRole("listbox", { name: "Members", exact: true })).toHaveCount(0);
-      await chooser().getByRole("button", { name: "Use whole value", exact: true }).press("Enter");
+      const wholeValue = chooser().getByRole("button", { name: "Use whole value", exact: true });
+      await expect(wholeValue).toBeEnabled();
+      await wholeValue.press("Enter");
     }
     await expect(chooser()).toHaveCount(0);
   }
