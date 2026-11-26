@@ -6,13 +6,12 @@ using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Inspection.Core;
-using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
 using WorkflowActor = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Elsa.Workbench.CorePreview;
 
-internal sealed class WorkbenchCorePreviewReads(Func<KernelDb> open, BoundScope tenant)
+internal sealed class WorkbenchCorePreviewReads(Func<int, CancellationToken, ValueTask<IActorReads>> open, BoundScope tenant)
 {
     internal const string ListPath = "/runtime/core-preview/workflows/instances";
     private const int PageSize = 25;
@@ -47,8 +46,7 @@ internal sealed class WorkbenchCorePreviewReads(Func<KernelDb> open, BoundScope 
             return Results.BadRequest("The definition or continuation is invalid.");
 
         var token = context.RequestAborted;
-        var store = new EfStore(open, postgres: true);
-        var reads = await store.OpenPreviewRootReadsAsync(PageSize, token);
+        var reads = await open(PageSize, token);
         var query = new ActorQuery(WorkflowActor.ActorType, filter,
             definition is null ? null : new Dictionary<string, string> { ["definition"] = definition });
         Page<ActorView> page;

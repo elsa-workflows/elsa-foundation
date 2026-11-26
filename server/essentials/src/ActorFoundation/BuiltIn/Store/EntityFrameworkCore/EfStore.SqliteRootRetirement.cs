@@ -112,20 +112,6 @@ public sealed partial class EfStore
             DELETE FROM "Journal" WHERE "Instance" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" > 0;
             """, token);
 
-        // The current stage may precede installation of the workflow-history read model.
-        if (await db.Database.SqlQueryRaw<bool>("""
-            SELECT EXISTS (SELECT 1 FROM main.sqlite_schema WHERE type = 'table' AND name = 'FoundationWorkflowHistory') AS "Value"
-            """).SingleAsync(token))
-        {
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                DELETE FROM "FoundationWorkflowHistory" WHERE "Tenant" = {root.Tenant} AND "Reference" = {root.Reference}
-                """, token);
-            if (await db.Database.SqlQuery<bool>($"""
-                SELECT EXISTS (SELECT 1 FROM "FoundationWorkflowHistory"
-                    WHERE "Tenant" = {root.Tenant} AND "Reference" = {root.Reference}) AS "Value"
-                """).SingleAsync(token)) return false;
-        }
-
         return await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "Journal" ("Instance", "Partition", "Position", "Revision", "Entries")
             SELECT {root.Actor}, {root.Partition}, {retire.Position}, -1, '["delete"]'
@@ -136,6 +122,7 @@ public sealed partial class EfStore
                 AND "FoundationHeader" IS NULL AND "FoundationStateWire" IS NULL
                 AND "FoundationTerminalRevision" = {terminalRevision} AND "FoundationTerminalAt" = {terminalAt})
                 AND NOT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {root.Tenant} AND "Reference" = {root.Reference})
+                AND NOT EXISTS (SELECT 1 FROM "FoundationWorkflowHistory" WHERE "Tenant" = {root.Tenant} AND "Reference" = {root.Reference})
                 AND NOT EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {root.Actor} AND "Partition" = {root.Partition})
                 AND NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition}
                     AND (NOT "Done" OR "Payload" IS NOT NULL OR "Start" IS NOT NULL OR "ReplyTo" IS NOT NULL))
