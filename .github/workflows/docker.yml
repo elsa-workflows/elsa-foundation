@@ -4,7 +4,7 @@ name: Docker Images
 #   - elsaworkflows/elsa-workbench       — development and demo host
 #   - elsaworkflows/elsa-foundation-host — minimal Nuplane + CShells server host
 #   - elsaworkflows/elsa-essentials-host — Nuplane + CShells host with the curated workflow essentials compiled in
-# A manual profile build produces the matching Foundation host, SDK builder and three package-based
+# A manual profile build produces the matching Foundation host, SDK builder and four package-based
 # server profiles. See docker/profiles/README.md for artifact and publication options.
 # The workbench is a development and demo host, not the shipped product; the
 # elsaworkflows/elsa-server name is reserved for the clean host once it exists.
@@ -75,12 +75,12 @@ on:
         required: true
         type: string
       build_profiles:
-        description: Export the profile builder and three verified Dockerfile-based server profiles.
+        description: Export the profile builder and four verified Dockerfile-based server profiles.
         required: false
         type: boolean
         default: false
       publish_profiles:
-        description: Publish a matching Foundation host, profile builder and three verified multi-platform profiles.
+        description: Publish a matching Foundation host, profile builder and four verified multi-platform profiles.
         required: false
         type: boolean
         default: false
@@ -342,7 +342,7 @@ jobs:
         if: matrix.arch == 'amd64'
         shell: bash
         run: |
-          for profile in essentials elsa3-import full; do
+          for profile in essentials elsa3-import full essentials-curated; do
             docker build --platform "$PLATFORM" --build-arg FOUNDATION_IMAGE --build-arg PROFILE_BUILDER_IMAGE \
               --target locks --output "type=local,dest=$RUNNER_TEMP/locks/$profile" "docker/profiles/$profile"
           done
@@ -372,7 +372,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profile: [essentials, elsa3-import, full]
+        profile: [essentials, elsa3-import, full, essentials-curated]
         arch: [amd64, arm64]
         include:
           - arch: amd64
@@ -413,6 +413,10 @@ jobs:
           mkdir "$bundle"
           docker save "$IMAGE" | gzip -1 > "$bundle/image.tar.gz"
           cp "docker/profiles/$PROFILE/"{Dockerfile,packages.txt,packages.lock.json,nuplane.lock.json,shells.json} "$bundle/"
+          if [ "$PROFILE" = essentials-curated ]; then
+            cp -r "docker/profiles/$PROFILE/settings" "$bundle/"
+            cp "docker/profiles/$PROFILE/shells.Production.json" "$bundle/"
+          fi
           printf '%s' "$PACKAGE_VERSIONS" | base64 -d | gunzip > "$bundle/package-versions.props"
           builder_id=$(docker image inspect --format '{{.Id}}' "$PROFILE_BUILDER_IMAGE")
           jq -n --arg profile "$PROFILE" --arg image "$IMAGE" --arg base "$FOUNDATION_IMAGE" \
@@ -445,6 +449,8 @@ jobs:
             destination: elsaworkflows/elsa-foundation-host:elsa3-import-
           - image: elsa-server-full
             destination: elsaworkflows/elsa-foundation-host:full-
+          - image: elsa-server-essentials-curated
+            destination: elsaworkflows/elsa-essentials-host:profile-
     env:
       ARTIFACT: ${{ matrix.image }}
       IMAGE: ${{ matrix.image }}:4.0.0-preview.${{ github.run_number }}
@@ -493,8 +499,7 @@ jobs:
           docker buildx imagetools create -t "$FOUNDATION:$VERSION" "$FOUNDATION@$DIGEST"
           actual=$(docker buildx imagetools inspect "$FOUNDATION:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
           test "$actual" = "$DIGEST"
-          for target in "$FOUNDATION:builder-$VERSION" \
-            "$FOUNDATION:essentials-$VERSION" "$FOUNDATION:elsa3-import-$VERSION" "$FOUNDATION:full-$VERSION"; do
+          for target in "$FOUNDATION:builder-$VERSION"             "$FOUNDATION:essentials-$VERSION" "$FOUNDATION:elsa3-import-$VERSION" "$FOUNDATION:full-$VERSION"             "elsaworkflows/elsa-essentials-host:profile-$VERSION"; do
             docker buildx imagetools create -t "$target" "$target-amd64" "$target-arm64"
             manifest=$(docker buildx imagetools inspect "$target" --format '{{json .Manifest}}')
             jq -e '([.manifests[].platform | select(.os=="linux") | .architecture] | sort) == ["amd64","arm64"]' <<< "$manifest"
