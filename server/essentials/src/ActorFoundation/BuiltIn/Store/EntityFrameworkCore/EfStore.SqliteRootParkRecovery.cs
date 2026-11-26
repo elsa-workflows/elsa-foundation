@@ -111,8 +111,7 @@ public sealed partial class EfStore
             WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition} AND "EventMatch" IS NULL AND "Done"
                 AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived}
             """, token) != arrived.Length ||
-            !await ClearSqliteParkPageAsync(db, root, kept.Where(row => row.Facts.KeptBy == (short)ParkKeepReason.Consumed).ToArray(),
-                command.Operator.RootParkWindow.Value, token))
+            !await ClearSqliteParkRowsAsync(db, root, kept.Where(row => row.Facts.KeptBy == (short)ParkKeepReason.Consumed).ToArray(), until, token))
             return false;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Messages" SET "Seen" = 0 WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition}

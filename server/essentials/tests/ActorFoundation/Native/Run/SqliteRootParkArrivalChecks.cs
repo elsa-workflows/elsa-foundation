@@ -134,6 +134,7 @@ internal static partial class SqliteHostLifetimeChecks
                 await db.Nodes.Where(node => node.Id == "successor")
                     .ExecuteUpdateAsync(update => update.SetProperty(node => node.LeaseUntil, 0L), token);
                 await using var recoveryOwner = await OwnAsync("recovering");
+                rollback.DelayRelease = true;
                 var recovered = await DriveAsync(recoveryOwner, actor, row => row is { Revision: >= 6, Status: InstanceStatus.Running });
                 Require(recoveryOwner.Owns && recovered is { ParkAt: null, TerminalRevision: null } && executor.Order is ["ordinary", "held"] &&
                     await db.Database.SqlQuery<bool>($"""
@@ -142,6 +143,11 @@ internal static partial class SqliteHostLifetimeChecks
                         AND EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {parked.Actor.Id} AND "Kind" = 'fail'
                             AND "Done" AND "Payload" IS NULL AND "Start" IS NULL AND "FoundationKeptBy" IS NULL) AS "Value"
                         """).SingleAsync(token), "the SQLite recovery candidate delivers the released cohort before the older held call");
+                Require(await db.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM "Messages" a JOIN "Messages" f ON f."Target" = a."Target"
+                        WHERE a."Target" = {parked.Actor.Id} AND a."Kind" = 'ordinary' AND f."Kind" = 'fail'
+                        AND a."KeepUntil" = f."KeepUntil") AS "Value"
+                    """).SingleAsync(token), "restored and consumed inputs use the same receipt expiry across a write delay");
                 Require(await admission.OperateAsync(scope.Tenant, actor, "stale", Kinds.Recover, view.Selection!, null, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Refused }, "the old Park selection cannot recover the running root again");
                 var oversized = (await admission.StartAsync(scope.Tenant, "oversized", new(fixture, "{}"), null, null, token)).Actor!.Value;
@@ -282,6 +288,7 @@ internal static partial class SqliteHostLifetimeChecks
     {
         internal bool Armed { get; set; }
         internal bool Observed { get; private set; }
+        internal bool DelayRelease { get; set; }
         internal bool ObserveQuote { get; set; }
         internal List<(ParkKeepReason Reason, bool HasBody)> Quote { get; } = [];
 
@@ -307,14 +314,20 @@ internal static partial class SqliteHostLifetimeChecks
             return result;
         }
 
-        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
             CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
-            if (!Armed || !command.CommandText.Contains("""SET "Done" = 0, "FoundationKeptBy" = NULL, "Seen" = 0""",
-                StringComparison.Ordinal)) return ValueTask.FromResult(result);
+            if (!command.CommandText.Contains("""SET "Done" = 0, "FoundationKeptBy" = NULL, "Seen" = 0""",
+                StringComparison.Ordinal)) return result;
+            if (DelayRelease)
+            {
+                DelayRelease = false;
+                await Task.Delay(25, cancellationToken);
+            }
+            if (!Armed) return result;
             Armed = false;
             Observed = true;
-            return ValueTask.FromResult(InterceptionResult<int>.SuppressWithResult(0));
+            return InterceptionResult<int>.SuppressWithResult(0);
         }
     }
 
