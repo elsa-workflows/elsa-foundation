@@ -145,20 +145,21 @@ internal static partial class SqliteHostLifetimeChecks
         finally { folder.Delete(recursive: true); }
     }
 
-    private static async Task<string> InsertLaterOperatorAsync(KernelDb db, string reference, string actor, CancellationToken token)
+    private static async Task<string> InsertLaterOperatorAsync(KernelDb db, string reference, string actor, CancellationToken token,
+        string? replyTo = null)
     {
         const string operation = "later-park-terminate";
         var deadline = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 60_000;
         var digest = FoundationRootCreator.OperationDigest(operation);
         var (id, header) = PostgresRootAdmission.EncodeOperator(reference, operation, digest, 1, Kinds.Terminate, null,
-            park: new(1, deadline - 60_000), window: 60_000);
+            park: new(1, deadline - 60_000), window: 60_000, replyAddress: replyTo);
         var home = new InstanceRef(actor).Partition;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Seq", "Kind", "Due", "Start",
-                "Done", "Seen", "Attempts", "Trial", "JobGeneration", "KeepUntil")
+                "Done", "Seen", "Attempts", "Trial", "JobGeneration", "KeepUntil", "ReplyTo")
             VALUES ({id}, {InboxKey.FoundationOccurrenceScope}, {actor}, {home},
                 (SELECT coalesce(max("Seq"), 0) + 1 FROM "Messages"), {Kinds.Terminate}, 0, {header},
-                0, 0, 0, 0, 0, {deadline})
+                0, 0, 0, 0, 0, {deadline}, {replyTo})
             """, token);
         return id;
     }

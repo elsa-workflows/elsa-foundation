@@ -58,6 +58,17 @@ public sealed partial class EfStore
         _ordinaryRoots?.AuthoredWithholds?.Invoke(new(new(root.Reference), current.Model, root.Tenant,
             (Contract.ActorStatus)current.Status, current.Fault, null, current.TerminalAt, current.TypeData, current.Labels)) == true;
 
+    internal static Task<bool> SqliteHeldOperatorCapacityReachedAsync(KernelDb db, string actor, int partition, CancellationToken token) =>
+        db.Database.SqlQuery<bool>(WithSqliteOperatorPredicate($"""
+            SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {actor} AND "Partition" = {partition}
+                AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND NOT "Done" AND "ReplyTo" IS NOT NULL
+                AND (/*supported-operator*/) LIMIT 1 OFFSET {PostgresRootAdmission.HeldReplyLimit - 1}) AS "Value"
+            """)).SingleAsync(token);
+
+    private static FormattableString WithSqliteOperatorPredicate(FormattableString sql) =>
+        FormattableStringFactory.Create(
+            sql.Format.Replace("/*supported-operator*/", SqliteSupportedOperator(""), StringComparison.Ordinal), sql.GetArguments());
+
     private static Task<List<WorkerRoot>> ResolveSqliteWorkerRootsAsync(KernelDb db, int? partition, string[] actors,
         string[] references, CancellationToken token) =>
         db.Database.SqlQuery<WorkerRoot>($"""
@@ -197,9 +208,7 @@ public sealed partial class EfStore
                 AND ("Id" NOT GLOB 'operator/*' OR (/*supported-operator*/))
             ORDER BY "Seq" LIMIT {expected.Count}
             """;
-        var sql = UseSqliteRootClock(ready);
-        var eligible = FormattableStringFactory.Create(
-            sql.Format.Replace("/*supported-operator*/", SqliteSupportedOperator(""), StringComparison.Ordinal), sql.GetArguments());
+        var eligible = WithSqliteOperatorPredicate(UseSqliteRootClock(ready));
         var rows = await db.Messages.FromSqlInterpolated(eligible).AsNoTracking().ToListAsync(token);
         var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue: null)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(message => message.TargetCreation != actor.Creation) ||

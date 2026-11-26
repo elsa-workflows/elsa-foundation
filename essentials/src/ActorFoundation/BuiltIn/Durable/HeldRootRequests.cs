@@ -152,9 +152,9 @@ internal sealed class HeldRootRequests : IReplyTransport
             actor is { } targetActor ? admission.ReadStatusAsync(scope.Tenant, targetActor.Id, token) : ValueTask.FromResult<Contract.ActorStatus?>(null);
     }
 
-    internal async ValueTask<Contract.Reply> RequestOperatorAsync(Contract.BoundScope scope, string reference, string id,
+    internal async ValueTask<Contract.Reply> RequestOperatorAsync(Contract.BoundScope scope, string id,
         Contract.RequestOptions request, TimeSpan? keepFor, Func<HeldRootRequest, CancellationToken, Task<Contract.Admission?>> issue,
-        CancellationToken stop)
+        Func<CancellationToken, ValueTask<Contract.ActorStatus?>> observeStatus, CancellationToken stop)
     {
         var admitted = false;
         return await HoldAsync(scope, id, request, keepFor, IssueAsync, ReadStatusAsync, stop);
@@ -178,14 +178,8 @@ internal sealed class HeldRootRequests : IReplyTransport
             };
         }
 
-        async ValueTask<Contract.ActorStatus?> ReadStatusAsync(CancellationToken token)
-        {
-            if (!admitted) return null;
-            using var observation = CancellationTokenSource.CreateLinkedTokenSource(token);
-            observation.CancelAfter(TimeSpan.FromMilliseconds(100));
-            try { return await admission.ReadStatusAsync(scope.Tenant, reference, observation.Token); }
-            catch (OperationCanceledException) when (observation.IsCancellationRequested && !token.IsCancellationRequested) { return null; }
-        }
+        ValueTask<Contract.ActorStatus?> ReadStatusAsync(CancellationToken token) =>
+            admitted ? observeStatus(token) : ValueTask.FromResult<Contract.ActorStatus?>(null);
     }
 
     private async ValueTask<Contract.Reply> HoldAsync(Contract.BoundScope scope, string id, Contract.RequestOptions request,

@@ -19,12 +19,14 @@ internal static partial class SqliteHostLifetimeChecks
             var file = Path.Combine(folder.FullName, "held-operators.db");
             await InstallFoundationAsync(file, token);
             var scope = EmbeddedTenant.Bind("sqlite-held-operators");
+            await CheckOperatorObservationBudgetAsync(token);
             var replies = SqliteEmbeddedHosting.CreateRequests(file, "held-operators", RetirementKind);
             var ingress = await SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(file, RetirementKind,
                 (_, _, kind) => kind is Contract.Kinds.Terminate or Contract.Kinds.Delete, requests: replies, cancellationToken: token);
             var noOperator = await SqliteEmbeddedHosting.OpenFoundationWithRequestsAsync(file, RetirementKind, replies, token);
             var definitions = new SqliteAdmissionDefinitions();
             var reader = new EfStore(() => OpenFoundationDb(file, definitions), postgres: false, fenceInBatch);
+            var executor = new RetirementActor();
             await using var db = OpenFoundationDb(file);
             var cursor = await SqliteRootAdmission.ReadSelectionCursorAsync(db, token);
             var plain = await StartAsync("plain");
@@ -32,10 +34,11 @@ internal static partial class SqliteHostLifetimeChecks
             var expires = await StartAsync("expires");
             var protectedActor = await StartAsync("protection", "protected");
             var capacity = await StartAsync("capacity");
+            var racesJob = await StartAsync("races-job", "running-job");
             await using (var first = OpenHost())
             {
                 await first.StartAsync(token);
-                foreach (var root in new[] { plain, compound, expires, protectedActor, capacity })
+                foreach (var root in new[] { plain, compound, expires, protectedActor, capacity, racesJob })
                     await WaitForRootAsync(reader, scope.Tenant, root, 1, token);
                 await first.StopAsync(token);
                 Require(first.LastError is null, "the initial owner stops before admitting held commands");
@@ -62,6 +65,7 @@ internal static partial class SqliteHostLifetimeChecks
             await PendingAsync(compound, 1);
             var sibling = CallAsync(compound, "sibling");
             await PendingAsync(compound, 2);
+            var laterPark = await AddFutureParkAsync(compound);
             var expired = CallAsync(expires, "expires", window: 900);
             await PendingAsync(expires, 1);
             Require(await expired is { Error: "timeout", Status: Contract.ActorStatus.Running },
@@ -73,10 +77,16 @@ internal static partial class SqliteHostLifetimeChecks
             var protectedReply = CallAsync(protectedActor, "protected", selection: protectedSelection, kind: Contract.Kinds.Delete);
             await PendingAsync(protectedActor, 1);
 
+            var jobInput = await ingress.SendAsync(scope, new Contract.Target.Ref(racesJob), "issue", "issue-job", cancellationToken: token);
+            var refusedCompound = CallAsync(racesJob, "refused-compound", thenDelete: true);
+            await PendingAsync(racesJob, 1);
+            Require(jobInput.Outcome == Contract.AdmissionOutcome.Accepted, "the live-job refusal follows an earlier ordinary input");
+
+            await AddFutureParkAsync(capacity);
             using var waiting = CancellationTokenSource.CreateLinkedTokenSource(token);
             var many = Enumerable.Range(0, PostgresRootAdmission.HeldReplyLimit)
                 .Select(i => CallAsync(capacity, $"hold-{i}", window: 40_000, caller: waiting.Token)).ToArray();
-            await PendingAsync(capacity, PostgresRootAdmission.HeldReplyLimit);
+            await PendingAsync(capacity, PostgresRootAdmission.HeldReplyLimit + 1);
             Require(await CallAsync(capacity, "extra") is { Error: "operator reply capacity" } &&
                 await CallAsync(capacity, "hold-0") is { Error: "repeat" },
                 "the per-root reply capacity refuses a new caller and keeps its prior receipts");
@@ -95,18 +105,33 @@ internal static partial class SqliteHostLifetimeChecks
             Require(await remove is { Channel: Request.Response, Item: "deleted" } && await sibling is { Error: "missing" } &&
                 await reader.ReadFirstRootAsync(scope.Tenant, compound.Id, token) is null,
                 "compound retirement replies to the selected caller and the scrubbed sibling");
+            Require(await db.Messages.AsNoTracking().SingleAsync(row => row.Id == laterPark, token) is { Done: true, ReplyTo: null, Start: null },
+                "retirement scrubs the staged-out Park-selected held route");
+            Require(await replies.ReadOperatorStatusAsync(scope.Tenant, compound.Id, token) == Contract.ActorStatus.Cancelled &&
+                await replies.ReadOperatorStatusAsync("other-tenant", compound.Id, token) is null,
+                "timeout observation reads only the exact tenant's retired checkpoint status");
             Require(await protectedReply is { Error: "protected" } &&
                 await reader.ReadFirstRootAsync(scope.Tenant, protectedActor.Id, token) is { Status: InstanceStatus.Finished, Revision: 1 },
                 "a protected Delete replies after settling its refusal and preserves the root");
             await WaitForRootAsync(reader, scope.Tenant, expires, 2, token);
             Require(await reader.ReadFirstRootAsync(scope.Tenant, expires.Id, token) is { Status: InstanceStatus.Cancelled },
                 "the durable command can finish after its caller's deadline");
+            var refusal = await refusedCompound;
+            var jobState = await reader.ReadFirstRootAsync(scope.Tenant, racesJob.Id, token);
+            Require(refusal is { Error: "stale selection" } &&
+                jobState is { Status: InstanceStatus.Running, Revision: 2, Jobs: not null } &&
+                await db.Messages.CountAsync(row => row.Target == jobState.Actor.Id && row.InboxScope == EfStore.RootTimedJobScope, token) == 2 &&
+                await db.Messages.AnyAsync(row => row.Target == jobState.Actor.Id && row.Kind == Kinds.Terminate &&
+                    row.Done && row.ReplyTo == null && row.Start == null, token),
+                "the held compound refusal answers once and keeps the same running job pair");
+            Require(await CallAsync(racesJob, "plain-after-refusal") is { Channel: Request.Response, Item: "terminated" },
+                "a subsequent held Terminate still completes");
             await successor.StopAsync(token);
             Require(successor.LastError is null, "the held operator owner stops cleanly");
             return 0;
 
             SqliteEmbeddedHostedService OpenHost() => SqliteEmbeddedHostedService.ForFoundation(file, "held-operators",
-                new RetirementActor(), reason => throw new InvalidOperationException(reason), Loops, fenceInBatch, requests: replies);
+                executor, reason => throw new InvalidOperationException(reason), Loops, fenceInBatch, requests: replies);
 
             async Task<Contract.ActorRef> StartAsync(string id, string definition = "running")
             {
@@ -139,7 +164,42 @@ internal static partial class SqliteHostLifetimeChecks
                     await Task.Delay(25, token);
                 }
             }
+
+            async Task<string> AddFutureParkAsync(Contract.ActorRef root)
+            {
+                var image = (await reader.ReadFirstRootAsync(scope.Tenant, root.Id, token))!;
+                var registration = new Requests().OpenBound("queued-park-control", later, scope.Tenant, null);
+                return await InsertLaterOperatorAsync(db, root.Id, image.Actor.Id, token, registration.ReplyAddress("later-stage"));
+            }
         }
         finally { folder.Delete(recursive: true); }
+    }
+
+    private static async Task CheckOperatorObservationBudgetAsync(CancellationToken token)
+    {
+        using var release = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var status = SqliteEmbeddedHosting.SqliteDirectRequests.ObserveOperatorStatusAsync(_ =>
+        {
+            entered.TrySetResult();
+            release.Wait();
+            exited.TrySetResult();
+            return ValueTask.FromResult<Contract.ActorStatus?>(Contract.ActorStatus.Running);
+        }, token).AsTask();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1), token);
+            Require(await status.WaitAsync(TimeSpan.FromSeconds(1), token) is null,
+                "a synchronous optional status observation cannot hold the settled deadline");
+        }
+        finally
+        {
+            release.Set();
+            if (entered.Task.IsCompleted) await exited.Task.WaitAsync(token);
+        }
+        Require(await SqliteEmbeddedHosting.SqliteDirectRequests.ObserveOperatorStatusAsync(
+            _ => throw new StoreFormatException("Fixture status read failed."), token) is null,
+            "an optional status read failure leaves the settled timeout without status");
     }
 }
