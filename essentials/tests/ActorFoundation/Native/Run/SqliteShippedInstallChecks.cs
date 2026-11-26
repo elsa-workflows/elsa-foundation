@@ -171,6 +171,12 @@ internal static class SqliteShippedInstallChecks
         Require(await db.Instances.CountAsync(instance => instance.Retired, token) == 2,
             "the physical guard accepts qualified running and parked atomic retirements");
 
+        await SeedAsync("terminal", InstanceStatus.Finished, jobs: "[]");
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "Retired" = 1, "Revision" = 2, "FoundationWriteRevision" = 2,
+                "State" = 'null', "FoundationHeader" = NULL, "Jobs" = NULL WHERE "Id" = 'terminal'
+            """, token), "a marked terminal retirement refuses outstanding jobs on the previous SQLite checkpoint");
+
         await SeedAsync("checkpoint", InstanceStatus.Running);
         Require(await db.Database.SqlQueryRaw<bool>("""
             SELECT wr AS "Value" FROM pragma_table_list WHERE schema = 'main' AND name = 'Instances'
@@ -224,7 +230,7 @@ internal static class SqliteShippedInstallChecks
                 VALUES (0, (SELECT coalesce(max("Position"), 0) + 1 FROM "Journal"), {id}, {revision}, {entries})
                 """, token);
 
-        async Task SeedAsync(string id, InstanceStatus status, bool qualified = true)
+        async Task SeedAsync(string id, InstanceStatus status, bool qualified = true, string? jobs = null)
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "FoundationRootBirths" ("Reference", "Tenant", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
@@ -233,16 +239,19 @@ internal static class SqliteShippedInstallChecks
             db.Instances.Add(new InstanceEntity
             {
                 Id = id, Partition = 0, Model = "model", Definition = "definition", State = "null",
-                Status = status, Revision = 1, NextJobGeneration = 1
+                Status = status, Revision = 1, NextJobGeneration = 1, Jobs = jobs
             });
             await db.SaveChangesAsync(token);
             if (!qualified) return;
             var parkedAt = status == InstanceStatus.Faulted ? (long?)100 : null;
             var parkRevision = parkedAt.HasValue ? (long?)1 : null;
+            var terminalRevision = status == InstanceStatus.Finished ? (long?)1 : null;
+            var terminalAt = terminalRevision.HasValue ? (long?)100 : null;
             const string header = "{}";
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "FoundationReference" = {id}, "FoundationTenant" = 'tenant', "FoundationHeader" = {header},
-                    "FoundationParkAt" = {parkedAt}, "FoundationParkRevision" = {parkRevision} WHERE "Id" = {id}
+                    "FoundationParkAt" = {parkedAt}, "FoundationParkRevision" = {parkRevision},
+                    "FoundationTerminalRevision" = {terminalRevision}, "FoundationTerminalAt" = {terminalAt} WHERE "Id" = {id}
                 """, token);
         }
     }
