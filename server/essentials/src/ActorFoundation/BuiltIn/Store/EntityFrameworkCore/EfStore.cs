@@ -836,8 +836,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 object[] args = [partition, epoch, (long)horizon.TotalMilliseconds, limit];
                 if (SamplesAuthoredCohortWithholding(db))
                 {
-                    var withheld = await ReadWithheldCohortsAsync(db, partition, epoch, limit, cancellationToken);
-                    args = [.. args, withheld.Select(row => row.Actor).ToArray(), withheld.Select(row => row.Revision).ToArray()];
+                    var (actors, revisions) = await ReadWithheldCohortsAsync(db, partition, epoch, limit, cancellationToken);
+                    args = [.. args, actors, revisions];
                 }
                 var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, args).ToListAsync(cancellationToken);
                 var result = ToGeneratedPoll(page, root, db);
