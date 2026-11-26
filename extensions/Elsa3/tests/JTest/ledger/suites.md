@@ -32,14 +32,14 @@ One row per suite file under `tests/` (spec 1235, data-model.md). Results: see d
 | `http/query-parameter-tests.json` | http-endpoints.json | pass | pass | 11, 29 |
 | `http/request-body-tests.json` | http-endpoints.json | pass | pass (XML case per engine, suite-changes W2) | 11, 31 |
 | `http/route-parameter-tests.json` | http-endpoints.json | pass | pass | 11, 29 |
-| `javascript/array-methods-tests.json` | javascript-array-methods.json | pass | blocked: #5686 (publish fails with VF-STATE-002 on `Body`) | 11, 29 |
+| `javascript/array-methods-tests.json` | javascript-array-methods.json | pass | blocked: #5894 (publishes since #5686 was fixed; the response script changes a variable through the reference it read, which Elsa 4 input expressions may not do, so the run faults with VF-BIND-001) | 11, 36 |
 | `javascript/date-methods-tests.json` | javascript-date-methods.json | pass | pass (made-compatible copy, run 34) | 11, 34 |
-| `javascript/elsa-functions-tests.json` | javascript-elsa-functions.json | pass | blocked: #5686 (the made-compatible copy converts; publish fails with VF-STATE-002 on `Body`) | 11, 34 |
+| `javascript/elsa-functions-tests.json` | javascript-elsa-functions.json | pass | publishes since #5686 was fixed (made-compatible copy); run 36: load failure, HTTP 408 at 100 % CPU; to confirm on a quieter run | 11, 36 |
 | `javascript/json-methods-tests.json` | javascript-json-methods.json | pass | pass | 11, 29 |
-| `javascript/object-methods-tests.json` | javascript-object-methods.json | pass | blocked: #5686 (publish fails with VF-STATE-002 on `Body`) | 11, 29 |
-| `javascript/script-handler-functions-tests.json` | javascript-script-handler-functions.json | pass (base64 cases; `getConfiguration` cases removed, B14) | pass (made-compatible copy, run 34) | 11, 34 |
+| `javascript/object-methods-tests.json` | javascript-object-methods.json | pass | blocked: #5894 (publishes since #5686 was fixed; the response script changes a variable through the reference it read, which Elsa 4 input expressions may not do, so the run faults with VF-BIND-001) | 11, 36 |
+| `javascript/script-handler-functions-tests.json` | javascript-script-handler-functions.json | pass (base64 cases; `getConfiguration` cases removed, B14) | pass (made-compatible copy, runs 34 and 36) | 11, 36 |
 | `javascript/specialized-methods-tests.json` | javascript-specialized-methods-workflow.json | pass | blocked: #5687 (a Promise result evaluates to `{}`) and #5818 (the top-level-await busy-wait exceeds the script memory limit and faults the workflow) | 11, 29 |
-| `logging/logging-tests.json` | logging-workflow.json | pass | blocked: #5686 (publish fails with VF-STATE-002 on `Headers`) | 11, 29 |
+| `logging/logging-tests.json` | logging-workflow.json | pass | blocked: #5894 (publishes since #5686 was fixed; the response script changes a variable through the reference it read, which Elsa 4 input expressions may not do, so the run faults with VF-BIND-001) | 11, 36 |
 | `performance/baseline-dispatch-tests.json` | performance-baseline-dispatch-sub.json, performance-baseline-dispatch.json | excluded | excluded | - |
 | `performance/big-data-tests.json` | performance-bigdata.json | pass | blocked: value capture (`output.OutputData`, `activityState.Value`/`OutputValue`, `outputs.Result`: snapshot trees; 10 782 items also exceed the snapshot limits) | 11, 29 |
 | `performance/commit-after-every-activity-tests.json` | performance-commit-after-every-activity.json | pass | blocked: value capture (#5647): since #5697 was fixed the adjusted copy publishes and runs; the suite then reads the loop variable's value (`variables['fbbc2932e0d13d2d']`), a value read | 11, 35 |
