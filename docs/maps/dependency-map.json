@@ -724,6 +724,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Sqlite",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.ActorFoundation.Hosting",
           "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj"
         },
