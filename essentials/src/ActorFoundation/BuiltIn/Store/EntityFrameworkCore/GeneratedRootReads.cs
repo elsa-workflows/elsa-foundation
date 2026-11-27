@@ -7,10 +7,19 @@ using Bookmark = Kernel.Durable.FoundationJournalPaging.Bookmark;
 namespace Kernel.EntityFramework;
 
 internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, int pageSize, string provider)
-    : IActorReads, IActorTerminalOutputReads, IActorSequencedJournalReads, IActorPlaybackReads, IActorRetentionConfirmation
+    : IActorReads, IActorTerminalOutputReads, IActorSequencedJournalReads, IActorPlaybackReads, IActorRetentionConfirmation,
+      IActorRetentionReads
 {
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
+
+    public ValueTask<ActorRetentionQuote> ReadRetentionQuoteAsync(BoundScope scope, string actorType,
+        ActorRetentionWindows previous, ActorRetentionWindows proposed, KeyValuePair<string, string>? definitionLabel = null,
+        long? asOf = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        return new(store.ReadRootRetentionQuoteAsync(scope.Tenant, actorType, previous, proposed, definitionLabel, asOf, cancellationToken));
+    }
 
     public async ValueTask<ActorTerminalOutput?> ReadTerminalOutputAsync(BoundScope scope, ActorRef actor, long endedAt,
         bool includeValues, CancellationToken cancellationToken = default)

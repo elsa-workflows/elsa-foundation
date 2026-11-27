@@ -16,7 +16,8 @@ public static partial class SqliteEmbeddedHosting
     }
 
     private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat)
-        : Contract.IActorReads, Contract.IActorTerminalOutputReads, Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads, Contract.IActorRetentionConfirmation
+        : Contract.IActorReads, Contract.IActorTerminalOutputReads, Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads, Contract.IActorRetentionConfirmation,
+          Contract.IActorRetentionReads
     {
         public bool SupportsSequencedJournal => qualificationFormat is null
             ? TakesSequencedJournal
@@ -40,6 +41,12 @@ public static partial class SqliteEmbeddedHosting
         public ValueTask<Contract.ActorSequencedJournalPage?> ReadSequencedJournalAsync(Contract.BoundScope scope,
             Contract.ActorRef actor, long afterSequence, long? upperSequence, int limit, CancellationToken cancellationToken = default) =>
             ReadAsync(reads => reads.ReadSequencedJournalAsync(scope, actor, afterSequence, upperSequence, limit, cancellationToken),
+                cancellationToken, normalizeLockTimeout: true);
+
+        public ValueTask<Contract.ActorRetentionQuote> ReadRetentionQuoteAsync(Contract.BoundScope scope, string actorType,
+            Contract.ActorRetentionWindows previous, Contract.ActorRetentionWindows proposed,
+            KeyValuePair<string, string>? definitionLabel = null, long? asOf = null, CancellationToken cancellationToken = default) =>
+            ReadAsync(reads => reads.ReadRetentionQuoteAsync(scope, actorType, previous, proposed, definitionLabel, asOf, cancellationToken),
                 cancellationToken, normalizeLockTimeout: true);
 
         public ValueTask<Contract.ActorTerminalOutput?> ReadTerminalOutputAsync(Contract.BoundScope scope, Contract.ActorRef actor,

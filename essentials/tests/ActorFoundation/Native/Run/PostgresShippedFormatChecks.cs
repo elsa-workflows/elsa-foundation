@@ -170,6 +170,24 @@ internal static class PostgresShippedFormatChecks
             var fetched = await SettledAsync(answered);
             Require(fetched is { Status: InstanceStatus.Finished } && Variable(fetched, "outcome") == "200" && partner.Calls("/ok") == 1,
                 "its SendHttpRequest job runs after the answer, settles, and the root commits Finished");
+            var retention = (Contract.IActorRetentionReads)foundation;
+            var keep = new Contract.ActorRetentionWindows();
+            var expire = new Contract.ActorRetentionWindows(Finished: TimeSpan.Zero);
+            var terminalAt = fetched!.TerminalAt!.Value;
+            var definition = (await foundation.GetAsync(scope, answered, stop))!.Header.Labels["definition"];
+            var quote = await retention.ReadRetentionQuoteAsync(scope, WorkflowActor.WorkflowActor.ActorType, keep, expire,
+                new("definition", definition), cancellationToken: stop);
+            Require(quote.NewlyEligible == 1 && quote.AsOf >= terminalAt,
+                "the PostgreSQL retention quote counts the exact projected terminal definition");
+            Require(await retention.ReadRetentionQuoteAsync(scope, WorkflowActor.WorkflowActor.ActorType,
+                expire with { Finished = TimeSpan.FromTicks(1) }, expire, asOf: terminalAt, cancellationToken: stop) ==
+                new Contract.ActorRetentionQuote(1, terminalAt) &&
+                await retention.ReadRetentionQuoteAsync(scope, WorkflowActor.WorkflowActor.ActorType, expire, keep, cancellationToken: stop) is { NewlyEligible: 0 },
+                "the PostgreSQL retention quote compares both windows at one clock and excludes extensions");
+            Require(await retention.ReadRetentionQuoteAsync(EmbeddedTenant.Bind("other-retention-tenant"), WorkflowActor.WorkflowActor.ActorType,
+                keep, expire, cancellationToken: stop) is { NewlyEligible: 0 } &&
+                await retention.ReadRetentionQuoteAsync(scope, "WORKFLOW", keep, expire, cancellationToken: stop) is { NewlyEligible: 0 },
+                "the PostgreSQL quote returns zero for an unmatched tenant or ordinal actor type");
             var fetchedActor = fetched!.Actor.Id;
             await using (var guard = Open())
                 await PostgresRootRetirementChecks.CheckRetirementFootprintAsync(guard, fetchedActor, stop);

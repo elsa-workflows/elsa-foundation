@@ -229,7 +229,26 @@ public sealed partial class EfStore
 
     private static FormattableString ActorListQuery(KernelDb db, ActorListProjection projection, FormattableString query)
     {
+        var args = query.GetArguments();
+        var triggers = projection.ListTriggers;
+        string Parameter(int offset) => FormattableString.Invariant($"{{{args.Length + offset}}}");
+        var readiness = $$"""
+            EXISTS (
+                SELECT 1 FROM pg_catalog.pg_trigger source
+                JOIN pg_catalog.pg_class relation ON relation.oid = source.tgrelid
+                JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
+                    AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
+                WHERE source.tgrelid = to_regclass('"Instances"')
+                    AND source.tgname::text = ANY({{Parameter(0)}}) AND source.tgenabled IN ('O', 'A')
+                    AND (NOT {{Parameter(1)}} OR 2 = (
+                        SELECT count(*) FROM pg_catalog.pg_class dependency
+                        WHERE dependency.relnamespace = relation.relnamespace AND dependency.oid IN (
+                            to_regclass('"FoundationActorList"'), to_regclass('"KernelStoreVersions"'))))
+                GROUP BY source.tgrelid HAVING count(*) = {{Parameter(2)}}
+            )
+            """;
         var sql = query.Format
+            .Replace("/*actor-list-ready*/", readiness, StringComparison.Ordinal)
             .Replace("/*terminal-mark*/", projection.TerminalMarkColumn, StringComparison.Ordinal)
             .Replace("/*park-at*/", projection.ParkAtColumn, StringComparison.Ordinal)
             .Replace("/*park-fault*/", projection.ParkFaultColumn, StringComparison.Ordinal)
@@ -238,7 +257,7 @@ public sealed partial class EfStore
             .Replace("/*parent*/", db.UsesRootChildren ? RootChildParentProjection : "NULL::text", StringComparison.Ordinal)
             .Replace("/*filter*/", projection.SchemaBound ? "" : "kernel_actor_list_filter", StringComparison.Ordinal)
             .Replace("/*filter-cast*/", projection.SchemaBound ? "::jsonb" : "", StringComparison.Ordinal);
-        return FormattableStringFactory.Create(StoreDefinitionsRevision.AddPostgresStampSql(sql), query.GetArguments());
+        return FormattableStringFactory.Create(StoreDefinitionsRevision.AddPostgresStampSql(sql), [.. args, triggers, projection.SchemaBound, triggers.Length]);
     }
 
     // Apply the same complete-escape transform as the projector. List parameters can then be
@@ -259,7 +278,6 @@ public sealed partial class EfStore
         if (!postgres) throw new NotSupportedException("Qualified root actor reads require PostgreSQL or a shipped SQLite root store.");
         var expected = db.RequiredFormat;
         var projection = ActorListProjection.Of(db);
-        var triggers = projection.ListTriggers;
         RootPointRow row;
         try
         {
@@ -268,19 +286,7 @@ public sealed partial class EfStore
                     /*park-revision*/ AS "ParkRevision", /*park-resolution*/ AS "ParkResolution", /*parent*/ AS "ParentReference",
                     kernel."StoreSchema", kernel."MessageProtocol", kernel."JournalCodec", /*definitions-stamp*/ AS "DefinitionStamp",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
-                    EXISTS (
-                        SELECT 1 FROM pg_catalog.pg_trigger source
-                        JOIN pg_catalog.pg_class relation ON relation.oid = source.tgrelid
-                        JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
-                            AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
-                        WHERE source.tgrelid = to_regclass('"Instances"')
-                            AND source.tgname::text = ANY({triggers}) AND source.tgenabled IN ('O', 'A')
-                            AND (NOT {projection.SchemaBound} OR 2 = (
-                                SELECT count(*) FROM pg_catalog.pg_class dependency
-                                WHERE dependency.relnamespace = relation.relnamespace AND dependency.oid IN (
-                                    to_regclass('"FoundationActorList"'), to_regclass('"KernelStoreVersions"'))))
-                        GROUP BY source.tgrelid HAVING count(*) = {triggers.Length}
-                    ) AS "SourceReady"
+                    /*actor-list-ready*/ AS "SourceReady"
                 FROM (VALUES (1)) stamp(id)
                 LEFT JOIN "KernelStoreVersions" kernel ON kernel."Id" = {StoreVersionEntity.MarkerId}
                 LEFT JOIN "FoundationActorList" l ON l."Tenant" = {tenant} AND l."Reference" = {reference}
@@ -316,7 +322,6 @@ public sealed partial class EfStore
         if (!postgres) throw new NotSupportedException("Qualified root actor lists require PostgreSQL or a shipped SQLite root store.");
         var expected = db.RequiredFormat;
         var projection = ActorListProjection.Of(db);
-        var triggers = projection.ListTriggers;
         var encodedType = type is null ? null : DurableKeyJson.Write(type);
         var encodedLabels = DurableKeyJson.Write(labels);
         if (projection.SchemaBound)
@@ -332,19 +337,7 @@ public sealed partial class EfStore
                     SELECT "StoreSchema", "MessageProtocol", "JournalCodec"
                     FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
                 ), readiness AS (
-                    SELECT EXISTS (
-                        SELECT 1 FROM pg_catalog.pg_trigger source
-                        JOIN pg_catalog.pg_class relation ON relation.oid = source.tgrelid
-                        JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
-                            AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
-                        WHERE source.tgrelid = to_regclass('"Instances"')
-                            AND source.tgname::text = ANY({triggers}) AND source.tgenabled IN ('O', 'A')
-                            AND (NOT {projection.SchemaBound} OR 2 = (
-                                SELECT count(*) FROM pg_catalog.pg_class dependency
-                                WHERE dependency.relnamespace = relation.relnamespace AND dependency.oid IN (
-                                    to_regclass('"FoundationActorList"'), to_regclass('"KernelStoreVersions"'))))
-                        GROUP BY source.tgrelid HAVING count(*) = {triggers.Length}
-                    ) AS "SourceReady"
+                    SELECT /*actor-list-ready*/ AS "SourceReady"
                 ), page AS (
                     SELECT l."Reference", l."Status", l."EndedAt", /*terminal-mark*/ AS "TerminalRevision", l."Header", /*park-at*/ AS "ParkAt", /*park-fault*/ AS "ParkFault",
                         /*park-revision*/ AS "ParkRevision", /*park-resolution*/ AS "ParkResolution", /*parent*/ AS "ParentReference"
