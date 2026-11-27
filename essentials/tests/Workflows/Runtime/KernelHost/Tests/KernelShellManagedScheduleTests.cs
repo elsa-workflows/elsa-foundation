@@ -14,20 +14,33 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Xunit;
 using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
 using Contract = Kernel.Foundation.Contracts;
 
-namespace Kernel.Native.Run;
+namespace Elsa.Workflows.Runtime.KernelHost.Tests;
 
 /// <summary>Real shell composition from durable publication through schedule delivery and committed workflow history.</summary>
-internal static class KernelShellManagedScheduleChecks
+public sealed class KernelShellManagedScheduleTests
 {
     private const string Trigger = "trigger";
     private const string After = "after-trigger";
     private static readonly TimeSpan TimerInterval = TimeSpan.FromSeconds(5);
     private static readonly PersistenceScope Persistence = new(PersistenceScope.DefaultValue);
 
-    internal static async Task<int> RunAsync(bool postgres)
+    [Fact]
+    public Task Sqlite_shell_reloads_and_fires_durable_schedules() => RunAsync(postgres: false);
+
+    [SkippableFact]
+    public Task PostgreSql_shell_reloads_and_fires_durable_schedules()
+    {
+        Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("KERNEL_SCHEDULE_RUNTIME_POSTGRES")),
+            "Requires dedicated Foundation and Runtime PostgreSQL databases.");
+        return RunAsync(postgres: true);
+    }
+
+    private static async Task RunAsync(bool postgres)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(65));
         var token = deadline.Token;
@@ -46,7 +59,6 @@ internal static class KernelShellManagedScheduleChecks
                     "PostgreSQL qualification requires separate dedicated Foundation and Runtime databases");
             var path = directory is null ? null : Path.Combine(directory.FullName, "foundation.db");
             await RunCoreAsync(provider, foundation, runtime, path, token);
-            return 0;
         }
         finally { directory?.Delete(recursive: true); }
     }

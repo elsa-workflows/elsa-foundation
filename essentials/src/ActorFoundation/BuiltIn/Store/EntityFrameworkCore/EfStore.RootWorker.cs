@@ -459,7 +459,12 @@ public sealed partial class EfStore
             return await CommitAsync(batch with { Seen = [], Trial = [] }, new PostgresMarkPreparation(this, roots, batch), sentAt, cancellationToken);
 
         (CommitBatch Batch, RootCheckpoints Checkpoints)? prepared;
-        try { prepared = await PrepareWorkerBatchAsync(roots, batch, cancellationToken); }
+        try
+        {
+            prepared = await PrepareWorkerBatchAsync(roots, batch, cancellationToken);
+            if (prepared is { } pending && !await ProtectPreparedChildBirthsAsync(pending.Checkpoints, cancellationToken))
+                return new(false, 0, []);
+        }
         catch (Exception error) when (error is not (OperationCanceledException or NotSupportedException) &&
             Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
         {
@@ -637,7 +642,7 @@ public sealed partial class EfStore
         }
         var row = turn.Row;
         if (turn.FoundationRootChildSends is not null && _rootChildReference is null) throw RootShape();
-        var childEffects = PrepareRootChildEffects(root, row, turn.FoundationRootChildSends ?? []);
+        var childEffects = PrepareRootChildEffects(root, row, turn.FoundationRootChildSends ?? [], fence);
         var recalls = turn.FoundationSelfRecalls;
         var values = turn.FoundationValues;
         if (values is not null && (!RootValuesEnabled || turn.Expected is null || turn.FoundationRootOperator is not null))

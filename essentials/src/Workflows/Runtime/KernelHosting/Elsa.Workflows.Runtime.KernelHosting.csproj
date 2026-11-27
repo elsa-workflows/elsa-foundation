@@ -11,7 +11,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="Kernel.Native.Run" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHost.Tests" />
     <ProjectReference Include="../../../ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
     <ProjectReference Include="../../../ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj" />
     <ProjectReference Include="../../../ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
