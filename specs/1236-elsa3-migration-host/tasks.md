@@ -114,12 +114,12 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 - [X] T010 [US4] Start the repository's Studio host against the migration host. Sign in, open a definition, edit an
   expression, publish, and see the host run the new version. Record it in the PR, with the Studio host used and any
   Studio module that expects a capability the host doesn't advertise (R-8). Name that Studio host in the README.
-
-## Phase 6: User Story 2 - JTest acceptance (P1)
-
   **Done 2026-11-27 (PR #6031), with one block:** sign-in and the definitions list work (US4 scenario 1). Scenario 2 is
   blocked outside this host: Studio opens a definition through its current draft and a reconciled definition has none
   ("This workflow definition has no current draft"). The README says so and how to change a migrated workflow instead.
+
+## Phase 6: User Story 2 - JTest acceptance (P1)
+
 - [ ] T011 [US2] **Follow-up, not this PR:** the acceptance run is S-15's final run on this host (spec 1235, PR #5662),
   once the 1237 CLI's `inventory` exists; spec status is `Implemented` for the host itself (coordinator, 2026-11-27).
   Wait for all three:
@@ -156,6 +156,8 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 - [X] T015 [P] Confirm FR-017 (no file under the Workbench host or its settings changed, and the S-15 Workbench run is
   unchanged) and FR-016 (no JTest project or step in `tools/ci/test-tiers.json` or the CI workflows).
 - [X] T016 Set this spec's status to `Implemented` in the finishing PR.
+- [X] T017 (added in implementation) Fix enum input defaults and options failing publication by name (R-12):
+  `JsonConversionContract.Read`, its unit tests, `docs/serialization.md` and the 1207 conversion contract.
 
 ## Dependencies
 
