@@ -14,6 +14,7 @@ internal sealed partial class SqliteRootAdmission
         return WriteAsync<Contract.ScheduleControlResult>(async (db, now, ct) =>
         {
             if (!db.UsesRootScheduleControls) throw new NotSupportedException("The profile does not admit trusted schedule controls.");
+            if (RootScheduleOwnerMode.Applies(db)) await RootScheduleOwnerMode.RequireAsync(db, actorType, ct);
             var reference = await RootScheduleInventory.FindAsync(db, tenant, intent.Key, actorType, ct);
             var current = await RootScheduleControls.ReadAsync(db, tenant, intent.Key, ct);
             if (current.Classify(tenant, actorType, intent, reference) is { } prior) return prior;

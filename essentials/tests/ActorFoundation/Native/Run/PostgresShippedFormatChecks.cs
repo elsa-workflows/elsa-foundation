@@ -475,8 +475,10 @@ internal static class PostgresShippedFormatChecks
         ALTER SCHEMA pin_replacement RENAME TO pin_swap;
         """;
 
-    private static Task CreateNamespaceSwapAsync(KernelDb observer, CancellationToken token) =>
-        observer.Database.ExecuteSqlRawAsync("""
+    private static async Task CreateNamespaceSwapAsync(KernelDb observer, CancellationToken token)
+    {
+        await using var transaction = await observer.Database.BeginTransactionAsync(token);
+        await observer.Database.ExecuteSqlRawAsync("""
             DO $fixture$
             DECLARE source text; relation text;
             BEGIN
@@ -494,6 +496,17 @@ internal static class PostgresShippedFormatChecks
             END
             $fixture$;
             """, token);
+        if (observer.UsesRootScheduleLineage)
+        {
+            foreach (var schema in new[] { "pin_swap", "pin_replacement" })
+            {
+                await observer.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_catalog.set_config('search_path', {schema}, true)", token);
+                await RootScheduleLineage.InstallPostgresAsync(observer, token);
+            }
+        }
+        await transaction.CommitAsync(token);
+    }
 
     private static Task DropNamespaceSwapAsync(KernelDb observer, CancellationToken token) =>
         observer.Database.ExecuteSqlRawAsync("""

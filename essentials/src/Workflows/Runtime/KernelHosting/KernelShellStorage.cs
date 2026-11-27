@@ -98,6 +98,7 @@ internal abstract class KernelShellStorage
         {
             Profile.ManagedSchedules => SqliteEmbeddedFoundation.ForManagedSchedulesQualification(path, node, WorkflowActor.ActorType),
             Profile.PreparedStarts => null,
+            Profile.Shipped when SqliteEmbeddedHosting.TakesPreparedStarts => null,
             _ => new(path, node, WorkflowActor.ActorType)
         };
 
@@ -109,7 +110,8 @@ internal abstract class KernelShellStorage
         public override bool TakesChildren => SqliteEmbeddedHosting.TakesChildren;
         public override bool TakesHttpWaits => SqliteEmbeddedHosting.TakesHttpWaits;
         public override bool TakesManagedSchedules => TakesPreparedStarts || Foundation.TakesManagedSchedules;
-        public override bool TakesPreparedStarts => profile == Profile.PreparedStarts;
+        public override bool TakesPreparedStarts => profile == Profile.PreparedStarts ||
+            profile == Profile.Shipped && SqliteEmbeddedHosting.TakesPreparedStarts;
         public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Foundation.BindProtectedRootStarts(scope);
 
         public override ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token) =>
@@ -118,8 +120,12 @@ internal abstract class KernelShellStorage
         public override Task InstallAsync(CancellationToken token, ProtectRootStartAsync? protectRootStart = null)
         {
             if (TakesPreparedStarts)
-                _foundation ??= SqliteEmbeddedFoundation.ForPreparedStartsQualification(path, node, WorkflowActor.ActorType,
-                    protectRootStart ?? throw new InvalidOperationException("The SQLite prepared-start profile requires executable protection."));
+            {
+                ArgumentNullException.ThrowIfNull(protectRootStart);
+                _foundation ??= profile == Profile.PreparedStarts
+                    ? SqliteEmbeddedFoundation.ForPreparedStartsQualification(path, node, WorkflowActor.ActorType, protectRootStart)
+                    : SqliteEmbeddedFoundation.WithRootStartProtection(path, node, WorkflowActor.ActorType, protectRootStart);
+            }
             return Foundation.InstallShippedAsync(token);
         }
 
@@ -173,7 +179,7 @@ internal abstract class KernelShellStorage
         public override bool TakesChildren => PostgresPreviewHosting.TakesChildren(OpenDatabase);
         public override bool TakesHttpWaits => PostgresPreviewHosting.TakesHttpWaits(OpenDatabase);
         public override bool TakesManagedSchedules => PostgresPreviewHosting.TakesManagedSchedules(OpenDatabase);
-        public override bool TakesPreparedStarts => _profile == Profile.PreparedStarts;
+        public override bool TakesPreparedStarts => PostgresPreviewHosting.TakesPreparedStarts(OpenDatabase);
         public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Requests.BindProtectedRootStarts(scope);
         private PostgresDirectRequests Requests => _requests ??
             throw new InvalidOperationException("Install the PostgreSQL prepared-start store before opening it.");
@@ -183,10 +189,7 @@ internal abstract class KernelShellStorage
             switch (_profile)
             {
                 case Profile.PreparedStarts:
-                    ArgumentNullException.ThrowIfNull(protectRootStart);
                     await PostgresPreviewHosting.InstallPreparedStartsQualificationAsync(_options, token);
-                    _requests ??= PostgresPreviewHosting.CreateRequestsWithRootStartProtection(OpenDatabase, _node,
-                        WorkflowActor.ActorType, protectRootStart);
                     break;
                 case Profile.ManagedSchedules:
                     await PostgresPreviewHosting.InstallManagedSchedulesQualificationAsync(_options, token);
@@ -194,6 +197,12 @@ internal abstract class KernelShellStorage
                 default:
                     await PostgresPreviewHosting.InstallShippedAsync(_options, token);
                     break;
+            }
+            if (TakesPreparedStarts)
+            {
+                ArgumentNullException.ThrowIfNull(protectRootStart);
+                _requests ??= PostgresPreviewHosting.CreateRequestsWithRootStartProtection(OpenDatabase, _node,
+                    WorkflowActor.ActorType, protectRootStart);
             }
         }
 

@@ -64,8 +64,11 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     [ManifestSetting(DisplayName = "Retention confirmation", Description = "Receipt from the retention policy preview for this tenant and store.", Category = "Retention")]
     public string? RetentionConfirmation { get; set; }
 
-    public void ConfigureServices(IServiceCollection services) =>
-        ConfigureServices(services, KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString));
+    public void ConfigureServices(IServiceCollection services)
+    {
+        var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString);
+        ConfigureServices(services, storage, protectChildExecutables: storage.TakesPreparedStarts);
+    }
 
     internal void ConfigureServices(IServiceCollection services, KernelShellStorage storage, bool protectChildExecutables = false)
     {
