@@ -92,21 +92,21 @@ public sealed class PublisherBridgeTests
         // of "failed unexpectedly", however deep the publisher wrapped the rejection.
         var rejection = new ActivityDataSelectionRejectedException(
         [
-            new("/variables/0/initialValue", "activity.graph.variable.initial-value-invalid", "'initialValue' must be an expression object with a syntax and value."),
+            new("/variables/0/initialValue", "ActivityDataSelection/activity.graph.variable.initial-value-invalid", "'initialValue' must be an expression object with a syntax and value."),
             new("write/inputs/text", "Expressions/UnresolvedVariable", "Variable 'missing' is not in scope.")
-        ]) { ProviderKey = "elsa.activity-graph" };
+        ]);
         var publisher = new FakeActivityPublisher { PreflightFailure = new InvalidOperationException("Compiling failed.", rejection) };
 
         var outcome = await new PublisherReusableActivityImportPublisher(publisher, new Tenant("tenant-a")).PublishAsync(Request);
 
         Assert.False(outcome.Published);
-        Assert.Equal("activity.graph.variable.initial-value-invalid", outcome.ErrorCode);
+        Assert.Equal("ActivityDataSelection/activity.graph.variable.initial-value-invalid", outcome.ErrorCode);
         Assert.Equal(2, outcome.Diagnostics.Count);
         var variable = outcome.Diagnostics[0];
-        Assert.Equal(("activity.graph.variable.initial-value-invalid", ActivityDiagnosticSeverity.Error), (variable.Code, variable.Severity));
+        Assert.Equal(("ActivityDataSelection/activity.graph.variable.initial-value-invalid", ActivityDiagnosticSeverity.Error), (variable.Code, variable.Severity));
         Assert.Equal("'initialValue' must be an expression object with a syntax and value.", variable.Message);
         Assert.Equal(("ActivityDraft", "draft-1", (long?)3), (variable.Subject.Kind, variable.Subject.Id, variable.Subject.Revision));
-        Assert.Equal(("elsa.activity-graph", "/variables/0/initialValue"), (variable.Location!.ProviderKey, variable.Location.JsonPointer));
+        Assert.Equal("/variables/0/initialValue", variable.Location!.JsonPointer);
         Assert.Equal("/variables/0/initialValue", variable.Metadata["authoredPath"]);
         Assert.False(string.IsNullOrWhiteSpace(variable.Remediation));
         var input = outcome.Diagnostics[1];
