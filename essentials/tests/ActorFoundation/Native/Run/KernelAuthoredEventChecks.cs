@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Elsa.ActorFoundation.TestSupport;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Hosting;
 using Kernel.Foundation.Postgres;
 using Kernel.Foundation.Sqlite;
 using Kernel.Native;
@@ -14,7 +15,7 @@ using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
 
 namespace Kernel.Native.Run;
 
-internal static class KernelAuthoredEventChecks
+internal static partial class KernelAuthoredEventChecks
 {
     internal static async Task<int> RunAsync(string provider, bool inBatch)
     {
@@ -48,7 +49,7 @@ internal static class KernelAuthoredEventChecks
         var directory = Directory.CreateTempSubdirectory("authored-events");
         try
         {
-            var (open, ingress, reads, owner) = await OpenAsync(model, provider, Path.Combine(directory.FullName, "store.db"), inBatch, token);
+            var (open, ingress, reads, owner, _) = await OpenAsync(model, provider, Path.Combine(directory.FullName, "store.db"), inBatch, token);
             await using var owned = owner;
             var native = await StartAsync(scope, "native-wait", "native");
             var flowchart = await StartAsync(scope, "chart-wait", "flowchart");
@@ -178,8 +179,9 @@ internal static class KernelAuthoredEventChecks
 
     private static Contract.StartSpec Spec(string workflow) => PublicWorkflow.Start(NativeExecutionModel.Start(workflow));
 
-    private static async Task<(Func<KernelDb> Open, Contract.IIngress Ingress, Contract.IActorReads Reads, IAsyncDisposable Owner)>
-        OpenAsync(PublicWorkflow model, string provider, string path, bool inBatch, CancellationToken token)
+    private static async Task<(Func<KernelDb> Open, Contract.IIngress Ingress, Contract.IActorReads Reads,
+        IAsyncDisposable Owner, EventStartPort? Events)>
+        OpenAsync(PublicWorkflow model, string provider, string path, bool inBatch, CancellationToken token, bool eventStarts = false)
     {
         const string node = "authored-event-owner";
         var loop = new LoopOptions
@@ -191,29 +193,48 @@ internal static class KernelAuthoredEventChecks
 
         if (provider == "sqlite")
         {
-            var sqlite = SqliteEmbeddedFoundation.ForAuthoredEventsQualification(path, node, model.Type);
+            var sqlite = eventStarts ? SqliteEmbeddedFoundation.ForEventStartsQualification(path, node, model.Type) :
+                SqliteEmbeddedFoundation.ForAuthoredEventsQualification(path, node, model.Type);
             await sqlite.InstallShippedAsync(token);
             var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
                 { DataSource = path, Pooling = false }.ConnectionString).Options;
-            KernelDb Open() => KernelDb.ForSqliteRootShipped(options, StoreFormat.RootAuthoredEventsQualification);
+            KernelDb Open() => KernelDb.ForSqliteRootShipped(options,
+                eventStarts ? StoreFormat.RootEventStartsQualification : StoreFormat.RootAuthoredEventsQualification);
             var owner = sqlite.CreateHostedService(model, EndProcess, loop, inBatch);
             await owner.StartAsync(token);
-            return (Open, await sqlite.OpenIngressAsync(token), sqlite.CreateReads(), owner);
+            var ingress = eventStarts ? await sqlite.OpenIngressWithOperatorsAsync(Authorize, token) : await sqlite.OpenIngressAsync(token);
+            var events = eventStarts ? new EventStartPort(sqlite.EventStarts.ApplyEventStartsAsync, sqlite.EventStarts.ListEventStartsAsync,
+                sqlite.EventStarts.AdmitEventStartAsync, sqlite.EventStarts.ConfirmEventStartRegistrationDrainedAsync,
+                sqlite.ConfirmPreparedStartAsync) : null;
+            return (Open, ingress, sqlite.CreateReads(), owner, events);
         }
 
         var pg = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
             throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.")).Options;
-        KernelDb OpenPostgres() => KernelDb.ForPostgresRootAuthoredEventsQualification(pg);
+        KernelDb OpenPostgres() => eventStarts ? KernelDb.ForPostgresRootEventStartsQualification(pg) :
+            KernelDb.ForPostgresRootAuthoredEventsQualification(pg);
         await using var database = OpenPostgres();
         Check(await PostgresFixtureDatabase.IsEmptyAsync(database, token), "the PostgreSQL fixture uses a dedicated empty database");
         var cold = new EfStore(OpenPostgres, postgres: true);
         await cold.CreateAsync(1);
         await cold.InstallPreviewRootSchemaAsync(token);
         var requests = PostgresPreviewHosting.CreateRequests(OpenPostgres, node, model.Type);
-        var foundation = await PostgresPreviewHosting.OpenFoundationAsync(OpenPostgres, model.Type, requests, cancellationToken: token);
+        var foundation = eventStarts
+            ? await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenPostgres, model.Type, Authorize, requests, cancellationToken: token)
+            : await PostgresPreviewHosting.OpenFoundationAsync(OpenPostgres, model.Type, requests, cancellationToken: token);
         var hosted = await PostgresPreviewHosting.StartAsync(OpenPostgres, node, model, EndProcess, loop, token,
             Console.Error.WriteLine, (IReplyTransport)requests, fenceInBatch: inBatch);
-        return (OpenPostgres, foundation, foundation, hosted);
+        var admission = new PostgresRootAdmission(OpenPostgres, TimeSpan.FromHours(1));
+        var port = eventStarts ? new EventStartPort(
+            (scope, slot, revision, registrations, ct) => admission.ApplyEventStartsAsync(scope.Tenant, slot, revision, registrations, ct),
+            (scope, after, ct) => admission.ListEventStartsAsync(scope.Tenant, after, ct),
+            (scope, target, compose, protect, ct) => admission.AdmitEventStartAsync(scope.Tenant, target, compose, protect, ct),
+            (scope, slot, revision, ct) => admission.ConfirmEventStartRegistrationDrainedAsync(scope.Tenant, slot, revision, ct),
+            (scope, actor, issuance, ct) => PostgresPreviewHosting.ConfirmPreparedStartAsync(OpenPostgres, scope, actor, issuance, ct)) : null;
+        return (OpenPostgres, foundation, foundation, hosted, port);
+
+        static bool Authorize(Contract.BoundScope scope, Contract.ActorRef _, string kind) =>
+            scope.Tenant == "authored-events" && kind == Contract.Kinds.Delete;
     }
 
     private static void Check(bool value, string message)

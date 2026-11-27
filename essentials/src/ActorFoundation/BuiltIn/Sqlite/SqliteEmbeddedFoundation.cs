@@ -41,6 +41,13 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     internal static SqliteEmbeddedFoundation ForLiveEventQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootLiveEventQualification);
 
+    internal static SqliteEmbeddedFoundation ForEventStartsQualification(string databasePath, string node, string actorType) =>
+        new(databasePath, node, actorType, StoreFormat.RootEventStartsQualification);
+
+    internal SqliteEmbeddedHosting.SqliteDirectRequests EventStarts =>
+        qualificationFormat == StoreFormat.RootEventStartsQualification ? requests.Value :
+            throw new InvalidOperationException("Event starts require their private qualification profile.");
+
     internal static SqliteEmbeddedFoundation ForAuthoredEventsQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootAuthoredEventsQualification);
 

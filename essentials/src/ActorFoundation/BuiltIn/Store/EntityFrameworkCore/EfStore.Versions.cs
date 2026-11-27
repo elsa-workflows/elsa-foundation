@@ -71,6 +71,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootManagedSchedulesQualification => new(3, 123, 1);
     internal static StoreFormat RootPreparedStartsQualification => new(3, 124, 1);
     internal static StoreFormat RootAuthoredEventsQualification => new(3, 126, 1);
+    internal static StoreFormat RootEventStartsQualification => new(3, 127, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -126,7 +127,8 @@ internal enum RootCapabilities : long
     ScheduleControls = 1L << 32,
     ScheduleLineage = 1L << 33,
     PreparedStarts = 1L << 34,
-    AuthoredEvents = 1L << 36
+    AuthoredEvents = 1L << 36,
+    EventStarts = 1L << 37
 }
 
 internal static class RootProfiles
@@ -171,6 +173,7 @@ internal static class RootProfiles
     internal const RootCapabilities ManagedSchedulesQualification = Shipped34 | ScheduleControlsQualification | ScheduleLineageQualification;
     internal const RootCapabilities PreparedStartsQualification = ManagedSchedulesQualification | RootCapabilities.PreparedStarts;
     internal const RootCapabilities AuthoredEventsQualification = PreparedStartsQualification | RootCapabilities.AuthoredEvents;
+    internal const RootCapabilities EventStartsQualification = AuthoredEventsQualification | RootCapabilities.EventStarts;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
     internal const RootCapabilities PlaybackDescendantsQualification = Shipped34;
@@ -241,6 +244,7 @@ internal static class RootProfiles
         [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
         [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
         [RootCapabilities.AuthoredEvents] = RootCapabilities.LiveEventWaits | RootCapabilities.SelfProtocol,
+        [RootCapabilities.EventStarts] = RootCapabilities.AuthoredEvents | RootCapabilities.PreparedStarts,
         [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
         [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
         [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
@@ -503,6 +507,7 @@ internal static class StoreDefinitionsRevision
                     sqlite ? SqliteLiveEventRevision : PostgreSqlLiveEventRevision,
                 // Protocol 126 adds a wire and write path, using the same physical definitions as protocol 35.
                 _ when db.RequiredFormat == StoreFormat.RootAuthoredEventsQualification => sqlite ? 23 : 20,
+                _ when db.RequiredFormat == StoreFormat.RootEventStartsQualification => sqlite ? 26 : 23,
                 _ when db.RequiredFormat == StoreFormat.RootShipped =>
                     sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,
                 _ => sqlite ? SqliteRevision : PostgreSqlRevision

@@ -326,6 +326,15 @@ public sealed partial class EfStore
             yield return Table(RootPreparedStarts.Table, RootPreparedStarts.Columns(sqlite: true));
             yield return Index(RootPreparedStarts.DeadlineIndex, RootPreparedStarts.Table, RootPreparedStarts.DeadlineColumns);
         }
+        if (db.UsesRootEventStarts)
+        {
+            yield return Table(RootEventStarts.Slots, RootEventStarts.SlotColumns(sqlite: true));
+            yield return Table(RootEventStarts.Registrations, RootEventStarts.RegistrationColumns(sqlite: true));
+            yield return Index(RootEventStarts.MatchIndex, RootEventStarts.Registrations, RootEventStarts.MatchColumns);
+            yield return Table(RootEventStarts.Targets, RootEventStarts.TargetColumns(sqlite: true));
+            yield return Index(RootEventStarts.PendingIndex, RootEventStarts.Targets, RootEventStarts.PendingColumns);
+            yield return Index(RootEventStarts.SlotPendingIndex, RootEventStarts.Targets, RootEventStarts.SlotPendingColumns);
+        }
         yield return Table("FoundationRootReceipts", """
             "Tenant" TEXT NOT NULL,
             "Operation" TEXT NOT NULL,

@@ -45,33 +45,45 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         (await StartProtectedAsync(request.Tenant, request.Caller.Id, spec, request, token, reserved, prepared: null))?.Actor?.Id;
 
     internal async Task<Contract.Admission?> StartProtectedAsync(string tenant, string operation, StartSpec spec, HeldRootRequest? reply,
-        CancellationToken token, RootAdmissionPressure.Attempt? reserved, PreparedRootStart? prepared)
+        CancellationToken token, RootAdmissionPressure.Attempt? reserved, PreparedRootStart? prepared, string? eventTarget = null)
     {
         if (reply is { IsOpen: false }) throw new ArgumentException("A held SQLite start requires an open caller bound to its tenant.", nameof(reply));
         try
         {
-            return await StartCoreAsync(tenant, operation, spec, null, reply?.KeepFor, reply, token, reserved, prepared);
+            return await StartCoreAsync(tenant, operation, spec, null, reply?.KeepFor, reply, token, reserved, prepared, eventTarget);
         }
         catch (PreparationExpired) { return null; }
     }
 
     private async Task<Contract.Admission?> StartCoreAsync(string tenant, string operation, StartSpec spec, long? due, TimeSpan? keepFor,
-        HeldRootRequest? reply, CancellationToken token, RootAdmissionPressure.Attempt? reserved = null, PreparedRootStart? prepared = null)
+        HeldRootRequest? reply, CancellationToken token, RootAdmissionPressure.Attempt? reserved = null, PreparedRootStart? prepared = null,
+        string? eventTarget = null)
     {
         RequireCreator(operation, spec);
         var window = ReceiptWindow(deduplicationWindow, keepFor);
-        var storedOperation = prepared is not null && reply is null ? RootPreparedStarts.OneWayOperation(operation) : operation;
+        var storedOperation = eventTarget is not null ? RootEventStarts.Operation(eventTarget) :
+            prepared is not null && reply is null ? RootPreparedStarts.OneWayOperation(operation) : operation;
         var digest = FoundationRootCreator.OperationDigest(storedOperation);
         using var localAttempt = reserved is null ? pressure?.Begin(tenant, RootAdmissionKind.Start) : null;
         var attempt = reserved ?? localAttempt;
         return await WriteAsync<Contract.Admission?>(async (db, ct) =>
         {
+            if (eventTarget is not null)
+            {
+                if (prepared is null) throw new InvalidOperationException("An event start requires a protected preparation.");
+                if (await RootEventStarts.CheckTargetAsync(db, tenant, eventTarget, spec, bind: null, lockRow: true, ct) is { } settled)
+                {
+                    await RootPreparedStarts.ConsumeAsync(db, prepared, ct);
+                    return new(Contract.AdmissionOutcome.Duplicate, new Contract.ActorRef(settled));
+                }
+            }
             var admission = await ReadStartAdmissionAsync(db, tenant, digest, ct);
             var now = admission.Now;
             var deadline = reply?.Caller.Deadline ?? prepared?.Deadline;
             if (deadline <= now) return null;
             if (admission.Reference is { } existing)
             {
+                if (eventTarget is not null) throw new StoreFormatException("An event start receipt has no settled target.");
                 if (prepared is not null)
                 {
                     await RootPreparedStarts.ConsumeAsync(db, prepared, ct);
@@ -111,24 +123,34 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
                 """, ct));
             await EnqueueAsync(db, actor.Id, actor.Partition, creator.InboxKey.Id, 0, creator.Kind, header, payload, due,
                 keepUntil: null, replyTo: creator.ReplyTo, token: ct);
+            if (eventTarget is not null) await RootEventStarts.SettleAsync(db, tenant, eventTarget, spec, prepared!, bind: null, ct);
             if (prepared is not null) await RequireBeforePreparedDeadlineAsync(db, prepared, ct);
             return new(Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(reference));
         }, token, attempt);
     }
 
     internal Task<(string? Existing, PreparedRootStart? Stage, PendingRootStart? Offer)> PrepareProtectedStartAsync(
-        string tenant, string operation, StartSpec spec, HeldRootRequest? reply, RootAdmissionPressure.Attempt? attempt, CancellationToken token)
+        string tenant, string operation, StartSpec spec, HeldRootRequest? reply, RootAdmissionPressure.Attempt? attempt, CancellationToken token,
+        string? eventTarget = null)
     {
         if (reply is { IsOpen: false }) throw new ArgumentException("A held SQLite start requires an open caller bound to its tenant.", nameof(reply));
         RequireCreator(operation, spec);
-        var storedOperation = reply is null ? RootPreparedStarts.OneWayOperation(operation) : operation;
+        var storedOperation = eventTarget is not null ? RootEventStarts.Operation(eventTarget) :
+            reply is null ? RootPreparedStarts.OneWayOperation(operation) : operation;
         var digest = FoundationRootCreator.OperationDigest(storedOperation);
         return WriteAsync<(string?, PreparedRootStart?, PendingRootStart?)>(async (db, ct) =>
         {
+            if (eventTarget is not null &&
+                await RootEventStarts.CheckTargetAsync(db, tenant, eventTarget, spec, bind: null, lockRow: false, ct) is { } settled)
+                return (settled, null, null);
             var admission = await ReadStartAdmissionAsync(db, tenant, digest, ct);
             var deadline = reply?.Caller.Deadline ?? RootPreparedStarts.OneWayDeadline(admission.Now);
             if (deadline <= admission.Now) return default;
-            if (admission.Reference is { } existing) return (existing, null, null);
+            if (admission.Reference is { } existing)
+            {
+                if (eventTarget is not null) throw new StoreFormatException("An event start receipt has no settled target.");
+                return (existing, null, null);
+            }
             attempt?.RequireCapacity();
             if (admission is not { Key: { } key, Partitions: { } partitions })
                 throw new StoreFormatException("The SQLite root issuer is missing or invalid.");
@@ -147,6 +169,19 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             return (null, stage, RootPreparedStarts.Offer(stage, spec, key));
         }, token, attempt);
     }
+
+    internal Task<EventRegistrationResult> ApplyEventStartsAsync(string tenant, string slot, long revision,
+        IReadOnlyList<EventStartRegistration> registrations, CancellationToken token) =>
+        WriteAsync((db, ct) => RootEventStarts.ApplyAsync(db, tenant, slot, revision, registrations, bind: null, ct), token);
+
+    internal Task<IReadOnlyList<EventStartTarget>> ListEventStartsAsync(string tenant, string? after, CancellationToken token) =>
+        InAdmissionTransactionAsync((db, ct) => RootEventStarts.ListAsync(db, tenant, after, bind: null, ct), token, readOnly: true);
+
+    internal Task<(EventStartTarget? Pending, string? Settled)> ReadEventStartAsync(string tenant, string target, CancellationToken token) =>
+        InAdmissionTransactionAsync((db, ct) => RootEventStarts.ReadWorkAsync(db, tenant, target, bind: null, ct), token, readOnly: true);
+
+    internal Task<bool> ConfirmEventStartRegistrationDrainedAsync(string tenant, string slot, long revision, CancellationToken token) =>
+        InAdmissionTransactionAsync((db, ct) => RootEventStarts.ConfirmDrainedAsync(db, tenant, slot, revision, bind: null, ct), token, readOnly: true);
 
     internal Task<(bool Expired, string? Existing)> DisarmHeldStartAsync(PreparedRootStart stage, CancellationToken token) =>
         WriteAsync(async (db, ct) =>

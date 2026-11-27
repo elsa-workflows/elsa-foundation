@@ -133,6 +133,13 @@ internal static class RootEventAdmission
                     Target = wait.Actor!, Partition = wait.Partition!.Value, Kind = kind, Start = header, Payload = body
                 });
             }
+            if (db.UsesRootEventStarts)
+            {
+                var captured = await RootEventStarts.CaptureAsync(db, publication, FoundationMetadataLimits.MaxTurnSends - count,
+                    FoundationMetadataLimits.MessageContentBytes - bytes, bindPostgresSource, token);
+                count += captured.Count;
+                bytes += captured.Bytes;
+            }
             var until = checked(now + publication.KeepUntil);
             var receipt = await db.Database.ExecuteSqlInterpolatedAsync(BindSource($"""
                 WITH source AS MATERIALIZED (/*event-source*/)

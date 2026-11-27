@@ -457,7 +457,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 break;
             case IStateful stateful:
             {
-                var delivery = _s.TriggerNode == node.Id && _s.Trigger is not null;
+                var delivery = PendingTrigger == node.Id;
                 var trigger = delivery ? _s.Trigger : null;
                 if (delivery) (_s.TriggerNode, _s.Trigger) = (null, null);
                 var context = Context(frame);
@@ -848,7 +848,8 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         [.. _s.Frames.Values.Where(f => f.Parent == frame).Select(f => (f.Id, f.Tag)), .. _s.Agenda.Where(w => !w.Resume && !w.Gone && w.Parent == frame).Select(w => (w.Frame, w.Tag))];
 
     /// <summary>The node whose start trigger is still to be delivered, if any.</summary>
-    internal string? PendingTrigger => _s.Trigger is null ? null : _s.TriggerNode;
+    internal string? PendingTrigger =>
+        _s.TriggerNode is { } node && (_s.Trigger is not null || _wf.Nodes.GetValueOrDefault(node)?.Type == typeof(Event)) ? node : null;
 
     internal IReadOnlyList<string> Running(string frame) =>
         [.. _s.Frames.Values.Where(f => f.Parent == frame).Select(f => f.Id), .. _s.Agenda.Where(w => !w.Resume && !w.Gone && w.Parent == frame).Select(w => w.Frame)];
