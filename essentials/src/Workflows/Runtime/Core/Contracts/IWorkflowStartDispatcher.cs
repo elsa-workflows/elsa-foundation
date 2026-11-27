@@ -53,6 +53,12 @@ public interface IWorkflowStartDispatcher
 /// <summary>A host's dispatcher for direct authoring Test Runs in an exact runtime test scope.</summary>
 public interface IWorkflowDirectTestRunDispatcher : IWorkflowStartDispatcher
 {
+    /// <summary>Keyed trigger discovery for private Test Runs. The ordinary publication extractor stays separate.</summary>
+    const string TriggerBindingKey = "workflow-test-run";
+
+    /// <summary>Whether this host can admit the exact scoped trigger driver.</summary>
+    bool SupportsTrigger(string driverId);
+
     /// <summary>Requests cancellation of the exact isolated actor after its authoring scope closes.</summary>
     ValueTask RequestStopAsync(WorkflowTestScope scope, string workflowExecutionId, CancellationToken cancellationToken = default);
 

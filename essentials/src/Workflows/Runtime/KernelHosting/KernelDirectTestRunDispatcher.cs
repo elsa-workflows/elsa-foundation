@@ -24,16 +24,20 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
     private static readonly TimeSpan StopBudget = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(100);
 
+    public bool SupportsTrigger(string driverId) => driverId == "Elsa.Event";
+
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.TestRun,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        if (requiredScope != WorkflowExecutableReferenceScope.TestRun ||
+        var triggered = request.TriggerNodeId is not null;
+        var ordinary = request is { TriggerNodeId: null, StimulusInput: null, IdempotencyKey: null, WorkflowExecutionId: null };
+        var prepared = request is { TriggerNodeId: not null, IdempotencyKey: not null, WorkflowExecutionId: not null };
+        if (requiredScope != WorkflowExecutableReferenceScope.TestRun || (!ordinary && !prepared) ||
             request is not { RunKind: WorkflowRunKind.TestRun, TestScope: { } test, SourceSelection.SourceReferenceId: { },
-                TriggerNodeId: null, StimulusInput: null, DispatchNestingDepth: 0, ParentWorkflowExecutionId: null,
-                StartAuthority: null, IdempotencyKey: null, WorkflowExecutionId: null } ||
+                DispatchNestingDepth: 0, ParentWorkflowExecutionId: null, StartAuthority: null } ||
             (test.TenantId ?? PersistenceScope.DefaultValue) != persistence.Value)
             throw new InvalidOperationException("The direct Test Run must select an exact source and the owning Runtime scope.");
 
@@ -74,12 +78,17 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
 
         var input = new JsonObject();
         foreach (var (name, value) in inputs) input.Add(name, JsonNode.Parse(value.GetRawText()));
+        if (triggered && !NativeStartTriggers.StartEvents(workflow).Any(node => node.Id == request.TriggerNodeId))
+            return Refused("The selected node is not a startable named-event trigger in this executable.");
         var subject = request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-kind") == "persisted-user"
             ? request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-id") : null;
         var selection = new WorkflowTestStart(test.ScopeId, test.ExpiresAt, test.TenantId, test.Partition.Value,
             source.SourceReferenceId, source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionVersionId,
             source.ArtifactVersion, KernelPublishedRunDispatcher.SourceDigest(source), subject);
-        var spec = WorkflowActor.Start(NativeExecutionModel.Start(workflow, mode.ToString(), input), null, selection);
+        var stimulus = request.StimulusInput is { } payload ? JsonNode.Parse(payload.GetRawText()) : null;
+        var native = NativeExecutionModel.Start(workflow.Id, mode.ToString(), input, request.TriggerNodeId, stimulus, workflow.Definition)
+            with { ExecutableSelection = workflow.ExecutableSelection };
+        var spec = WorkflowActor.Start(native, null, selection);
         var admission = await start(test.ScopeId, spec, cancellationToken);
         return KernelPublishedRunDispatcher.Result(test.ScopeId, executable.Identity, provenance, admission, clock.GetUtcNow());
 

@@ -92,6 +92,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
     private const string ArtifactPrefix = "artifact-";
     private const string DraftArtifactVersion = "draft";
     private readonly IReadOnlyCollection<ITestRunTriggerDriver> _triggerDrivers = (triggerDrivers ?? []).ToArray();
+    private IWorkflowTriggerBindingExtractor? TestRunTriggerExtractor =>
+        (ambientServices as IKeyedServiceProvider)?.GetKeyedService<IWorkflowTriggerBindingExtractor>(IWorkflowDirectTestRunDispatcher.TriggerBindingKey) ??
+        triggerBindingExtractor;
 
     /// <summary>
     /// Preserves the original direct-construction surface with one shared process-local scope provider.
@@ -194,7 +197,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
         }
 
         var diagnostics = new List<TestRunOptionsDiagnostic>();
-        if (triggerBindingExtractor is null)
+        var extractor = TestRunTriggerExtractor;
+        if (extractor is null)
         {
             diagnostics.Add(new("trigger.discovery.unavailable", "Trigger discovery is not configured."));
             return new DraftTestRunOptionsView(executable.Identity.ArtifactHash, executable.InputContract, [], diagnostics);
@@ -203,7 +207,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         WorkflowTriggerPreflightOutcome outcome;
         try
         {
-            outcome = triggerBindingExtractor.Evaluate(executable);
+            outcome = extractor.Evaluate(executable);
         }
         catch (Exception exception) when (exception is WorkflowTriggerPreflightException or WorkflowTriggerExtractionException)
         {
@@ -767,10 +771,10 @@ public sealed class StartWorkflowTestRunRequestHandler(
         await executableStore.SaveAsync(executable, cancellationToken);
 
         // Append the expiring TestRun Source Reference the dispatch gates on. Scope/expiry are reference facts now.
-        var directTestRunDispatcher = triggerResolution.Trigger is null
-            ? ambientServices?.GetService<IWorkflowDirectTestRunDispatcher>()
-            : null;
-        var directScopeId = directTestRunDispatcher is not null ? testRunId : null;
+        var directTestRunDispatcher = ambientServices?.GetService<IWorkflowDirectTestRunDispatcher>();
+        var useKernel = directTestRunDispatcher is not null &&
+            (triggerResolution.Trigger is null || directTestRunDispatcher.SupportsTrigger(triggerResolution.Trigger.Driver.DriverId));
+        var directScopeId = useKernel ? testRunId : null;
         var reference = await BuildTestRunReferenceAsync(executable, compileRequest.Source, now, expiresAt, draftLayout,
             directScopeId, cancellationToken);
         await rootWriteLeaseManager.ExecuteAsync(
@@ -964,13 +968,14 @@ public sealed class StartWorkflowTestRunRequestHandler(
             return (null, "A trigger start requires an option and mode.");
         if (selection.Data is { ValueKind: JsonValueKind.Undefined })
             return (null, "Trigger data must be a defined JSON value when provided.");
-        if (triggerBindingExtractor is null)
+        var extractor = TestRunTriggerExtractor;
+        if (extractor is null)
             return (null, "Trigger discovery is not configured.");
 
         WorkflowTriggerPreflightOutcome outcome;
         try
         {
-            outcome = triggerBindingExtractor.Evaluate(executable);
+            outcome = extractor.Evaluate(executable);
         }
         catch (Exception exception) when (exception is WorkflowTriggerPreflightException or WorkflowTriggerExtractionException)
         {

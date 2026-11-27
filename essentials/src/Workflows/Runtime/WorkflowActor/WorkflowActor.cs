@@ -245,7 +245,8 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         new(header.Ref, header.Tenant, workflow.Model, workflow.Workflow, header.Parent)
         {
             Definition = workflow.Definition,
-            ExecutableSelection = workflow.ExecutableSelection
+            ExecutableSelection = workflow.ExecutableSelection,
+            TestScopeId = workflow.TestStart?.ScopeId
         };
 
     private static string? SerializeValue(object? value) => value is null ? null : JsonSerializer.Serialize(value, value.GetType());

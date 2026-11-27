@@ -250,7 +250,8 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         NativeInterventions.Validate(_s);
         if (AdmitPrefix()) return;
         foreach (var message in turn.Items)
-            if (HandlesMetadata(message.Kind)) turn.Hold(message);
+            if (NativeTestRunWaitControl.Handles(message.Kind)) HandleTestRunWait(message);
+            else if (HandlesMetadata(message.Kind)) turn.Hold(message);
             else Accept(message);
         if (_retryAccepted) turn.SendToSelf(NativeKinds.Continue);
         else { await DrainAsync(); if (!_checkpointRequested) DrainInputs(); }

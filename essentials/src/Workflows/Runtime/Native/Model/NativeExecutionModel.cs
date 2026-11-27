@@ -191,7 +191,8 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         .Where(inbox => inbox.Closed is null)
         .Sum(inbox => 7 + 23L * inbox.Receipts.Values.Count(receipt => receipt.Status is "Queued" or "Evaluating" or "Selected")) ?? 0;
 
-    public bool HandlesMetadata(Contract.Message message) => Burst.HandlesMetadata(message.Kind);
+    public bool HandlesMetadata(Contract.Message message) =>
+        Burst.HandlesMetadata(message.Kind) || NativeTestRunWaitControl.Handles(message.Kind);
     public ValueTask MetadataAsync(Models.ITurn turn, Contract.ActorStatus status, long? endedAt, CancellationToken cancellationToken)
     {
         var bridge = new ContractTurn(turn, outbound, endedAt, structuralJournal: _options.UseStructuralJournal);

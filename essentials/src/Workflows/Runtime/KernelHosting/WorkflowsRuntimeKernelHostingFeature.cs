@@ -12,6 +12,7 @@ using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.KernelApi;
@@ -110,11 +111,16 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(sp => new KernelRuns(tenant, sp.GetRequiredService<KernelShellRuntime>().ReadAsync));
         if (testTenant is not null)
         {
+            services.AddKeyedSingleton<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>(
+                IWorkflowDirectTestRunDispatcher.TriggerBindingKey);
             services.AddSingleton(sp => new KernelTestRuns(new(testTenant, sp.GetRequiredService<KernelShellRuntime>().ReadAsync)));
             services.AddScoped<IWorkflowDirectTestRunDispatcher>(sp => new KernelDirectTestRunDispatcher(
                 sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<KernelServing>(), persistenceScope,
                 sp.GetRequiredService<KernelShellRuntime>().StartDirectTestAsync, sp.GetRequiredService<KernelTestRuns>(),
                 sp.GetRequiredService<KernelOperatorIngress>(), sp.GetRequiredService<TimeProvider>()));
+            services.AddScoped<IWorkflowTestRunWaitControl>(sp => new KernelTestRunWaitControl(
+                sp.GetRequiredService<KernelTestRuns>(), sp.GetRequiredService<KernelShellRuntime>(), storage,
+                sp.GetRequiredService<IServiceScopeFactory>(), persistenceScope, sp.GetRequiredService<TimeProvider>()));
         }
         services.AddSingleton(sp =>
         {

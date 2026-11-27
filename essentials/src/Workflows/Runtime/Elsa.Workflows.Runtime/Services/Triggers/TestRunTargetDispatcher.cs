@@ -13,7 +13,8 @@ internal sealed class TestRunTargetDispatcher(
     IWorkflowStartDispatcher startDispatcher,
     TimeProvider timeProvider,
     IPersistenceAccessContextAccessor? accessContextAccessor = null,
-    IWorkflowExecutionPartitionAccessor? partitionAccessor = null) : ITestRunTargetDispatcher
+    IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
+    IWorkflowDirectTestRunDispatcher? kernel = null) : ITestRunTargetDispatcher
 {
     public ValueTask<TestRunTargetDispatchResult> DispatchAsync(
         string testRunId,
@@ -89,7 +90,12 @@ internal sealed class TestRunTargetDispatcher(
             testScope: target.Scope,
             triggerMetadata: target.Binding.Metadata);
 
-        var dispatched = await startDispatcher.DispatchAsync(
+        var dispatcher = target.SourceReferenceId == target.Scope.ScopeId
+            ? kernel is not null && kernel.SupportsTrigger(target.DriverId)
+                ? kernel
+                : throw new TestScopeAdmissionException("The selected Test Run trigger driver is unavailable in this host.")
+            : startDispatcher;
+        var dispatched = await dispatcher.DispatchAsync(
             request,
             WorkflowExecutableReferenceScope.TestRun,
             dispatchOptions,
