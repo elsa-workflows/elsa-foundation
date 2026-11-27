@@ -52,7 +52,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
         if (_protectRootStart is not { } protect || _startType is not { } actorType)
             throw new InvalidOperationException("Configure PostgreSQL root start protection before binding one-way starts.");
         return new BoundProtectedRootStarts(actorType,
-            (operation, spec, token) => admission.AdmitProtectedRootStartAsync(scope.Tenant, operation, spec, protect, token));
+            (operation, spec, token, caller) => admission.AdmitProtectedRootStartAsync(scope.Tenant, operation, spec, protect, token, caller));
     }
 
     internal Requests Pending => edge.Pending;

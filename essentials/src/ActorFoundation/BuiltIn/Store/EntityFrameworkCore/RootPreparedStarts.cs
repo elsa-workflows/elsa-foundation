@@ -13,7 +13,7 @@ internal sealed record PreparedRootStart(string Tenant, string Reference, string
     string Operation, string Fingerprint, long Deadline);
 
 internal sealed class BoundProtectedRootStarts(string actorType,
-    Func<string, StartSpec, CancellationToken, Task<Contract.Admission?>> admit) : IProtectedRootStarts
+    Func<string, StartSpec, CancellationToken, CancellationToken, Task<Contract.Admission?>> admit) : IProtectedRootStarts
 {
     public async ValueTask<Contract.Admission> StartAsync(string operationId, Contract.StartSpec spec,
         CancellationToken cancellationToken = default)
@@ -24,14 +24,26 @@ internal sealed class BoundProtectedRootStarts(string actorType,
         if (spec.Type != actorType || spec.Ephemeral || !Enum.IsDefined(spec.History) ||
             !FoundationMetadataLimits.IsOutsideMessageId(operationId))
             return new(Contract.AdmissionOutcome.Refused);
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(RootPreparedStarts.OneWayBudget);
         try
         {
-            return await admit(operationId, new(spec.Type, spec.TypeData, spec.Input, History: (History)spec.History), cancellationToken)
-                ?? RootPreparedStarts.OneWayUnavailable().Admission;
+            var admission = await admit(operationId, new(spec.Type, spec.TypeData, spec.Input, History: (History)spec.History),
+                budget.Token, cancellationToken);
+            if (admission is not null) return admission;
+            cancellationToken.ThrowIfCancellationRequested();
+            return Unavailable();
+        }
+        catch (OperationCanceledException) when (budget.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            return Unavailable();
         }
         catch (RootAdmissionRefused refusal) { return refusal.Admission; }
         catch (MetadataLimitExceeded) { return new(Contract.AdmissionOutcome.Refused); }
     }
+
+    private static Contract.Admission Unavailable() =>
+        new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.NodeBusy, RetryAfter: TimeSpan.FromSeconds(1));
 }
 
 internal static class RootPreparedStarts
@@ -43,25 +55,12 @@ internal static class RootPreparedStarts
     internal const string Source = "/*prepared-start-source*/";
     private const string IssuancePrefix = PendingRootStart.IssuancePrefix;
     private const int MaximumIssuanceLength = 2_048;
-    private static readonly TimeSpan OneWayBudget = TimeSpan.FromSeconds(10);
+    internal static readonly TimeSpan OneWayBudget = TimeSpan.FromSeconds(10);
 
     internal static long OneWayDeadline(long now) => checked(now + (long)OneWayBudget.TotalMilliseconds);
 
     // Ordinary ingress cannot submit this reserved id or win a protected operation's receipt.
     internal static string OneWayOperation(string operation) => "~prepared-start/1:" + FoundationRootCreator.OperationDigest(operation);
-
-    internal static async Task<bool> ProtectOneWayAsync(ProtectRootStartAsync protect, PendingRootStart offer, CancellationToken token)
-    {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-        deadline.CancelAfter(OneWayBudget);
-        try { return await ProtectAsync(protect, offer, deadline.Token); }
-        catch (OperationCanceledException) when (deadline.IsCancellationRequested && !token.IsCancellationRequested)
-        {
-            throw OneWayUnavailable();
-        }
-    }
-
-    internal static RootAdmissionRefused OneWayUnavailable() => new(Contract.RefusalReason.NodeBusy, TimeSpan.FromSeconds(1));
 
     internal static async Task<bool> ProtectAsync(ProtectRootStartAsync protect, PendingRootStart offer, CancellationToken token)
     {

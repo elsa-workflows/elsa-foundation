@@ -66,7 +66,7 @@ public static partial class SqliteEmbeddedHosting
             if (protectRootStart is not { } protect)
                 throw new InvalidOperationException("Configure SQLite root start protection before binding one-way starts.");
             return new BoundProtectedRootStarts(actorType,
-                (operation, spec, token) => admission.StartProtectedOneWayAsync(scope, operation, spec, protect, token));
+                (operation, spec, token, caller) => admission.StartProtectedOneWayAsync(scope, operation, spec, protect, token, caller));
         }
 
         internal Task<RootStartProof> ConfirmHeldStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
@@ -153,8 +153,9 @@ public static partial class SqliteEmbeddedHosting
             }
 
             internal Task<Contract.Admission?> StartProtectedOneWayAsync(Contract.BoundScope scope, string operation, StartSpec spec,
-                ProtectRootStartAsync protect, CancellationToken token) =>
-                OnWriteWorkerAsync(() => StartProtectedAsync(scope.Tenant, operation, spec, null, protect, token), token);
+                ProtectRootStartAsync protect, CancellationToken token, CancellationToken caller) =>
+                // Observe the worker's result if the budget expires across its synchronous SQLite COMMIT.
+                OnWriteWorkerAsync(() => StartProtectedAsync(scope.Tenant, operation, spec, null, protect, token), caller);
 
             private async Task<Contract.Admission?> StartProtectedAsync(string tenant, string operation, StartSpec spec,
                 HeldRootRequest? request, ProtectRootStartAsync protect, CancellationToken token)
@@ -164,9 +165,7 @@ public static partial class SqliteEmbeddedHosting
                     (admission, ct) => admission.PrepareProtectedStartAsync(tenant, operation, spec, request, attempt, ct), token);
                 if (prepared.Stage is not { } stage || prepared.Offer is not { } offer)
                     return Duplicate(prepared.Existing);
-                var protectedStart = request is null
-                    ? await RootPreparedStarts.ProtectOneWayAsync(protect, offer, token)
-                    : await RootPreparedStarts.ProtectAsync(protect, offer, token);
+                var protectedStart = await RootPreparedStarts.ProtectAsync(protect, offer, token);
                 if (!protectedStart)
                 {
                     var (expired, duplicate) = await WriteWithFileAsync(RootAdmissionKind.Start, attempt,

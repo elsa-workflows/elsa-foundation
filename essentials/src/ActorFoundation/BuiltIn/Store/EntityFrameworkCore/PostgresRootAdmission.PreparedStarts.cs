@@ -21,15 +21,15 @@ internal sealed partial class PostgresRootAdmission
         Message Creator, string Header, string? Payload);
 
     internal async Task<Contract.Admission?> AdmitProtectedRootStartAsync(string tenant, string operation, StartSpec spec,
-        ProtectRootStartAsync protectRootStart, CancellationToken token)
+        ProtectRootStartAsync protectRootStart, CancellationToken token, CancellationToken caller)
     {
-        var receipt = await AdmitProtectedRootAsync(tenant, operation, spec, null, null, protectRootStart, token);
+        var receipt = await AdmitProtectedRootAsync(tenant, operation, spec, null, null, protectRootStart, token, caller);
         return receipt is null ? null : new(receipt.Duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted,
             new Contract.ActorRef(receipt.Reference));
     }
 
     private async Task<Receipt?> AdmitProtectedRootAsync(string tenant, string operation, StartSpec spec,
-        TimeSpan? keepFor, DirectReply? reply, ProtectRootStartAsync protectRootStart, CancellationToken token)
+        TimeSpan? keepFor, DirectReply? reply, ProtectRootStartAsync protectRootStart, CancellationToken token, CancellationToken commitToken)
     {
         RequireCreator(operation, spec);
         var windowMs = (long)ReceiptWindow(deduplicationWindow, keepFor).TotalMilliseconds;
@@ -40,9 +40,7 @@ internal sealed partial class PostgresRootAdmission
         if (plan is null) return duplicate;
 
         // PrepareAsync has committed and disposed its connection and locks. The host may use another database.
-        var protectedStart = reply is null
-            ? await RootPreparedStarts.ProtectOneWayAsync(protectRootStart, plan.Offer, token)
-            : await RootPreparedStarts.ProtectAsync(protectRootStart, plan.Offer, token);
+        var protectedStart = await RootPreparedStarts.ProtectAsync(protectRootStart, plan.Offer, token);
 
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
@@ -79,7 +77,9 @@ internal sealed partial class PostgresRootAdmission
             return new(winner, true);
         }
         if (!write.Enqueued) throw new InvalidOperationException("A protected root start must commit its creator with the receipt.");
-        await transaction.CommitAsync(token);
+        // Once COMMIT starts, local one-way expiry cannot turn a landed birth into a NodeBusy refusal.
+        token.ThrowIfCancellationRequested();
+        await transaction.CommitAsync(commitToken);
         attempt?.Committed();
         return new(stage.Reference, false);
 

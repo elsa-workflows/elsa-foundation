@@ -98,6 +98,16 @@ internal static class PostgresHeldStartChecks
                         offers.Last().Issuance, stop) == RootStartProof.PreparationDisarmed,
                 "one-way refusal disarms its exact preparation without admitting an actor");
             behavior = 0;
+            await using (var blocker = Open())
+            await using (var transaction = await blocker.Database.BeginTransactionAsync(stop))
+            {
+                await blocker.Database.ExecuteSqlRawAsync("""LOCK TABLE ONLY "FoundationPreparedRootStarts" IN ACCESS EXCLUSIVE MODE""", stop);
+                Require(await starts.StartAsync("one-way-contended", spec, stop).AsTask()
+                        .WaitAsync(RootPreparedStarts.OneWayBudget + TimeSpan.FromSeconds(4), stop) is
+                        { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.NodeBusy, RetryAfter: { }, Actor: null } &&
+                        offers.Count == 2,
+                    "the one-way budget cancels a contended PostgreSQL preparation lock before any protection call");
+            }
             offers.Clear();
         }
         await service.StartAsync(stop);

@@ -62,6 +62,29 @@ internal static class SqlitePreparedStartChecks
             Require(await oneWay.StartAsync("one-way-wrong-type", oneWaySpec with { Type = "other-model" }, token) is
                     { Outcome: Contract.AdmissionOutcome.Refused, Actor: null }, "one-way start is bound to the configured actor type");
             Require(calls == 1, "the one-way receipt and wrong-type refusal make no additional protection offers");
+            await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+                { DataSource = path, ForeignKeys = true, Pooling = false }.ToString()))
+            {
+                await connection.OpenAsync(token);
+                await using var writer = connection.BeginTransaction(deferred: false);
+                var contended = oneWay.StartAsync("one-way-contended", oneWaySpec, token).AsTask();
+                using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(token);
+                cancelled.CancelAfter(TimeSpan.FromMilliseconds(150));
+                try
+                {
+                    await oneWay.StartAsync("one-way-cancelled", oneWaySpec, cancelled.Token).AsTask()
+                        .WaitAsync(TimeSpan.FromSeconds(3), token);
+                    throw new InvalidOperationException("A canceled one-way start returned an admission.");
+                }
+                catch (OperationCanceledException) when (cancelled.IsCancellationRequested && !token.IsCancellationRequested)
+                {
+                    Console.WriteLine("ok one-way caller cancellation remains cancellation under SQLite contention");
+                }
+                Require(await contended.WaitAsync(RootPreparedStarts.OneWayBudget + TimeSpan.FromSeconds(4), token) is
+                        { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.NodeBusy, RetryAfter: { }, Actor: null } &&
+                        Volatile.Read(ref calls) == 1,
+                    "the one-way budget bounds contended SQLite BEGIN IMMEDIATE retries before preparation");
+            }
 
             await using var owner = foundation.CreateHostedServiceWithAuxiliaryActor(new TerminalActor(), new Kernel.WorkflowActor.ScheduleActor(),
                 reason => throw new InvalidOperationException(reason), _ => TimeSpan.FromMilliseconds(1), fenceInBatch: fenceInBatch);
