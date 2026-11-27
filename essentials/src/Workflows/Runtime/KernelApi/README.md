@@ -1,11 +1,10 @@
 # Elsa.Workflows.Runtime.KernelApi
 
-Serves the workflow runtime API's run reads from the clean-slate kernel on a kernel shell, so Studio's Runs page lists
-the runs the kernel holds.
+Serves the workflow runtime API's Runs list and individual run summaries from the clean-slate kernel on a kernel shell.
 
 - `WorkflowsRuntimeKernelApiFeature` (`WorkflowsRuntimeKernelApi`) depends on `WorkflowsRuntimeKernel` and
   `WorkflowsRuntimeApi`. After every other feature has registered, it replaces the runtime API's
-  `IWorkflowInstanceListService` with the kernel's, and refuses a shell that registers any other implementation. It
+  `IWorkflowInstanceListService` and `IWorkflowInstanceDetailsService` with the kernel's, and refuses a shell that registers any other implementation. It
   requires the host's `KernelRuns` (`Elsa.Workflows.Runtime.KernelHost`), registered by instance on the root container.
 - The kernel's list shows the kernel's runs in the host's bound tenant (`KernelRuns.Tenant`), and no other runs: a
   caller reading another tenant, or across tenants, sees none, and old-core runs (Studio's test runs among them) are not
@@ -20,6 +19,11 @@ the runs the kernel holds.
 - Filters, paging cursors and per-run authorization are the runtime API's own: the list service runs over an in-memory
   store holding the kernel's runs. A definition filter is applied in the foundation's read; status, dates, run kind and
   the rest in memory.
+- The run details endpoint loads the exact committed actor header in the host's bound tenant and applies the runtime
+  API's structure and sensitive-value authorization. It reports Balanced persistence and boundary-level inspection
+  because one kernel turn can execute several activities before it commits. Studio authoring test runs continue to use
+  the legacy exact-run read with the normal runtime authorization and request tenant. Kernel summaries keep operator
+  controls disabled until the runtime API routes those actions to the kernel.
 
 ## Coupling to the old core's read model
 
@@ -33,4 +37,5 @@ with paging in the store.
 Each request reads every run of the tenant (or of the definition it names) from the foundation, once. This is fine for a
 preview database and slows with the number of runs. A kernel list query that pages in the store replaces it later.
 
-The run details, activity timeline and incidents are not served from the kernel yet.
+The kernel run summary includes empty activity, incident and output collections. The activity timeline is a separate K10 slice.
+Workflow outputs need a committed capture projection before the runtime API can serve them.

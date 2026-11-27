@@ -1,17 +1,13 @@
 using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Api.Handlers;
-using Microsoft.Extensions.DependencyInjection;
 using Elsa.Workflows.Runtime.KernelHost;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.KernelApi;
 
 /// <summary>
-/// Serves a kernel shell's workflow runtime API run reads from the kernel: after every other feature has registered, it
-/// puts <see cref="KernelWorkflowInstanceListService"/> in the place of the runtime API's workflow-instance list, so
-/// Studio's Runs page lists the kernel's runs, and only those. It requires the host's <see cref="KernelRuns"/>,
-/// registered by instance as the host's <see cref="KernelServing"/> is.
+/// Serves a kernel shell's workflow lists and run summaries from the host's <see cref="KernelRuns"/>.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]
@@ -19,7 +15,7 @@ namespace Elsa.Workflows.Runtime.KernelApi;
 [ShellFeature(
     name: FeatureName,
     DisplayName = "Workflows Runtime Kernel API",
-    Description = "Serves the workflow runtime API's run list from the clean-slate kernel on a kernel shell, so Studio's Runs page lists the kernel's runs. Requires a host that composes the kernel's run reads.",
+    Description = "Serves workflow lists and run summaries from the clean-slate kernel on a kernel shell.",
     DependsOn = new object[] { WorkflowsRuntimeKernelFeature.FeatureName, "WorkflowsRuntimeApi" })]
 public class WorkflowsRuntimeKernelApiFeature : IShellFeature, IPostConfigureShellServices
 {
@@ -31,18 +27,22 @@ public class WorkflowsRuntimeKernelApiFeature : IShellFeature, IPostConfigureShe
     {
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(KernelRuns) && !descriptor.IsKeyedService))
             throw new InvalidOperationException(
-                $"The {FeatureName} feature lists the host's kernel runs and needs the host's {nameof(KernelRuns)}, registered by instance on the root container.");
-        foreach (var descriptor in services.Where(descriptor => descriptor.ServiceType == typeof(IWorkflowInstanceListService) && !descriptor.IsKeyedService).ToArray())
+                $"The {FeatureName} feature needs the host's {nameof(KernelRuns)}, registered by instance on the root container.");
+        ReplaceReadService(typeof(IWorkflowInstanceListService), typeof(WorkflowInstanceListService), typeof(KernelWorkflowInstanceListService));
+        ReplaceReadService(typeof(IWorkflowInstanceDetailsService), typeof(WorkflowInstanceDetailsService), typeof(KernelWorkflowInstanceDetailsService));
+
+        void ReplaceReadService(Type service, Type runtimeImplementation, Type kernelImplementation)
         {
-            // The runtime API registers its default list, by its type or through a factory of its own assembly that resolves
-            // it; anything else is another implementation this feature would replace without a word.
-            var runtimeApi = typeof(WorkflowInstanceListService).Assembly;
-            if (descriptor.ImplementationType != typeof(WorkflowInstanceListService) && descriptor.ImplementationFactory?.Method.DeclaringType?.Assembly != runtimeApi)
-                throw new InvalidOperationException(
-                    $"The {FeatureName} feature replaces the shell's {nameof(IWorkflowInstanceListService)} with the kernel's, and this shell registers another for it. " +
-                    $"One implementation serves per shell: remove that registration, or leave the {FeatureName} feature out of the shell.");
-            services.Remove(descriptor);
+            foreach (var descriptor in services.Where(descriptor => descriptor.ServiceType == service && !descriptor.IsKeyedService).ToArray())
+            {
+                // The runtime API registers each default by type or through a factory within its own assembly.
+                if (descriptor.ImplementationType != runtimeImplementation && descriptor.ImplementationFactory?.Method.DeclaringType?.Assembly != runtimeImplementation.Assembly)
+                    throw new InvalidOperationException(
+                        $"The {FeatureName} feature replaces the shell's {service.Name} with the kernel's, and this shell registers another for it. " +
+                        $"One implementation serves per shell: remove that registration, or leave the {FeatureName} feature out of the shell.");
+                services.Remove(descriptor);
+            }
+            services.AddScoped(service, kernelImplementation);
         }
-        services.AddScoped<IWorkflowInstanceListService, KernelWorkflowInstanceListService>();
     }
 }
