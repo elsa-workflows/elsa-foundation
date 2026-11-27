@@ -222,12 +222,17 @@ internal static class PostgresChildWorkflowChecks
             Check(parkedView?.Selection is { } selection && await foundation.SendAsync(scope, new Contract.Target.Ref(parkedRef),
                 "recover-creator", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)), cancellationToken: token)
                 is { Outcome: Contract.AdmissionOutcome.Accepted }, "the first owner admits selected Recover for the creator Park");
-            await WaitForAsync(parkedRef, row => row is { Revision: 2, Status: InstanceStatus.Running, ParkAt: null }, service);
-            Check(!await db.Messages.AnyAsync(row => row.InboxScope == 0 && row.Id == creatorId, token),
-                "the recovery checkpoint clears the retained creator");
-            Check(await foundation.SendAsync(scope, new Contract.Target.Ref(parkedRef), "finish-recovered-creator",
-                ChildFixtureActor.Finish, cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
-                "the recovered child accepts a new authored turn");
+            var afterRecovery = await WaitForAsync(parkedRef, row => row.Revision == 2, service);
+            var refusedRecovery = Json.Write(new { Outcome = "refused", Operation = "recover-creator", Reason = "plan" });
+            Check(afterRecovery is { Status: InstanceStatus.Faulted, ParkAt: not null } &&
+                await db.Messages.AnyAsync(row => row.InboxScope == 0 && row.Id == creatorId && row.Done, token) &&
+                await db.Journal.AnyAsync(row => row.Instance == afterRecovery.Actor.Id && row.Revision == 2 &&
+                    row.Entries == refusedRecovery, token),
+                "Recover records a plan refusal and retains the creator when Native has no committed state");
+            Check(await foundation.SendAsync(scope, new Contract.Target.Ref(parent), "terminate-recovery-refused-child",
+                ChildFixtureActor.TerminateChild, parkedRef.Id, cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "the parent can terminate the child after the recovery refusal");
+            await WaitForAsync(parkedRef, row => row is { Revision: 3, Status: InstanceStatus.Cancelled, ParkAt: null }, service);
             await WaitForAsync(parent, row => row.Children is null, service);
 
             async Task<(Contract.ActorRef Parent, Contract.ActorRef Child, string CreatorId)> ParkCreatorAsync(string operation)
