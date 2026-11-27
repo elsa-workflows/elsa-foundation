@@ -71,7 +71,7 @@ internal static class ShippedWriteBudget
         var definitions = new SqliteAdmissionDefinitions();
         IDisposable? sqliteFile = null;
         DbContextOptions<KernelDb>? hostedOptions = null;
-        KernelDb At(DbContextOptions<KernelDb> settings) => postgres ? PostgresPreviewHosting.CreateShippedContext(settings)
+        KernelDb At(DbContextOptions<KernelDb> settings) => postgres ? PostgresPreviewHosting.CreateShippedContext(settings, PublicActor.ActorType, protectsStarts: false)
             : KernelDb.ForSqliteRootRuntime(settings, definitions);
         KernelDb Open() => At(hostedOptions ?? options.Options);
         KernelDb Observe() => At(observerOptions.Options);
@@ -95,8 +95,8 @@ internal static class ShippedWriteBudget
             }
             else
             {
-                await SqliteEmbeddedHosting.InstallShippedAsync(path!, token);
-                (sqliteFile, hostedOptions, definitions) = HoldSqliteFile(path!);
+                await SqliteEmbeddedHosting.InstallShippedAsync(path!, PublicActor.ActorType, protectsStarts: false, token);
+                (sqliteFile, hostedOptions, definitions) = HoldSqliteFile(path!, token);
                 await using (var hosted = Open()) sqlite!.Path = hosted.Database.GetDbConnection().DataSource;
                 var requests = SqliteEmbeddedHosting.CreateRequests(path!, Node, PublicActor.ActorType);
                 ingress = await SqliteEmbeddedHosting.OpenFoundationWithRequestsAsync(path!, PublicActor.ActorType, requests, token);
@@ -104,7 +104,9 @@ internal static class ShippedWriteBudget
             }
             await using (var db = Observe())
             {
-                var markers = await db.StoreVersions.AsNoTracking().OrderBy(row => row.Id).ToListAsync(token);
+                var markers = await db.StoreVersions.AsNoTracking()
+                    .Where(row => row.Id == StoreVersionEntity.MarkerId || row.Id == StoreDefinitionsRevision.MarkerId)
+                    .OrderBy(row => row.Id).ToListAsync(token);
                 Check(markers is [var family, _] && family.Format == StoreFormat.RootShipped && db.UsesRootDueBacklog,
                     "The fixture must run the shipped profile with its pressure capability.");
                 Console.WriteLine($"{(postgres ? "PostgreSQL" : "SQLite")} shipped {markers[0].Format}, definitions " +
@@ -340,11 +342,12 @@ internal static class ShippedWriteBudget
     }
 
     // The stepped owner shares the shipped host's file lease, options and verified definitions with its public edge.
-    private static (IDisposable Lease, DbContextOptions<KernelDb> Options, SqliteAdmissionDefinitions Definitions) HoldSqliteFile(string path)
+    private static (IDisposable Lease, DbContextOptions<KernelDb> Options, SqliteAdmissionDefinitions Definitions) HoldSqliteFile(string path,
+        CancellationToken token)
     {
         const BindingFlags instance = BindingFlags.Instance | BindingFlags.NonPublic;
         var lease = (IDisposable)typeof(SqliteEmbeddedHosting).GetMethod("AcquireFile", BindingFlags.Static | BindingFlags.NonPublic)!
-            .Invoke(null, [path, false, null])!;
+            .Invoke(null, [path, null, token])!;
         var type = lease.GetType();
         try
         {

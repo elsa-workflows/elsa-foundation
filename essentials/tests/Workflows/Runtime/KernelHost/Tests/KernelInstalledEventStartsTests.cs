@@ -147,7 +147,7 @@ public sealed class KernelInstalledEventStartsTests
                 try
                 {
                     await firstApp.StartAsync(token);
-                    if (publicEventHost) await CheckGenericStartRefusedAsync(firstApp);
+                    if (shipped) await CheckGenericStartRefusedAsync(firstApp);
                     original = await PublishAsync(services, first, 0, null);
                     Assert.True(original.Succeeded, original.Failure?.Message);
                     var unsupported = await PublishAsync(services, ephemeral, 0, null);
@@ -197,7 +197,7 @@ public sealed class KernelInstalledEventStartsTests
                 try
                 {
                     await restarted.StartAsync(token);
-                    if (publicEventHost) await CheckGenericStartRefusedAsync(restarted);
+                    if (shipped) await CheckGenericStartRefusedAsync(restarted);
                     var services = restarted.Services.GetRequiredService<IServiceScopeFactory>();
                     await using (var owner = await services.CreateAsyncScopeAsync(Persistence))
                     {

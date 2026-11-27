@@ -42,7 +42,7 @@ internal static class PostgresShippedFormatChecks
             ?? throw new InvalidOperationException("Supply a fresh PostgreSQL preview database.");
         var markSwap = new SwapBeforeSecondMark();
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).AddInterceptors(markSwap).Options;
-        KernelDb Open() => PostgresPreviewHosting.CreateShippedContext(options);
+        KernelDb Open() => PostgresPreviewHosting.CreateShippedContext(options, WorkflowActor.WorkflowActor.ActorType, protectsStarts: false);
         await using (var db = Open())
         {
             Require(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "the shipped-format check uses an empty PostgreSQL database");
@@ -401,7 +401,7 @@ internal static class PostgresShippedFormatChecks
 
     private sealed class QueuedCreatorActor : Contract.IActorType
     {
-        public string Type => "queued-creator-fault";
+        public string Type => WorkflowActor.WorkflowActor.ActorType;
         public bool Withholds(Contract.ActorHeader header) => false;
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {

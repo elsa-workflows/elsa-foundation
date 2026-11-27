@@ -25,6 +25,13 @@ public static partial class PostgresPreviewHosting
     /// </summary>
     public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootShipped(options);
 
+    /// <summary>Selects the shipped PostgreSQL store with the configured primary actor and root start protection.</summary>
+    public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts)
+    {
+        RootPublicEventHost.RequireConfiguredActorType(actorType);
+        return KernelDb.ForPostgresRootShipped(options, new(actorType, protectsStarts));
+    }
+
     /// <summary>Selects the dedicated preview format for qualifying indexed playback.</summary>
     public static KernelDb CreatePlaybackQualificationContext(DbContextOptions<KernelDb> options) =>
         KernelDb.ForPostgresRootPlaybackQualification(options);
@@ -103,9 +110,8 @@ public static partial class PostgresPreviewHosting
 
     /// <summary>
     /// Readies a dedicated database for the shipped format (<see cref="CreateShippedContext"/>), for a single-process host
-    /// such as the Workbench to call before its node starts. An empty database is installed. One whose store marker is the
-    /// shipped format is installed again, which completes a first install that was cut short and changes nothing in a whole
-    /// one. Any other database (another kernel store format, or tables of something else) is refused, naming what it holds.
+    /// such as the Workbench to call before its node starts. Use the actor-type overload to install an empty database.
+    /// A database already bound to a shipped Event host is verified. Any other database is refused, naming what it holds.
     /// Objects of PostgreSQL extensions do not count. Hosts starting at once on one database install one after the other. A
     /// multi-node production host keeps installation an explicit setup step, run while no node is.
     /// </summary>
@@ -114,6 +120,14 @@ public static partial class PostgresPreviewHosting
     {
         ArgumentNullException.ThrowIfNull(options);
         return InstallPreviewFormatAsync(() => CreateShippedContext(options), cancellationToken);
+    }
+
+    /// <summary>Installs or verifies the shipped PostgreSQL format for the configured actor and root start protection.</summary>
+    public static Task InstallShippedAsync(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return InstallPreviewFormatAsync(() => CreateShippedContext(options, actorType, protectsStarts), cancellationToken);
     }
 
     private static async Task InstallPreviewFormatAsync(Func<KernelDb> open, CancellationToken cancellationToken)
@@ -220,6 +234,14 @@ public static partial class PostgresPreviewHosting
         return db.UsesRootInlinePromotion;
     }
 
+    /// <summary>Whether the selected profile takes held Ephemeral HTTP for an isolated Test Run.</summary>
+    public static bool TakesHeldEphemeralHttpTestRuns(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootHeldEphemeralHttpTestRuns;
+    }
+
     /// <summary>Whether the selected format takes durable actor-owned timers, as used by the Native Delay activity.</summary>
     public static bool TakesTimers(Func<KernelDb> create)
     {
@@ -299,8 +321,9 @@ public static partial class PostgresPreviewHosting
             requests?.RequireKeyBinding(create, actorType, takesKeyedRequests);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
-            if (db.PublicEventHost is { } host)
-                await PostgresRootAdmission.RequirePublicEventHostAsync(db, new(actorType, requests?.ProtectsRootStarts ?? host.ProtectsStarts),
+            if (db.UsesRootPublicEventHost)
+                await PostgresRootAdmission.RequirePublicEventHostAsync(db,
+                    new(actorType, requests?.ProtectsRootStarts ?? db.PublicEventHost?.ProtectsStarts ?? false),
                     cancellationToken);
             usesPressure = db.UsesRootDueBacklog;
         }
@@ -338,7 +361,7 @@ public static partial class PostgresPreviewHosting
         using var db = create();
         if (protectRootStart is not null && (!db.UsesRootReplyProtocol || !db.UsesRootPreparedStarts))
             throw new NotSupportedException("Held root protection requires an installed PostgreSQL prepared-start profile.");
-        if (db.UsesRootPublicEventHost && db.PublicEventHost != new RootPublicEventHost(actorType, protectRootStart is not null))
+        if (db.PublicEventHost is { } host && host != new RootPublicEventHost(actorType, protectRootStart is not null))
             throw new ArgumentException("Held requests must match the public Event host actor type and root start protection.");
         if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
         return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: pressure), new EfStore(create, postgres: true),

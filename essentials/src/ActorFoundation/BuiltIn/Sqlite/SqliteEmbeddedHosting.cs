@@ -37,6 +37,9 @@ public static partial class SqliteEmbeddedHosting
     /// <summary>Whether the shipped Embedded profile supports inline promotion.</summary>
     public static bool TakesInlineStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.InlinePromotion);
 
+    /// <summary>Whether the shipped format takes held Ephemeral HTTP for an isolated Test Run.</summary>
+    public static bool TakesHeldEphemeralHttpTestRuns => RootProfiles.Shipped.HasFlag(RootCapabilities.HeldEphemeralHttpTestRuns);
+
     /// <summary>Whether the shipped Embedded profile supports Event-triggered starts.</summary>
     public static bool TakesEventStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStarts);
 
@@ -46,17 +49,21 @@ public static partial class SqliteEmbeddedHosting
     /// <summary>Whether the shipped Embedded profile supports ordered Event replay.</summary>
     public static bool TakesOrderedEventScan => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStartScan);
 
-    /// <summary>Installs or verifies a dedicated shipped SQLite file for one Embedded owner.</summary>
-    /// <remarks>The parent directory must exist. An existing file must be empty or carry this build's shipped definitions.</remarks>
+    /// <summary>Verifies a dedicated shipped SQLite file with an installed Event host.</summary>
     public static Task InstallShippedAsync(string databasePath, CancellationToken cancellationToken = default) =>
         InstallShippedFileAsync(databasePath, cancellationToken);
+
+    /// <summary>Installs or verifies the shipped SQLite file for the configured actor and root start protection.</summary>
+    public static Task InstallShippedAsync(string databasePath, string actorType, bool protectsStarts,
+        CancellationToken cancellationToken = default) =>
+        InstallShippedFileAsync(databasePath, cancellationToken, publicEventHost: new(actorType, protectsStarts));
 
     internal static async Task<string> InstallShippedFileAsync(string databasePath, CancellationToken cancellationToken,
         StoreFormat? qualificationFormat = null, RootPublicEventHost? publicEventHost = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         cancellationToken.ThrowIfCancellationRequested();
-        if (publicEventHost is not null) RequireFoundationActorType(publicEventHost.ActorType);
+        if (publicEventHost is not null) RootPublicEventHost.RequireConfiguredActorType(publicEventHost.ActorType);
         var path = Path.GetFullPath(databasePath);
         // Create a missing file without opening SQLite or changing an existing store before acquiring the host lock.
         using (new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite)) { }
@@ -122,8 +129,9 @@ public static partial class SqliteEmbeddedHosting
         {
             if (rootType is not null) requests?.RequireBinding(file.Path, rootType, node);
             var shipped = rootType is not null;
+            var eventHost = requests?.PublicEventHost ?? (requests is null && rootType is not null ? new(rootType, false) : null);
             KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
-                qualificationFormat: requests?.QualificationFormat, publicEventHost: requests?.PublicEventHost) : new(file.Options);
+                qualificationFormat: requests?.QualificationFormat, publicEventHost: eventHost) : new(file.Options);
 
             int partitions;
             bool selfSends, publicEventMaintenance;

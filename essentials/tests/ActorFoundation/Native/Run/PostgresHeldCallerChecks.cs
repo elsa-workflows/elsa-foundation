@@ -25,7 +25,7 @@ internal static class PostgresHeldCallerChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Supply a fresh PostgreSQL preview database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => PostgresPreviewHosting.CreateShippedContext(options);
+        KernelDb Open() => PostgresPreviewHosting.CreateShippedContext(options, WorkflowActor.WorkflowActor.ActorType, protectsStarts: false);
         await using (var db = Open())
             Require(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "the held-caller check uses an empty PostgreSQL database");
         var store = new EfStore(Open, postgres: true);

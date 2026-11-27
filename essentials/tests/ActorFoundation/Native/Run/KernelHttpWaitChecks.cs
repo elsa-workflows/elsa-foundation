@@ -224,7 +224,8 @@ internal static class KernelHttpWaitChecks
             var race = new PostgresEventRace();
             var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
                 throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.")).AddInterceptors(race).Options;
-            KernelDb Open() => shipped ? KernelDb.ForPostgresRootShipped(options) : KernelDb.ForPostgresRootLiveEventQualification(options);
+            KernelDb Open() => shipped ? KernelDb.ForPostgresRootShipped(options, new(PublicWorkflow.ActorType, false)) :
+                KernelDb.ForPostgresRootLiveEventQualification(options);
             race.IsBlockedAsync = async (pid, ct) =>
             {
                 await using var db = Open();

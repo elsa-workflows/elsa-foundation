@@ -19,7 +19,7 @@ internal sealed partial class SqliteRootAdmission
         RootAdmissionPressure.Attempt? reserved = null)
     {
         using (var profile = create())
-            if (!profile.UsesRootKeyedStarts) throw new NotSupportedException("Caller keys require their SQLite qualification profile.");
+            if (!profile.UsesRootKeyedStarts) throw new NotSupportedException("The installed SQLite profile does not support caller keys.");
         var window = ReceiptWindow(deduplicationWindow, keepFor);
         if (RootKeyedAdmission.Prepare(tenant, target, id, kind, payload, due, (long)window.TotalMilliseconds, actorType) is not { } request)
             return new(Contract.AdmissionOutcome.Refused);
@@ -28,6 +28,9 @@ internal sealed partial class SqliteRootAdmission
         var attempt = reserved ?? localAttempt;
         return await WriteAsync(async (db, ct) =>
         {
+            if (request.Start is not null &&
+                await RootPublicEventHost.ReadAsync(db, bind: null, ct) is { ProtectsStarts: true })
+                throw new NotSupportedException("Starting a caller-key root requires a host without root start protection.");
             var issuer = await ReadIssuerAsync(db, ct);
             return await RootKeyedAdmission.ApplyAsync(db, request, issuer.Key, issuer.Partitions, caller, Fence,
                 async (life, readToken) =>

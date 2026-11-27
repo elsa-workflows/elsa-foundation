@@ -28,7 +28,7 @@ internal static class PostgresChildWorkflowChecks
         var store = new EfStore(Open, postgres: true);
         if (shipped)
         {
-            await PostgresPreviewHosting.InstallShippedAsync(options, token);
+            await PostgresPreviewHosting.InstallShippedAsync(options, WorkflowActor.WorkflowActor.ActorType, protectsStarts: false, token);
             Check(PostgresPreviewHosting.TakesChildren(Open), "the PostgreSQL shipped host advertises owned child starts");
         }
         else
