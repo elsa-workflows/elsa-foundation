@@ -24,6 +24,12 @@ public interface IActivityDefinitionDraftStore
     Task<IReadOnlyList<ActivityDefinitionDraft>> ListByDefinitionAsync(
         string definitionId,
         CancellationToken cancellationToken = default);
+
+    async Task<IReadOnlyList<string>> ListActiveIdsByDefinitionAsync(
+        string definitionId, string? tenantId, CancellationToken cancellationToken = default) =>
+        (await ListByDefinitionAsync(definitionId, cancellationToken))
+            .Where(draft => draft.TenantId == tenantId && draft.Status == ActivityDefinitionDraftStatus.Active)
+            .Select(draft => draft.Id).ToArray();
 }
 
 public interface IActivityDefinitionVersionPublicationStore

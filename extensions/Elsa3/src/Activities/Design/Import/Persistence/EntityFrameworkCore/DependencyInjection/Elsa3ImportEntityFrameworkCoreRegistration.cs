@@ -75,6 +75,9 @@ public static class Elsa3ImportEntityFrameworkCoreRegistration
             addContext(services, configured);
 
             services.AddScoped<IReusableActivityImportOperationStore, EfReusableActivityImportOperationStore>();
+            services.AddScoped<Func<(Elsa.Primitives.Contracts.IIdentityGenerator, Elsa.Locking.Core.IDistributedLockProvider)>>(
+                provider => () => (provider.GetRequiredService<Elsa.Primitives.Contracts.IIdentityGenerator>(),
+                    provider.GetRequiredService<Elsa.Locking.Core.IDistributedLockProvider>()));
             services.AddScoped<IReusableActivityImportCommand, EfReusableActivityImportCommand>();
             Elsa3ImportPersistenceBackend.Register(services, new Elsa3ImportPersistenceBackend(
                 Elsa3ImportPersistenceBackend.EntityFramework,

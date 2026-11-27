@@ -23,6 +23,7 @@ compilation enrichment is the documented **contributor** (fan-in) exception.
 | `IActivityPublicationCandidateEvaluator` *(Publishing Core)* | `ActivityPublicationCandidateEvaluator` (scoped) | One publication verdict combines validated candidate content, compiler diagnostics and selected capability readiness. |
 | `IActivityPublicationReadiness` *(Publishing Core)* | `ActivityPublicationReadiness` (scoped) | Runtime/storage availability or its stable review fingerprint differs. |
 | `IActivityCatalogProjection` *(Publishing Core)* | `ActivityCatalogProjection` (scoped) | Derived read-only activity descriptors/publication metadata need a different projection. |
+| `IActivityDraftPublicationIdentity` *(Publishing API)* | Optional scoped reservation lookup | Binds reviewed publication of an imported draft to the ID and SemVer already referenced by its callers. |
 | `IActivityPublicationVersionPolicy` *(Publishing Core)* | `ActivityPublicationVersions` (scoped) | Release choices differ while respecting the contract compatibility floor. |
 | `IWorkflowExecutableCompiler` | `WorkflowExecutableCompiler` (scoped) | Compilation, artifact hashing, validation, or executable projection differs. |
 | `IWorkflowActivationAuthority` *(Core — Elsa.Workflows.Runtime.Core)* | `InMemoryWorkflowActivationAuthority` (singleton) | Activation-slot authority and revision CAS must survive restart. Owned by Runtime, not Publishing. |
