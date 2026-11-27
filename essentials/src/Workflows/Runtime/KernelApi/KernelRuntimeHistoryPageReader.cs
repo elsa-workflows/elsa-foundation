@@ -8,26 +8,34 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Foundation.Contracts;
+using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Workflows.Runtime.KernelApi;
 
 internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, KernelRuns host, KernelHistoryCursor cursor,
     IActivityInspectionContextAsync authorization, RuntimeHistoryInspectionService legacy, TimeProvider time) : IRuntimeHistoryPageReader
 {
-    public async Task<RuntimeHistoryPageView?> ReadAsync(GetRuntimeHistory request, CancellationToken cancellationToken = default)
+    public async Task<RuntimeHistoryPageView?> ReadAsync(GetRuntimeHistory request, CancellationToken cancellationToken = default) =>
+        (await ReadPageAsync(request, currentPermission: null, cancellationToken)).Page;
+
+    internal async Task<(RuntimeHistoryPageView? Page, int? Status)> ReadPageAsync(GetRuntimeHistory request,
+        Func<WorkflowExecutionState, Task<int?>>? currentPermission, CancellationToken cancellationToken)
     {
         var run = await AuthorizedRunAsync(request.WorkflowExecutionId, cancellationToken);
-        if (run is null) return null;
+        if (run is null) return (null, null);
         var access = await AccessBindingAsync(cancellationToken);
         if (run.Header is not { } header)
         {
-            if (KernelHistoryCursor.IsKernelCursor(request.Cursor)) return null;
+            if (currentPermission is not null) return (null, StatusCodes.Status501NotImplemented);
+            if (KernelHistoryCursor.IsKernelCursor(request.Cursor)) return (null, null);
             var legacyPage = await legacy.ReadAsync(request, cancellationToken);
             var current = await AuthorizedRunAsync(request.WorkflowExecutionId, cancellationToken);
-            return current is { Header: null } && current.State.TenantId == run.State.TenantId &&
-                await AccessBindingAsync(cancellationToken) == access ? legacyPage : null;
+            return (current is { Header: null } && current.State.TenantId == run.State.TenantId &&
+                await AccessBindingAsync(cancellationToken) == access ? legacyPage : null, null);
         }
 
+        if (currentPermission is not null && await currentPermission(run.State) is { } denied)
+            return (null, denied);
         if (request.Category is { } category && !Enum.IsDefined(category))
             throw new ArgumentException("Unknown history category.", nameof(request));
         var query = new RuntimeHistoryQuery(request.WorkflowExecutionId, request.Limit, request.Cursor,
@@ -37,12 +45,16 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
         var page = KernelActivityTimeline.Supports(header)
             ? await ReadKernelAsync(query, tenant, header.Workflow, position, cancellationToken)
             : Unsupported();
-        if (page is null) return null;
+        if (page is null) return (null, null);
 
         var verified = await AuthorizedRunAsync(request.WorkflowExecutionId, cancellationToken);
-        return verified is { Header: { } currentHeader } && currentHeader.Workflow == header.Workflow &&
-            currentHeader.Model == header.Model && currentHeader.History == header.History && verified.State.TenantId == run.State.TenantId &&
-            await AccessBindingAsync(cancellationToken) == access ? page : null;
+        if (verified is not { Header: { } currentHeader } || currentHeader.Workflow != header.Workflow ||
+            currentHeader.Model != header.Model || currentHeader.History != header.History || verified.State.TenantId != run.State.TenantId ||
+            await AccessBindingAsync(cancellationToken) != access)
+            return (null, null);
+        if (currentPermission is not null && await currentPermission(verified.State) is { } revoked)
+            return (null, revoked);
+        return (page, null);
     }
 
     private async ValueTask<RuntimeHistoryPageView?> ReadKernelAsync(RuntimeHistoryQuery query, string tenant, string workflow,

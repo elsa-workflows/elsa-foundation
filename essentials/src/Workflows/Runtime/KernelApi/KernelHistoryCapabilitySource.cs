@@ -11,8 +11,9 @@ internal sealed class KernelHistoryCapabilitySource(KernelRuns runs) : IApiCapab
     {
         if (!await runs.SupportsSequencedJournalAsync(cancellationToken)) return [];
         var link = new ApiCapabilityLink("workflow-history-page", "runtime/workflows/instances/{workflowExecutionId}/history", templated: true);
+        var live = new ApiCapabilityLink("workflow-history-live", KernelHistoryStream.Route, templated: true);
         return [new(RuntimeApiCapabilities.CapabilityId, 1, await runs.SupportsPlaybackAsync(cancellationToken)
-            ? [link, new("workflow-history-occurrences", "runtime/workflows/instances/{workflowExecutionId}/history/occurrences", templated: true)]
-            : [link], $"{WorkflowsRuntimeKernelApiFeature.FeatureName}.History")];
+            ? [link, live, new("workflow-history-occurrences", "runtime/workflows/instances/{workflowExecutionId}/history/occurrences", templated: true)]
+            : [link, live], $"{WorkflowsRuntimeKernelApiFeature.FeatureName}.History")];
     }
 }

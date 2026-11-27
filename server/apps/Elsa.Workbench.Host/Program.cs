@@ -203,6 +203,7 @@ builder.Services.AddSingleton<DefaultShellWarmup>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DefaultShellWarmup>());
 #if ELSA_DASHBOARD_QUALIFICATION
 ActivityPlaybackQualificationControls.Register(builder.Services);
+HistoryQualificationControls.Register(builder.Services);
 builder.Services.AddSingleton<DashboardQualificationBootstrap>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DashboardQualificationBootstrap>());
 builder.Services.AddSingleton<IShellServiceExclusionProvider>(new DashboardQualificationServiceExclusions());
