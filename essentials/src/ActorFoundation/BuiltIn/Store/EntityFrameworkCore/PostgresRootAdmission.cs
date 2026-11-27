@@ -11,7 +11,7 @@ namespace Kernel.EntityFramework;
 /// <summary>Store operations for externally generated root starts in the single-host PostgreSQL preview.
 /// The calling host supplies the tenant from its bound ingress scope. Schema installation is explicit.</summary>
 internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow, bool lockOrdinaryWrites = false,
-    RootAdmissionPressure? pressure = null)
+    RootAdmissionPressure? pressure = null, string? scheduleActorType = null)
 {
     internal RootAdmissionPressure? Pressure => pressure;
 
@@ -153,6 +153,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             ON CONFLICT DO NOTHING
             """, cancellationToken);
         await EfStore.InstallFirstRootCheckpointsAsync(db, cancellationToken);
+        if (db.UsesRootScheduleInventory) await RootScheduleInventory.InstallPostgresAsync(db, cancellationToken);
         if (db.UsesRootChildren) await EfStore.InstallRootChildCascadeAsync(db, cancellationToken);
         if (db.UsesRootStableBody)
             await db.Database.ExecuteSqlRawAsync("""

@@ -6,7 +6,7 @@ using static Kernel.EntityFramework.RootAdmissionWire;
 namespace Kernel.EntityFramework;
 
 internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow, SqliteAdmissionDefinitions definitions,
-    RootAdmissionPressure? pressure = null)
+    RootAdmissionPressure? pressure = null, string? scheduleActorType = null)
 {
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record StartAdmission(long Now, string? Reference, byte[]? Key, int? Partitions);
@@ -178,8 +178,12 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         RootAdmissionPressure.Attempt? attempt = null) =>
         WriteAsync(async (db, ct) => await write(db, await ReadClockAsync(db, ct), ct), token, attempt);
 
-    private async Task<T> WriteAsync<T>(Func<KernelDb, CancellationToken, Task<T>> write, CancellationToken token,
+    private Task<T> WriteAsync<T>(Func<KernelDb, CancellationToken, Task<T>> write, CancellationToken token,
         RootAdmissionPressure.Attempt? attempt = null)
+        => InAdmissionTransactionAsync(write, token, attempt);
+
+    private async Task<T> InAdmissionTransactionAsync<T>(Func<KernelDb, CancellationToken, Task<T>> work, CancellationToken token,
+        RootAdmissionPressure.Attempt? attempt = null, bool readOnly = false)
     {
         await using var db = create();
         if (!db.UsesSqliteShippedInstall) throw new NotSupportedException("Root admission requires the SQLite shipped context.");
@@ -187,14 +191,13 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             throw new StoreFormatException("Admission pressure requires the due-backlog store profile.");
         await db.Database.OpenConnectionAsync(token);
         token.ThrowIfCancellationRequested();
-        // A busy attempt can replay from a read snapshot but cannot publish. Only attempts that can write wait for
-        // the immediate transaction; those attempts serialize before reading a receipt, with no snapshot upgrade.
+        // Inventory and busy attempts only read a snapshot. Writers serialize before reading any receipt.
         await using var transaction = ((SqliteConnection)db.Database.GetDbConnection())
-            .BeginTransaction(deferred: attempt?.IsBusy == true);
+            .BeginTransaction(deferred: readOnly || attempt?.IsBusy == true);
         token.ThrowIfCancellationRequested();
         await using var enlistment = await db.Database.UseTransactionAsync(transaction, token);
         await EfStore.RequireSqliteRootAdmissionAsync(db, definitions, token);
-        var result = await write(db, token);
+        var result = await work(db, token);
         token.ThrowIfCancellationRequested();
         await transaction.CommitAsync(token);
         attempt?.Committed();

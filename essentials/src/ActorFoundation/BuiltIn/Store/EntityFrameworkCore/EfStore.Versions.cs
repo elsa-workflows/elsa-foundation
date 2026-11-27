@@ -63,6 +63,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootSequencedJournalQualification => new(3, 115, 1);
     internal static StoreFormat RootPlaybackQualification => new(3, 116, 1);
     internal static StoreFormat RootLiveEventQualification => new(3, 117, 1);
+    internal static StoreFormat RootScheduleInventoryQualification => new(3, 119, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -111,7 +112,8 @@ internal enum RootCapabilities
     SequencedJournal = 1 << 25,
     LiveEventWaits = 1 << 26,
     Playback = 1 << 27,
-    RetentionPolicy = 1 << 28
+    RetentionPolicy = 1 << 28,
+    ScheduleInventory = 1 << 30
 }
 
 internal static class RootProfiles
@@ -145,6 +147,9 @@ internal static class RootProfiles
     private const RootCapabilities Shipped29 = TimerRearmQualification | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput;
     private const RootCapabilities Shipped31 = Shipped29 | RootCapabilities.Children | RootCapabilities.SequencedJournal;
     internal const RootCapabilities Shipped = Shipped31 | RootCapabilities.LiveEventWaits | RootCapabilities.RetentionPolicy;
+    // Freeze this private profile to the base it qualified. Playback has its own qualification profile.
+    internal const RootCapabilities ScheduleInventoryQualification = Shipped31 | RootCapabilities.LiveEventWaits |
+        RootCapabilities.RetentionPolicy | RootCapabilities.ScheduleInventory;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
     internal const RootCapabilities LiveEventQualification = Shipped31 | RootCapabilities.LiveEventWaits;
@@ -214,7 +219,8 @@ internal static class RootProfiles
         [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
         [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
         [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
-        [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection
+        [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
+        [RootCapabilities.ScheduleInventory] = RootCapabilities.Timers | RootCapabilities.ParkOpening
     };
 
     // The prerequisites of the set's members that the set lacks. None means the set is closed.
@@ -409,6 +415,8 @@ internal static class StoreDefinitionsRevision
     private const int SqliteShippedRevision = 16;
     private const int PostgreSqlPlaybackRevision = 12;
     private const int SqlitePlaybackRevision = 15;
+    private const int PostgreSqlScheduleInventoryRevision = 15;
+    private const int SqliteScheduleInventoryRevision = 18;
     private const int SqliteParkRecoverRevision = 5;
     private const int PostgreSqlDueBacklogRevision = 5;
     private const int SqliteDueBacklogRevision = 10;
@@ -439,6 +447,8 @@ internal static class StoreDefinitionsRevision
                     sqlite ? SqliteSequencedJournalRevision : PostgreSqlSequencedJournalRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPlaybackQualification =>
                     sqlite ? SqlitePlaybackRevision : PostgreSqlPlaybackRevision,
+                _ when db.RequiredFormat == StoreFormat.RootScheduleInventoryQualification =>
+                    sqlite ? SqliteScheduleInventoryRevision : PostgreSqlScheduleInventoryRevision,
                 _ when db.RequiredFormat == StoreFormat.RootTerminalOutputQualification => sqlite ? SqliteTerminalOutputRevision : PostgreSqlTerminalOutputRevision,
                 _ when db.RequiredFormat == StoreFormat.RootS6TerminalOutputQualification => sqlite ? SqliteS6TerminalOutputRevision : PostgreSqlS6TerminalOutputRevision,
                 _ when db.RequiredFormat == StoreFormat.RootLiveEventQualification =>
