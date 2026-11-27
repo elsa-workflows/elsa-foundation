@@ -30,10 +30,10 @@ internal sealed partial class SqliteRootAdmission
         {
             var issuer = await ReadIssuerAsync(db, ct);
             return await RootKeyedAdmission.ApplyAsync(db, request, issuer.Key, issuer.Partitions, caller, Fence,
-                async (binding, readToken) =>
+                async (life, readToken) =>
                 {
-                    var selected = await ReadTargetAsync(db, tenant, binding.Reference!, readToken);
-                    return selected is not null && selected.Actor == binding.Actor && selected.Partition == binding.Partition &&
+                    var selected = await ReadTargetAsync(db, tenant, life.Reference, readToken);
+                    return selected is not null && selected.Actor == life.Address.Id && selected.Partition == life.Address.Partition &&
                         (selected.Status == (int)InstanceStatus.Running || caller is null && selected is { HasCheckpoint: false, Pending: true });
                 }, attempt, ct);
         }, token, attempt);

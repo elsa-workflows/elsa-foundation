@@ -156,6 +156,8 @@ internal sealed class HeldRootRequests : IReplyTransport
                 var result = await admission.AdmitKeyAsync(caller, key, kind, payload, token);
                 actor = result?.Actor;
                 if (result is null) return new(null, null, Error: "timeout");
+                if (result.Reason == Contract.RefusalReason.ObligationOutstanding)
+                    return new(null, null, Error: "in progress") { RefusalReason = result.Reason, RetryAfter = result.RetryAfter };
                 if (result.Outcome == Contract.AdmissionOutcome.Refused)
                     return new(null, null, Error: result.Reason switch
                     {

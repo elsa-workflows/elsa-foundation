@@ -57,14 +57,10 @@ internal static class KeyedRootChecks
                 "pending creator accepts exact opaque keyed sends while the receipt rejects changed data");
 
             await using var db = fixture.Open();
-            var stored = await db.Database.SqlQuery<KeyedImage>($"""
-                SELECT b."Creation", b."Actor", b."Partition", b."Creator", k."KeyBytes"
-                FROM "FoundationRootBirths" b JOIN "FoundationKeyBindings" k
-                    ON k."Tenant" = b."Tenant" AND k."Reference" = b."Reference"
-                WHERE b."Reference" = {reference.Id}
-                """).SingleAsync(token);
+            var stored = await ReadBindingAsync(reference);
             var partitions = await db.Partitions.CountAsync(token);
-            Require(stored.Creation == 1 && stored.Partition == InstanceRef.Spread("keyed_Invoice", partitions) &&
+            Require(stored is { Creation: 1, Generation: 1 } && stored.KeyActor == stored.Actor &&
+                stored.Partition == InstanceRef.Spread("keyed_Invoice", partitions) &&
                 stored.KeyBytes.AsSpan().SequenceEqual(DurableKeyJson.CodeUnits("Invoice")) && stored.Creator == "root:" + stored.Actor,
                 "a retained binary binding uses stable tenant/key placement and the existing creation-one wire");
             var operations = await db.Database.SqlQuery<string>($"""
@@ -86,16 +82,81 @@ internal static class KeyedRootChecks
             var removed = await SendAsync(scope, new Contract.Target.Ref(reference), "delete", Contract.Kinds.Delete, delete);
             Require(removed.Outcome == Contract.AdmissionOutcome.Accepted, "the keyed root uses the normal exact-delete route");
             await UntilAsync(async () => await fixture.Reads.GetAsync(scope, reference, token), actor => actor is null);
-            await Task.Delay(reuseWindow, token);
-            var blocked = await SendAsync(scope, key, "after-delete", Contract.Kinds.Start);
-            var old = await SendAsync(scope, command, exactOperation, "append", "first");
-            Require(blocked.Reason == Contract.RefusalReason.Repeat && old.Outcome == Contract.AdmissionOutcome.Duplicate && old.Actor == reference,
-                "retirement keeps the binding and old receipts while physical generation reuse remains disabled");
+            await VerifyReuseAsync();
             await VerifyHeldAsync();
             return 0;
 
             Task<Contract.Admission> SendAsync(Contract.BoundScope tenant, Contract.Target target, string id, string kind, string? payload = null) =>
                 fixture.Ingress.SendAsync(tenant, target, id, kind, payload, keep, token).AsTask();
+
+            Task<KeyedImage> ReadBindingAsync(Contract.ActorRef actor) => db.Database.SqlQuery<KeyedImage>($"""
+                SELECT b."Creation", k."Generation", k."Actor" AS "KeyActor", b."Actor", b."Partition", b."Creator",
+                    k."KeyBytes", k."ReuseAfter"
+                FROM "FoundationRootBirths" b JOIN "FoundationKeyBindings" k
+                    ON k."Tenant" = b."Tenant" AND k."Reference" = b."Reference"
+                WHERE b."Reference" = {actor.Id}
+                """).SingleAsync(token);
+
+            async Task VerifyReuseAsync()
+            {
+                // Stage a future recorded window on the retired fixture, then restore its real deadline.
+                var future = await fixture.ReadClockAsync(token) + 60_000;
+                await SetReuseDeadlineAsync(future);
+                var tooEarly = await SendAsync(scope, key, "after-delete", Contract.Kinds.Start);
+                Require(tooEarly.Reason == Contract.RefusalReason.Repeat,
+                    "an exact retirement marker cannot advance a binding before its reuse deadline");
+                await SetReuseDeadlineAsync(stored.ReuseAfter);
+                await UntilAsync(async () => await fixture.ReadClockAsync(token), now => now >= stored.ReuseAfter);
+
+                // Stage an outstanding ledger against the exact retired life, without scheduling its continuation.
+                var children = JsonSerializer.Serialize(new[] { new CreationAddress("0/child-a", 1), new CreationAddress("0/child-b", 1) });
+                FormattableString mark = postgres
+                    ? (FormattableString)$"""INSERT INTO "FoundationRootChildCascades" VALUES ({reference.Id}, 1, 1, CAST({children} AS jsonb))"""
+                    : $"""INSERT INTO "FoundationRootChildCascades" VALUES ({reference.Id}, 1, 1, {children})""";
+                await db.Database.ExecuteSqlInterpolatedAsync(mark, token);
+                var outstanding = await SendAsync(scope, key, "after-delete", Contract.Kinds.Start);
+                var waiting = await RequestAsync(scope, key, "after-delete", Contract.Kinds.Start);
+                Require(outstanding.Reason == Contract.RefusalReason.ObligationOutstanding && waiting is
+                    { Error: "in progress", RefusalReason: Contract.RefusalReason.ObligationOutstanding, RetryAfter: not null },
+                    "a predecessor with an outstanding cascade refuses both keyed start forms");
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    DELETE FROM "FoundationRootChildCascades" WHERE "Reference" = {reference.Id}
+                    """, token);
+
+                var starts = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(() => SendAsync(scope, key, "after-delete",
+                    Contract.Kinds.Start), token)));
+                var next = starts.Single(item => item.Outcome == Contract.AdmissionOutcome.Accepted).Actor!.Value;
+                var newer = await ReadBindingAsync(next);
+                Require(starts.Count(item => item.Outcome == Contract.AdmissionOutcome.Duplicate) == 3 &&
+                    starts.All(item => item.Actor == next) && next != reference &&
+                    newer is { Generation: 2, Creation: 1 } && newer.KeyActor == stored.KeyActor &&
+                    newer.Partition == stored.Partition && newer.Actor != stored.Actor,
+                    "concurrent reuse creates one new life with the same logical actor and virtual partition");
+                await UntilAsync(async () => await fixture.Reads.GetAsync(scope, next, token),
+                    actor => actor is { Header.Status: Contract.ActorStatus.Running });
+
+                var oldStart = await SendAsync(scope, key, "start", Contract.Kinds.Start);
+                var oldInput = await SendAsync(scope, command, exactOperation, "append", "first");
+                var oldWait = await RequestAsync(scope, command, exactOperation, "append", "first", timeoutMs: 750);
+                var staleAddress = await SendAsync(scope, new Contract.Target.Ref(reference), "stale-address", "append", "old life");
+                Require(oldStart.Outcome == Contract.AdmissionOutcome.Duplicate && oldStart.Actor == reference &&
+                    oldInput.Outcome == Contract.AdmissionOutcome.Duplicate && oldInput.Actor == reference &&
+                    oldWait is { Error: "timeout", Status: null } && staleAddress.Outcome == Contract.AdmissionOutcome.Refused &&
+                    await fixture.Reads.GetAsync(scope, reference, token) is null,
+                    "old operations and exact references stay bound to the retired life after reuse");
+
+                var answer = await RequestAsync(scope, command, "new-life-input", "answer", "new life");
+                var nextTail = await fixture.Reads.TailAsync(scope, next, cancellationToken: token);
+                Require(answer is { Channel: "answer", Item: "new life" } &&
+                    nextTail.Items.Count(item => item.Entry.Contains("new life", StringComparison.Ordinal)) == 1 &&
+                    nextTail.Items.All(item => !item.Entry.Contains("first", StringComparison.Ordinal) &&
+                        !item.Entry.Contains("second", StringComparison.Ordinal) && !item.Entry.Contains("old life", StringComparison.Ordinal)),
+                    "fresh keyed input reaches only the new life with a new journal and no predecessor inputs");
+
+                Task<int> SetReuseDeadlineAsync(long at) => db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "FoundationKeyBindings" SET "ReuseAfter" = {at} WHERE "Reference" = {reference.Id}
+                    """, token);
+            }
 
             async Task VerifyHeldAsync()
             {
@@ -156,7 +217,8 @@ internal static class KeyedRootChecks
         Func<CancellationToken, ValueTask<long>> ReadClockAsync,
         Func<CancellationToken, Task<IAsyncDisposable>> StartAsync);
 
-    private sealed record KeyedImage(long Creation, string Actor, int Partition, string Creator, byte[] KeyBytes);
+    private sealed record KeyedImage(long Creation, long Generation, string KeyActor, string Actor, int Partition, string Creator,
+        byte[] KeyBytes, long ReuseAfter);
 
     private static async Task<Fixture> OpenAsync(bool postgres, bool inBatch, string file, CancellationToken token)
     {

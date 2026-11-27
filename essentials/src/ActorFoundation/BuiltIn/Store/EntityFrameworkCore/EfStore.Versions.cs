@@ -265,7 +265,7 @@ internal static class RootProfiles
         [RootCapabilities.EventStartReceipts] = RootCapabilities.EventStarts,
         [RootCapabilities.EventStartScan] = RootCapabilities.EventStartReceipts,
         [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
-        [RootCapabilities.KeyedStarts] = RootCapabilities.PreparedStarts,
+        [RootCapabilities.KeyedStarts] = RootCapabilities.PreparedStarts | RootCapabilities.Retirement | RootCapabilities.Children,
         [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
         [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
         [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,

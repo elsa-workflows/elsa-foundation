@@ -415,7 +415,7 @@ internal static class ProfileCapabilityChecks
             !RootProfiles.Formats.ContainsKey(keyedPostgres.RequiredFormat) &&
             StoreDefinitionsRevision.Seed(keyedPostgres) is { StoreSchema: 1, MessageProtocol: 28, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(keyedSqlite) is { StoreSchema: 2, MessageProtocol: 31, JournalCodec: 0 },
-            "first-generation caller keys have a distinct private profile and per-provider definitions");
+            "caller-key lives have a distinct private profile and per-provider definitions");
         using var testPostgres = KernelDb.ForPostgresRootDirectTestRunQualification(options);
         using var testSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootDirectTestRunQualification);
         Check(testPostgres.RequiredFormat.MessageProtocol == 131 && testSqlite.RequiredFormat == testPostgres.RequiredFormat &&
@@ -476,7 +476,7 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.EventStartReceipts] = RootCapabilities.EventStarts,
             [RootCapabilities.EventStartScan] = RootCapabilities.EventStartReceipts,
             [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
-            [RootCapabilities.KeyedStarts] = RootCapabilities.PreparedStarts,
+            [RootCapabilities.KeyedStarts] = RootCapabilities.PreparedStarts | RootCapabilities.Retirement | RootCapabilities.Children,
             [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
             [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
             [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,

@@ -41,7 +41,7 @@ internal sealed partial class PostgresRootAdmission
             ?? throw new StoreFormatException("Caller keys require an exact PostgreSQL source.");
         var issuer = pin.Issuer ?? throw new StoreFormatException("The PostgreSQL root issuer is missing.");
         await db.Database.ExecuteSqlRawAsync("""
-            LOCK TABLE "FoundationKeyBindings", "FoundationKeyReceipts" IN ACCESS SHARE MODE
+            LOCK TABLE "FoundationKeyBindings", "FoundationKeyReceipts", "FoundationRootChildCascades" IN ACCESS SHARE MODE
             """, token);
         var keyLock = tenant + "/" + FoundationRootCreator.OperationDigest(target.CallerKey);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -52,15 +52,18 @@ internal sealed partial class PostgresRootAdmission
         if (result?.Outcome == Contract.AdmissionOutcome.Accepted) attempt?.Committed();
         return result;
 
-        FormattableString Fence(FormattableString sql) => WithAdmissionSource(sql, pin, RootKeyedAdmission.Source, 5,
-            """('"FoundationKeyBindings"'), ('"FoundationKeyReceipts"'), ('"FoundationRootBirths"'), ('"Messages"'), ('"Instances"')""",
+        FormattableString Fence(FormattableString sql) => WithAdmissionSource(sql, pin, RootKeyedAdmission.Source, 6,
+            """
+            ('"FoundationKeyBindings"'), ('"FoundationKeyReceipts"'), ('"FoundationRootBirths"'),
+            ('"Messages"'), ('"Instances"'), ('"FoundationRootChildCascades"')
+            """,
             requirePermanentDirectRelations: true);
 
-        async Task<bool> CanReceiveAsync(RootKeyedAdmission.Binding binding, CancellationToken ct)
+        async Task<bool> CanReceiveAsync(RootKeyedAdmission.Life life, CancellationToken ct)
         {
-            var address = await GuardedRootAddressAsync(db, tenant, binding.Reference!, ct);
-            if (address is not { Creation: 1 } || address.Id != binding.Actor) return false;
-            return await AdmissionStatusAsync(db, address, tenant, binding.Reference!, ct,
+            var address = await GuardedRootAddressAsync(db, tenant, life.Reference, ct);
+            if (address is not { Creation: 1 } || address.Id != life.Address.Id) return false;
+            return await AdmissionStatusAsync(db, address, tenant, life.Reference, ct,
                 requireCheckpoint: caller is not null) == InstanceStatus.Running;
         }
     }
