@@ -26,7 +26,7 @@ public sealed class KernelRunListTests
     private static readonly BoundScope Scope = EmbeddedTenant.Bind(Tenant);
 
     /// <summary>The foundation's reads over fixed views, two to a page, so a list reads every page.</summary>
-    private sealed class Reads(params ActorView[] views) : IActorReads
+    private sealed class Reads(params ActorView[] views) : IActorReads, IActorSequencedJournalReads
     {
         public List<ActorQuery> Queries { get; } = [];
         public List<(BoundScope Scope, ActorRef Actor)> Gets { get; } = [];
@@ -35,6 +35,22 @@ public sealed class KernelRunListTests
         public Action? ReadTail { get; set; }
         public JournalCancellation? Cancellation { get; set; }
         public IReadOnlyDictionary<string, JournalEntry[]> Journal { get; init; } = new Dictionary<string, JournalEntry[]>();
+        public List<SequencedJournalEntry>? Sequence { get; init; }
+        public int SequenceReads { get; private set; }
+        public bool SupportsSequencedJournal => Sequence is not null;
+
+        public ValueTask<ActorSequencedJournalPage?> ReadSequencedJournalAsync(BoundScope scope, ActorRef actor, long afterSequence,
+            long? upperSequence, int limit, CancellationToken cancellationToken = default)
+        {
+            Assert.Equal(Tenant, scope.Tenant);
+            Assert.Contains(views, view => view.Header.Ref == actor);
+            SequenceReads++;
+            var upper = upperSequence ?? Sequence!.Count;
+            var items = Sequence!.Where(entry => entry.Sequence > afterSequence && entry.Sequence <= upper).Take(limit).ToArray();
+            return ValueTask.FromResult<ActorSequencedJournalPage?>(new(items, upper == 0 ? 0 : 1, upper,
+                items.LastOrDefault()?.Sequence ?? afterSequence, Sequence.LastOrDefault(entry => entry.Sequence == upper)?.RecordedAt,
+                CapturedFromStart: true, AsOf: 3_000));
+        }
 
         public ValueTask<ActorView?> GetAsync(BoundScope scope, ActorRef actor, CancellationToken cancellationToken = default)
         {
@@ -116,8 +132,12 @@ public sealed class KernelRunListTests
         services.AddSingleton(new RuntimePersistenceModeInspector([new PersistenceModeOptions()]));
         services.AddScoped<WorkflowInstanceDetailsService>();
         services.AddScoped<ActivityExecutionInspectionService>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<RuntimeHistoryInspectionService>();
         services.AddScoped<IWorkflowInstanceDetailsService, WorkflowInstanceDetailsService>();
-        new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(services);
+        var feature = new WorkflowsRuntimeKernelApiFeature();
+        feature.ConfigureServices(services);
+        feature.PostConfigureServices(services);
         return services.BuildServiceProvider();
     }
 
@@ -125,6 +145,53 @@ public sealed class KernelRunListTests
         shell.CreateScope().ServiceProvider.GetRequiredService<IWorkflowInstanceListService>().ListAsync(request, CancellationToken.None);
 
     private static readonly PersistenceAccessContext HostTenant = PersistenceAccessContext.Scoped(new PersistenceScope(Tenant));
+
+    [Fact]
+    public async Task Standard_history_pages_committed_structure_and_catches_up_without_reopening_the_snapshot()
+    {
+        var reads = new Reads(Views)
+        {
+            Sequence =
+            [
+                new(1, 1, 0, "\"start\"", 1_200),
+                new(2, 1, 1, "\"t:1000\"", 1_200),
+                new(3, 1, 2, "\"b:frame:branch:leaf:parent\"", 1_200),
+                new(4, 1, 3, "{\"value\":\"private\"}", 1_200)
+            ]
+        };
+        using var shell = Shell(reads, HostTenant);
+        using var scope = shell.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>();
+        var endpoint = new Elsa.Workflows.Runtime.Api.Endpoints.History.Page.Endpoint(service);
+        var request = new GetRuntimeHistory("run-1", Limit: 2, ActivityExecutionId: "frame");
+        var first = await endpoint.HandleAsync(request, CancellationToken.None);
+        Assert.Empty(first.Items);
+        Assert.Equal(4, first.UpperSequence);
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.NotNull(first.CatchUpToken);
+        reads.Sequence!.Add(new(5, 2, 0, "\"c:frame:branch:leaf\"", 2_000));
+        var frozen = await endpoint.HandleAsync(request with { Cursor = first.NextContinuationToken }, CancellationToken.None);
+        var started = Assert.Single(frozen.Items);
+        Assert.Equal(("ActivityStarted", "branch:leaf", "parent", 3L),
+            (started.Name, started.ExecutableNodeId, started.ParentActivityExecutionId, started.Sequence));
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1_000), started.OccurredAt);
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1_200), started.RecordedAt);
+        Assert.Equal(4, frozen.ScannedThroughSequence);
+        Assert.Null(frozen.NextContinuationToken);
+        var live = await endpoint.HandleAsync(request with { Cursor = first.CatchUpToken }, CancellationToken.None);
+        var completed = Assert.Single(live.Items);
+        Assert.Equal(("ActivityCompleted", 5L), (completed.Name, completed.Sequence));
+        Assert.Null(completed.OccurredAt);
+        await Assert.ThrowsAsync<ArgumentException>(() => endpoint.HandleAsync(
+            request with { Cursor = first.CatchUpToken, ActivityExecutionId = "different" }, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() => endpoint.HandleAsync(
+            request with { Cursor = first.CatchUpToken, WorkflowExecutionId = "run-2" }, CancellationToken.None));
+
+        using var foreign = Shell(reads, PersistenceAccessContext.Scoped(new PersistenceScope("foreign")));
+        using var foreignScope = foreign.CreateScope();
+        Assert.Null(await foreignScope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>().ReadAsync(request));
+        Assert.Equal(3, reads.SequenceReads);
+    }
 
     [Fact]
     public async Task Details_read_one_committed_run_and_preserve_its_summary_and_permissions()

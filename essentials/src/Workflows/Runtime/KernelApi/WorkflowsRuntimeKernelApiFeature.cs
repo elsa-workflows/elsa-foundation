@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Api.Capabilities.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.KernelHost;
@@ -22,7 +23,7 @@ public class WorkflowsRuntimeKernelApiFeature : IShellFeature, IPostConfigureShe
 {
     public const string FeatureName = "WorkflowsRuntimeKernelApi";
 
-    public virtual void ConfigureServices(IServiceCollection services) { }
+    public virtual void ConfigureServices(IServiceCollection services) => services.AddDataProtection();
 
     public virtual void PostConfigureServices(IServiceCollection services)
     {
@@ -31,11 +32,14 @@ public class WorkflowsRuntimeKernelApiFeature : IShellFeature, IPostConfigureShe
                 $"The {FeatureName} feature needs the host's {nameof(KernelRuns)}, registered by instance on the root container.");
         services.AddScoped<KernelRunReader>();
         services.AddScoped<KernelActivityTimeline>();
+        services.AddScoped<KernelHistoryCursor>();
+        services.AddApiCapabilitySource<KernelHistoryCapabilitySource>();
         services.TryAddScoped<ActivityExecutionBrowseSource>();
         ReplaceReadService(typeof(IWorkflowInstanceListService), typeof(WorkflowInstanceListService), typeof(KernelWorkflowInstanceListService));
         ReplaceReadService(typeof(IWorkflowInstanceDetailsService), typeof(WorkflowInstanceDetailsService), typeof(KernelWorkflowInstanceDetailsService));
         ReplaceReadService(typeof(IActivityExecutionBrowseSource), typeof(ActivityExecutionBrowseSource), typeof(KernelActivityExecutionBrowseSource));
         ReplaceReadService(typeof(IActivityExecutionInspectionService), typeof(ActivityExecutionInspectionService), typeof(KernelActivityExecutionInspectionService));
+        ReplaceReadService(typeof(IRuntimeHistoryPageReader), typeof(RuntimeHistoryInspectionService), typeof(KernelRuntimeHistoryPageReader));
 
         void ReplaceReadService(Type service, Type runtimeImplementation, Type kernelImplementation)
         {
