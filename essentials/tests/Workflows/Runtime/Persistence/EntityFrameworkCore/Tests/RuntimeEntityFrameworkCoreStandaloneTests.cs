@@ -185,6 +185,25 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
     }
 
     [Fact]
+    public void A_late_aggregate_refusal_restores_the_existing_neutral_artifact_cache_policy()
+    {
+        var services = new ServiceCollection();
+        var options = Options();
+        services.AddRuntimeArtifactsEntityFrameworkCore(new() { Provider = options.Provider, ConnectionString = options.ConnectionString });
+        services.AddScoped<IWorkflowActivationAuthority>(_ => throw new InvalidOperationException("foreign activation authority"));
+        var before = services.ToArray();
+        var artifactBackend = RuntimeArtifactStoreBackend.Find(services);
+
+        var error = Assert.Throws<InvalidOperationException>(() => services.AddRuntimeEntityFrameworkCore(options));
+
+        Assert.Contains("An explicit workflow activation-authority registration", error.Message);
+        Assert.Equal(before, services);
+        Assert.Same(artifactBackend, RuntimeArtifactStoreBackend.Find(services));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(WorkflowExecutableCacheOptions));
+        artifactBackend!.EnsureOwnsRegisteredContracts(services);
+    }
+
+    [Fact]
     public void The_aggregate_refuses_to_replace_an_explicit_activation_switch_without_partial_mutation()
     {
         var services = new ServiceCollection().AddWorkflowRuntime();
