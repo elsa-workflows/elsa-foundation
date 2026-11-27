@@ -49,6 +49,7 @@ public sealed partial class EfStore
         internal Func<StartSpec, object, bool>? ValidateInlineMaterial { get; set; }
         internal Func<string, Contract.ActorStatus, bool>? AllowsWriteFreeInlineCompletion { get; set; }
         internal object? InlineIssuer { get; set; }
+        internal string? InlineHeldTenant { get; set; }
         internal bool RecoversInlineInitialRoots { get; set; }
         internal bool SettlesEndedMailbox { get; init; }
         internal Func<Contract.ActorHeader, bool>? AuthoredWithholds { get; init; }
@@ -100,6 +101,7 @@ public sealed partial class EfStore
         public bool AllowsWriteFreeInlineCompletion(string tenant, Contract.ActorStatus status) =>
             roots.AllowsWriteFreeInlineCompletion?.Invoke(tenant, status) != false;
         public object? InlineIssuer => roots.InlineIssuer;
+        public bool HoldsInlineCaller(string tenant) => roots.InlineHeldTenant == tenant;
         public bool RecoversInlineInitialRoots => roots.RecoversInlineInitialRoots;
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
@@ -180,6 +182,7 @@ public sealed partial class EfStore
                 scope.ValidateInlineMaterial = inline.Validate;
                 scope.AllowsWriteFreeInlineCompletion = inline.AllowsWriteFreeCompletion;
                 scope.InlineIssuer = inline;
+                scope.InlineHeldTenant = inline.HoldsAdditional ? inline.AdditionalScope!.Tenant : null;
             }
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;

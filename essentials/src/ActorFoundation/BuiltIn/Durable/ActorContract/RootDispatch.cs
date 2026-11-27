@@ -12,6 +12,7 @@ internal interface IRootDispatchHeaders
     Func<Durable.StartSpec, object, bool>? ValidateInlineMaterial => null;
     object? InlineIssuer => null;
     bool SupportsInlineStarts => ValidateInlineMaterial is not null;
+    bool HoldsInlineCaller(string tenant) => false;
     bool AllowsWriteFreeInlineCompletion(string tenant, Contract.ActorStatus status) => true;
     bool RecoversInlineInitialRoots => false;
     bool SupportsChildren => false;
@@ -429,8 +430,9 @@ internal sealed partial class ActorAdapter
                 message.FoundationRootBinding is { } identity && tenant == identity.Tenant && identity.Actor == input.Actor &&
                 message.Target.Id == input.Actor && message.InboxKey == new Durable.InboxKey("root:" + input.Actor) &&
                 message.Start is { Ephemeral: true, Parent: null, Creation: { Generation: 1, Previous: 0 } } &&
-                message is { Kind: Durable.Kinds.Start, TargetCreation: 1, Sender: null, ReplyTo: null, Due: null, KeepUntil: null,
-                    Operator: null, ActorAuthored: false, BindFoundationChild: false })
+                message is { Kind: Durable.Kinds.Start, TargetCreation: 1, Sender: null, Due: null, KeepUntil: null,
+                    Operator: null, ActorAuthored: false, BindFoundationChild: false } &&
+                (message.ReplyTo is null || rootHeldReplies && roots.HoldsInlineCaller(tenant) && delivery.ReplyTenant == tenant))
                 continue;
             if (issueSelf is not null && issueSelf.Allows(message.Due) && input.Row is { } issuer &&
                 (delivery.Durable || roots?.SupportsInlineStarts == true && issuer.FoundationInlineBirth is not null) &&

@@ -70,6 +70,25 @@ public sealed partial class KernelPublishedExecuteTests
     public Task Sqlite_ephemeral_test_runs_attach_the_exact_compiled_child() =>
         RunAsync(false, directTests: true, recordEphemeralTestCompletion: false, attachedTests: true);
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task Sqlite_held_ephemeral_http_keeps_exact_owner_completion(bool recordCompletion) =>
+        RunAsync(false, directTests: true, recordEphemeralTestCompletion: recordCompletion, heldEphemeralTests: true);
+
+    [SkippableFact]
+    public Task PostgreSql_held_ephemeral_http_records_completion() => PostgreSqlHeldEphemeralAsync(true);
+
+    [SkippableFact]
+    public Task PostgreSql_held_ephemeral_http_settles_after_observation_timeout() => PostgreSqlHeldEphemeralAsync(false);
+
+    private static Task PostgreSqlHeldEphemeralAsync(bool recordCompletion)
+    {
+        Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)), "Requires two dedicated PostgreSQL databases.");
+        return RunAsync(true, directTests: true, recordEphemeralTestCompletion: recordCompletion, heldEphemeralTests: true);
+    }
+
     [SkippableFact]
     public Task PostgreSql_ephemeral_test_runs_attach_the_exact_compiled_child()
     {
@@ -119,7 +138,7 @@ public sealed partial class KernelPublishedExecuteTests
     }
 
     private static async Task RunAsync(bool postgres, bool directTests = false, bool inline = false, bool? recordEphemeralTestCompletion = null,
-        bool attachedTests = false)
+        bool attachedTests = false, bool heldEphemeralTests = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var directory = postgres ? null : Directory.CreateTempSubdirectory("kernel-published-execute-");
@@ -133,13 +152,13 @@ public sealed partial class KernelPublishedExecuteTests
             if (postgres) Assert.NotEqual(new Npgsql.NpgsqlConnectionStringBuilder(foundation).Database,
                 new Npgsql.NpgsqlConnectionStringBuilder(runtime).Database);
             await RunAsync(postgres ? "PostgreSql" : "Sqlite", directory?.FullName, foundation, runtime, directTests, inline,
-                recordEphemeralTestCompletion, attachedTests, deadline.Token);
+                recordEphemeralTestCompletion, attachedTests, heldEphemeralTests, deadline.Token);
         }
         finally { directory?.Delete(recursive: true); }
     }
 
     private static async Task RunAsync(string provider, string? directory, string? foundation, string runtime, bool directTests, bool inline,
-        bool? recordEphemeralTestCompletion, bool attachedTests, CancellationToken token)
+        bool? recordEphemeralTestCompletion, bool attachedTests, bool heldEphemeralTests, CancellationToken token)
     {
         var canonical = ExecutableOf("execute-native", "canonical-publication", Sequence("sequence",
             SetOutput("input", "message", Request("input", "message")), SetOutput("variable", "seed", VariableRead("input", "seed-key"))),
@@ -230,7 +249,11 @@ public sealed partial class KernelPublishedExecuteTests
             SqlitePath = directory is null ? null : Path.Combine(directory, "foundation.db"),
             PostgresConnectionString = foundation
         };
-        if (attachedTests)
+        if (heldEphemeralTests)
+            kernelHosting.ConfigureServices(builder.Services,
+                KernelShellStorage.CreateHeldEphemeralHttpQualification(provider, kernelHosting.SqlitePath, foundation),
+                protectChildExecutables: true);
+        else if (attachedTests)
             kernelHosting.ConfigureServices(builder.Services,
                 KernelShellStorage.CreateAttachedTestRunQualification(provider, kernelHosting.SqlitePath, foundation),
                 protectChildExecutables: true);
@@ -322,6 +345,12 @@ public sealed partial class KernelPublishedExecuteTests
             var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
             using var http = new HttpClient { BaseAddress = new(address) };
             var isolatedActors = new List<Contract.ActorRef>();
+            if (heldEphemeralTests)
+            {
+                await VerifyHeldEphemeralTestsAsync(recordEphemeralTestCompletion!.Value);
+                if (!recordEphemeralTestCompletion.Value) await VerifyAttachedTestsAsync();
+                return;
+            }
             if (attachedTests)
             {
                 await VerifyAttachedTestsAsync();
@@ -804,6 +833,221 @@ public sealed partial class KernelPublishedExecuteTests
                 return actor.Id;
             }
 
+            async Task VerifyHeldEphemeralTestsAsync(bool recordCompletion)
+            {
+                var immediate = HeldExecutable("held-immediate", HeldResponse());
+                var blocked = HeldExecutable("held-blocked", Node("script", Types.RunJavaScript, [Literal("Script", "return 1;", "String")]), HeldResponse());
+                var replyFirst = HeldExecutable("held-reply-first", HeldResponse(),
+                    Node("wait", Types.Delay, [Literal("Duration", "00:00:01", "TimeSpan")]),
+                    Node("script", Types.RunJavaScript, [Literal("Script", BlockingScript.AfterReplySource, "String")]));
+                await materials.SaveAsync(immediate, token);
+                if (!recordCompletion)
+                {
+                    await materials.SaveAsync(blocked, token);
+                    await materials.SaveAsync(replyFirst, token);
+                }
+                await using var authoring = await scopes.CreateAsyncScopeAsync(Scope);
+                var services = authoring.ServiceProvider;
+                var dispatcher = services.GetRequiredService<IWorkflowDirectTestRunDispatcher>();
+                var production = app.Services.GetRequiredService<KernelRuns>();
+                var scopeStore = services.GetRequiredService<IWorkflowTestScopeStore>();
+                var durableBefore = await DurableRowCountAsync();
+                var prepared = await PrepareAsync(immediate);
+                scopeAdmission.BeganHeld = async (scope, attempt, cancellation) =>
+                {
+                    Assert.Equal(prepared.Test, scope);
+                    var committed = await scopeStore.FindAsync(scope.ScopeId, cancellation);
+                    Assert.Equal(WorkflowTestRunInlineState.Pending, committed?.InlineStart);
+                    Assert.Equal(attempt, committed?.HeldInlineAttempt);
+                    throw new TimeoutException("The physical reservation committed and its acknowledgment was lost.");
+                };
+                try
+                {
+                    var lost = await DispatchAsync(prepared.Request, TimeSpan.FromSeconds(5));
+                    Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, lost.CommandDispatch.Status);
+                    Assert.Null(lost.TestRunHttpReply);
+                    var restored = await scopeStore.FindAsync(prepared.Test.ScopeId, token);
+                    Assert.Null(restored?.HeldInlineAttempt);
+                    Assert.Null(restored?.InlineStart);
+                    Assert.Equal(durableBefore, await DurableRowCountAsync());
+                }
+                finally { scopeAdmission.BeganHeld = null; }
+
+                var unqueued = await DispatchAsync(prepared.Request, TimeSpan.Zero);
+                Assert.Equal(408, unqueued.TestRunHttpReply?.StatusCode);
+                var cleared = await scopeStore.FindAsync(prepared.Test.ScopeId, token);
+                Assert.Null(cleared?.HeldInlineAttempt);
+                Assert.Null(cleared?.InlineStart);
+                Assert.Equal(durableBefore, await DurableRowCountAsync());
+
+                if (!recordCompletion)
+                {
+                    var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    scopeAdmission.Settling = (_, state, deadline) =>
+                    {
+                        Assert.Equal(WorkflowTestRunInlineState.CompletedWithoutRecord, state);
+                        entered.TrySetResult();
+                        return release.Task.WaitAsync(deadline);
+                    };
+                    var waiting = StartPreparedAsync(prepared, TimeSpan.FromSeconds(5));
+                    try
+                    {
+                        await entered.Task.WaitAsync(TimeSpan.FromSeconds(4), token);
+                        Assert.Equal(WorkflowTestRunInlineState.Pending, (await scopeStore.FindAsync(prepared.Test.ScopeId, token))?.InlineStart);
+                        Assert.False(waiting.IsCompleted);
+                    }
+                    finally
+                    {
+                        scopeAdmission.Settling = null;
+                        release.TrySetResult();
+                    }
+                    await CheckImmediateAsync(await waiting);
+                    scopeAdmission.Settling = (_, _, _) => Task.FromException(new TimeoutException("Scope settlement is unavailable."));
+                    try
+                    {
+                        var uncertain = await StartAsync(immediate, TimeSpan.FromSeconds(5));
+                        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, uncertain.Dispatch.CommandDispatch.Status);
+                        Assert.False(uncertain.Dispatch.TestRunCompletedWithoutRecord);
+                        Assert.Null(uncertain.Dispatch.TestRunHttpReply);
+                        Assert.Equal(WorkflowTestRunInlineState.Pending, (await scopeStore.FindAsync(uncertain.Test.ScopeId, token))?.InlineStart);
+                    }
+                    finally { scopeAdmission.Settling = null; }
+                }
+                else await CheckImmediateAsync(await StartPreparedAsync(prepared, TimeSpan.FromSeconds(5)));
+
+                if (recordCompletion)
+                {
+                    pinBoundary.BeforeTestAdmission = (_, _) => ValueTask.FromException(new InvalidDataException("Refuse this exact fixture root pin."));
+                    try
+                    {
+                        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+                        var refused = await StartAsync(immediate, TimeSpan.FromSeconds(10));
+                        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(5));
+                        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, refused.Dispatch.CommandDispatch.Status);
+                        Assert.Null(refused.Dispatch.TestRunHttpReply);
+                        Assert.Equal(WorkflowTestRunInlineState.Refused, (await scopeStore.FindAsync(refused.Test.ScopeId, token))?.InlineStart);
+                    }
+                    finally { pinBoundary.BeforeTestAdmission = null; }
+                    return;
+                }
+
+                var beginning = StartAsync(blocked, TimeSpan.FromSeconds(2));
+                try
+                {
+                    await scripts.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
+                    var timedOut = await beginning;
+                    Assert.Equal(408, timedOut.Dispatch.TestRunHttpReply?.StatusCode);
+                    Assert.False(timedOut.Dispatch.TestRunHttpReply?.OwnerAccepted);
+                    var during = await scopeStore.FindAsync(timedOut.Test.ScopeId, token);
+                    Assert.Equal(WorkflowTestRunInlineState.Pending, during?.InlineStart);
+                }
+                finally { scripts.Released.TrySetResult(); }
+                var finished = await beginning;
+                await RequireNoRecordAsync(finished.Test, finished.Source);
+                Assert.Equal(1, scripts.Calls);
+                Assert.Equal(durableBefore, await DurableRowCountAsync());
+
+                var answering = StartAsync(replyFirst, TimeSpan.FromSeconds(8));
+                try
+                {
+                    await scripts.AfterReply.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
+                    var live = await answering.WaitAsync(TimeSpan.FromSeconds(5), token);
+                    var reply = Assert.IsType<WorkflowTestRunHttpReply>(live.Dispatch.TestRunHttpReply);
+                    Assert.Equal(201, reply.StatusCode);
+                    Assert.Equal("held-ephemeral-owner", reply.Body);
+                    Assert.True(reply.OwnerAccepted);
+                    Assert.False(reply.Headers.ContainsKey("x-elsa-workflow-instance-id"));
+                    Assert.False(live.Dispatch.TestRunCompletedWithoutRecord);
+                    Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, live.Dispatch.CommandDispatch.Status);
+                    Assert.Equal(WorkflowTestRunInlineState.Pending, (await scopeStore.FindAsync(live.Test.ScopeId, token))?.InlineStart);
+                }
+                finally { scripts.AfterReply.Released.TrySetResult(); }
+                var answered = await answering;
+                await RequireNoRecordAsync(answered.Test, answered.Source);
+                Assert.Equal(2, scripts.Calls);
+                Assert.Equal(durableBefore, await DurableRowCountAsync());
+
+                var (fenced, _, _) = await PrepareAsync(immediate);
+                var attempts = services.GetRequiredService<IWorkflowTestScopeAdmissionStore>();
+                var previous = Guid.NewGuid();
+                var current = Guid.NewGuid();
+                Assert.True(await attempts.BeginHeldInlineStartAsync(fenced, previous, () => DateTimeOffset.UtcNow, token));
+                Assert.True(await attempts.SettleHeldInlineStartAsync(fenced, previous, null, token));
+                Assert.True(await attempts.BeginHeldInlineStartAsync(fenced, current, () => DateTimeOffset.UtcNow, token));
+                Assert.False(await attempts.SettleHeldInlineStartAsync(fenced, previous, null, token));
+                Assert.False(await attempts.SettleHeldInlineStartAsync(fenced, previous, WorkflowTestRunInlineState.CompletedWithoutRecord, token));
+                Assert.Equal(current, (await scopeStore.FindAsync(fenced.ScopeId, token))?.HeldInlineAttempt);
+                Assert.True(await attempts.SettleHeldInlineStartAsync(fenced, current, null, token));
+
+                async Task CheckImmediateAsync((WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Dispatch) first)
+                {
+                    var reply = Assert.IsType<WorkflowTestRunHttpReply>(first.Dispatch.TestRunHttpReply);
+                    Assert.Equal(201, reply.StatusCode);
+                    Assert.Equal("held-ephemeral-owner", reply.Body);
+                    Assert.True(reply.OwnerAccepted);
+                    if (recordCompletion)
+                    {
+                        Assert.False(first.Dispatch.TestRunCompletedWithoutRecord);
+                        Assert.Equal(first.Dispatch.WorkflowExecutionId, reply.Headers["x-elsa-workflow-instance-id"]);
+                        Assert.True((await production.GetAsync(new(first.Dispatch.WorkflowExecutionId), token)).Missing);
+                        Assert.Null(await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(first.Dispatch.WorkflowExecutionId, token));
+                        return;
+                    }
+
+                    Assert.True(first.Dispatch.TestRunCompletedWithoutRecord);
+                    Assert.False(reply.Headers.ContainsKey("x-elsa-workflow-instance-id"));
+                    await RequireNoRecordAsync(first.Test, first.Source);
+                    Assert.Equal(durableBefore, await DurableRowCountAsync());
+                }
+
+                async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Dispatch)>
+                    StartAsync(WorkflowExecutable executable, TimeSpan budget) => await StartPreparedAsync(await PrepareAsync(executable), budget);
+
+                async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Dispatch)>
+                    StartPreparedAsync((WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchRequest Request) ready,
+                        TimeSpan budget)
+                {
+                    var elapsed = System.Diagnostics.Stopwatch.StartNew();
+                    while (true)
+                    {
+                        var result = await DispatchAsync(ready.Request, budget);
+                        if (!result.CommandDispatch.IsShed || elapsed.Elapsed >= TimeSpan.FromSeconds(8)) return (ready.Test, ready.Source, result);
+                        await Task.Delay(100, token);
+                    }
+                }
+
+                async Task<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request, TimeSpan budget) =>
+                    await dispatcher.DispatchAsync(request, WorkflowExecutableReferenceScope.TestRun, new()
+                    {
+                        TestRunHttpBudget = new(System.Diagnostics.Stopwatch.GetTimestamp(), budget)
+                    }, token);
+
+                Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchRequest Request)>
+                    PrepareAsync(WorkflowExecutable executable) => PrepareEphemeralTestAsync(services, executable, httpStimulus: JsonSerializer.SerializeToElement(new
+                    {
+                        Path = "/held/entry", Method = "POST", Body = (string?)null,
+                        Headers = new Dictionary<string, string[]>(), Query = new Dictionary<string, string[]>(), RouteData = new Dictionary<string, string>()
+                    }));
+
+                async Task RequireNoRecordAsync(WorkflowTestScope test, WorkflowExecutableSourceReference source)
+                {
+                    await using var recovered = await scopes.CreateAsyncScopeAsync(Scope);
+                    var recovery = recovered.ServiceProvider;
+                    var store = recovery.GetRequiredService<IWorkflowTestScopeStore>();
+                    WorkflowTestScopeRecord? stored;
+                    do
+                    {
+                        stored = await store.FindAsync(test.ScopeId, token);
+                        if (stored?.InlineStart == WorkflowTestRunInlineState.CompletedWithoutRecord) break;
+                        await Task.Delay(40, token);
+                    } while (true);
+                    Assert.Null(stored.IsolatedActor);
+                    Assert.Equal(WorkflowDirectTestRunObservation.CompletedWithoutRecord, await recovery
+                        .GetRequiredService<IWorkflowDirectTestRunDispatcher>().ObserveAsync(stored, source, token));
+                }
+            }
+
             async Task VerifyAttachedTestsAsync()
             {
                 const string logicalDefinition = "test-child-published-alias";
@@ -1179,7 +1423,8 @@ public sealed partial class KernelPublishedExecuteTests
             }
 
             async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchRequest Request)>
-                PrepareEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable, IReadOnlyDictionary<string, object?>? inputs = null)
+                PrepareEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable, IReadOnlyDictionary<string, object?>? inputs = null,
+                    JsonElement? httpStimulus = null)
             {
                 var now = DateTimeOffset.UtcNow;
                 var selected = new WorkflowTestScope(Guid.NewGuid().ToString("N"), now.AddMinutes(30), Scope.Value, new(Scope.Value));
@@ -1190,14 +1435,16 @@ public sealed partial class KernelPublishedExecuteTests
                     WorkflowExecutableReferenceScope.TestRun, ExpiresAt: selected.ExpiresAt, TenantId: selected.TenantId);
                 await author.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(reference, token);
                 var start = new WorkflowExecutionStartDispatchRequest(id.ArtifactId, "workflow-designer-test-run",
-                    workflowExecutionId: null, idempotencyKey: null, metadata: null, variables: null, inputs: inputs,
-                    stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.TestRun,
+                    workflowExecutionId: httpStimulus is null ? null : "test-target-" + selected.ScopeId,
+                    idempotencyKey: httpStimulus is null ? null : selected.ScopeId, metadata: null, variables: null, inputs: inputs,
+                    stimulusInput: httpStimulus, triggerNodeId: httpStimulus is null ? null : "http", runKind: WorkflowRunKind.TestRun,
                     sourceSelection: new(sourceReferenceId: reference.SourceReferenceId),
                     provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
                     parentWorkflowExecutionId: null, correlationId: null, tenantId: Scope.Value, partition: selected.Partition,
                     authority: WorkflowExecutionAuthoritySnapshot.CreateRoot("workflow-designer-test-run",
                         new Dictionary<string, string> { ["elsa.identity.subject-id"] = "accepted", ["elsa.identity.subject-kind"] = "persisted-user" }),
-                    startAuthority: null, dispatchNestingDepth: 0, testScope: selected);
+                    startAuthority: null, dispatchNestingDepth: 0, testScope: selected,
+                    triggerMetadata: httpStimulus is null ? null : new Dictionary<string, string> { ["http:responseMode"] = "Sync" });
                 return (selected, reference, start);
             }
 
@@ -1389,16 +1636,20 @@ public sealed partial class KernelPublishedExecuteTests
 
     private sealed class BlockingScript : IJavaScriptScriptEvaluator
     {
+        public const string AfterReplySource = "return 2;";
         private int _calls;
         public int Calls => Volatile.Read(ref _calls);
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public (TaskCompletionSource Entered, TaskCompletionSource Released) AfterReply { get; } =
+            (new(TaskCreationOptions.RunContinuationsAsynchronously), new(TaskCreationOptions.RunContinuationsAsynchronously));
 
         public async ValueTask<JsonElement?> EvaluateAsync(JavaScriptScriptEvaluationRequest request)
         {
             Interlocked.Increment(ref _calls);
-            Entered.TrySetResult();
-            await Released.Task.WaitAsync(request.CancellationToken);
+            var (entered, released) = request.Source == AfterReplySource ? AfterReply : (Entered, Released);
+            entered.TrySetResult();
+            await released.Task.WaitAsync(request.CancellationToken);
             return JsonSerializer.SerializeToElement(1);
         }
     }
@@ -1407,6 +1658,14 @@ public sealed partial class KernelPublishedExecuteTests
         executable.ResumeTargets, executable.CreatedAt, executable.CompatibilityMetadata, executable.InputContract, executable.Dependencies,
         executable.RuntimeRequirements, executable.StorageDriverRequirements, executable.IncidentStrategy,
         persistenceMode: PersistenceMode.Ephemeral, workflowVariables: executable.WorkflowVariables);
+
+    private static WorkflowExecutable HeldExecutable(string id, params ExecutableNode[] afterEndpoint) => Ephemeral(ExecutableOf(id, id,
+        Sequence("root", [Node("http", Types.HttpEndpoint,
+            [Literal("Path", "held/entry", "String"), Literal("SupportedMethods", new[] { "POST" }),
+             Literal("CanStartWorkflow", true, "Boolean"), Literal("ResponseMode", "Sync", "String")]), .. afterEndpoint])));
+
+    private static ExecutableNode HeldResponse() => Node("response", Types.WriteHttpResponse,
+        [Literal("StatusCode", 201, "Int32"), Literal("ContentType", "text/plain", "String"), Literal("Body", "held-ephemeral-owner", "String")]);
 
     private static WorkflowExecutable WithInputContract(WorkflowExecutable executable, WorkflowExecutableInputContract? contract = null) =>
         new(executable.Identity, executable.RootActivity, executable.ResumeTargets, executable.CreatedAt,
@@ -1494,6 +1753,7 @@ public sealed partial class KernelPublishedExecuteTests
     private sealed class FixtureTestScopeAdmission
     {
         public Action<WorkflowTestScope>? Began { get; set; }
+        public Func<WorkflowTestScope, Guid, CancellationToken, Task>? BeganHeld { get; set; }
         public Func<WorkflowTestScope, WorkflowTestRunInlineState, CancellationToken, Task>? Settling { get; set; }
     }
 
@@ -1519,6 +1779,21 @@ public sealed partial class KernelPublishedExecuteTests
         {
             if (fixture.Settling is { } settling) await settling(scope, outcome, cancellationToken);
             return await physical.SettleInlineStartAsync(scope, outcome, cancellationToken);
+        }
+
+        public async ValueTask<bool> BeginHeldInlineStartAsync(WorkflowTestScope scope, Guid attemptId, Func<DateTimeOffset> readClock,
+            CancellationToken cancellationToken)
+        {
+            var began = await physical.BeginHeldInlineStartAsync(scope, attemptId, readClock, cancellationToken);
+            if (began && fixture.BeganHeld is { } after) await after(scope, attemptId, cancellationToken);
+            return began;
+        }
+
+        public async ValueTask<bool> SettleHeldInlineStartAsync(WorkflowTestScope scope, Guid attemptId, WorkflowTestRunInlineState? outcome,
+            CancellationToken cancellationToken)
+        {
+            if (outcome is { } definite && fixture.Settling is { } settling) await settling(scope, definite, cancellationToken);
+            return await physical.SettleHeldInlineStartAsync(scope, attemptId, outcome, cancellationToken);
         }
     }
 

@@ -65,24 +65,11 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         var provenance = WorkflowExecutableSourceProvenance.From(source);
         var mode = services.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(executable);
         var inline = mode == PersistenceMode.Ephemeral;
-        if (inline && (!runtime.TakesEphemeralTestRuns || triggered))
+        var syncHttp = triggered && request.TriggerMetadata.GetValueOrDefault("http:responseMode") == "Sync";
+        var inlineHeld = inline && syncHttp && runtime.TakesHeldEphemeralHttp;
+        if (inline && (!runtime.TakesEphemeralTestRuns || triggered && !inlineHeld))
             return Refused("EphemeralTestRunUnavailable");
-        if (inline)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            // A disconnect must not hide whether the exact reservation committed. The offer owns the next decision.
-            using var reservation = new CancellationTokenSource(InlineReservationBudget, time);
-            try
-            {
-                if (!await services.GetRequiredService<IWorkflowTestScopeAdmissionStore>()
-                        .BeginInlineStartAsync(test, clock.GetUtcNow, reservation.Token))
-                    return UnknownInlineResult();
-            }
-            catch (OperationCanceledException) when (reservation.IsCancellationRequested)
-            {
-                return UnknownInlineResult();
-            }
-        }
+        if (inline && !inlineHeld && !await ReserveInlineAsync()) return UnknownInlineResult();
 
         Workflow workflow;
         try
@@ -93,7 +80,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         }
         catch (NativeMappingRefusedException error)
         {
-            if (inline && !await runtime.SettleInlineTestAsync(test, WorkflowTestRunInlineState.Refused))
+            if (inline && !inlineHeld && !await runtime.SettleInlineTestAsync(test, WorkflowTestRunInlineState.Refused))
                 return UnknownInlineResult();
             if (inline) cancellationToken.ThrowIfCancellationRequested();
             return Refused(error.Message);
@@ -129,8 +116,28 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         var native = NativeExecutionModel.Start(workflow.Id, mode.ToString(), input, request.TriggerNodeId, stimulus, workflow.Definition)
             with { ExecutableSelection = workflow.ExecutableSelection };
         var spec = WorkflowActor.Start(native, null, selection);
+        if (inlineHeld)
+        {
+            if (!http || dispatchOptions?.TestRunHttpBudget is not { } budget)
+                return Refused("The selected Ephemeral HTTP Test Run is missing its synchronous request timeout.");
+            var attempt = Guid.NewGuid();
+            if (!await ReserveInlineAsync(attempt))
+            {
+                var current = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, cancellationToken);
+                if (await CommittedDuplicateAsync(current) is { } duplicate) return duplicate;
+                return current is { State: WorkflowTestScopeState.Open, IsolatedActor: null,
+                    InlineStart: WorkflowTestRunInlineState.CompletedWithoutRecord } && WorkflowTestScope.ContextEquals(current.Scope, test)
+                    ? InlineResult(new(InlineStartDisposition.Volatile, Status: ActorStatus.Finished)) : UnknownInlineResult();
+            }
+
+            var held = await runtime.StartInlineHeldTestAsync(test, attempt, spec, workflow, budget, cancellationToken);
+            if (held.Reply is not { } reply) return InlineResult(held.Start);
+            if (reply.Error is not null)
+                return InlineResult(new(InlineStartDisposition.Unknown), PresentHttpReply(reply));
+            return InlineResult(held.Start, PresentHttpReply(reply with { Actor = held.Start.Actor }) with { OwnerAccepted = true });
+        }
         if (inline) return InlineResult(await runtime.StartInlineTestAsync(test, spec, workflow, cancellationToken));
-        if (http && request.TriggerMetadata.GetValueOrDefault("http:responseMode") == "Sync")
+        if (http && syncHttp)
         {
             if (dispatchOptions?.TestRunHttpBudget is not { } budget)
                 return Refused("The selected HTTP Test Run is missing its request timeout.");
@@ -141,24 +148,11 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
                 var existing = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, cancellationToken);
                 if (await CommittedDuplicateAsync(existing) is { } duplicate) return duplicate;
             }
-            var response = KernelHttpEdge.Answer(reply);
-            if (reply.Error == "timeout") response = response with { StatusCode = 408 };
             var heldAdmission = reply.Actor is { } actor
                 ? new Admission(AdmissionOutcome.Accepted, actor)
                 : new Admission(AdmissionOutcome.Refused, Reason: reply.RefusalReason, RetryAfter: reply.RetryAfter);
             return KernelPublishedRunDispatcher.Result(test.ScopeId, executable.Identity, provenance, heldAdmission, clock.GetUtcNow(),
-                reply.Error, new(response.StatusCode, response.ContentType, response.Body, response.Headers));
-
-            async ValueTask<WorkflowExecutionStartDispatchResult?> CommittedDuplicateAsync(WorkflowTestScopeRecord? current)
-            {
-                if (current is not { State: WorkflowTestScopeState.Open, IsolatedActor: { } binding } ||
-                    !WorkflowTestScope.ContextEquals(current.Scope, test) || test.IsExpired(clock.GetUtcNow()) ||
-                    await ObserveAsync(current, source, cancellationToken) is not
-                        (WorkflowDirectTestRunObservation.Started or WorkflowDirectTestRunObservation.Ended))
-                    return null;
-                return KernelPublishedRunDispatcher.Result(test.ScopeId, executable.Identity, provenance,
-                    new(AdmissionOutcome.Duplicate, new(binding.ActorReference)), clock.GetUtcNow());
-            }
+                reply.Error, PresentHttpReply(reply));
         }
         var admission = await runtime.StartDirectTestAsync(test.ScopeId, spec, cancellationToken);
         return KernelPublishedRunDispatcher.Result(test.ScopeId, executable.Identity, provenance, admission, clock.GetUtcNow());
@@ -166,10 +160,51 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         WorkflowExecutionStartDispatchResult Refused(string reason) => KernelPublishedRunDispatcher.Result(
             test.ScopeId, executable.Identity, provenance, new(AdmissionOutcome.Refused), clock.GetUtcNow(), reason);
 
-        WorkflowExecutionStartDispatchResult InlineResult(InlineStartOutcome outcome) => KernelPublishedRunDispatcher.InlineResult(
-            test.ScopeId, executable.Identity, provenance, outcome, clock.GetUtcNow(), testRun: true);
+        WorkflowExecutionStartDispatchResult InlineResult(InlineStartOutcome outcome, WorkflowTestRunHttpReply? reply = null) =>
+            KernelPublishedRunDispatcher.InlineResult(test.ScopeId, executable.Identity, provenance, outcome, clock.GetUtcNow(), testRun: true, httpReply: reply);
 
         WorkflowExecutionStartDispatchResult UnknownInlineResult() => InlineResult(new(InlineStartDisposition.Unknown));
+
+        async ValueTask<bool> ReserveInlineAsync(Guid? attempt = null)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // A disconnect must not hide whether the exact reservation committed. The offer owns the next decision.
+            using var reservation = new CancellationTokenSource(InlineReservationBudget, time);
+            var reserved = false;
+            try
+            {
+                var admissions = services.GetRequiredService<IWorkflowTestScopeAdmissionStore>();
+                reserved = attempt is { } held
+                    ? await admissions.BeginHeldInlineStartAsync(test, held, clock.GetUtcNow, reservation.Token)
+                    : await admissions.BeginInlineStartAsync(test, clock.GetUtcNow, reservation.Token);
+                return reserved;
+            }
+            catch (OperationCanceledException) when (reservation.IsCancellationRequested) { return false; }
+            catch (TimeoutException) when (attempt is not null) { return false; }
+            finally
+            {
+                // A lost acknowledgment can leave this exact attempt pending even though we never offered it.
+                if (!reserved && attempt is { } unoffered)
+                    await runtime.SettleInlineTestAsync(test, null, unoffered);
+            }
+        }
+
+        async ValueTask<WorkflowExecutionStartDispatchResult?> CommittedDuplicateAsync(WorkflowTestScopeRecord? current)
+        {
+            if (current is not { State: WorkflowTestScopeState.Open, IsolatedActor: { } binding } ||
+                !WorkflowTestScope.ContextEquals(current.Scope, test) || test.IsExpired(clock.GetUtcNow()) ||
+                await ObserveAsync(current, source, cancellationToken) is not
+                    (WorkflowDirectTestRunObservation.Started or WorkflowDirectTestRunObservation.Ended))
+                return null;
+            return KernelPublishedRunDispatcher.Result(test.ScopeId, executable.Identity, provenance,
+                new(AdmissionOutcome.Duplicate, new(binding.ActorReference)), clock.GetUtcNow());
+        }
+    }
+
+    private static WorkflowTestRunHttpReply PresentHttpReply(Reply reply)
+    {
+        var response = KernelHttpEdge.Answer(reply);
+        return new(reply.Error == "timeout" ? 408 : response.StatusCode, response.ContentType, response.Body, response.Headers);
     }
 
     public async ValueTask<WorkflowDirectTestRunObservation?> ObserveAsync(WorkflowTestScopeRecord scope,

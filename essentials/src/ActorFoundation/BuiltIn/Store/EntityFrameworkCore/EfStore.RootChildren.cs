@@ -39,7 +39,7 @@ public sealed partial class EfStore
             key = await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token);
         }
         if (ProtectChildBirths is not null) _rootChildIssuanceKey = key;
-        _qualifiesAttachedTestRuns = db.RequiredFormat == StoreFormat.RootAttachedTestRunQualification;
+        _qualifiesAttachedTestRuns = db.RequiredFormat.SupportsAttachedTestRunQualification;
         _rootChildReference = (tenant, address) => FoundationRootCreator.ReferenceFor(key, tenant, address);
         _rootChildMessageHandle = seed => FoundationSelfSend.Handle(key, "child-" + seed);
     }

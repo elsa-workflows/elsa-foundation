@@ -114,6 +114,14 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return new(databasePath, node, actorType, StoreFormat.RootAttachedTestRunQualification, protectRootStart);
     }
 
+    /// <summary>Binds the private SQLite format for qualifying held Ephemeral HTTP Test Runs.</summary>
+    public static SqliteEmbeddedFoundation ForHeldEphemeralHttpQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootHeldEphemeralHttpQualification, protectRootStart);
+    }
+
     /// <summary>Binds the private SQLite inline start qualification profile with its executable protection.</summary>
     public static SqliteEmbeddedFoundation ForInlineStartsQualification(string databasePath, string node, string actorType,
         ProtectRootStartAsync protectRootStart)

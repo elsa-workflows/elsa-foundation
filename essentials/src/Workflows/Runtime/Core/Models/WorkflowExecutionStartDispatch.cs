@@ -822,4 +822,9 @@ public sealed class WorkflowExecutionStartDispatchResult
 }
 
 public sealed record WorkflowTestRunHttpReply(int StatusCode, string ContentType, string? Body,
-    IReadOnlyDictionary<string, string> Headers);
+    IReadOnlyDictionary<string, string> Headers)
+{
+    /// <summary>The owner supplied a live reply for the held Test Run. The workflow may still be running.</summary>
+    [JsonIgnore]
+    public bool OwnerAccepted { get; init; }
+}

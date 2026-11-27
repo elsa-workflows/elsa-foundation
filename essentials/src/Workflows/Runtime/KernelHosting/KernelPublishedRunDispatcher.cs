@@ -129,7 +129,8 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
     }
 
     internal static WorkflowExecutionStartDispatchResult InlineResult(string operationId, WorkflowExecutableIdentity material,
-        WorkflowExecutableSourceProvenance source, InlineStartOutcome outcome, DateTimeOffset recordedAt, bool testRun = false)
+        WorkflowExecutableSourceProvenance source, InlineStartOutcome outcome, DateTimeOffset recordedAt, bool testRun = false,
+        WorkflowTestRunHttpReply? httpReply = null)
     {
         var (status, reason) = outcome.Disposition switch
         {
@@ -154,7 +155,7 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
             metadata[RuntimeMetadataKeys.DispatchShed] = "true";
             metadata[RuntimeMetadataKeys.DispatchRetryAfterSeconds] = RetrySeconds(outcome.RetryAfter);
         }
-        return CreateResult(operationId, id, material, source, status, recordedAt, reason, metadata,
+        return CreateResult(operationId, id, material, source, status, recordedAt, reason, metadata, httpReply,
             completedWithoutRecord: testRun && outcome is { Disposition: InlineStartDisposition.Volatile, Status: ActorStatus.Finished });
     }
 

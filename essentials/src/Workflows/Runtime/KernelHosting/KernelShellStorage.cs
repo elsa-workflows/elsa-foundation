@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal abstract class KernelShellStorage
 {
-    private enum Profile { Shipped, ManagedSchedules, PreparedStarts, InlineStarts, EventStarts, EventStartReceipts, EventStartScan, SharedActivation, DirectTestRuns, EphemeralTestRuns, PublicEventHost, AttachedTestRuns }
+    private enum Profile { Shipped, ManagedSchedules, PreparedStarts, InlineStarts, EventStarts, EventStartReceipts, EventStartScan, SharedActivation, DirectTestRuns, EphemeralTestRuns, PublicEventHost, AttachedTestRuns, HeldEphemeralHttp }
 
     public abstract bool TakesSelfSends { get; }
     public abstract bool TakesTimers { get; }
@@ -27,6 +27,7 @@ internal abstract class KernelShellStorage
     internal abstract bool TakesDirectTestRuns { get; }
     internal abstract bool TakesEphemeralTestRuns { get; }
     internal abstract bool TakesAttachedTestRuns { get; }
+    internal abstract bool TakesHeldEphemeralHttp { get; }
     internal virtual bool TakesEventStarts => false;
     internal virtual bool RetainsEventStartReceipts => false;
     internal virtual bool TakesOrderedEventScan => false;
@@ -83,6 +84,9 @@ internal abstract class KernelShellStorage
     internal static KernelShellStorage CreateAttachedTestRunQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
         Create(provider, sqlitePath, postgresConnectionString, Profile.AttachedTestRuns);
 
+    internal static KernelShellStorage CreateHeldEphemeralHttpQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
+        Create(provider, sqlitePath, postgresConnectionString, Profile.HeldEphemeralHttp);
+
     private static KernelShellStorage Create(string provider, string? sqlitePath, string? postgresConnectionString, Profile profile)
     {
         var node = $"foundation-kernel-{Environment.ProcessId}-{Guid.NewGuid():N}";
@@ -135,7 +139,8 @@ internal abstract class KernelShellStorage
         {
             Profile.ManagedSchedules => SqliteEmbeddedFoundation.ForManagedSchedulesQualification(path, node, WorkflowActor.ActorType),
             Profile.PreparedStarts or Profile.InlineStarts or Profile.EventStarts or Profile.EventStartReceipts or Profile.EventStartScan or
-                Profile.SharedActivation or Profile.DirectTestRuns or Profile.EphemeralTestRuns or Profile.PublicEventHost or Profile.AttachedTestRuns => null,
+                Profile.SharedActivation or Profile.DirectTestRuns or Profile.EphemeralTestRuns or Profile.PublicEventHost or Profile.AttachedTestRuns or
+                Profile.HeldEphemeralHttp => null,
             Profile.Shipped when SqliteEmbeddedHosting.TakesPreparedStarts => null,
             _ => new(path, node, WorkflowActor.ActorType)
         };
@@ -152,7 +157,8 @@ internal abstract class KernelShellStorage
             profile == Profile.Shipped && SqliteEmbeddedHosting.TakesPreparedStarts;
         internal override bool TakesDirectTestRuns => profile == Profile.DirectTestRuns || TakesEphemeralTestRuns;
         internal override bool TakesEphemeralTestRuns => profile == Profile.EphemeralTestRuns || TakesAttachedTestRuns;
-        internal override bool TakesAttachedTestRuns => profile == Profile.AttachedTestRuns;
+        internal override bool TakesAttachedTestRuns => profile == Profile.AttachedTestRuns || TakesHeldEphemeralHttp;
+        internal override bool TakesHeldEphemeralHttp => profile == Profile.HeldEphemeralHttp;
         internal override bool TakesEventStarts => profile == Profile.Shipped
             ? SqliteEmbeddedHosting.TakesEventStarts
             : profile == Profile.EventStarts || RetainsEventStartReceipts;
@@ -188,6 +194,7 @@ internal abstract class KernelShellStorage
                     Profile.DirectTestRuns => SqliteEmbeddedFoundation.ForDirectTestRunQualification(path, node, WorkflowActor.ActorType, protectRootStart),
                     Profile.EphemeralTestRuns => SqliteEmbeddedFoundation.ForEphemeralTestRunQualification(path, node, WorkflowActor.ActorType, protectRootStart),
                     Profile.AttachedTestRuns => SqliteEmbeddedFoundation.ForAttachedTestRunQualification(path, node, WorkflowActor.ActorType, protectRootStart),
+                    Profile.HeldEphemeralHttp => SqliteEmbeddedFoundation.ForHeldEphemeralHttpQualification(path, node, WorkflowActor.ActorType, protectRootStart),
                     _ => SqliteEmbeddedFoundation.WithRootStartProtection(path, node, WorkflowActor.ActorType, protectRootStart)
                 };
             }
@@ -257,7 +264,8 @@ internal abstract class KernelShellStorage
         public override bool TakesPreparedStarts => PostgresPreviewHosting.TakesPreparedStarts(OpenDatabase);
         internal override bool TakesDirectTestRuns => _profile == Profile.DirectTestRuns || TakesEphemeralTestRuns;
         internal override bool TakesEphemeralTestRuns => _profile == Profile.EphemeralTestRuns || TakesAttachedTestRuns;
-        internal override bool TakesAttachedTestRuns => _profile == Profile.AttachedTestRuns;
+        internal override bool TakesAttachedTestRuns => _profile == Profile.AttachedTestRuns || TakesHeldEphemeralHttp;
+        internal override bool TakesHeldEphemeralHttp => _profile == Profile.HeldEphemeralHttp;
         internal override bool TakesEventStarts => PostgresPreviewHosting.TakesEventStarts(OpenDatabase);
         internal override bool RetainsEventStartReceipts => PostgresPreviewHosting.RetainsEventStartReceipts(OpenDatabase);
         internal override bool TakesOrderedEventScan => PostgresPreviewHosting.TakesOrderedEventScan(OpenDatabase);
@@ -297,6 +305,9 @@ internal abstract class KernelShellStorage
                     break;
                 case Profile.AttachedTestRuns:
                     await PostgresPreviewHosting.InstallAttachedTestRunQualificationAsync(_options, token);
+                    break;
+                case Profile.HeldEphemeralHttp:
+                    await PostgresPreviewHosting.InstallHeldEphemeralHttpQualificationAsync(_options, token);
                     break;
                 case Profile.PreparedStarts:
                     await PostgresPreviewHosting.InstallPreparedStartsQualificationAsync(_options, token);
@@ -382,6 +393,7 @@ internal abstract class KernelShellStorage
             Profile.DirectTestRuns => PostgresPreviewHosting.CreateDirectTestRunQualificationContext(_options),
             Profile.EphemeralTestRuns => PostgresPreviewHosting.CreateEphemeralTestRunQualificationContext(_options),
             Profile.AttachedTestRuns => PostgresPreviewHosting.CreateAttachedTestRunQualificationContext(_options),
+            Profile.HeldEphemeralHttp => PostgresPreviewHosting.CreateHeldEphemeralHttpQualificationContext(_options),
             _ => PostgresPreviewHosting.CreateShippedContext(_options)
         };
     }
