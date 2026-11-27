@@ -51,6 +51,15 @@ public interface IRuntimeKernelScheduleOccurrenceDeliveryStore
     ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ListPendingAsync(TriggerScope scope,
         RuntimeKernelScheduleOccurrenceCursor? after, int limit, CancellationToken cancellationToken = default);
 
+    /// <summary>Reads the inclusive end of a delivery pass, or null when there are no pending admissions.</summary>
+    ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadPendingTailAsync(TriggerScope scope,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    /// <summary>Reads a page of pending admissions through the end captured at the start of this pass.</summary>
+    ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ListPendingAsync(TriggerScope scope,
+        RuntimeKernelScheduleOccurrenceCursor? after, RuntimeKernelScheduleOccurrenceCursor through, int limit,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
     ValueTask MarkMaterializedAsync(RuntimeKernelScheduleOccurrence occurrence, string actorReference, CancellationToken cancellationToken = default);
 }
 
