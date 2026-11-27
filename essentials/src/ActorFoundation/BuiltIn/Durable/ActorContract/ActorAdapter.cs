@@ -414,7 +414,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             ? host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message))
             : null;
         var turn = new ActorTurn(inMemory, roots, input, header, ambient, issueSelf, rootJobHandle,
-            rootTimedJobIssuance || rootTimedJobSettlement, rootValueReader, rootTerminalOutputLimit);
+            rootTimedJobIssuance || rootTimedJobSettlement, rootValueReader, rootTerminalOutputLimit,
+            auxiliaryActor is null ? null : actor.Type);
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray(), turn.Now);
         var handler = roots is null ? actor : RootActor(header.Type)
             ?? throw new InvalidOperationException("The root actor type is not registered on this owner.");
