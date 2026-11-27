@@ -156,6 +156,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
         RefusesAuxiliaryInput(row, delivery) || SettlesEndedChildNotice(row, delivery.Message) ||
+        roots?.RecoversInlineInitialRoots == true && row is not null && issueSelf is { } issuer &&
+            Durable.FoundationInlineRetry.Matches(issuer, row, delivery.Message) ||
         roots?.SupportsChildren == true && delivery.Message.Kind == Durable.Kinds.Terminate && MatchesRootChildInput(row, delivery.Message) ||
         roots is not null && delivery.Message.Operator is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null } ||
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||

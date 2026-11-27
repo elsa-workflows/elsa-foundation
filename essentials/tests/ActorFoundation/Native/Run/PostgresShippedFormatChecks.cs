@@ -111,7 +111,6 @@ internal static class PostgresShippedFormatChecks
         await store.InstallPreviewRootSchemaAsync(stop);
 
         await RefusalsAsync(connection, options, stop);
-        await CheckQueuedCreatorRecoveryAsync(Open, store, inBatch, stop);
 
         var registry = new WorkflowRegistry()
             // Answers its caller from the start's own turn, then runs a job.
@@ -261,6 +260,7 @@ internal static class PostgresShippedFormatChecks
                 await check();
                 await restart.StopAsync(stop);
             }, extended: new(), stop);
+        await CheckQueuedCreatorRecoveryAsync(Open, store, inBatch, stop);
         return 0;
 
         async Task<Contract.ActorRef> StartAsync(string workflow, string id) =>
@@ -344,7 +344,7 @@ internal static class PostgresShippedFormatChecks
     private static async Task CheckQueuedCreatorRecoveryAsync(Func<KernelDb> open, EfStore store, bool inBatch, CancellationToken token)
     {
         var actor = new QueuedCreatorActor();
-        var scope = EmbeddedTenant.Bind("queued-creator");
+        var scope = EmbeddedTenant.Bind("shipped");
         const string node = "queued-creator-owner";
         var requests = PostgresPreviewHosting.CreateRequests(open, node, actor.Type);
         var foundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(open, actor.Type,
