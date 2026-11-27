@@ -64,7 +64,7 @@ internal static class RootScheduleControlChecks
                 db.UsesRootScheduleControls && db.UsesRootScheduleLineage, "managed schedules compose all shipped workflow capabilities");
         }
 
-        var primary = new WorkflowActor.WorkflowActor([]);
+        Contract.IActorType primary = managedProfile ? new HeldEventActor() : new WorkflowActor.WorkflowActor([]);
         var acceptor = new RecordingAcceptor();
         var schedule = new ScheduleActor(null, acceptor);
         var writes = sqlite?.BindScheduleControls(schedule.Type) ?? PostgresPreviewHosting.BindScheduleControls(Open, schedule.Type);
@@ -72,6 +72,10 @@ internal static class RootScheduleControlChecks
         var pg = postgres ? await PostgresPreviewHosting.OpenFoundationAsync(Open, primary.Type, requests, cancellationToken: token) : null;
         Contract.IIngress ingress = pg is null ? await sqlite!.OpenIngressAsync(token) : pg;
         Contract.IActorReads reads = pg is null ? sqlite!.CreateReads() : pg;
+        if (managedProfile)
+            Require(reads is Contract.IActorSequencedJournalReads { SupportsSequencedJournal: true } &&
+                reads is Contract.IActorPlaybackReads { SupportsPlayback: true, SupportsDescendantPlayback: true },
+                "the managed profile exposes sequenced journal and descendant playback through public reads");
 
         Require(await Apply(3, Control.Stop) is { Outcome: Outcome.Applied, Actor: null }, "Stop before first Set persists without a root");
         Require(await Apply(3, Control.Stop) is { Outcome: Outcome.Duplicate, Actor: null }, "identical Stop retries the unbound receipt");
@@ -114,6 +118,22 @@ internal static class RootScheduleControlChecks
                 };
         await using var lifetime = (IAsyncDisposable)owner;
         await owner.StartAsync(token);
+        if (managedProfile)
+        {
+            var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(primary.Type, "{}")),
+                "managed-profile-held-start", Contract.Kinds.Start, cancellationToken: token);
+            Require(started is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "the managed profile admits the primary actor");
+            await UntilAsync(async () =>
+            {
+                await using var db = Open();
+                return await db.Subscriptions.AnyAsync(subscription => subscription.Key == HeldEventActor.EventKey, token);
+            });
+            var now = postgres ? await requests!.ReadClockAsync(token) : await sqlite!.ReadClockAsync(token);
+            var reply = await ingress.RequestAsync(scope, new Contract.Target.Event(HeldEventActor.EventKey),
+                "managed-profile-held-event", Contract.Kinds.Event, null, null,
+                new Contract.RequestOptions(null, now + 5000), token);
+            Require(reply is { Channel: "managed-event", Error: null }, "the managed profile replies to a public held event");
+        }
         await UntilAsync(() => Task.FromResult(acceptor.Offers.Any(offer => offer.Schedule == reference && offer.Authority == "first")));
         Require(await Apply(5, Control.Set, Header(5, "second")) == new Contract.ScheduleControlResult(Outcome.Applied, reference),
             "authenticated Set enqueues to the exact existing auxiliary root");
@@ -197,6 +217,34 @@ internal static class RootScheduleControlChecks
     {
         if (!result) throw new InvalidOperationException(description);
         Console.WriteLine("ok " + description);
+    }
+
+    private sealed class HeldEventActor : Contract.IActorType
+    {
+        internal const string EventKey = "managed-profile-event";
+        public string Type => WorkflowActor.WorkflowActor.ActorType;
+        public bool Withholds(Contract.ActorHeader header) => false;
+
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            foreach (var message in turn.Inbox)
+            {
+                if (message.Kind == Contract.Kinds.Start)
+                {
+                    turn.State = "{}";
+                    turn.Subscribe(EventKey, "held");
+                }
+                else if (message.Event is not null)
+                    turn.Reply(message, "managed-event", "accepted");
+            }
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
+            ValueTask.FromException<object?>(new InvalidOperationException("The primary fixture actor has no background jobs."));
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }
 
     private sealed class RecordingAcceptor : IScheduleOccurrenceAcceptor
