@@ -58,6 +58,7 @@ internal static class RetainedRootResponseChecks
             var shippedRequests = PostgresPreviewHosting.CreateRequestsWithRootStartProtection(OpenShipped, Node, ActorType, Allow);
             await RequireStockRefusalAsync(async () =>
                 _ = await PostgresPreviewHosting.OpenFoundationAsync(OpenShipped, ActorType, shippedRequests, cancellationToken: token));
+            await CheckInstalledPostgresAuthorityAsync(Open, store, token);
         }
         else
         {
@@ -79,6 +80,47 @@ internal static class RetainedRootResponseChecks
             finally { folder.Delete(recursive: true); }
         }
         return 0;
+    }
+
+    private static async Task CheckInstalledPostgresAuthorityAsync(Func<KernelDb> open, EfStore store, CancellationToken token)
+    {
+        await store.InstallPreviewRootSchemaAsync(token);
+        await using var db = open();
+        var original = await db.Database.SqlQueryRaw<long>("""
+            SELECT count(*) AS "Value" FROM "FoundationRootResponses"
+            """).SingleAsync(token);
+        Require(original > 0, "normal reinstallation preserves the first-response ledger");
+
+        await db.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE "FoundationRootResponses" ALTER COLUMN "ResponseKey" DROP NOT NULL
+            """, token);
+        await RequirePostgresAuthorityRefusalAsync(store, "the initialized profile rejects a drifted response column", token);
+        await db.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE "FoundationRootResponses" ALTER COLUMN "ResponseKey" SET NOT NULL
+            """, token);
+        await store.InstallPreviewRootSchemaAsync(token);
+        await db.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE "FoundationRootResponses" RENAME TO "PreviousRootResponseAuthority"
+            """, token);
+        await RequirePostgresAuthorityRefusalAsync(store, "the initialized profile rejects a missing response authority", token);
+        Require(await db.Database.SqlQueryRaw<bool>("""
+                SELECT pg_catalog.to_regclass('"FoundationRootResponses"') IS NULL AS "Value"
+                """).SingleAsync(token) &&
+            await db.Database.SqlQueryRaw<long>("""
+                SELECT count(*) AS "Value" FROM "PreviousRootResponseAuthority"
+                """).SingleAsync(token) == original,
+            "refused installation neither creates an empty ledger nor loses prior responses");
+    }
+
+    private static async Task RequirePostgresAuthorityRefusalAsync(EfStore store, string description, CancellationToken token)
+    {
+        try { await store.InstallPreviewRootSchemaAsync(token); }
+        catch (StoreFormatException)
+        {
+            Console.WriteLine("ok " + description);
+            return;
+        }
+        throw new InvalidOperationException(description);
     }
 
     private static async Task CheckAsync(IHostedService owner, Contract.IIngress ingress, Contract.IActorReads reads,

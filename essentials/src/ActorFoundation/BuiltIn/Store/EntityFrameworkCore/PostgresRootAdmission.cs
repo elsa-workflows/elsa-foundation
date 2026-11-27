@@ -135,6 +135,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var createKeyedAuthority = db.UsesRootKeyedStarts && await RootKeyedAdmission.MayCreatePostgresAuthorityAsync(db, cancellationToken);
         var createPublicEventAuthority = db.UsesRootPublicEventStarts &&
             await RootEventStarts.MayCreatePostgresPublicAuthorityAsync(db, cancellationToken);
+        var createRetainedResponseAuthority = db.UsesRetainedRootResponse &&
+            await EfStore.MayCreatePostgresRetainedResponseAuthorityAsync(db, cancellationToken);
         const string definitions = """
             CREATE TABLE IF NOT EXISTS "FoundationRootIssuer" (
                 "Singleton" boolean PRIMARY KEY CHECK ("Singleton"), "Key" bytea NOT NULL,
@@ -167,7 +169,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         if (db.UsesRootScheduleControls) await RootScheduleControls.InstallPostgresAsync(db, cancellationToken);
         if (db.UsesRootScheduleLineage) await RootScheduleLineage.InstallPostgresAsync(db, cancellationToken);
         if (db.UsesRootPreparedStarts) await RootPreparedStarts.InstallPostgresAsync(db, cancellationToken);
-        if (db.UsesRetainedRootResponse) await EfStore.InstallRetainedRootResponsesAsync(db, cancellationToken);
+        if (db.UsesRetainedRootResponse)
+            await EfStore.InstallRetainedRootResponsesAsync(db, createRetainedResponseAuthority, cancellationToken);
         if (db.UsesRootEventStarts)
             await RootEventStarts.InstallPostgresAsync(db, createPublicEventAuthority, cancellationToken);
         if (db.UsesRootChildren) await EfStore.InstallRootChildCascadeAsync(db, cancellationToken);
