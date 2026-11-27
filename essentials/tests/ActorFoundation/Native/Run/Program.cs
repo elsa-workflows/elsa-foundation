@@ -299,6 +299,10 @@ if (args is ["pg-write-budget", var budgetWriter and ("owned" or "ef"), var budg
     budgetOptions is [] or ["--require-budget"])
     return await PostgresWriteBudget.RunAsync(budgetWriter == "owned" ? CommitSql.Owned : CommitSql.EntityFramework,
         budgetFence == "in-batch", budgetOptions.Length != 0);
+if (args is ["pg-tenant-start-load", var loadMode and ("limited" or "control"), .. var loadOptions] && loadOptions.Length <= 1)
+    return loadOptions is [var count]
+        ? await PostgresTenantStartLoadChecks.RunAsync(loadMode == "limited", int.Parse(count, System.Globalization.CultureInfo.InvariantCulture))
+        : await PostgresTenantStartLoadChecks.RunAsync(loadMode == "limited");
 if (args is ["shipped-write-budget", var shippedBudgetProvider and ("postgres" or "sqlite"),
     var shippedBudgetFence and ("checked" or "in-batch"), .. var shippedBudgetOptions] &&
     shippedBudgetOptions is [] or ["--require-budget"])

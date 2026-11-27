@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -63,7 +64,8 @@ public class WorkflowsRuntimeKernelFeature : IShellFeature, IPostConfigureShellS
     /// <summary>The contract the old core's HTTP feature registers beside its route-table observer: present, the observer must be found.</summary>
     public const string RouteTableSynchronizerTypeName = "Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRouteTableSynchronizer";
 
-    public virtual void ConfigureServices(IServiceCollection services) { }
+    public virtual void ConfigureServices(IServiceCollection services) =>
+        services.TryAddSingleton(new PersistenceModeOptions());
 
     public virtual void PostConfigureServices(IServiceCollection services)
     {
@@ -95,8 +97,8 @@ public class WorkflowsRuntimeKernelFeature : IShellFeature, IPostConfigureShellS
             provider.GetService<IPersistenceAccessContextAccessor>())
         {
             EventPublications = provider.GetService<IKernelEventPublicationRegistration>(),
-            EventPersistenceModes = provider.GetService<IKernelEventPublicationRegistration>() is { SupportsDurableMode: true }
-                ? provider.GetRequiredService<IRuntimePersistenceModeResolver>()
+            SelectEventPersistenceMode = provider.GetService<IKernelEventPublicationRegistration>() is { SupportsDurableMode: true }
+                ? executable => KernelPersistenceMode.Resolve(provider, executable)
                 : null
         });
     }
