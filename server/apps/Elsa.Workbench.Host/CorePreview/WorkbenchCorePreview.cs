@@ -225,8 +225,8 @@ internal static class WorkbenchCorePreview
             // Host expressions (JavaScript, Liquid) run on the default shell's portable evaluator, in a scope of that shell.
             var shells = provider.GetRequiredService<IShellRegistry>();
             var shellName = provider.GetRequiredService<IOptions<ShellReadinessOptions>>().Value.DefaultShellName;
-            Func<IShell?> getActiveShell = () => shells.GetActive(shellName);
-            var expressions = new PortableNativeExpressions(() => OpenExpressionScope(shellName, getActiveShell));
+            var expressions = new PortableNativeExpressions(() => OpenExpressionScope(shellName,
+                () => shells.GetActive(shellName), () => (shells as ISettledShellRegistry)?.GetSettledActive(shellName)));
             var model = new NativeExecutionModel(workflows, new NativeExecutionOptions
             {
                 Scripts = scripts,
@@ -309,7 +309,8 @@ internal static class WorkbenchCorePreview
         return (tenant ?? readsTenant ?? DefaultTenant, readsTenant ?? tenant);
     }
 
-    internal static (IServiceProvider Services, IAsyncDisposable Lifetime) OpenExpressionScope(string shellName, Func<IShell?> getActiveShell)
+    internal static (IServiceProvider Services, IAsyncDisposable Lifetime) OpenExpressionScope(string shellName,
+        Func<IShell?> getActiveShell, Func<IShell?> getSettledShell)
     {
         var shell = getActiveShell() ?? throw new NativeExpressionsUnavailableException($"The shell '{shellName}' is not active.");
         try
@@ -319,7 +320,7 @@ internal static class WorkbenchCorePreview
         catch (NativeExpressionsUnavailableException)
         {
             // A reload can replace the shell between the lookup and opening its scope.
-            if (getActiveShell() is not { } replacement || replacement.Descriptor.Generation == shell.Descriptor.Generation)
+            if (getSettledShell() is not { } replacement || replacement.Descriptor.Generation == shell.Descriptor.Generation)
                 throw;
             return OpenScope(replacement);
         }

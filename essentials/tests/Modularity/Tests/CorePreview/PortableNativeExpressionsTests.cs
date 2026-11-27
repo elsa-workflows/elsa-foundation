@@ -39,16 +39,19 @@ public sealed class PortableNativeExpressionsTests
         const string shellName = "default";
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var token = deadline.Token;
-        var services = new ServiceCollection().AddLogging();
+        using var activationBarrier = new ActivationBarrier(token);
+        var services = new ServiceCollection().AddLogging()
+            .AddSingleton<IShellGenerationActivationParticipant>(activationBarrier);
         services.AddCShells(shells => shells.WithAssemblyContaining<ExpressionProbeFeature>()
             .AddShell(shellName, shell => shell.WithFeature<ExpressionProbeFeature>()));
         await using var provider = services.BuildServiceProvider();
         var registry = provider.GetRequiredService<IShellRegistry>();
+        var settled = Assert.IsAssignableFrom<ISettledShellRegistry>(registry);
         var original = await registry.GetOrActivateAsync(shellName, token);
         var lookedUp = new TaskCompletionSource<IShell?>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var openScope = new ManualResetEventSlim();
         var lookups = 0;
-        var expressions = new PortableNativeExpressions(() => WorkbenchCorePreview.OpenExpressionScope(shellName, GetActiveShell));
+        var expressions = new PortableNativeExpressions(() => WorkbenchCorePreview.OpenExpressionScope(shellName, GetActiveShell, GetSettledShell));
         var evaluation = Task.Run(async () =>
         {
             await using var session = expressions.Open(token);
@@ -72,14 +75,27 @@ public sealed class PortableNativeExpressionsTests
             Assert.Equal(42, await evaluation.WaitAsync(token));
             Assert.Equal(2, lookups);
 
-            var staleLookups = 0;
-            Assert.Throws<NativeExpressionsUnavailableException>(() => WorkbenchCorePreview.OpenExpressionScope(shellName, () =>
+            Assert.Throws<NativeExpressionsUnavailableException>(() => WorkbenchCorePreview.OpenExpressionScope(shellName, () => original, () => original));
+            Assert.Throws<NativeExpressionsUnavailableException>(() => WorkbenchCorePreview.OpenExpressionScope(shellName, () => null, GetSettledShell));
+
+            activationBarrier.PauseNextActivation();
+            var nextReload = Task.Run(() => registry.ReloadAsync(shellName, token), token);
+            try
             {
-                staleLookups++;
-                return original;
-            }));
-            Assert.Equal(2, staleLookups);
-            Assert.Throws<NativeExpressionsUnavailableException>(() => WorkbenchCorePreview.OpenExpressionScope(shellName, () => null));
+                var provisional = await activationBarrier.Entered.WaitAsync(token);
+                Assert.Same(provisional, registry.GetActive(shellName));
+                Assert.Null(settled.GetSettledActive(shellName));
+                Assert.Throws<NativeExpressionsUnavailableException>(() =>
+                    WorkbenchCorePreview.OpenExpressionScope(shellName, () => original, GetSettledShell));
+            }
+            finally
+            {
+                activationBarrier.Release();
+                var next = await nextReload.WaitAsync(token);
+                Assert.Null(next.Error);
+                Assert.NotNull(next.Drain);
+                await next.Drain.WaitAsync(token);
+            }
         }
         finally
         {
@@ -100,6 +116,12 @@ public sealed class PortableNativeExpressionsTests
                 openScope.Wait(token);
             }
             return shell;
+        }
+
+        IShell? GetSettledShell()
+        {
+            Interlocked.Increment(ref lookups);
+            return settled.GetSettledActive(shellName);
         }
     }
 
@@ -284,6 +306,28 @@ public sealed class PortableNativeExpressionsTests
         {
             await Task.Delay(50);
             return JsonSerializer.SerializeToElement(1);
+        }
+    }
+
+    private sealed class ActivationBarrier(CancellationToken token) : IShellGenerationActivationParticipant, IDisposable
+    {
+        private readonly TaskCompletionSource<IShell> _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly ManualResetEventSlim _release = new();
+        private int _pause;
+
+        public Task<IShell> Entered => _entered.Task;
+        public void PauseNextActivation() => Interlocked.Exchange(ref _pause, 1);
+        public void Release() => _release.Set();
+        public void Dispose() => _release.Dispose();
+        public Task PrepareAsync(IShell shell, CancellationToken cancellationToken) => Task.CompletedTask;
+        public void Complete(IShell shell) { }
+        public void Rollback(IShell shell) { }
+
+        public void Commit(IShell shell)
+        {
+            if (Interlocked.Exchange(ref _pause, 0) == 0) return;
+            _entered.SetResult(shell);
+            _release.Wait(token);
         }
     }
 }
