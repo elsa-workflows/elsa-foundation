@@ -259,6 +259,7 @@ export function RunActivitiesTimeline({
   workflowExecutionId,
   activities,
   activitiesDeferred = false,
+  refreshKey,
   hasMoreFromSummary = false,
   selectedActivityExecutionId,
   labelForActivity,
@@ -270,6 +271,7 @@ export function RunActivitiesTimeline({
   workflowExecutionId: string;
   activities: readonly ActivityExecutionStateSummary[];
   activitiesDeferred?: boolean;
+  refreshKey?: string;
   hasMoreFromSummary?: boolean;
   selectedActivityExecutionId?: string | null;
   labelForActivity(execution: ActivityExecutionStateSummary): string;
@@ -453,7 +455,7 @@ export function RunActivitiesTimeline({
     if (!activitiesDeferred) return;
     void loadActivityPage(undefined, true);
     return () => abortRef.current?.abort();
-  }, [activitiesDeferred, loadActivityPage]);
+  }, [activitiesDeferred, loadActivityPage, refreshKey]);
 
   return (
     <section className="wf-run-activities" aria-label="Executed activities">
@@ -487,7 +489,7 @@ export function RunActivitiesTimeline({
             title="Refresh activities"
             onClick={() => {
               onRefresh();
-              if (activitiesDeferred) void loadActivityPage(undefined, true);
+              if (activitiesDeferred && refreshKey === undefined) void loadActivityPage(undefined, true);
             }}
           >
             <RefreshCw size={14} aria-hidden="true" />

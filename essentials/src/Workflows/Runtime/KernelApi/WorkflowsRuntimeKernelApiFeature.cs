@@ -58,6 +58,7 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
             ReplaceService(typeof(IWorkflowInstanceDeletionService), typeof(WorkflowInstanceDeletionService), typeof(KernelWorkflowInstanceDeletionService));
             services.TryAddSingleton<SelectedRunDeletionAvailable>();
             services.TryAddScoped<KernelParkRecovery>();
+            services.AddApiCapabilitySource<KernelParkRecoveryCapabilitySource>();
         }
 
         void ReplaceService(Type service, Type runtimeImplementation, Type kernelImplementation)
