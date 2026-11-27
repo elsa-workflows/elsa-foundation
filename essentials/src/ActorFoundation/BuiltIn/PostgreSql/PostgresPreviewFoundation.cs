@@ -110,7 +110,8 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
     {
         if (directRequests is null || target is not (Contract.Target.Ref or Contract.Target.Start or Contract.Target.Event))
             throw new NotSupportedException("This preview holds requests only with a reply-capable store and its direct requests.");
-        if (authorizeExactOperator is null || !Contract.Kinds.IsCommand(kind))
+        // Route Start and Event targets before classifying exact-reference commands.
+        if (target is not Contract.Target.Ref exact || authorizeExactOperator is null || !Contract.Kinds.IsCommand(kind))
             return directRequests.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken);
 
         ArgumentNullException.ThrowIfNull(scope);
@@ -120,7 +121,7 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
             return ValueTask.FromResult(new Contract.Reply(null, null, Error: "invalid operator request"));
         if (add?.DueAt is not null)
             return ValueTask.FromResult(new Contract.Reply(null, null, Error: "requests cannot set a due time"));
-        if (kind == Contract.Kinds.Recover || target is not Contract.Target.Ref exact || !ingress.Authorizes(scope, exact.Actor, kind))
+        if (kind == Contract.Kinds.Recover || !ingress.Authorizes(scope, exact.Actor, kind))
             return ValueTask.FromResult(new Contract.Reply(null, null, Error: "missing"));
 
         return directRequests.RequestOperatorAsync(scope, exact.Actor, id, add, request,

@@ -225,15 +225,8 @@ internal static class WorkbenchCorePreview
             // Host expressions (JavaScript, Liquid) run on the default shell's portable evaluator, in a scope of that shell.
             var shells = provider.GetRequiredService<IShellRegistry>();
             var shellName = provider.GetRequiredService<IOptions<ShellReadinessOptions>>().Value.DefaultShellName;
-            var expressions = new PortableNativeExpressions(() =>
-            {
-                var shell = shells.GetActive(shellName) ?? throw new NativeExpressionsUnavailableException($"The shell '{shellName}' is not active.");
-                IShellScope scope;
-                try { scope = shell.BeginScope(); }
-                catch (Exception closing) when (closing is ObjectDisposedException or InvalidOperationException)
-                { throw new NativeExpressionsUnavailableException($"The shell '{shellName}' is going away.", closing); }
-                return (scope.ServiceProvider, scope);
-            });
+            var expressions = new PortableNativeExpressions(() => OpenExpressionScope(shellName,
+                () => shells.GetActive(shellName), () => (shells as ISettledShellRegistry)?.GetSettledActive(shellName)));
             var model = new NativeExecutionModel(workflows, new NativeExecutionOptions
             {
                 Scripts = scripts,
@@ -314,6 +307,37 @@ internal static class WorkbenchCorePreview
                 $"{TenantKey} ('{tenant}') and {ReadsTenantKey} ('{readsTenant}') name different tenants, and the Core Preview's " +
                 "Embedded foundation binds one tenant per process. Set one of them, or both to the same tenant.");
         return (tenant ?? readsTenant ?? DefaultTenant, readsTenant ?? tenant);
+    }
+
+    internal static (IServiceProvider Services, IAsyncDisposable Lifetime) OpenExpressionScope(string shellName,
+        Func<IShell?> getActiveShell, Func<IShell?> getSettledShell)
+    {
+        var shell = getActiveShell() ?? throw new NativeExpressionsUnavailableException($"The shell '{shellName}' is not active.");
+        try
+        {
+            return OpenScope(shell);
+        }
+        catch (NativeExpressionsUnavailableException)
+        {
+            // A reload can replace the shell between the lookup and opening its scope.
+            if (getSettledShell() is not { } replacement || replacement.Descriptor.Generation == shell.Descriptor.Generation)
+                throw;
+            return OpenScope(replacement);
+        }
+
+        (IServiceProvider Services, IAsyncDisposable Lifetime) OpenScope(IShell selected)
+        {
+            IShellScope scope;
+            try
+            {
+                scope = selected.BeginScope();
+            }
+            catch (InvalidOperationException closing)
+            {
+                throw new NativeExpressionsUnavailableException($"The shell '{shellName}' is going away.", closing);
+            }
+            return (scope.ServiceProvider, scope);
+        }
     }
 
     /// <summary>Refuses an edge whose base path is not the default shell's HTTP base path (its HttpEndpointOptions).</summary>
