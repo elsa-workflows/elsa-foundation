@@ -75,7 +75,7 @@ internal static partial class SqliteHostLifetimeChecks
             var reads = new GeneratedRootReads(store, cursor, 8, provider: "sqlite");
             var executor = new SqliteArrivalActor(fixture);
             var adapter = new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode(executor.Withholds)), executor,
-                rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true);
+                store.RootSelfIssuer, rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true);
             if (authored)
             {
                 await CheckAuthoredCohortAsync();

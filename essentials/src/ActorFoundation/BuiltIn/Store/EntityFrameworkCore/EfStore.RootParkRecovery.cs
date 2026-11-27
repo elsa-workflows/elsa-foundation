@@ -315,6 +315,10 @@ public sealed partial class EfStore
         return Convert.ToHexString(hash.GetHashAndReset());
     }
 
+    private static bool KeepsQueuedRootCreator(KernelDb db, string actor, IEnumerable<KeptRow> kept) =>
+        db.UsesRootInlinePromotion && kept.Any(row =>
+            row.Scope == 0 && row.KeptBy == (short)ParkKeepReason.Consumed && row.Id == "root:" + actor);
+
     private static async Task<Message?> ReadInlineRetryAsync(KernelDb db, string actor, int partition, IReadOnlyList<KeptRow> kept,
         FoundationSelfIssuer? issuer, CancellationToken token)
     {
@@ -415,7 +419,8 @@ public sealed partial class EfStore
                 fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Residue = park?.Residue ?? false, Rereads = RereadsParkFacts(db), Clearing = park?.Clearing, Cleared = park?.Cleared ?? 0, Page = page,
                     ClearsInPages = db.UsesSqliteRootRuntime || ClearsParkInPages(db), ProtectionRefusals = refusals,
                     RecoverableJobRegistry = job is null ? null : park?.Jobs, KeepsRegisteredJob = job?.KeepsRegistration == true,
-                    RestorableTimers = timers, InlineRetry = recover && fits ?
+                    RestorableTimers = timers, KeepsQueuedCreator = recover && KeepsQueuedRootCreator(db, message.Target.Id, kept),
+                    InlineRetry = recover && fits ?
                         await ReadInlineRetryAsync(db, message.Target.Id, message.Target.Partition, kept, RootSelfIssuer, token) : null };
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }
@@ -501,7 +506,8 @@ public sealed partial class EfStore
                 var read = await ReadPostgresRecoveryRowsAsync(db, Root.Actor, Root.Partition, true, token);
                 kept = read.Kept;
                 if (!read.Fits || facts.Mark != new FoundationParkMark(prior.Revision ?? 0, prior.At ?? 0) ||
-                    KeptSetDigest(kept) != facts.KeptDigest) return false;
+                    KeptSetDigest(kept) != facts.KeptDigest ||
+                    facts.KeepsQueuedCreator != KeepsQueuedRootCreator(db, Root.Actor, kept)) return false;
                 if (facts.InlineRetry != await ReadInlineRetryAsync(db, Root.Actor, Root.Partition, kept, SelfIssuer, token)) return false;
                 if (await ReadRootParkTimersAsync(db, Root.Actor, Root.Partition, SelfIssuer, lockRows: true, token) != facts.RestorableTimers)
                     return false;

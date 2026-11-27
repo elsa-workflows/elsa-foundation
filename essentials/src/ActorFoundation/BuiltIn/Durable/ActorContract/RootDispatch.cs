@@ -274,7 +274,11 @@ internal sealed partial class ActorAdapter
     {
         if (row.Jobs != facts.RecoverableJobRegistry) return false;
         if (roots?.RecoversInlineInitialRoots == true && row is { FoundationNullState: true, Parent: null })
-            return facts.InlineRetry is { } retry && issueSelf is { } issuer && Durable.FoundationInlineRetry.Matches(issuer, row, retry);
+        {
+            if (facts.InlineRetry is { } retry)
+                return issueSelf is { } issuer && Durable.FoundationInlineRetry.Matches(issuer, row, retry);
+            if (!facts.KeepsQueuedCreator) return false;
+        }
         try
         {
             var header = RootHeader(row);

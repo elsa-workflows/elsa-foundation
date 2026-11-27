@@ -86,6 +86,7 @@ public sealed partial class EfStore
             """)).SingleOrDefaultAsync(token);
         if (prior is null || (prior.At is null) != (turn.Prior == InstanceStatus.Running)) return false;
         var kept = turn.Recovered ? await ReadSqliteRecoveryRowsAsync(db, root.Actor, root.Partition, null, token) : [];
+        var keptFacts = kept.Select(row => row.Facts).ToArray();
         var arrived = kept.Where(row => row.Facts.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
         if (turn.Recovered && await ReadRootParkTimersAsync(db, root.Actor, root.Partition, turn.SelfIssuer,
                 lockRows: false, token) != facts.RestorableTimers) return false;
@@ -100,8 +101,9 @@ public sealed partial class EfStore
             PageLength(arrived.Select(row => row.Facts)) != arrived.Length ||
             arrived.Any(row => row.Scope != InboxKey.FoundationOccurrenceScope &&
                 (!db.UsesRootPrivateParkInputs || row.Scope != RootSelfScope)) ||
-            KeptSetDigest(kept.Select(row => row.Facts)) != facts.KeptDigest ||
-            facts.InlineRetry != await ReadInlineRetryAsync(db, root.Actor, root.Partition, kept.Select(row => row.Facts).ToArray(), turn.SelfIssuer, token)))
+            KeptSetDigest(keptFacts) != facts.KeptDigest ||
+            facts.KeepsQueuedCreator != KeepsQueuedRootCreator(db, root.Actor, keptFacts) ||
+            facts.InlineRetry != await ReadInlineRetryAsync(db, root.Actor, root.Partition, keptFacts, turn.SelfIssuer, token)))
             return false;
         if (!await BindRootTimerRearmsAsync(db, root, turn.JournalRevision, turn.SelfIssuer, turn.Rearms, facts.RestorableTimers, token))
             return false;

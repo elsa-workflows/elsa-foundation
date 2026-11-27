@@ -111,6 +111,7 @@ internal static class PostgresShippedFormatChecks
         await store.InstallPreviewRootSchemaAsync(stop);
 
         await RefusalsAsync(connection, options, stop);
+        await CheckQueuedCreatorRecoveryAsync(Open, store, inBatch, stop);
 
         var registry = new WorkflowRegistry()
             // Answers its caller from the start's own turn, then runs a job.
@@ -338,6 +339,62 @@ internal static class PostgresShippedFormatChecks
                 SELECT count(*)::integer AS "Value" FROM "FoundationWorkflowHistory" WHERE "Tenant" = {scope.Tenant} AND "Reference" = {root.Id}
                 """).SingleAsync(stop);
         }
+    }
+
+    private static async Task CheckQueuedCreatorRecoveryAsync(Func<KernelDb> open, EfStore store, bool inBatch, CancellationToken token)
+    {
+        var actor = new QueuedCreatorActor();
+        var scope = EmbeddedTenant.Bind("queued-creator");
+        var foundation = await PostgresPreviewHosting.OpenFoundationAsync(open, actor.Type, cancellationToken: token);
+        var operators = await store.OpenSelectedRootIngressAsync(actor.Type, TimeSpan.FromHours(1),
+            (bound, _) => ReferenceEquals(bound, scope), token, (bound, _) => ReferenceEquals(bound, scope));
+        await using var owner = await PostgresPreviewHosting.StartAsync(open, "queued-creator-owner", actor,
+            reason => throw new InvalidOperationException(reason), new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(20) },
+            token, onFault: null, replies: null, fenceInBatch: inBatch);
+
+        var target = new Contract.Target.Start(new(actor.Type, "ordinary"));
+        async Task<Contract.Admission> StartAsync() =>
+            await foundation.SendAsync(scope, target, "queued-start", Contract.Kinds.Start, cancellationToken: token);
+        var started = await StartAsync();
+        Require(started is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null },
+            "the shipped provider admits the queued creator");
+        var actorRef = started.Actor!.Value;
+        var parked = await WaitForRevisionAsync(1);
+        Require(parked is { Status: InstanceStatus.Faulted, ParkAt: not null, State: null },
+            "the ordinary creator faults before its first state");
+        var selection = (await foundation.GetAsync(scope, actorRef, token))!.Selection;
+        Require(await operators.SendAsync(scope, new Contract.Target.Ref(actorRef), "recover-queued-creator", Contract.Kinds.Recover,
+            JsonSerializer.Serialize(new Contract.OperatorCommand(selection)), cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+            "the exact queued creator Park admits Recover");
+        Require(await WaitForRevisionAsync(2) is { Status: InstanceStatus.Running, ParkAt: null },
+            "the queued creator uses the actor's recovery plan in the shared inline-capable format");
+        await using var db = open();
+        Require(!await db.Messages.AnyAsync(row => row.Target == parked.Actor.Id && row.InboxScope == 0, token) &&
+            await StartAsync() is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var duplicate } && duplicate == actorRef,
+            "queued recovery clears the creator while retaining the original receipt");
+
+        async Task<EfStore.RootImage> WaitForRevisionAsync(long revision)
+        {
+            while (true)
+            {
+                if (await store.ReadFirstRootAsync(scope.Tenant, actorRef.Id, token) is { } row && row.Revision >= revision)
+                    return row;
+                await Task.Delay(20, token);
+            }
+        }
+    }
+
+    private sealed class QueuedCreatorActor : Contract.IActorType
+    {
+        public string Type => "queued-creator-fault";
+        public bool Withholds(Contract.ActorHeader header) => false;
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("The queued fixture faults before committing state.");
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("The queued fixture has no jobs.");
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }
 
     // These fingerprints pin the PostgreSQL definitions revision. A deliberate definition change advances its revision.
