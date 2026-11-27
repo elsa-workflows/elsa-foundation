@@ -295,7 +295,8 @@ public sealed partial class EfStore
             AND child."FoundationReference" = b."Reference" AND child."FoundationTenant" = b."Tenant"
         CROSS JOIN LATERAL (SELECT CASE WHEN left(m."Start", {RootChildNoticePrefix.Length}) = '{RootChildNoticePrefix}'
             THEN substring(m."Start" FROM {RootChildNoticePrefix.Length + 1})::jsonb END AS wire) notice
-        CROSS JOIN LATERAL (SELECT (notice.wire->>'Payload')::jsonb AS body) payload
+        CROSS JOIN LATERAL (SELECT CASE WHEN jsonb_typeof(notice.wire->'Payload') = 'string'
+            THEN (notice.wire->>'Payload')::jsonb END AS body) payload
         CROSS JOIN LATERAL (SELECT 'c' || length(b."Actor") || '_' || b."Actor" || '_' || b."Creation"
             || '#' || child."FoundationTerminalRevision" || '.end' AS handle) canonical
         WHERE m."Target" = OLD."Id" AND m."Partition" = OLD."Partition" AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}

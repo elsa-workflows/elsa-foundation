@@ -218,10 +218,16 @@ internal static class PostgresChildWorkflowChecks
             var handle = CreationProtocol.TerminalNoticeId(exactChild.Id, exactChild.Creation, revision);
             var key = address.Id + "/child/" + FoundationRootCreator.OperationDigest(handle);
             var payload = new FoundationChildNotice(exactChild.Id, InstanceStatus.Finished, null, exactChild.Creation, Final: true);
-            foreach (var (id, body) in new[] { (key + "0", payload), (key, payload with { Final = false }) })
+            (string Id, object Body, string Description)[] malformed =
+            [
+                (key + "0", DurableKeyJson.Write(payload), "a final notice stored under a noncanonical occurrence cannot shrink the registry"),
+                (key, DurableKeyJson.Write(payload with { Final = false }), "a canonical occurrence with a non-final nested notice cannot shrink the registry"),
+                (key, payload, "an object in place of the encoded final notice string cannot shrink the registry")
+            ];
+            foreach (var (id, body, description) in malformed)
             {
                 await witness.CreateSavepointAsync("notice", token);
-                var wire = "!kernel-child-notice/1:" + DurableKeyJson.Write(new { Id = handle, Payload = DurableKeyJson.Write(body), Final = true });
+                var wire = "!kernel-child-notice/1:" + DurableKeyJson.Write(new { Id = handle, Payload = body, Final = true });
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Kind", "Due", "Start", "Sender",
                         "Done", "Seen", "Attempts", "Trial", "JobGeneration")
@@ -239,8 +245,7 @@ internal static class PostgresChildWorkflowChecks
                     error.ConstraintName == "kernel_require_root_checkpoint_writer") { rejected = true; }
                 await witness.RollbackToSavepointAsync("notice", token);
                 await witness.ReleaseSavepointAsync("notice", token);
-                Check(rejected, id == key ? "a canonical occurrence with a non-final nested notice cannot shrink the registry"
-                    : "a final notice stored under a noncanonical occurrence cannot shrink the registry");
+                Check(rejected, description);
             }
             await witness.RollbackAsync(token);
         }
