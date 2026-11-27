@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Run the Core Preview acceptance journeys against owned hosts: a Workbench whose default shell serves its
-publications on the kernel (Elsa:CorePreview:Publications, the shipped PostgreSQL or SQLite format), Studio, and
-a local HTTP stub for the workflows' outbound requests. Every process, container and store is owned and removed."""
+"""Run the Core Preview acceptance journeys against an owned kernel backend, Studio and an HTTP stub.
+The backend is source-built Workbench or a separately staged Nuplane Foundation host. All stores are disposable."""
 from __future__ import annotations
 
 import argparse
@@ -55,6 +54,12 @@ DATABASE = 'ux_core_preview'
 # The Workbench logs one of these once the default shell's publications are served on the kernel, before its node runs.
 SERVING_LINE = 'serves the publications of shell default on the kernel'
 SERVING_FAILURES = ('could not serve the publications of shell', 'does not compose the WorkflowsRuntimeKernel feature')
+FOUNDATION_HOST = 'Elsa.Foundation.Host.dll'
+FOUNDATION_KERNEL_FEATURE = 'CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting'
+KERNEL_PACKAGES = (
+    'Elsa.ActorFoundation.Contracts', 'Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore',
+    'Elsa.Workflows.Runtime.KernelApi', 'Elsa.Workflows.Runtime.KernelHost', 'Elsa.Workflows.Runtime.KernelHosting',
+)
 
 
 def inventory(journeys=None):
@@ -71,6 +76,25 @@ def kernel_environment(connection=None, *, sqlite_path=None):
     if sqlite_path is not None:
         return dict(switches, Elsa__CorePreview__Provider='SQLite', Elsa__CorePreview__SqlitePath=str(sqlite_path))
     return dict(switches, ConnectionStrings__KernelCorePreview=connection)
+
+
+def installed_environment(runtime_path, connection=None, *, sqlite_path=None):
+    path_settings = {'SqlitePath': str(sqlite_path)} if sqlite_path is not None else {'PostgresConnectionString': connection}
+    kernel_settings = dict(path_settings, Provider='SQLite' if sqlite_path is not None else 'PostgreSQL', Tenant=TENANT)
+    return dict({f'{FOUNDATION_KERNEL_FEATURE}__{key}': value for key, value in kernel_settings.items()},
+                ConnectionStrings__Elsa=f'Data Source={runtime_path}')
+
+
+def installed_packages(backend, provider, log):
+    provider_package = 'Elsa.ActorFoundation.BuiltIn.' + ('Sqlite' if provider == 'sqlite' else 'PostgreSql')
+    hashes = {}
+    log_text = log.read_text(errors='replace')
+    for package in (*KERNEL_PACKAGES, provider_package):
+        installed = list((backend / '.nuplane/packages').glob(f'*/{package}/*/lib/net10.0/*.dll'))
+        if len(installed) != 1 or f'Loaded package {package}@{installed[0].parents[2].name} ' not in log_text:
+            raise ValueError(f'The Foundation host did not install and load exactly one {package} assembly')
+        hashes[package] = hashlib.sha256(installed[0].read_bytes()).hexdigest()
+    return hashes
 
 
 def sqlite_shipped_markers():
@@ -261,7 +285,7 @@ class Stub:
 def overlay(backend, studio_url):
     """Local origin routing only, in the owned private copy: the kernel's switches come from the environment."""
     settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
-    settings['Cors']['AllowedOrigins'] = [studio_url]
+    settings.setdefault('Cors', {})['AllowedOrigins'] = [studio_url]
     (backend / 'appsettings.json').write_text(json.dumps(settings))
     shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))
     shells['CShells']['Shells']['default']['Features']['FoundationIdentityAspNetCoreIdentity']['AllowedReturnUrlOrigins'] = [studio_url]
@@ -303,12 +327,13 @@ def verdict(report, artifacts, journeys=None):
     return len(rows)
 
 
-def run(output, journey=None, provider='postgres'):
+def run(output, journey=None, provider='postgres', installed_foundation_host=None):
     output.mkdir(parents=True, exist_ok=False)
     sha, dirty = source_state(ROOT)
     selected = [journey] if journey else None
     provider_name = 'SQLite' if provider == 'sqlite' else 'PostgreSQL'
-    report = {'sourceSha': sha, 'headSha': os.environ.get('UX_PR_HEAD_SHA', sha), 'dirty': bool(dirty), 'kind': 'composed-source',
+    report = {'sourceSha': sha, 'headSha': os.environ.get('UX_PR_HEAD_SHA', sha), 'dirty': bool(dirty),
+              'kind': 'installed-foundation-backend' if installed_foundation_host else 'composed-source',
               'suite': SUITE, 'project': PROJECT, 'journeys': sorted(title for _, title in inventory(selected)),
               'sharedHostHelperSha256': hashlib.sha256((ROOT / 'tools/ux-acceptance/run.py').read_bytes()).hexdigest(),
               'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'status': 'failed', 'stage': 'build',
@@ -321,14 +346,21 @@ def run(output, journey=None, provider='postgres'):
         backend_project = ROOT / 'server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
         studio_project = ROOT / 'studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
         build = ['-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '-p:BuildInParallel=false', '/nr:false']
-        command(['dotnet', 'build', str(backend_project), *build], output / 'backend-build.log')
+        if installed_foundation_host:
+            binary = installed_foundation_host / FOUNDATION_HOST
+            report['foundationHostSha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
+        else:
+            command(['dotnet', 'build', str(backend_project), *build], output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'studio')
         command(['dotnet', 'build', str(studio_project), *build], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-core-preview-') as temporary:
             data = Path(temporary)
             report['ownedRoot'] = str(data)
-            backend, studio = data / 'workbench', data / 'studio'
-            prepare_host(backend_project, backend)
+            backend, studio = data / 'backend', data / 'studio'
+            if installed_foundation_host:
+                _base.copy_host(installed_foundation_host, backend, installed_foundation_host)
+            else:
+                prepare_host(backend_project, backend)
             prepare_host(studio_project, studio)
             backend_url, studio_url = f'http://localhost:{free_port()}', f'http://localhost:{free_port()}'
             overlay(backend, studio_url)
@@ -344,19 +376,23 @@ def run(output, journey=None, provider='postgres'):
                 store = nullcontext()
                 report['sqlite'] = {'database': sqlite_path.name, 'expectedMarkers': sqlite_shipped_markers()}
             with store as database, Stub() as stub:
-                # The store is empty: the Workbench installs the shipped format itself before its node starts.
+                connection = None
                 if sqlite_path is None:
                     report['postgres'] = {key: database[key] for key in ('container', 'image', 'database')}
-                    kernel = kernel_environment(database['connection'])
+                    connection = database['connection']
+                if installed_foundation_host:
+                    kernel = installed_environment(data / 'runtime.sqlite', connection, sqlite_path=sqlite_path)
                 else:
-                    kernel = kernel_environment(sqlite_path=sqlite_path)
+                    kernel = kernel_environment(connection, sqlite_path=sqlite_path)
                 report.update(stage='host-start', backendUrl=backend_url, studioUrl=studio_url, stubUrl=stub.url)
                 backend_log = output / 'backend.log'
-                with host(backend, 'Elsa.Workbench.Host.dll', backend_url, '/health/ready', backend_log,
+                backend_dll = FOUNDATION_HOST if installed_foundation_host else 'Elsa.Workbench.Host.dll'
+                with host(backend, backend_dll, backend_url, '/health/ready', backend_log,
                           dict(env, **kernel)) as backend_process:
                     processes['backend'] = backend_process
                     report['ownedPids']['backend'] = backend_process.pid
-                    report['kernelServing'] = wait_for_kernel_serving(backend_log, backend_process)
+                    if not installed_foundation_host:
+                        report['kernelServing'] = wait_for_kernel_serving(backend_log, backend_process)
                     with host(studio, 'Elsa.Studio.Workbench.Host.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
                               dict(env, Studio__BackendBaseUrl=backend_url)) as studio_process:
                         processes['studio'] = studio_process
@@ -370,6 +406,10 @@ def run(output, journey=None, provider='postgres'):
                             browser_command.extend(['--grep', r'(?:^|\s)' + re.escape(journey) + '$'])
                         command(browser_command, output / 'journeys.log', cwd=ROOT / 'studio', env=browser_env)
                 report['stubRequests'] = stub.recorded()
+                if installed_foundation_host:
+                    if processes['backend'].returncode != 0:
+                        raise ValueError('The installed Foundation host did not stop cleanly')
+                    report['installedPackages'] = installed_packages(backend, provider, backend_log)
                 if selected is None or 'kernel HTTP response opens the committed run' in selected:
                     calls = [item for item in report['stubRequests'] if item['path'] == '/core-preview/k10-order']
                     if calls != [{'method': 'POST', 'path': '/core-preview/k10-order', 'body': 'kernel-outbound'}] * 2:
@@ -380,7 +420,7 @@ def run(output, journey=None, provider='postgres'):
                     raise ValueError('The owned PostgreSQL container outlived the run')
             else:
                 if processes['backend'].returncode != 0:
-                    raise ValueError('The SQLite Workbench did not stop cleanly before checking the markers')
+                    raise ValueError('The SQLite backend did not stop cleanly before checking the markers')
                 report['sqlite']['markers'] = sqlite_markers(sqlite_path, report['sqlite']['expectedMarkers'])
             report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, selected)
         report['hostExitCodes'] = {key: process.returncode for key, process in processes.items()}
@@ -405,9 +445,10 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
     parser.add_argument('--provider', choices=['postgres', 'sqlite'], default='postgres', help='Owned kernel store (default: postgres)')
     parser.add_argument('--journey', choices=sorted(JOURNEYS), help='Run one journey; the report certifies only that journey')
+    parser.add_argument('--installed-foundation-host', type=Path, help='Staged Foundation host output with Nuplane feed and shell configuration')
     args = parser.parse_args()
 
     def terminate(_signum, _frame):
         raise InterruptedError('Acceptance interrupted; owned resources will be stopped')
     signal.signal(signal.SIGTERM, terminate)
-    run(args.output.resolve(), args.journey, args.provider)
+    run(args.output.resolve(), args.journey, args.provider, args.installed_foundation_host)
