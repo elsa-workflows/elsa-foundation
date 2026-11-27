@@ -91,6 +91,10 @@ if (args is ["kernel-event-receipts", var receiptProvider and ("postgres" or "sq
     return await KernelAuthoredEventChecks.RunStartsAsync(receiptProvider, receiptFence == "in-batch", retainReceipts: true);
 if (args is ["kernel-event-scan", var scanProvider and ("postgres" or "sqlite"), var scanFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunStartsAsync(scanProvider, scanFence == "in-batch", retainReceipts: true, orderedScan: true);
+if (args is ["kernel-public-event-replies", var replyEventProvider and ("postgres" or "sqlite"), var replyEventFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPublicEventRepliesAsync(replyEventProvider, replyEventFence == "in-batch");
+if (args is ["kernel-public-event-remote-reply", var remoteEventFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunRemotePublicEventReplyAsync(remoteEventFence == "in-batch");
 if (args is ["kernel-public-event-starts", var publicEventProvider and ("postgres" or "sqlite"), var publicEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPublicStartsAsync(publicEventProvider, publicEventFence == "in-batch");
 if (args is ["kernel-public-event-host", var eventHostProvider and ("postgres" or "sqlite"),

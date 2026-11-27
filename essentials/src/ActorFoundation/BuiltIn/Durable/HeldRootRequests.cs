@@ -23,6 +23,7 @@ internal interface IHeldRootAdmission
     Task<Contract.Admission?> AdmitKeyAsync(HeldRootRequest request, Contract.Target.Key key, string kind, string? payload,
         CancellationToken token) => throw new NotSupportedException("This held reply edge has no caller-key admission.");
     bool SupportsEvents => false;
+    bool SupportsPublicEvents => false;
     Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>
         throw new NotSupportedException("This held reply edge has no event admission.");
     ValueTask<Contract.ActorStatus?> ReadStatusAsync(string tenant, string reference, CancellationToken token);
@@ -114,8 +115,8 @@ internal sealed class HeldRootRequests : IReplyTransport
         ArgumentNullException.ThrowIfNull(request);
         stop.ThrowIfCancellationRequested();
         if (add?.DueAt is not null) return new(null, null, Error: "requests cannot set a due time");
-        if (request.Ambient is not null || request.Inline)
-            throw new NotSupportedException("The held reply edge runs its actor on a separate owner.");
+        if (request.Inline || request.Ambient is not null && (target is not Contract.Target.Event || !admission.SupportsPublicEvents))
+            throw new NotSupportedException("This held reply edge supports Ambient only for public Event requests and cannot run an inline turn.");
         StartSpec? spec = null;
         switch (target)
         {
@@ -227,7 +228,7 @@ internal sealed class HeldRootRequests : IReplyTransport
         if (untilDeadline <= uint.MaxValue - 1)
             budget.CancelAfter(TimeSpan.FromMilliseconds((double)untilDeadline));
         var token = budget.Token;
-        var waiting = requests.OpenBound(id, request.Deadline, scope.Tenant, null);
+        var waiting = requests.OpenBound(id, request.Deadline, scope.Tenant, request.Ambient);
         var caller = new HeldRootRequest(scope.Tenant, node, waiting, request.ReleaseBeforeCommit, keepFor);
         try
         {

@@ -369,7 +369,7 @@ public static partial class PostgresPreviewHosting
         Action<string> endProcess, LoopOptions? options, CancellationToken cancellationToken,
         Action<Exception>? onFault, IReplyTransport? replies, bool? fenceInBatch = null,
         Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null,
-        ProtectChildBirthsAsync? protectChildBirths = null, InlineRootRequests? inlineStarts = null)
+        ProtectChildBirthsAsync? protectChildBirths = null, InlineRootRequests? inlineStarts = null, PostgresDirectRequests? localRequests = null)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -379,7 +379,10 @@ public static partial class PostgresPreviewHosting
             throw new ArgumentException("Invalid PostgreSQL node name.", nameof(node));
         PostgresRootAdmission.RequireActorType(actor.Type);
         (replies as PostgresDirectRequests)?.RequireRootStartProtectionBinding(create, actor.Type);
-        (replies as PostgresDirectRequests)?.RequirePublicEventBinding(create, actor.Type);
+        var requestEdge = replies as PostgresDirectRequests ?? localRequests;
+        requestEdge?.RequirePublicEventBinding(create, actor.Type);
+        if (requestEdge is not null && requestEdge.Node != node)
+            throw new ArgumentException("The local reply registry must belong to the owner node.", nameof(replies));
         if (auxiliaryActor is not null) ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
 
         options ??= new LoopOptions();
@@ -431,7 +434,8 @@ public static partial class PostgresPreviewHosting
         var watched = watchdog.Watch(store);
         var adapter = new ActorAdapter(store.WorkerHeaders(scope), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
             rootTimedJobClock: store.RootTimedJobSettlementEnabled ? store.ReadRootTimedJobPublicationTimeAsync : null,
-            rootHeldReplies: replies is not null, retentionWindow: retentionWindow, rootTerminalOutputLimit: terminalOutputLimit, auxiliaryActor: auxiliaryActor);
+            rootHeldReplies: replies is not null, retentionWindow: retentionWindow, rootTerminalOutputLimit: terminalOutputLimit, auxiliaryActor: auxiliaryActor,
+            local: publicEventMaintenance && requestEdge is not null ? (requestEdge.Pending, node) : null);
         // A store error a drain retried is reported as a loop error of the node made below: counted, and reported once per
         // distinct error per window, so a drain the deadline kills shows why it made no progress.
         RuntimeNode? reporter = null;
