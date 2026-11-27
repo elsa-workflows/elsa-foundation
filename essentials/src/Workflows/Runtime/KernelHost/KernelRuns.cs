@@ -53,6 +53,20 @@ public sealed class KernelRuns
         return await reads.TailAsync(Tenant, actor, from, cancellationToken);
     }
 
+    /// <summary>Whether this host's selected foundation supports sequenced journal reads.</summary>
+    public async ValueTask<bool> SupportsSequencedJournalAsync(CancellationToken cancellationToken = default) =>
+        await _reads(cancellationToken) is IActorSequencedJournalReads { SupportsSequencedJournal: true };
+
+    /// <summary>Reads a bounded retained sequence window in the host's bound tenant.</summary>
+    public async ValueTask<ActorSequencedJournalPage?> ReadSequencedJournalAsync(ActorRef actor, long afterSequence,
+        long? upperSequence, int limit, CancellationToken cancellationToken = default)
+    {
+        var reads = await _reads(cancellationToken);
+        return reads is IActorSequencedJournalReads { SupportsSequencedJournal: true } sequenced
+            ? await sequenced.ReadSequencedJournalAsync(Tenant, actor, afterSequence, upperSequence, limit, cancellationToken)
+            : throw new NotSupportedException("The configured foundation does not expose a sequenced journal.");
+    }
+
     /// <summary>
     /// The workflow runs of the host's tenant, one page after another until the last, filtered by definition when one is
     /// given. Each is the actor's view and what its header says about the run (<see cref="Kernel.WorkflowActor.WorkflowActor.DescribeRun"/>).

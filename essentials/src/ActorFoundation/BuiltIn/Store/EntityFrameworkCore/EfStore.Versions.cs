@@ -60,6 +60,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootTerminalOutputQualification => new(3, 112, 1);
     internal static StoreFormat RootS6TerminalOutputQualification => new(3, 113, 1);
     internal static StoreFormat SqliteRootChildrenQualification => new(3, 114, 1);
+    internal static StoreFormat RootSequencedJournalQualification => new(3, 115, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -104,7 +105,8 @@ internal enum RootCapabilities
     DueBacklog = 1 << 21,
     TimerRearm = 1 << 22,
     Children = 1 << 23,
-    TerminalOutput = 1 << 24
+    TerminalOutput = 1 << 24,
+    SequencedJournal = 1 << 25
 }
 
 internal static class RootProfiles
@@ -134,7 +136,9 @@ internal static class RootProfiles
     /// The growth rule: each widening of this set takes a new protocol number, and a database installed with an older set
     /// is refused. Before GA a preview database is recreated; after GA a widening migrates, with a rollback floor (K12).
     /// </summary>
-    internal const RootCapabilities Shipped = TimerRearmQualification | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput;
+    private const RootCapabilities Shipped29 = TimerRearmQualification | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput;
+    internal const RootCapabilities Shipped = Shipped29;
+    internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
 
     internal const RootCapabilities ParkRecoveryComposition = ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
     internal const RootCapabilities SelfTimedParkQualification = ParkRecoveryComposition | RootCapabilities.SelfProtocol | RootCapabilities.Timers;
@@ -197,7 +201,8 @@ internal static class RootProfiles
         [RootCapabilities.ParkArrivals] = RootCapabilities.ParkInspection,
         [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol,
         [RootCapabilities.TimerRearm] = ParkCompositionBase | RootCapabilities.Timers | RootCapabilities.ParkRecovery,
-        [RootCapabilities.TerminalOutput] = RootCapabilities.TerminalSelection | RootCapabilities.Retention
+        [RootCapabilities.TerminalOutput] = RootCapabilities.TerminalSelection | RootCapabilities.Retention,
+        [RootCapabilities.SequencedJournal] = RootCapabilities.Retention
     };
 
     // The prerequisites of the set's members that the set lacks. None means the set is closed.
@@ -384,6 +389,8 @@ internal static class StoreDefinitionsRevision
     private const int PostgreSqlChildrenRevision = 10;
     private const int SqliteRevision = 12;
     private const int SqliteChildrenRevision = 13;
+    private const int PostgreSqlSequencedJournalRevision = 10;
+    private const int SqliteSequencedJournalRevision = 14;
     private const int SqliteParkRecoverRevision = 5;
     private const int PostgreSqlDueBacklogRevision = 5;
     private const int SqliteDueBacklogRevision = 10;
@@ -410,6 +417,8 @@ internal static class StoreDefinitionsRevision
                 _ when db.RequiredFormat == StoreFormat.RootDueBacklogQualification => sqlite ? SqliteDueBacklogRevision : PostgreSqlDueBacklogRevision,
                 _ when db.RequiredFormat == StoreFormat.PostgresRootChildrenQualification => PostgreSqlChildrenRevision,
                 _ when db.RequiredFormat == StoreFormat.SqliteRootChildrenQualification => SqliteChildrenRevision,
+                _ when db.RequiredFormat == StoreFormat.RootSequencedJournalQualification =>
+                    sqlite ? SqliteSequencedJournalRevision : PostgreSqlSequencedJournalRevision,
                 _ when db.RequiredFormat == StoreFormat.RootTerminalOutputQualification => sqlite ? SqliteTerminalOutputRevision : PostgreSqlTerminalOutputRevision,
                 _ when db.RequiredFormat == StoreFormat.RootS6TerminalOutputQualification => sqlite ? SqliteS6TerminalOutputRevision : PostgreSqlS6TerminalOutputRevision,
                 _ => sqlite ? SqliteRevision : PostgreSqlRevision

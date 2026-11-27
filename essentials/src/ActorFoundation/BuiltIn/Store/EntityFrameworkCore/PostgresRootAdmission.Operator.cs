@@ -325,14 +325,17 @@ internal sealed partial class PostgresRootAdmission
         IN ACCESS SHARE MODE
         """;
 
-    internal static Task PinRootNamespaceAsync(KernelDb db, CancellationToken token) => PinRootNamespaceAsync(db, false, token);
+    internal static Task PinRootNamespaceAsync(KernelDb db, CancellationToken token, bool writesJournal = false) =>
+        PinRootNamespaceAsync(db, false, token, writesJournal);
 
-    private static async Task<PinnedRootSource?> PinRootNamespaceAsync(KernelDb db, bool loadIssuer, CancellationToken token)
+    private static async Task<PinnedRootSource?> PinRootNamespaceAsync(KernelDb db, bool loadIssuer, CancellationToken token,
+        bool writesJournal = false)
     {
         EfStore.RefuseSqliteShippedRuntime(db);
         try
         {
-            if (db.UsesRootParkOpening) return await PinRootParkSourcesAsync(db, loadIssuer, token);
+            if (db.UsesRootParkOpening)
+                return await PinRootParkSourcesAsync(db, loadIssuer, writesJournal && db.UsesRootSequencedJournal, token);
             await PinRootSourceAsync(db, token);
             return null;
         }
@@ -379,7 +382,8 @@ internal sealed partial class PostgresRootAdmission
             throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");
     }
 
-    private static Task<PinnedRootSource> PinRootParkSourcesAsync(KernelDb db, bool loadIssuer, CancellationToken token)
+    private static Task<PinnedRootSource> PinRootParkSourcesAsync(KernelDb db, bool loadIssuer, bool pinSequencedJournal,
+        CancellationToken token)
     {
         // Every Park set that admits operator commands, Recover or a composed one, pins their receipts too.
         var receipts = db.UsesRootOperatorProtocol;
@@ -397,7 +401,8 @@ internal sealed partial class PostgresRootAdmission
             WHERE v."Id" = $1
             """);
         pin.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
-        var validate = new NpgsqlBatchCommand("""
+        var journalReady = pinSequencedJournal ? ", " + EfStore.PostgresSequencedJournalReady("marker.oid") : "";
+        var validate = new NpgsqlBatchCommand($$"""
             SELECT marker.oid, marker.relnamespace, (
                 SELECT count(*) = $1
                 FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
@@ -407,7 +412,7 @@ internal sealed partial class PostgresRootAdmission
                 JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name) AND c.relkind = 'r'
                     AND c.relnamespace = marker.relnamespace
                 WHERE ($2 OR required.name <> '"FoundationOperatorReceipts"')
-                    AND ($3 OR required.name <> '"FoundationRootChildCascades"'))
+                    AND ($3 OR required.name <> '"FoundationRootChildCascades"')){{journalReady}}
             FROM pg_catalog.pg_class marker WHERE marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
             """);
         validate.Parameters.Add(new NpgsqlParameter<int> { TypedValue = (receipts ? 14 : 13) + (childLedger ? 1 : 0) });
@@ -416,7 +421,12 @@ internal sealed partial class PostgresRootAdmission
 
         // Resolve lock targets after setting the local search path. The batch contains only reads and locks.
         // Before sending any business SQL, confirm the locked relations belong to the same physical marker.
-        List<NpgsqlBatchCommand> commands = [pin, new(lockTables), validate];
+        List<NpgsqlBatchCommand> commands = [pin, new(lockTables)];
+        // Keep trigger state stable until the fenced write commits. ROW EXCLUSIVE permits other
+        // writers but conflicts with ALTER TABLE ... ENABLE/DISABLE TRIGGER.
+        if (pinSequencedJournal)
+            commands.Add(new("""LOCK TABLE "Journal", "FoundationSequencedJournal" IN ROW EXCLUSIVE MODE"""));
+        commands.Add(validate);
         if (loadIssuer) commands.Add(new("""SELECT issuer."Key", issuer."Partitions", marker.oid """ + RootIssuerSource));
         return ReadGuardedAdmissionAsync<PinnedRootSource>(db, commands, async (reader, marker, ct) =>
         {
@@ -428,6 +438,8 @@ internal sealed partial class PostgresRootAdmission
                 throw new StoreFormatException(childLedger
                     ? "The child profile requires its source tables in the marker schema."
                     : "Park requires the source tables in the marker schema.");
+            if (pinSequencedJournal && !reader.GetBoolean(3))
+                throw new StoreFormatException("The installed sequenced journal projection is incomplete.");
             if (!loadIssuer) return new(marker, schema, null);
             if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct))
                 throw new StoreFormatException(RootIssuerMissing);
