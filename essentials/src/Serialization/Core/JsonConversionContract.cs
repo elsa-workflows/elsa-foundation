@@ -165,7 +165,10 @@ public sealed class JsonConversionContract
         if (contract.memberConverter is null && value.ValueKind == JsonValueKind.String
             && (Nullable.GetUnderlyingType(type) ?? type) is { IsEnum: true } enumType
             && enumType.GetCustomAttribute<JsonConverterAttribute>(inherit: false) is null)
+        {
+            _ = Naming(contract.namingPolicy); // Invalid selections must still refuse, whatever the value's JSON kind.
             return ReadEnumName(value.GetString()!, enumType);
+        }
         var operation = new Operation();
         foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, contract, operation)) report?.Invoke(diagnostic);
         return value.Deserialize(type, operation.GetOptions(contract));

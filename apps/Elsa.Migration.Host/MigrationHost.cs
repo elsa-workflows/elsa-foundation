@@ -77,7 +77,7 @@ public static class MigrationHost
         // The shell runs its own ValidateOnStart checks as it activates; CShells runs none. Registered before CShells.
         services.AddShellStartupValidation();
         // CShells activates a shell without a listed feature it can't find; this host refuses it instead, naming the feature.
-        services.AddSingleton(new HostConfiguration(configuration));
+        services.AddSingleton(new RootConfiguration(configuration));
         services.AddShellInitializer<ComposedFeaturesCheck>(LifecyclePhase.Prepare, ComposedFeaturesCheck.PrepareOrder);
 
         // Browser access for the repository's Studio host. Content-Disposition carries an exported artifact's download
@@ -134,7 +134,7 @@ public static class MigrationHost
     }
 
     /// <summary>
-    /// Creates the folder of the SQLite store <c>ConnectionStrings:Elsa</c> names when it is missing: nothing in the persistence
+    /// Creates the folder of the SQLite file (<c>.db</c>, <c>.sqlite</c>, <c>.sqlite3</c>) <c>ConnectionStrings:Elsa</c> names when it is missing: nothing in the persistence
     /// code creates it. A relative data source resolves against the working directory, as SQLite resolves it.
     /// </summary>
     private static void PrepareLocalFolders(IConfiguration configuration)
@@ -154,12 +154,16 @@ public static class MigrationHost
         var parts = new DbConnectionStringBuilder { ConnectionString = connectionString };
         foreach (var key in new[] { "Data Source", "DataSource", "Filename" })
         {
-            if (parts.TryGetValue(key, out var value) && value is string path && !string.IsNullOrWhiteSpace(path) && path != ":memory:")
+            if (parts.TryGetValue(key, out var value) && value is string path && IsSqliteFile(path))
                 return Path.GetFullPath(path);
         }
 
         return null;
     }
+
+    /// <summary>A SQLite database file; another engine's data source (a server name, for example) is not a local path.</summary>
+    private static bool IsSqliteFile(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() is ".db" or ".sqlite" or ".sqlite3";
 
     private static void LogPaths(WebApplication app)
     {

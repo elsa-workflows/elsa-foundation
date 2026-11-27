@@ -10,8 +10,9 @@ namespace Elsa.Migration.Host.Tests.Support;
 /// One in-process run of the migration host (spec 1236 R-5): <c>MigrationHost.CreateBuilder</c>, a test server, then
 /// <c>MigrationHost.Build</c>, in Development, on its own temporary content root, data folder and migrated folder. The
 /// content root holds copies of the host's committed settings files only, so an engineer's git-ignored
-/// <c>shells.Local.json</c> in the host project never reaches a test. User secrets still can (the host adds them through
-/// its assembly's <c>UserSecretsId</c>); every setting a test relies on is a command-line override, which wins over them. Each setting override goes in as a command-line argument, the highest configuration source.
+/// <c>shells.Local.json</c> in the host project never reaches a test. User secrets for the host's <c>UserSecretsId</c> still
+/// do (the host adds them through its assembly): the folders, store, locks and timeout below are command-line overrides and
+/// win over them, but a secret that changes the composition or the seeded administrator changes what the tests run against. Each setting override goes in as a command-line argument, the highest configuration source.
 /// </summary>
 internal sealed class InProcessRun : IAsyncDisposable
 {
@@ -42,7 +43,7 @@ internal sealed class InProcessRun : IAsyncDisposable
         Directory.CreateDirectory(Path.Combine(migrated, "activities"));
         if (withSample)
         {
-            foreach (var file in Directory.EnumerateFiles(Path.Combine(HostPaths.ProjectFolder, "migrated", "workflows"), "*.json"))
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(ProjectPaths.ProjectFolder, "migrated", "workflows"), "*.json"))
                 File.Copy(file, Path.Combine(migrated, "workflows", Path.GetFileName(file)));
         }
 
@@ -69,19 +70,21 @@ internal sealed class InProcessRun : IAsyncDisposable
         var args = new List<string> { "--environment=Development", $"--contentRoot={CommittedContentRoot(folder.Root)}" };
         args.AddRange(all.Select(setting => $"--{setting.Key}={setting.Value}"));
 
-        var builder = MigrationHost.CreateBuilder([.. args]);
-        builder.WebHost.UseTestServer();
         var logs = new CapturingLoggerProvider();
-        builder.Logging.AddProvider(logs);
-
-        var app = MigrationHost.Build(builder);
+        WebApplication? app = null;
         try
         {
+            var builder = MigrationHost.CreateBuilder([.. args]);
+            builder.WebHost.UseTestServer();
+            builder.Logging.AddProvider(logs);
+            app = MigrationHost.Build(builder);
             await app.StartAsync();
         }
         catch
         {
-            await app.DisposeAsync();
+            if (app is not null)
+                await app.DisposeAsync();
+            DeleteRoot(folder.Root);
             throw;
         }
 
@@ -94,7 +97,7 @@ internal sealed class InProcessRun : IAsyncDisposable
         var contentRoot = Path.Combine(root, "content");
         Directory.CreateDirectory(contentRoot);
         foreach (var file in new[] { "shells.json", "appsettings.json", "appsettings.Development.json" })
-            File.Copy(Path.Combine(HostPaths.ProjectFolder, file), Path.Combine(contentRoot, file), overwrite: true);
+            File.Copy(Path.Combine(ProjectPaths.ProjectFolder, file), Path.Combine(contentRoot, file), overwrite: true);
         return contentRoot;
     }
 
@@ -147,9 +150,15 @@ internal sealed class InProcessRun : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         Client.Dispose();
-        await App.StopAsync();
-        await App.DisposeAsync();
-        DeleteRoot(Root);
+        try
+        {
+            await App.StopAsync();
+            await App.DisposeAsync();
+        }
+        finally
+        {
+            DeleteRoot(Root);
+        }
     }
 }
 
@@ -186,7 +195,7 @@ internal sealed class CapturingLoggerProvider : ILoggerProvider
 }
 
 /// <summary>Where the host project and the repository are, found from the test's output folder.</summary>
-internal static class HostPaths
+internal static class ProjectPaths
 {
     public static string RepositoryRoot { get; } = FindRepositoryRoot();
 

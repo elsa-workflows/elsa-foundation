@@ -57,7 +57,7 @@ public sealed class CompositionTests
     [Fact]
     public void The_host_closure_holds_no_Elsa_3_package_or_project()
     {
-        var assetsFile = Path.Combine(HostPaths.ProjectFolder, "obj", "project.assets.json");
+        var assetsFile = Path.Combine(ProjectPaths.ProjectFolder, "obj", "project.assets.json");
         Assert.True(File.Exists(assetsFile), $"'{assetsFile}' is missing; restore the host first.");
         using var assets = JsonDocument.Parse(File.ReadAllText(assetsFile));
 
@@ -84,14 +84,14 @@ public sealed class CompositionTests
 
     private static HashSet<string> ComposedFeatures()
     {
-        using var shells = JsonDocument.Parse(File.ReadAllText(Path.Combine(HostPaths.ProjectFolder, "shells.json")));
+        using var shells = JsonDocument.Parse(File.ReadAllText(Path.Combine(ProjectPaths.ProjectFolder, "shells.json")));
         return shells.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("default").GetProperty("Features")
             .EnumerateObject().Select(feature => feature.Name).ToHashSet(StringComparer.Ordinal);
     }
 
     private static Dictionary<string, string> Reasons()
     {
-        using var reasons = JsonDocument.Parse(File.ReadAllText(Path.Combine(HostPaths.ProjectFolder, "composition-reasons.json")));
+        using var reasons = JsonDocument.Parse(File.ReadAllText(Path.Combine(ProjectPaths.ProjectFolder, "composition-reasons.json")));
         return reasons.RootElement.EnumerateObject().ToDictionary(reason => reason.Name, reason => reason.Value.GetString() ?? "", StringComparer.Ordinal);
     }
 

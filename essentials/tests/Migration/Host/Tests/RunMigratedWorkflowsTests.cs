@@ -13,7 +13,7 @@ namespace Elsa.Migration.Host.Tests;
 /// Spec 1236 US1 (run my migrated workflows), in process: each test starts the host on a temporary data folder and migrated
 /// folder. The runs share no state, but they start one at a time to keep the machine's load down.
 /// </summary>
-[Collection(HostRunsCollection.Name)]
+[Collection(SerialRunsCollection.Name)]
 public sealed class RunMigratedWorkflowsTests
 {
     [Fact]
@@ -60,6 +60,7 @@ public sealed class RunMigratedWorkflowsTests
         try
         {
             var builder = MigrationHost.CreateBuilder(["--environment=Development", $"--contentRoot={InProcessRun.CommittedContentRoot(root)}"]);
+            using var configuration = (IDisposable)builder.Configuration;
 
             Assert.Equal("Balanced", builder.Configuration[modeKey]);
             Assert.Equal("50", builder.Configuration["CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:MaxActivitiesPerCommit"]);
@@ -116,7 +117,7 @@ public sealed class RunMigratedWorkflowsTests
     [Fact]
     public void The_sample_workflow_names_the_catalog_versions_of_the_activities_it_uses()
     {
-        var sample = File.ReadAllText(Path.Combine(HostPaths.ProjectFolder, "migrated", "workflows", "hello.json"));
+        var sample = File.ReadAllText(Path.Combine(ProjectPaths.ProjectFolder, "migrated", "workflows", "hello.json"));
 
         Assert.Contains(CatalogIds.VersionIdOf(typeof(Sequence)), sample, StringComparison.Ordinal);
         Assert.Contains(CatalogIds.VersionIdOf(typeof(HttpEndpoint)), sample, StringComparison.Ordinal);
@@ -235,7 +236,7 @@ public sealed class RunMigratedWorkflowsTests
 
 /// <summary>Host runs start one at a time.</summary>
 [CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class HostRunsCollection
+public sealed class SerialRunsCollection
 {
     public const string Name = "Migration host runs";
 }

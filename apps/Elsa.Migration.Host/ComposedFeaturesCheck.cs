@@ -20,7 +20,7 @@ internal sealed class ComposedFeaturesCheck(IServiceProvider services) : IShellI
     {
         var shell = services.GetRequiredService<ShellSettings>();
         // The composition as configured: CShells leaves a feature it can't find out of the shell's settings.
-        var configured = services.GetRequiredService<HostConfiguration>().Configuration
+        var configured = services.GetRequiredService<RootConfiguration>().Configuration
             .GetSection($"CShells:Shells:{shell.Id}:Features").GetChildren().Select(feature => feature.Key);
         var snapshot = await services.GetRequiredService<IRuntimeFeatureCatalog>().GetSnapshotAsync(cancellationToken);
         var available = snapshot.FeatureDescriptors.Select(feature => feature.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -34,4 +34,4 @@ internal sealed class ComposedFeaturesCheck(IServiceProvider services) : IShellI
 }
 
 /// <summary>The host's own configuration, shared into the shells as one instance, so a shell reads the composition as configured.</summary>
-internal sealed record HostConfiguration(IConfiguration Configuration);
+internal sealed record RootConfiguration(IConfiguration Configuration);
