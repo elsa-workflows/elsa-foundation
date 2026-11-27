@@ -33,7 +33,7 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
         if (from is { } continuation)
         {
             var bookmark = OpenParkInboxBookmark(context, continuation.Value);
-            if (bookmark.Mark != mark) return null;
+            if (bookmark.Mark != mark || bookmark.Revision <= 0) return null;
             revision = bookmark.Revision;
             after = bookmark.After;
         }
