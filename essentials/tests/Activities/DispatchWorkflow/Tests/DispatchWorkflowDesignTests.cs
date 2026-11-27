@@ -27,6 +27,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Values;
@@ -166,6 +167,7 @@ public sealed class DispatchWorkflowDesignTests
         var typeRegistry = SerializationServices.TypeRegistry();
         typeRegistry.RegisterType(typeof(string), "String");
         var services = new ServiceCollection();
+        services.AddPersistenceCore();
         services.AddSingleton<IWorkflowDefinitionVersionStore>(new StubWorkflowVersionStore(workflowVersion));
         services.AddSingleton<IActivityDefinitionVersionStore>(new StubActivityVersionStore(activityVersion));
         services.AddSingleton<IActivityDefinitionVersionPublicationStore, EmptyActivityPublicationStore>();
