@@ -132,6 +132,7 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
 - [x] T013 [P] Converter README (`extensions/Elsa3/src/Mapping/README.md`): add the FR-006 to FR-011 rows, the six
   accepted differences (a faulted child's outputs, a cancelled child, a failed child start, `ParentInstanceId`,
   output-name case, the suspended-child shape) with their Flowchart and Sequence behaviour, and Execute Workflow's always-wait.
+  > **Implementation note (PR #5999):** a seventh accepted difference was added: a `.Status` read on a path that skips the node reads `"Finished"` (FR-011).
 - [x] T013a [P] Amend spec 236's `member-map.md` rows for `DispatchWorkflow.Result`, the `Done` outcome and
   `ExecuteWorkflow` in place, and the null-member row for `ExecuteWorkflow.WaitForCompletion`, citing spec 1245
   (FR-011a). The `ExecuteWorkflow` row also corrects the default: Elsa 3

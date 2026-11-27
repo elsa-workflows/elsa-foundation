@@ -2438,7 +2438,7 @@ public sealed class Elsa3ExpressionRewriter(
         /// Spec 1245 FR-010: a read of a variable an Elsa 3 ExecuteWorkflow captured its wrapped result into. The member
         /// read on it (dot, literal bracket or optional chaining) decides the Elsa 4 value: <c>.Output</c> is the variable,
         /// which holds the dispatch's Output; <c>.WorkflowInstanceId</c> and <c>.SubStatus</c> read the capturing node's
-        /// <c>ChildWorkflowExecutionId</c> and <c>Status</c> outputs; <c>.Status</c> is always "Finished";
+        /// <c>ChildWorkflowExecutionId</c> and <c>Status</c> outputs; <c>.Status</c> is "Finished", with the same frame and order checks;
         /// <c>.CorrelationId</c> and <c>.WorkflowDefinitionVersionId</c> are null; the whole value is rebuilt with Elsa 3's
         /// keys. Any other member is refused.
         /// </summary>

@@ -127,7 +127,9 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     - the child gets no `ParentInstanceId` input; pass it as an explicit input to keep it;
     - after a waited child that suspended, Elsa 3 set an Execute Workflow `Result` to the bare output dictionary, where
       `.Output.X` and `.SubStatus` read `undefined`; the converted reads return the child's value and `"Finished"`;
-    - an output read must match the output name's case; Elsa 3's dictionary ignored case.
+    - an output read must match the output name's case; Elsa 3's dictionary ignored case;
+    - a `.Status` read on a path where the node may not have run (after a branch that skips it) reads `"Finished"`,
+      where Elsa 3 read `V`'s earlier value.
 - **Variable starting values** (spec 264). Elsa 3 stored a variable's starting value as text and converted it to the
   variable's type when the workflow started. The converter applies that rule, through Elsa 4's object converter, and
   carries the result as a `Literal`:

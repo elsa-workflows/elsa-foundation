@@ -396,7 +396,7 @@ faults.
 
     `.Status` keeps the same two checks, because `"Finished"` holds only once the node has run (added in the
     implementation, PR #5999). The `.Output` rows read only the variable and are not affected.
-  - For those same rows, a read where the dispatch has not definitely run before it is left to publish. The converter
+  - For the node-output rows (`.WorkflowInstanceId`, `.SubStatus`, the whole value), a read where the dispatch has not definitely run before it is left to publish. The converter
     computes no availability, and publish already refuses a non-definite activity-output read
     (`ValueFlow/UnavailableProducer`). Elsa 3 read `V`'s earlier value there.
 
