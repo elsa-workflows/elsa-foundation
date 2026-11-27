@@ -66,6 +66,12 @@ public sealed class PostgresDirectRequests : IReplyTransport
             throw new ArgumentException("Schedule occurrences and held requests must use the same PostgreSQL store factory and primary actor type.");
     }
 
+    internal void RequireOperatorBinding(Func<KernelDb> create, string actorType)
+    {
+        if (!admission.UsesDatabaseFactory(create) || _startType != actorType)
+            throw new ArgumentException("Selected operators and held requests must use the same PostgreSQL store factory and actor type.");
+    }
+
     internal void RequireRootStartProtectionBinding(Func<KernelDb> create, string actorType)
     {
         if (_protectRootStart is not null && (!admission.UsesDatabaseFactory(create) || _startType != actorType))
