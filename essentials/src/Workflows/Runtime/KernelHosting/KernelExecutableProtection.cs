@@ -18,6 +18,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
     private const int PageSize = 32;
     private static readonly TimeSpan CleanupCadence = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan OperationBudget = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan HeldRetryDelay = TimeSpan.FromMilliseconds(200);
 
     internal async Task RequireAsync(CancellationToken token)
     {
@@ -65,17 +66,27 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
     internal async ValueTask<bool> ProtectHeldStartAsync(PendingRootStart start, CancellationToken token)
     {
         if (start.Tenant != actors.Tenant || scope.Value != actors.Tenant ||
-            KernelExecutableSelection.Read(start.Type, start.TypeData)?.Executable is not { } expected)
+            KernelExecutableSelection.Read(start.Type, start.TypeData) is not { } selected)
             return false;
 
-        try
+        if (selected.Executable is not { } expected) return serving.IsHostWorkflow(selected.Workflow, selected.Definition);
+        RuntimeKernelExecutablePin[] pins = [new(scope, actors.Tenant, start.Actor.Id, expected, start.Issuance)];
+        while (true)
         {
-            return await TryPinAsync([new(scope, actors.Tenant, start.Actor.Id, expected, start.Issuance)], token);
-        }
-        catch (Exception error) when (error is WorkflowExecutableDependencyGraphException or InvalidDataException)
-        {
-            logger.LogWarning(error, "Held executable protection refused the selected identity for tenant {Tenant}.", actors.Tenant);
-            return false;
+            token.ThrowIfCancellationRequested();
+            try { return await TryPinAsync(pins, token); }
+            catch (Exception error) when (error is WorkflowExecutableDependencyGraphException or InvalidDataException)
+            {
+                logger.LogWarning(error, "Held executable protection refused the selected identity for tenant {Tenant}.", actors.Tenant);
+                return false;
+            }
+            catch (Exception error) when (!token.IsCancellationRequested &&
+                error is OperationCanceledException or WorkflowExecutableRootWriteLeaseLostException or
+                    WorkflowExecutableRootWriteLeaseUnavailableException or TimeoutException or DbException { IsTransient: true })
+            {
+                logger.LogDebug(error, "Held executable protection will retry for tenant {Tenant}.", actors.Tenant);
+                await Task.Delay(HeldRetryDelay, clock, token);
+            }
         }
     }
 
@@ -95,13 +106,9 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
             using var timer = new PeriodicTimer(CleanupCadence, clock);
             do
             {
+                if (foundation.TakesPreparedStarts) await PrunePreparedStartsAsync(token);
                 try
                 {
-                    if (foundation.TakesPreparedStarts)
-                    {
-                        using var pruneBudget = Limit(token);
-                        await foundation.PrunePreparedStartsAsync(actors, pruneBudget.Token);
-                    }
                     using var pageBudget = Limit(token);
                     await using var runtime = await scopes.CreateAsyncScopeAsync(scope);
                     var store = runtime.ServiceProvider.GetRequiredService<IRuntimeKernelExecutablePinStore>();
@@ -127,6 +134,19 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
         catch (Exception error)
         {
             logger.LogError(error, "Executable pin cleanup stopped for tenant {Tenant}.", actors.Tenant);
+        }
+    }
+
+    private async Task PrunePreparedStartsAsync(CancellationToken token)
+    {
+        try
+        {
+            using var bounded = Limit(token);
+            await foundation.PrunePreparedStartsAsync(actors, bounded.Token);
+        }
+        catch (Exception error) when (!token.IsCancellationRequested)
+        {
+            logger.LogWarning(error, "Prepared root cleanup will retry for tenant {Tenant}.", actors.Tenant);
         }
     }
 

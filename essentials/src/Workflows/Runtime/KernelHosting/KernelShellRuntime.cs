@@ -56,7 +56,8 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ResolveWorkflow = ResolveWorkflowAsync
         });
         var auxiliary = schedules is null ? null : new ScheduleActor(schedules.Value.Calendar, schedules.Value.Worker.CreateAcceptor());
-        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window, auxiliary, protection is null ? null : protection.ProtectAsync);
+        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window, auxiliary,
+            protectChildExecutables ? protection!.ProtectAsync : null);
         await _owner.StartAsync(token);
         var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
         var worker = new KernelRetentionWorker(pass, tenant,

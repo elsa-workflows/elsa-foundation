@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
@@ -72,6 +73,7 @@ public sealed class KernelShellHeldExecutableTests
             Node("wait", Types.Event, [Literal("EventName", eventName), Literal("CanStartWorkflow", false, "Boolean")]),
             WriteLine("finish", Literal("text", "finished"))));
         var identity = executable.Identity;
+        var unavailable = new PinAvailability();
         Contract.ActorRef actor;
 
         await using (var services = OpenShell())
@@ -95,17 +97,22 @@ public sealed class KernelShellHeldExecutableTests
                 var handler = new KernelHttpRequestHandler(services.GetRequiredService<KernelServing>(), shell.IngressAsync,
                     services.GetRequiredService<KernelShellStorage>().ReadClockAsync, tenant, "/workflows/http", TimeSpan.FromSeconds(10),
                     maxRequestBodyBytes: 64 * 1024, enforceRequestTimeout: true);
-                using var body = new MemoryStream();
-                var context = new DefaultHttpContext { RequestServices = services, RequestAborted = token };
-                context.Request.Path = Route;
-                context.Request.Method = "POST";
-                context.Features.GetRequiredFeature<IHttpRequestFeature>().RawTarget = Route;
-                context.Response.Body = body;
-                await handler.HandleAsync(context);
-                Assert.True(context.Response.StatusCode == 202,
-                    $"The held endpoint returned {context.Response.StatusCode}: {System.Text.Encoding.UTF8.GetString(body.ToArray())}");
-                actor = new(Assert.Single(context.Response.Headers[KernelHttpEdge.WorkflowInstanceIdHeader])!);
                 var reads = await shell.ReadAsync(token);
+                unavailable.FailWrites = true;
+                var shortRequest = new KernelHttpRequestHandler(services.GetRequiredService<KernelServing>(), shell.IngressAsync,
+                    services.GetRequiredService<KernelShellStorage>().ReadClockAsync, tenant, "/workflows/http", TimeSpan.FromSeconds(1),
+                    maxRequestBodyBytes: 64 * 1024, enforceRequestTimeout: true);
+                Assert.Equal(408, (await RequestAsync(shortRequest, Route)).StatusCode);
+                Assert.True(unavailable.Attempts > 0);
+                Assert.Empty((await reads.ListAsync(tenant, new(), cancellationToken: token)).Items);
+                var probe = Wf.Workflow("held-probe", Wf.Sequence("main", Wf.HttpEndpoint("start", "held-probe"), Wf.Respond("out", "ok")));
+                await services.GetRequiredService<KernelServing>().ServeHostWorkflowAsync(probe, token);
+                var hosted = await RequestAsync(handler, "/workflows/http/held-probe");
+                Assert.Equal(200, hosted.StatusCode);
+                unavailable.FailWrites = false;
+                var context = await RequestAsync(handler, Route);
+                Assert.Equal(202, context.StatusCode);
+                actor = new(Assert.Single(context.Headers[KernelHttpEdge.WorkflowInstanceIdHeader])!);
                 Assert.Equal(Contract.ActorStatus.Running, (await reads.GetAsync(tenant, actor, token))?.Header.Status);
                 var pins = stores.GetRequiredService<IRuntimeKernelExecutablePinStore>();
                 var tail = await pins.ReadOpenTailAsync(Persistence, token);
@@ -173,11 +180,55 @@ public sealed class KernelShellHeldExecutableTests
                 Provider = provider, ConnectionString = runtime,
                 RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
             });
+            var pinStore = services.Last(item => item.ServiceType == typeof(IRuntimeKernelExecutablePinStore));
+            services.Remove(pinStore);
+            services.AddScoped<IRuntimeKernelExecutablePinStore>(sp => new TestPins(
+                (IRuntimeKernelExecutablePinStore)ActivatorUtilities.CreateInstance(sp, pinStore.ImplementationType!), unavailable));
             new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(services, KernelShellStorage.CreatePreparedStartsQualification(
                 provider, foundationPath, foundation));
             new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
             return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         }
+
+        async Task<HttpResponse> RequestAsync(KernelHttpRequestHandler handler, string path)
+        {
+            using var body = new MemoryStream();
+            var context = new DefaultHttpContext { RequestAborted = token };
+            context.Request.Path = path;
+            context.Request.Method = "POST";
+            context.Features.GetRequiredFeature<IHttpRequestFeature>().RawTarget = path;
+            context.Response.Body = body;
+            await handler.HandleAsync(context);
+            return context.Response;
+        }
+    }
+
+    private sealed class PinAvailability
+    {
+        internal volatile bool FailWrites;
+        internal int Attempts;
+    }
+
+    private sealed class TestPins(IRuntimeKernelExecutablePinStore inner, PinAvailability availability) : IRuntimeKernelExecutablePinStore
+    {
+        public ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken token)
+        {
+            if (!availability.FailWrites) return inner.TryPinAsync(pins, token);
+            Interlocked.Increment(ref availability.Attempts);
+            throw new WorkflowExecutableRootWriteLeaseUnavailableException(pins.First().Executable.ArtifactId, "qualification");
+        }
+
+        public ValueTask<string?> ReadOpenTailAsync(PersistenceScope scope, CancellationToken token) => inner.ReadOpenTailAsync(scope, token);
+
+        public ValueTask<RuntimeKernelExecutablePinPage> ListOpenAsync(PersistenceScope scope, string? after, string through, int limit,
+            CancellationToken token) => inner.ListOpenAsync(scope, after, through, limit, token);
+
+        public ValueTask<bool> TryReleaseAsync(RuntimeKernelExecutablePin pin,
+            Func<RuntimeKernelExecutablePin, CancellationToken, ValueTask<RuntimeKernelExecutablePinProof>> confirmAsync,
+            CancellationToken token) => inner.TryReleaseAsync(pin, confirmAsync, token);
+
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken token) =>
+            inner.ListPinnedExecutableArtifactIdsAsync(token);
     }
 
     private static async Task<T> WaitAsync<T>(Func<ValueTask<T>> read, Func<T, bool> complete, CancellationToken token)
