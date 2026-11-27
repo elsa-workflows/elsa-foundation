@@ -184,22 +184,32 @@ public sealed partial class EfStore
             ends && !discards && row.Suspended || turn.Journal != journal ||
             turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
                 turn.Journal, Unsubscribe: ends, Held: turn.Held)
-                { FoundationRootOperator = command, FoundationRootChildSends = turn.FoundationRootChildSends } ||
+                { FoundationRootOperator = command, FoundationRootChildSends = turn.FoundationRootChildSends, FoundationCascade = turn.FoundationCascade } ||
             turn.Sent.Count + turn.Subscribed.Count + turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 })
             throw RootShape();
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
         if (current is not { Status: InstanceStatus.Faulted, TerminalRevision: null } || current.Revision != expected) return null;
         if (parentTerminate && (current.Parent is null || current.Parent != command.Sender || command.SenderCreation != 1)) return null;
         var sends = turn.FoundationRootChildSends;
-        if (_rootChildReference is not null && ends && !discards && current.Parent is not null)
+        var attached = _rootChildReference is not null && !discards && current.Parent is not null && command.Kind == Kinds.Terminate;
+        var endsAttached = attached && ends;
+        RootChildEffects? effects = null;
+        if (endsAttached)
         {
-            if (sends is not [var notice] || notice != FoundationChildNotice.Create(row, null, final: true)) throw RootShape();
+            if (sends?.LastOrDefault() != FoundationChildNotice.Create(row, null, final: true)) throw RootShape();
+            effects = PrepareRootChildEffects(root, row, sends!) ?? throw RootShape();
         }
         else if (sends is not null) throw RootShape();
+        if (endsAttached && current.Children is not null)
+        {
+            if (turn.FoundationCascade is not { Input: null, Entries.Jobs.IsEmpty: true } cascade) throw RootShape();
+            effects = WithPendingChildCascade(root, row, current, cascade, effects);
+        }
+        else if (turn.FoundationCascade is not null) throw RootShape();
         if (row != WorkerRow(root, current) with
             {
                 Status = row.Status, Suspended = ends && !discards ? false : current.Suspended, Revision = checked(expected + 1), Fault = row.Fault,
-                FoundationDispatchHeader = header
+                FoundationDispatchHeader = header, Children = endsAttached ? null : current.Children
             } || header.Tenant != root.Tenant || header.Reference != root.Reference || header.Header.TypeData != current.TypeData ||
             header.Header.Labels.Count != current.Labels.Count ||
             current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))
@@ -208,7 +218,8 @@ public sealed partial class EfStore
             new RootParkedTerminate(root, expected, WithoutParkFacts(command)!, mark, facts.KeptDigest, current.Suspended,
                 facts.Clearing, facts.Cleared, ends ? facts.Arrived + facts.Consumed : facts.Page, ends)
             {
-                ChildEffects = sends is null ? null : PrepareRootChildEffects(root, row, sends),
+                ChildEffects = effects,
+                Children = attached ? current.Children : null,
                 SelfIssuer = _rootChildReference is null ? null : RootSelfIssuer
             });
     }
@@ -225,7 +236,10 @@ public sealed partial class EfStore
             ROW(_."State", _."StateVersion", _."FoundationHeader", _."Fault", _."History", _."Jobs", _."Children", _."Parent",
                 _."Model", _."Definition", _."NextJobGeneration", _."CustomHandles" /*wire*/)
             """;
-        string Row(string side) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
+        string Row(string side, bool clearsAttachedChildren = false) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
+            .Replace("OLD.\"Children\"",
+                clearsAttachedChildren ? """(CASE WHEN OLD."Parent" IS NOT NULL THEN NULL ELSE OLD."Children" END)""" : "OLD.\"Children\"",
+                StringComparison.Ordinal)
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal);
         var keptScope = db.UsesSqliteShippedInstall ? "" : """k."InboxScope" = -4 AND """;
         const string pageKind = """ AND NEW."FoundationParkClearingKind" = OLD."FoundationParkClearingKind" """;
@@ -236,7 +250,7 @@ public sealed partial class EfStore
                 AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
                 AND NEW."Jobs" IS NULL AND NEW."Children" IS NULL AND NEW."CustomHandles" IS NULL AND OLD."Fault" IS NOT NULL
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = NEW."Id")
-                AND {{{Row("NEW")}}} IS NOT DISTINCT FROM {{{Row("OLD")}}}
+                AND {{{Row("NEW")}}} IS NOT DISTINCT FROM {{{Row("OLD", db.UsesRootChildren && kind == Kinds.Terminate)}}}
                 AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
                     AND {{{keptScope}}}k."FoundationKeptBy" IS NOT NULL)
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
@@ -504,6 +518,7 @@ public sealed partial class EfStore
         bool Suspended, string? Clearing, long Cleared, int Count, bool Ends) : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal RootChildEffects? ChildEffects { get; init; }
+        internal string? Children { get; init; }
         internal FoundationSelfIssuer? SelfIssuer { get; init; }
 
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
@@ -521,7 +536,7 @@ public sealed partial class EfStore
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND i."Suspended" = {Suspended}
                     AND i."Status" = {(int)InstanceStatus.Faulted} AND i."Revision" = {Expected} AND i."FoundationParkAt" = {Mark.At}
                     AND i."FoundationParkRevision" = {Mark.Revision} AND i."Fault" IS NOT NULL AND i."FoundationTerminalRevision" IS NULL
-                    AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."CustomHandles" IS NULL
+                    AND i."Jobs" IS NULL AND i."Children" IS NOT DISTINCT FROM {Children}::text AND i."CustomHandles" IS NULL
                     AND (NOT {parentTerminate} OR i."Parent" = {Command.Sender})
                     AND i."FoundationParkClearing" IS NOT DISTINCT FROM {Clearing}::text
                     AND ({Clearing}::text IS NULL OR i."FoundationParkClearingKind" = {Command.Kind})
@@ -550,7 +565,8 @@ public sealed partial class EfStore
                 Expected, SelfIssuer, includeImmediate: false, token)) return false;
             FormattableString end = $"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
-                    "Status" = {(int)status}, "Suspended" = {discards} AND "Suspended", "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL,
+                    "Status" = {(int)status}, "Suspended" = {discards} AND "Suspended", "Children" = NULL,
+                    "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL,
                     "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL,
                     "FoundationTerminalRevision" = {JournalRevision},
                     "FoundationTerminalAt" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint

@@ -176,7 +176,13 @@ internal sealed partial class ActorAdapter
                     : Durable.Json.Write(new { Outcome = "terminated", Operation = control.Id, Cleared = cleared })
             };
             if (roots.SupportsChildren && ended.Parent is not null)
-                terminated.FoundationRootChildSends = [Durable.FoundationChildNotice.Create(ended, null, final: true)];
+            {
+                if (row.Children is not null)
+                    Durable.CascadeProtocol.Open(terminated, Durable.CascadeRegistry.From(row));
+                terminated.Sent.Add(Durable.FoundationChildNotice.Create(ended, null, final: true));
+                RequireRootOutcome(terminated, row, control);
+                terminated.ClearsPrivateTimersOnEnd = issueSelf is { DistinguishesTimers: true };
+            }
             terminated.ReplyTo(refused, kept ? "terminated and kept" : "terminated");
             return terminated;
         }

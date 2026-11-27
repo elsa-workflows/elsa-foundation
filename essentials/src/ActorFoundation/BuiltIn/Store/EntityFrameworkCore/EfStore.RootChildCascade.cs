@@ -14,6 +14,15 @@ public sealed partial class EfStore
     private sealed record RootChildCascade(WorkerRoot Parent, long Revision, int Cursor, CreationAddress[] Children);
     private sealed record StoredChildCascade(long Revision, int Cursor, string Children);
 
+    private static RootChildEffects WithPendingChildCascade(WorkerRoot root, InstanceRow next, RootImage current,
+        CascadeCommit cascade, RootChildEffects? effects)
+    {
+        if (effects is null || !ChildRegistry.Read(current.Children).SequenceEqual(cascade.Entries.Children)) throw RootShape();
+        var dispatched = Math.Min(cascade.Entries.Children.Length, CascadeProtocol.PageLimit - cascade.Entries.Jobs.Length);
+        return dispatched == cascade.Entries.Children.Length
+            ? effects : effects with { Cascade = new(root, next.Revision, dispatched, cascade.Entries.Children.ToArray()) };
+    }
+
     internal static Task InstallRootChildCascadeAsync(KernelDb db, CancellationToken token) =>
         db.Database.ExecuteSqlRawAsync("""
             CREATE TABLE IF NOT EXISTS "FoundationRootChildCascades" (

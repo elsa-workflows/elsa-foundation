@@ -36,6 +36,7 @@ internal static class PostgresChildWorkflowChecks
                 Wf.Parallel("race", 1, Wf.Dispatch("dispatch", "child", wait: true), Wf.Node<ReleaseChild>("win"))))
             .Add(Wf.Workflow("cascade-parent", Wf.Parallel("cascade", null,
                 Wf.Dispatch("left", "child", wait: true), Wf.Dispatch("right", "child", wait: true))))
+            .Add(Wf.Workflow("nested-parent", Wf.Dispatch("dispatch", "parent", wait: true)))
             .Add(Wf.Workflow("bulk-parent", Wf.Node<ReleaseChild>("wait")));
         var actor = new ChildFixtureActor(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases)]));
         var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, actor.Type,
@@ -186,15 +187,18 @@ internal static class PostgresChildWorkflowChecks
         async Task CheckParkedAttachedTerminationAsync(string lane, bool fromParent)
         {
             var added = await nextFoundation.SendAsync(scope, new Contract.Target.Start(
-                WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("parent"))), lane + "-parent", Contract.Kinds.Start, cancellationToken: token);
+                WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start(fromParent ? "nested-parent" : "parent"))),
+                lane + "-parent", Contract.Kinds.Start, cancellationToken: token);
             var parent = added.Actor!.Value;
             var waitingParent = await WaitForAsync(parent, image => image.Children is not null, successor);
             var childLife = ChildRegistry.Read(waitingParent.Children).Single();
-            var childId = await db.Database.SqlQuery<string>($"""
-                SELECT "Reference" AS "Value" FROM "FoundationRootBirths" WHERE "Actor" = {childLife.Id}
-                """).SingleAsync(token);
+            var childId = await ReferenceAsync(childLife);
             var attached = new Contract.ActorRef(childId);
-            await WaitForAsync(attached, image => image.Status == InstanceStatus.Running, successor);
+            var runningChild = await WaitForAsync(attached, image => image.Status == InstanceStatus.Running &&
+                (!fromParent || image.Children is not null), successor);
+            var descendant = fromParent ? await ReferenceAsync(ChildRegistry.Read(runningChild.Children).Single()) : null;
+            if (descendant is not null)
+                await WaitForAsync(new(descendant), image => image.Status == InstanceStatus.Running, successor);
             Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(attached), lane + "-park", ChildFixtureActor.Fault,
                 cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, $"the {lane} child fault is admitted");
             var parkedChild = await WaitForAsync(attached, image => image.ParkAt is not null, successor);
@@ -227,7 +231,16 @@ internal static class PostgresChildWorkflowChecks
             await WaitForAsync(attached, image => image is { Status: InstanceStatus.Cancelled, ParkAt: null }, successor);
             await WaitForAsync(parent, image => image.Children is null, successor);
             Check(true, $"the {lane} Terminate closes Park and the committed final notice removes the child from its parent");
+            if (descendant is not null)
+            {
+                await WaitForAsync(new(descendant), image => image.Status == InstanceStatus.Cancelled, successor);
+                Check(true, "terminating the parked middle child also cancels its exact live descendant");
+            }
         }
+
+        Task<string> ReferenceAsync(CreationAddress life) => db.Database.SqlQuery<string>($"""
+            SELECT "Reference" AS "Value" FROM "FoundationRootBirths" WHERE "Actor" = {life.Id}
+            """).SingleAsync(token);
 
         async Task<EfStore.RootImage> WaitForAsync(Contract.ActorRef target, Func<EfStore.RootImage, bool> ready, PostgresPreviewHostedService owner)
         {

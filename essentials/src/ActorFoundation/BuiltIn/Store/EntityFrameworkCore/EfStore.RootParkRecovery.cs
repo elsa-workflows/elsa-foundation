@@ -319,6 +319,7 @@ public sealed partial class EfStore
         {
             var message = item.Message;
             var childTerminate = db.UsesRootChildren && IsRootChildTerminate(message);
+            var endsAttachedChild = db.UsesRootChildren && message.Kind == Kinds.Terminate && message.Operator?.RootThenDelete != true;
             if (message.Operator is not { RootParkMark: not null } && !childTerminate)
             {
                 messages.Add(item);
@@ -332,13 +333,14 @@ public sealed partial class EfStore
                 ? await ReadSqliteParkMarkAsync(db, message.Target.Id, message.Target.Partition, token)
                 : await db.Database.SqlQueryRaw<ParkMarkRow>($"""
                 SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision",
-                    "Jobs" IS NOT NULL OR "Children" IS NOT NULL OR "CustomHandles" IS NOT NULL
+                    "Jobs" IS NOT NULL OR "Children" IS NOT NULL AND NOT ({"{2}"} AND "Parent" IS NOT NULL)
+                        OR "CustomHandles" IS NOT NULL
                         OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding",
                     EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = "Instances"."Id" AND m."Partition" = "Instances"."Partition"
                         AND {PendingResidue}) AS "Residue",
                     {clearing}, "Jobs", {jobPin} AS "ParkJobResult", {livePin} AS "ParkLiveJob" FROM "Instances"
                 WHERE "Id" = {"{0}"} AND "Partition" = {"{1}"} AND NOT "Retired"
-                """, message.Target.Id, message.Target.Partition).SingleOrDefaultAsync(token);
+                """, message.Target.Id, message.Target.Partition, endsAttachedChild).SingleOrDefaultAsync(token);
             var command = message.Operator;
             if (childTerminate)
             {

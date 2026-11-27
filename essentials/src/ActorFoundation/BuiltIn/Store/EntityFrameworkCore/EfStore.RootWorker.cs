@@ -563,12 +563,7 @@ public sealed partial class EfStore
         IReadOnlyList<InboxKey> inputKeys = turn.Consumed;
         string[]? settledJobs = null;
         if (supported.FoundationCascade is { Entries.Children.IsEmpty: false } childCascade)
-        {
-            if (childEffects is null || !ChildRegistry.Read(current.Children).SequenceEqual(childCascade.Entries.Children)) throw RootShape();
-            var dispatched = Math.Min(childCascade.Entries.Children.Length, CascadeProtocol.PageLimit - childCascade.Entries.Jobs.Length);
-            if (dispatched < childCascade.Entries.Children.Length)
-                childEffects = childEffects with { Cascade = new(root, row.Revision, dispatched, childCascade.Entries.Children.ToArray()) };
-        }
+            childEffects = WithPendingChildCascade(root, row, current, childCascade, childEffects);
         if (supported.FoundationCascade is { Entries.Jobs.IsEmpty: false } jobCascade)
         {
             if (current.Jobs is null || !JobRegistry.Read(current.Jobs).SequenceEqual(jobCascade.Entries.Jobs)) throw RootShape();
