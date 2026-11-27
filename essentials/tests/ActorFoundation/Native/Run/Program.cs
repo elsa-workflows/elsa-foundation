@@ -72,6 +72,7 @@ if (args is ["root-schedule-occurrence", var occurrenceProvider and ("postgres" 
     return await RootScheduleInventoryChecks.RunAsync(occurrenceProvider == "postgres", settleOccurrences: true);
 if (args is ["root-schedule-occurrence", var occurrenceLifecycleProvider and ("postgres" or "sqlite"), var occurrenceFence and ("checked" or "in-batch")])
     return await RootScheduleInventoryChecks.RunAsync(occurrenceLifecycleProvider == "postgres", settleOccurrences: true, fenceInBatch: occurrenceFence == "in-batch");
+if (args is ["kernel-schedule-reconciliation"]) return await KernelScheduleReconciliationChecks.RunAsync();
 if (args is ["root-schedule-lineage", var lineageProvider and ("postgres" or "sqlite"), var lineageFence and ("checked" or "in-batch")])
     return await RootScheduleInventoryChecks.RunAsync(lineageProvider == "postgres", settleOccurrences: true,
         fenceInBatch: lineageFence == "in-batch", trackLineage: true);

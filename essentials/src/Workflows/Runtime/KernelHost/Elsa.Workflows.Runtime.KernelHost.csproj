@@ -9,6 +9,8 @@
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHosting" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHost.Tests" />
     <ProjectReference Include="../Core/Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="../Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj" />
     <ProjectReference Include="../WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />

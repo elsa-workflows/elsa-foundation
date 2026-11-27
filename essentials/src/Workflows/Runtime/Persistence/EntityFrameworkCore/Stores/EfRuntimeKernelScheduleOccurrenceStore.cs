@@ -105,32 +105,68 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         bool IsDue(DateTimeOffset now) => occurrence.Due <= now && occurrence.AcceptBefore > now;
     }
 
-    public async ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ListPendingAsync(TriggerScope scope,
-        RuntimeKernelScheduleOccurrenceCursor? after, int limit, CancellationToken cancellationToken = default)
+    public ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadPendingTailAsync(TriggerScope scope, CancellationToken cancellationToken = default) =>
+        ReadTailAsync(scope, materialized: false, cancellationToken);
+
+    public ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ListPendingAsync(TriggerScope scope,
+        RuntimeKernelScheduleOccurrenceCursor? after, int limit, CancellationToken cancellationToken = default) =>
+        ReadPendingPageAsync(scope, after, null, limit, cancellationToken);
+
+    public ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ListPendingAsync(TriggerScope scope,
+        RuntimeKernelScheduleOccurrenceCursor? after, RuntimeKernelScheduleOccurrenceCursor through, int limit,
+        CancellationToken cancellationToken = default)
     {
-        var page = await ReadPageAsync(scope, after, limit, materialized: false, cancellationToken);
+        ArgumentNullException.ThrowIfNull(through);
+        return ReadPendingPageAsync(scope, after, through, limit, cancellationToken);
+    }
+
+    private async ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ReadPendingPageAsync(TriggerScope scope,
+        RuntimeKernelScheduleOccurrenceCursor? after, RuntimeKernelScheduleOccurrenceCursor? through, int limit, CancellationToken token)
+    {
+        var page = await ReadPageAsync(scope, after, through, limit, materialized: false, token);
         return page.Select(row => new RuntimeKernelScheduleOccurrenceDelivery(ReadScoped(row, scope), new(row.AcceptedAtUtcTicks, row.Id))).ToArray();
     }
 
+    private async ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadTailAsync(TriggerScope scope, bool materialized, CancellationToken token) =>
+        await ScopedOccurrences(scope, materialized).OrderByDescending(row => row.AcceptedAtUtcTicks).ThenByDescending(row => row.Id)
+            .Select(row => new RuntimeKernelScheduleOccurrenceCursor(row.AcceptedAtUtcTicks, row.Id)).FirstOrDefaultAsync(token);
+
     private async Task<RuntimeKernelScheduleOccurrenceEntity[]> ReadPageAsync(TriggerScope scope,
-        RuntimeKernelScheduleOccurrenceCursor? after, int limit, bool materialized, CancellationToken token)
+        RuntimeKernelScheduleOccurrenceCursor? after, RuntimeKernelScheduleOccurrenceCursor? through, int limit, bool materialized,
+        CancellationToken token)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
+        var query = ScopedOccurrences(scope, materialized);
+        if (after is not null)
+        {
+            RequireCursor(after, nameof(after));
+            query = query.Where(row => row.AcceptedAtUtcTicks > after.AcceptedAtUtcTicks ||
+                row.AcceptedAtUtcTicks == after.AcceptedAtUtcTicks && string.Compare(row.Id, after.Id) > 0);
+        }
+        if (through is not null)
+        {
+            RequireCursor(through, nameof(through));
+            query = query.Where(row => row.AcceptedAtUtcTicks < through.AcceptedAtUtcTicks ||
+                row.AcceptedAtUtcTicks == through.AcceptedAtUtcTicks && string.Compare(row.Id, through.Id) <= 0);
+        }
+        return await query.OrderBy(row => row.AcceptedAtUtcTicks).ThenBy(row => row.Id).Take(limit).ToArrayAsync(token);
+    }
+
+    private IQueryable<RuntimeKernelScheduleOccurrenceEntity> ScopedOccurrences(TriggerScope scope, bool materialized)
+    {
         var scopeKey = Bind(scope);
         var scopeHash = Hash(scopeKey);
         var tenantHash = Hash(JsonSerializer.Serialize(scope.TenantId));
         var query = context.KernelScheduleOccurrences.AsNoTracking().Where(row =>
             row.ScopeKeyHash == scopeHash && row.TenantKeyHash == tenantHash && row.RetiredAtUtcTicks == null);
-        query = materialized ? query.Where(row => row.ActorReference != null) : query.Where(row => row.ActorReference == null);
-        if (after is not null)
-        {
-            if (after.AcceptedAtUtcTicks <= 0 || !IsReference(after.Id))
-                throw new ArgumentException("Invalid schedule delivery cursor.", nameof(after));
-            query = query.Where(row => row.AcceptedAtUtcTicks > after.AcceptedAtUtcTicks ||
-                row.AcceptedAtUtcTicks == after.AcceptedAtUtcTicks && string.Compare(row.Id, after.Id) > 0);
-        }
-        return await query.OrderBy(row => row.AcceptedAtUtcTicks).ThenBy(row => row.Id).Take(limit).ToArrayAsync(token);
+        return materialized ? query.Where(row => row.ActorReference != null) : query.Where(row => row.ActorReference == null);
+    }
+
+    private static void RequireCursor(RuntimeKernelScheduleOccurrenceCursor cursor, string parameter)
+    {
+        if (cursor.AcceptedAtUtcTicks <= 0 || !IsReference(cursor.Id))
+            throw new ArgumentException("Invalid schedule delivery cursor.", parameter);
     }
 
     private static RuntimeKernelScheduleOccurrence ReadScoped(RuntimeKernelScheduleOccurrenceEntity row, TriggerScope scope)

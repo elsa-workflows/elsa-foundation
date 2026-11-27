@@ -113,6 +113,8 @@ internal static class KernelScheduleOccurrenceContract
         var pageOne = Assert.Single(await relay.ListPendingAsync(scope, null, 1));
         var pageTwo = Assert.Single(await relay.ListPendingAsync(scope, pageOne.Cursor, 1));
         Assert.Empty(await relay.ListPendingAsync(scope, pageTwo.Cursor, 1));
+        Assert.Equal(pageTwo.Cursor, await relay.ReadPendingTailAsync(scope));
+        Assert.Equal(pageOne, Assert.Single(await relay.ListPendingAsync(scope, null, pageOne.Cursor, 2)));
         Assert.Contains(original, new[] { pageOne.Occurrence, pageTwo.Occurrence });
         Assert.Contains(replacement, new[] { pageOne.Occurrence, pageTwo.Occurrence });
 
@@ -183,9 +185,15 @@ internal static class KernelScheduleOccurrenceContract
         var desiredFirst = await controlReads.ListAsync(scope, null, 1);
         var desiredSecond = await controlReads.ListAsync(scope, Assert.IsType<string>(desiredFirst.Next), 1);
         Assert.Null(desiredSecond.Next);
+        var controlTail = Assert.IsType<string>(await controlReads.ReadTailAsync(scope));
+        Assert.Equal(Assert.Single(desiredSecond.Items), Assert.Single((await controlReads.ListAsync(scope, desiredFirst.Next, controlTail, 2)).Items));
+        var boundedControl = await controlReads.ListAsync(scope, null, desiredFirst.Next!, 2);
+        Assert.Equal(Assert.Single(desiredFirst.Items), Assert.Single(boundedControl.Items));
+        Assert.Null(boundedControl.Next);
         Assert.Contains(reclaimed, desiredFirst.Items.Concat(desiredSecond.Items));
         Assert.Contains(desiredFirst.Items.Concat(desiredSecond.Items), control => control.TriggerNode == "another-node" && control.Revision == 1);
         Assert.Empty((await controlReads.ListAsync(scope with { TenantId = null }, null, 1)).Items);
+        Assert.Null(await controlReads.ReadTailAsync(scope with { TenantId = null }));
         Assert.Null(await controlReads.FindAsync(scope with { TenantId = null }, scheduleKey));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             controlReads.ListAsync(scope with { TenantId = "another-tenant" }, null, 1).AsTask());
@@ -203,6 +211,8 @@ internal static class KernelScheduleOccurrenceContract
         var openFirst = Assert.Single(await relay.ListMaterializedAsync(scope, null, 1));
         var openSecond = Assert.Single(await relay.ListMaterializedAsync(scope, openFirst.Cursor, 1));
         Assert.Empty(await relay.ListMaterializedAsync(scope, openSecond.Cursor, 1));
+        Assert.Equal(openSecond.Cursor, await relay.ReadMaterializedTailAsync(scope));
+        Assert.Equal(openFirst, Assert.Single(await relay.ListMaterializedAsync(scope, null, openFirst.Cursor, 2)));
         Assert.Equal(delayed, openFirst.Occurrence);
         Assert.Equal(original, openSecond.Occurrence);
         static ValueTask<bool> MustNotReadProof(RuntimeKernelScheduleOccurrence _, string __, CancellationToken ___) =>
