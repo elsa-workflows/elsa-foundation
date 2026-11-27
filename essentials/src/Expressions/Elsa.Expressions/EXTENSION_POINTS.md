@@ -44,8 +44,8 @@ Shipped implementations are `PortableJavaScriptExpressionHandler` and
   FR-008). An evaluator reads computed and opaque variable reads through it; the host records each read.
 - **Implementations:** `RuntimeVariableReadFallback` (`Elsa.Workflows.Runtime`, the recorded run-time lookup for
   expressions publish marked with a `VariableReadFallback`), `GraphVariableReader` (`Elsa.Activities.Graph.Runtime`,
-  a graph expression's own variables) and `AmbientVariableReader` (the Workbench Core Preview's kernel expressions,
-  the visible variables a source references; it does not yet honour `VariableReadFallback`, #5890).
+  a graph expression's own variables) and `AmbientVariableReader` (`Elsa.Workbench.Host`, the Core Preview's kernel
+  expressions: the visible variables a source references; it does not yet honour `VariableReadFallback`, #5890).
 - **Consumers:** the Jint evaluator's `variables` root, `getVariable` and, in a script body, `setVariable`, and the
   Liquid handler's `variables` root.
 

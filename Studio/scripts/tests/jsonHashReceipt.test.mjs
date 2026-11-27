@@ -283,17 +283,26 @@ test("nested module scopes bind to their real package and an unowned external co
   assert.throws(() => sourceDocument(root, join(unowned, "value.d.ts")), /no owning package/);
 }));
 
-test("only the named output-only build observer may read the filesystem, and it stays an input", () => fixture(({ root }) => {
+test("only the reviewed output-only build observer may read the filesystem, and it stays an input", () => fixture(({ root }) => {
   const studio = join(root, "Studio"), client = join(studio, "Client");
   mkdirSync(client, { recursive: true });
-  const observer = 'import { readFileSync } from "node:fs"; export const inventory = () => readFileSync(process.env.INPUT);';
-  writeFileSync(join(studio, "vite.release-inventory.ts"), observer);
-  writeFileSync(join(studio, "vite.other-plugin.ts"), observer);
+  const reviewed = readFileSync(new URL("../../vite.release-inventory.ts", import.meta.url), "utf8");
   const config = join(client, "vite.config.ts");
-  writeFileSync(config, 'import { inventory } from "../vite.release-inventory"; export default inventory;');
+  const use = name => writeFileSync(config, `import { releaseInventory } from "${name}"; export default releaseInventory;`);
+  writeFileSync(join(studio, "vite.release-inventory.ts"), reviewed);
+  use("../vite.release-inventory");
   assert.ok(studioHashBuildInputs(root, [client]).includes(join(studio, "vite.release-inventory.ts")));
-  writeFileSync(config, 'import { inventory } from "../vite.other-plugin"; export default inventory;');
+  // The same content under another name, or the same name in another folder, is not the reviewed observer.
+  writeFileSync(join(studio, "vite.other-plugin.ts"), reviewed);
+  use("../vite.other-plugin");
   assert.throws(() => studioHashBuildInputs(root, [client]), /Unsupported Studio build loader\/read/);
+  writeFileSync(join(client, "vite.release-inventory.ts"), reviewed);
+  use("./vite.release-inventory");
+  assert.throws(() => studioHashBuildInputs(root, [client]), /Unsupported Studio build loader\/read/);
+  // An edit to the observer refuses until it is reviewed again.
+  writeFileSync(join(studio, "vite.release-inventory.ts"), reviewed + ";");
+  use("../vite.release-inventory");
+  assert.throws(() => studioHashBuildInputs(root, [client]), /Changed output-only Studio build observer/);
 }));
 
 test("computed active build modules and filesystem reads refuse instead of losing their inputs", () => fixture(({ root }) => {

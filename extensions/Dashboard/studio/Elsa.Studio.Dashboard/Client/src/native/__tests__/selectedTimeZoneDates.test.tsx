@@ -41,3 +41,20 @@ it("converts typed instants, refresh and period dates live while retaining raw a
   for (const date of dates) expect(date.textContent).toBe(expected("UTC", "+00:00"));
   expect(JSON.stringify(result)).toBe(original);
 });
+
+it("shows an instant in a metric and a list in the selected zone, live", () => {
+  setStudioTimeZonePreference("Europe/Amsterdam");
+  const expected = (zone: string, offset: string) => `${new Intl.DateTimeFormat(undefined, { timeZone: zone, dateStyle: "medium", timeStyle: "medium" }).format(new Date(instant))} UTC${offset}`;
+  for (const kind of ["metric", "list"] as const) {
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container);
+    cleanups.push(() => { flushSync(() => root.unmount()); container.remove(); });
+    flushSync(() => root.render(<ResultView result={result} visualization={{ kind, y: ["instant"] }} />));
+    const shown = () => container.querySelector(kind === "metric" ? ".named-metric strong" : ".named-result-list li span")!.textContent;
+    expect(shown()).toContain(expected("Europe/Amsterdam", "+02:00"));
+    flushSync(() => setStudioTimeZonePreference("UTC"));
+    expect(shown()).toContain(expected("UTC", "+00:00"));
+    expect(shown()).not.toContain(instant);
+    flushSync(() => setStudioTimeZonePreference("Europe/Amsterdam"));
+  }
+});

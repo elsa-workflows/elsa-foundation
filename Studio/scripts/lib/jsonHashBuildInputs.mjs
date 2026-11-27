@@ -1,4 +1,5 @@
 import ts from "typescript";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
@@ -7,7 +8,16 @@ const code = /\.[cm]?[jt]sx?$/;
 // filesystem because it cannot change emitted bytes: it runs after the bundle is written and writes elsewhere.
 // - Studio/vite.release-inventory.ts: off unless STUDIO_INVENTORY is set; in writeBundle it records the package
 //   owners and digests of the written files into that separate directory.
-const outputObservers = new Set(["Studio/vite.release-inventory.ts"]);
+// Each is pinned to the reviewed content (LF-normalized SHA-256): any edit refuses until it is reviewed again,
+// so a later hook that reads before or during the build cannot inherit the exemption.
+const outputObservers = new Map([["Studio/vite.release-inventory.ts", "2b78731582df5ab9d122e0ac3021dc9ac2220fe2f9a72e31addb525bdff52e19"]]);
+function isReviewedOutputObserver(repoRoot, file) {
+  const reviewed = outputObservers.get(relative(repoRoot, file).split(sep).join("/"));
+  if (!reviewed) return false;
+  const actual = createHash("sha256").update(readFileSync(file, "utf8").replace(/\r\n/g, "\n")).digest("hex");
+  if (actual !== reviewed) throw new Error("Changed output-only Studio build observer; review that it still cannot change emitted bytes, then update its pinned digest: " + file);
+  return true;
+}
 function moduleFiles(file, name) {
   const selected = resolve(dirname(file), name.split(/[?#]/)[0]);
   const candidates = [selected, ...[".ts", ".tsx", ".mts", ".cts", ".js", ".mjs", ".cjs", ".json"].flatMap(extension =>
@@ -134,7 +144,7 @@ export function studioHashBuildInputs(repoRoot, clients) {
       if (errors.length) throw new Error("Unresolved Studio build configuration: " + JSON.stringify(errors.map(error => ts.flattenDiagnosticMessageText(error.messageText, " "))));
     }
     if (!code.test(file)) continue;
-    if (active.has(file) && !outputObservers.has(relative(repoRoot, file).split(sep).join("/"))) assertStaticBuildInputs(file);
+    if (active.has(file) && !isReviewedOutputObserver(repoRoot, file)) assertStaticBuildInputs(file);
     for (const imported of ts.preProcessFile(readFileSync(file, "utf8"), true, true).importedFiles) {
       if (active.has(file) && [...ownedPackages].some(name => imported.fileName === name || imported.fileName.startsWith(name + "/")))
         throw new Error("Unsupported Studio build owned-package import: " + file + " -> " + imported.fileName);

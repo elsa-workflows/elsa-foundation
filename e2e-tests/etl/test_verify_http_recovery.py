@@ -62,8 +62,7 @@ class ProtectedProductInventoryTests(unittest.TestCase):
         renamed={**products,'actualProductVersions':[{**row,'name':'Elsa.Workbench.Host.dll'} if row['name']=='Elsa.Workbench.dll' else row
             for row in products['actualProductVersions']]}
         self.assertTrue(etl.protected_product_inventory(renamed,source,True,2))
-        both={**products,'actualProductVersions':[*products['actualProductVersions'][1:],renamed['actualProductVersions'][0]]}
-        self.assertTrue(etl.protected_product_inventory(both,source,True,2))
+        # Old and new name together are not one Workbench product.
         mixed={**products,'actualProductVersions':[*products['actualProductVersions'][:-1],renamed['actualProductVersions'][0]]}
         self.assertFalse(etl.protected_product_inventory(mixed,source,True,2))
 
