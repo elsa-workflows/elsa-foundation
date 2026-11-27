@@ -38,6 +38,7 @@ internal static partial class RootEventAdmission
         RootAdmissionPressure.Attempt? attempt, Func<FormattableString, FormattableString>? bind, HeldRootRequest? caller,
         CancellationToken token)
     {
+        if (db.UsesRootPublicEventHost) await RootPublicEventHost.ReadAsync(db, bind, token);
         var qualified = tenant + "_" + key;
         var operation = FoundationRootCreator.OperationDigest(id);
         FormattableString BindPublic(FormattableString sql) => RootPublicEventStarts.Bind(sql, bind);

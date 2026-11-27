@@ -106,26 +106,40 @@ internal sealed partial class PostgresRootAdmission
         await transaction.CommitAsync(token);
     }
 
-    private static async Task LockPublicEventStartTablesAsync(KernelDb db, CancellationToken token)
+    internal static async Task RequirePublicEventHostAsync(KernelDb db, RootPublicEventHost host, CancellationToken token)
     {
-        await db.Database.ExecuteSqlRawAsync("""
+        if (!db.UsesRootPublicEventHost) return;
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
+        var pin = await PinRootNamespaceAsync(db, loadIssuer: false, token) ??
+            throw new StoreFormatException("The public Event host requires the pinned PostgreSQL store.");
+        await LockPublicEventStartTablesAsync(db, token);
+        await RootPublicEventHost.RequireAsync(db, host, sql => BindPublicEventStarts(db, sql, pin), token);
+        await transaction.CommitAsync(token);
+    }
+
+    private static Task LockPublicEventStartTablesAsync(KernelDb db, CancellationToken token)
+    {
+        const string tables = """
             LOCK TABLE ONLY "FoundationPublicEventStarts", ONLY "FoundationPublicEventTargets", ONLY "FoundationPublicEventPublications",
                 ONLY "FoundationPublicEventHorizons", ONLY "FoundationPublicEventLiveWaits", ONLY "FoundationPublicEventLiveReceipts",
-                ONLY "FoundationRootIssuer", ONLY "FoundationRootBirths", ONLY "Instances", ONLY "Subscriptions", ONLY "Messages" IN ACCESS SHARE MODE
-            """, token);
-        if (db.UsesRootPagedPublicEvents)
-            await db.Database.ExecuteSqlRawAsync("""LOCK TABLE ONLY "FoundationPublicEventDispatch" IN ACCESS SHARE MODE""", token);
+                ONLY "FoundationRootIssuer", ONLY "FoundationRootBirths", ONLY "Instances", ONLY "Subscriptions", ONLY "Messages"
+            """;
+        var host = db.UsesRootPublicEventHost ? """, ONLY "FoundationPublicEventHost" """ : "";
+        var dispatch = db.UsesRootPagedPublicEvents ? """, ONLY "FoundationPublicEventDispatch" """ : "";
+        return db.Database.ExecuteSqlRawAsync(tables + host + dispatch + " IN ACCESS SHARE MODE", token);
     }
 
     private static FormattableString BindPublicEventStarts(KernelDb db, FormattableString sql, PinnedRootSource pin)
     {
-        const string relations = """
+        const string tables = """
             ('"FoundationPublicEventStarts"'), ('"FoundationPublicEventTargets"'), ('"FoundationPublicEventPublications"'), ('"FoundationPublicEventHorizons"'),
             ('"FoundationPublicEventLiveWaits"'), ('"FoundationPublicEventLiveReceipts"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
             ('"Instances"'), ('"Subscriptions"'), ('"Messages"')
             """;
-        return WithAdmissionSource(sql, pin, RootPublicEventStarts.Source, db.UsesRootPagedPublicEvents ? 12 : 11,
-            db.UsesRootPagedPublicEvents ? relations + """ , ('"FoundationPublicEventDispatch"') """ : relations,
-            requirePermanentDirectRelations: true);
+        var host = db.UsesRootPublicEventHost ? """ , ('"FoundationPublicEventHost"') """ : "";
+        var dispatch = db.UsesRootPagedPublicEvents ? """ , ('"FoundationPublicEventDispatch"') """ : "";
+        return WithAdmissionSource(sql, pin, RootPublicEventStarts.Source,
+            11 + (db.UsesRootPublicEventHost ? 1 : 0) + (db.UsesRootPagedPublicEvents ? 1 : 0),
+            tables + host + dispatch, requirePermanentDirectRelations: true);
     }
 }

@@ -299,6 +299,9 @@ public static partial class PostgresPreviewHosting
             requests?.RequireKeyBinding(create, actorType, takesKeyedRequests);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
+            if (db.PublicEventHost is { } host)
+                await PostgresRootAdmission.RequirePublicEventHostAsync(db, new(actorType, requests?.ProtectsRootStarts ?? host.ProtectsStarts),
+                    cancellationToken);
             usesPressure = db.UsesRootDueBacklog;
         }
         if (usesPressure && pressure is null)
@@ -335,6 +338,8 @@ public static partial class PostgresPreviewHosting
         using var db = create();
         if (protectRootStart is not null && (!db.UsesRootReplyProtocol || !db.UsesRootPreparedStarts))
             throw new NotSupportedException("Held root protection requires an installed PostgreSQL prepared-start profile.");
+        if (db.UsesRootPublicEventHost && db.PublicEventHost != new RootPublicEventHost(actorType, protectRootStart is not null))
+            throw new ArgumentException("Held requests must match the public Event host actor type and root start protection.");
         if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
         return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: pressure), new EfStore(create, postgres: true),
             node, actorType, protectRootStart) { DeduplicationWindow = window };
@@ -373,8 +378,8 @@ public static partial class PostgresPreviewHosting
         if (node.Contains('\0') || !FoundationMetadataLimits.FitsName(node))
             throw new ArgumentException("Invalid PostgreSQL node name.", nameof(node));
         PostgresRootAdmission.RequireActorType(actor.Type);
-        (replies as PostgresDirectRequests)?.RequireRootStartProtectionBinding(create, actor.Type);
         var requestEdge = replies as PostgresDirectRequests ?? localRequests;
+        requestEdge?.RequireRootStartProtectionBinding(create, actor.Type);
         requestEdge?.RequirePublicEventBinding(create, actor.Type);
         if (requestEdge is not null && requestEdge.Node != node)
             throw new ArgumentException("The local reply registry must belong to the owner node.", nameof(replies));
@@ -405,8 +410,10 @@ public static partial class PostgresPreviewHosting
                 throw new NotSupportedException(replies is null
                     ? "A store with held replies needs the reply transport its callers wait on."
                     : "Only a store with held replies answers held callers.");
-            (replies as PostgresDirectRequests)?.RequireKeyBinding(create, actor.Type, db.UsesRootKeyedStarts);
+            requestEdge?.RequireKeyBinding(create, actor.Type, db.UsesRootKeyedStarts);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
+            await PostgresRootAdmission.RequirePublicEventHostAsync(db, new(actor.Type, requestEdge?.ProtectsRootStarts == true),
+                cancellationToken);
             if (db.UsesRootSequencedJournal) await EfStore.RequirePostgresSequencedJournalAsync(db, cancellationToken);
             if (db.UsesRootPlaybackDescendants) await EfStore.RequirePostgresPlaybackAsync(db, cancellationToken);
             if (db.UsesRootScheduleControls) await RootScheduleControls.RequirePostgresDefinitionsAsync(db, cancellationToken);
@@ -414,7 +421,7 @@ public static partial class PostgresPreviewHosting
             await PostgresRootAdmission.BindScheduleOwnerAsync(db, auxiliaryActor?.Type, cancellationToken);
         }
 
-        var pressure = (replies as PostgresDirectRequests)?.Pressure;
+        var pressure = requestEdge?.Pressure;
         var store = new EfStore(create, postgres: true, fenceInBatch: fenceInBatch)
             { AdmissionPressure = pressure, ProtectChildBirths = protectChildBirths };
         if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
@@ -433,7 +440,7 @@ public static partial class PostgresPreviewHosting
         // distinct error per window, so a drain the deadline kills shows why it made no progress.
         RuntimeNode? reporter = null;
         var publicEvents = publicEventMaintenance ? new PostgresRootAdmission(create, TimeSpan.Zero) : null;
-        var edge = liveReplyRelay ? replies as PostgresDirectRequests : null;
+        var edge = liveReplyRelay ? requestEdge : null;
         var relay = edge is null ? null : await edge.OpenLiveRepliesAsync(create,
             error => Volatile.Read(ref reporter)?.RecordLoopError(error), cancellationToken);
         var workers = new WorkerOptions

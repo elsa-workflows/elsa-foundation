@@ -669,7 +669,7 @@ internal static partial class KernelAuthoredEventChecks
         Check(true, "stored null headers fail definitively across the direct wire families");
     }
 
-    private sealed class PublicEventActor : Contract.IActorType
+    private sealed class PublicEventActor(Action<object?>? observeLiveAmbient = null) : Contract.IActorType
     {
         internal const string Key = "event:Orders";
         internal const string KeepingStartTopic = "retained-start-same-wait";
@@ -696,6 +696,7 @@ internal static partial class KernelAuthoredEventChecks
                 if (message.Kind == "arm-keep") turn.Subscribe(message.Payload!, "kept", keep: true);
                 if (message.Event is { } published)
                 {
+                    if (turn.Header.TypeData == "live-waiter") observeLiveAmbient?.Invoke(turn.Ambient);
                     if (turn.Header.TypeData == "held-recipient") turn.Emit("held-event", message.Payload);
                     if (turn.Header.TypeData == "fanout-emits")
                     {

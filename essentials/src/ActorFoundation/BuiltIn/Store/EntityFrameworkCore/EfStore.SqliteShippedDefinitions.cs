@@ -42,7 +42,8 @@ public sealed partial class EfStore
             await RequireSqliteInstallConnectionAsync(db, token);
             var installed = await ReadSqliteDefinitionsAsync(db, token);
             var expected = SqliteBaseDefinitions(db).Concat(SqliteRootDefinitions(db)).ToArray();
-            if (installed.Count == 0)
+            var create = installed.Count == 0;
+            if (create)
             {
                 foreach (var definition in expected)
                 {
@@ -57,6 +58,7 @@ public sealed partial class EfStore
             await RequireInstalledStoreVersionsAsync(db, FormatLock.None, token);
 
             RequireSqliteDefinitions(installed, expected);
+            if (db.UsesRootPublicEventHost) await RootPublicEventHost.InstallAsync(db, db.PublicEventHost, create, token);
             if (!await db.Database.SqlQuery<bool>($"""
                 SELECT
                     (SELECT count(*) FROM "Partitions") = {partitions}
@@ -348,6 +350,8 @@ public sealed partial class EfStore
             if (db.UsesRootEventStartScan)
                 yield return Index(RootEventStarts.ScanIndex, RootEventStarts.Targets, RootEventStarts.ScanColumns);
         }
+        if (db.UsesRootPublicEventHost)
+            yield return Table(RootPublicEventHost.Table, RootPublicEventHost.Columns(sqlite: true));
         if (db.UsesRootPublicEventStarts)
         {
             yield return Table(RootPublicEventStarts.Registrations, RootPublicEventStarts.RegistrationColumns(sqlite: true));

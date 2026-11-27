@@ -13,11 +13,12 @@ internal static partial class RootEventStarts
     internal static async Task<bool> MayCreatePostgresPublicAuthorityAsync(KernelDb db, CancellationToken token)
     {
         var format = db.RequiredFormat;
-        var expectedRelations = PublicAuthorityTables + (db.UsesRootPagedPublicEvents ? 1 : 0);
+        var expectedRelations = PublicAuthorityTables + (db.UsesRootPublicEventHost ? 1 : 0) + (db.UsesRootPagedPublicEvents ? 1 : 0);
         var state = await db.Database.SqlQuery<PublicInstallState>($"""
             SELECT (SELECT count(*)::int FROM (VALUES ('"FoundationPublicEventStarts"'), ('"FoundationPublicEventTargets"'),
                     ('"FoundationPublicEventPublications"'), ('"FoundationPublicEventLiveWaits"'), ('"FoundationPublicEventLiveReceipts"'),
-                    ('"FoundationPublicEventHorizons"'), (CASE WHEN {db.UsesRootPagedPublicEvents} THEN '"FoundationPublicEventDispatch"' END))
+                    ('"FoundationPublicEventHorizons"'), (CASE WHEN {db.UsesRootPublicEventHost} THEN '"FoundationPublicEventHost"' END),
+                    (CASE WHEN {db.UsesRootPagedPublicEvents} THEN '"FoundationPublicEventDispatch"' END))
                     AS authority(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL) AS "Relations",
                 (pg_catalog.to_regclass('"FoundationRootIssuer"') IS NOT NULL OR
                     pg_catalog.to_regclass('"FoundationRootBirths"') IS NOT NULL OR
@@ -39,6 +40,7 @@ internal static partial class RootEventStarts
         var receipts = db.UsesRootEventStartReceipts;
         var scan = db.UsesRootEventStartScan;
         var publicStarts = db.UsesRootPublicEventStarts;
+        var hostAuthority = db.UsesRootPublicEventHost;
         var dispatch = db.UsesRootPagedPublicEvents;
         var receiptIndex = receipts ? $"""CREATE INDEX IF NOT EXISTS "{ReceiptIndex}" ON "{Targets}" {ReceiptColumns};""" : "";
         var scanIndex = scan ? $"""CREATE INDEX IF NOT EXISTS "{ScanIndex}" ON "{Targets}" {ScanColumns};""" : "";
@@ -71,6 +73,17 @@ internal static partial class RootEventStarts
                 LOCK TABLE ONLY "FoundationPublicEventStarts", ONLY "FoundationPublicEventTargets", ONLY "FoundationPublicEventPublications",
                     ONLY "FoundationPublicEventLiveWaits", ONLY "FoundationPublicEventLiveReceipts", ONLY "FoundationPublicEventHorizons" IN ACCESS SHARE MODE
                 """, token);
+        if (hostAuthority)
+        {
+            if (createPublicAuthority)
+                await db.Database.ExecuteSqlRawAsync($"""
+                    CREATE TABLE "{RootPublicEventHost.Table}" ({RootPublicEventHost.Columns(sqlite: false)})
+                    """, token);
+            else
+                await db.Database.ExecuteSqlRawAsync("""
+                    LOCK TABLE ONLY "FoundationPublicEventHost" IN ACCESS SHARE MODE
+                    """, token);
+        }
         if (dispatch)
         {
             if (createPublicAuthority)
@@ -94,6 +107,7 @@ internal static partial class RootEventStarts
         var publicLive = "kernel_public_event_live_" + suffix;
         var publicLiveReceipts = "kernel_public_event_live_rcpt_" + suffix;
         var publicHorizons = "kernel_public_event_horizon_" + suffix;
+        var publicHost = "kernel_public_event_host_" + suffix;
         var publicDispatch = "kernel_public_event_dispatch_" + suffix;
         var compareReceipts = receipts ? $"""CREATE INDEX "{targets}_r" ON "{targets}" {ReceiptColumns};""" : "";
         var compareScan = scan ? $"""CREATE INDEX "{targets}_o" ON "{targets}" {ScanColumns};""" : "";
@@ -123,6 +137,11 @@ internal static partial class RootEventStarts
                 CREATE INDEX "{publicPublications}_c" ON "{publicPublications}" {RootPublicEventPublications.CleanupColumns};
                 """, token);
 
+        if (hostAuthority)
+            await db.Database.ExecuteSqlRawAsync($"""
+                CREATE TABLE "{publicHost}" ({RootPublicEventHost.Columns(sqlite: false)})
+                """, token);
+
         if (dispatch)
             await db.Database.ExecuteSqlRawAsync($"""
                 CREATE TABLE "{publicDispatch}" ({RootPublicEventDispatch.Columns(sqlite: false)})
@@ -139,6 +158,7 @@ internal static partial class RootEventStarts
                        (pg_catalog.to_regclass({publicLive}), pg_catalog.to_regclass('"FoundationPublicEventLiveWaits"')),
                        (pg_catalog.to_regclass({publicLiveReceipts}), pg_catalog.to_regclass('"FoundationPublicEventLiveReceipts"')),
                        (pg_catalog.to_regclass({publicHorizons}), pg_catalog.to_regclass('"FoundationPublicEventHorizons"')),
+                       (pg_catalog.to_regclass({publicHost}), pg_catalog.to_regclass('"FoundationPublicEventHost"')),
                        (pg_catalog.to_regclass({publicDispatch}), pg_catalog.to_regclass('"FoundationPublicEventDispatch"'))
             ), shapes AS (
                 SELECT c.oid,
@@ -156,12 +176,13 @@ internal static partial class RootEventStarts
                     AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_inherits i WHERE c.oid IN (i.inhparent, i.inhrelid))
                     AND c.oid IN (SELECT expected FROM pairs UNION SELECT installed FROM pairs)
             )
-            SELECT count(*) = {3 + (publicStarts ? PublicAuthorityTables : 0) + (dispatch ? 1 : 0)} AND bool_and(expected.columns = installed.columns AND expected.constraints = installed.constraints
+            SELECT count(*) = {3 + (publicStarts ? PublicAuthorityTables : 0) + (hostAuthority ? 1 : 0) + (dispatch ? 1 : 0)} AND bool_and(expected.columns = installed.columns AND expected.constraints = installed.constraints
                 AND expected.indexes = installed.indexes) AS "Value"
             FROM pairs JOIN shapes expected ON expected.oid = pairs.expected JOIN shapes installed ON installed.oid = pairs.installed
             """).SingleAsync(token);
         await transaction.RollbackToSavepointAsync(savepoint, token);
         if (!same) throw new StoreFormatException("The installed event start definitions differ from the selected profile.");
+        if (hostAuthority) await RootPublicEventHost.InstallAsync(db, db.PublicEventHost, createPublicAuthority, token);
         if (publicStarts)
         {
             var format = db.RequiredFormat;

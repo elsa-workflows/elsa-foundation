@@ -46,6 +46,18 @@ public static partial class PostgresPreviewHosting
     public static Task InstallSharedActivationQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default) =>
         InstallPreviewFormatAsync(() => CreateSharedActivationQualificationContext(options), cancellationToken);
 
+    /// <summary>Selects the private profile that binds public Event start authority to the installed actor host.</summary>
+    public static KernelDb CreatePublicEventHostQualificationContext(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts)
+    {
+        PostgresRootAdmission.RequireActorType(actorType);
+        return KernelDb.ForPostgresRootPublicEventHostQualification(options, new(actorType, protectsStarts));
+    }
+
+    /// <summary>Installs or verifies a PostgreSQL Event host with the specified actor type and start protection.</summary>
+    public static Task InstallPublicEventHostQualificationAsync(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts,
+        CancellationToken cancellationToken = default) =>
+        InstallPreviewFormatAsync(() => CreatePublicEventHostQualificationContext(options, actorType, protectsStarts), cancellationToken);
+
     /// <summary>Whether the selected PostgreSQL profile supports Event-triggered starts.</summary>
     public static bool TakesEventStarts(Func<KernelDb> create)
     {
