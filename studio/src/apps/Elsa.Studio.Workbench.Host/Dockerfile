@@ -27,14 +27,14 @@ COPY studio/Elsa.Studio.slnx ./studio/
 # Hosting and its optional administration package use these lightweight Foundation libraries.
 # Their shared build/version inputs and compile-only naming analyzer are required in this context too.
 COPY Directory.Build.props Directory.Packages.props VersionLines.props PackageVersioning.props PackageRanges.targets .editorconfig ./
-COPY server/essentials/build/Analyzers/ ./server/essentials/build/Analyzers/
-COPY server/essentials/src/Modularity/Core/ ./server/essentials/src/Modularity/Core/
-COPY server/essentials/src/Modularity/Nuplane/ ./server/essentials/src/Modularity/Nuplane/
-COPY server/essentials/src/Preferences/Core/ ./server/essentials/src/Preferences/Core/
-COPY server/essentials/src/Events/ ./server/essentials/src/Events/
-COPY server/essentials/src/Pipelines/Core/ ./server/essentials/src/Pipelines/Core/
-COPY server/essentials/src/Primitives/Primitives/ ./server/essentials/src/Primitives/Primitives/
-COPY server/essentials/src/Tasks/Core/ ./server/essentials/src/Tasks/Core/
+COPY essentials/build/Analyzers/ ./essentials/build/Analyzers/
+COPY essentials/src/Modularity/Core/ ./essentials/src/Modularity/Core/
+COPY essentials/src/Modularity/Nuplane/ ./essentials/src/Modularity/Nuplane/
+COPY essentials/src/Preferences/Core/ ./essentials/src/Preferences/Core/
+COPY essentials/src/Events/ ./essentials/src/Events/
+COPY essentials/src/Pipelines/Core/ ./essentials/src/Pipelines/Core/
+COPY essentials/src/Primitives/Primitives/ ./essentials/src/Primitives/Primitives/
+COPY essentials/src/Tasks/Core/ ./essentials/src/Tasks/Core/
 
 # Copy the Studio host and shared modules.
 COPY studio/src/ ./studio/src/

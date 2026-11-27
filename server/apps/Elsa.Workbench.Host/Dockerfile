@@ -66,7 +66,7 @@ COPY tools/architecture/check-kernel-model-references.targets ./tools/architectu
 # changes no longer invalidate the expensive RID-specific restore layer. The recursive
 # patterns cover the complete project graph without a manually maintained file list,
 # each project's committed NuGet lock file included (#2122).
-COPY --parents server/essentials/**/*.csproj server/essentials/**/*.targets server/essentials/**/packages.lock.json server/apps/**/*.csproj server/apps/**/*.targets server/apps/**/packages.lock.json extensions/**/*.csproj extensions/**/*.targets extensions/**/packages.lock.json ./
+COPY --parents essentials/**/*.csproj essentials/**/*.targets essentials/**/packages.lock.json server/apps/**/*.csproj server/apps/**/*.targets server/apps/**/packages.lock.json extensions/**/*.csproj extensions/**/*.targets extensions/**/packages.lock.json ./
 
 # Locked, and without a runtime identifier (#2122): restores exactly the versions the
 # committed lock files name, and fails when one no longer matches its project or names a
@@ -98,8 +98,8 @@ RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
 FROM restore AS build
 
 # Copy the source tree (tests, docs, local dev artifacts are excluded via .dockerignore).
-# One root carries everything the Workbench composes: server/essentials/src, Extensions and apps (#1815).
-COPY server/essentials/ ./server/essentials/
+# One root carries everything the Workbench composes: essentials/src, Extensions and apps (#1815).
+COPY essentials/ ./essentials/
 COPY server/apps/ ./server/apps/
 COPY extensions/ ./extensions/
 

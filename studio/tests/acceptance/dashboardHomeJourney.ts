@@ -5,7 +5,7 @@ import { captureDashboardAppearances } from "./nativeDashboardsJourney";
 type Layout = { source: string; revision?: string; schemaVersion: number; value: { widgets: { id: string; size: string; visible: boolean; options?: unknown }[] } };
 const canonicalAuthenticatedHome = ["home.get-started", "home.quick-actions", "home.recent-workflows", "home.recent-runs", "home.needs-attention", "home.tasks"];
 const homeOwners = {
-  authenticatedDefault: "server/essentials/src/Preferences/Core/StudioHomeLayout.cs",
+  authenticatedDefault: "essentials/src/Preferences/Core/StudioHomeLayout.cs",
   page: "studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/home/HomePage.tsx",
   anonymousFallback: "studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/home/homeLayout.ts",
   moduleRegistration: "extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client/src/module.tsx"

@@ -9,9 +9,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\..\..\..\server\essentials\src\Expressions\JavaScript\Core\Elsa.Expressions.JavaScript.Core.csproj" />
-	  <ProjectReference Include="..\..\..\..\server\essentials\src\Events\Core\Elsa.Events.Core.csproj" />
-	  <ProjectReference Include="..\..\..\..\server\essentials\src\Expressions\JavaScript\Rendering\Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
+	  <ProjectReference Include="..\..\..\..\essentials\src\Expressions\JavaScript\Core\Elsa.Expressions.JavaScript.Core.csproj" />
+	  <ProjectReference Include="..\..\..\..\essentials\src\Events\Core\Elsa.Events.Core.csproj" />
+	  <ProjectReference Include="..\..\..\..\essentials\src\Expressions\JavaScript\Rendering\Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
 	  <ProjectReference Include="..\Core\Elsa.Http.Core.csproj" />
 	</ItemGroup>
 

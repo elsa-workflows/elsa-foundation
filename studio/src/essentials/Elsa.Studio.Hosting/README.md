@@ -121,7 +121,7 @@ The built-in default layout lists Get started, Workflow run health, Workflow por
 
 Signed-in users read and write `/_elsa/studio/home-layout`. Admins with `studio/preferences/defaults:manage` (or `*`) read and write `/_elsa/studio/home-layout/default`. **Reset to default** deletes the user document so the admin default, then the built-in layout, applies. When GET falls back to the admin default it still returns that document's ETag; the first user PUT uses `If-None-Match: *`. The reserved subject `__admin_default__` cannot call the per-user route. When the backend has no Studio Preferences API, Home keeps the layout on the device.
 
-When sign-in is off the client never calls the Home layout API. The layout is stored in `localStorage` under `elsa-studio:home-layout:` (scoped by host, backend, tenant and subject). If that key is missing, Home uses the built-in default. A reset clears the local key. See [Studio Preferences API](../../../../server/essentials/src/Preferences/Api/README.md) for the HTTP surface.
+When sign-in is off the client never calls the Home layout API. The layout is stored in `localStorage` under `elsa-studio:home-layout:` (scoped by host, backend, tenant and subject). If that key is missing, Home uses the built-in default. A reset clears the local key. See [Studio Preferences API](../../../../essentials/src/Preferences/Api/README.md) for the HTTP surface.
 
 
 ## Branding
