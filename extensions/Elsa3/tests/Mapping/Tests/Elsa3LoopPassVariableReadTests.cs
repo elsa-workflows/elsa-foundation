@@ -112,6 +112,32 @@ public sealed class Elsa3LoopPassVariableReadTests
         AssertReadsLoop(result, "loop", "currentItem");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task In_a_reusable_workflow_a_body_variable_that_a_callers_pass_may_sit_behind_is_refused(bool reusable)
+    {
+        // Run as a reusable activity, a calling loop's CurrentValue above this workflow is overwritten in place, behind the
+        // body's own CurrentValue; run alone, the pass's variable is the body's and comes first.
+        var body = Sequence("body", Read("getVariable('CurrentValue')"));
+        body.AdditionalProperties["variables"] = JsonSerializer.SerializeToElement(new[] { new { id = "acme-body-value", name = "CurrentValue", typeName = "String" } });
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Sequence("root", ForEach("loop", body))), isReusable: reusable);
+
+        if (reusable)
+        {
+            Assert.False(result.Succeeded);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("calling workflow", StringComparison.Ordinal));
+        }
+        else
+        {
+            Assert.True(result.Succeeded, Describe(result.Diagnostics));
+            AssertReadsLoop(result, "loop", "currentItem");
+        }
+    }
+
     [Fact]
     public async Task A_generated_accessor_shared_with_a_workflow_variable_reads_the_workflow_variable()
     {

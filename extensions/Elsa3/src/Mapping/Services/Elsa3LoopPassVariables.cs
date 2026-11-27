@@ -107,6 +107,11 @@ internal static class Elsa3LoopPassVariables
                 locations.Add((container, false, earlier));
         }
 
+        // A reusable workflow runs inline in its caller: a calling loop's block above it is overwritten in place, behind
+        // the reusable's own variables and inputs.
+        if (plan.Request.IsReusable && topContainer is not null)
+            locations.Add((null, false, null));
+
         var verdicts = locations.Select(location => (location.Writer, Wins: PassWins(plan, read, path, location.Container, location.Fresh, name))).ToArray();
         if (verdicts.All(verdict => !verdict.Wins))
         {
@@ -139,8 +144,10 @@ internal static class Elsa3LoopPassVariables
         if (verdicts.All(verdict => verdict.Wins))
             return new Elsa3PassRead(Elsa3PassReadKind.Loop, name, NodeId(owner), loopVariable);
 
-        var writer = verdicts.First(verdict => verdict.Writer is not null).Writer!;
-        return Ambiguous(name, $"loop '{NodeId(writer)}' may run first and leave its '{name}' where a variable named '{name}' hides it");
+        var writer = verdicts.FirstOrDefault(verdict => verdict.Writer is not null).Writer;
+        return Ambiguous(name, writer is null
+            ? $"a calling workflow's loop may hold its '{name}' above this reusable workflow, where a variable named '{name}' hides it"
+            : $"loop '{NodeId(writer)}' may run first and leave its '{name}' where a variable named '{name}' hides it");
     }
 
     /// <summary>The per-pass reads a computed name could reach from <paramref name="read"/>: those not plainly another variable.</summary>
