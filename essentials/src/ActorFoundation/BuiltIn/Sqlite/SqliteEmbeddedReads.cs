@@ -18,7 +18,9 @@ public static partial class SqliteEmbeddedHosting
     private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat)
         : Contract.IActorReads, Contract.IActorTerminalOutputReads, Contract.IActorSequencedJournalReads
     {
-        public bool SupportsSequencedJournal => qualificationFormat == StoreFormat.RootSequencedJournalQualification;
+        public bool SupportsSequencedJournal => qualificationFormat is null
+            ? TakesSequencedJournal
+            : qualificationFormat == StoreFormat.RootSequencedJournalQualification;
 
         public ValueTask<Contract.ActorSequencedJournalPage?> ReadSequencedJournalAsync(Contract.BoundScope scope,
             Contract.ActorRef actor, long afterSequence, long? upperSequence, int limit, CancellationToken cancellationToken = default) =>

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Text.Json;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Foundation.Sqlite;
@@ -108,7 +109,10 @@ internal static class ShippedWriteBudget
             await store.EnableRootJobsAsync(token);
             await store.EnableRootChildrenAsync(token);
             var definition = Reference.WriteLines(Lines);
-            var model = new NativeExecutionModel(new WorkflowRegistry().Add(definition), new() { SelfSends = true });
+            var sequenced = reads is Contract.IActorSequencedJournalReads { SupportsSequencedJournal: true } reader ? reader : null;
+            var model = new NativeExecutionModel(new WorkflowRegistry().Add(definition),
+                new() { SelfSends = true, UseStructuralJournal = sequenced is not null });
+            Console.WriteLine($"The selected writer records {(sequenced is null ? "legacy" : "structural")} Native journal entries.");
             var actor = new PublicActor([model]);
             var roots = postgres ? store.BindWorkerNode(actor.Withholds) : store.BindSqliteWorkerNode(actor.Withholds);
             var adapter = new ActorAdapter(store.WorkerHeaders(roots), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
@@ -168,13 +172,23 @@ internal static class ShippedWriteBudget
                     .SequenceEqual(Enumerable.Range(1, Lines).Select(line => $"line {line}")),
                     "The ten Native WriteLines must execute once in authored order.");
                 var journal = await reads.TailAsync(scope, reference, cancellationToken: token);
-                var completions = journal.Items.Select(PostgresPublicPreview.Decode)
-                    .Where(entry => entry.StartsWith("c:", StringComparison.Ordinal) && entry.Contains(":write-", StringComparison.Ordinal))
-                    .Select(entry => entry[(entry.LastIndexOf(':') + 1)..]);
+                var completions = sequenced is null
+                    ? journal.Items.Select(PostgresPublicPreview.Decode)
+                        .Where(entry => entry.StartsWith("c:", StringComparison.Ordinal) && entry.Contains(":write-", StringComparison.Ordinal))
+                        .Select(entry => entry[(entry.LastIndexOf(':') + 1)..])
+                    : journal.Items.Select(StructuralWriteLineCompletion).OfType<string>();
                 Check(journal.Items.All(entry => entry.Revision == 1) &&
                     completions.SequenceEqual(Enumerable.Range(1, Lines).Select(line => $"write-{line}")) &&
                     journal.Items.Select(PostgresPublicPreview.Decode).Count(entry => entry == "end") == 1,
                     "The public journal must expose ten ordered completions and one end in revision 1.");
+                if (sequenced is not null)
+                {
+                    var page = await sequenced.ReadSequencedJournalAsync(scope, reference, 0, null, 64, token);
+                    Check(page is not null && page.UpperSequence == journal.Items.Count && page.Items.Count == journal.Items.Count &&
+                        page.Items.Zip(journal.Items).All(pair => pair.First.Revision == pair.Second.Revision &&
+                            pair.First.CommitOrdinal == pair.Second.CommitOrdinal && pair.First.Entry == pair.Second.Entry),
+                        "The sequenced reader must retain every entry of the measured structural commit in order.");
+                }
                 if (sample == 0) continue;
 
                 var total = written - baseline;
@@ -216,6 +230,18 @@ internal static class ShippedWriteBudget
 
         Measurement Read() => wire is null ? sqlite!.Read() : new(wire.Trips, wire.ProtocolRequests, wire.Connections,
             counter.Commands, counter.Transactions.Begun, counter.Transactions.Ended, 0, 0);
+    }
+
+    private static string? StructuralWriteLineCompletion(Contract.JournalEntry entry)
+    {
+        const int completed = 3;
+        using var document = JsonDocument.Parse(entry.Entry);
+        var value = document.RootElement;
+        return value.ValueKind == JsonValueKind.Object && value.TryGetProperty("NativeStructure", out var version) &&
+            version.GetInt32() == 1 && value.GetProperty("Kind").GetInt32() == completed &&
+            value.GetProperty("Node").GetString() is { } node && node.StartsWith("write-", StringComparison.Ordinal)
+            ? node
+            : null;
     }
 
     // The stepped owner shares the shipped host's file lease, options and verified definitions with its public edge.

@@ -148,6 +148,14 @@ public static class PostgresPreviewHosting
         return db.UsesRootChildren;
     }
 
+    /// <summary>Whether the selected format records a sequenced workflow journal.</summary>
+    public static bool TakesSequencedJournal(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootSequencedJournal;
+    }
+
     /// <summary>
     /// Opens the Foundation's ingress and reads on an installed PostgreSQL Core Preview store, for the configured actor type.
     /// With <paramref name="requests"/> (<see cref="CreateRequests"/>), on a store with held replies (<c>ReplyProtocol</c>),
