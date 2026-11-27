@@ -16,7 +16,7 @@ internal static class RootPreparedStarts
 {
     internal const string Table = "FoundationPreparedRootStarts";
     internal const string DeadlineIndex = "IX_FoundationPreparedRootStarts_Deadline";
-    internal const string DeadlineColumns = """("Deadline", "Reference")""";
+    internal const string DeadlineColumns = """("Tenant", "Deadline", "Reference")""";
 
     internal const string Source = "/*prepared-start-source*/";
     private const string IssuancePrefix = "held-root/1.";
@@ -29,7 +29,7 @@ internal static class RootPreparedStarts
         var issuance = body + "." + Convert.ToHexString(HMACSHA256.HashData(key, Encoding.ASCII.GetBytes(body)));
         if (issuance.Length > MaximumIssuanceLength)
             throw new InvalidOperationException("Held root preparation exceeds its issuance limit.");
-        return new(stage.Tenant, new(stage.Reference), spec.Type, spec.TypeData, issuance);
+        return new(stage.Tenant, new(stage.Reference), spec.Model, spec.Definition, issuance);
     }
 
     internal static PreparedRootStart? Verify(byte[] key, Contract.BoundScope scope, Contract.ActorRef actor, string issuance)
@@ -80,18 +80,66 @@ internal static class RootPreparedStarts
                 AND (SELECT "SourceReady" FROM source)
             """, token, bindSource);
 
+    internal static async Task ExpireAsync(KernelDb db, PreparedRootStart stage, long now, CancellationToken token,
+        Func<FormattableString, FormattableString>? bindSource = null)
+    {
+        if (now < stage.Deadline) return;
+        await ConsumeAsync(db, stage, token, bindSource);
+    }
+
+    internal static Task<int> PruneAsync(KernelDb db, string tenant, long now, CancellationToken token,
+        Func<FormattableString, FormattableString>? bindSource = null) =>
+        db.Database.ExecuteSqlInterpolatedAsync(Bind(db, $"""
+            WITH source AS MATERIALIZED (/*prepared-start-source*/)
+            DELETE FROM /*prepared-only*/"FoundationPreparedRootStarts"
+            WHERE "Reference" IN (
+                SELECT "Reference" FROM /*prepared-only*/"FoundationPreparedRootStarts"
+                WHERE "Tenant" = {tenant} AND "Deadline" <= {now} ORDER BY "Deadline", "Reference" LIMIT 32)
+                AND (SELECT "SourceReady" FROM source)
+            """, bindSource), token);
+
+    internal static async Task<RootStartProof> ReadProofAsync(KernelDb db, PreparedRootStart stage, CancellationToken token,
+        Func<FormattableString, FormattableString>? bindSource = null)
+    {
+        var creator = "root:" + stage.Actor;
+        var query = Bind(db, $"""
+            WITH source AS MATERIALIZED (/*prepared-start-source*/)
+            SELECT CASE
+                WHEN NOT source."SourceReady" THEN 0
+                WHEN EXISTS (
+                    SELECT 1 FROM /*prepared-only*/"FoundationRootBirths" b
+                    JOIN /*prepared-only*/"Instances" i ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
+                        AND i."FoundationTenant" = b."Tenant" AND i."FoundationReference" = b."Reference"
+                    JOIN /*prepared-only*/"Journal" j ON j."Instance" = i."Id" AND j."Partition" = i."Partition"
+                        AND j."Revision" = -1 AND j."Entries" = '["delete"]'
+                    WHERE b."Tenant" = {stage.Tenant} AND b."Reference" = {stage.Reference} AND b."Actor" = {stage.Actor}
+                        AND b."Partition" = {stage.Partition} AND b."Creation" = 1 AND b."Creator" = {creator}
+                        AND b."Fingerprint" = {stage.Fingerprint} AND i."Retired" AND i."Status" <> {(int)InstanceStatus.Running}
+                        AND i."FoundationTerminalRevision" > 0 AND i."FoundationTerminalAt" IS NOT NULL
+                        AND i."FoundationWriteRevision" = i."Revision") THEN 1
+                WHEN NOT EXISTS (SELECT 1 FROM /*prepared-only*/"FoundationPreparedRootStarts" WHERE "Reference" = {stage.Reference})
+                    AND NOT EXISTS (SELECT 1 FROM /*prepared-only*/"FoundationRootBirths" WHERE "Reference" = {stage.Reference} OR "Actor" = {stage.Actor})
+                    AND NOT EXISTS (SELECT 1 FROM /*prepared-only*/"Instances" WHERE "Partition" = {stage.Partition} AND "Id" = {stage.Actor})
+                    AND NOT EXISTS (SELECT 1 FROM /*prepared-only*/"Messages" WHERE "InboxScope" = 0 AND "Id" = {creator}) THEN 2
+                ELSE 0 END AS "Value" FROM source
+            """, bindSource);
+        return (RootStartProof)await db.Database.SqlQuery<int>(query).SingleAsync(token);
+    }
+
     private static async Task<bool> ChangeAsync(KernelDb db, FormattableString query, CancellationToken token,
-        Func<FormattableString, FormattableString>? bindSource)
+        Func<FormattableString, FormattableString>? bindSource) =>
+        await db.Database.ExecuteSqlInterpolatedAsync(Bind(db, query, bindSource), token) == 1;
+
+    private static FormattableString Bind(KernelDb db, FormattableString query, Func<FormattableString, FormattableString>? bindSource)
     {
         if (!db.UsesRootPreparedStarts || db.Database.CurrentTransaction is null || !db.UsesSqliteRootRuntime && bindSource is null)
-            throw new NotSupportedException("Held root preparation requires a bound provider write transaction.");
+            throw new NotSupportedException("Held root preparation requires a bound provider transaction.");
 
-        // Keep the source selection in the same statement as the mutation.
+        // Keep the source selection in the same statement as the query.
         var format = query.Format.Replace("/*prepared-only*/", db.UsesSqliteRootRuntime ? "" : "ONLY ", StringComparison.Ordinal);
         query = FormattableStringFactory.Create(format, query.GetArguments());
-        var bound = bindSource is not null ? bindSource(query) : FormattableStringFactory.Create(
+        return bindSource is not null ? bindSource(query) : FormattableStringFactory.Create(
             format.Replace(Source, """SELECT true AS "SourceReady" """, StringComparison.Ordinal), query.GetArguments());
-        return await db.Database.ExecuteSqlInterpolatedAsync(bound, token) == 1;
     }
 
     internal static string Columns(bool sqlite)
