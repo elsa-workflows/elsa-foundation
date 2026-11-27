@@ -38,3 +38,13 @@ internal sealed class RuntimeKernelScheduleControlScanEntityConfiguration : IEnt
         builder.Property(row => row.Pass).IsConcurrencyToken();
     }
 }
+
+internal sealed class RuntimeKernelScheduleCutoverEntityConfiguration : IEntityTypeConfiguration<RuntimeKernelScheduleCutoverEntity>
+{
+    public void Configure(EntityTypeBuilder<RuntimeKernelScheduleCutoverEntity> builder)
+    {
+        builder.ToTable("elsa_runtime_kernel_schedule_cutover");
+        builder.HasKey(row => row.Id);
+        builder.Property(row => row.Id).HasMaxLength(64);
+    }
+}

@@ -93,6 +93,22 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbConte
                 if (CanonicalScope(current.Scope) != CanonicalScope(replacement.Scope) || current.ScheduleKey != replacement.ScheduleKey ||
                     current.DefinitionId != replacement.DefinitionId || current.TriggerNode != replacement.TriggerNode)
                     throw InvalidControl();
+                if (current.Owner is { Continuity: { } priorContinuity } former &&
+                    replacement.Owner is { Continuity: { } nextContinuity } successor &&
+                    priorContinuity.Stimulus == nextContinuity.Stimulus)
+                {
+                    // Freeze the first cutover for an older actor, even if it skips subsequent controls.
+                    if (former.PublicationRevision < successor.PublicationRevision)
+                        context.KernelScheduleCutovers.Add(new()
+                        {
+                            Id = CutoverId(persistence, slotId, former.PublicationRevision, priorContinuity.Stamp),
+                            ActivatedAtUtcTicks = nextContinuity.ActivatedAt.UtcTicks
+                        });
+                    replacement = replacement with
+                    {
+                        Owner = successor with { Continuity = nextContinuity with { Stamp = priorContinuity.Stamp } }
+                    };
+                }
                 if (current.Owner != replacement.Owner || current.Scope != replacement.Scope)
                 {
                     if (adoptSchedules && current.Owner is not null) throw InvalidControl();
@@ -139,6 +155,15 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbConte
                 source.ArtifactVersion, binding.ArtifactHash);
             var owner = new RuntimeKernelScheduleControlOwner(slot.SlotId, slot.SlotName, source.ActivationId!, slot.Revision,
                 source.SourceReferenceId, executable);
+            if (binding.Metadata.TryGetValue(ScheduleStimulusMetadata, out var stimulus))
+            {
+                if (!IsDigest(stimulus) || slot.UpdatedAt <= DateTimeOffset.UnixEpoch) throw InvalidControl();
+                owner = owner with
+                {
+                    Continuity = new(CompositeId(scope.Persistence.Value, "kernel-schedule-continuity-v1", slot.SlotId, key,
+                        source.ActivationId!, slot.Revision.ToString(System.Globalization.CultureInfo.InvariantCulture)), stimulus, slot.UpdatedAt)
+                };
+            }
             controls.Add(new(scope, key, source.DefinitionId, node, 0, owner));
         }
         if (controls.Select(control => control.ScheduleKey).Distinct(StringComparer.Ordinal).Count() != controls.Count)
@@ -160,7 +185,8 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbConte
         row.OwnerSlotHash = control.Owner is { } owner ? Hash(owner.SlotId) : null;
         row.Revision = control.Revision;
         row.SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleControlEfModule.SchemaFamily,
-            RuntimeKernelScheduleControlEfModule.SchemaVersion, row.SchemaVersion);
+            control.Owner?.Continuity is null ? RuntimeKernelScheduleControlEfModule.InitialSchemaVersion
+                : RuntimeKernelScheduleControlEfModule.SchemaVersion, row.SchemaVersion);
     }
 
     private static RuntimeKernelScheduleControl ReadScoped(RuntimeKernelScheduleControlEntity row, TriggerScope scope)
@@ -178,7 +204,10 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbConte
             string.IsNullOrWhiteSpace(control.DefinitionId) || string.IsNullOrWhiteSpace(control.TriggerNode) ||
             control.ScheduleKey != LogicalKey(control.DefinitionId, control.TriggerNode) || row.Id != Identity(control.Scope, control.ScheduleKey) ||
             row.ScopeKeyHash != Hash(physicalScope.Value) || row.TenantKeyHash != TenantHash(control.Scope) ||
-            (control.Owner is { } owner ? !MatchesOwner(row, control.DefinitionId, owner) : row.OwnerSlotHash is not null))
+            (control.Owner is { } owner ? !MatchesOwner(row, control.DefinitionId, owner) : row.OwnerSlotHash is not null) ||
+            control.Owner?.Continuity is { } continuity &&
+            (row.SchemaVersion == RuntimeKernelScheduleControlEfModule.InitialSchemaVersion || !IsDigest(continuity.Stamp) ||
+             !IsDigest(continuity.Stimulus) || continuity.ActivatedAt <= DateTimeOffset.UnixEpoch))
             throw InvalidControl();
         return control;
     }
@@ -195,6 +224,12 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbConte
 
     private static string Identity(TriggerScope scope, string key) =>
         CompositeId(scope.Persistence.Value, "kernel-schedule-control-v1", JsonSerializer.Serialize(CanonicalScope(scope).TenantId), key);
+
+    internal static string CutoverId(PersistenceScope persistence, string slotId, long revision, string continuity) =>
+        CompositeId(persistence.Value, "kernel-schedule-cutover-v1", slotId,
+            revision.ToString(System.Globalization.CultureInfo.InvariantCulture), continuity);
+
+    private static bool IsDigest(string? value) => value is { Length: 64 } && value.AsSpan().IndexOfAnyExcept("0123456789ABCDEF") < 0;
 
     private static InvalidDataException InvalidControl() => new("A schedule control differs from its physical identity or authority.");
 }

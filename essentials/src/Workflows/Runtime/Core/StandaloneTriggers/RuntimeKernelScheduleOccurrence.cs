@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.StandaloneTriggers;
@@ -22,9 +23,16 @@ public sealed record RuntimeKernelScheduleOccurrence(
 
     public static string ReservationKey(string scheduleKey) => WorkflowTriggerBinding.BuildId(ReservationType, scheduleKey, "owner");
 
+    /// <summary>When accepted by a successor, the immutable original offer that owns the timer identity.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeKernelScheduleOccurrenceOrigin? Origin { get; init; }
+
     public string Id => RuntimeDeliveryFingerprint.Compute("elsa.runtime.kernel-schedule-occurrence.v1",
-        new { Scope, ScheduleReference, ArmGeneration, TimerDeliveryId });
+        new { Scope = Origin is { } origin ? Scope with { TenantId = origin.TenantId } : Scope, ScheduleReference, ArmGeneration, TimerDeliveryId });
 }
+
+/// <summary>A hash-only link to the original offer, retained even after physical retirement.</summary>
+public sealed record RuntimeKernelScheduleOccurrenceOrigin(string? TenantId, string Fingerprint);
 
 /// <summary>Commits a schedule occurrence and its retained executable under the same publication transaction boundary.</summary>
 public interface IRuntimeKernelScheduleOccurrenceStore
@@ -48,6 +56,12 @@ public interface IRuntimeKernelScheduleOccurrenceStore
             ? RuntimeKernelScheduleAttemptOutcome.Accepted
             : RuntimeKernelScheduleAttemptOutcome.Retry;
     }
+
+    /// <summary>Decides the same timer under a currently authorized successor publication.</summary>
+    ValueTask<RuntimeKernelScheduleAttemptOutcome> TryHandoffAttemptAsync(RuntimeKernelScheduleOccurrence origin,
+        RuntimeKernelScheduleOccurrence successor, string continuity, DateTimeOffset attemptDeadline,
+        Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("The Runtime provider does not support schedule publication handoff.");
 }
 
 /// <summary>Whether a managed schedule attempt resolved its immutable occurrence.</summary>

@@ -43,21 +43,29 @@ internal static class KernelScheduleAuthority
         var schedules = new NativeSchedules(new WorkflowRegistry().Add(workflow), calendar is null ? null : expression => CronError(calendar, expression));
         var schedule = schedules.All.SingleOrDefault(item => item.Workflow == owner.Executable.ArtifactId &&
             item.Definition == control.DefinitionId && item.Node == control.TriggerNode && item.Key == control.ScheduleKey);
-        if (schedule is null) return null;
+        if (schedule is null || owner.Continuity is { } continuity &&
+            continuity.Stimulus != KernelScheduleClaim.Stimulus(schedule)) return null;
 
         var start = JsonSerializer.Serialize(WorkflowActor.Start(schedule.Start()));
         var authority = new Authority(AuthorityVersion, control.Scope, actors.Tenant, control.ScheduleKey, control.TriggerNode, owner, start);
         var header = new ScheduleHeader(new(schedule.Kind, schedule.Value), schedule.StartKey, control.Revision)
         {
-            Authority = JsonSerializer.Serialize(authority)
+            Authority = JsonSerializer.Serialize(authority),
+            Continuity = owner.Continuity?.Stamp,
+            Cutover = owner.Continuity?.ActivatedAt.ToUnixTimeMilliseconds() ?? 0
         };
         if (!FitsTypeData(JsonSerializer.Serialize(header)))
             throw new MetadataLimitExceeded(nameof(ScheduleHeader.Authority), MaxTypeDataBytes);
         return header;
     }
 
-    internal static RuntimeKernelScheduleOccurrence? ReadOffer(ScheduleOccurrence offer, TriggerScope scope, BoundScope actors)
+    internal static RuntimeKernelScheduleOccurrence? ReadOffer(ScheduleOccurrence offer, TriggerScope scope, BoundScope actors) =>
+        ReadOffer(offer, scope, actors, out _);
+
+    internal static RuntimeKernelScheduleOccurrence? ReadOffer(ScheduleOccurrence offer, TriggerScope scope, BoundScope actors,
+        out string? continuity)
     {
+        continuity = null;
         if (offer.Tenant != actors.Tenant || !IsReference(offer.Schedule.Id) ||
             offer.TimerDeliveryId is not { Length: 65 } timer || timer[0] != '~' || timer.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEF") >= 0 ||
             offer.ArmGeneration <= 0 || offer.DueAtUnixMilliseconds <= 0 || offer.DueAtUnixMilliseconds >= offer.OfferUntilUnixMilliseconds ||
@@ -73,6 +81,12 @@ internal static class KernelScheduleAuthority
                 ReadPinnedStart(authority.PinnedStart, authority.FoundationTenant, executable, authority.TriggerNode, authority.ScheduleKey) is null)
                 return null;
 
+            if (owner.Continuity is { } span)
+            {
+                if (!IsReference(span.Stamp) || !IsReference(span.Stimulus) || span.ActivatedAt <= DateTimeOffset.UnixEpoch)
+                    return null;
+                continuity = span.Stamp;
+            }
             return new(exactScope, authority.ScheduleKey, offer.Schedule.Id, owner.SlotName, owner.ActivationId,
                 owner.PublicationRevision, offer.ArmGeneration, timer, DateTimeOffset.FromUnixTimeMilliseconds(offer.DueAtUnixMilliseconds),
                 DateTimeOffset.FromUnixTimeMilliseconds(offer.OfferUntilUnixMilliseconds), executable, authority.TriggerNode, authority.PinnedStart);
@@ -139,6 +153,10 @@ internal delegate ValueTask<RuntimeKernelScheduleAttemptOutcome> AcceptScheduleO
     DateTimeOffset attemptDeadline,
     Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken);
 
+internal delegate ValueTask<RuntimeKernelScheduleAttemptOutcome> HandoffScheduleOccurrence(ScheduleOccurrence job,
+    RuntimeKernelScheduleOccurrence origin, string continuity, DateTimeOffset attemptDeadline,
+    Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken);
+
 /// <summary>Bridges authenticated managed schedule jobs to the scoped Runtime occurrence transaction.</summary>
 internal sealed class KernelScheduleOccurrenceAcceptor : IScheduleOccurrenceAcceptor
 {
@@ -146,15 +164,17 @@ internal sealed class KernelScheduleOccurrenceAcceptor : IScheduleOccurrenceAcce
     private readonly BoundScope _actors;
     private readonly Func<CancellationToken, ValueTask<long>> _readScheduleClock;
     private readonly AcceptScheduleOccurrence _accept;
+    private readonly HandoffScheduleOccurrence? _handoff;
 
     internal KernelScheduleOccurrenceAcceptor(TriggerScope scope, BoundScope actors, Func<CancellationToken, ValueTask<long>> readScheduleClock,
-        AcceptScheduleOccurrence accept)
+        AcceptScheduleOccurrence accept, HandoffScheduleOccurrence? handoff = null)
     {
         KernelScheduleAuthority.RequireBoundScope(scope, actors);
         _scope = scope;
         _actors = actors;
         _readScheduleClock = readScheduleClock ?? throw new ArgumentNullException(nameof(readScheduleClock));
         _accept = accept ?? throw new ArgumentNullException(nameof(accept));
+        _handoff = handoff;
     }
 
     public ValueTask<bool> TryAcceptAsync(ScheduleOccurrence occurrence, CancellationToken cancellationToken = default) =>
@@ -164,9 +184,12 @@ internal sealed class KernelScheduleOccurrenceAcceptor : IScheduleOccurrenceAcce
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (attemptDeadline < occurrence.OfferUntilUnixMilliseconds || attemptDeadline > DateTimeOffset.MaxValue.ToUnixTimeMilliseconds() ||
-            KernelScheduleAuthority.ReadOffer(occurrence, _scope, _actors) is not { } offer)
+            KernelScheduleAuthority.ReadOffer(occurrence, _scope, _actors, out var continuity) is not { } offer)
             return false;
-        var outcome = await _accept(offer, DateTimeOffset.FromUnixTimeMilliseconds(attemptDeadline), ReadClockAsync, cancellationToken);
+        var deadline = DateTimeOffset.FromUnixTimeMilliseconds(attemptDeadline);
+        var outcome = await _accept(offer, deadline, ReadClockAsync, cancellationToken);
+        if (outcome == RuntimeKernelScheduleAttemptOutcome.Refused && continuity is not null && _handoff is not null)
+            outcome = await _handoff(occurrence, offer, continuity, deadline, ReadClockAsync, cancellationToken);
         return outcome switch
         {
             RuntimeKernelScheduleAttemptOutcome.Accepted => true,
