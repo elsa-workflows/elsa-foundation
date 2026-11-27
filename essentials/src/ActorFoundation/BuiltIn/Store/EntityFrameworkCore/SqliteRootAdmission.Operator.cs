@@ -57,6 +57,7 @@ internal sealed partial class SqliteRootAdmission
                     thenDelete && target.Terminal && await MatchesTerminalAsync(db, tenant, reference.Id, target, null, ct);
             if (prior is not null || !eligible)
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
+            attempt?.RequireCapacity();
             if (reply is not null && await EfStore.SqliteHeldOperatorCapacityReachedAsync(db, target.Actor, target.Partition, ct))
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.NodeBusy);
             attempt?.Require(target.Partition);

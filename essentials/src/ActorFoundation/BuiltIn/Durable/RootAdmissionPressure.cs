@@ -7,7 +7,11 @@ internal enum RootAdmissionKind { Start, Input, ShedLoad }
 /// <summary>One receiving node's limits. The worker publishes backlog separately from incoming requests.</summary>
 internal sealed class RootAdmissionPressure
 {
-    private sealed record Bucket(double Tokens, long At);
+    private sealed class Bucket(double tokens, long at)
+    {
+        internal double Tokens { get; set; } = tokens;
+        internal long At { get; set; } = at;
+    }
 
     private readonly object _sync = new();
     private readonly Dictionary<(string Tenant, RootAdmissionKind Kind), Bucket> _buckets = [];
@@ -83,7 +87,9 @@ internal sealed class RootAdmissionPressure
     {
         private SemaphoreSlim? _slot = reserved;
         private HashSet<int>? _placement;
-        private bool _debited;
+        private Bucket? _debited;
+
+        internal bool IsBusy => _slot is null;
 
         internal int Place(int partition, int count)
         {
@@ -101,8 +107,7 @@ internal sealed class RootAdmissionPressure
         // if this refuses. The attempt remains reserved through the end of the provider transaction.
         internal void Require(int partition)
         {
-            if (_slot is null)
-                throw new RootAdmissionRefused(Contract.RefusalReason.NodeBusy, TimeSpan.FromSeconds(1));
+            RequireCapacity();
             lock (owner._sync)
             {
                 if (kind != RootAdmissionKind.ShedLoad && (_placement ?? owner._full).Contains(partition))
@@ -117,24 +122,33 @@ internal sealed class RootAdmissionPressure
                     : limits.Burst;
                 if (tokens < 1)
                     throw new RootAdmissionRefused(Contract.RefusalReason.RateLimited, TimeSpan.FromSeconds((1 - tokens) / rate));
-                owner._buckets[key] = new(tokens - 1, now);
-                _debited = true;
+                if (bucket is null) owner._buckets.Add(key, bucket = new(tokens, now));
+                bucket.Tokens = tokens - 1;
+                bucket.At = now;
+                _debited = bucket;
             }
         }
 
-        internal void Committed() => _debited = false;
+        internal void RequireCapacity()
+        {
+            if (IsBusy)
+                throw new RootAdmissionRefused(Contract.RefusalReason.NodeBusy, TimeSpan.FromSeconds(1));
+        }
+
+        internal void Committed() => _debited = null;
 
         public void Dispose()
         {
             var slot = Interlocked.Exchange(ref _slot, null);
             if (slot is null) return;
-            if (_debited)
+            if (_debited is { } charged)
             {
                 lock (owner._sync)
                 {
                     var key = (tenant, kind);
-                    if (owner._buckets.TryGetValue(key, out var bucket))
-                        owner._buckets[key] = bucket with { Tokens = Math.Min(owner.Limits(kind).Burst, bucket.Tokens + 1) };
+                    // An idle refresh can retire this bucket while its provider transaction is still open.
+                    if (owner._buckets.TryGetValue(key, out var bucket) && ReferenceEquals(bucket, charged))
+                        bucket.Tokens = Math.Min(owner.Limits(kind).Burst, bucket.Tokens + 1);
                 }
             }
             slot.Release();

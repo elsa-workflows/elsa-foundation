@@ -48,6 +48,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             if (existing is not null)
                 return new(Contract.AdmissionOutcome.Duplicate, new Contract.ActorRef(existing));
 
+            attempt?.RequireCapacity();
             var issuer = await ReadIssuerAsync(db, ct);
             var name = tenant + "_" + Guid.NewGuid().ToString("N");
             var preferred = InstanceRef.Spread(name, issuer.Partitions);
@@ -162,8 +163,10 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             throw new StoreFormatException("Admission pressure requires the due-backlog store profile.");
         await db.Database.OpenConnectionAsync(token);
         token.ThrowIfCancellationRequested();
-        // Competing callers serialize before any receipt or checkpoint is read. SQLite cannot upgrade a stale read snapshot.
-        await using var transaction = ((SqliteConnection)db.Database.GetDbConnection()).BeginTransaction(deferred: false);
+        // A busy attempt can replay from a read snapshot but cannot publish. Only attempts that can write wait for
+        // the immediate transaction; those attempts serialize before reading a receipt, with no snapshot upgrade.
+        await using var transaction = ((SqliteConnection)db.Database.GetDbConnection())
+            .BeginTransaction(deferred: attempt?.IsBusy == true);
         token.ThrowIfCancellationRequested();
         await using var enlistment = await db.Database.UseTransactionAsync(transaction, token);
         await EfStore.RequireSqliteRootAdmissionAsync(db, token);

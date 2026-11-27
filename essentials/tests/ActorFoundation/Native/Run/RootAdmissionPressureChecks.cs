@@ -14,6 +14,7 @@ internal static class RootAdmissionPressureChecks
 {
     internal static async Task<int> RunAsync(bool postgres, bool inBatch)
     {
+        CheckExpiredRefund();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var token = timeout.Token;
         var directory = Directory.CreateTempSubdirectory("root-admission-pressure-");
@@ -107,6 +108,22 @@ internal static class RootAdmissionPressureChecks
             {
                 Check(await ingress.SendAsync(scope, target, "busy", "work", cancellationToken: token) is
                     { Reason: Contract.RefusalReason.NodeBusy, RetryAfter: not null }, "ordinary in-flight saturation returns NodeBusy");
+                if (!postgres)
+                {
+                    await using var writer = new SqliteConnection(new SqliteConnectionStringBuilder
+                        { DataSource = path, ForeignKeys = true, Pooling = false }.ToString());
+                    await writer.OpenAsync(token);
+                    await using var blockerWrite = writer.BeginTransaction(deferred: false);
+                    var busyDeadline = DateTimeOffset.UtcNow.AddSeconds(10).ToUnixTimeMilliseconds();
+                    var refused = await ingress.RequestAsync(scope, Start("serve"), "busy-start", Contract.Kinds.Start, null, null,
+                        new(null, busyDeadline), token).AsTask().WaitAsync(TimeSpan.FromSeconds(2), token);
+                    var duplicate = await Task.Run(async () => await ingress.SendAsync(scope, Start("hold"), "withhold", Contract.Kinds.Start,
+                        cancellationToken: token), token).WaitAsync(TimeSpan.FromSeconds(2), token);
+                    Check(refused is { RefusalReason: Contract.RefusalReason.NodeBusy, RetryAfter: not null } &&
+                        duplicate is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: { } existing } && existing == blocker,
+                        "a busy SQLite attempt refuses or replays while a different transaction still owns the writer");
+                    await blockerWrite.RollbackAsync(token);
+                }
                 var view = (await reads.GetAsync(scope, blocker, token))!;
                 var command = new Contract.OperatorCommand(view.Selection, ExpectedTarget: blocker);
                 Check(await ingress.SendAsync(scope, blocked, "relieve", Contract.Kinds.Terminate, Json.Write(command), cancellationToken: token) is
@@ -162,6 +179,31 @@ internal static class RootAdmissionPressureChecks
     {
         if (!pass) throw new InvalidOperationException(description);
         Console.WriteLine("ok " + description);
+    }
+
+    private static void CheckExpiredRefund()
+    {
+        var clock = new RateClock();
+        var pressure = new RootAdmissionPressure(new(2, 1, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1)),
+            ordinaryCapacity: 2, operatorCapacity: 1, ordinaryRate: new(1, 1), operatorRate: new(1, 1), clock);
+        using var stalled = pressure.Begin("one", RootAdmissionKind.Input);
+        stalled.Require(0);
+        clock.Advance(TimeSpan.FromSeconds(2));
+        pressure.Refresh(new Dictionary<int, int>(), nodes: 1);
+        using (var admitted = pressure.Begin("one", RootAdmissionKind.Input))
+        {
+            admitted.Require(0);
+            admitted.Committed();
+        }
+        stalled.Dispose();
+        using var next = pressure.Begin("one", RootAdmissionKind.Input);
+        try { next.Require(0); }
+        catch (RootAdmissionRefused refusal) when (refusal.Admission.Reason == Contract.RefusalReason.RateLimited)
+        {
+            Console.WriteLine("ok a rolled back stale debit cannot refund into a replacement tenant bucket");
+            return;
+        }
+        throw new InvalidOperationException("The stale rollback refilled a different bucket.");
     }
 
     private sealed class RateClock : TimeProvider

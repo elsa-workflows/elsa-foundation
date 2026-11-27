@@ -149,15 +149,18 @@ internal sealed partial class PostgresRootAdmission
             var selectedStatus = selected && !deletion && park is null
                 ? await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: true)
                 : null;
-            var prior = await db.Database.SqlQuery<string>($"""
+            Task<string?> LiveReceiptAsync() => db.Database.SqlQuery<string>($"""
                 SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts"
                 WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
                 """).SingleOrDefaultAsync(token);
-            if (prior is not null)
+
+            async Task<Receipt?> ReplayAsync(string prior)
             {
                 await tx.CommitAsync(token);
                 return (selected || requireExactTarget) && prior != reference ? null : new(prior, true);
             }
+            var prior = await LiveReceiptAsync();
+            if (prior is not null) return await ReplayAsync(prior);
             if (!deletion && park is null)
                 selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
             // S5b: a composed Park set admits a Terminate, or a Terminate and delete, for a parked root, held or not, only with the
@@ -191,7 +194,12 @@ internal sealed partial class PostgresRootAdmission
             }
 
             var actor = new InstanceRef(address.Id);
-            attempt?.Require(actor.Partition);
+            try { attempt?.Require(actor.Partition); }
+            catch (RootAdmissionRefused)
+            {
+                if (await LiveReceiptAsync() is { } winner) return await ReplayAsync(winner);
+                throw;
+            }
             var receipt = await db.Database.SqlQuery<long>($"""
                 INSERT INTO "FoundationOperatorReceipts" AS r ("Tenant","Operation","Reference","Until")
                 VALUES ({tenant},{digest},{reference},floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
@@ -205,8 +213,7 @@ internal sealed partial class PostgresRootAdmission
                 prior = await db.Database.SqlQuery<string>($"""
                     SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
                     """).SingleAsync(token);
-                await tx.CommitAsync(token);
-                return (selected || requireExactTarget) && prior != reference ? null : new(prior, true);
+                return await ReplayAsync(prior);
             }
             var replyAddress = reply?.Address;
             var (id, header) = EncodeOperator(reference, operation, digest, address.Creation, kind, due, terminal, park,
