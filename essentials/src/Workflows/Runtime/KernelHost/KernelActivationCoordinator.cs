@@ -666,7 +666,7 @@ public sealed class KernelActivationCoordinator(
                 (!servesHere || NativeStartTriggers.StartEvents(served!.Workflow).Any());
             if (restore is null && (!servesHere || adoptEvents))
             {
-                (restore, var refusal) = await PlanRestoreAsync(slot, cancellationToken);
+                (restore, var refusal) = await PlanRestoreAsync(slot, cancellationToken, checkEventAdoption: adoptEvents);
                 if (refusal is not null) return (slot, refusal);
             }
             if (!servesHere && adoption is not null && !adopted)
@@ -681,8 +681,15 @@ public sealed class KernelActivationCoordinator(
                     throw new InvalidOperationException("Event cutover requires the physical publication adoption store.");
                 if (!await eventAdoption.TryAdoptEventsAsync(slot, restore!.Source, eventClaims, cancellationToken))
                     return (slot, EventPublicationPending(slot, new InvalidOperationException("Publication authority changed during Event adoption.")));
-                publication = await ReadEventPublicationAsync(slot, cancellationToken) ??
+                publication = await ReadEventPublicationAsync(slot, cancellationToken);
+                if (publication is null)
+                {
+                    // A replacement can drain the adopted generation before this read. Only startup follows
+                    // the newer slot; an exact caller still receives the pending result for its original revision.
+                    if (await EventAdoptionAuthorityAdvancedAsync(slot, cancellationToken))
+                        return (slot, EventPublicationPending(slot, new InvalidOperationException("Publication authority advanced after Event adoption.")));
                     throw new InvalidOperationException("The adopted Event generation could not be read back.");
+                }
             }
             if (servesHere)
             {
@@ -728,13 +735,15 @@ public sealed class KernelActivationCoordinator(
     }
 
     private async ValueTask<(RestorePlan? Plan, WorkflowActivationResult? Refusal)> PlanRestoreAsync(WorkflowActivationSlot slot,
-        CancellationToken token)
+        CancellationToken token, bool checkEventAdoption = false)
     {
         var activation = slot.ActiveActivationId!;
-        var source = await sourceReferenceStore.FindAsync(WorkflowActivationReferenceIdentity.Create(activation), token)
-            ?? throw new InvalidOperationException($"Activation '{activation}' has no source reference to name its artifact.");
-        var executable = await executableStore.FindAsync(source.ArtifactId, token)
-            ?? throw new InvalidOperationException($"Artifact '{source.ArtifactId}' of activation '{activation}' is not in the executable store.");
+        var source = await sourceReferenceStore.FindAsync(WorkflowActivationReferenceIdentity.Create(activation), token);
+        if (source is null)
+            return await MissingAsync($"Activation '{activation}' has no source reference to name its artifact.");
+        var executable = await executableStore.FindAsync(source.ArtifactId, token);
+        if (executable is null)
+            return await MissingAsync($"Artifact '{source.ArtifactId}' of activation '{activation}' is not in the executable store.");
         Workflow workflow;
         try { workflow = NativeExecutableMapper.Map(executable, serving.Capabilities, slot.WorkflowDefinitionId); }
         catch (NativeMappingRefusedException refused)
@@ -757,7 +766,19 @@ public sealed class KernelActivationCoordinator(
         {
             return (null, NotServingFailure(slot, refused.Message, WorkflowActivationStep.ServingCheck));
         }
+
+        async ValueTask<(RestorePlan?, WorkflowActivationResult?)> MissingAsync(string detail)
+        {
+            var failure = new InvalidOperationException(detail);
+            if (checkEventAdoption && await EventAdoptionAuthorityAdvancedAsync(slot, token))
+                return (null, EventPublicationPending(slot, failure));
+            throw failure;
+        }
     }
+
+    private async ValueTask<bool> EventAdoptionAuthorityAdvancedAsync(WorkflowActivationSlot slot, CancellationToken token) =>
+        await authority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, token) is { } current &&
+        current.SlotId == slot.SlotId && current.Revision > slot.Revision;
 
     private async ValueTask<(WorkflowActivationSlot Slot, WorkflowActivationResult? Unserved)> ScheduleAdoptionMovedAsync(
         WorkflowActivationSlot slot, CancellationToken token)

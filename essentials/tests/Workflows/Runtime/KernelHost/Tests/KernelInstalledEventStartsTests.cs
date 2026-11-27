@@ -85,7 +85,15 @@ public sealed class KernelInstalledEventStartsTests
         return RunAsync(true, combined: true, adoptStock: true);
     }
 
-    private static async Task RunAsync(bool postgres, bool combined = false, bool adoptStock = false)
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public Task Sqlite_adoption_handles_a_drained_predecessor(bool startup, bool afterAdoption) =>
+        RunAsync(false, combined: true, adoption: (startup, afterAdoption));
+
+    private static async Task RunAsync(bool postgres, bool combined = false, bool adoptStock = false,
+        (bool Startup, bool AfterAdoption)? adoption = null)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(55));
         var token = deadline.Token;
@@ -108,6 +116,11 @@ public sealed class KernelInstalledEventStartsTests
             var gate = new RelayGate { Hold = true };
             PublicationActivationResult original;
 
+            if (adoption is { } cutover)
+            {
+                await RaceAdoptionAsync(cutover.Startup, cutover.AfterAdoption);
+                return;
+            }
             if (adoptStock)
             {
                 await AdoptStockAsync();
@@ -442,6 +455,73 @@ public sealed class KernelInstalledEventStartsTests
                 Assert.Contains(nameof(EventRegistrationResult.Conflict), conflict.Message, StringComparison.Ordinal);
             }
 
+            async Task RaceAdoptionAsync(bool startup, bool afterAdoption)
+            {
+                PublicationActivationResult published;
+                await using (var stock = OpenShell(stock: true))
+                {
+                    var services = stock.Services.GetRequiredService<IServiceScopeFactory>();
+                    await MigrateAsync(services);
+                    published = await PublishAsync(services, first, 0, null);
+                    Assert.True(published.Succeeded, published.Failure?.Message);
+                    Assert.Null(await ReadGenerationAsync(services, published.Slot));
+                }
+
+                PublicationActivationResult? successor = null;
+                var race = new AdoptionRace(published.Slot, afterAdoption, async observed =>
+                {
+                    // A republish advances both stores and drains the older generation while the exact read is pending.
+                    // If this is the first read, the competitor also completes adoption as part of republishing.
+                    await using var competitor = OpenShell();
+                    var storage = competitor.Services.GetRequiredService<KernelShellStorage>();
+                    await storage.InstallAsync(token, (_, _) => ValueTask.FromResult(false));
+                    var services = competitor.Services.GetRequiredService<IServiceScopeFactory>();
+                    successor = await PublishAsync(services, replacement, published.Slot.Revision, null);
+                    Assert.True(successor.Succeeded, successor.Failure?.Message);
+                    var adopted = observed ?? Assert.IsType<RuntimeKernelEventPublication>(await ReadGenerationAsync(services, published.Slot));
+                    Assert.Equal(published.Publication.PublicationId, adopted.Source!.ActivationId);
+                    Assert.True(await storage.BindEventStarts(Tenant).ConfirmDrainedAsync(adopted.SlotId, adopted.Revision, token));
+                    await using var drain = await services.CreateAsyncScopeAsync(Persistence);
+                    Assert.True(await drain.ServiceProvider.GetRequiredService<IRuntimeKernelEventPublicationStore>()
+                        .ReleaseDrainedAsync(adopted, token));
+                    if (!afterAdoption)
+                    {
+                        var references = drain.ServiceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+                        var retired = await references.FindAsync(adopted.Source.ReferenceId, token);
+                        Assert.NotNull(retired);
+                        Assert.NotNull(retired.DeletedAt);
+                        Assert.True(await references.TryDeleteDoomedAsync(retired, DateTimeOffset.UtcNow, token));
+                    }
+                });
+
+                await using var adopting = OpenShell(adoptionRace: race);
+                if (startup)
+                {
+                    var shell = adopting.Services.GetRequiredService<KernelShellRuntime>();
+                    await shell.StartAsync(token);
+                    try
+                    {
+                        Assert.NotNull(successor);
+                        var serving = adopting.Services.GetRequiredService<KernelServing>().Find(published.Slot.SlotId);
+                        Assert.Equal(successor.Slot.Revision, serving!.Revision);
+                        Assert.Equal(successor.Slot.ActiveActivationId, serving.ActivationId);
+                    }
+                    finally { await shell.StopAsync(token); }
+                }
+                else
+                {
+                    await adopting.Services.GetRequiredService<KernelShellStorage>().InstallAsync(token, (_, _) => ValueTask.FromResult(false));
+                    await using var caller = await adopting.Services.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+                    var result = await caller.ServiceProvider.GetRequiredService<PublicationActivator>()
+                        .CompleteAsync(Definition, KernelServing.DefaultSlotName, token);
+                    Assert.NotNull(successor);
+                    Assert.False(result.Succeeded);
+                    Assert.Equal(PublicationFailureCodes.ProjectionActivationFailed, result.Failure!.Code);
+                    Assert.Contains("its Event serving could not be confirmed", result.Failure.Message, StringComparison.Ordinal);
+                    Assert.Equal(published.Slot, result.Slot);
+                }
+            }
+
             async Task AdoptStockAsync()
             {
                 PublicationActivationResult published;
@@ -539,7 +619,7 @@ public sealed class KernelInstalledEventStartsTests
                     .FindAsync(Scope, slot.SlotId, slot.Revision, token);
             }
 
-            WebApplication OpenShell(bool stock = false)
+            WebApplication OpenShell(bool stock = false, AdoptionRace? adoptionRace = null)
             {
                 var builder = WebApplication.CreateBuilder();
                 builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
@@ -576,6 +656,9 @@ public sealed class KernelInstalledEventStartsTests
                         Tenant, sp.GetRequiredService<KernelServing>().Capabilities, () => new PausableAdmissions(storage.BindEventStarts(Tenant), gate),
                         TimeProvider.System, sp.GetRequiredService<ILogger<KernelEventPublicationRelay>>(), retainsReceipts: true, orderedScan: true,
                         adoptExisting: combined)));
+                if (adoptionRace is not null)
+                    services.Replace(ServiceDescriptor.Singleton<IKernelEventPublicationRegistration>(sp =>
+                        new InterruptAdoptionRead(sp.GetRequiredService<KernelEventPublicationRelay>(), adoptionRace)));
                 new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
                 api.PostConfigureServices(services);
                 var app = builder.Build();
@@ -701,6 +784,30 @@ public sealed class KernelInstalledEventStartsTests
     private sealed record ApplyRace(string Slot, long Revision, bool AfterProvider, Func<Task> Win)
     {
         internal EventRegistrationResult? Observed;
+    }
+
+    private sealed record AdoptionRace(WorkflowActivationSlot Slot, bool AfterAdoption, Func<RuntimeKernelEventPublication?, Task> Drain);
+
+    private sealed class InterruptAdoptionRead(IKernelEventPublicationRegistration inner, AdoptionRace race) : IKernelEventPublicationRegistration
+    {
+        private bool _drained;
+
+        public bool SupportsDurableMode => inner.SupportsDurableMode;
+        public bool AdoptsExistingPublications => inner.AdoptsExistingPublications;
+
+        public void Validate(KernelServingPlan plan, WorkflowExecutableIdentity identity, WorkflowExecutableSourceReference reference,
+            long revision, IReadOnlyList<WorkflowTriggerBinding> claims) => inner.Validate(plan, identity, reference, revision, claims);
+
+        public async ValueTask<RuntimeKernelEventPublication?> ReadAsync(WorkflowActivationSlot slot, CancellationToken token)
+        {
+            var publication = await inner.ReadAsync(slot, token);
+            if (_drained || slot != race.Slot || (publication is not null) != race.AfterAdoption) return publication;
+            _drained = true;
+            await race.Drain(publication);
+            return await inner.ReadAsync(slot, token);
+        }
+
+        public ValueTask ApplyAsync(RuntimeKernelEventPublication publication, CancellationToken token) => inner.ApplyAsync(publication, token);
     }
 
     private sealed class SlotSnapshot(WorkflowActivationSlot snapshot) : IWorkflowActivationAuthority
