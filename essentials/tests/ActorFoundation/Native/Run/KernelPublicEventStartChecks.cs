@@ -107,8 +107,12 @@ internal static partial class KernelAuthoredEventChecks
             var held = await RequestAsync(heldTarget, "held-id", "held item");
             Check(held is { Channel: "held-event", Error: null } && held.Item?.ToString() == "held item",
                 "a held Event creates the registered actor and returns its first matching reply");
-            var heldCaptured = (await CapturedAsync()).Single(item => item.Wait == "held" && item.EventId == "held-id");
-            await VerifyDeliveryAsync(new(heldCaptured.Reference), "held template", "held", "held item", "held-id", heldKey);
+            // The short-lived target can be pruned as soon as the held publication has been dispatched.
+            var heldActors = await reads.ListAsync(scope, new Contract.ActorQuery(Type: model.Type, Status: Contract.ActorStatus.Finished),
+                cancellationToken: token);
+            var heldActor = heldActors.Items.Single(item => item.Header.TypeData ==
+                JsonSerializer.Serialize(new[] { "held template", heldKey, "held", "held item", "held-id" }));
+            await VerifyDeliveryAsync(heldActor.Header.Ref, "held template", "held", "held item", "held-id", heldKey);
             var heldReplay = await ingress.SendAsync(scope, heldTarget, "held-id", "ignored", "different item", cancellationToken: token);
             Check(heldReplay is { Outcome: Contract.AdmissionOutcome.Duplicate, Publication.EventId: "held-id" },
                 "one-way retry observes the held Event publication receipt without creating another actor");
