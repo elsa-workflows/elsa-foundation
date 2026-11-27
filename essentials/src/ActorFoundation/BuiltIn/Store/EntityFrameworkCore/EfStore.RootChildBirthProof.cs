@@ -26,6 +26,8 @@ public sealed partial class EfStore
             // Hold the marker and source namespace while authenticating the issuance and reading the
             // occurrence, retirement mark and disarming fence in the same physical snapshot.
             await using var snapshot = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
+            // PostgreSQL rejects policy-filtered reads under this setting. Missing rows can then prove absence.
+            await db.Database.ExecuteSqlRawAsync("SET LOCAL row_security = off", token);
             var (key, bindSource) = await PostgresRootAdmission.PinRootChildBirthProofAsync(db, token);
             return await ConfirmAsync(key, bindSource);
         }
