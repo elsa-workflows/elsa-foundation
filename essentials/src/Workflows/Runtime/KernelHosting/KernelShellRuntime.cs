@@ -75,6 +75,12 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         List<Task> maintenance = [Task.Run(() => worker.RunAsync(maintenanceToken))];
         if (schedules is { } managed) maintenance.Add(Task.Run(() => managed.Worker.RunAsync(maintenanceToken)));
         if (protection is not null) maintenance.Add(Task.Run(() => protection.RunAsync(maintenanceToken)));
+        if (testTenant is not null)
+        {
+            var expired = new KernelDirectTestRunRetirement(testTenant, Foundation.Reads, storage.OpenOperatorsAsync, clock,
+                logs.CreateLogger<KernelDirectTestRunRetirement>());
+            maintenance.Add(Task.Run(() => expired.RunAsync(maintenanceToken)));
+        }
         _maintenance = Task.WhenAll(maintenance);
     }
 

@@ -33,6 +33,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
 using Contract = Kernel.Foundation.Contracts;
@@ -192,12 +193,15 @@ public sealed class KernelPublishedExecuteTests
             await app.StartAsync(token);
             var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
             using var http = new HttpClient { BaseAddress = new(address) };
+            var isolatedActors = new List<Contract.ActorRef>();
             if (directTests)
             {
                 await VerifyDirectTestAsync(canonical, "workflow-draft-snapshot", "draft:witness", closeBeforePin: false);
                 await VerifyDirectTestAsync(flowchart, "workflow-definition-version", "saved-witness", closeBeforePin: false);
                 await VerifyDirectTestAsync(waiting, "workflow-definition-version", "stop-witness", closeBeforePin: false, stop: true);
+                await VerifyDirectTestAsync(waiting, "workflow-definition-version", "expire-witness", closeBeforePin: false, expire: true);
                 await VerifyDirectTestAsync(waiting, "workflow-definition-version", "closed-witness", closeBeforePin: true);
+                await VerifyExpiryAsync();
                 return;
             }
             var target = WorkflowActivationReferenceIdentity.Create("publish-native-blue");
@@ -438,7 +442,8 @@ public sealed class KernelPublishedExecuteTests
                 return actor.Id;
             }
 
-            async Task VerifyDirectTestAsync(WorkflowExecutable executable, string sourceKind, string version, bool closeBeforePin, bool stop = false)
+            async Task VerifyDirectTestAsync(WorkflowExecutable executable, string sourceKind, string version, bool closeBeforePin,
+                bool stop = false, bool expire = false)
             {
                 var privateRuns = app.Services.GetRequiredService<KernelTestRuns>().Reads;
                 Assert.Throws<ArgumentException>(() => EmbeddedTenant.Bind(privateRuns.Tenant.Tenant));
@@ -483,11 +488,13 @@ public sealed class KernelPublishedExecuteTests
                 Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
                 Assert.Equal(source.SourceReferenceId, result.PinnedSource?.SourceReferenceId);
                 var actor = new Contract.ActorRef(result.WorkflowExecutionId);
-                if (stop)
+                isolatedActors.Add(actor);
+                if (stop || expire)
                 {
                     while ((await privateRuns.TailAsync(actor, cancellationToken: token)).JournalHeadRevision is not > 0)
                         await Task.Delay(40, token);
                     Assert.Equal(Contract.ActorStatus.Running, (await privateRuns.GetAsync(actor, token)).Run?.View.Header.Status);
+                    if (expire) return;
                     await Assert.ThrowsAsync<Core.Exceptions.TestScopeAdmissionException>(() =>
                         dispatcher.RequestStopAsync(test, actor.Id, token).AsTask());
                     await scopeStore.CloseAsync(new(test.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, DateTimeOffset.UtcNow), token);
@@ -530,6 +537,26 @@ public sealed class KernelPublishedExecuteTests
                 Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
                 using var list = JsonDocument.Parse(await listed.Content.ReadAsStringAsync(token));
                 Assert.Empty(list.RootElement.GetProperty("items").EnumerateArray());
+            }
+
+            async Task VerifyExpiryAsync()
+            {
+                var privateRuns = app.Services.GetRequiredService<KernelTestRuns>().Reads;
+                var storage = app.Services.GetRequiredService<KernelShellStorage>();
+                var logger = app.Services.GetRequiredService<ILogger<KernelDirectTestRunRetirement>>();
+                var clock = new FakeTimeProvider(DateTimeOffset.UtcNow.AddMinutes(31));
+                var cleanup = new KernelDirectTestRunRetirement(privateRuns.Tenant, await shell.ReadAsync(token),
+                    storage.OpenOperatorsAsync, clock, logger);
+                while (!(await Task.WhenAll(isolatedActors.Select(async actor =>
+                    (await privateRuns.GetAsync(actor, token)).Missing))).All(missing => missing))
+                {
+                    await cleanup.SweepPageAsync(null, token);
+                    await Task.Delay(80, token);
+                }
+
+                var pins = stores.GetRequiredService<IRuntimeKernelExecutablePinStore>();
+                while ((await pins.ListPinnedExecutableArtifactIdsAsync(token)).Count > 0)
+                    await Task.Delay(80, token);
             }
         }
         finally { await shell.StopAsync(CancellationToken.None); }
