@@ -161,15 +161,17 @@ internal static class RootScheduleControls
         Watermark prior, CancellationToken token, Func<FormattableString, FormattableString>? bind = null)
     {
         var fingerprint = intent.Fingerprint(tenant, actorType);
-        FormattableString write = prior.Revision is null
-            ? $"""
+        FormattableString write;
+        if (prior.Revision is null)
+            write = $"""
                 WITH source AS MATERIALIZED (/*schedule-source*/)
                 INSERT INTO "FoundationScheduleControls" ("Tenant", "Key", "Definition", "ActorType", "Revision", "Kind", "Fingerprint", "Reference")
                 SELECT {tenant}, {intent.Key.Key}, {intent.Key.Definition}, {actorType}, {intent.Revision}, {intent.KindName}, {fingerprint}, {reference}
                 FROM source WHERE source."SourceReady"
                 ON CONFLICT ("Tenant", "Key") DO NOTHING
-                """
-            : $"""
+                """;
+        else
+            write = $"""
                 WITH source AS MATERIALIZED (/*schedule-source*/)
                 UPDATE "FoundationScheduleControls" SET "Revision" = {intent.Revision}, "Kind" = {intent.KindName},
                     "Fingerprint" = {fingerprint}, "Reference" = {reference}
