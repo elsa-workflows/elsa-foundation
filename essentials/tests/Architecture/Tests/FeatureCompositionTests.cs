@@ -81,6 +81,10 @@ public sealed class FeatureCompositionTests
         new("A shell runs exactly one Weaver harness.", ["WeaverAnthropic"], ["WeaverGitHubCopilot"]),
         new("Agent source-only persistence and combined source/journal persistence select the same source ports.",
             ["AgentSourcesEntityFrameworkCore"], ["AgentEntityFrameworkCore"]),
+        new("Legacy and retained workflow dashboards share the same routes.",
+            ["WorkflowsDashboard"], ["WorkflowsDashboardRetained"]),
+        new("Legacy and retained workflow attention provide the same contributor.",
+            ["WorkflowsRuntimeAttention"], ["WorkflowsRuntimeRetainedAttention"]),
     ];
 
     [Fact]
