@@ -1,3 +1,4 @@
+using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Capabilities;
@@ -39,4 +40,31 @@ public static class PublishingApiCapabilities
             new("activity-draft-test-run-cancel", "publishing/activity-test-runs/{testRunId}/cancel", templated: true)
         ],
         SourceFeatureId);
+}
+
+internal sealed record PublishingTestRunRoutes(bool Workflow, bool Waits, bool Activity)
+{
+    internal static readonly PublishingTestRunRoutes All = new(true, true, true);
+}
+
+internal sealed class PublishingApiCapabilitySource(PublishingTestRunRoutes? routes = null) : IApiCapabilitySource
+{
+    public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        var available = routes ?? PublishingTestRunRoutes.All;
+        var declaration = PublishingApiCapabilities.StaticDeclaration;
+        return ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>([declaration with
+        {
+            Links = declaration.Links.Where(link => link.Rel switch
+            {
+                "workflow-test-runs" or "workflow-draft-test-runs" or "workflow-draft-test-run-options" or
+                "workflow-test-run-status" or "workflow-test-run-stop" => available.Workflow,
+                "workflow-test-run-waits" or "workflow-test-run-events" => available.Waits,
+                "activity-draft-test-run-dispatch" or "activity-version-test-run-dispatch" or "activity-draft-test-run-status" or
+                "activity-draft-test-run-idempotency-status" or "activity-version-test-run-idempotency-status" or
+                "activity-draft-test-run-cancel" => available.Activity,
+                _ => true
+            }).ToArray()
+        }]);
+    }
 }
