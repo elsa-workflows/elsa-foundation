@@ -43,6 +43,10 @@ if (args is ["pg-root-operators", var operatorWriter and ("owned" or "ef"), var 
 }
 if (args is ["sqlite-plan-projection", ..]) return await SqlitePlanFixtureCommand.RunAsync(args);
 if (args is ["sqlite-shipped-install"]) return await SqliteShippedInstallChecks.RunAsync();
+if (args is ["sqlite-root-terminal-envelope", var sqliteTerminalFence and ("checked" or "in-batch")])
+    return await ShippedNativeTerminalEnvelopeChecks.RunAsync(postgres: false, inBatch: sqliteTerminalFence == "in-batch");
+if (args is ["pg-root-terminal-envelope", "owned", var pgTerminalFence and ("checked" or "in-batch")])
+    return await ShippedNativeTerminalEnvelopeChecks.RunAsync(postgres: true, inBatch: pgTerminalFence == "in-batch");
 if (args is ["sqlite-root-ingress"]) return await SqliteRootIngressChecks.RunAsync();
 if (args is ["sqlite-root-timed-jobs", var sqliteJobFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunTimedJobsAsync(sqliteJobFence == "in-batch");
