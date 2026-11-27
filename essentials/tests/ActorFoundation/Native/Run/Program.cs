@@ -13,6 +13,11 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["workbench-shipped-flowcharts", var graphProvider and ("sqlite" or "postgres"), var graphWorkbench])
+{
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedFlowchartsAsync(graphWorkbench, graphProvider == "postgres");
+    return 0;
+}
 if (args is ["workbench-shipped-history", var historyProvider and ("sqlite" or "postgres"), var historyWorkbench, .. var historyMode] &&
     historyMode is ([] or ["playback"]))
 {
@@ -386,7 +391,7 @@ if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.P
 Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | pg-write-budget <owned|ef> <checked|in-batch> [--require-budget] | " +
     "shipped-write-budget <sqlite|postgres> <checked|in-batch> [--require-budget] | root-sequenced-journal <sqlite|postgres> <checked|in-batch> | " +
     "shipped-foreach-budget <sqlite|postgres> <balanced|durable> <100|1000> | " +
-    "workbench-shipped-history <sqlite|postgres> <executable> [playback] | " +
+    "workbench-shipped-history <sqlite|postgres> <executable> [playback] | workbench-shipped-flowcharts <sqlite|postgres> <executable> | " +
     "memory [runs] | pg-runtime-cluster [partitions] [wake]");
 return 2;
 
