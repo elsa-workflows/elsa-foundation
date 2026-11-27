@@ -17,12 +17,14 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
-    ILoggerFactory logs, PersistenceScope persistenceScope) : IAsyncDisposable
+    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionPolicy retention) : IAsyncDisposable
 {
     private IHostedService? _owner;
     private IAsyncDisposable? _lifetime;
     private HttpClient? _client;
-    private (IIngress Ingress, IActorReads Reads)? _foundation;
+    private KernelShellFoundation? _foundation;
+    private readonly CancellationTokenSource _retentionStop = new();
+    private Task? _retention;
 
     public async Task StartAsync(CancellationToken token)
     {
@@ -46,17 +48,30 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ServedWorkflow = serving.ServedWorkflow,
             ResolveWorkflow = ResolveWorkflowAsync
         });
-        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs);
+        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window);
         await _owner.StartAsync(token);
+        if (retention.Enabled)
+        {
+            var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
+            _retention = new KernelRetentionWorker(pass, tenant, logs.CreateLogger<KernelRetentionWorker>()).RunAsync(_retentionStop.Token);
+        }
     }
 
-    public Task StopAsync(CancellationToken token) => _owner?.StopAsync(token) ?? Task.CompletedTask;
+    public Task StopAsync(CancellationToken token) =>
+        Task.WhenAll(StopRetentionAsync(token), _owner?.StopAsync(token) ?? Task.CompletedTask);
+
+    private async Task StopRetentionAsync(CancellationToken token)
+    {
+        if (_retention is null) return;
+        await _retentionStop.CancelAsync();
+        await _retention.WaitAsync(token);
+    }
 
     public ValueTask<IIngress> IngressAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Ingress);
 
     public ValueTask<IActorReads> ReadAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Reads);
 
-    private (IIngress Ingress, IActorReads Reads) Foundation => _foundation ??
+    private KernelShellFoundation Foundation => _foundation ??
         throw new InvalidOperationException("The kernel shell has not opened its Actor Foundation.");
 
     private async Task ServePublicationsAsync(CancellationToken token)
@@ -84,11 +99,15 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     {
         try
         {
-            if (_lifetime is not null)
-                await _lifetime.DisposeAsync();
+            try { await StopRetentionAsync(CancellationToken.None); }
+            finally
+            {
+                if (_lifetime is not null) await _lifetime.DisposeAsync();
+            }
         }
         finally
         {
+            _retentionStop.Dispose();
             _client?.Dispose();
         }
     }

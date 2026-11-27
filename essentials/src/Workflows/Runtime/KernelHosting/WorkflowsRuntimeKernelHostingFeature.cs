@@ -45,11 +45,23 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     [ManifestSetting(DisplayName = "Tenant", Description = "The tenant bound to this shell's kernel ingress and reads.", Category = "Runtime", DefaultValue = "default")]
     public string Tenant { get; set; } = "default";
 
+    [ManifestSetting(DisplayName = "Finished retention (seconds)", Description = "Minimum age for automatic deletion of finished runs. Leave empty to keep them.", Category = "Retention")]
+    public int? FinishedRetentionSeconds { get; set; }
+
+    [ManifestSetting(DisplayName = "Cancelled retention (seconds)", Description = "Minimum age for automatic deletion of cancelled runs. Leave empty to keep them.", Category = "Retention")]
+    public int? CancelledRetentionSeconds { get; set; }
+
+    [ManifestSetting(DisplayName = "Faulted retention (seconds)", Description = "Minimum age for automatic deletion of resolved faults. Leave empty to keep them.", Category = "Retention")]
+    public int? FaultedRetentionSeconds { get; set; }
+
     public void ConfigureServices(IServiceCollection services)
     {
         var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString);
         var tenant = EmbeddedTenant.Bind(Tenant);
         var persistenceScope = new PersistenceScope(tenant.Tenant);
+        var retention = new KernelRetentionPolicy(RetentionWindow(FinishedRetentionSeconds, nameof(FinishedRetentionSeconds)),
+            RetentionWindow(CancelledRetentionSeconds, nameof(CancelledRetentionSeconds)),
+            RetentionWindow(FaultedRetentionSeconds, nameof(FaultedRetentionSeconds)));
         services.AddSingleton(storage);
         services.AddSingleton(new ShellRestartRequirement(FeatureName));
         services.AddSingleton(new KernelServing(capabilities: new KernelHostCapabilities(
@@ -59,7 +71,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),
             sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILoggerFactory>(),
-            persistenceScope));
+            persistenceScope, tenant, retention));
         services.AddSingleton(sp => new KernelRuns(tenant, sp.GetRequiredService<KernelShellRuntime>().ReadAsync));
         services.AddSingleton(sp =>
         {
@@ -79,6 +91,13 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddShellInitializer<StartKernelShell>(LifecyclePhase.Start, order: 100);
         services.AddShellTerminator<StopKernelShell>(LifecyclePhase.Start, order: 100);
     }
+
+    private static TimeSpan? RetentionWindow(int? seconds, string setting) => seconds switch
+    {
+        null => null,
+        >= 0 => TimeSpan.FromSeconds(seconds.Value),
+        _ => throw new InvalidOperationException($"{setting} must be nonnegative.")
+    };
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {

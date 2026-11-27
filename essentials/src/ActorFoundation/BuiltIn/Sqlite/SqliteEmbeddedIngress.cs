@@ -33,10 +33,10 @@ public static partial class SqliteEmbeddedHosting
         OpenFoundationCoreAsync(databasePath, actorType, requests, requests.DeduplicationWindow, cancellationToken, authorizeOperator);
 
     internal static async ValueTask<Contract.Admission> AdmitRetentionDeleteAsync(string databasePath, Contract.BoundScope scope,
-        Contract.ActorRef actor, string selection, TimeSpan deduplicationWindow, CancellationToken token)
+        Contract.ActorRef actor, string selection, TimeSpan deduplicationWindow, CancellationToken token, StoreFormat? format = null)
     {
         using var file = AcquireFile(databasePath);
-        var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), deduplicationWindow,
+        var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options, format), deduplicationWindow,
             file.AdmissionDefinitions);
         return await admission.RetentionDeleteAsync(scope.Tenant, actor, selection, token);
     }

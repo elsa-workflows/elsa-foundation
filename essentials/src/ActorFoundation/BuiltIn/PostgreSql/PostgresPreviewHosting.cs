@@ -270,7 +270,8 @@ public static class PostgresPreviewHosting
     // The node with the transport its owner answers held callers through (a check may observe it on the way).
     internal static async Task<RuntimeNode> StartAsync(Func<KernelDb> create, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options, CancellationToken cancellationToken,
-        Action<Exception>? onFault, IReplyTransport? replies, bool? fenceInBatch = null)
+        Action<Exception>? onFault, IReplyTransport? replies, bool? fenceInBatch = null,
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -318,7 +319,7 @@ public static class PostgresPreviewHosting
         var watched = watchdog.Watch(store);
         var adapter = new ActorAdapter(store.WorkerHeaders(scope), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
             rootTimedJobClock: store.RootTimedJobSettlementEnabled ? store.ReadRootTimedJobPublicationTimeAsync : null,
-            rootHeldReplies: replies is not null, rootTerminalOutputLimit: terminalOutputLimit);
+            rootHeldReplies: replies is not null, retentionWindow: retentionWindow, rootTerminalOutputLimit: terminalOutputLimit);
         // A store error a drain retried is reported as a loop error of the node made below: counted, and reported once per
         // distinct error per window, so a drain the deadline kills shows why it made no progress.
         RuntimeNode? reporter = null;

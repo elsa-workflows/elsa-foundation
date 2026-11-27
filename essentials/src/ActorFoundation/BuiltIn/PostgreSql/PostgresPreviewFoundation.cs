@@ -34,6 +34,11 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
             authorizeRecover: (scope, actor) => authorizeExactOperator?.Invoke(scope, actor, Contract.Kinds.Recover) == true);
     }
 
+    /// <summary>Submits a projected terminal selection from the trusted host retention worker.</summary>
+    public ValueTask<Contract.Admission> AdmitRetentionDeleteAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        string selection, CancellationToken cancellationToken = default) =>
+        admission.AdmitRetentionDeleteAsync(scope, actor, selection, cancellationToken);
+
     public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
     {

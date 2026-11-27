@@ -31,9 +31,13 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
                 if (StartNode is { } start) return start(fault, token);
                 Kernel.Durable.IReplyTransport? replies = requests;
                 if (replies is not null && ObserveReplies is { } observe) replies = observe(replies);
-                return PostgresPreviewHosting.StartAsync(create, node, actor, escalate, options, token, fault, replies);
+                return PostgresPreviewHosting.StartAsync(create, node, actor, escalate, options, token, fault, replies,
+                    retentionWindow: RetentionWindow);
             }, logger);
     }
+
+    /// <summary>Evaluates the host's current policy when the owner handles a retention command.</summary>
+    public Func<ActorHeader, TimeSpan?>? RetentionWindow { get; init; }
 
     internal Func<Action<Exception>, CancellationToken, Task<RuntimeNode>>? StartNode { get; init; }
     internal Func<Kernel.Durable.IReplyTransport, Kernel.Durable.IReplyTransport>? ObserveReplies { get; init; }

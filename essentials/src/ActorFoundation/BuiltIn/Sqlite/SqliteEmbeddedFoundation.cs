@@ -63,11 +63,18 @@ public sealed class SqliteEmbeddedFoundation
 
     /// <summary>Creates the host service whose reply edge also serves <see cref="OpenIngressAsync"/>.</summary>
     public SqliteEmbeddedHostedService CreateHostedService(Contract.IActorType actor, Action<string> endProcess,
-        LoopOptions? options = null, bool fenceInBatch = true, ILogger<SqliteEmbeddedHostedService>? logger = null)
+        LoopOptions? options = null, bool fenceInBatch = true, ILogger<SqliteEmbeddedHostedService>? logger = null) =>
+        CreateHostedServiceWithRetention(actor, endProcess, null, options, fenceInBatch, logger);
+
+    /// <summary>Creates a hosted owner that rechecks retention eligibility under the supplied host policy.</summary>
+    public SqliteEmbeddedHostedService CreateHostedServiceWithRetention(Contract.IActorType actor, Action<string> endProcess,
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow, LoopOptions? options = null, bool fenceInBatch = true,
+        ILogger<SqliteEmbeddedHostedService>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         if (actor.Type != actorType) throw new ArgumentException("The actor type must match the Embedded foundation.", nameof(actor));
-        return SqliteEmbeddedHostedService.ForShipped(node, actor, endProcess, options, fenceInBatch, logger, () => (InstalledPath, requests.Value));
+        return SqliteEmbeddedHostedService.ForShipped(node, actor, endProcess, options, fenceInBatch, logger,
+            () => (InstalledPath, requests.Value), retentionWindow);
     }
 
     /// <summary>Opens durable ingress and held requests routed to this foundation's owner.</summary>
@@ -77,6 +84,12 @@ public sealed class SqliteEmbeddedFoundation
     internal Task<Contract.IIngress> OpenIngressWithOperatorsAsync(Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorize,
         CancellationToken cancellationToken) =>
         SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(InstalledPath, actorType, authorize, requests.Value, cancellationToken);
+
+    /// <summary>Submits a projected terminal selection from the trusted host retention worker.</summary>
+    public ValueTask<Contract.Admission> AdmitRetentionDeleteAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        string selection, CancellationToken cancellationToken = default) =>
+        SqliteEmbeddedHosting.AdmitRetentionDeleteAsync(InstalledPath, scope, actor, selection, requests.Value.DeduplicationWindow,
+            cancellationToken, qualificationFormat);
 
     /// <summary>Creates a paged reader of committed roots, inboxes and journals.</summary>
     public Contract.IActorReads CreateReads(int pageSize = 100) => SqliteEmbeddedHosting.CreateFoundationReads(InstalledPath, pageSize, qualificationFormat);

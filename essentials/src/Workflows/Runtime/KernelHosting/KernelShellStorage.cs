@@ -16,9 +16,10 @@ internal abstract class KernelShellStorage
     public abstract bool TakesChildren { get; }
     public abstract bool TakesHttpWaits { get; }
     public abstract Task InstallAsync(CancellationToken token);
-    public abstract ValueTask<(IIngress Ingress, IActorReads Reads)> OpenAsync(CancellationToken token);
+    public abstract ValueTask<KernelShellFoundation> OpenAsync(CancellationToken token);
     public abstract ValueTask<long> ReadClockAsync(CancellationToken token);
-    public abstract (IHostedService Service, IAsyncDisposable Lifetime) CreateOwner(IActorType actor, ILoggerFactory logs);
+    public abstract (IHostedService Service, IAsyncDisposable Lifetime) CreateOwner(IActorType actor, ILoggerFactory logs,
+        Func<ActorHeader, TimeSpan?> retentionWindow);
 
     public static KernelShellStorage Create(string provider, string? sqlitePath, string? postgresConnectionString)
     {
@@ -46,12 +47,14 @@ internal abstract class KernelShellStorage
         public override Task InstallAsync(CancellationToken token) => _foundation.InstallShippedAsync(token);
         public override ValueTask<long> ReadClockAsync(CancellationToken token) => _foundation.ReadClockAsync(token);
 
-        public override async ValueTask<(IIngress, IActorReads)> OpenAsync(CancellationToken token) =>
-            (await _foundation.OpenIngressAsync(token), _foundation.CreateReads());
+        public override async ValueTask<KernelShellFoundation> OpenAsync(CancellationToken token) =>
+            new(await _foundation.OpenIngressAsync(token), _foundation.CreateReads(), _foundation.AdmitRetentionDeleteAsync);
 
-        public override (IHostedService, IAsyncDisposable) CreateOwner(IActorType actor, ILoggerFactory logs)
+        public override (IHostedService, IAsyncDisposable) CreateOwner(IActorType actor, ILoggerFactory logs,
+            Func<ActorHeader, TimeSpan?> retentionWindow)
         {
-            var owner = _foundation.CreateHostedService(actor, Environment.FailFast, logger: logs.CreateLogger<SqliteEmbeddedHostedService>());
+            var owner = _foundation.CreateHostedServiceWithRetention(actor, Environment.FailFast,
+                logger: logs.CreateLogger<SqliteEmbeddedHostedService>(), retentionWindow: retentionWindow);
             return (owner, owner);
         }
     }
@@ -76,20 +79,27 @@ internal abstract class KernelShellStorage
         public override Task InstallAsync(CancellationToken token) => PostgresPreviewHosting.InstallShippedAsync(_options, token);
         public override ValueTask<long> ReadClockAsync(CancellationToken token) => _requests.ReadClockAsync(token);
 
-        public override async ValueTask<(IIngress, IActorReads)> OpenAsync(CancellationToken token)
+        public override async ValueTask<KernelShellFoundation> OpenAsync(CancellationToken token)
         {
             var foundation = await PostgresPreviewHosting.OpenFoundationAsync(OpenDatabase, WorkflowActor.ActorType, _requests,
                 cancellationToken: token);
-            return (foundation, foundation);
+            return new(foundation, foundation, foundation.AdmitRetentionDeleteAsync);
         }
 
-        public override (IHostedService, IAsyncDisposable) CreateOwner(IActorType actor, ILoggerFactory logs)
+        public override (IHostedService, IAsyncDisposable) CreateOwner(IActorType actor, ILoggerFactory logs,
+            Func<ActorHeader, TimeSpan?> retentionWindow)
         {
             var owner = new PostgresPreviewHostedService(OpenDatabase, _node, actor, Environment.FailFast,
-                logger: logs.CreateLogger<PostgresPreviewHostedService>(), requests: _requests);
+                logger: logs.CreateLogger<PostgresPreviewHostedService>(), requests: _requests)
+            {
+                RetentionWindow = retentionWindow
+            };
             return (owner, owner);
         }
 
         private KernelDb OpenDatabase() => PostgresPreviewHosting.CreateShippedContext(_options);
     }
 }
+
+internal sealed record KernelShellFoundation(IIngress Ingress, IActorReads Reads,
+    Func<BoundScope, ActorRef, string, CancellationToken, ValueTask<Admission>> AdmitRetentionDelete);
