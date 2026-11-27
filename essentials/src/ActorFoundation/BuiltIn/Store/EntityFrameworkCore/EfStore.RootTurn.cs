@@ -173,7 +173,7 @@ public sealed partial class EfStore
             RootTimedJobScope => timed ? DecodeRootTimedRow(row) : throw RootShape(),
             RootSelfScope => DecodeRootSelf(row, issue),
             InboxKey.FoundationOccurrenceScope when db.UsesRootChildren && IsStoredRootChildNotice(row.Start) =>
-                DecodeRootChildNotice(row, reference),
+                DecodeRootChildNotice(row, reference, sqlite: db.UsesSqliteRootRuntime),
             InboxKey.FoundationOccurrenceScope when db.UsesRootChildren && IsStoredRootChildInput(row.Start) =>
                 DecodeRootChildInput(row, reference),
             InboxKey.FoundationOccurrenceScope when db.UsesRootChildren && row.Start == RootChildCascadeWire =>

@@ -44,6 +44,23 @@ public sealed partial class EfStore
                     AND ({{resolved}}) IS TRUE;
             END
             """);
+        if (db.UsesRootChildren)
+        {
+            // A parked live-job pin stops protecting its rows once the terminal checkpoint clears the Park.
+            // Keep the deferred outcome until the last physical job row and its protected membership are gone.
+            var childSettled = SqliteParkedOutcomeCheckpoint(db, "\"FoundationRootPendingOutcomes\".", firstCheckpoint: false, checkpoint: "i.");
+            yield return new("trigger", "kernel_resolve_parked_child_job_outcome", "FoundationProtectedTimedJobs", $$"""
+                CREATE TRIGGER kernel_resolve_parked_child_job_outcome AFTER DELETE ON "FoundationProtectedTimedJobs"
+                WHEN OLD."InboxScope" = {{RootTimedJobScope}}
+                BEGIN
+                    DELETE FROM "FoundationRootPendingOutcomes"
+                    WHERE "Instance" = OLD."Actor"
+                        AND EXISTS (SELECT 1 FROM "Instances" i
+                            WHERE i."Id" = OLD."Actor" AND i."Partition" = "FoundationRootPendingOutcomes"."Partition"
+                            AND i."Revision" = "FoundationRootPendingOutcomes"."Revision" AND ({{childSettled}}) IS TRUE);
+                END
+                """);
+        }
 
         // The first turn journals before its root is bound, just as an ordinary turn can journal before a row exists.
         // Once a row becomes qualified, check those outcomes against the new checkpoint as PostgreSQL does at commit.
@@ -67,12 +84,13 @@ public sealed partial class EfStore
     }
 
     // The shared predicate refers to the checkpoint as i and the journal entry as NEW.
-    private static string SqliteParkedOutcomeCheckpoint(KernelDb db, string journalAlias, bool firstCheckpoint) =>
+    private static string SqliteParkedOutcomeCheckpoint(KernelDb db, string journalAlias, bool firstCheckpoint, string checkpoint = "NEW.") =>
         RenderSqliteOutcomePrefixes(RootParkedOutcomeCheckpoint + StoppedParkOutcomeCheckpoint +
+            (db.UsesRootChildren ? SettledParkedChildJob : "") +
             (!db.UsesRootParkRecovery ? "" : firstCheckpoint ? """ AND NEW."Entries" NOT LIKE '{{"Outcome":"recovered",%' """ : """
                 AND (NEW."Entries" NOT LIKE '{{"Outcome":"recovered",%' OR (i."Status" = 0 AND NOT i."Retired"
                     AND i."FoundationParkAt" IS NULL AND i."FoundationParkRevision" IS NULL AND i."FoundationParkClearing" IS NULL))
                 """))
             .Replace("NEW.", journalAlias, StringComparison.Ordinal)
-            .Replace("i.", "NEW.", StringComparison.Ordinal);
+            .Replace("i.", checkpoint, StringComparison.Ordinal);
 }

@@ -163,7 +163,7 @@ internal static partial class WorkbenchPostgresPreview
 
             var reader = postgres
                 ? await new EfStore(Open, postgres: true).OpenPreviewRootReadsAsync(cancellationToken: token)
-                : SqliteEmbeddedHosting.CreateFoundationReads(sqlite!, terminalOutputFormat: shared ? null : format);
+                : SqliteEmbeddedHosting.CreateFoundationReads(sqlite!, qualificationFormat: shared ? null : format);
             var output = (IActorTerminalOutputReads)reader;
             var point = await reader.GetAsync(scope, new(flowRun), token);
             var endedAt = point!.Header.EndedAt!.Value;

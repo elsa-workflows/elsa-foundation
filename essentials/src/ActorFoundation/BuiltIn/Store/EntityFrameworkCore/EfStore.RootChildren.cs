@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kernel.EntityFramework;
@@ -15,10 +16,18 @@ public sealed partial class EfStore
     {
         await using var db = create();
         if (!db.UsesRootChildren) return;
-        if (!db.Database.IsNpgsql()) throw new StoreFormatException("The child qualification profile requires PostgreSQL.");
-        await using var pinned = await BeginPinnedRootOperationAsync(db, token);
-        if (pinned is null) await RequireStoreVersionsAsync(db, token);
-        var key = await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token);
+        byte[] key;
+        if (db.UsesSqliteRootRuntime)
+        {
+            await RequireSqliteOperationalFormatAsync(db, token);
+            key = await SqliteRootAdmission.ReadRootIssuerKeyAsync(db, token);
+        }
+        else
+        {
+            await using var pinned = await BeginPinnedRootOperationAsync(db, token);
+            if (pinned is null) await RequireStoreVersionsAsync(db, token);
+            key = await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token);
+        }
         _rootChildReference = (tenant, address) => FoundationRootCreator.ReferenceFor(key, tenant, address);
         _rootChildMessageHandle = seed => FoundationSelfSend.Handle(key, "child-" + seed);
     }
@@ -42,18 +51,31 @@ public sealed partial class EfStore
                 throw new StoreException(Failure.Definite, "The child result exceeds its storage budget.");
             var target = notice.Target;
             // A finalized parent's registry still needs its final notice, even though the model has ended.
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Start","Sender","Done","Seen","Attempts","Trial","JobGeneration")
+            FormattableString insert = $"""
+                INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Start","Sender","Done","Seen","Attempts","Trial","JobGeneration"/*seq-column*/)
                 SELECT {notice.InboxKey.Id}, {InboxKey.FoundationOccurrenceScope}, b."Actor", b."Partition", {Kinds.ChildFinished}, 0,
-                    {stored}, {notice.Sender}, false, 0, 0, 0, 0
+                    {stored}, {notice.Sender}, false, 0, 0, 0, 0/*seq*/
                 FROM "FoundationRootBirths" b
                 JOIN "Instances" i ON i."Partition" = b."Partition" AND i."Id" = b."Actor" AND i."FoundationReference" = b."Reference"
                 WHERE b."Tenant" = {tenant} AND b."Actor" = {target.Id} AND b."Partition" = {target.Partition}
                     AND b."Creation" = {notice.TargetCreation} AND NOT i."Retired"
                     AND (i."FoundationTerminalRevision" IS NULL OR i."Children" IS NOT NULL AND {final})
-                """, token);
+                """;
+            await db.Database.ExecuteSqlInterpolatedAsync(RootChildDialectQuery(db, insert), token);
             return true;
         }
+    }
+
+    private static FormattableString RootChildDialectQuery(KernelDb db, FormattableString query)
+    {
+        var sqlite = db.UsesSqliteRootRuntime;
+        var sql = query.Format
+            .Replace("/*seq-column*/", sqlite ? """, "Seq" """ : "", StringComparison.Ordinal)
+            .Replace("/*seq*/", sqlite ? """, (SELECT coalesce(max("Seq"), 0) + 1 FROM "Messages")""" : "", StringComparison.Ordinal)
+            .Replace("/*json-cast*/", sqlite ? "" : "::jsonb", StringComparison.Ordinal)
+            .Replace("/*text-cast*/", sqlite ? "" : "::text", StringComparison.Ordinal)
+            .Replace("/*lock*/", sqlite ? "" : " FOR UPDATE", StringComparison.Ordinal);
+        return FormattableStringFactory.Create(sql, query.GetArguments());
     }
 
     private static async Task<bool> BindRootChildStartsAsync(KernelDb db, string tenant, RootChildStart[] starts, CancellationToken token)
@@ -71,6 +93,8 @@ public sealed partial class EfStore
                 Creator = creator.InboxKey.Id, Fingerprint = fingerprint, Header = header, Payload = payload, creator.Sender
             };
         }));
+        if (db.UsesSqliteRootRuntime)
+            return await BindSqliteRootChildStartsAsync(db, tenant, envelopes, starts.Length, token);
         return await db.Database.ExecuteSqlInterpolatedAsync($"""
             WITH inputs AS MATERIALIZED (
                 SELECT * FROM jsonb_to_recordset({envelopes}::jsonb) AS input("Ordinal" integer, "Reference" text,
@@ -95,6 +119,11 @@ public sealed partial class EfStore
             Ordinal = ordinal, input.InboxKey.Id, Actor = input.Target.Id, input.Target.Partition, input.Sender, input.TargetCreation, input.Kind,
             Header = EncodeChildInput(input)
         }));
+        if (db.UsesSqliteRootRuntime)
+        {
+            await BindSqliteRootChildInputsAsync(db, tenant, envelopes, token);
+            return;
+        }
         // The child may still be a creator. A terminal or retired child no longer needs the input.
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Start","Sender","Done","Seen","Attempts","Trial","JobGeneration")
@@ -158,7 +187,8 @@ public sealed partial class EfStore
                     message.TargetCreation != row.ParentCreation || message.Sender != row.Id || message.SenderCreation != row.Creation ||
                     message.Id != CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision) || message.Payload is null)
                     throw RootShape();
-                notice = message with { StorageId = ChildOccurrence(reference(root.Tenant, new(row.Parent, row.ParentCreation)), message.Id) };
+                notice = message with { StorageId = ChildNoticeOccurrence(reference(root.Tenant, new(row.Parent, row.ParentCreation)),
+                    message.Id, sqlite: !postgres) };
             }
             else throw RootShape();
         }
@@ -219,6 +249,9 @@ public sealed partial class EfStore
     private static string ChildOccurrence(string reference, string id) =>
         reference + "/child/" + FoundationRootCreator.OperationDigest(id);
 
+    private static string ChildNoticeOccurrence(string reference, string id, bool sqlite) =>
+        sqlite ? reference + SqliteChildNoticePath + id : ChildOccurrence(reference, id);
+
     private static string RootChildNoticePredicate(string alias) =>
         $"""(COALESCE({alias}."Start", '') LIKE '{RootChildNoticePrefix}%' OR COALESCE({alias}."Start", '') LIKE '{RootChildInputPrefix}%' OR COALESCE({alias}."Start", '') = '{RootChildCascadeWire}')""";
 
@@ -266,7 +299,7 @@ public sealed partial class EfStore
     private static bool IsStoredRootChildNotice(string? header) =>
         header?.StartsWith(RootChildNoticePrefix, StringComparison.Ordinal) == true;
 
-    private static Message DecodeRootChildNotice(MessageEntity row, string reference)
+    private static Message DecodeRootChildNotice(MessageEntity row, string reference, bool sqlite = false)
     {
         var stored = DurableKeyJson.Read<StoredChildNotice>(row.Start![RootChildNoticePrefix.Length..]);
         var notice = DurableKeyJson.Read<FoundationChildNotice>(stored.Payload);
@@ -275,7 +308,7 @@ public sealed partial class EfStore
             notice.Creation != 1 || notice.Status is not (InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled) ||
             stored.Final != notice.Final || !notice.Final && notice.Status != InstanceStatus.Faulted ||
             !CreationProtocol.IsTerminalHandle(stored.Id, CreationProtocol.Origin(notice.Child, 1)) ||
-            row.Id != ChildOccurrence(reference, stored.Id))
+            row.Id != ChildNoticeOccurrence(reference, stored.Id, sqlite))
             throw new StoreException(Failure.Definite, "Invalid PostgreSQL child notice.");
         return (new Message(stored.Id, new(row.Target), Kinds.ChildFinished, stored.Payload,
             row.Sender, TargetCreation: 1, SenderCreation: 1) { FoundationRootChildNotice = true, StorageId = row.Id })

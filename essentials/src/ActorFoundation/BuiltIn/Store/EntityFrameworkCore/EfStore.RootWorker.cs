@@ -294,6 +294,10 @@ public sealed partial class EfStore
             if (terminal.Count != 1) return false;
             if (SettledJobs.Length > 0 && await db.Messages.AnyAsync(m => m.Target == Root.Actor && m.Partition == Root.Partition &&
                     m.InboxScope == RootTimedJobScope && SettledJobs.Contains(m.Id) && !m.Done, cancellationToken)) return false;
+            if (db.UsesSqliteRootRuntime && db.UsesRootChildren)
+                return await SettleSqliteRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys,
+                    HeldOperator is null ? null : [HeldOperator], false, cancellationToken, issue: Issue, ended: Root) &&
+                    await DrainRootChildCascadeAsync(db, Root, Keys, ChildReference, ChildHandle, cancellationToken);
             return (!db.UsesRootChildren || await CloseEndedChildRegistryAsync(db, Root, Keys, cancellationToken)) &&
                 await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys,
                     HeldOperator is null ? null : [HeldOperator], Issue, false, cancellationToken) &&

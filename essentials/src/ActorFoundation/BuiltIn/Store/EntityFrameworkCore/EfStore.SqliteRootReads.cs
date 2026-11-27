@@ -7,7 +7,7 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     private sealed record SqliteActorProjection(string Reference, int Status, long? EndedAt, long? TerminalRevision,
-        string Header, long? ParkAt, string? ParkFault, long? ParkRevision, string? ParkResolution);
+        string Header, long? ParkAt, string? ParkFault, long? ParkRevision, string? ParkResolution, string? ParentReference);
 
     private sealed record SqliteInboxProjection(long Seq, string Occurrence, string Kind, string? Header, long Due, int Attempts,
         long Size, bool HasReply, bool SupportedShape, short? KeptBy);
@@ -15,10 +15,12 @@ public sealed partial class EfStore
     private static async Task<(RootListItem Item, long AsOf)?> ReadSqliteRootActorAsync(KernelDb db, string tenant, string reference,
         CancellationToken token) => await ReadSqliteRootSnapshotAsync<(RootListItem, long)?>(db, async at =>
     {
-        var row = await db.Database.SqlQuery<SqliteActorProjection>($"""
-            SELECT "Reference", "Status", "EndedAt", "TerminalRevision", "Header", "ParkAt", "ParkFault", "ParkRevision", "ParkResolution"
-            FROM "FoundationActorList" WHERE "Tenant" = {tenant} AND "Reference" = {reference}
-            """).SingleOrDefaultAsync(token);
+        FormattableString query = $"""
+            SELECT l."Reference", l."Status", l."EndedAt", l."TerminalRevision", l."Header", l."ParkAt", l."ParkFault",
+                l."ParkRevision", l."ParkResolution", /*parent*/ AS "ParentReference"
+            FROM "FoundationActorList" l WHERE l."Tenant" = {tenant} AND l."Reference" = {reference}
+            """;
+        var row = await db.Database.SqlQuery<SqliteActorProjection>(SqliteRootActorReadQuery(db, query)).SingleOrDefaultAsync(token);
         return row is null ? null : (ToSqliteRootListItem(row), at);
     }, token);
 
@@ -31,7 +33,8 @@ public sealed partial class EfStore
             // Compare each encoded label object. Extracting its key or value as SQL text would lose escaped code units.
             FormattableString query = $"""
                 /* sqlite-root-actor-list */
-                SELECT l."Reference", l."Status", l."EndedAt", l."TerminalRevision", l."Header", l."ParkAt", l."ParkFault", l."ParkRevision", l."ParkResolution"
+                SELECT l."Reference", l."Status", l."EndedAt", l."TerminalRevision", l."Header", l."ParkAt", l."ParkFault",
+                    l."ParkRevision", l."ParkResolution", /*parent*/ AS "ParentReference"
                 FROM "FoundationActorList" l WHERE l."Tenant" = {tenant} AND l."Reference" > {after}
                     AND ({encodedType} IS NULL OR l."Type" COLLATE BINARY = {encodedType})
                     AND ({status} IS NULL OR l."Status" = {status})
@@ -48,16 +51,21 @@ public sealed partial class EfStore
                 null => ""
             };
             var sql = query.Format.Replace("/* park filter */", parkFilter, StringComparison.Ordinal);
-            var rows = await db.Database.SqlQuery<SqliteActorProjection>(FormattableStringFactory.Create(sql, query.GetArguments())).ToListAsync(token);
+            var rows = await db.Database.SqlQuery<SqliteActorProjection>(
+                SqliteRootActorReadQuery(db, FormattableStringFactory.Create(sql, query.GetArguments()))).ToListAsync(token);
             return new RootListPage(rows.Select(ToSqliteRootListItem).ToArray(), at);
         }, token);
+
+    private static FormattableString SqliteRootActorReadQuery(KernelDb db, FormattableString query) =>
+        FormattableStringFactory.Create(query.Format.Replace("/*parent*/", db.UsesRootChildren ? RootChildParentProjection : "NULL",
+            StringComparison.Ordinal), query.GetArguments());
 
     private static RootListItem ToSqliteRootListItem(SqliteActorProjection row)
     {
         if (row.ParkAt is not null && row.ParkRevision is not > 0)
             throw new StoreFormatException("The SQLite actor projection has an incomplete Park mark.");
         return ToRootListItem(row.Reference, row.Status, row.EndedAt, row.TerminalRevision, row.Header,
-            qualified: true, row.ParkAt, row.ParkFault, row.ParkRevision, row.ParkResolution);
+            qualified: true, row.ParkAt, row.ParkFault, row.ParkRevision, row.ParkResolution) with { ParentReference = row.ParentReference };
     }
 
     private static Task<RootJournalPage> ReadSqliteRootJournalAsync(KernelDb db, string tenant, string reference,
@@ -109,6 +117,7 @@ public sealed partial class EfStore
                 JOIN "Messages" m ON m."Target" = b."Actor" AND m."Partition" = b."Partition"
                 WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
                     AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."EventMatch" IS NULL
+                    /*root-child-notices*/
                     AND (NOT m."Done" OR /*kept-reasons*/)
                     AND (NOT m."Done" OR i."FoundationParkAt" IS NOT NULL)
                     AND (m."Seq", m."Id") > ({afterSeq}, {afterOccurrence})
@@ -138,8 +147,9 @@ public sealed partial class EfStore
             FROM normalized ORDER BY "Seq", "Occurrence"
             """;
         var kept = KeptReasons(db).Replace("\"FoundationKeptBy\"", "m.\"FoundationKeptBy\"", StringComparison.Ordinal).Trim();
-        var rows = await db.Database.SqlQuery<SqliteInboxProjection>(FormattableStringFactory.Create(
-            query.Format.Replace("/*kept-reasons*/", kept, StringComparison.Ordinal), query.GetArguments())).ToListAsync(token);
+        var sql = query.Format.Replace("/*kept-reasons*/", kept, StringComparison.Ordinal)
+            .Replace("/*root-child-notices*/", db.UsesRootChildren ? "AND NOT " + RootChildNoticePredicate("m") : "", StringComparison.Ordinal);
+        var rows = await db.Database.SqlQuery<SqliteInboxProjection>(FormattableStringFactory.Create(sql, query.GetArguments())).ToListAsync(token);
         return new RootInboxPage(rows.Select(Project).ToArray(), at);
 
         RootInboxEntry Project(SqliteInboxProjection row)

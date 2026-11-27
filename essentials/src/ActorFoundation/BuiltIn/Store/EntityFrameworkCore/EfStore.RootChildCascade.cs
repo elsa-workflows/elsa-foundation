@@ -11,6 +11,11 @@ public sealed partial class EfStore
         AND ({RootChildCascadeRow} OR NOT EXISTS (
             SELECT 1 FROM "FoundationRootChildCascades" children WHERE children."Reference" = b."Reference"))
         """;
+    private static readonly string RootChildPriorityPoll = $"""
+        {RootChildCascadeRow} OR EXISTS (SELECT 1 FROM "Instances" child
+            WHERE child."Id" = m."Target" AND child."Partition" = m."Partition" AND child."Suspended"
+            AND {RootChildTerminatePredicate("m", "child")}) OR
+        """;
     private sealed record RootChildCascade(WorkerRoot Parent, long Revision, int Cursor, CreationAddress[] Children);
     private sealed record StoredChildCascade(long Revision, int Cursor, string Children);
 
@@ -47,18 +52,26 @@ public sealed partial class EfStore
             .WithInboxScope(InboxKey.FoundationOccurrenceScope);
     }
 
-    private static async Task<bool> OpenRootChildCascadeAsync(KernelDb db, RootChildCascade cascade, CancellationToken token) =>
-        await db.Database.ExecuteSqlInterpolatedAsync($"""
+    private static async Task<bool> OpenRootChildCascadeAsync(KernelDb db, RootChildCascade cascade, CancellationToken token)
+    {
+        FormattableString insert = $"""
             INSERT INTO "FoundationRootChildCascades" ("Reference", "Revision", "Cursor", "Children")
-            VALUES ({cascade.Parent.Reference}, {cascade.Revision}, {cascade.Cursor}, {Json.Write(cascade.Children)}::jsonb)
-            """, token) == 1 && await EnqueueRootChildCascadeAsync(db, cascade.Parent, cascade.Revision, cascade.Cursor, token);
+            VALUES ({cascade.Parent.Reference}, {cascade.Revision}, {cascade.Cursor}, {Json.Write(cascade.Children)}/*json-cast*/)
+            """;
+        return await db.Database.ExecuteSqlInterpolatedAsync(RootChildDialectQuery(db, insert), token) == 1 &&
+            await EnqueueRootChildCascadeAsync(db, cascade.Parent, cascade.Revision, cascade.Cursor, token);
+    }
 
     private static async Task<bool> EnqueueRootChildCascadeAsync(KernelDb db, WorkerRoot parent, long revision, int cursor,
-        CancellationToken token) => await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Start","Sender","Done","Seen","Attempts","Trial","JobGeneration")
+        CancellationToken token)
+    {
+        FormattableString insert = $"""
+            INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Start","Sender","Done","Seen","Attempts","Trial","JobGeneration"/*seq-column*/)
             VALUES ({ChildCascadeKey(parent.Reference, revision, cursor)}, {InboxKey.FoundationOccurrenceScope}, {parent.Actor}, {parent.Partition},
-                {Kinds.Cascade}, 0, {RootChildCascadeWire}, {parent.Actor}, false, 0, 0, 0, 0)
-            """, token) == 1;
+                {Kinds.Cascade}, 0, {RootChildCascadeWire}, {parent.Actor}, false, 0, 0, 0, 0/*seq*/)
+            """;
+        return await db.Database.ExecuteSqlInterpolatedAsync(RootChildDialectQuery(db, insert), token) == 1;
+    }
 
     private static async Task<bool> DrainRootChildCascadeAsync(KernelDb db, WorkerRoot parent, IReadOnlyList<InboxKey> keys,
         Func<string, CreationAddress, string>? reference, Func<string, string>? handle, CancellationToken token)
@@ -67,10 +80,11 @@ public sealed partial class EfStore
             key.Id.StartsWith(ChildCascadePrefix(parent.Reference), StringComparison.Ordinal)).ToArray();
         if (controls.Length == 0) return true;
         if (controls is not [var control] || reference is null || handle is null) return false;
-        var pending = await db.Database.SqlQuery<StoredChildCascade>($"""
-            SELECT "Revision", "Cursor", "Children"::text AS "Children" FROM "FoundationRootChildCascades"
-            WHERE "Reference" = {parent.Reference} FOR UPDATE
-            """).SingleOrDefaultAsync(token);
+        FormattableString select = $"""
+            SELECT "Revision", "Cursor", "Children"/*text-cast*/ AS "Children" FROM "FoundationRootChildCascades"
+            WHERE "Reference" = {parent.Reference}/*lock*/
+            """;
+        var pending = await db.Database.SqlQuery<StoredChildCascade>(RootChildDialectQuery(db, select)).SingleOrDefaultAsync(token);
         if (pending is null || control.Id != ChildCascadeKey(parent.Reference, pending.Revision, pending.Cursor)) return false;
         var children = Json.Read<CreationAddress[]>(pending.Children);
         var count = Math.Min(CascadeProtocol.PageLimit, children.Length - pending.Cursor);

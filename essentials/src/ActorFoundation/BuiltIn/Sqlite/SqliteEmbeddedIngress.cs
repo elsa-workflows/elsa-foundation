@@ -53,7 +53,7 @@ public static partial class SqliteEmbeddedHosting
 
         using var file = AcquireFile(databasePath, requests: requests);
         requests?.RequireBinding(file.Path, actorType);
-        var format = requests?.TerminalOutputFormat;
+        var format = requests?.QualificationFormat;
         var pressure = requests?.Pressure;
         using (var db = KernelDb.ForSqliteRootShipped(file.Options, format))
             if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
@@ -70,7 +70,7 @@ public static partial class SqliteEmbeddedHosting
         async Task ReadPressureAsync(CancellationToken token)
         {
             using var lease = AcquireFile(path);
-            var store = new EfStore(() => KernelDb.ForSqliteRootRuntime(lease.Options, lease.AdmissionDefinitions, terminalOutputFormat: format), postgres: false)
+            var store = new EfStore(() => KernelDb.ForSqliteRootRuntime(lease.Options, lease.AdmissionDefinitions, qualificationFormat: format), postgres: false)
                 { AdmissionPressure = pressure };
             await store.PrimeAdmissionPressureAsync(token);
         }
@@ -109,13 +109,13 @@ public static partial class SqliteEmbeddedHosting
                 var (actor, command, refusal) = ReadCommand(scope, target, kind, payload);
                 if (command is null) return new(Contract.AdmissionOutcome.Refused, Reason: refusal);
                 using var write = AcquireFile(path);
-                var operators = CreateAdmission(write, window, pressure, requests?.TerminalOutputFormat);
+                var operators = CreateAdmission(write, window, pressure, requests?.QualificationFormat);
                 return await operators.OperateAsync(scope.Tenant, actor, id, kind, command.Selection!, options?.DueAt, options?.KeepFor,
                     cancellationToken, thenDelete: command.ThenDelete);
             }
 
             using var file = AcquireFile(path);
-            var admission = CreateAdmission(file, window, pressure, requests?.TerminalOutputFormat);
+            var admission = CreateAdmission(file, window, pressure, requests?.QualificationFormat);
             if (target is Contract.Target.Start start)
             {
                 var spec = start.Spec;

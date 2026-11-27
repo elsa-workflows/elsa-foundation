@@ -59,6 +59,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootDueBacklogQualification => Current with { MessageProtocol = 110 };
     internal static StoreFormat RootTerminalOutputQualification => new(3, 112, 1);
     internal static StoreFormat RootS6TerminalOutputQualification => new(3, 113, 1);
+    internal static StoreFormat SqliteRootChildrenQualification => new(3, 114, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -138,6 +139,7 @@ internal static class RootProfiles
     internal const RootCapabilities ParkRecoveryComposition = ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
     internal const RootCapabilities SelfTimedParkQualification = ParkRecoveryComposition | RootCapabilities.SelfProtocol | RootCapabilities.Timers;
     internal const RootCapabilities TimerRearmQualification = SelfTimedParkQualification | RootCapabilities.TimerRearm;
+    internal const RootCapabilities ChildQualification = TimerRearmQualification | RootCapabilities.Children;
     // Protocol 112 was qualified before the S6 timers and rearming capability.
     internal const RootCapabilities TerminalOutputQualification = ParkRecoveryComposition | RootCapabilities.TerminalOutput;
     internal const RootCapabilities S6TerminalOutputQualification = TimerRearmQualification | RootCapabilities.TerminalOutput;
@@ -381,6 +383,7 @@ internal static class StoreDefinitionsRevision
     private const int PostgreSqlRevision = 8;
     private const int PostgreSqlChildrenRevision = 9;
     private const int SqliteRevision = 12;
+    private const int SqliteChildrenRevision = 13;
     private const int SqliteParkRecoverRevision = 5;
     private const int PostgreSqlDueBacklogRevision = 5;
     private const int SqliteDueBacklogRevision = 10;
@@ -406,6 +409,7 @@ internal static class StoreDefinitionsRevision
                 _ when sqliteQualification => db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification ? SqliteParkRecoverRevision : 1,
                 _ when db.RequiredFormat == StoreFormat.RootDueBacklogQualification => sqlite ? SqliteDueBacklogRevision : PostgreSqlDueBacklogRevision,
                 _ when db.RequiredFormat == StoreFormat.PostgresRootChildrenQualification => PostgreSqlChildrenRevision,
+                _ when db.RequiredFormat == StoreFormat.SqliteRootChildrenQualification => SqliteChildrenRevision,
                 _ when db.RequiredFormat == StoreFormat.RootTerminalOutputQualification => sqlite ? SqliteTerminalOutputRevision : PostgreSqlTerminalOutputRevision,
                 _ when db.RequiredFormat == StoreFormat.RootS6TerminalOutputQualification => sqlite ? SqliteS6TerminalOutputRevision : PostgreSqlS6TerminalOutputRevision,
                 _ => sqlite ? SqliteRevision : PostgreSqlRevision

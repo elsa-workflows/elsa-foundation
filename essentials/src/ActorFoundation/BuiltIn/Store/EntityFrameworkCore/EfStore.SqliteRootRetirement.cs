@@ -24,7 +24,8 @@ public sealed partial class EfStore
                     AND i."FoundationTerminalRevision" IS NOT DISTINCT FROM {current.TerminalRevision}
                     AND i."FoundationTerminalAt" IS NOT DISTINCT FROM {current.TerminalAt}
                     AND i."FoundationParkAt" IS NOT DISTINCT FROM {park?.Mark.At}
-                    AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."Parent" IS NULL AND i."CustomHandles" IS NULL
+                    AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."CustomHandles" IS NULL
+                    AND (i."Parent" IS NULL OR {db.UsesRootChildren && !ending} AND i."FoundationTerminalRevision" = i."Revision")
                     AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = i."Id")
                     AND ({clearsPrivate} OR NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
                         AND NOT m."Done" AND (m."InboxScope" <> {scope} OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL))))
@@ -54,7 +55,7 @@ public sealed partial class EfStore
         if (await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Instances" SET "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL,
                 "Model" = '', "Definition" = '', "Fault" = NULL, "StateVersion" = 1, "History" = {(int)History.Minimal},
-                "NextJobGeneration" = NULL, "Suspended" = false, "Retired" = true, "Revision" = {revision},
+                "NextJobGeneration" = NULL, "Parent" = NULL, "Suspended" = false, "Retired" = true, "Revision" = {revision},
                 "FoundationWriteRevision" = {revision}, "Status" = {(int)status},
                 "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL,
                 "FoundationTerminalRevision" = {terminalRevision}, "FoundationTerminalAt" = {terminalAt}
