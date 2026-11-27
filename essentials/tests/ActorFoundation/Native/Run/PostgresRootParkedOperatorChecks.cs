@@ -174,6 +174,8 @@ internal static class PostgresRootParkedOperatorChecks
         await main.BypassAsync(plannedPark, PlantChild);
         try
         {
+            // The shipped owner loads child registries. Re-read the fixture row after its out-of-band change.
+            if (shippedSet) await main.RetakeAsync();
             Check(await main.OperateAsync(planned, "terminate-planned", Contract.Kinds.Terminate, parkPlanned, reply: true),
                 "a held Terminate with the Park selection is admitted for the root with children");
             await main.DriveAsync(planned, image => image is { Revision: 3 });
@@ -181,6 +183,7 @@ internal static class PostgresRootParkedOperatorChecks
         finally { await main.BypassAsync(plannedPark, """ "Children" = NULL """); }
         await main.SettledAsync(planned, "terminate-planned", reason: "outstanding");
         main.Answered("terminate-planned", "ParkOutstanding");
+        if (shippedSet) await main.RetakeAsync();
         // A subscription counts as outstanding too, so the Terminate is refused instead of failing its commit.
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ('planned', {plannedPark.Actor.Id}, 'planned', 0)
