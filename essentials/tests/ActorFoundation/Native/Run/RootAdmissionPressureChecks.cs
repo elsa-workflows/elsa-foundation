@@ -6,6 +6,7 @@ using Kernel.Foundation.Sqlite;
 using Kernel.Runtime.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
@@ -170,10 +171,36 @@ internal static class RootAdmissionPressureChecks
                 "one-way ingress primes the published pressure list and still replays existing starts");
             if (postgres)
             {
-                var preview = await store.OpenPreviewRootIngressAsync(actor.Type, TimeSpan.FromHours(1), token);
+                var singleConnection = new NpgsqlConnectionStringBuilder(db.Database.GetConnectionString())
+                {
+                    MaxPoolSize = 1,
+                    Timeout = 2
+                };
+                var singleOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(singleConnection.ConnectionString).Options;
+                var singleConnectionStore = new EfStore(OpenWithOwnedConnection, postgres: true);
+                var preview = await singleConnectionStore.OpenPreviewRootIngressAsync(actor.Type, TimeSpan.FromHours(1), token);
+                var selected = await singleConnectionStore.OpenSelectedRootIngressAsync(actor.Type, TimeSpan.FromHours(1),
+                    (caller, target) => Authorize(caller, target, Contract.Kinds.Terminate), token);
                 Check(await preview.SendAsync(scope, Start("serve"), "cold-preview-start", Contract.Kinds.Start, cancellationToken: token) is
-                    { Reason: Contract.RefusalReason.InboxFull, RetryAfter: not null },
-                    "the public PostgreSQL preview factory applies the shared pressure limits");
+                        { Reason: Contract.RefusalReason.InboxFull, RetryAfter: not null } &&
+                    await selected.SendAsync(scope, Start("serve"), "cold-selected-start", Contract.Kinds.Start, cancellationToken: token) is
+                        { Reason: Contract.RefusalReason.InboxFull, RetryAfter: not null },
+                    "both low-level PostgreSQL factories apply shared pressure using one pooled connection");
+
+                KernelDb OpenWithOwnedConnection()
+                {
+                    var context = KernelDb.ForPostgresRootShipped(singleOptions);
+                    try
+                    {
+                        context.Database.OpenConnection();
+                        return context;
+                    }
+                    catch
+                    {
+                        context.Dispose();
+                        throw;
+                    }
+                }
             }
             return 0;
 
