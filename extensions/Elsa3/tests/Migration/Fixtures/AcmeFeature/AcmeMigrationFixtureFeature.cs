@@ -25,8 +25,17 @@ public sealed class AcmeMigrationFixtureFeature : IShellFeature
     /// <summary>The CShells feature name a shell lists to enable this feature.</summary>
     public const string FeatureName = "AcmeElsa3MigrationFixture";
 
+    /// <summary>
+    /// Test-only: when set, the feature throws while the shell is composed, so the migration CLI's
+    /// <c>composition-failed</c> refusal can be tested (spec 1237 T026). The value is never echoed.
+    /// </summary>
+    public string? Throw { get; set; }
+
     public void ConfigureServices(IServiceCollection services)
     {
+        if (!string.IsNullOrEmpty(Throw))
+            throw new InvalidOperationException($"The {FeatureName} feature was told to fail while the shell is composed.");
+
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityReconciliationSource, NotifyCustomerActivitySource>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IVariableTypeDescriptorProvider, OrderDtoTypeDescriptorProvider>());
         foreach (var function in AcmeHostFunctions.All)

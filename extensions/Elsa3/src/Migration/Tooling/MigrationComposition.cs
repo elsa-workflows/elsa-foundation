@@ -61,10 +61,15 @@ internal sealed class MigrationComposition : IAsyncDisposable
     /// Composes and activates the shell. Returns the <c>composition-failed</c> refusal when a listed feature is missing or
     /// throws while the shell is composed (T026); then nothing is left behind.
     /// </summary>
+    /// <param name="observeHostServices">
+    /// Test seam (T015): the root descriptors before the host's <c>AddHostServices</c> call, and after it and the Data
+    /// Protection replacement.
+    /// </param>
     public static async Task<(MigrationComposition? Composition, MigrationRefusal? Refusal)> ComposeAsync(
         MigrationCommand command,
         HostWiring wiring,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<IReadOnlyList<ServiceDescriptor>, IReadOnlyList<ServiceDescriptor>>? observeHostServices = null)
     {
         ArgumentNullException.ThrowIfNull(wiring);
         var runId = Guid.NewGuid().ToString("N");
@@ -93,8 +98,10 @@ internal sealed class MigrationComposition : IAsyncDisposable
             foreach (var layer in layers)
                 builder.Configuration.AddConfiguration(layer);
 
+            var before = builder.Services.ToArray();
             wiring.AddServices(builder);
             ReplaceDataProtection(builder.Services);
+            observeHostServices?.Invoke(before, builder.Services.ToArray());
 
             host = builder.Build();
             var shell = await ActivateAsync(host.Services, facts.ShellName, cancellationToken);

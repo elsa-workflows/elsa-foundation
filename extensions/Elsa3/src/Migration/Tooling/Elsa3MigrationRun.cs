@@ -130,16 +130,18 @@ internal static class Elsa3MigrationRun
         var planItems = results.SelectMany(result => result.PlanItems)
             .GroupBy(item => item.SourceVersionId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        // Keyed by file too: two inputs of the same version (a duplicate-input skip) each get their own skip.
         var skips = results.SelectMany(result => result.Skipped)
             .Where(skip => skip.SourceVersionId is not null)
-            .ToLookup(skip => skip.SourceVersionId!, StringComparer.Ordinal);
+            .ToLookup(skip => (skip.SourceVersionId!, skip.FilePath));
         var reusables = results.SelectMany(result => result.ReusablePublications)
             .GroupBy(state => state.SourceVersionId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
         var workflows = results.SelectMany(result => result.WorkflowPublications)
             .GroupBy(publication => publication.Workflow.SourceVersionId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
-        var warnings = results.SelectMany(result => result.Warnings).ToArray();
+        // Warnings of applied items, and the conversion diagnostics of items the apply refused (their plan items carry none).
+        var versionDiagnostics = results.SelectMany(result => result.Warnings.Concat(result.ApplyDiagnostics)).ToArray();
         var refusals = results.Select(result => result.Refusal).OfType<Elsa3ImportRunRefusal>().ToArray();
         var refusedIds = refusals.SelectMany(refusal => refusal.UnappliedSourceVersionIds).ToHashSet(StringComparer.Ordinal);
         var noPublished = selection.NoPublishedVersion.ToHashSet(StringComparer.Ordinal);
@@ -159,7 +161,7 @@ internal static class Elsa3MigrationRun
                 findings.Add(VersionSelection.NoPublishedVersionFinding());
 
             var diagnostics = (planItem?.Diagnostics ?? [])
-                .Concat(warnings.Where(warning => NamesVersion(warning, sourceVersionId)))
+                .Concat(versionDiagnostics.Where(diagnostic => NamesVersion(diagnostic, sourceVersionId)))
                 .DistinctBy(diagnostic => (diagnostic.Code, diagnostic.Path, diagnostic.Message, diagnostic.Severity))
                 .ToArray();
             findings.AddRange(diagnostics.Select(Finding));
@@ -167,11 +169,21 @@ internal static class Elsa3MigrationRun
                 conversionRefused.Add(sourceVersionId);
 
             var blockedBy = new List<string>();
-            foreach (var skip in skips[sourceVersionId])
+            var publishFailure = workflows.TryGetValue(sourceVersionId, out var failed) ? failed.PublishFailure : null;
+            var failureFindings = publishFailure is null ? [] : PublishFindings(publishFailure).ToArray();
+            foreach (var skip in skips[(sourceVersionId, item.File)])
             {
-                findings.Add(SkipFinding(skip, diagnostics));
                 if (skip.BlockedBy is not null)
                     blockedBy.Add(skip.BlockedBy);
+                // A skip for an error the conversion reported is that error, already a finding of its own.
+                if (diagnostics.Any(diagnostic => diagnostic.Code == skip.Code && diagnostic.Severity == Elsa3MigrationDiagnosticSeverity.Error))
+                    continue;
+
+                // A failed publication with no diagnostics of its own is reported by its skip, which stops publishing.
+                var skipFinding = SkipFinding(skip, diagnostics);
+                if (skip.Code == Elsa3ReconciliationDiagnosticCodes.PublishFailed && failureFindings.Length == 0)
+                    skipFinding = skipFinding with { Stage = FindingStage.Publish, PublishStoppedHere = true };
+                findings.Add(skipFinding);
             }
 
             var published = false;
@@ -196,9 +208,9 @@ internal static class Elsa3MigrationRun
                     candidateWorkflows.Add(new ExportWorkflow(sourceVersionId, workflow.Workflow.WorkflowDefinitionId, workflow.Workflow.WorkflowVersionId));
                     published |= planItem is not { IsReusable: true };
                 }
-                else if (workflow.PublishFailure is { } failure)
+                else
                 {
-                    findings.AddRange(PublishFindings(failure));
+                    findings.AddRange(failureFindings);
                 }
             }
 
@@ -279,7 +291,10 @@ internal static class Elsa3MigrationRun
         }
     }
 
-    /// <summary>A workflow publication's failure: its diagnostics when it carries them, otherwise its code.</summary>
+    /// <summary>
+    /// A workflow publication's failure: its diagnostics when it carries them, otherwise its code; nothing for a failure
+    /// without a code (a compilation refusal), which its <c>ELS3-RECONCILE-PUBLISH-FAILED</c> skip reports.
+    /// </summary>
     private static IEnumerable<CollectedFinding> PublishFindings(Exception failure)
     {
         switch (failure)
@@ -308,15 +323,12 @@ internal static class Elsa3MigrationRun
             case PublicationPreflightConflictException conflict:
                 yield return PublishFailed(conflict.Code);
                 break;
-            default:
-                yield return PublishFailed(null);
-                break;
         }
     }
 
-    private static CollectedFinding PublishFailed(string? code) =>
-        new(code ?? Elsa3ReconciliationDiagnosticCodes.PublishFailed, FindingSeverity.Error, FindingStage.Publish, null, null, string.Empty, null,
-            PublishStoppedHere: true);
+    /// <summary>An Elsa 4 publication code; the report gives it the code table's fixed text, never the Elsa 4 message.</summary>
+    private static CollectedFinding PublishFailed(string code) =>
+        new(code, FindingSeverity.Error, FindingStage.Publish, null, null, string.Empty, null, PublishStoppedHere: true);
 
     private static CollectedFinding Finding(Elsa3MigrationDiagnostic diagnostic) =>
         new(diagnostic.Code,

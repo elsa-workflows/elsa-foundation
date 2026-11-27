@@ -77,6 +77,10 @@ internal sealed record Elsa3WorkflowPublication(
 /// <param name="WorkflowPublications">The applied workflow and wrapper versions whose reusables were published.</param>
 /// <param name="Warnings">The conversion warnings of the applied items.</param>
 /// <param name="Refusal">A refusal the run could not pin on one definition; nothing more ran in this scope after it.</param>
+/// <param name="ApplyDiagnostics">
+/// The diagnostics of the apply refusals the run located on selected items and left those items out for: the
+/// conversion's own diagnostics of each refused item, which its plan item does not carry (spec 1237 T018).
+/// </param>
 internal sealed record Elsa3ImportRunResult(
     PersistenceScope Scope,
     IReadOnlyList<ReusableActivityImportItem> PlanItems,
@@ -84,7 +88,8 @@ internal sealed record Elsa3ImportRunResult(
     IReadOnlyList<ReusableActivityPublicationState> ReusablePublications,
     IReadOnlyList<Elsa3WorkflowPublication> WorkflowPublications,
     IReadOnlyList<Elsa3MigrationDiagnostic> Warnings,
-    Elsa3ImportRunRefusal? Refusal)
+    Elsa3ImportRunRefusal? Refusal,
+    IReadOnlyList<Elsa3MigrationDiagnostic> ApplyDiagnostics)
 {
     /// <summary>Imported reusable activity versions that have been published, by this run or earlier.</summary>
     public int ReusablesInPlace => ReusablePublications.Count(state =>
@@ -134,9 +139,10 @@ internal sealed class Elsa3ImportRun(Elsa3ImportSelection selection, IPersistenc
         CancellationToken cancellationToken)
     {
         var skipped = new List<Elsa3SkippedItem>(inputSkips);
+        var applyDiagnostics = new List<Elsa3MigrationDiagnostic>();
         request.OnSkips?.Invoke(scope, skipped);
         if (inputs.Count == 0)
-            return Result(scope, [], skipped);
+            return Result(scope, [], skipped, applyDiagnostics);
 
         services.GetRequiredService<Elsa3StartupPublishingGrant>().Grant(scope.Value);
         var importer = services.GetRequiredService<IReusableActivityCollectionImporter>();
@@ -151,7 +157,7 @@ internal sealed class Elsa3ImportRun(Elsa3ImportSelection selection, IPersistenc
         var itemIds = plan.Items.Select(item => item.SourceVersionId).ToHashSet(StringComparer.Ordinal);
         if (plan.Diagnostics.FirstOrDefault(diagnostic =>
                 diagnostic.IsError && !itemIds.Contains(diagnostic.Metadata.GetValueOrDefault("SourceVersionId") ?? string.Empty)) is { } planError)
-            return Result(scope, plan.Items, skipped, refusal: new(
+            return Result(scope, plan.Items, skipped, applyDiagnostics, refusal: new(
                 Elsa3ImportRunStage.Analysis,
                 planError.Code,
                 Elsa3ImportSelection.Cause(planError.Message, planError.Guidance),
@@ -163,11 +169,11 @@ internal sealed class Elsa3ImportRun(Elsa3ImportSelection selection, IPersistenc
         skipped.AddRange(analysisSkips);
         request.OnSkips?.Invoke(scope, skipped);
 
-        var (result, refusal) = await ApplyAsync(request, importer, plan, collection, selected, inputsById, skipped, scope, startId, cancellationToken);
+        var (result, refusal) = await ApplyAsync(request, importer, plan, collection, selected, inputsById, skipped, applyDiagnostics, scope, startId, cancellationToken);
         if (refusal is not null)
-            return Result(scope, plan.Items, skipped, refusal: refusal);
+            return Result(scope, plan.Items, skipped, applyDiagnostics, refusal: refusal);
         if (result is null)
-            return Result(scope, plan.Items, skipped);
+            return Result(scope, plan.Items, skipped, applyDiagnostics);
 
         // A reusable the publisher did not publish blocks every workflow that uses it, its wrapper included.
         var refused = (result.Publications ?? [])
@@ -192,7 +198,7 @@ internal sealed class Elsa3ImportRun(Elsa3ImportSelection selection, IPersistenc
                 SourceVersionId: sourceVersionId));
         }
 
-        return Result(scope, plan.Items, skipped, result.Publications ?? [], Publications(workflows, outcomes), result.Warnings ?? []);
+        return Result(scope, plan.Items, skipped, applyDiagnostics, result.Publications ?? [], Publications(workflows, outcomes), result.Warnings ?? []);
     }
 
     /// <summary>
@@ -208,6 +214,7 @@ internal sealed class Elsa3ImportRun(Elsa3ImportSelection selection, IPersistenc
         IReadOnlyList<string> selected,
         IReadOnlyDictionary<string, Elsa3InputItem> inputsById,
         List<Elsa3SkippedItem> skipped,
+        List<Elsa3MigrationDiagnostic> applyDiagnostics,
         PersistenceScope scope,
         string startId,
         CancellationToken cancellationToken)
@@ -223,6 +230,7 @@ internal sealed class Elsa3ImportRun(Elsa3ImportSelection selection, IPersistenc
             catch (ReusableActivityImportValidationException exception) when (Locate(exception, selected) is { Count: > 0 } located)
             {
                 var (remaining, refusals) = selection.Exclude(plan, located, inputsById, selected);
+                applyDiagnostics.AddRange(exception.Diagnostics);
                 skipped.AddRange(refusals);
                 request.OnSkips?.Invoke(scope, skipped);
                 selected = remaining;
@@ -318,9 +326,10 @@ internal sealed class Elsa3ImportRun(Elsa3ImportSelection selection, IPersistenc
         PersistenceScope scope,
         IReadOnlyList<ReusableActivityImportItem> planItems,
         IReadOnlyList<Elsa3SkippedItem> skipped,
+        IReadOnlyList<Elsa3MigrationDiagnostic> applyDiagnostics,
         IReadOnlyList<ReusableActivityPublicationState>? reusables = null,
         IReadOnlyList<Elsa3WorkflowPublication>? workflows = null,
         IReadOnlyList<Elsa3MigrationDiagnostic>? warnings = null,
         Elsa3ImportRunRefusal? refusal = null) =>
-        new(scope, planItems, skipped.ToArray(), reusables ?? [], workflows ?? [], warnings ?? [], refusal);
+        new(scope, planItems, skipped.ToArray(), reusables ?? [], workflows ?? [], warnings ?? [], refusal, applyDiagnostics.ToArray());
 }

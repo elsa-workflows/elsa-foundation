@@ -288,6 +288,8 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     one of its variables, converts as a workflow body does: an Elsa 4 graph activity is a closed scope whose request
     is its own inputs and whose root variables are its own (spec 265, #3027).
   - What to change in Elsa 3 before exporting: [Elsa 3 migration readiness](../../../../docs/reference/elsa3-migration-readiness.md).
+  - To test-migrate a whole export and get a redacted report and a `migrated/` folder, run the migration CLI:
+    [Elsa 3 workflows migration tooling](../Migration/Tooling/README.md).
 
 ## Migrating Elsa 3 JavaScript
 
