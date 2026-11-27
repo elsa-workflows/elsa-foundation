@@ -36,7 +36,7 @@ internal sealed class KernelRetentionWorker(RetentionPass pass, BoundScope tenan
                     next = (await pass.RunAsync(tenant, next, token)).Next;
                     pause = next is null ? BetweenSweeps : BetweenPages;
                 }
-                catch (Exception error) when (error is DbException or TimeoutException)
+                catch (Exception error) when (error is DbException { IsTransient: true } or TimeoutException)
                 {
                     logger.LogWarning(error, "Kernel retention failed for tenant {Tenant}. The sweep will retry.", tenant.Tenant);
                     pause = BetweenSweeps;
@@ -46,5 +46,9 @@ internal sealed class KernelRetentionWorker(RetentionPass pass, BoundScope tenan
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception error)
+        {
+            logger.LogError(error, "Kernel retention stopped for tenant {Tenant}. Restart the shell after correcting the fault.", tenant.Tenant);
+        }
     }
 }

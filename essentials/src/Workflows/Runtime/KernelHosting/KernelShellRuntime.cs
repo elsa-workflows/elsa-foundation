@@ -19,6 +19,8 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
     ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionPolicy retention) : IAsyncDisposable
 {
+    private static readonly TimeSpan RetentionDisposeBudget = TimeSpan.FromSeconds(5);
+
     private IHostedService? _owner;
     private IAsyncDisposable? _lifetime;
     private HttpClient? _client;
@@ -48,23 +50,42 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ServedWorkflow = serving.ServedWorkflow,
             ResolveWorkflow = ResolveWorkflowAsync
         });
-        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window);
+        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, RetentionWindow);
         await _owner.StartAsync(token);
         if (retention.Enabled)
         {
-            var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
-            _retention = new KernelRetentionWorker(pass, tenant, logs.CreateLogger<KernelRetentionWorker>()).RunAsync(_retentionStop.Token);
+            var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, RetentionWindow, Foundation.AdmitRetentionDelete);
+            var worker = new KernelRetentionWorker(pass, tenant, logs.CreateLogger<KernelRetentionWorker>());
+            _retention = Task.Run(() => worker.RunAsync(_retentionStop.Token));
         }
     }
 
-    public Task StopAsync(CancellationToken token) =>
-        Task.WhenAll(StopRetentionAsync(token), _owner?.StopAsync(token) ?? Task.CompletedTask);
+    private TimeSpan? RetentionWindow(ActorHeader header) =>
+        StringComparer.Ordinal.Equals(header.Tenant, tenant.Tenant) ? retention.Window(header) : null;
 
-    private async Task StopRetentionAsync(CancellationToken token)
+    public async Task StopAsync(CancellationToken token)
     {
-        if (_retention is null) return;
-        await _retentionStop.CancelAsync();
-        await _retention.WaitAsync(token);
+        try { await StopRetentionAsync(token); }
+        finally
+        {
+            if (_owner is not null) await _owner.StopAsync(token);
+        }
+    }
+
+    private async Task<bool> StopRetentionAsync(CancellationToken token)
+    {
+        if (_retention is null) return true;
+        try
+        {
+            await _retentionStop.CancelAsync().WaitAsync(token);
+            await _retention.WaitAsync(token);
+            return true;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            logs.CreateLogger<KernelShellRuntime>().LogWarning("Kernel retention did not stop within the shell's shutdown deadline.");
+            return false;
+        }
     }
 
     public ValueTask<IIngress> IngressAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Ingress);
@@ -97,18 +118,18 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async ValueTask DisposeAsync()
     {
+        using var stop = new CancellationTokenSource(RetentionDisposeBudget);
         try
         {
-            try { await StopRetentionAsync(CancellationToken.None); }
-            finally
-            {
-                if (_lifetime is not null) await _lifetime.DisposeAsync();
-            }
+            if (await StopRetentionAsync(stop.Token)) _retentionStop.Dispose();
         }
         finally
         {
-            _retentionStop.Dispose();
-            _client?.Dispose();
+            try
+            {
+                if (_lifetime is not null) await _lifetime.DisposeAsync();
+            }
+            finally { _client?.Dispose(); }
         }
     }
 
