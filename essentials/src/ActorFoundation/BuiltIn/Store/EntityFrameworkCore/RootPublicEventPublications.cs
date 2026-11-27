@@ -18,10 +18,12 @@ internal static partial class RootPublicEventPublications
     {
         var text = sqlite ? "TEXT COLLATE BINARY" : """text COLLATE "C" """;
         var number = sqlite ? "INTEGER" : "bigint";
+        var boolean = sqlite ? "INTEGER" : "boolean";
         var ordinal = sqlite ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY";
         return $"""
             "Tenant" {text} NOT NULL, "Key" {text} NOT NULL, "Operation" {text} NOT NULL,
             "Incarnation" {text} NOT NULL, "Occurrence" {text} NOT NULL UNIQUE, "EventId" {text} NOT NULL, "Payload" {text},
+            "PayloadEscaped" {boolean} NOT NULL CHECK (NOT "PayloadEscaped" OR "Payload" IS NOT NULL),
             "ReceiptUntil" {number}, "KeepUntil" {number}, "CleanupAt" {number} NOT NULL,
             "Ordinal" {ordinal}, UNIQUE ("Tenant", "Key", "Operation", "Incarnation")
             """;
@@ -76,13 +78,13 @@ internal static partial class RootPublicEventPublications
                 WHERE "Tenant" = {tenant} AND "Key" = {key} AND "Operation" = {operation} AND "ReceiptUntil" IS NOT NULL
                     AND (SELECT "SourceReady" FROM source)
                 """), token);
-        var packed = keepThrough is not null && payload is not null ? DurableKeyJson.Write(payload) : null;
+        var (text, escaped) = RootAdmissionWire.EncodePayload(keepThrough is not null ? payload : null);
         if (await db.Database.ExecuteSqlInterpolatedAsync(bind($"""
                 WITH source AS MATERIALIZED (/*public-event-start-source*/)
                 INSERT INTO "FoundationPublicEventPublications"
-                    ("Tenant","Key","Operation","Incarnation","Occurrence","EventId","Payload","ReceiptUntil","KeepUntil","CleanupAt")
+                    ("Tenant","Key","Operation","Incarnation","Occurrence","EventId","Payload","PayloadEscaped","ReceiptUntil","KeepUntil","CleanupAt")
                 SELECT {tenant}, {key}, {operation}, {incarnation.ToString("N")}, {occurrence}, {DurableKeyJson.Write(id)},
-                    CAST({packed} AS TEXT), CAST({receiveThrough} AS BIGINT), CAST({keepThrough} AS BIGINT), {keepThrough ?? now}
+                    CAST({text} AS TEXT), {escaped}, CAST({receiveThrough} AS BIGINT), CAST({keepThrough} AS BIGINT), {keepThrough ?? now}
                 FROM source WHERE "SourceReady"
                 """), token) != 1)
             throw new StoreFormatException("The public event receipt did not land in its pinned source.");

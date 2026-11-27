@@ -41,7 +41,8 @@ internal static class RootPublicEventLiveWaits
     internal sealed record Candidate(bool SourceReady, string? Tenant, string? Key, string? Actor, string? Wait, string? Registration);
     private sealed record NewWait(bool SourceReady, int? Index);
     private sealed record Position(bool SourceReady, string? Reference, int? Partition, long? After, long? Through, long? RetainFrom);
-    private sealed record Publication(bool SourceReady, long? Ordinal, string? Occurrence, long? KeepUntil, string? EventId, string? Payload);
+    private sealed record Publication(bool SourceReady, long? Ordinal, string? Occurrence, long? KeepUntil, string? EventId, string? Payload,
+        bool? PayloadEscaped);
 
     // Ordinary waits use insert-if-absent. A second Subscribe cannot upgrade a wait that was already present.
     internal static async Task<SubscriptionRow[]> NewAsync(KernelDb db, SubscriptionRow[] proposed,
@@ -159,7 +160,7 @@ internal static class RootPublicEventLiveWaits
 
         var publication = await db.Database.SqlQuery<Publication>(RootPublicEventStarts.Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/), matching AS (
-                SELECT "Ordinal", "Occurrence", "KeepUntil", "EventId", "Payload"
+                SELECT "Ordinal", "Occurrence", "KeepUntil", "EventId", "Payload", "PayloadEscaped"
                 FROM "FoundationPublicEventPublications"
                 WHERE "Tenant" = {candidate.Tenant} AND "Key" = {candidate.Key} AND "KeepUntil" >= {position.RetainFrom}
                     AND "CleanupAt" = "KeepUntil" AND "Ordinal" > {position.After} AND "Ordinal" <= {position.Through}
@@ -175,7 +176,7 @@ internal static class RootPublicEventLiveWaits
             var delivery = PublicEventOccurrence(position.Reference, occurrence, id, candidate.Wait!);
             if (await RememberAsync(db, occurrence, delivery, bind, token))
             {
-                var payload = publication.Payload is null ? null : DurableKeyJson.Read<string>(publication.Payload);
+                var payload = DecodePayload(publication.Payload, publication.PayloadEscaped == true);
                 var (header, body, kind) = EncodeDirect(id, 1, Kinds.Event, payload, null, held: false,
                     new(candidate.Key!, candidate.Wait!), eventOccurrence: occurrence);
                 if (!FitsEnvelope(header, body)) throw SourceChanged();

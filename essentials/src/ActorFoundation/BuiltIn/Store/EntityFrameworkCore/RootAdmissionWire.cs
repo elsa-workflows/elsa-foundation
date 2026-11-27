@@ -80,7 +80,7 @@ internal static class RootAdmissionWire
         long? due, bool held, StoredEventWait? eventWait = null, StoredScheduleControl? scheduleControl = null,
         bool authoredEvent = false, string? eventOccurrence = null, bool keyed = false)
     {
-        var escaped = RequiresEnvelope(payload);
+        var (storedPayload, escaped) = EncodePayload(payload);
         var escapedKind = kind.Contains('\0') ? kind : null;
         var prefix = (eventOccurrence is not null, authoredEvent, keyed, held) switch
         {
@@ -94,13 +94,18 @@ internal static class RootAdmissionWire
         };
         var header = new StoredDirect(id, creation, escaped, due == 0, escapedKind)
             { EventWait = eventWait, ScheduleControl = scheduleControl, EventOccurrence = eventOccurrence };
-        return (prefix + DurableKeyJson.Write(header),
-            escaped ? DurableKeyJson.Write(payload!) : payload, escapedKind is null ? kind : "input");
+        return (prefix + DurableKeyJson.Write(header), storedPayload, escapedKind is null ? kind : "input");
     }
 
     internal static bool FitsEnvelope(string header, string? payload, string? replyTo = null) =>
         Encoding.UTF8.GetByteCount(header) + (payload is null ? 0L : Encoding.UTF8.GetByteCount(payload)) +
         (replyTo is null ? 0 : Encoding.UTF8.GetByteCount(replyTo)) <= EfStore.RootContentBytes;
+
+    internal static (string? Text, bool Escaped) EncodePayload(string? payload) =>
+        RequiresEnvelope(payload) ? (DurableKeyJson.Write(payload!), true) : (payload, false);
+
+    internal static string? DecodePayload(string? text, bool escaped) =>
+        escaped ? DurableKeyJson.Read<string>(text!) : text;
 
     internal static bool FitsRetainedEventPayload(string? payload) =>
         FoundationMetadataLimits.FitsContent(payload, FoundationMetadataLimits.EventContentBytes) &&

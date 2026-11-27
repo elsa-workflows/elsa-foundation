@@ -11,11 +11,14 @@ namespace Kernel.Native.Run;
 
 internal static partial class KernelAuthoredEventChecks
 {
-    private sealed record CapturedPublicStart(string Wait, string Registration, string Start, string? Payload, string Reference,
-        string PackedEventId)
+    private sealed record CapturedPublicStart(string Wait, string Registration, string Start, string? StoredPayload, bool PayloadEscaped,
+        string Reference, string PackedEventId)
     {
         internal string EventId => DurableKeyJson.Read<string>(PackedEventId);
+        internal string? Payload => RootAdmissionWire.DecodePayload(StoredPayload, PayloadEscaped);
     }
+
+    private sealed record PublicationEncoding(string? Ledger, bool LedgerEscaped, string? Target, bool TargetEscaped, string Reference);
 
     internal static async Task<int> RunPublicStartsAsync(string provider, bool inBatch)
     {
@@ -31,6 +34,7 @@ internal static partial class KernelAuthoredEventChecks
             var path = Path.Combine(directory.FullName, "store.db");
             var (open, ingress, reads, owner, _, restart) = await OpenAsync(model, provider, path, inBatch, token, publicStarts: true);
             await using var owned = owner;
+            CheckDirectNullHeaders();
             var initial = new Contract.StartSpec(model.Type, "starter", "first\0template");
             var replacement = initial with { Input = "replacement" };
             await ingress.SetStartAsync(scope, key, "starter", initial, token);
@@ -40,7 +44,7 @@ internal static partial class KernelAuthoredEventChecks
             var firstId = await StartPublisherAsync("one");
             var first = (await CapturedAsync()).Single(item => item.EventId == firstId);
             Check(first.Wait == "starter" && DurableKeyJson.Read<Contract.StartSpec>(first.Start) == initial &&
-                DurableKeyJson.Read<string>(first.Payload!) == "authored payload",
+                first.Payload == "authored payload",
                 "both engines select exactly one ordinal, tenant-bound registration");
             await VerifyDeliveryAsync(new(first.Reference), initial.Input!, "starter", "authored payload");
 
@@ -192,7 +196,7 @@ internal static partial class KernelAuthoredEventChecks
             await using (var db = open())
             {
                 var owed = await db.Database.SqlQuery<bool>($"""
-                    SELECT p."ReceiptUntil" > p."KeepUntil" AND p."Payload" = {DurableKeyJson.Write("kept payload")}
+                    SELECT p."ReceiptUntil" > p."KeepUntil" AND p."Payload" = {"kept payload"}
                         AND r."CatchAfter" < p."Ordinal" AND r."CatchThrough" = p."Ordinal" AS "Value"
                     FROM "FoundationPublicEventPublications" p JOIN "FoundationPublicEventStarts" r
                         ON r."Tenant" = p."Tenant" AND r."Key" = p."Key"
@@ -203,7 +207,8 @@ internal static partial class KernelAuthoredEventChecks
 
             const string keeperKey = "retained-for-actor";
             var keeperEvent = new Contract.Target.Event(keeperKey);
-            var beforeSubscribe = await ingress.SendAsync(scope, keeperEvent, "before-subscribe", "ignored", "cold kept item",
+            const string coldPayload = "cold kept item\0\ud800";
+            var beforeSubscribe = await ingress.SendAsync(scope, keeperEvent, "before-subscribe", "ignored", coldPayload,
                 new(KeepFor: TimeSpan.FromMinutes(1)), token);
             var arm = await ingress.SendAsync(scope, new Contract.Target.Ref(keeper), "arm-keep", "arm-keep", keeperKey,
                 cancellationToken: token);
@@ -211,7 +216,7 @@ internal static partial class KernelAuthoredEventChecks
                 "the old owner stops before a retained publication and the subscription command are admitted");
             await Task.Delay(quietOptions.KeepFor!.Value + TimeSpan.FromMilliseconds(100), token);
             await using var successor = await restart(token);
-            await VerifyDeliveryAsync(keeper, "cold subscription actor", "kept", "cold kept item", "before-subscribe", keeperKey);
+            await VerifyDeliveryAsync(keeper, "cold subscription actor", "kept", coldPayload, "before-subscribe", keeperKey);
             await using (var db = open())
             {
                 var consumed = await db.Database.SqlQuery<bool>($"""
@@ -273,7 +278,9 @@ internal static partial class KernelAuthoredEventChecks
             await using (var db = open())
             {
                 var barred = await db.Database.SqlQuery<bool>($"""
-                    SELECT r."CatchThrough" = 0 AND p."KeepUntil" < r."RetainFrom" AS "Value"
+                    SELECT r."CatchThrough" = p."Ordinal" AND p."KeepUntil" < r."RetainFrom"
+                        AND NOT EXISTS (SELECT 1 FROM "FoundationPublicEventTargets" t WHERE t."Publication" = p."Occurrence"
+                            AND t."Registration" = r."Incarnation") AS "Value"
                     FROM "FoundationPublicEventStarts" r JOIN "FoundationPublicEventPublications" p
                         ON p."Tenant" = r."Tenant" AND p."Key" = r."Key"
                     WHERE r."Tenant" = {scope.Tenant} AND r."Key" = {scope.Tenant + "_" + quietKey} AND r."Wait" = 'after-clock-backstep'
@@ -282,6 +289,8 @@ internal static partial class KernelAuthoredEventChecks
                     "retention cleanup's tenant watermark survives a clock backstep without changing publication acceptance");
             }
             await StopOwnerAsync(successor);
+            await CheckPayloadEncodingAsync();
+            await CheckBoundedStartCatchUpAsync();
             await CheckPublicationClockAsync();
             await CheckReinstallationAsync();
             return 0;
@@ -290,6 +299,126 @@ internal static partial class KernelAuthoredEventChecks
             {
                 if (host is RuntimeNode postgresOwner) await postgresOwner.StopAsync(token);
                 else await ((SqliteEmbeddedHostedService)host).StopAsync(token);
+            }
+
+            async Task<Func<FormattableString, FormattableString>?> PinPublicationSourceAsync(KernelDb db, string[] keys)
+            {
+                if (provider == "sqlite") return null;
+                var marker = await db.Database.SqlQueryRaw<long>("""
+                    SELECT pg_catalog.to_regclass('"KernelStoreVersions"')::oid::bigint AS "Value"
+                    """).SingleAsync(token);
+                var bind = await PostgresRootAdmission.PinAuthoredEventSourceAsync(db, checked((uint)marker), token);
+                await RootEventAdmission.LockPostgresKeysAsync(db, keys, token);
+                return bind;
+            }
+
+            async Task<RootPublicEventStarts.CatchUpKey> ReadStartCatchUpAsync(KernelDb db, string tenant, string key, string wait)
+            {
+                var registration = await db.Database.SqlQuery<string>($"""
+                    SELECT "Incarnation" AS "Value" FROM "FoundationPublicEventStarts"
+                    WHERE "Tenant" = {tenant} AND "Key" = {key} AND "Wait" = {wait}
+                    """).SingleAsync(token);
+                return new(true, tenant, key, wait, registration);
+            }
+
+            async Task CheckPayloadEncodingAsync()
+            {
+                var encodingScope = ContractScopes.Bind("public-event-encoding");
+                const string rawKey = "mostly-quotes";
+                const string escapedKey = "code-units";
+                const string escaped = "event body\0\ud800";
+                var raw = new string('"', 9 * 1024 * 1024);
+                var retained = new Contract.AddOptions(KeepFor: TimeSpan.FromMinutes(1));
+                await ingress.SetStartAsync(encodingScope, rawKey, "immediate", replacement, token);
+                var rawEvent = await ingress.SendAsync(encodingScope, new Contract.Target.Event(rawKey), rawKey, "ignored", raw, retained, token);
+                Check(rawEvent.Outcome == Contract.AdmissionOutcome.Accepted,
+                    "a 9 MiB legal text payload fits the same budget when a start matches");
+                var escapedEvent = await ingress.SendAsync(encodingScope, new Contract.Target.Event(escapedKey), escapedKey, "ignored", escaped,
+                    retained, token);
+                Check(escapedEvent.Outcome == Contract.AdmissionOutcome.Accepted, "outside Event accepts the reversible payload envelope");
+                await ingress.SetStartAsync(encodingScope, escapedKey, "after", replacement, token);
+
+                await using var db = open();
+                await using var transaction = await db.Database.BeginTransactionAsync(token);
+                var bound = await PinPublicationSourceAsync(db, [Qualify(rawKey), Qualify(escapedKey)]);
+                var candidate = await ReadStartCatchUpAsync(db, encodingScope.Tenant, Qualify(escapedKey), "after");
+                Check(await RootPublicEventStarts.CatchUpAsync(db, candidate, bound, token),
+                    "late start catch-up captures the escaped publication");
+                await VerifyStoredPayloadAsync(rawKey, raw, escaped: false);
+                await VerifyStoredPayloadAsync(escapedKey, escaped, escaped: true);
+                await transaction.RollbackAsync(token);
+
+                string Qualify(string candidate) => encodingScope.Tenant + "_" + candidate;
+
+                async Task VerifyStoredPayloadAsync(string key, string original, bool escaped)
+                {
+                    var captured = await db.Database.SqlQuery<PublicationEncoding>($"""
+                        SELECT p."Payload" AS "Ledger", p."PayloadEscaped" AS "LedgerEscaped",
+                            t."Payload" AS "Target", t."PayloadEscaped" AS "TargetEscaped", t."Reference"
+                        FROM "FoundationPublicEventPublications" p JOIN "FoundationPublicEventTargets" t
+                            ON t."Tenant" = p."Tenant" AND t."Publication" = p."Occurrence"
+                        WHERE p."Tenant" = {encodingScope.Tenant} AND p."Key" = {Qualify(key)}
+                        """).SingleAsync(token);
+                    var expected = escaped ? DurableKeyJson.Write(original) : original;
+                    var row = await db.Messages.FromSqlInterpolated($"""
+                        SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b
+                            ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
+                        WHERE b."Reference" = {captured.Reference} AND m."Kind" = {Contract.Kinds.Event}
+                        """).AsNoTracking().SingleAsync(token);
+                    var delivery = PostgresRootAdmission.DecodeDirect(row, captured.Reference, liveEventWaits: true, publicEvents: true);
+                    Check(captured.Ledger == expected && captured.LedgerEscaped == escaped && captured.Target == expected &&
+                        captured.TargetEscaped == escaped && row.Payload == expected && delivery.Payload == original,
+                        escaped ? "ledger, late target and queued delivery preserve the exact NUL and unpaired UTF-16 code unit"
+                            : "ledger, captured target and queued delivery retain raw UTF-8 text within the same budget");
+                }
+            }
+
+            async Task CheckBoundedStartCatchUpAsync()
+            {
+                const string tenant = "public-event-page";
+                const string qualified = tenant + "_many";
+                const string wait = "page";
+                var now = await ReadClockAsync();
+                await using var db = open();
+                await using var transaction = await db.Database.BeginTransactionAsync(token);
+                var bind = await PinPublicationSourceAsync(db, [qualified]);
+                var emptyRows = InMemoryStore.ParkPageLimit + 1;
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    WITH RECURSIVE receipt(n) AS (
+                        SELECT 1 UNION ALL SELECT n + 1 FROM receipt WHERE n < {emptyRows}
+                    )
+                    INSERT INTO "FoundationPublicEventPublications"
+                        ("Tenant","Key","Operation","Incarnation","Occurrence","EventId","PayloadEscaped","ReceiptUntil","CleanupAt")
+                    SELECT {tenant}, {qualified}, 'receipt-' || n, 'receipt-' || n, 'receipt-' || n, 'receipt-' || n,
+                        false, {now + 60000}, {now} FROM receipt
+                    """, token);
+                var pageEnd = await db.Database.SqlQuery<long>($"""
+                    SELECT max(page."Ordinal") AS "Value" FROM (
+                        SELECT "Ordinal" FROM "FoundationPublicEventPublications" WHERE "Tenant" = {tenant} AND "Key" = {qualified}
+                        ORDER BY "Ordinal" LIMIT {InMemoryStore.ParkPageLimit}) page
+                    """).SingleAsync(token);
+                var newOccurrence = FoundationRootCreator.OperationDigest("bounded-page-proof");
+                await RootPublicEventPublications.InsertAsync(db, tenant, qualified, "after-page", newOccurrence, Guid.NewGuid(),
+                    newOccurrence, "retained after receipts", now, now + 60000, now + 60000,
+                    sql => RootPublicEventStarts.Bind(sql, bind), token);
+                await RootPublicEventStarts.SetAsync(db, tenant, qualified, wait, replacement, now, bind, token);
+                var candidate = await ReadStartCatchUpAsync(db, tenant, qualified, wait);
+                Check(await RootPublicEventStarts.CatchUpAsync(db, candidate, bind, token), "a receipt-only page still advances the start cursor");
+                var bounded = await db.Database.SqlQuery<bool>($"""
+                    SELECT "CatchAfter" = {pageEnd} AND "CatchAfter" < "CatchThrough" AND NOT EXISTS (
+                        SELECT 1 FROM "FoundationPublicEventTargets" WHERE "Tenant" = {tenant} AND "Key" = {qualified}) AS "Value"
+                    FROM "FoundationPublicEventStarts" WHERE "Tenant" = {tenant} AND "Key" = {qualified} AND "Wait" = {wait}
+                    """).SingleAsync(token);
+                Check(bounded, "one start-catch-up step examines only a bounded page and leaves the later eligible Event pending");
+                Check(await RootPublicEventStarts.CatchUpAsync(db, candidate, bind, token), "the next start page reaches the eligible Event");
+                var later = await db.Database.SqlQuery<bool>($"""
+                    SELECT "CatchAfter" = "CatchThrough" AND EXISTS (
+                        SELECT 1 FROM "FoundationPublicEventTargets" WHERE "Tenant" = {tenant} AND "Key" = {qualified}
+                            AND "Publication" = {newOccurrence} AND "Reference" IS NOT NULL) AS "Value"
+                    FROM "FoundationPublicEventStarts" WHERE "Tenant" = {tenant} AND "Key" = {qualified} AND "Wait" = {wait}
+                    """).SingleAsync(token);
+                Check(later, "the successor page delivers the exact retained Event and settles the start cursor");
+                await transaction.RollbackAsync(token);
             }
 
             async Task CheckPublicationClockAsync()
@@ -315,22 +444,14 @@ internal static partial class KernelAuthoredEventChecks
 
                 await using var db = open();
                 await using var transaction = await db.Database.BeginTransactionAsync(token);
-                Func<FormattableString, FormattableString>? bind = null;
-                if (provider == "postgres")
-                {
-                    var marker = await db.Database.SqlQueryRaw<long>("""
-                        SELECT pg_catalog.to_regclass('"KernelStoreVersions"')::oid::bigint AS "Value"
-                        """).SingleAsync(token);
-                    bind = await PostgresRootAdmission.PinAuthoredEventSourceAsync(db, checked((uint)marker), token);
-                    await RootEventAdmission.LockPostgresKeysAsync(db,
-                        [Qualify("swept"), Qualify("retained"), zeroOutsideKey, zeroAuthoredKey, qualifiedHeldKey, scope.Tenant + "_" + key], token);
-                }
+                var bind = await PinPublicationSourceAsync(db,
+                    [Qualify("swept"), Qualify("retained"), zeroOutsideKey, zeroAuthoredKey, qualifiedHeldKey, scope.Tenant + "_" + key]);
 
                 var previous = await RootPublicEventPublications.ReadReplayAsync(db, scope.Tenant, scope.Tenant + "_" + key, "event\0id",
                     FoundationRootCreator.OperationDigest("event\0id"), 50, sql => RootPublicEventStarts.Bind(sql, bind), token);
                 Check(previous == recreated.Publication!.Incarnation, "a clock backstep after id reuse returns the newest receipt");
                 var olderPayload = await db.Database.SqlQuery<bool>($"""
-                    SELECT "ReceiptUntil" IS NULL AND "KeepUntil" IS NOT NULL AND "Payload" = {DurableKeyJson.Write("outside payload")} AS "Value"
+                    SELECT "ReceiptUntil" IS NULL AND "KeepUntil" IS NOT NULL AND "Payload" = {"outside payload"} AS "Value"
                     FROM "FoundationPublicEventPublications" WHERE "Incarnation" = {outside.Publication!.Incarnation.ToString("N")}
                     """).SingleAsync(token);
                 Check(olderPayload, "superseding a receipt leaves its independent retained payload intact");
@@ -352,8 +473,8 @@ internal static partial class KernelAuthoredEventChecks
                     SELECT count(*) = 2 AS "Value"
                     FROM "FoundationPublicEventPublications" p JOIN "FoundationPublicEventLiveReceipts" r ON r."Occurrence" = p."Occurrence"
                     WHERE p."Tenant" = {zeroScope.Tenant} AND p."KeepUntil" = {zeroAt}
-                        AND ((p."Key" = {zeroOutsideKey} AND p."Payload" = {DurableKeyJson.Write("outside zero payload")})
-                            OR (p."Key" = {zeroAuthoredKey} AND p."Payload" = {DurableKeyJson.Write("authored zero payload")}))
+                        AND ((p."Key" = {zeroOutsideKey} AND p."Payload" = {"outside zero payload"})
+                            OR (p."Key" = {zeroAuthoredKey} AND p."Payload" = {"authored zero payload"}))
                     """).SingleAsync(token);
                 Check(recorded, "outside and authored zero-window Events retain their exact deadlines, payloads and immediate match receipts");
 
@@ -364,8 +485,13 @@ internal static partial class KernelAuthoredEventChecks
                     UPDATE "FoundationPublicEventHorizons" SET "Through" = 0 WHERE "Tenant" = {scope.Tenant}
                     """, token);
                 await RootPublicEventStarts.SetAsync(db, scope.Tenant, qualifiedHeldKey, "after-held-zero", replacement, zeroAt - 1000, bind, token);
+                var heldCandidate = await ReadStartCatchUpAsync(db, scope.Tenant, qualifiedHeldKey, "after-held-zero");
+                await RootPublicEventStarts.CatchUpAsync(db, heldCandidate, bind, token);
                 var heldExcluded = await db.Database.SqlQuery<bool>($"""
-                    SELECT "CatchThrough" = 0 AS "Value" FROM "FoundationPublicEventStarts"
+                    SELECT "CatchAfter" = "CatchThrough" AND NOT EXISTS (
+                        SELECT 1 FROM "FoundationPublicEventTargets" WHERE "Registration" = {heldCandidate.Registration}
+                            AND "Tenant" = {scope.Tenant} AND "Key" = {qualifiedHeldKey}) AS "Value"
+                    FROM "FoundationPublicEventStarts"
                     WHERE "Tenant" = {scope.Tenant} AND "Key" = {qualifiedHeldKey} AND "Wait" = 'after-held-zero'
                     """).SingleAsync(token);
                 Check(heldExcluded, "a held zero-window Event remains receipt-only even on a clock backstep");
@@ -385,6 +511,8 @@ internal static partial class KernelAuthoredEventChecks
                 foreach (var candidate in new[] { "swept", "retained" })
                     await RootPublicEventStarts.SetAsync(db, clockScope.Tenant, Qualify(candidate), "after-backstep", replacement, retainedUntil, bind, token);
 
+                var sweptCandidate = await ReadStartCatchUpAsync(db, clockScope.Tenant, Qualify("swept"), "after-backstep");
+                await RootPublicEventStarts.CatchUpAsync(db, sweptCandidate, bind, token);
                 var keepsExactSelection = await db.Database.SqlQuery<bool>($"""
                     SELECT EXISTS (SELECT 1 FROM "FoundationPublicEventHorizons" WHERE "Tenant" = {clockScope.Tenant}
                             AND "Through" = {sweptUntil})
@@ -393,7 +521,9 @@ internal static partial class KernelAuthoredEventChecks
                         AND EXISTS (SELECT 1 FROM "FoundationPublicEventStarts" WHERE "Tenant" = {clockScope.Tenant}
                             AND "Key" = {Qualify("retained")} AND "CatchThrough" > 0)
                         AND NOT EXISTS (SELECT 1 FROM "FoundationPublicEventStarts" WHERE "Tenant" = {clockScope.Tenant}
-                            AND "Key" = {Qualify("swept")} AND "CatchThrough" <> 0) AS "Value"
+                            AND "Key" = {Qualify("swept")} AND "CatchAfter" <> "CatchThrough")
+                        AND NOT EXISTS (SELECT 1 FROM "FoundationPublicEventTargets" WHERE "Tenant" = {clockScope.Tenant}
+                            AND "Key" = {Qualify("swept")} AND "Registration" = {sweptCandidate.Registration}) AS "Value"
                     """).SingleAsync(token);
                 Check(keepsExactSelection, "sweep advances only to the actual retention deadline, including equal eligible material after a backstep");
                 await transaction.RollbackAsync(token);
@@ -404,16 +534,13 @@ internal static partial class KernelAuthoredEventChecks
                 {
                     const string wait = "after-zero";
                     await RootPublicEventStarts.SetAsync(db, zeroScope.Tenant, qualified, wait, replacement, registeringAt, bind, token);
-                    var registration = await db.Database.SqlQuery<string>($"""
-                        SELECT "Incarnation" AS "Value" FROM "FoundationPublicEventStarts"
-                        WHERE "Tenant" = {zeroScope.Tenant} AND "Key" = {qualified} AND "Wait" = {wait}
-                        """).SingleAsync(token);
-                    Check(await RootPublicEventStarts.CatchUpAsync(db, new(true, zeroScope.Tenant, qualified, wait, registration), bind, token),
+                    var candidate = await ReadStartCatchUpAsync(db, zeroScope.Tenant, qualified, wait);
+                    Check(await RootPublicEventStarts.CatchUpAsync(db, candidate, bind, token),
                         "an eligible zero-window Event has durable catch-up work");
                     var matched = await db.Database.SqlQuery<bool>($"""
                         SELECT count(*) = 1 AS "Value" FROM "FoundationPublicEventTargets"
-                        WHERE "Tenant" = {zeroScope.Tenant} AND "Key" = {qualified} AND "Registration" = {registration}
-                            AND "Payload" = {DurableKeyJson.Write(payload)} AND "Reference" IS NOT NULL
+                        WHERE "Tenant" = {zeroScope.Tenant} AND "Key" = {qualified} AND "Registration" = {candidate.Registration}
+                            AND "Payload" = {payload} AND NOT "PayloadEscaped" AND "Reference" IS NOT NULL
                         """).SingleAsync(token);
                     Check(matched, "a zero-window Event delivers its original payload once at equality or after a clock backstep");
                 }
@@ -489,7 +616,7 @@ internal static partial class KernelAuthoredEventChecks
                     if (seen?.Park is not null) throw new InvalidOperationException(seen.Header.Fault);
                     return seen?.Header.Status == Contract.ActorStatus.Finished;
                 });
-                var delivery = JsonSerializer.Deserialize<string[]>(seen!.Header.TypeData)!;
+                var delivery = DurableKeyJson.Read<string[]>(seen!.Header.TypeData);
                 Check(delivery.Length == 5 && delivery[0] == input && delivery[1] == correlationKey && delivery[2] == wait &&
                     delivery[3] == payload && (id is null || delivery[4] == id),
                     "the exact actor handles its configured creator input before the published event");
@@ -499,7 +626,7 @@ internal static partial class KernelAuthoredEventChecks
             {
                 await using var db = open();
                 return await db.Database.SqlQuery<CapturedPublicStart>($"""
-                    SELECT "Wait", "Registration", "Start", "Payload", "Reference", "EventId" AS "PackedEventId"
+                    SELECT "Wait", "Registration", "Start", "Payload" AS "StoredPayload", "PayloadEscaped", "Reference", "EventId" AS "PackedEventId"
                     FROM "FoundationPublicEventTargets" WHERE "Tenant" = {scope.Tenant} OR "Tenant" = {other.Tenant}
                     """).ToListAsync(token);
             }
@@ -510,6 +637,36 @@ internal static partial class KernelAuthoredEventChecks
             }
         }
         finally { directory.Delete(recursive: true); }
+    }
+
+    private static void CheckDirectNullHeaders()
+    {
+        var prefixes = new[]
+        {
+            RootAdmissionWire.DirectPrefix, RootAdmissionWire.AuthoredEventDirectPrefix, RootAdmissionWire.PublicEventDirectPrefix,
+            RootAdmissionWire.HeldDirectPrefix, RootAdmissionWire.HeldPublicEventDirectPrefix, RootAdmissionWire.KeyedDirectPrefix
+        };
+        var reference = new string('A', 64);
+        foreach (var prefix in prefixes)
+        {
+            var row = new MessageEntity
+            {
+                Start = prefix + "null",
+                ReplyTo = prefix == RootAdmissionWire.HeldDirectPrefix || prefix == RootAdmissionWire.HeldPublicEventDirectPrefix
+                    ? ReplyTo.Of("owner", "request", 100) : null
+            };
+            try
+            {
+                _ = PostgresRootAdmission.DecodeDirect(row, reference, replies: true, liveEventWaits: true,
+                    authoredEvents: true, publicEvents: true, keyedStarts: true);
+                throw new InvalidOperationException("A null stored direct header was accepted.");
+            }
+            catch (StoreException error) when (error.Failure == Failure.Definite &&
+                error.Message.Contains("differs from its admitted identity", StringComparison.Ordinal))
+            {
+            }
+        }
+        Check(true, "stored null headers fail definitively across the direct wire families");
     }
 
     private sealed class PublicEventActor : Contract.IActorType
@@ -545,7 +702,7 @@ internal static partial class KernelAuthoredEventChecks
                         await ReleaseFanout.Task.WaitAsync(cancellationToken);
                         turn.Emit("held-fanout", message.Payload);
                     }
-                    turn.SetHeader(JsonSerializer.Serialize(new[] { turn.State, published.Key, published.Wait, message.Payload, published.Id }),
+                    turn.SetHeader(DurableKeyJson.Write(new[] { turn.State, published.Key, published.Wait, message.Payload, published.Id }),
                         turn.Header.Labels);
                     if (turn.State != KeepingStartTopic) turn.End(Contract.ActorStatus.Finished);
                 }

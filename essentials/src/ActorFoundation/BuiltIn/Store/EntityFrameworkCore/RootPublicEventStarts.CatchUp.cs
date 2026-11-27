@@ -6,7 +6,7 @@ internal static partial class RootPublicEventStarts
 {
     internal sealed record CatchUpKey(bool SourceReady, string? Tenant, string? Key, string? Wait, string? Registration);
     private sealed record CatchUpStep(bool SourceReady, string? Registration, long? After, long? Through,
-        long? Ordinal, long? KeepUntil, string? Occurrence);
+        long? Ordinal, long? KeepUntil, string? Occurrence, long? PageEnd);
 
     internal enum MaintenanceWork { Start, Live, Cleanup }
 
@@ -49,20 +49,26 @@ internal static partial class RootPublicEventStarts
         CancellationToken token)
     {
         RequireTransaction(db, bind);
+        // Limit the ordinal page before testing eligibility. A receipt-only span still advances the cursor.
         var step = await db.Database.SqlQuery<CatchUpStep>(Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/), registration AS MATERIALIZED (
                 SELECT "Incarnation" AS "Registration", "CatchAfter" AS "After", "CatchThrough" AS "Through", "RetainFrom"
                 FROM "FoundationPublicEventStarts" WHERE "Tenant" = {target.Tenant} AND "Key" = {target.Key}
                     AND "Wait" = {target.Wait} AND "Incarnation" = {target.Registration}
                     AND "CatchAfter" < "CatchThrough" AND (SELECT "SourceReady" FROM source)
-            ), publication AS (
-                SELECT p."Ordinal", p."KeepUntil", p."Occurrence"
+            ), page AS MATERIALIZED (
+                SELECT p."Ordinal", p."KeepUntil", p."CleanupAt", p."Occurrence"
                 FROM "FoundationPublicEventPublications" p, registration r
-                WHERE p."Tenant" = {target.Tenant} AND p."Key" = {target.Key} AND p."KeepUntil" >= r."RetainFrom"
-                    AND p."CleanupAt" = p."KeepUntil" AND p."Ordinal" > r."After" AND p."Ordinal" <= r."Through"
+                WHERE p."Tenant" = {target.Tenant} AND p."Key" = {target.Key}
+                    AND p."Ordinal" > r."After" AND p."Ordinal" <= r."Through"
+                ORDER BY p."Ordinal" LIMIT {InMemoryStore.ParkPageLimit}
+            ), publication AS (
+                SELECT p."Ordinal", p."KeepUntil", p."Occurrence" FROM page p, registration r
+                WHERE p."KeepUntil" >= r."RetainFrom" AND p."CleanupAt" = p."KeepUntil"
                 ORDER BY p."Ordinal" LIMIT 1
             )
-            SELECT source."SourceReady", r."Registration", r."After", r."Through", p.*
+            SELECT source."SourceReady", r."Registration", r."After", r."Through", p.*,
+                (SELECT max("Ordinal") FROM page) AS "PageEnd"
             FROM source LEFT JOIN registration r ON true LEFT JOIN publication p ON true
             """, bind)).SingleAsync(token);
         RequireSource(step.SourceReady);
@@ -72,8 +78,8 @@ internal static partial class RootPublicEventStarts
             var captured = await db.Database.ExecuteSqlInterpolatedAsync(Bind($"""
                 WITH source AS MATERIALIZED (/*public-event-start-source*/)
                 INSERT INTO "FoundationPublicEventTargets"
-                    ("Tenant", "Publication", "Registration", "Key", "Wait", "EventId", "Start", "Payload")
-                SELECT p."Tenant", p."Occurrence", r."Incarnation", p."Key", r."Wait", p."EventId", r."Start", p."Payload"
+                    ("Tenant", "Publication", "Registration", "Key", "Wait", "EventId", "Start", "Payload", "PayloadEscaped")
+                SELECT p."Tenant", p."Occurrence", r."Incarnation", p."Key", r."Wait", p."EventId", r."Start", p."Payload", p."PayloadEscaped"
                 FROM "FoundationPublicEventPublications" p
                 JOIN "FoundationPublicEventStarts" r ON r."Tenant" = p."Tenant" AND r."Key" = p."Key"
                 WHERE p."Tenant" = {target.Tenant} AND p."Key" = {target.Key} AND p."Ordinal" = {step.Ordinal}
@@ -85,7 +91,7 @@ internal static partial class RootPublicEventStarts
         }
         RequireSource(await db.Database.ExecuteSqlInterpolatedAsync(Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)
-            UPDATE "FoundationPublicEventStarts" SET "CatchAfter" = {step.Ordinal ?? step.Through}
+            UPDATE "FoundationPublicEventStarts" SET "CatchAfter" = {step.Ordinal ?? step.PageEnd ?? step.Through}
             WHERE "Tenant" = {target.Tenant} AND "Key" = {target.Key} AND "Wait" = {target.Wait} AND "Incarnation" = {step.Registration}
                 AND "CatchAfter" = {step.After} AND (SELECT "SourceReady" FROM source)
             """, bind), token) == 1);
