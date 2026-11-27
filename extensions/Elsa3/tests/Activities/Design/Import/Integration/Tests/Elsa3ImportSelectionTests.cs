@@ -118,6 +118,48 @@ public sealed class Elsa3ImportSelectionTests
     }
 
     [Fact]
+    public void A_refusal_a_retry_cannot_fix_keeps_its_remediation_and_promises_no_retry()
+    {
+        // A collision comes back on every start; its remediation is the only advice the operator gets.
+        var state = new ReusableActivityPublicationState("v1", "a", ReusableActivityPublicationStatus.Refused, "ELS3-REUSABLE-IDENTITY-COLLISION",
+        [
+            new("ELS3-REUSABLE-IDENTITY-COLLISION", ActivityDiagnosticSeverity.Error, "Version id 'v1' is published from other content.", Subject(),
+                Remediation: "Publish the changed workflow as a new version in Elsa 3, re-export, and import that version.")
+        ]);
+
+        var (_, cause) = Elsa3FolderImportTask.NotPublished(state);
+
+        Assert.Equal("The reusable activity was not published (Refused): Version id 'v1' is published from other content. " +
+                     "Publish the changed workflow as a new version in Elsa 3, re-export, and import that version.", cause);
+    }
+
+    [Fact]
+    public void An_unexpected_publish_failure_points_to_the_log_and_the_next_start()
+    {
+        var state = new ReusableActivityPublicationState("v1", "a", ReusableActivityPublicationStatus.Refused, "activity.publication.failed",
+        [
+            new("activity.publication.failed", ActivityDiagnosticSeverity.Error, "Publishing the imported activity version 'v1' failed unexpectedly.", Subject(),
+                Remediation: "To retry, upload the same export again.")
+        ]);
+
+        var (_, cause) = Elsa3FolderImportTask.NotPublished(state);
+
+        Assert.Equal("The reusable activity was not published (Refused): Publishing the imported activity version 'v1' failed unexpectedly. " +
+                     "The error logged before this one has the cause; the next start tries again.", cause);
+    }
+
+    [Fact]
+    public void A_refused_reusable_without_an_error_diagnostic_names_its_status_only()
+    {
+        var warningOnly = new ReusableActivityPublicationState("v1", "a", ReusableActivityPublicationStatus.Refused, "code",
+            [new("activity.note", ActivityDiagnosticSeverity.Warning, "A warning.", Subject(), Remediation: "Do something.")]);
+        var none = new ReusableActivityPublicationState("v1", "a", ReusableActivityPublicationStatus.Refused);
+
+        Assert.Equal("The reusable activity was not published (Refused).", Elsa3FolderImportTask.NotPublished(warningOnly).Cause);
+        Assert.Equal(("Refused", "The reusable activity was not published (Refused)."), Elsa3FolderImportTask.NotPublished(none));
+    }
+
+    [Fact]
     public void A_reusable_blocked_by_a_dependency_names_the_status_and_the_dependency_only()
     {
         // The phase attaches a diagnostic that repeats the dependency with upload advice; the dependency's own skip says why.

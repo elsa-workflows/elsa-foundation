@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Primitives.Exceptions;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -8,6 +9,7 @@ using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Reconciliation.Exceptions;
 using Elsa3.Activities.Design.Import.Reconciliation.Models;
 using Elsa3.Activities.Design.Import.Reconciliation.Options;
+using Elsa3.Activities.Design.Import.Services;
 using Elsa3.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -173,9 +175,10 @@ internal sealed class Elsa3FolderImportTask(
 
     /// <summary>
     /// Why a reusable was not published, for its skip: its status and what its first error says, which is where a schema
-    /// refusal names its family and versions (#5972). The remediation is left out: it speaks to an upload applied under a
-    /// new idempotency key, while an engine start tries again by itself. A version blocked by a dependency names only that
-    /// dependency, whose own skip says why.
+    /// refusal names its family and versions (#5972). A refusal a later start can get past (a schema refusal, an
+    /// unexpected failure) says the next start tries again instead of its remediation, which speaks to an upload applied
+    /// under a new idempotency key; any other refusal comes back on every start, so it keeps its remediation. A version
+    /// blocked by a dependency names only that dependency, whose own skip says why.
     /// </summary>
     internal static (string Code, string Cause) NotPublished(ReusableActivityPublicationState state)
     {
@@ -183,8 +186,14 @@ internal sealed class Elsa3FolderImportTask(
         var error = state.BlockedBy is null
             ? state.Diagnostics?.FirstOrDefault(diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error)
             : null;
-        return (state.ErrorCode ?? state.Status.ToString(),
-            error is null ? $"{status}." : $"{status}: {error.Message} The next start tries again.");
+        var cause = error?.Code switch
+        {
+            null => $"{status}.",
+            SchemaWriteRefusedException.RefusalCode or SchemaDormancyRefusedException.RefusalCode => $"{status}: {error.Message} The next start tries again.",
+            ReusableActivityImportPublishPhase.PublicationFailed => $"{status}: {error.Message} The error logged before this one has the cause; the next start tries again.",
+            _ => $"{status}: {Elsa3ImportSelection.Cause(error.Message, error.Remediation)}"
+        };
+        return (state.ErrorCode ?? state.Status.ToString(), cause);
     }
 
     /// <summary>

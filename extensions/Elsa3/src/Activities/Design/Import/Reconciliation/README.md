@@ -70,8 +70,8 @@ start or an earlier one; it does not say which version a slot serves now. A rest
   stays as a retired version.
 - Each imported version is published at most once. If an operator publishes another version in Studio, or rolls back
   to an older imported one, later starts leave it alone; only a new Elsa 3 version supersedes it.
-- What a start committed but did not publish, including a reusable the publisher refused, is published by the next
-  start.
+- What a start committed but did not publish is published by the next start once the cause is gone: a schema refusal
+  or an unexpected failure can clear by itself, while any other refusal of a reusable names in its skip what to change.
 - Removing a file removes nothing: no definition is deleted, retired or unpublished.
 - **Converter upgrades.** Versions are `n.0.0`, so a converter that converts the same Elsa 3 version differently
   meets the import's identity check and the start fails. Until Elsa 4 is in production, a host that imported with an
