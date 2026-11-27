@@ -224,6 +224,26 @@ internal static class RootPublicEventLiveWaits
             throw SourceChanged();
     }
 
+    internal static async Task<HashSet<string>> ClaimPublishedAsync(KernelDb db, string occurrence, string[] deliveryIds,
+        Func<FormattableString, FormattableString>? bind, CancellationToken token)
+    {
+        var query = bind is null
+            ? (FormattableString)$"""
+                WITH source AS MATERIALIZED (/*public-event-start-source*/)
+                INSERT INTO "FoundationPublicEventLiveReceipts" ("Occurrence", "Delivery")
+                SELECT {occurrence}, deliveries.value FROM json_each({Json.Write(deliveryIds)}) deliveries CROSS JOIN source WHERE "SourceReady"
+                ON CONFLICT DO NOTHING RETURNING "Delivery" AS "Value"
+                """
+            : $"""
+                WITH source AS MATERIALIZED (/*public-event-start-source*/)
+                INSERT INTO "FoundationPublicEventLiveReceipts" ("Occurrence", "Delivery")
+                SELECT {occurrence}, deliveries.value FROM unnest({deliveryIds}::text[]) AS deliveries(value) CROSS JOIN source WHERE "SourceReady"
+                ON CONFLICT DO NOTHING RETURNING "Delivery" AS "Value"
+                """;
+        var claimed = await db.Database.SqlQuery<string>(RootPublicEventStarts.Bind(query, bind)).ToListAsync(token);
+        return claimed.ToHashSet(StringComparer.Ordinal);
+    }
+
     private static async Task<bool> RememberAsync(KernelDb db, string occurrence, string delivery,
         Func<FormattableString, FormattableString>? bind, CancellationToken token) =>
         await db.Database.ExecuteSqlInterpolatedAsync(RootPublicEventStarts.Bind($"""

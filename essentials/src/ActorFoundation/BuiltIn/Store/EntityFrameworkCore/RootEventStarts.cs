@@ -220,8 +220,23 @@ internal static partial class RootEventStarts
     internal static async Task<(int Count, long Bytes)> CaptureAsync(KernelDb db, EventRow publication, long publicationUntil, int available, long availableBytes,
         Func<FormattableString, FormattableString>? bind, CancellationToken token)
     {
+        var matches = await FindMatchesAsync(db, publication.FoundationTenant!, publication.Key, available + 1, bind, token);
+        if (matches.Count == 0) return default;
+        var packedPayload = PackPayload(publication.Payload);
+        var payloadBytes = packedPayload is null ? 0 : Encoding.UTF8.GetByteCount(packedPayload);
+        var bytes = matches.Sum(match => match.Bytes!.Value + payloadBytes);
+        if (matches.Count > available || bytes > availableBytes)
+            throw new StoreException(Failure.Definite, "The authored event's start targets exceed the atomic delivery limit.");
+        await InsertMatchesAsync(db, publication, publicationUntil, matches, packedPayload, bind, token);
+        return (matches.Count, bytes);
+    }
+
+    private static string? PackPayload(string? payload) => payload is null ? null : DurableKeyJson.Write(payload);
+
+    private static async Task<List<MatchRow>> FindMatchesAsync(KernelDb db, string tenant, string key, int limit,
+        Func<FormattableString, FormattableString>? bind, CancellationToken token)
+    {
         RequireTransaction(db, bind);
-        var tenant = publication.FoundationTenant!;
         var length = bind is not null ? """octet_length(r."Authority")::bigint""" : """length(CAST(r."Authority" AS BLOB))""";
         var quote = Bind($"""
             WITH source AS MATERIALIZED (/*event-start-source*/)
@@ -229,8 +244,8 @@ internal static partial class RootEventStarts
                 SELECT r."Slot", r."Node", slots."Revision", /*authority-bytes*/ AS "Bytes"
                 FROM "FoundationEventStartRegistrations" r
                 JOIN "FoundationEventStartSlots" slots ON slots."Tenant" = r."Tenant" AND slots."Slot" = r."Slot"
-                WHERE r."Tenant" = {tenant} AND r."Key" = {publication.Key} AND (SELECT "SourceReady" FROM source)
-                ORDER BY r."Slot", r."Node" LIMIT {available + 1}
+                WHERE r."Tenant" = {tenant} AND r."Key" = {key} AND (SELECT "SourceReady" FROM source)
+                ORDER BY r."Slot", r."Node" LIMIT {limit}
             )
             SELECT source."SourceReady", matches.* FROM source LEFT JOIN matches ON true
             ORDER BY matches."Slot", matches."Node"
@@ -238,13 +253,15 @@ internal static partial class RootEventStarts
         quote = FormattableStringFactory.Create(quote.Format.Replace("/*authority-bytes*/", length, StringComparison.Ordinal), quote.GetArguments());
         var matches = await db.Database.SqlQuery<MatchRow>(quote).ToListAsync(token);
         if (!matches[0].SourceReady) throw SourceChanged();
-        if (matches is [{ Slot: null }]) return default;
-        var packedPayload = publication.Payload is { } body ? DurableKeyJson.Write(body) : null;
-        var payloadBytes = packedPayload is null ? 0 : Encoding.UTF8.GetByteCount(packedPayload);
-        var bytes = matches.Sum(match => match.Bytes!.Value + payloadBytes);
-        if (matches.Count > available || bytes > availableBytes)
-            throw new StoreException(Failure.Definite, "The authored event's start targets exceed the atomic delivery limit.");
+        return matches is [{ Slot: null }] ? [] : matches;
 
+    }
+
+    private static async Task InsertMatchesAsync(KernelDb db, EventRow publication, long publicationUntil,
+        List<MatchRow> matches, string? packedPayload, Func<FormattableString, FormattableString>? bind, CancellationToken token,
+        string? stagedOccurrence = null)
+    {
+        var tenant = publication.FoundationTenant!;
         // The key lock (or SQLite writer) keeps the bounded quote current. Only matched rows load the registered authority.
         var identities = JsonSerializer.Serialize(matches.Select(match => new
         {
@@ -260,20 +277,26 @@ internal static partial class RootEventStarts
         var payload = bind is not null ? "{4}::text" : "{4}";
         var receiptColumn = db.UsesRootEventStartReceipts ? """, "ReceiptUntil" """ : "";
         var receiptValue = db.UsesRootEventStartReceipts ? ", {5}" : "";
+        var matchedRows = stagedOccurrence is null ? """
+            JOIN "FoundationEventStartRegistrations" r
+                ON r."Tenant" = {1} AND r."Slot" = selected."Slot" AND r."Node" = selected."Node" AND r."Key" = {2}
+            JOIN "FoundationEventStartSlots" slots ON slots."Tenant" = r."Tenant" AND slots."Slot" = r."Slot"
+                AND slots."Revision" = selected."Revision"
+            """ : """
+            JOIN "FoundationPagedEventStarts" r ON r."Occurrence" = {6} AND r."Tenant" = {1}
+                AND r."Slot" = selected."Slot" AND r."Node" = selected."Node" AND r."Key" = {2} AND r."Revision" = selected."Revision"
+            """;
+        object?[] parameters = [identities, tenant, publication.Key, publication.Id, packedPayload];
+        if (db.UsesRootEventStartReceipts) parameters = [.. parameters, publicationUntil];
+        if (stagedOccurrence is not null) parameters = [.. parameters, stagedOccurrence];
         var insert = FormattableStringFactory.Create($$"""
             WITH source AS MATERIALIZED (/*event-start-source*/)
             INSERT INTO "FoundationEventStartTargets" ("Tenant", "Id", "Slot", "Node", "Revision", "Key", "EventId", "Authority", "Payload"{{receiptColumn}})
             SELECT r."Tenant", selected."Id", r."Slot", r."Node", selected."Revision", r."Key", {3}, r."Authority", {{payload}}{{receiptValue}}
-            FROM {{table}} JOIN "FoundationEventStartRegistrations" r
-                ON r."Tenant" = {1} AND r."Slot" = selected."Slot" AND r."Node" = selected."Node" AND r."Key" = {2}
-            JOIN "FoundationEventStartSlots" slots ON slots."Tenant" = r."Tenant" AND slots."Slot" = r."Slot"
-                AND slots."Revision" = selected."Revision"
+            FROM {{table}} {{matchedRows}}
             WHERE (SELECT "SourceReady" FROM source)
-            """, db.UsesRootEventStartReceipts
-                ? [identities, tenant, publication.Key, publication.Id, packedPayload!, publicationUntil]
-                : [identities, tenant, publication.Key, publication.Id, packedPayload!]);
+            """, parameters);
         if (await db.Database.ExecuteSqlInterpolatedAsync(Bind(insert, bind), token) != matches.Count) throw SourceChanged();
-        return (matches.Count, bytes);
     }
 
     // The cursor belongs to one scan. A new sweep must restart from null so a later publication behind it is found.
@@ -449,14 +472,21 @@ internal static partial class RootEventStarts
         Func<FormattableString, FormattableString>? bind, CancellationToken token)
     {
         RequireTransaction(db, bind);
-        return await db.Database.SqlQuery<bool>(Bind($"""
+        FormattableString query = $"""
             WITH source AS MATERIALIZED (/*event-start-source*/)
             SELECT "SourceReady" AND EXISTS (SELECT 1 FROM "FoundationEventStartSlots" WHERE "Tenant" = {tenant}
                     AND "Slot" = {slot} AND "Revision" > {revision})
                 AND NOT EXISTS (SELECT 1 FROM "FoundationEventStartTargets" WHERE "Tenant" = {tenant}
-                    AND "Slot" = {slot} AND "Revision" = {revision} AND "Reference" IS NULL) AS "Value"
+                    AND "Slot" = {slot} AND "Revision" = {revision} AND "Reference" IS NULL)
+                /*staged*/ AS "Value"
             FROM source
-            """, bind)).SingleAsync(token);
+            """;
+        var extra = db.UsesRootPagedPublicEvents ? """
+            AND NOT EXISTS (SELECT 1 FROM "FoundationPagedEventStarts" WHERE "Tenant" = {0} AND "Slot" = {1} AND "Revision" = {2})
+            """ : "";
+        // Use the first slot and revision's exact values, independently of the provider's parameter deduplication.
+        query = FormattableStringFactory.Create(query.Format.Replace("/*staged*/", extra, StringComparison.Ordinal), query.GetArguments());
+        return await db.Database.SqlQuery<bool>(Bind(query, bind)).SingleAsync(token);
     }
 
     internal static string Operation(string target) => "~prepared-event-start/1:" + target;

@@ -184,10 +184,10 @@ internal static partial class KernelAuthoredEventChecks
         OpenAsync(Contract.IActorType model, string provider, string path, bool inBatch, CancellationToken token, bool eventStarts = false,
             bool retainReceipts = false, bool orderedScan = false, bool publicStarts = false,
             Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator = null, RootPublicEventHost? publicEventHost = null,
-            Func<IReplyTransport, IReplyTransport>? observeReplies = null)
+            Func<IReplyTransport, IReplyTransport>? observeReplies = null, bool pagedPublicEvents = false,
+            string node = "authored-event-owner", bool attachExisting = false)
     {
         if (eventStarts) authorizeOperator ??= Authorize;
-        const string node = "authored-event-owner";
         var loop = new LoopOptions
         {
             BalanceEvery = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(25),
@@ -197,7 +197,8 @@ internal static partial class KernelAuthoredEventChecks
 
         if (provider == "sqlite")
         {
-            var sqlite = publicEventHost is not null
+            var sqlite = pagedPublicEvents ? SqliteEmbeddedFoundation.ForPagedPublicEventsQualification(path, node, model.Type) :
+                publicEventHost is not null
                 ? SqliteEmbeddedFoundation.ForPublicEventHostQualification(path, node, model.Type,
                     publicEventHost.ProtectsStarts ? Protect : null)
                 : publicStarts ? SqliteEmbeddedFoundation.ForPublicEventStartsQualification(path, node, model.Type) :
@@ -209,6 +210,7 @@ internal static partial class KernelAuthoredEventChecks
             var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new SqliteConnectionStringBuilder
                 { DataSource = path, Pooling = false }.ConnectionString).Options;
             KernelDb Open() => KernelDb.ForSqliteRootShipped(options,
+                pagedPublicEvents ? StoreFormat.RootPagedPublicEventsQualification :
                 publicEventHost is not null ? StoreFormat.RootPublicEventHostQualification :
                 publicStarts ? StoreFormat.RootPublicEventStartsQualification : orderedScan ? StoreFormat.RootEventStartScanQualification :
                 retainReceipts ? StoreFormat.RootEventStartReceiptsQualification :
@@ -232,17 +234,21 @@ internal static partial class KernelAuthoredEventChecks
 
         var pg = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
             throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.")).Options;
-        KernelDb OpenPostgres() => publicEventHost is not null ? KernelDb.ForPostgresRootPublicEventHostQualification(pg, publicEventHost) :
+        KernelDb OpenPostgres() => pagedPublicEvents ? KernelDb.ForPostgresRootPagedPublicEventsQualification(pg) :
+            publicEventHost is not null ? KernelDb.ForPostgresRootPublicEventHostQualification(pg, publicEventHost) :
             publicStarts ? KernelDb.ForPostgresRootPublicEventStartsQualification(pg) :
             orderedScan ? KernelDb.ForPostgresRootEventStartScanQualification(pg) :
             retainReceipts ? KernelDb.ForPostgresRootEventStartReceiptsQualification(pg) :
             eventStarts ? KernelDb.ForPostgresRootEventStartsQualification(pg) :
             KernelDb.ForPostgresRootAuthoredEventsQualification(pg);
-        await using var database = OpenPostgres();
-        Check(await PostgresFixtureDatabase.IsEmptyAsync(database, token), "the PostgreSQL fixture uses a dedicated empty database");
-        var cold = new EfStore(OpenPostgres, postgres: true);
-        await cold.CreateAsync(1);
-        await cold.InstallPreviewRootSchemaAsync(token);
+        if (!attachExisting)
+        {
+            await using var database = OpenPostgres();
+            Check(await PostgresFixtureDatabase.IsEmptyAsync(database, token), "the PostgreSQL fixture uses a dedicated empty database");
+            var cold = new EfStore(OpenPostgres, postgres: true);
+            await cold.CreateAsync(1);
+            await cold.InstallPreviewRootSchemaAsync(token);
+        }
         var requests = publicEventHost?.ProtectsStarts == true
             ? PostgresPreviewHosting.CreateRequestsWithRootStartProtection(OpenPostgres, node, model.Type, Protect)
             : PostgresPreviewHosting.CreateRequests(OpenPostgres, node, model.Type);

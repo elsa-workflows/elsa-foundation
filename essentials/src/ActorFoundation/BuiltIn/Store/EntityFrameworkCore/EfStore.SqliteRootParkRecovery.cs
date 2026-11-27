@@ -23,6 +23,7 @@ public sealed partial class EfStore
                 m."Kind", NULL, NULL, m."Due", NULL, m."KeepUntil", m."JobGeneration", m."Sender"
             FROM "Messages" m WHERE m."Target" = {"{0}"} AND m."Partition" = {"{1}"} AND m."EventMatch" IS NULL
                 AND m."Done" AND m."FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
+                AND m."InboxScope" <> {RootPublicEventTicket.Scope}
             """ : "";
         // Quote the arrivals before opening their envelopes. Clearing a consumed input needs only its metadata.
         var sql = $"""
@@ -130,6 +131,7 @@ public sealed partial class EfStore
             """, turn.Recovered);
         if (await db.Database.ExecuteSqlInterpolatedAsync(update, token) != 1) return false;
         if (!turn.Recovered) return true;
+        if (!await RequeueParkPublicationsAsync(db, root, token)) return false;
 
         var until = checked(await ReadSqliteParkClockAsync(db, token) + command.Operator.RootParkWindow!.Value);
         foreach (var scope in arrived.GroupBy(row => row.Scope))
