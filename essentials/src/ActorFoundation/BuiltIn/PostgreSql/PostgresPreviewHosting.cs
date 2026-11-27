@@ -299,7 +299,9 @@ public static partial class PostgresPreviewHosting
             requests?.RequireKeyBinding(create, actorType, takesKeyedRequests);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
-            await PostgresRootAdmission.RequirePublicEventHostAsync(db, new(actorType, requests?.ProtectsRootStarts == true), cancellationToken);
+            if (db.PublicEventHost is { } host)
+                await PostgresRootAdmission.RequirePublicEventHostAsync(db, new(actorType, requests?.ProtectsRootStarts ?? host.ProtectsStarts),
+                    cancellationToken);
             usesPressure = db.UsesRootDueBacklog;
         }
         if (usesPressure && pressure is null)

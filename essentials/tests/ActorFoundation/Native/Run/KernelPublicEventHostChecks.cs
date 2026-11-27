@@ -55,14 +55,22 @@ internal static partial class KernelAuthoredEventChecks
             {
                 await using var source = open();
                 var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(source.Database.GetConnectionString()).Options;
-                await RequireRefusalAsync<StoreFormatException>(() => PostgresPreviewHosting.InstallPublicEventHostQualificationAsync(
-                    options, model.Type, !protectedStarts, token));
-                await RequireRefusalAsync<StoreFormatException>(() => PostgresPreviewHosting.InstallPublicEventHostQualificationAsync(
-                    options, "different-actor", protectedStarts, token));
-                KernelDb WrongMode() => PostgresPreviewHosting.CreatePublicEventHostQualificationContext(options, model.Type, protectsStarts: false);
-                if (protectedStarts)
-                    await RequireRefusalAsync<StoreFormatException>(() =>
-                        PostgresPreviewHosting.OpenFoundationAsync(WrongMode, model.Type, cancellationToken: token));
+                await RequireRefusalAsync<StoreFormatException>(() => InstallAsync(model.Type, !protectedStarts));
+                await RequireRefusalAsync<StoreFormatException>(() => InstallAsync("different-actor", protectedStarts));
+                KernelDb WrongMode() => PostgresPreviewHosting.CreatePublicEventHostQualificationContext(options, model.Type, !protectedStarts);
+                await RequireRefusalAsync<StoreFormatException>(() =>
+                    PostgresPreviewHosting.OpenFoundationAsync(WrongMode, model.Type, cancellationToken: token));
+                var standalone = await PostgresPreviewHosting.OpenFoundationAsync(open, model.Type, cancellationToken: token);
+                var standaloneSend = await standalone.SendAsync(scope, new Contract.Target.Event("standalone"), "standalone-event",
+                    "ignored", cancellationToken: token);
+                Check(standaloneSend is { Outcome: Contract.AdmissionOutcome.Accepted, Publication.EventId: "standalone-event" },
+                    "standalone PostgreSQL ingress supports public Event publication with the exact installed binding");
+
+                async Task InstallAsync(string actorType, bool protectsStarts)
+                {
+                    await using var db = PostgresPreviewHosting.CreatePublicEventHostQualificationContext(options, actorType, protectsStarts);
+                    await PostgresRootAdmission.InstallAsync(db, token);
+                }
             }
             else
             {
