@@ -8,6 +8,7 @@ using Contract = Kernel.Foundation.Contracts;
 using PublicModel = Kernel.Model.Contracts;
 using Workflow = Kernel.WorkflowActor.WorkflowActor;
 using WorkflowRuntime = Kernel.WorkflowActor.WorkflowRuntime;
+using static Kernel.Testing.NativeTerminalFixture;
 
 namespace Kernel.Sim;
 
@@ -26,7 +27,6 @@ internal static class NativeVersionTerminateChecks
     {
         const long now = 1_702_312_000_000;
         const string receiptId = "pending-receipt";
-        const int publicHeaderReserve = 16_384 + 8_192;
         var title = $"C1 {kind}";
         var fallback = kind == Kind.ExplicitFallback;
         var withoutMetadata = kind == Kind.WithoutMetadata;
@@ -39,8 +39,8 @@ internal static class NativeVersionTerminateChecks
         var reads = new ActorList(store, 16);
         var registry = new WorkflowRegistry()
             .Add(Wf.Workflow("root", Wf.Parallel("parallel", null,
-                Wf.Node<NativeTerminalEnvelopeChecks.OpenInbox>("receipt", (nameof(NativeTerminalEnvelopeChecks.OpenInbox.Protected), true)),
-                Wf.Node<NativeTerminalEnvelopeChecks.Padding>("padding"),
+                Wf.Node<OpenInbox>("receipt", (nameof(OpenInbox.Protected), true)),
+                Wf.Node<Padding>("padding"),
                 Wf.Dispatch("child", "descendant", wait: true))))
             .Add(Wf.Workflow("descendant", Wf.Event("wait", "never-delivered")));
         var native = new NativeExecutionModel(registry);
@@ -80,8 +80,8 @@ internal static class NativeVersionTerminateChecks
             var retained = Row(root)!;
             var header = (await reads.GetAsync(bound, reference))!.Header;
             originalGrowth = firstActor.TerminalGrowth(header, retained.State);
-            var padSize = checked((int)(NativeTerminalEnvelopeChecks.Envelope - originalGrowth -
-                NativeTerminalEnvelopeChecks.RowBytes(retained, publicHeaderReserve)));
+            var padSize = checked((int)(Envelope - originalGrowth -
+                RowBytes(retained, PublicHeaderReserve)));
             await Send("grow", CompositeSignal.Kind, new CompositeSignal(padding, "grow", padSize.ToString(CultureInfo.InvariantCulture)));
             await DriveUntil(first, () => State(Row(root)!).Frames[padding].State?.GetValue<string>().Length == padSize);
             saved = Row(root)!;
@@ -90,8 +90,8 @@ internal static class NativeVersionTerminateChecks
                 $"status {saved.Status}, state {Encoding.UTF8.GetByteCount(saved.State)}, terminal growth {originalGrowth}");
             Verify(saved.Status == InstanceStatus.Running && HasNativeHeader(savedHeader, 13) &&
                 State(saved).Inboxes?[frame].Receipts[receiptId] is { Status: "Queued", Retention: 3_600_000 } &&
-                originalGrowth == 30 && NativeTerminalEnvelopeChecks.RowBytes(saved, publicHeaderReserve) + originalGrowth ==
-                    NativeTerminalEnvelopeChecks.Envelope,
+                originalGrowth == 30 && RowBytes(saved, PublicHeaderReserve) + originalGrowth ==
+                    Envelope,
                 "the preceding owner commits v13 and an exact-envelope live checkpoint with a protected invocation");
         }
 
@@ -108,7 +108,7 @@ internal static class NativeVersionTerminateChecks
         {
             reader.TerminateMetadata(upgraded);
             var expandedTerminal = saved with { State = JsonSerializer.Serialize(upgraded, native.StateType), Children = null };
-            Verify(NativeTerminalEnvelopeChecks.RowBytes(expandedTerminal, HeaderBytes(savedHeader)) > NativeTerminalEnvelopeChecks.Envelope,
+            Verify(RowBytes(expandedTerminal, HeaderBytes(savedHeader)) > Envelope,
                 "the deliberately expanded model would exceed the ending envelope on the preceding checkpoint");
         }
         reader.ResetObservations();
@@ -181,9 +181,9 @@ internal static class NativeVersionTerminateChecks
                 result.Receipts[receiptId] == (originalReceipt with { Status = "NotProcessed", Outcome = "cancelled", Clock = "workflow:end" }),
                 "real Native v14 termination upgrades v13 and closes the protected invocation with its terminal clock");
 
-        var terminalBytes = NativeTerminalEnvelopeChecks.RowBytes(ended, HeaderBytes(final));
-        Console.WriteLine($"{title} terminal bytes {terminalBytes} of {NativeTerminalEnvelopeChecks.Envelope}");
-        Verify(terminalBytes <= NativeTerminalEnvelopeChecks.Envelope, "the actual terminal projection stays inside the in-memory envelope");
+        var terminalBytes = RowBytes(ended, HeaderBytes(final));
+        Console.WriteLine($"{title} terminal bytes {terminalBytes} of {Envelope}");
+        Verify(terminalBytes <= Envelope, "the actual terminal projection stays inside the in-memory envelope");
 
         InstanceRow? Row(string id) => store.Instances.GetValueOrDefault(id);
         void Verify(bool condition, string description) => check(condition, $"{title}: {description}");

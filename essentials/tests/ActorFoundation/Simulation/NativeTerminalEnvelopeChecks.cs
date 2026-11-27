@@ -1,11 +1,11 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using Kernel.Foundation.InMemory;
 using Kernel.Native;
 using Contract = Kernel.Foundation.Contracts;
 using PublicRuntime = Kernel.WorkflowActor.WorkflowRuntime;
 using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
+using static Kernel.Testing.NativeTerminalFixture;
 
 namespace Kernel.Sim;
 
@@ -13,7 +13,6 @@ internal static class NativeTerminalEnvelopeChecks
 {
     private const int InboxCount = 3_500;
     private const int CreatorBatch = 500;
-    internal const long Envelope = 16_457_728;
 
     internal static async Task Run(Action<bool, string> check)
     {
@@ -116,7 +115,7 @@ internal static class NativeTerminalEnvelopeChecks
         var frame = state.Frames.Values.Single(candidate => candidate.Node == "padding");
         // C1 projects the UTF-8 state, metadata, child reserve, maximum public header and Native termination growth.
         var terminalGrowth = InboxCount * 7 + (thenDelete ? 23 : 0);
-        var atLimit = checked((int)(Envelope - RowBytes(beforeGrowth, 16_384 + 8_192) - terminalGrowth));
+        var atLimit = checked((int)(Envelope - RowBytes(beforeGrowth, PublicHeaderReserve) - terminalGrowth));
         var padding = atLimit + (boundary switch
         {
             Boundary.WithoutHandleCharge => Bytes(oldHandles),
@@ -132,7 +131,7 @@ internal static class NativeTerminalEnvelopeChecks
             (oversize ? afterGrowth.State == beforeGrowth.State && growthView?.Park is not null &&
                     afterGrowth.Fault?.Contains("terminal growth exceed", StringComparison.Ordinal) == true
                 : afterGrowth.Status == InstanceStatus.Running && afterGrowth.CustomHandles == oldHandles &&
-                    RowBytes(afterGrowth, 16_384 + 8_192) + terminalGrowth == Envelope),
+                    RowBytes(afterGrowth, PublicHeaderReserve) + terminalGrowth == Envelope),
             oversize ? "the excess parks and preserves the previous checkpoint" : "the authored growth commits at the exact projected envelope");
         Console.WriteLine($"{name} state bytes {Bytes(afterGrowth.State)}, retained handle bytes {Bytes(oldHandles)}, terminal growth {terminalGrowth}");
 
@@ -233,14 +232,6 @@ internal static class NativeTerminalEnvelopeChecks
 
     private static NativeState State(InstanceRow row) => JsonSerializer.Deserialize<NativeState>(row.State)!;
     private static IReadOnlyList<string> Handles(InstanceRow row) => row.CustomHandles is { } encoded ? DurableKeyJson.ReadKeys(encoded) : [];
-    private static int Bytes(string? text) => text is null ? 0 : Encoding.UTF8.GetByteCount(text);
-
-    internal static long RowBytes(InstanceRow row, int variableHeader) =>
-        16_384L + variableHeader
-        + Math.Max(Bytes(row.Children), 384L * ChildRegistry.Read(row.Children).Count)
-        + Math.Max(Bytes(row.Jobs), 12_416L * JobRegistry.Read(row.Jobs).Count)
-        + (row.Cascade?.Entries.StorageBytes ?? 0)
-        + Bytes(row.State) + Bytes(row.CustomHandles) + Bytes(row.CommitTimes) + Bytes(row.Model) + Bytes(row.Definition);
 
     private static Node[] Branches(string mode) => Enumerable.Range(0, InboxCount)
         .Select(index => Wf.Node<OpenInbox>($"inbox-{index}", (nameof(OpenInbox.Protected), index == 0)))
@@ -265,24 +256,5 @@ internal static class NativeTerminalEnvelopeChecks
     private sealed class Replies(Requests requests) : IReplyTransport
     {
         public void Send(string node, Reply reply) => requests.Receive(reply);
-    }
-
-    internal sealed class OpenInbox : CompositeActivity
-    {
-        [Input] public bool Protected { get; set; }
-        protected override void Execute(CompositeContext context) =>
-            context.RegisterInputInbox(1, 1, Protected ? TimeSpan.FromHours(1) : null);
-        protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
-            throw new InvalidOperationException("An invocation inbox has no authored children.");
-    }
-
-    internal sealed class Padding : CompositeActivity, ISignalledComposite
-    {
-        protected override void Execute(CompositeContext context) => context.SetState("");
-        public bool CanAccept(CompositeContext context) => true;
-        public void Accept(CompositeContext context, string messageId, CompositeSignal signal) =>
-            context.SetState(new string('x', int.Parse(signal.Value!, CultureInfo.InvariantCulture)));
-        protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
-            throw new InvalidOperationException("Padding has no authored children.");
     }
 }

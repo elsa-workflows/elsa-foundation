@@ -764,7 +764,7 @@ internal static class PostgresRootTerminateChecks
             throw new InvalidOperationException("This invocation inbox has no child.");
     }
 
-    private sealed class ObservedNative(NativeExecutionModel native, int version, int padding = 0) : PublicModel.IExecutionModel, PublicModel.IModelMetadata
+    internal sealed class ObservedNative(NativeExecutionModel native, int version, int padding = 0) : PublicModel.IExecutionModel, PublicModel.IModelMetadata
     {
         private object? upgraded;
         public string Key => native.Key;
