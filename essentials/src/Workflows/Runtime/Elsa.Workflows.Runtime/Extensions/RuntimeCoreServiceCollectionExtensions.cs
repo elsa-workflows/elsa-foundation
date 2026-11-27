@@ -175,16 +175,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         // tracer (which itself stays free until a listener attaches).
         services.TryAddSingleton<IWorkflowEngineTracer>(NullWorkflowEngineTracer.Instance);
 
-        // Own the three default native stores together. Factories never resolve a host's selected scoped
-        // replacements into a singleton. Exact selected-store capability still rejects mixed compositions.
-        var nativeArtifacts = ServiceDescriptor.Singleton<InMemoryRuntimeArtifactStores, InMemoryRuntimeArtifactStores>();
-        if (RuntimeArtifactStoreBackend.Find(services)?.Name != RuntimeArtifactStoreBackend.EntityFramework)
-            services.TryAdd(nativeArtifacts);
-        var defaultWorkflowExecutableStore = ServiceDescriptor.Singleton<IWorkflowExecutableStore>(provider =>
-            provider.GetRequiredService<InMemoryRuntimeArtifactStores>().Executables);
-        services.TryAdd(defaultWorkflowExecutableStore);
+        WorkflowPublicationServiceCollectionExtensions.AddWorkflowArtifactDefaults(services);
         services.AddWorkflowActivationDefaults();
-        services.TryAddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
         // Burst-scoped reconstructible cache. The accessor is a singleton AsyncLocal (like
         // the live-drain/coalescing accessors); the router pushes a scope per drain gated by the kill switch. The reader
         // is the first consumer — scoped so it composes with whichever IWorkflowExecutableStore the provider registers
@@ -192,34 +184,6 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<RuntimeBurstCacheOptions>();
         services.TryAddSingleton<IWorkflowBurstScopeAccessor, AsyncLocalWorkflowBurstScopeAccessor>();
         services.TryAddScoped<IWorkflowExecutableReader, BurstCachedWorkflowExecutableReader>();
-        // One provider-neutral checker is shared by Publishing preflight and future Runtime artifact
-        // import admission. Hosts compose the serialization/type-registry feature alongside Runtime.
-        services.TryAddScoped<IRuntimeRequirementChecker, RuntimeRequirementChecker>();
-        services.TryAddSingleton<IWorkflowArtifactClosureSerializer, WorkflowArtifactClosureSerializer>();
-        var defaultActivityTemplateStore = ServiceDescriptor.Singleton<IExecutableActivityTemplateStore>(provider =>
-            provider.GetRequiredService<InMemoryRuntimeArtifactStores>().Templates);
-        services.TryAdd(defaultActivityTemplateStore);
-        var defaultActivityTemplateReader = ServiceDescriptor.Scoped<IExecutableActivityTemplateReader>(serviceProvider =>
-            serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
-        services.TryAdd(defaultActivityTemplateReader);
-        var defaultSourceReferenceStore = ServiceDescriptor.Singleton<IWorkflowExecutableSourceReferenceStore>(provider =>
-            provider.GetRequiredService<InMemoryRuntimeArtifactStores>().References);
-        services.TryAdd(defaultSourceReferenceStore);
-        var defaultSourceReferenceReader = ServiceDescriptor.Scoped<IWorkflowExecutableSourceReferenceReader>(serviceProvider =>
-            serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
-        services.TryAdd(defaultSourceReferenceReader);
-        if (RuntimeArtifactStoreBackend.Find(services) is null)
-        {
-            var defaultArtifactDescriptors = services.Where(descriptor =>
-                ReferenceEquals(descriptor, nativeArtifacts) ||
-                ReferenceEquals(descriptor, defaultWorkflowExecutableStore) ||
-                ReferenceEquals(descriptor, defaultActivityTemplateStore) ||
-                ReferenceEquals(descriptor, defaultSourceReferenceStore) ||
-                ReferenceEquals(descriptor, defaultActivityTemplateReader) ||
-                ReferenceEquals(descriptor, defaultSourceReferenceReader)).ToArray();
-            if (defaultArtifactDescriptors.Length == 6)
-                RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(RuntimeArtifactStoreBackend.InMemory, defaultArtifactDescriptors));
-        }
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();
         services.TryAddSingleton<IActivityExecutionHierarchyCursorCodec, HmacActivityExecutionHierarchyCursorCodec>();
         services.AddOptions<RuntimeRecoveryContinuationOptions>();
@@ -266,8 +230,6 @@ public static class RuntimeCoreServiceCollectionExtensions
         // observers themselves register as singletons that open their own scopes (mirroring RouteTableTriggerIndexObserver).
         services.TryAddSingleton<BookmarkLifecycleNotifier>();
         services.TryAddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeDurableValueStorageDriver, JsonRuntimeDurableValueStorageDriver>());
-        services.TryAddSingleton<IRuntimeDurableValueStorageDriverRegistry, RuntimeDurableValueStorageDriverRegistry>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(IncidentStrategyRuntimeDefaultsMarker)))
         {
@@ -639,8 +601,6 @@ public static class RuntimeCoreServiceCollectionExtensions
 
         // Reference GC: retained execution roots and creation grace are runtime safety policy. A host may
         // configure the policy and schedule the collector through the separate sweeper feature.
-        services.AddOptions<WorkflowExecutableGarbageCollectionOptions>();
-        services.TryAddScoped<IWorkflowExecutableRootWriteLeaseManager, WorkflowExecutableRootWriteLeaseManager>();
         // Cohort maintenance is selected only for the actual provider tuple. Publisher rollout still
         // separately requires protocol/old-writer preflight; a GC capability is not that authorization.
         services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector>(WorkflowExecutableReferenceGarbageCollector.Create);
