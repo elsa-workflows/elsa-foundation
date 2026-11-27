@@ -6,8 +6,9 @@ namespace Elsa.Workbench.Qualification;
 
 internal static partial class WorkbenchPostgresPreview
 {
-    internal static async Task RunShippedHistoryAsync(string executable, bool postgres, bool playback, bool descendants)
+    internal static async Task RunShippedHistoryAsync(string executable, bool postgres, string? qualification)
     {
+        var descendants = qualification is not "playback";
         using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         var token = deadline.Token;
         var workspace = Directory.CreateTempSubdirectory("elsa-workbench-history-");
@@ -18,7 +19,7 @@ internal static partial class WorkbenchPostgresPreview
         try
         {
             using var host = WorkbenchProcess.Start(executable, connection, enabled: true, "publications", null, sqlite, workspace,
-                diagnosticHistoryDisabled: true, playbackQualification: descendants ? "descendants" : playback ? "true" : null);
+                diagnosticHistoryDisabled: true, playbackQualification: qualification == "playback" ? "true" : qualification);
             await host.WaitReadyAsync(token);
             await host.WaitForKernelServingAsync(token);
             var address = new Uri(await host.ListeningAsync(token));
@@ -30,8 +31,8 @@ internal static partial class WorkbenchPostgresPreview
             var occurrencesAdvertised = capabilities.GetProperty("capabilities").EnumerateArray()
                 .SelectMany(capability => capability.GetProperty("links").EnumerateArray())
                 .Any(link => link.GetProperty("rel").GetString() == "workflow-history-occurrences");
-            Require(occurrencesAdvertised == playback, "only the selected playback store advertises the occurrence relation");
-            var httpWaits = !playback || descendants;
+            Require(occurrencesAdvertised, "the selected Playback store advertises the standard occurrence relation");
+            var httpWaits = descendants;
             using (var wait = await client.PostAsync("/workflows/http/core-preview/wait", null, token))
                 Require(wait.StatusCode == (httpWaits ? HttpStatusCode.Accepted : HttpStatusCode.NotFound),
                     httpWaits ? $"the selected profile opens the live HTTP wait ({(int)wait.StatusCode}: {await wait.Content.ReadAsStringAsync(token)})" :
@@ -63,15 +64,14 @@ internal static partial class WorkbenchPostgresPreview
             if (descendants)
             {
                 var flowRun = runs[1];
-                await RetirePlaybackAsync(connection, sqlite, flowRun.Run, token);
+                await RetirePlaybackAsync(connection, sqlite, flowRun.Run, qualification, token);
                 using var retired = await client.GetAsync(flowRun.FrozenScopePath!, token);
                 Require(retired.StatusCode == HttpStatusCode.NotFound, "the public route cannot reopen a retired run's frozen descendant token");
                 var surviving = await ReadAsync(runs[0].FrozenScopePath!);
                 Require(Text(surviving, "totalCount") == "3", "retiring a run leaves another run's frozen membership untouched");
             }
             await host.StopAsync();
-            if (playback)
-                await VerifyPlaybackProviderAsync(connection, sqlite, runs[0].Run, descendants, token);
+            await VerifyPlaybackProviderAsync(connection, sqlite, runs[0].Run, qualification, token);
 
             async Task<(string Run, string CatchUp, string? FrozenScopePath)> CheckHistoryAsync(string name)
             {
@@ -83,10 +83,6 @@ internal static partial class WorkbenchPostgresPreview
                     first.GetProperty("coverage").GetProperty("policyId").GetString() == "kernel-activity-journal-v1",
                     $"the published {name} opens a bounded window in the standard History route");
                 var admitted = await ReadAsync(OccurrencesPath(run));
-                if (!playback)
-                    Require(Text(admitted, "state") == "unavailable" && Text(admitted, "reason") == "occurrence-facet-unsupported",
-                        $"the shipped {name} reports unavailable Playback on a history-only provider");
-
                 var prefix = descendants ? await CollectAsync(run, first) : null;
                 var scopedId = prefix?.Single(item => Activity(item, "ActivityStarted", "scope")).GetProperty("activityExecutionId").GetString();
                 var scopedPath = scopedId is null ? null : OccurrencesPath(run) + "&includeDescendants=true&activityExecutionId=" + Uri.EscapeDataString(scopedId);
@@ -116,7 +112,7 @@ internal static partial class WorkbenchPostgresPreview
                     item.GetProperty("occurredAt").ValueKind == JsonValueKind.String && item.GetProperty("recordedAt").ValueKind == JsonValueKind.String &&
                     !item.GetRawText().Contains("private-history-fixture-value", StringComparison.Ordinal)),
                     $"the published {name} exposes committed structural facts with timestamps and ancestry");
-                if (playback) await CheckPlaybackAsync(name, run, admitted, prefix.Concat(later));
+                await CheckPlaybackAsync(name, run, admitted, prefix.Concat(later));
                 var frozenScopePath = scopedPath is not null && frozenScope is { } scope
                     ? await CheckDescendantsAsync(name, scopedPath, scope, prefix.Concat(later))
                     : null;

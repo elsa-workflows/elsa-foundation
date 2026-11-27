@@ -73,7 +73,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 33 };
+    internal static StoreFormat RootShipped => Current with { MessageProtocol = 34 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -142,20 +142,21 @@ internal static class RootProfiles
 
     /// <summary>
     /// The shared shipped format includes owned children, durable self-sends and timers, one-page Park Resume,
-    /// fenced due pressure, sequenced workflow history, live event waits and tenant retention policy.
+    /// fenced due pressure, sequenced workflow history, live event waits, tenant retention policy and ranked workflow Playback.
     /// The growth rule: each widening of this set takes a new protocol number, and a database installed with an older set
     /// is refused. Before GA a preview database is recreated; after GA a widening migrates, with a rollback floor (K12).
     /// </summary>
     private const RootCapabilities Shipped29 = TimerRearmQualification | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput;
     private const RootCapabilities Shipped31 = Shipped29 | RootCapabilities.Children | RootCapabilities.SequencedJournal;
     private const RootCapabilities Shipped33 = Shipped31 | RootCapabilities.LiveEventWaits | RootCapabilities.RetentionPolicy;
-    internal const RootCapabilities Shipped = Shipped33;
+    private const RootCapabilities Shipped34 = Shipped33 | RootCapabilities.Playback | RootCapabilities.PlaybackDescendants;
+    internal const RootCapabilities Shipped = Shipped34;
     // Freeze this private profile to the base it qualified. Playback has its own qualification profile.
     internal const RootCapabilities ScheduleInventoryQualification = Shipped31 | RootCapabilities.LiveEventWaits |
         RootCapabilities.RetentionPolicy | RootCapabilities.ScheduleInventory;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
-    internal const RootCapabilities PlaybackDescendantsQualification = Shipped33 | RootCapabilities.Playback | RootCapabilities.PlaybackDescendants;
+    internal const RootCapabilities PlaybackDescendantsQualification = Shipped34;
     internal const RootCapabilities LiveEventQualification = Shipped31 | RootCapabilities.LiveEventWaits;
 
     internal const RootCapabilities ParkRecoveryComposition = ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
@@ -416,8 +417,8 @@ internal static class StoreDefinitionsRevision
     private const int SqliteSequencedJournalRevision = 14;
     private const int PostgreSqlLiveEventRevision = 11;
     private const int SqliteLiveEventRevision = 14;
-    private const int PostgreSqlShippedRevision = 13;
-    private const int SqliteShippedRevision = 16;
+    private const int PostgreSqlShippedRevision = PostgreSqlPlaybackDescendantsRevision;
+    private const int SqliteShippedRevision = SqlitePlaybackDescendantsRevision;
     private const int PostgreSqlPlaybackRevision = 12;
     private const int SqlitePlaybackRevision = 15;
     private const int PostgreSqlPlaybackDescendantsRevision = 14;
