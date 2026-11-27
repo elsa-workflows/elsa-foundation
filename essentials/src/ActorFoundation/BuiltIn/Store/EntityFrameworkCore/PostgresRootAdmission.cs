@@ -8,8 +8,11 @@ namespace Kernel.EntityFramework;
 
 /// <summary>Store operations for externally generated root starts in the single-host PostgreSQL preview.
 /// The calling host supplies the tenant from its bound ingress scope. Schema installation is explicit.</summary>
-internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow, bool lockOrdinaryWrites = false)
+internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow, bool lockOrdinaryWrites = false,
+    RootAdmissionPressure? pressure = null)
 {
+    internal RootAdmissionPressure? Pressure => pressure;
+
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record StartWrite(bool Claimed, bool Enqueued);
@@ -221,7 +224,9 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
 
         var digest = FoundationRootCreator.OperationDigest(operation);
         var name = tenant + "_" + Guid.NewGuid().ToString("N");
+        using var attempt = pressure?.Begin(tenant, RootAdmissionKind.Start);
         await using var db = create();
+        RequirePressureProfile(db);
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
         if (db.RequiresPinnedRootNamespace)
             await PinRootNamespaceAsync(db, cancellationToken);
@@ -238,7 +243,21 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             }
         }
         var issuer = await ReadIssuerAsync(db, cancellationToken);
-        var actor = InstanceRef.In(InstanceRef.Spread(name, issuer.Partitions), name);
+        var preferred = InstanceRef.Spread(name, issuer.Partitions);
+        var actor = InstanceRef.In(attempt?.Place(preferred, issuer.Partitions) ?? preferred, name);
+        try { attempt?.Require(actor.Partition); }
+        catch (RootAdmissionRefused)
+        {
+            // Preserve the one-round-trip claim/write on the accepted small-start path. A refused attempt
+            // only reads the already installed receipt and has made no change to the store.
+            var existing = await db.Database.SqlQuery<string>($"""
+                SELECT "Reference" AS "Value" FROM "FoundationRootReceipts"
+                WHERE "Tenant" = {tenant} AND "Operation" = {digest}
+                    AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                """).SingleOrDefaultAsync(cancellationToken);
+            if (existing is null) throw;
+            return new(existing, true);
+        }
         var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
         var windowMs = (long)window.TotalMilliseconds;
         var claimFirst = spec.Input is { Length: > BatchedStartInputCodeUnits };
@@ -282,6 +301,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         if (!write.Enqueued)
             throw new InvalidOperationException("A generated root start must commit its creator with the receipt.");
         await transaction.CommitAsync(cancellationToken);
+        attempt?.Committed();
         return new(reference, false);
 
         async Task<Receipt> Replay()
@@ -292,6 +312,12 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             await transaction.CommitAsync(cancellationToken);
             return new(existing, true);
         }
+    }
+
+    private void RequirePressureProfile(KernelDb db)
+    {
+        if (pressure is not null && !db.UsesRootDueBacklog)
+            throw new StoreFormatException("Admission pressure requires the due-backlog store profile.");
     }
 
     private async Task<Issuer> ReadIssuerAsync(KernelDb db, CancellationToken token)

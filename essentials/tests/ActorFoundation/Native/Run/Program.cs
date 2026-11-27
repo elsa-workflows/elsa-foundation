@@ -32,6 +32,8 @@ if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
 if (args is ["pg-live-remote-http"]) return await PostgresLiveRemoteHttpChecks.RunAsync();
 if (args is ["root-due-backlog", var backlogProvider and ("postgres" or "sqlite"), var backlogFence and ("checked" or "in-batch")])
     return await RootDueBacklogChecks.RunAsync(backlogProvider == "postgres", backlogFence == "in-batch");
+if (args is ["root-admission-pressure", var pressureProvider and ("postgres" or "sqlite"), var pressureFence and ("checked" or "in-batch")])
+    return await RootAdmissionPressureChecks.RunAsync(pressureProvider == "postgres", pressureFence == "in-batch");
 if (args is ["shipped-delay-recovery", var delayProvider and ("postgres" or "sqlite"), var delayFence and ("checked" or "in-batch")])
     return await ShippedDelayRecoveryChecks.RunAsync(delayProvider == "postgres", delayFence == "in-batch");
 if (args is ["pg-root-operators", "admit"])

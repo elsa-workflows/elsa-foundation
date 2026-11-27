@@ -40,6 +40,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
     public ValueTask<long> ReadClockAsync(CancellationToken cancellationToken = default) => admission.ReadReplyTimeAsync(cancellationToken);
 
     internal Requests Pending => edge.Pending;
+    internal RootAdmissionPressure? Pressure => admission.Pressure;
 
     internal ValueTask<bool> ReceiveAsync(string destination, Reply reply, CancellationToken stop) =>
         edge.ReceiveAsync(destination, reply, stop);

@@ -155,6 +155,8 @@ public static class PostgresPreviewHosting
             throw new ArgumentException("Held requests carry their own deduplication window.", nameof(deduplicationWindow));
         var window = requests?.DeduplicationWindow ?? deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
+        var pressure = requests?.Pressure;
+        bool usesPressure;
         await using (var db = create())
         {
             if (!db.Database.IsNpgsql() || !(db.SupportsCorePreview || db.UsesRootReplyProtocol))
@@ -163,8 +165,11 @@ public static class PostgresPreviewHosting
                 throw new NotSupportedException("Held requests require a PostgreSQL store with held replies.");
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
+            usesPressure = db.UsesRootDueBacklog;
         }
-        var admission = new PostgresRootAdmission(create, window, lockOrdinaryWrites: true);
+        if (usesPressure && pressure is null)
+            pressure = await EfStore.OpenStandalonePostgresPressureAsync(create, cancellationToken);
+        var admission = new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: pressure);
         var store = new EfStore(create, postgres: true);
         return new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(cancellationToken), pageSize),
             actorType, directRequests: requests, authorizeExactOperator: authorizeOperator);
@@ -176,12 +181,18 @@ public static class PostgresPreviewHosting
     /// (<see cref="OpenFoundationAsync"/>).
     /// </summary>
     public static PostgresDirectRequests CreateRequests(Func<KernelDb> create, string node, string actorType, TimeSpan? deduplicationWindow = null)
+        => CreateRequests(create, node, actorType, deduplicationWindow, null);
+
+    internal static PostgresDirectRequests CreateRequests(Func<KernelDb> create, string node, string actorType,
+        TimeSpan? deduplicationWindow, RootAdmissionPressure? pressure)
     {
         ArgumentNullException.ThrowIfNull(create);
         PostgresRootAdmission.RequireActorType(actorType);
         var window = deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
-        return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true), new EfStore(create, postgres: true),
+        using var db = create();
+        if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
+        return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: pressure), new EfStore(create, postgres: true),
             node, actorType) { DeduplicationWindow = window };
     }
 
@@ -241,10 +252,12 @@ public static class PostgresPreviewHosting
             partitions = await PostgresRootAdmission.ReadInstalledPartitionCountAsync(db, cancellationToken);
         }
 
-        var store = new EfStore(create, postgres: true, fenceInBatch: fenceInBatch);
+        var pressure = (replies as PostgresDirectRequests)?.Pressure;
+        var store = new EfStore(create, postgres: true, fenceInBatch: fenceInBatch) { AdmissionPressure = pressure };
         if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
         if (nativeJobs) await store.EnableRootJobsAsync(cancellationToken);
         var scope = store.BindWorkerNode(actor.Withholds);
+        await store.PrimeAdmissionPressureAsync(cancellationToken);
         var watchdog = new Watchdog(Defaults.Lease, endProcess);
         var watched = watchdog.Watch(store);
         var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
@@ -256,7 +269,11 @@ public static class PostgresPreviewHosting
         var edge = shipped ? replies as PostgresDirectRequests : null;
         var relay = edge is null ? null : await edge.OpenLiveRepliesAsync(create,
             error => Volatile.Read(ref reporter)?.RecordLoopError(error), cancellationToken);
-        var workers = new WorkerOptions { Partitions = partitions, OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error) };
+        var workers = new WorkerOptions
+        {
+            Partitions = partitions, Backlog = pressure?.Backlog,
+            OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error)
+        };
         var host = DurableHost.ForNode(node, watched, adapter, partitions, replies is null ? workers : workers with { Transport = replies });
         var runtime = new RuntimeNode(node, watched, partitions, options, beside: RunBesideAsync,
             beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault)
