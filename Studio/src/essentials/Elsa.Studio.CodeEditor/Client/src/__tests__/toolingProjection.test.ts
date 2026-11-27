@@ -209,6 +209,32 @@ describe("createStudioCodeToolingProjection", () => {
     expect(getHover).not.toHaveBeenCalled();
   });
 
+  it("shows a typed variable's members with their type and the declared-type note", async () => {
+    const note = "From the declared type `shop.address`; the stored value may differ.";
+    const getCompletions = vi.fn()
+      .mockResolvedValueOnce({
+        state: "ready",
+        data: { items: [{ label: "city", detail: "String", kind: "property", insertText: "city", documentation: note }] }
+      })
+      .mockResolvedValueOnce({ state: "ready", data: { items: [] } });
+    // A root symbol that matches the typed word, so a fallback to local symbols would invent an item.
+    const projection = createStudioCodeToolingProjection({
+      document: { source: "variables.customer.ci", sourceVersion: 1 },
+      authoringContext: { rootSymbols: [{ id: "variable:cities", name: "cities", kind: "variable" }] },
+      tooling: { getCompletions }
+    });
+    const signal = new AbortController().signal;
+    const typed = { uri: "elsa://drafts/a/customer", language: "javascript", value: "variables.customer.ci", version: 1 };
+    const untyped = { ...typed, value: "variables.untyped.ci", version: 2 };
+
+    await expect(projection.completionProvider({ document: typed, position: typed.value.length, explicit: true, signal }))
+      .resolves.toEqual([expect.objectContaining({
+        label: "city", detail: "String", apply: "city", documentation: { markdown: note }
+      })]);
+    await expect(projection.completionProvider({ document: untyped, position: untyped.value.length, explicit: true, signal }))
+      .resolves.toEqual([]);
+  });
+
   it("prefers source-aware language-provider completion and hover operations", async () => {
     const getCompletions = vi.fn().mockResolvedValue({
       state: "ready",

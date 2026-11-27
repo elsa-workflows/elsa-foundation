@@ -943,7 +943,7 @@ public sealed class CompositionFileSourceTests
         {
             foreach (var file in System.IO.Directory.GetFiles(Directory, "*.json"))
                 File.Delete(file);
-            var workbench = Path.Join(RepoRoot, "apps", "Elsa.Workbench");
+            var workbench = Path.Join(RepoRoot, "apps", "Elsa.Workbench.Host");
             foreach (var file in System.IO.Directory.GetFiles(workbench, "*.json"))
                 if (Path.GetFileName(file).StartsWith("shells", StringComparison.Ordinal) ||
                     Path.GetFileName(file).StartsWith("appsettings", StringComparison.Ordinal))

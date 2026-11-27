@@ -15,7 +15,7 @@ the fence row can live:
 
 Both keep the kernel's rules: a fence that does not match answers "not landed" and the batch is rolled back whole; a
 stale owner's commit after a takeover is refused; positions are gapless per virtual partition and move only with a
-commit; placement is `VirtualPartitions.Of(name, count)` from `src/Kernel.Runtime/VirtualPartitions.cs`, the same hash
+commit; placement is `VirtualPartitions.Of(name, count)` from `../../essentials/src/ActorFoundation/BuiltIn/Runtime/VirtualPartitions.cs`, the same hash
 as today, fixed when the database is created.
 
 This is experiment code: it changes no default. The kernel still hosts 64 partitions with one worker each; the two

@@ -178,8 +178,8 @@ class Qualification:
         verify_packages(REPO, self.studio, self.version)
         self.web = self.root / "reference-web"
         shutil.copytree(web, self.web)
-        dependencies = json.loads((self.web / "Elsa.Studio.Web.deps.json").read_text())["libraries"]
-        check("Elsa.Studio.Web/" + self.version in dependencies, "Reference Web has a different build stamp")
+        dependencies = json.loads((self.web / "Elsa.Studio.Workbench.Host.deps.json").read_text())["libraries"]
+        check("Elsa.Studio.Workbench.Host/" + self.version in dependencies, "Reference Web has a different build stamp")
         matched = {}
         for name, row in self.packages.items():
             dll = self.web / (name + ".dll")

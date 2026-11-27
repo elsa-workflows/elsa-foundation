@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Studio.Hosting.Distribution.DistributionHostingExtensions
+static Elsa.Studio.Hosting.Distribution.DistributionHostingExtensions.AddElsaStudioDistribution(this Microsoft.AspNetCore.Builder.WebApplicationBuilder! builder, System.Collections.Generic.IEnumerable<System.Reflection.Assembly!>! startupAssemblies, System.Action<Elsa.Studio.Hosting.StudioHostingOptions!>? configure = null) -> Elsa.Studio.Hosting.StudioBuilder!
+static Elsa.Studio.Hosting.Distribution.DistributionHostingExtensions.UseElsaStudioDistribution(this Microsoft.AspNetCore.Builder.WebApplication! app) -> Microsoft.AspNetCore.Builder.WebApplication!

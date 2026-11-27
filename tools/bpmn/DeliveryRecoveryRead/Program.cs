@@ -286,13 +286,13 @@ try
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(args[1]))!;
         var names = args[0] == "--inspect-studio-products"
-            ? new[] { "Elsa.Studio.Web.dll", "Elsa.Studio.Hosting.dll", "Elsa.Studio.Core.dll", "Elsa.Studio.Workflows.dll" }
+            ? new[] { "Elsa.Studio.Workbench.Host.dll", "Elsa.Studio.Hosting.dll", "Elsa.Studio.Core.dll", "Elsa.Studio.Workflows.dll" }
             : args[0] == "--inspect-native-bpmn-products"
-            ? new[] { "Elsa.Workbench.dll", "Elsa.Activities.Bpmn.Core.dll", "Elsa.Activities.Bpmn.dll", "Elsa.Activities.Bpmn.Api.dll",
+            ? new[] { "Elsa.Workbench.Host.dll", "Elsa.Activities.Bpmn.Core.dll", "Elsa.Activities.Bpmn.dll", "Elsa.Activities.Bpmn.Api.dll",
                 "Elsa.Serialization.Core.dll", "Elsa.Activities.Runtime.Core.dll",
                 "Elsa.Workflows.Runtime.Core.dll", "Elsa.Workflows.Runtime.dll", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
                 "Elsa.Etl.Core.dll", "Elsa.Etl.Runtime.dll", "Elsa.Etl.Workflows.Runtime.dll", "Elsa.Etl.Persistence.EntityFrameworkCore.dll", "Elsa.Etl.Runtime.Api.dll" }
-            : new[] { "Elsa.Workbench.dll", "Elsa.Etl.Core.dll", "Elsa.Etl.Runtime.dll", "Elsa.Etl.Workflows.Runtime.dll", "Elsa.Etl.Persistence.EntityFrameworkCore.dll", "Elsa.Etl.Runtime.Api.dll" };
+            : new[] { "Elsa.Workbench.Host.dll", "Elsa.Etl.Core.dll", "Elsa.Etl.Runtime.dll", "Elsa.Etl.Workflows.Runtime.dll", "Elsa.Etl.Persistence.EntityFrameworkCore.dll", "Elsa.Etl.Runtime.Api.dll" };
         var products = names.Select(name =>
         {
             var path = Path.Combine(directory, name);
@@ -314,7 +314,7 @@ try
     if (args.Length == 2 && args[0] == "--inspect-host-products")
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(args[1]))!;
-        var required = new[] { "Elsa.Workbench.dll", "Elsa.Activities.Bpmn.dll", "Elsa.Activities.Bpmn.Interchange.dll",
+        var required = new[] { "Elsa.Workbench.Host.dll", "Elsa.Activities.Bpmn.dll", "Elsa.Activities.Bpmn.Interchange.dll",
             "Elsa.Workflows.Runtime.Core.dll", "Elsa.Workflows.Runtime.dll", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
             "Elsa.Activities.Runtime.dll", "Elsa.Activities.DispatchWorkflow.Runtime.dll", "Elsa.Serialization.SystemText.dll",
             "Elsa.Workflows.Design.Core.dll", "Elsa.Workflows.Design.Api.dll", "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll", "Elsa.Persistence.EntityFramework.dll" };

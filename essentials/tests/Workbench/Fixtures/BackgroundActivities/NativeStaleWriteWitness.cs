@@ -581,13 +581,40 @@ internal static class NativeStaleWriteWitnessRegistration
 
 }
 
+/// <summary>
+/// The stale-write witnesses pass every commit to the real store unchanged, so they report that store's atomic
+/// capabilities. Without this, the contract's refusing defaults hide the EF store's history support and native
+/// admission refuses the workflow before the scenario starts (#5710).
+/// </summary>
+internal interface IForwardingCheckpointWitness : IRuntimeCheckpointCommitStore
+{
+    IRuntimeCheckpointCommitStore Target { get; }
+
+    bool IRuntimeCheckpointCommitStore.SupportsInitialStartFaultAdmission => Target.SupportsInitialStartFaultAdmission;
+    bool IRuntimeCheckpointCommitStore.SupportsHistory => Target.SupportsHistory;
+    bool IRuntimeCheckpointCommitStore.CanCommitHistory(IRuntimeHistoryStore selectedStore) => Target.CanCommitHistory(selectedStore);
+    ValueTask<bool> IRuntimeCheckpointCommitStore.RequiresUnrecordedTimerDischargeAsync(string workflowExecutionId, CancellationToken cancellationToken) =>
+        Target.RequiresUnrecordedTimerDischargeAsync(workflowExecutionId, cancellationToken);
+    bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => Target.SupportsModelCheckpoint;
+    bool IRuntimeCheckpointCommitStore.CanCommitModelState(IRuntimeModelExecutionReader reader) => Target.CanCommitModelState(reader);
+    bool IRuntimeCheckpointCommitStore.SupportsModelParentAdmission => Target.SupportsModelParentAdmission;
+    bool IRuntimeCheckpointCommitStore.SupportsModelAdmission => Target.SupportsModelAdmission;
+    bool IRuntimeCheckpointCommitStore.CanCommitModelAdmission(IRuntimeModelExecutionReader reader, IWorkflowExecutionStateStore executions,
+        IActivityExecutionStateStore activities, IRuntimePostCommitOutboxStore outbox) => Target.CanCommitModelAdmission(reader, executions, activities, outbox);
+    bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume => Target.SupportsExactBookmarkResume;
+    bool IRuntimeCheckpointCommitStore.CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks, IWorkflowExecutionStateStore physicalExecutions,
+        IActivityExecutionStateStore activities) => Target.CanCommitExactBookmarkResume(bookmarks, physicalExecutions, activities);
+}
+
 internal sealed class OuterCheckpointWitness(
     IRuntimeCheckpointCommitStore inner,
     IServiceProvider services,
     NativeHostingObservationSettings settings,
     bool ownsInner)
-    : NativeHostingOwnedService<IRuntimeCheckpointCommitStore>(inner, services, settings, ownsInner), IRuntimeCheckpointCommitStore
+    : NativeHostingOwnedService<IRuntimeCheckpointCommitStore>(inner, services, settings, ownsInner), IForwardingCheckpointWitness
 {
+    IRuntimeCheckpointCommitStore IForwardingCheckpointWitness.Target => Inner;
+
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
         RuntimeCheckpointCommit commit,
         RuntimeCheckpointPersistenceDecision decision,
@@ -609,9 +636,11 @@ internal sealed class OuterCheckpointWitness(
 internal sealed class EfCheckpointWitness(
     CoalescingInner<IRuntimeCheckpointCommitStore> ownedHolder,
     IServiceProvider services,
-    NativeHostingObservationSettings settings) : IRuntimeCheckpointCommitStore, IDisposable, IAsyncDisposable
+    NativeHostingObservationSettings settings) : IForwardingCheckpointWitness, IDisposable, IAsyncDisposable
 {
     private int _disposed;
+
+    IRuntimeCheckpointCommitStore IForwardingCheckpointWitness.Target => ownedHolder.Value;
 
     public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
         RuntimeCheckpointCommit commit,

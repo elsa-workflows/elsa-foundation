@@ -311,6 +311,24 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.Contains("IScriptBodyWriteAnalyzer", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(ServiceLifetime.Scoped)]
+    [InlineData(ServiceLifetime.Singleton)]
+    public async Task A_second_or_non_scoped_step_variable_write_analyzer_fails_the_shell_at_start(ServiceLifetime lifetime)
+    {
+        // Spec 1241, framework 2.6.2: a replacement contract never wins silently.
+        using var provider = BuildProvider(_ => { }, services =>
+        {
+            if (lifetime == ServiceLifetime.Singleton)
+                Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.RemoveAll<IStepVariableWriteAnalyzer>(services);
+            services.Add(new ServiceDescriptor(typeof(IStepVariableWriteAnalyzer), typeof(OtherStepVariableWriteAnalyzer), lifetime));
+        });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(provider).InitializeAsync());
+
+        Assert.Contains("IStepVariableWriteAnalyzer", exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Two_read_analyzers_for_one_language_fail_the_shell_at_start()
     {
@@ -368,5 +386,12 @@ public sealed class ValidationsFeatureRegistrationTests
         public ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document,
             ActivityDataSelectionTarget? target = null, ActivityDataSelectionQuery? query = null, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new ActivityDataSelectionAnalysis(document.ContractRevision, null, [], []));
+    }
+
+    private sealed class OtherStepVariableWriteAnalyzer : IStepVariableWriteAnalyzer
+    {
+        public ValueTask<StepVariableWriteAnalysis> AnalyzeAsync(Elsa.Workflows.Design.Core.Models.ActivityNode root,
+            IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> rootVariables, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(StepVariableWriteAnalysis.None);
     }
 }

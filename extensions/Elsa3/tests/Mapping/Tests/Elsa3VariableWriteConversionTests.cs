@@ -10,9 +10,9 @@ namespace Elsa3.Mapping.Tests;
 /// Spec 1231 User Story 6 (T038–T040), #4899: inside a Run JavaScript body, Elsa 3's <c>setVariable('x', v)</c> and
 /// generated <c>setX(v)</c> become whole assignments through <c>variables</c> (Q6), and a member change of a value read
 /// through <c>getVariable</c> or <c>variables</c> stays a member change, and a computed setter name becomes
-/// <c>variables[name] = v</c> (FR-033 as amended). A setter of an undeclared variable or of a loop's value, a write in an
-/// input expression and a write in a reusable workflow's script are refused with guidance; the other Elsa 3 setters stay
-/// refused (FR-034).
+/// <c>variables[name] = v</c> (FR-033 as amended). A setter of an undeclared variable or of a loop's value and a write in
+/// an input expression are refused with guidance; the other Elsa 3 setters stay refused (FR-034). Spec 1241: a reusable
+/// workflow's script writes its own variables as a workflow's script does; a write to one of its inputs is refused.
 /// </summary>
 public sealed class Elsa3VariableWriteConversionTests
 {
@@ -21,30 +21,27 @@ public sealed class Elsa3VariableWriteConversionTests
     private static readonly Elsa3Variable OrderTotal = new() { Id = "order-total-id", Name = "order-total", TypeName = "Int32" };
 
     [Theory]
-    [InlineData("function f(item) { item.Status = 'Paid'; var item; } f(getVariable('Order')); return 1;", false)]
-    [InlineData("function f(item) { var item; item.Status = 'Paid'; } f(getVariable('Order')); return 1;", false)]
-    [InlineData("function f(item = getVariable('Order')) { item.Status = 'Paid'; var item; } f(); return 1;", false)]
-    [InlineData("function f(item, read = () => item) { var item = {}; read().Status = 'Paid'; } f(getVariable('Order')); return 1;", false)]
-    [InlineData("function f(write) { write(); var write; } f(() => { getVariable('Order').Status = 'Paid'; }); return 1;", false)]
-    [InlineData("function f(write = () => { getVariable('Order').Status = 'Paid'; }) { var write; write(); } f(); return 1;", false)]
-    [InlineData("switch (0) { default: const item = getVariable('Order'); item.Status = 'Paid'; } return 1;", false)]
-    [InlineData("const item = getVariable('Order'); switch (0) { default: let item = {}; } item.Status = 'Paid'; return 1;", false)]
-    [InlineData("switch (0) { case 0: const item = getVariable('Order'); case 1: item.Status = 'Paid'; } return 1;", false)]
-    [InlineData("function f(item) { var item; item.Status = 'Local'; } f({}); return 1;", true)]
-    [InlineData("function f(item = {}) { var item; item.Status = 'Local'; } f(); return 1;", true)]
-    [InlineData("switch (0) { default: const setVariable = () => 1; setVariable(); } return 1;", true)]
-    [InlineData("switch (0) { default: const getVariable = () => ({}); const item = getVariable(); item.Status = 'Local'; } return 1;", true)]
-    [InlineData("const item = getVariable('Order'); switch (0) { default: let item = {}; item.Status = 'Local'; } return 1;", true)]
-    [InlineData("function f(item) { item = {}; var item; item.Status = 'Local'; } f(getVariable('Order')); return 1;", true)]
-    [InlineData("function f(item, read = () => item) { var item = {}; item.Status = 'Local'; } f(getVariable('Order')); return 1;", true)]
-    public async Task Reusable_scope_analysis_preserves_parameter_values_and_switch_bindings(string source, bool succeeds)
+    [InlineData("function f(item) { item.Status = 'Paid'; var item; } f(getVariable('Order')); return 1;")]
+    [InlineData("function f(item) { var item; item.Status = 'Paid'; } f(getVariable('Order')); return 1;")]
+    [InlineData("function f(item = getVariable('Order')) { item.Status = 'Paid'; var item; } f(); return 1;")]
+    [InlineData("function f(item, read = () => item) { var item = {}; read().Status = 'Paid'; } f(getVariable('Order')); return 1;")]
+    [InlineData("function f(write) { write(); var write; } f(() => { getVariable('Order').Status = 'Paid'; }); return 1;")]
+    [InlineData("function f(write = () => { getVariable('Order').Status = 'Paid'; }) { var write; write(); } f(); return 1;")]
+    [InlineData("switch (0) { default: const item = getVariable('Order'); item.Status = 'Paid'; } return 1;")]
+    [InlineData("const item = getVariable('Order'); switch (0) { default: let item = {}; } item.Status = 'Paid'; return 1;")]
+    [InlineData("switch (0) { case 0: const item = getVariable('Order'); case 1: item.Status = 'Paid'; } return 1;")]
+    [InlineData("function f(item) { var item; item.Status = 'Local'; } f({}); return 1;")]
+    [InlineData("function f(item = {}) { var item; item.Status = 'Local'; } f(); return 1;")]
+    [InlineData("switch (0) { default: const setVariable = () => 1; setVariable(); } return 1;")]
+    [InlineData("switch (0) { default: const getVariable = () => ({}); const item = getVariable(); item.Status = 'Local'; } return 1;")]
+    [InlineData("const item = getVariable('Order'); switch (0) { default: let item = {}; item.Status = 'Local'; } return 1;")]
+    [InlineData("function f(item) { item = {}; var item; item.Status = 'Local'; } f(getVariable('Order')); return 1;")]
+    [InlineData("function f(item, read = () => item) { var item = {}; item.Status = 'Local'; } f(getVariable('Order')); return 1;")]
+    public async Task Reusable_scope_analysis_preserves_parameter_values_and_switch_bindings(string source)
     {
-        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
-        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Total, Order]), isReusable: true);
-        Assert.Equal(succeeds, result.Succeeded);
-        if (!succeeds)
-            Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
-                item.Guidance.Contains("reusable workflow", StringComparison.Ordinal));
+        // Spec 1241 SC-002: a script that changes a variable through an alias, or only a local copy, is converted (or
+        // refused) in a reusable workflow exactly as in a workflow; a write lands in the reusable activity's own variable.
+        await AssertConvertsAsInAWorkflowAsync(source);
     }
 
     [Fact]
@@ -458,16 +455,188 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("const owned = getVariable('Order'); let o = {}; function receiver() { o = owned; return null; } receiver()?.x(o = {}); o.Status = 'Paid'; return 1;")]
     [InlineData("let o = {}; ((o = getVariable('Order')), null)?.[(o = {})]; o.Status = 'Paid'; return 1;")]
     [InlineData("const owned = getVariable('Order'); let o = {}; const h = { get fn() { o = owned; return null; } }; h.fn?.(o = {}); o.Status = 'Paid'; return 1;")]
-    public async Task A_write_in_a_reusable_workflows_script_is_refused(string source)
+    public async Task A_write_in_a_reusable_workflows_script_is_handled_as_in_a_workflow(string source)
     {
-        // A graph activity's variables are a closed scope a step cannot write yet (#4805): the script would fail every run.
-        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+        // Spec 1241 SC-002: these were refused because the workflow was reusable (#4805). A step in a reusable activity's
+        // body now writes the body's own variables, so each converts, or is refused for its own reason, exactly as in a
+        // workflow.
+        await AssertConvertsAsInAWorkflowAsync(source);
+    }
 
-        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Total, Order]), isReusable: true);
+    [Fact]
+    public async Task ApplyDiscount_converts_with_no_refusal()
+    {
+        // Spec 1241 SC-001, US4 AS1: the reusable workflow from the problem statement.
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("setTotal(getTotal() * 0.9);\nreturn getTotal();"))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Total]), isReusable: true);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("variables.Total = variables.Total * 0.9;\nreturn variables.Total;", Text(Input(Node(result.Value!.State, "node"), "script")));
+    }
+
+    [Theory]
+    [InlineData("getVariable('Order').Status = 'Paid'; return 1;")]
+    [InlineData("function pay(order) { order.Status = 'Paid'; } pay(getVariable('Order')); return 1;")]
+    public async Task A_reusable_script_that_changes_a_member_of_a_variable_converts_as_in_a_workflow(string source)
+    {
+        // Spec 1241 US4 AS2: a member change, directly or through a helper that may change it.
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+        var reusable = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Total, Order]), isReusable: true);
+
+        Assert.True(reusable.Succeeded, Describe(reusable.Diagnostics));
+        await AssertConvertsAsInAWorkflowAsync(source);
+    }
+
+    [Theory]
+    [InlineData("setVariable('Amount', 5); return 1;", "setVariable")]
+    [InlineData("setVariable('amount', 5); return 1;", "setVariable")]
+    [InlineData("setAmount(5); return 1;", "setAmount")]
+    public async Task A_write_to_a_reusable_workflows_input_is_refused_with_guidance(string source, string callee)
+    {
+        // Spec 1241 FR-011, US4 AS3: Elsa 3 held a reusable workflow's inputs as local variables; in Elsa 4 they are the
+        // activity's inputs, which a script reads and never writes.
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+        var definition = ConversionServices.Definition(root, variables: [Total]);
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
 
         Assert.False(result.Succeeded);
-        var diagnostic = Assert.Single(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
-        Assert.Contains("reusable workflow", diagnostic.Guidance, StringComparison.Ordinal);
+        var diagnostic = Assert.Single(result.Diagnostics, item => item.IsError);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, diagnostic.Code);
+        Assert.Contains($"'{callee}'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("an input of this reusable workflow", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("initialize it from input", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("setAmount(5); return 1;")]
+    [InlineData("setVariable('Amount', 5); return 1;")]
+    [InlineData("getVariable('Amount').x = 1; return 1;")]
+    [InlineData("variables.Amount.x = 1; return 1;")]
+    [InlineData("getAmount().x = 1; return 1;")]
+    public async Task A_reusable_setter_named_like_both_an_input_and_a_variable_is_ambiguous(string source)
+    {
+        // Elsa 3 declared a reusable workflow's inputs as variables too, so the name names two variables there.
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+        var definition = ConversionServices.Definition(root, variables: [new Elsa3Variable { Id = "amount-id", Name = "Amount", TypeName = "Int32" }]);
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.AmbiguousReference, Assert.Single(result.Diagnostics, item => item.IsError).Code);
+    }
+
+    [Fact]
+    public async Task A_reusable_setVariable_of_two_inputs_named_alike_is_refused_as_an_input_write()
+    {
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("setVariable('Amount', 5); return 1;"))));
+        var definition = ConversionServices.Definition(root, variables: [Total]);
+        definition.Inputs =
+        [
+            new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" },
+            new Elsa3WorkflowArgumentDefinition { Name = "amount", Type = "Int32" }
+        ];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, item => item.IsError);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, diagnostic.Code);
+        Assert.Contains("an input of this reusable workflow", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Amount", "setVariable('amount', 5); return 1;")]
+    [InlineData("Amount", "setVariable('Amount', 5); return 1;")]
+    [InlineData("Amount", "getVariable('Amount').x = 1; return 1;")]
+    [InlineData("Amount", "variables.amount.x = 1; return 1;")]
+    [InlineData("AMOUNT", "setAmount(5); return 1;")]
+    [InlineData("AMOUNT", "setAMOUNT(5); return 1;")]
+    [InlineData("AMOUNT", "getAmount().x = 1; return 1;")]
+    [InlineData("AMOUNT", "setVariable('amount', 5); return 1;")]
+    [InlineData("AMOUNT", "getAMOUNT().x = 1; return 1;")]
+    [InlineData("Amount", "const o = getVariable('amount'); o.x = 1; return 1;")]
+    [InlineData("Amount", "function pay(x) { x.Status = 'Paid'; } pay(getVariable('amount')); return 1;")]
+    [InlineData("amount", "const k = 'am' + 'ount'; setVariable(k, 5); return 1;")]
+    [InlineData("Amount", "setVariable('Total', 1); return 1;")]
+    [InlineData("AMOUNT", "const o = getAMOUNT(); o.x = 1; return 1;")]
+    [InlineData("AMOUNT", "function pay(x) { x.Status = 'Paid'; } pay(getAMOUNT()); return 1;")]
+    [InlineData("Amount", "return getVariable('amount');")]
+    public async Task A_reusable_variable_named_like_an_input_in_another_letter_case_is_ambiguous(string input, string source)
+    {
+        // Names compare as the converter resolves variables and inputs, without regard to letter case, whichever write form
+        // the script uses and whichever of the two its generated accessor resolves to.
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+        var definition = ConversionServices.Definition(root, variables: [new Elsa3Variable { Id = "amount-id", Name = "amount", TypeName = "Object" }]);
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = input, Type = "Int32" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.AmbiguousReference, Assert.Single(result.Diagnostics, item => item.IsError).Code);
+    }
+
+    [Fact]
+    public async Task A_member_change_of_another_variable_is_refused_in_a_reusable_workflow_that_has_a_shared_name()
+    {
+        // FR-010a: the write analysis does not tie a member change to one name, so it is refused there (VF-IMP-002).
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("getVariable('Order').status = 'Paid'; return 1;"))));
+        var definition = ConversionServices.Definition(root, variables: [Order, new Elsa3Variable { Id = "amount-id", Name = "amount", TypeName = "Object" }]);
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.AmbiguousReference, Assert.Single(result.Diagnostics, item => item.IsError).Code);
+    }
+
+    [Theory]
+    [InlineData("return getTotal() + 1;")]
+    [InlineData("setTotal(5); return 1;")]
+    public async Task A_reusable_script_that_does_not_use_a_shared_name_converts_in_a_workflow_that_has_one(string source)
+    {
+        // FR-010a refuses what could reach the shared name; a read or a generated setter of another variable cannot.
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+        var definition = ConversionServices.Definition(root, variables: [Total, new Elsa3Variable { Id = "amount-id", Name = "amount", TypeName = "Object" }]);
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("setOutput('Result', 1); return 1;")]
+    [InlineData("setCorrelationId('c'); return 1;")]
+    [InlineData("setWorkflowInstanceName('n'); return 1;")]
+    public async Task A_reusable_script_still_cannot_change_running_workflow_state(string source)
+    {
+        // Spec 1241 excludes writes of workflow outputs, correlation and instance name: a closed body has no workflow state (#3023).
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Total]), isReusable: true);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, item => item.IsError && item.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+    }
+
+    /// <summary>The same script converts to the same source, or is refused with the same diagnostics, reusable or not.</summary>
+    private static async Task AssertConvertsAsInAWorkflowAsync(string source)
+    {
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+        var workflow = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Total, Order]));
+        var reusable = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Total, Order]), isReusable: true);
+
+        Assert.Equal(workflow.Succeeded, reusable.Succeeded);
+        if (workflow.Succeeded)
+            Assert.Equal(Text(Input(Node(workflow.Value!.State, "node"), "script")), Text(Input(Node(reusable.Value!.State, "node"), "script")));
+        else
+            Assert.Equal(
+                workflow.Diagnostics.Where(item => item.IsError).Select(item => (item.Code, item.Message)),
+                reusable.Diagnostics.Where(item => item.IsError).Select(item => (item.Code, item.Message)));
     }
 
     [Theory]

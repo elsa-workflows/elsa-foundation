@@ -26,10 +26,10 @@ namespace Elsa.Activities.Behavioral;
 /// </summary>
 public sealed class GraphBodyScopeTests
 {
-    private const string BoundaryNodeId = "node-boundary";
+    internal const string BoundaryNodeId = "node-boundary";
     private const string TemplateHash = "sha256:graph-template";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-    private static readonly JsonElement ObjectType = JsonSerializer.SerializeToElement(new { alias = "object" });
+    internal static readonly JsonElement ObjectType = JsonSerializer.SerializeToElement(new { alias = "object" });
 
     [Fact]
     public async Task A_body_node_reads_the_value_the_caller_passed_not_the_started_workflows_input()
@@ -403,10 +403,10 @@ public sealed class GraphBodyScopeTests
             .WithFeature(services => services.AddMemoryCache())
             .Build(Enumerable.Range(1, 64).Select(index => $"actexec-{index}"));
 
-    private static ExecutableNode CaptureInto(ExecutableNode node, string variableKey)
+    internal static ExecutableNode CaptureInto(ExecutableNode node, string variableKey, string outputName = nameof(EchoResult.Value))
     {
         var capture = new RuntimeOutputCapture(
-            nameof(EchoResult.Value),
+            outputName,
             $"graph-variable:{variableKey}",
             new RuntimeValueTypeDescriptor("object", WellKnownRuntimeDurableValueStorageDrivers.Json, ObjectType),
             DurableValueLifecycle.Instance,
@@ -423,20 +423,21 @@ public sealed class GraphBodyScopeTests
         return new ExecutableNode(
             node.ExecutableNodeId, node.AuthoredActivityId, node.ActivityType, node.ActivityTypeVersion,
             node.DescriptorType, node.DescriptorPayload, node.InputBindings, node.Metadata,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture> { [capture.OutputName] = capture });
+            activityContract: node.ActivityContract,
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(node.OutputCaptures) { [capture.OutputName] = capture });
     }
 
-    private static RuntimeVariableDeclaration CallerTotal() => new(
+    internal static RuntimeVariableDeclaration CallerTotal() => new(
         "total", "RunningTotal", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline, Literal("total", 0));
 
     // A placed body occurrence carries its template's identity, which makes it open its own execution scope (plan A-2).
     private static readonly IReadOnlyDictionary<string, string> PlacedOccurrence =
         new Dictionary<string, string> { ["activity.definitionVersionId"] = "version-echo" };
 
-    private static int ReadInput(WorkflowExecutionRun run, string nodeId) =>
+    internal static int ReadInput(WorkflowExecutionRun run, string nodeId) =>
         run.State(nodeId).InputSnapshot!.Values[nameof(EchoActivity.Value)].InlineValue!.Value.GetInt32();
 
-    private static ExecutableNode Echo(string nodeId, RuntimeInputBinding value, IReadOnlyDictionary<string, string>? metadata = null) => new(
+    internal static ExecutableNode Echo(string nodeId, RuntimeInputBinding value, IReadOnlyDictionary<string, string>? metadata = null) => new(
         executableNodeId: nodeId,
         authoredActivityId: $"authored-{nodeId}",
         activityType: typeof(EchoActivity).FullName!,
@@ -450,7 +451,7 @@ public sealed class GraphBodyScopeTests
         inputName, new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
         RuntimeInputBindingSource.WorkflowRequest, workflowRequest: new RuntimeWorkflowRequestReference(memberKey));
 
-    private static RuntimeInputBinding Variable(string key, string scopeId) => new(
+    internal static RuntimeInputBinding Variable(string key, string scopeId) => new(
         nameof(EchoActivity.Value), new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
         RuntimeInputBindingSource.VariableRead, variable: new RuntimeVariableReference(key, scopeId));
 
@@ -466,7 +467,7 @@ public sealed class GraphBodyScopeTests
         new(key, ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, defaultValue, key);
 
     // Mirrors what placement leaves for a closed-scope graph boundary (see GraphActivityDrive).
-    private static ExecutableNode Boundary(
+    internal static ExecutableNode Boundary(
         ExecutableNode entry,
         IReadOnlyList<GraphActivityInputDescriptor>? inputs = null,
         IReadOnlyList<GraphActivityVariableDescriptor>? variables = null,

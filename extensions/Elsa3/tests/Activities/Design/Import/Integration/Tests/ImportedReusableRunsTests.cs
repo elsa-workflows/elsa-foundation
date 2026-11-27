@@ -226,3 +226,33 @@ public sealed class ImportedReusableValueReadTests
         Assert.DoesNotContain("on-approved", run.ExecutedNodeIds);
     }
 }
+
+/// <summary>
+/// Spec 1241 SC-001: the Elsa 3 reusable <c>ApplyDiscount</c>, whose script sets its own variable
+/// (<c>setTotal(getTotal() * 0.9)</c>), imports with no refusal, publishes and returns the discounted total on every call.
+/// </summary>
+public sealed class ImportedReusableVariableWriteTests
+{
+    [Fact]
+    public async Task ApplyDiscount_imports_publishes_and_discounts_on_every_call()
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var (apply, items) = await host.ImportAsync("apply-discount", "reusable-apply-discount");
+        Assert.Equal(HttpStatusCode.Created, apply.StatusCode);
+        var reusable = Assert.Single(items);
+        var wrapper = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(reusable, "workflowVersionId"));
+
+        // Two calls: each activation starts from Total = 100, so each discounts to 90.
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            var run = await host.RunAsync(wrapper);
+
+            Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
+            var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
+            Assert.Equal(new[] { "Approved" }, activity.Completion?.OutcomeNames);
+            var discount = Assert.Single(run.Activities, state => state.Execution.ActivityType.EndsWith("RunJavaScript", StringComparison.Ordinal));
+            var write = Assert.Single(discount.VariableWrites!);
+            Assert.Equal(VariableWriteSource.SessionChange, write.Writer.Source);
+        }
+    }
+}

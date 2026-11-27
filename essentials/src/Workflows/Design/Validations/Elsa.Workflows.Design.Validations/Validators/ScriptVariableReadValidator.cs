@@ -36,8 +36,8 @@ public sealed class ScriptVariableReadValidator(
 {
     public const string UnresolvedReadType = "Scripts/UnresolvedVariableRead";
     public const string ComputedReadType = "Scripts/ComputedVariableRead";
-    public const string RefusedWriteType = "Scripts/RefusedVariableWrite";
-    public const string ComputedWriteType = "Scripts/ComputedVariableWrite";
+    public const string RefusedWriteType = StepVariableWriteRules.RefusedScriptWrite;
+    public const string ComputedWriteType = StepVariableWriteRules.ComputedScriptWrite;
 
     public async ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
@@ -75,7 +75,7 @@ public sealed class ScriptVariableReadValidator(
                 if (plan is null)
                     continue;
 
-                if (body is null && plan.WorkflowState.AccessesState)
+                if (body is null && plan.WorkflowState.ReferencesCapability)
                     errors.Add(new ValidationError(path, "VF-STATE-002", "Input expressions cannot access the body workflow-state capability. Use an inline leaf body."));
 
                 if (body is not null)

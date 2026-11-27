@@ -13,7 +13,14 @@ The adapter between the Elsa 3 import and Workflows Publishing (spec 246). It ex
 - **Behaviour:** checks that the activity publisher resolves the import's tenant, then calls
   `IActivityDefinitionPublisher.PreflightAsync` and `PublishReviewedAsync` with the review token, the plan's version id
   (`RequestedVersionId`) and the phase's idempotency key. A preflight that is not publishable, a rejection or a
-  non-applied receipt becomes a refused outcome with the publisher's code and diagnostics.
+  non-applied receipt becomes a refused outcome with the publisher's code and diagnostics. An
+  `ActivityDataSelectionRejectedException` from either call, wrapped or not, becomes a refused outcome with one located
+  diagnostic per finding (a JSON pointer, or an authored node and reference key) and the first error finding's code, or
+  `activity.publication.invalid` when none is an error (#5850). A `SchemaWriteRefusedException` from either call, a
+  `SchemaDormancyRefusedException` included, wrapped or held by an `AggregateException`, becomes a refused outcome with
+  the refusal's code (`schema-write-refused` or `schema-version-not-finalized`) and one diagnostic carrying the refusal's
+  message, metadata `family`, `writeVersion` and `requiredVersion` (and a dormancy refusal's `feature` and `reason`), and
+  remediation to apply the export again once the cause the message names is resolved (#5972).
 
 ## Registered services
 

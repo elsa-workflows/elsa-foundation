@@ -55,7 +55,7 @@ activity reconciliation, main's OpenIddict store library (R-7), and `jtest` for 
 | §2.23 risk-based tests | PASS | Tests cover composition drift, reasons, Elsa 3 leakage and the folder settings (R-5). |
 | §2.22 feature documentation | PASS | No feature or extension point. The host's README documents it. |
 | ADR 0073 (vendor-owned EF boundary) | PASS | The host uses main's store library (R-7) and references no EF vendor package directly. |
-| Accepted initiative ADRs | PASS | No ADR point is applied or changed. |
+| Accepted initiative ADRs | PASS | No ADR point is changed. R-12 (found in implementation) widens what ADR 0091's conversion contract reads, an enum by its member name, as a defect fix the coordinator asked for; the 1207 contract records it. |
 | Studio work in this repository | PASS | No Studio change. US4 uses an existing Studio host (R-8). |
 | xunit only | PASS | No other framework. |
 
@@ -87,7 +87,6 @@ specs/1236-elsa3-migration-host/
 ├── quickstart.md
 ├── contracts/
 │   └── host-composition.md
-├── checklists/requirements.md
 └── tasks.md
 ```
 
@@ -122,8 +121,8 @@ Elsa.Server.*.slnf                                                  # regenerate
 extensions/Elsa3/tests/JTest/ledger/runs.md                         # migration-host run rows (after S-15 merges)
 ```
 
-**Structure Decision**: one thin host over existing features, in `apps/` with the other hosts. Nothing in
-`essentials/src` changes. Outside the two new projects, these change: the guard tests and the architecture test project
+**Structure Decision**: one thin host over existing features, in `apps/` with the other hosts. In
+`essentials/src` only `JsonConversionContract` changes (R-12, T017). Outside the two new projects, these change: the guard tests and the architecture test project
 named above, `Elsa.Server.slnx` (by hand), `tools/ci/test-tiers.json`, the S-15 ledger row (T012), and the regenerated
 solution filters and lock files.
 

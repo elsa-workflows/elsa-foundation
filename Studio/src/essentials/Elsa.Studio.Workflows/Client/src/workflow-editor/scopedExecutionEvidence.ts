@@ -10,6 +10,7 @@ export async function readVisibleActivityExecutions(context: StudioEndpointConte
   const nodes = [...new Set(executableNodeIds)];
   const activities: ActivityExecutionStateSummary[] = [];
   const observations: ActivityExecutionBrowseEntry[] = [];
+  const repeatedNodes: string[] = [];
   let repeated = false;
   let failed = false;
   let denied = false;
@@ -22,6 +23,7 @@ export async function readVisibleActivityExecutions(context: StudioEndpointConte
         const page = await browseActivityExecutions(context, workflowExecutionId, { executableNodeId: node,
           ...(ancestorId ? { ancestorActivityExecutionId: ancestorId } : {}), ...(exact ? { anchorActivityExecutionId: exact } : {}), limit: 1 }, signal);
         const execution = page.items[0]?.execution;
+        if (page.totalCount > 1) repeatedNodes.push(node);
         if (page.totalCount > 1 && !exact) repeated = true;
         if ((page.totalCount === 1 || exact && execution?.activityExecutionId === exact)
           && execution?.workflowExecutionId === workflowExecutionId && execution.executableNodeId === node) {
@@ -35,43 +37,107 @@ export async function readVisibleActivityExecutions(context: StudioEndpointConte
     }
   };
   await Promise.all(Array.from({ length: Math.min(4, nodes.length) }, worker));
-  return { activities, observations, repeated, failed, denied };
+  return { activities, observations, repeated, repeatedNodes, failed, denied };
+}
+
+interface ScopedCanvasActivitiesState {
+  key: string;
+  activities: ActivityExecutionStateSummary[];
+  observations: ActivityExecutionBrowseEntry[];
+  confirmedRevision: number | null;
+  repeated: boolean;
+  repeatedNodes: string[];
+  anchoredRepeatedId: string | undefined;
+  lastAttemptedSelectedId: string | undefined;
+  failed: boolean;
+  loading: boolean;
+}
+
+function emptyScopedState(key: string): ScopedCanvasActivitiesState {
+  return {
+    key,
+    activities: [],
+    observations: [],
+    confirmedRevision: null,
+    repeated: false,
+    repeatedNodes: [],
+    anchoredRepeatedId: undefined,
+    lastAttemptedSelectedId: undefined,
+    failed: false,
+    loading: true
+  };
+}
+
+function needsSelectionRefresh(
+  snapshot: Pick<ScopedCanvasActivitiesState, "activities" | "repeatedNodes" | "anchoredRepeatedId" | "lastAttemptedSelectedId" | "failed" | "loading">,
+  candidate: ActivityExecutionStateSummary | undefined
+) {
+  if (snapshot.loading || snapshot.failed) return false;
+  const candidateId = candidate?.activityExecutionId;
+  const candidateNode = candidate?.executableNodeId;
+  if (candidateId === snapshot.lastAttemptedSelectedId) return false;
+  if (snapshot.anchoredRepeatedId && candidateId !== snapshot.anchoredRepeatedId) return true;
+  if (!candidateId || !candidateNode) return false;
+  if (snapshot.repeatedNodes.includes(candidateNode)) return candidateId !== snapshot.anchoredRepeatedId;
+  return !snapshot.activities.some(item => item.executableNodeId === candidateNode && item.activityExecutionId === candidateId);
 }
 
 /** Refreshes a visible scope without replacing the pinned graph, selected occurrence or confirmed batch. */
 export function useScopedCanvasActivities(context: StudioEndpointContext, workflowExecutionId: string, ancestorId: string | undefined,
   executableNodeIds: string[], refreshKey: number, selectedExecution?: ActivityExecutionStateSummary, includeRoot = false) {
-  const nodeKey = JSON.stringify([...new Set(executableNodeIds)].sort());
-  const selectedId = selectedExecution?.activityExecutionId;
-  const selectedNode = selectedExecution?.executableNodeId;
-  const key = JSON.stringify([runtimeValueContextId(context), workflowExecutionId, ancestorId, nodeKey, selectedId]);
-  const [state, setState] = useState({ key, activities: [] as ActivityExecutionStateSummary[], observations: [] as ActivityExecutionBrowseEntry[], confirmedRevision: null as number | null, repeated: false, failed: false, loading: true });
+  const nodes = [...new Set(executableNodeIds)].sort();
+  const nodeKey = JSON.stringify(nodes);
+  const scopeKey = JSON.stringify([runtimeValueContextId(context), workflowExecutionId, ancestorId, nodeKey]);
+  const selectedForScope = selectedExecution?.workflowExecutionId === workflowExecutionId && nodes.includes(selectedExecution.executableNodeId)
+    ? selectedExecution : undefined;
+  const selectedId = selectedForScope?.activityExecutionId;
+  const selectedNode = selectedForScope?.executableNodeId;
+  const [state, setState] = useState<ScopedCanvasActivitiesState>(() => emptyScopedState(scopeKey));
   const requested = useRef(refreshKey); requested.current = refreshKey;
+  const selectedRef = useRef(selectedForScope); selectedRef.current = selectedForScope;
   const pump = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (!ancestorId && !includeRoot) return;
     const controller = new AbortController();
     let running = false;
     let confirmed: number | null = null;
-    setState({ key, activities: [], observations: [], confirmedRevision: null, repeated: false, failed: false, loading: true });
-    const load = async () => {
-      if (running || controller.signal.aborted || confirmed === requested.current) return;
+    let latest: ScopedCanvasActivitiesState | null = null;
+    setState(emptyScopedState(scopeKey));
+    const load = async (initial = false) => {
+      if (running || controller.signal.aborted) return;
+      if (!initial && confirmed === requested.current && (!latest || !needsSelectionRefresh(latest, selectedRef.current))) return;
       running = true;
       try {
         do {
           const revision = requested.current;
-          const result = await readVisibleActivityExecutions(context, workflowExecutionId, JSON.parse(nodeKey) as string[], ancestorId, selectedExecution, controller.signal);
+          const usedSelected = selectedRef.current;
+          const usedSelectedId = usedSelected?.activityExecutionId;
+          const result = await readVisibleActivityExecutions(context, workflowExecutionId, JSON.parse(nodeKey) as string[], ancestorId, usedSelected, controller.signal);
           if (controller.signal.aborted) return;
           confirmed = revision;
-          setState({ key, ...result, loading: false, confirmedRevision: revision });
-        } while (confirmed !== requested.current);
+          const nextState: ScopedCanvasActivitiesState = {
+            key: scopeKey,
+            activities: result.activities,
+            observations: result.observations,
+            repeated: result.repeated,
+            repeatedNodes: result.repeatedNodes,
+            anchoredRepeatedId: usedSelected && result.repeatedNodes.includes(usedSelected.executableNodeId) ? usedSelected.activityExecutionId : undefined,
+            lastAttemptedSelectedId: usedSelectedId,
+            failed: result.failed,
+            loading: false,
+            confirmedRevision: revision
+          };
+          latest = nextState;
+          setState(nextState);
+          if (confirmed === requested.current && (usedSelectedId === selectedRef.current?.activityExecutionId || !needsSelectionRefresh(nextState, selectedRef.current))) break;
+        } while (!controller.signal.aborted);
       } finally { running = false; }
     };
-    const start = () => { void load(); }; pump.current = start; start();
+    const start = () => { void load(); }; pump.current = start; void load(true);
     return () => { controller.abort(); if (pump.current === start) pump.current = null; };
-    // Scope primitives identify a selected occurrence; a refresh is coalesced instead of restarting it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ancestorId, context, includeRoot, key, nodeKey, selectedId, selectedNode, workflowExecutionId]);
-  useEffect(() => { pump.current?.(); }, [refreshKey]);
-  return state.key === key ? state : { key, activities: [], observations: [], confirmedRevision: null, repeated: false, failed: false, loading: true };
+    // Scope primitives identify a visible scope; refreshes and repeated-occurrence anchors are coalesced without wiping the canvas.
+  }, [ancestorId, context, includeRoot, nodeKey, scopeKey, workflowExecutionId]);
+  useEffect(() => { pump.current?.(); }, [refreshKey, selectedId, selectedNode]);
+  const current = state.key === scopeKey ? state : emptyScopedState(scopeKey);
+  return { ...current, anchoring: !current.loading && needsSelectionRefresh(current, selectedForScope) };
 }

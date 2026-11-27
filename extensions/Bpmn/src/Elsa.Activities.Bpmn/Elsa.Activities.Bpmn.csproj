@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Tests" />
+    <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Interchange.Tests" />
+    <PackageReference Include="Bpmn.Model" />
+    <PackageReference Include="Bpmn.Semantics" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Core/Elsa.Activities.Bpmn.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
+  </ItemGroup>
+
+</Project>

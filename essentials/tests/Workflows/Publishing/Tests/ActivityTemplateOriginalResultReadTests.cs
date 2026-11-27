@@ -60,7 +60,7 @@ public sealed partial class ActivityTemplateDataSelectionTests
         var expression = new ExpressionDefinition("JavaScript", "args.source", new("String"),
             new Dictionary<string, ExpressionParameterBinding> { ["source"] = new ActivityResultExpressionParameterBinding(producerId, projection) },
             JsonSerializer.SerializeToElement(new { }), "binding-readonly-v1");
-        var sourceValue = portable ? new ArgumentValue(expression, change == "literal-lookalike" ? "Literal" : "JavaScript")
+        var sourceValue = portable ? ArgumentValue.FromClr(expression, change == "literal-lookalike" ? "Literal" : "JavaScript")
             : new ArgumentValue(JsonSerializer.SerializeToElement(reference), "ActivityResult");
         var producer = new ActivityNode(producerId, "producer-version", [], []);
         var consumer = new ActivityNode("consumer", "elsa.intrinsic.set-output@1", [new("value", sourceValue, null, null, null, null)], [])

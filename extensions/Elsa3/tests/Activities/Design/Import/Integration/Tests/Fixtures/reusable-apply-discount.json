@@ -1,0 +1,212 @@
+{
+  "id": "apply-discount-v1",
+  "definitionId": "apply-discount",
+  "name": "ApplyDiscount",
+  "description": "Spec 1241 SC-001: a reusable whose script sets its own variable (setTotal(getTotal() * 0.9)); its decision reads the discounted total.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    {
+      "id": "total",
+      "name": "Total",
+      "typeName": "Int32",
+      "value": "100"
+    }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [
+    "Approved",
+    "Rejected"
+  ],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": true
+  },
+  "root": {
+    "id": "apply-discount-root",
+    "nodeId": "apply-discount-root",
+    "name": "apply-discount-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "discount",
+        "nodeId": "discount",
+        "name": "discount",
+        "type": "Elsa.RunJavaScript",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "script": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "setTotal(getTotal() * 0.9);\nreturn getTotal();"
+          }
+        }
+      },
+      {
+        "id": "decide",
+        "nodeId": "decide",
+        "name": "decide",
+        "type": "Elsa.FlowDecision",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "condition": {
+          "typeName": "Boolean",
+          "expression": {
+            "type": "JavaScript",
+            "value": "getTotal() == 90"
+          }
+        }
+      },
+      {
+        "id": "approved",
+        "nodeId": "approved",
+        "name": "approved",
+        "type": "Elsa.Complete",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "outcomes": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Approved"
+          }
+        }
+      },
+      {
+        "id": "rejected",
+        "nodeId": "rejected",
+        "name": "rejected",
+        "type": "Elsa.Complete",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "outcomes": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Rejected"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "discount",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "decide",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "decide",
+          "port": "True"
+        },
+        "target": {
+          "activity": "approved",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "decide",
+          "port": "False"
+        },
+        "target": {
+          "activity": "rejected",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

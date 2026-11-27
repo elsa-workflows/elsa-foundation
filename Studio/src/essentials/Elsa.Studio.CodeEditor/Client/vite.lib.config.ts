@@ -1,3 +1,4 @@
+import { releaseInventory } from "../../../../vite.release-inventory";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -22,7 +23,7 @@ import dts from "vite-plugin-dts";
  * than bundled.
  */
 export default defineConfig({
-  plugins: [
+  plugins: [releaseInventory("npm"),
     react(),
     dts({
       entryRoot: "src",

@@ -52,6 +52,7 @@ of the workflow that calls it:
 | Another body node's result | an `ActivityResult` reference to the body node id | that node's result in the same invocation |
 | A declared public output | a Set Output node targeting the declaration by name | writes the value for this invocation and returns it when the activity completes |
 | An output captured into a variable | a node output bound to a `workflow`-scope `Variable` | writes the activity's own variable |
+| A variable changed by a step | a script assignment, a `VariableReference<T>` input bound to a `workflow`-scope `Variable`, or a type marked `[AccessesUndeclaredVariables]` | writes the activity's own variable with the step ([spec 1241](../../specs/1241-closed-scope-step-writes/spec.md)) |
 
 Inside a body, the `workflow` scope means the activity, because the body is authored like a workflow whose root is
 the activity. When a workflow that uses the activity is published, placement rewrites these template-local references
@@ -80,7 +81,9 @@ reads are projected from it, not kept as a separate frame. Several nodes may cap
 another, and later reads see the last captured value. Captures into one variable whose order the body does not fix
 (for example on two branches of a Parallel) are reported as an `activity.graph.unordered-variable-write` warning when
 the draft is validated and when the activity compiles; the activity still publishes and the last committed capture
-wins. See [Writes to one variable whose order is not defined](variable-write-order.md).
+wins. A step that changes a variable in its body writes the same row, checked at publish as a workflow's steps are
+(`activity.graph.variable-reference`, `activity.graph.script-write`). See
+[Writes to one variable whose order is not defined](variable-write-order.md).
 
 The last two in the table that need the body nodes' resolved contracts (the result check and the capture type check)
 run when the activity compiles; the others also run when a draft is validated. Ambient JavaScript reads and the key

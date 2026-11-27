@@ -1,3 +1,4 @@
+import { releaseInventory } from "../../../../vite.release-inventory";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -16,7 +17,7 @@ import dts from "vite-plugin-dts";
  * externalized as peers so the consumer supplies its own single React copy. There are no other runtime
  * dependencies to bundle or declare.
  *
- * `entryRoot` is the `Elsa.Studio.Web` directory — the common ancestor spanning both `StudioSdk/src`
+ * `entryRoot` is the `Elsa.Studio.Hosting` directory — the common ancestor spanning both `StudioSdk/src`
  * (this package's entry) and `Client/src/sdk` + `Client/src/auth` (the re-exported source) — so
  * `rollupTypes` can walk the type graph across both trees and emit a single flattened `index.d.ts`.
  *
@@ -40,7 +41,7 @@ export default defineConfig({
       external: ["react", "react/jsx-runtime"]
     }
   },
-  plugins: [
+  plugins: [releaseInventory("npm"),
     react(),
     dts({
       rollupTypes: true,

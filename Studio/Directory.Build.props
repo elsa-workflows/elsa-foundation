@@ -24,6 +24,8 @@
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Condition="'$(StudioFrontendInventories)' != '' and Exists('$(StudioFrontendInventories)/$(MSBuildProjectName).cdx.json')"
+          Include="$(StudioFrontendInventories)/$(MSBuildProjectName).cdx.json" Pack="true" PackagePath="sbom/frontend.cdx.json" Visible="false" />
     <None Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="" Visible="false" />
   </ItemGroup>
 </Project>

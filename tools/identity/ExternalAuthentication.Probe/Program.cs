@@ -21,7 +21,7 @@ using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 using Elsa.Foundation.Identity.ExternalAuthentication.Oidc;
 using Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict;
-using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
+using Elsa.Foundation.Identity.Tests.OpenIddict.VendorStore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;

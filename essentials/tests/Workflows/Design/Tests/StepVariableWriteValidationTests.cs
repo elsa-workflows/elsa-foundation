@@ -224,6 +224,22 @@ public sealed partial class StepVariableWriteValidationTests
 
     private static async Task<IReadOnlyCollection<ValidationError>> Validate(ActivityNode root)
     {
+        using var services = Services();
+        // Resolved as the feature registers it, so these tests also prove that DI hands the validator the activity
+        // catalog: without it every step-write check is skipped (FR-024, FR-028).
+        using var scope = services.CreateScope();
+        var validator = scope.ServiceProvider.GetServices<IDraftValidator>().OfType<ValueFlowValidator>().Single();
+        return [.. await validator.Validate(new StubDraft(new WorkflowDefinitionState(Variables, root, [], [], null)), CancellationToken.None)];
+    }
+
+    private static readonly VariableDefinition[] Variables =
+    [
+        new("balance", "balance", new TypeReference("Decimal"), null, null),
+        new("total", "total", new TypeReference("Int32"), null, null)
+    ];
+
+    private static ServiceProvider Services()
+    {
         var catalog = new StubActivityCatalog()
             .Add("test.activity@1").Add("elsa.sequence.structure@1").Add("elsa.parallel.structure@1")
             .Add(WriterVersion, [ReferenceInput("Balance", InputVariableAccess.ReadWrite)], [new OutputDefinition("Result", "Result", new TypeReference("Decimal"), null, "Result", null, false)])
@@ -251,18 +267,8 @@ public sealed partial class StepVariableWriteValidationTests
                         [VariableAccessDesignFacet.DeclaredMember] = true
                     }))
             ]);
-        using var services = ActivityDataSelectionTestSupport.Provider(catalog,
+        return ActivityDataSelectionTestSupport.Provider(catalog,
             configure: collection => new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(collection));
-        // Resolved as the feature registers it, so these tests also prove that DI hands the validator the activity
-        // catalog: without it every step-write check is skipped (FR-024, FR-028).
-        using var scope = services.CreateScope();
-        var validator = scope.ServiceProvider.GetServices<IDraftValidator>().OfType<ValueFlowValidator>().Single();
-        var variables = new[]
-        {
-            new VariableDefinition("balance", "balance", new TypeReference("Decimal"), null, null),
-            new VariableDefinition("total", "total", new TypeReference("Int32"), null, null)
-        };
-        return [.. await validator.Validate(new StubDraft(new WorkflowDefinitionState(variables, root, [], [], null)), CancellationToken.None)];
     }
 
     private static InputDefinition ReferenceInput(string key, string access) =>

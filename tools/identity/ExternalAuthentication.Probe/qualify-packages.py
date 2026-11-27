@@ -12,9 +12,9 @@ import zipfile
 
 REPO = Path(__file__).resolve().parents[3]
 ROOTS = [
-    'essentials/src/Foundation/Identity/ExternalAuthentication/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj',
-    'essentials/src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj',
-    'essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj',
+    'extensions/Identity/src/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj',
+    'extensions/Identity/src/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj',
+    'extensions/Identity/src/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj',
     'essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj',
 ]
 

@@ -408,12 +408,12 @@ internal sealed class StepVariableSession : IStepVariableSession
         if (variable.Frame.Kind == VariableFrameKind.Iteration)
             throw Fault(new InvalidOperationException(
                 $"Variable '{variable.Name}' is a loop item or index and is read-only; a step cannot write it."));
-        if (IsClosedScopeFrame(variable.Frame))
-            throw Fault(new InvalidOperationException(
-                $"Variable '{variable.Name}' belongs to a closed activity execution scope (a reusable activity's body); a step session cannot write it yet. " +
-                "Capture an output into it instead."));
 
-        var declared = variable.Committed;
+        // Spec 1241: a closed scope's frame holds its variables as Any; a write is checked against the declared type.
+        var closedScope = IsClosedScopeFrame(variable.Frame);
+        var declared = closedScope && _frames!.RootVariableTypes.TryGetValue(variable.Key, out var declaredType)
+            ? variable.Committed.Retype(declaredType)
+            : variable.Committed;
         if (declared.Policy.RequiresEncryption)
             throw Fault(new InvalidOperationException(
                 $"Variable '{variable.Name}' requires encryption; a step session cannot write it yet."));
@@ -441,6 +441,8 @@ internal sealed class StepVariableSession : IStepVariableSession
             : InvocationVariableBases.For(_invocation, variable.Frame.ScopeId, variable.Key);
         if (!_intents.ContainsKey(variable.Address))
             _intentOrder.Add(variable.Address);
+        // Spec 1241: a variable of the nearest closed scope (a reusable activity's body) is written to its row. Its frame
+        // is a Root frame, so the intent names the boundary, or the commit would take it for the workflow's root.
         _intents[variable.Address] = new StepVariableWriteIntent(
             variable.Frame.ScopeId,
             variable.Key,
@@ -449,7 +451,10 @@ internal sealed class StepVariableSession : IStepVariableSession
             kind,
             envelope,
             writeBase,
-            droppedMembers is { Count: > 0 } ? droppedMembers : null);
+            droppedMembers is { Count: > 0 } ? droppedMembers : null)
+        {
+            ClosedScopeBoundaryId = closedScope ? _frames!.ClosedScopeBoundary!.InvocationId : null
+        };
     }
 
     private void Validate(ResolvedVariable variable, ValueEnvelope value)
@@ -497,9 +502,13 @@ internal sealed class StepVariableSession : IStepVariableSession
         for (var index = frames.Count - 1; index >= 0; index--)
         {
             var frame = frames[index];
+            // Placement does not remap a variable-reference input's pinned literal, so a body's reference keeps the root
+            // scope it was authored with: `workflow`, or the legacy graph scope (spec 1241). Below a closed boundary both
+            // name the body's own variables.
             var matchesScope = StringComparer.Ordinal.Equals(frame.ScopeId, scopeId) ||
                                index == 0 && _frames!.ClosedScopeBoundary is not null &&
-                               StringComparer.Ordinal.Equals(scopeId, ExpressionVariableReference.WorkflowScopeId);
+                               (StringComparer.Ordinal.Equals(scopeId, ExpressionVariableReference.WorkflowScopeId) ||
+                                StringComparer.Ordinal.Equals(scopeId, LegacyGraphScopeId));
             if (matchesScope && frame.Values.ContainsKey(variableKey))
                 return Resolved(frame, variableKey, name);
         }
@@ -508,12 +517,18 @@ internal sealed class StepVariableSession : IStepVariableSession
             $"Variable '{name}' (scope '{scopeId}', key '{variableKey}') is not visible to node '{_node.ExecutableNodeId}'."));
     }
 
+    // PlacedReferenceRemapper.LegacyGraphScopeId (Publishing); Runtime does not reference Design or Publishing.
+    private const string LegacyGraphScopeId = "activity-graph";
+
     private static ResolvedVariable Resolved(VariableFrameState frame, string key, string name)
     {
         var committed = frame.Values[key];
         return new ResolvedVariable(frame, key, string.IsNullOrWhiteSpace(name) ? key : name, committed,
             committed.Policy.Lifecycle == DurableValueLifecycle.None);
     }
+
+    /// <summary>The nearest closed activity execution scope the step runs in, whose variables are its root frame; null outside one.</summary>
+    internal ActivityExecutionState? ClosedScopeBoundary => _frames?.ClosedScopeBoundary;
 
     private bool IsClosedScopeFrame(VariableFrameState frame) =>
         _frames?.ClosedScopeBoundary is not null && ReferenceEquals(frame, _frames.Frames[0]);
@@ -540,7 +555,8 @@ internal enum StepVariableWriteKind
 /// <summary>
 /// One pending write of a step (data-model.md <c>WriteIntent</c>): the variable, the whole value (base plus the step's
 /// changes, C3), the base it was built on (null = blind), its kind, and the members a narrower read dropped (FR-017).
-/// <see cref="OwnerInvocationId"/> names the activity whose container frame holds the variable; null for the workflow root.
+/// <see cref="OwnerInvocationId"/> names the activity whose container frame holds the variable; null for the workflow root
+/// and for a closed scope's variable, which <see cref="ClosedScopeBoundaryId"/> names instead.
 /// </summary>
 internal sealed record StepVariableWriteIntent(
     string ScopeId,
@@ -550,7 +566,11 @@ internal sealed record StepVariableWriteIntent(
     StepVariableWriteKind Kind,
     ValueEnvelope Value,
     VariableWriteBase? Base,
-    IReadOnlyList<string>? DroppedMembers);
+    IReadOnlyList<string>? DroppedMembers)
+{
+    /// <summary>The boundary activation whose variable row this intent writes (spec 1241); null for a frame variable.</summary>
+    public string? ClosedScopeBoundaryId { get; init; }
+}
 
 /// <summary>Finds the members of a stored JSON value that a typed read did not keep.</summary>
 internal static class DroppedMembers
