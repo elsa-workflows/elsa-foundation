@@ -37,6 +37,7 @@ public sealed partial class EfStore
         internal bool KeepsParkArrivals { get; set; }
         internal bool KeepsPrivateParkInputs { get; set; }
         internal bool RecoversPark { get; set; }
+        internal bool TakesLiveEventWaits { get; set; }
         internal bool MeasuresDueBacklog { get; set; }
         internal bool RefusesParkedOperators { get; set; }
         internal bool SettlesEndedMailbox { get; init; }
@@ -78,6 +79,7 @@ public sealed partial class EfStore
         public bool KeepsParkArrivals => roots.KeepsParkArrivals;
         public bool KeepsPrivateParkInputs => roots.KeepsPrivateParkInputs;
         public bool RecoversPark => roots.RecoversPark;
+        public bool TakesLiveEventWaits => roots.TakesLiveEventWaits;
         public bool RefusesParkedOperators => roots.RefusesParkedOperators;
         public bool SettlesEndedMailbox => roots.SettlesEndedMailbox;
 
@@ -141,6 +143,7 @@ public sealed partial class EfStore
             scope.KeepsParkArrivals = db.UsesRootParkArrivals;
             scope.KeepsPrivateParkInputs = db.UsesRootPrivateParkInputs;
             scope.RecoversPark = db.UsesRootParkRecovery;
+            scope.TakesLiveEventWaits = db.UsesRootLiveEventWaits;
             scope.MeasuresDueBacklog = db.UsesRootDueBacklog;
             if (db.UsesRootChildren != (_rootChildReference is not null))
                 throw new StoreFormatException("The root owner must initialize the child capability before binding.");
@@ -454,6 +457,9 @@ public sealed partial class EfStore
             var checkpoint = prepared.Checkpoint;
             if (prepared.JournalTurn is { } journal)
             {
+                if (_ordinaryRoots?.TakesLiveEventWaits == true &&
+                    (turn.Unsubscribe || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0))
+                    journal = RootEventWaits.Lower(root, turn, journal);
                 turns.Add(journal);
                 revisions.Add(journal.Instance, checkpoint.JournalRevision);
                 if (journal.Journal is not null)
@@ -604,7 +610,8 @@ public sealed partial class EfStore
             row.Status is not (InstanceStatus.Running or InstanceStatus.Finished) && !timedFault && !terminated ||
             row.FoundationDispatchHeader is not { } header || header.Tenant != root.Tenant || header.Reference != root.Reference ||
             turn.Unsubscribe != (row.Status == InstanceStatus.Finished || timedFault || terminated) ||
-            turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 }) throw RootShape();
+            _ordinaryRoots?.TakesLiveEventWaits != true && (turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0) ||
+            turn.Held is { Count: > 0 }) throw RootShape();
 
         // Record equality checks the full shape, including extension fields. Adding a new durable effect
         // fails closed here until the qualified SQL writer can represent it.

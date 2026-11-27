@@ -76,6 +76,11 @@ public sealed class PostgresDirectRequests : IReplyTransport
 
     private sealed class Admission(PostgresRootAdmission admission, EfStore store) : IHeldRootAdmission
     {
+        public bool SupportsEvents { get; } = admission.SupportsLiveEventWaits();
+
+        public Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>
+            admission.PublishRequestAsync(request, key, payload, token);
+
         public ValueTask<long> ReadClockAsync(CancellationToken token) => admission.ReadReplyTimeAsync(token);
 
         public async Task<string?> StartAsync(HeldRootRequest request, StartSpec spec, CancellationToken token) =>

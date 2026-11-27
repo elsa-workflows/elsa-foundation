@@ -617,8 +617,9 @@ public static class Events
 {
     internal static EventMatch? MatchFor(Message message)
     {
-        if (message.Kind != Kinds.Event || message.EventMatch is not { } match) return null;
+        if (message.Kind != Kinds.Event) return null;
         if (message.ProjectedEvent is { } projected) return projected;
+        if (message.EventMatch is not { } match) return null;
         return FoundationEventDelivery.HasDigest(message)
             ? FoundationEventDelivery.ReadHeader(message, out _)
             : EventMatch.Decode(match);

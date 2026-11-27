@@ -2,10 +2,15 @@ using System.Net;
 using Elsa.ActorFoundation.TestSupport;
 using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.KernelHosting;
+using Kernel.EntityFramework;
 using Kernel.Foundation.InMemory;
+using Kernel.Foundation.Postgres;
+using Kernel.Foundation.Sqlite;
 using Kernel.Native;
+using Kernel.Runtime.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Contract = Kernel.Foundation.Contracts;
 using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
@@ -15,7 +20,7 @@ namespace Kernel.Native.Run;
 
 internal static class KernelHttpWaitChecks
 {
-    internal static async Task<int> RunAsync()
+    internal static async Task<int> RunAsync(string? provider = null, bool inBatch = true)
     {
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         var token = stop.Token;
@@ -37,21 +42,15 @@ internal static class KernelHttpWaitChecks
                 Node("cancelled", Types.WriteHttpResponse, [ResultMember("Body", "wait", "RouteData", "ID")]))]));
         await serving.ServeHostWorkflowAsync(NativeExecutableMapper.Map(chart, serving.Capabilities), token);
 
-        const string node = "http-wait-owner";
         var scope = ContractScopes.Bind("kernel-http-waits");
-        long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var store = new InMemoryStore(1, Now);
-        var requests = new Requests(node);
-        var ingress = new InMemoryIngress(store, requests, node);
-        var reads = new ActorList(store, 16);
         var model = new PublicWorkflow([new NativeExecutionModel(serving.Registry)]);
-        var worker = new Worker(node, 0, store, new ActorAdapter(store, model, (requests, node)),
-            new WorkerOptions { Lease = TimeSpan.FromMinutes(1), Transport = new HttpWaitTransport(requests) });
-        await using var owner = await new DurableHost([worker]).ActivateAsync(0, token)
-            ?? throw new InvalidOperationException("The fixture owner failed to activate.");
+        using var temporary = provider == "sqlite" ? new TemporaryDatabase() : null;
+        var fixture = await OpenAsync(provider, inBatch, model, temporary?.Path, token);
+        await using var owner = fixture.Owner;
+        var reads = fixture.Reads;
 
         const string basePath = "/workflows/http";
-        var handler = new KernelHttpRequestHandler(serving, _ => ValueTask.FromResult<Contract.IIngress>(ingress), _ => new(Now()),
+        var handler = new KernelHttpRequestHandler(serving, _ => ValueTask.FromResult(fixture.Ingress), fixture.Clock,
             scope, basePath, TimeSpan.FromSeconds(5), 64 * 1024, enforceRequestTimeout: true);
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
@@ -59,7 +58,7 @@ internal static class KernelHttpWaitChecks
         await using var app = builder.Build();
         app.Map(basePath + "/{**path}", handler.HandleAsync);
         await app.StartAsync(token);
-        var pump = PumpAsync();
+        var pump = fixture.Pump?.Invoke() ?? Task.CompletedTask;
         using var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
         try
         {
@@ -67,9 +66,9 @@ internal static class KernelHttpWaitChecks
             {
                 const string first = "A/b%41";
                 const string second = "a/b%41";
-                var before = store.FoundationEvents.Count;
+                var before = await fixture.EventCount(token);
                 using (var missing = await PostAsync(kind, first, "cancel"))
-                    Require(missing.StatusCode == HttpStatusCode.NotFound && store.FoundationEvents.Count == before && requests.All.Count == 0,
+                    Require(missing.StatusCode == HttpStatusCode.NotFound && await fixture.EventCount(token) == before && fixture.NoPendingCallers(),
                         $"{kind}: a matched route without a committed waiter returns 404 and publishes nothing.");
 
                 var a = await StartAsync(kind, first);
@@ -77,7 +76,7 @@ internal static class KernelHttpWaitChecks
                 Require(await StateAsync(a) == Contract.ActorStatus.Running && await StateAsync(b) == Contract.ActorStatus.Running,
                     $"{kind}: both starts commit independent running waits.");
                 using (var wrongCase = await PostAsync(kind, "A/B%41", "cancel"))
-                    Require(wrongCase.StatusCode == HttpStatusCode.NotFound && store.FoundationEvents.Count == before,
+                    Require(wrongCase.StatusCode == HttpStatusCode.NotFound && await fixture.EventCount(token) == before,
                         $"{kind}: the resolved route preserves parameter case and refuses a different key.");
                 using (var resumed = await PostAsync(kind, second, "cancel"))
                     Require(resumed.StatusCode == HttpStatusCode.OK && await resumed.Content.ReadAsStringAsync(token) == second &&
@@ -101,8 +100,9 @@ internal static class KernelHttpWaitChecks
             var existing = (await reads.ListAsync(scope, new(Status: Contract.ActorStatus.Running), cancellationToken: token)).Items
                 .Select(row => row.Header.Ref).ToHashSet();
             using var response = await PostAsync(kind, order, "ship");
-            Require(response.StatusCode == HttpStatusCode.Accepted && await response.Content.ReadAsStringAsync(token) == order,
-                $"{kind}: the start responds 202 with the exact decoded route value.");
+            var body = await response.Content.ReadAsStringAsync(token);
+            Require(response.StatusCode == HttpStatusCode.Accepted && body == order,
+                $"{kind}: expected the start to return 202 and '{order}', got {(int)response.StatusCode} '{body}'.");
             return (await reads.ListAsync(scope, new(Status: Contract.ActorStatus.Running), cancellationToken: token)).Items
                 .Single(row => !existing.Contains(row.Header.Ref)).Header.Ref;
         }
@@ -112,19 +112,88 @@ internal static class KernelHttpWaitChecks
 
         async Task<Contract.ActorStatus?> StateAsync(Contract.ActorRef actor) => (await reads.GetAsync(scope, actor, token))?.Header.Status;
 
+    }
+
+    private sealed record WaitFixture(IAsyncDisposable Owner, Contract.IIngress Ingress, Contract.IActorReads Reads,
+        Func<CancellationToken, ValueTask<long>> Clock, Func<CancellationToken, Task<int>> EventCount,
+        Func<bool> NoPendingCallers, Func<Task>? Pump = null);
+
+    private static async Task<WaitFixture> OpenAsync(string? provider, bool inBatch, PublicWorkflow model, string? path, CancellationToken token)
+    {
+        const string node = "http-wait-owner";
+        var loop = new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(25),
+            Window = TimeSpan.FromMilliseconds(400)
+        };
+        static void EndProcess(string reason) => throw new InvalidOperationException(reason);
+
+        if (provider == "postgres")
+        {
+            var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
+                throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.")).Options;
+            KernelDb Open() => KernelDb.ForPostgresRootLiveEventQualification(options);
+            await using var database = Open();
+            Require(await PostgresFixtureDatabase.IsEmptyAsync(database, token), "the PostgreSQL event fixture uses a dedicated empty database");
+            var cold = new EfStore(Open, postgres: true);
+            await cold.CreateAsync(1);
+            await cold.InstallPreviewRootSchemaAsync(token);
+            var requests = PostgresPreviewHosting.CreateRequests(Open, node, model.Type);
+            var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, model.Type, requests, cancellationToken: token);
+            var owner = await PostgresPreviewHosting.StartAsync(Open, node, model, EndProcess, loop, token, Console.Error.WriteLine,
+                (IReplyTransport)requests, fenceInBatch: inBatch);
+            return new(owner, foundation, foundation, requests.ReadClockAsync, ct => EventCountAsync(Open, ct), () => requests.Pending.All.Count == 0);
+        }
+
+        if (provider == "sqlite")
+        {
+            var foundation = SqliteEmbeddedFoundation.ForLiveEventQualification(path!, node, model.Type);
+            await foundation.InstallShippedAsync(token);
+            var owner = foundation.CreateHostedService(model, EndProcess, loop, inBatch);
+            await owner.StartAsync(token);
+            var ingress = await foundation.OpenIngressAsync(token);
+            var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+                { DataSource = path, Pooling = false }.ConnectionString).Options;
+            KernelDb Open() => KernelDb.ForSqliteRootShipped(options, StoreFormat.RootLiveEventQualification);
+            return new(owner, ingress, foundation.CreateReads(), foundation.ReadClockAsync, ct => EventCountAsync(Open, ct), () => true);
+        }
+
+        long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var memory = new InMemoryStore(1, Now);
+        var pending = new Requests(node);
+        var worker = new Worker(node, 0, memory, new ActorAdapter(memory, model, (pending, node)),
+            new WorkerOptions { Lease = TimeSpan.FromMinutes(1), Transport = new HttpWaitTransport(pending) });
+        var memoryOwner = await new DurableHost([worker]).ActivateAsync(0, token)
+            ?? throw new InvalidOperationException("The fixture owner failed to activate.");
+        return new(memoryOwner, new InMemoryIngress(memory, pending, node), new ActorList(memory, 16), _ => new(Now()),
+            _ => Task.FromResult(memory.FoundationEvents.Count), () => pending.All.Count == 0, PumpAsync);
+
         async Task PumpAsync()
         {
             try
             {
                 while (!token.IsCancellationRequested)
                 {
-                    await owner.WokenAsync(null, token);
-                    await owner.RunAsync(token);
+                    await memoryOwner.WokenAsync(null, token);
+                    await memoryOwner.RunAsync(token);
                     await Task.Delay(5, token);
                 }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         }
+
+        static async Task<int> EventCountAsync(Func<KernelDb> open, CancellationToken token)
+        {
+            await using var db = open();
+            return await db.Events.CountAsync(token);
+        }
+    }
+
+    private sealed class TemporaryDatabase : IDisposable
+    {
+        private readonly DirectoryInfo directory = Directory.CreateTempSubdirectory("http-waits");
+        internal string Path => System.IO.Path.Combine(directory.FullName, "waits.db");
+        public void Dispose() => directory.Delete(recursive: true);
     }
 
     private static Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding[] EndpointInputs(string path, bool start) =>
