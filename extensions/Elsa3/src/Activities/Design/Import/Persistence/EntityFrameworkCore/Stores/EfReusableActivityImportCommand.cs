@@ -51,8 +51,12 @@ public sealed class EfReusableActivityImportCommand(
     IPersistenceAccessContextAccessor accessContextAccessor,
     IPayloadSerializer payloadSerializer,
     TimeProvider? timeProvider = null,
-    Func<(IIdentityGenerator Identities, IDistributedLockProvider Locks)>? draftServices = null) : IReusableActivityImportCommand
+    Func<(IIdentityGenerator Identities, IDistributedLockProvider Locks)>? draftServices = null) : IReusableActivityDraftImportCommand
 {
+    public EfReusableActivityImportCommand(Elsa3ImportDbContext importDb, ActivitiesDesignDbContext activitiesDb, WorkflowsDesignDbContext workflowsDb,
+        IPersistenceAccessContextAccessor accessContextAccessor, IPayloadSerializer payloadSerializer, TimeProvider? timeProvider)
+        : this(importDb, activitiesDb, workflowsDb, accessContextAccessor, payloadSerializer, timeProvider, null) { }
+
     private static readonly EfWriteRetry WriteConflicts = new(EfWriteRetry.DefaultMaxAttempts, IsWriteConflict);
     private const int ReconciliationReads = 3;
     private const string DefinitionBindingKind = "elsa3ReusableImportDefinitionBinding";
@@ -120,7 +124,9 @@ public sealed class EfReusableActivityImportCommand(
         EfSharedTransaction shared;
         try
         {
-            shared = await EfSharedTransaction.BeginAsync([importDb, activitiesDb, workflowsDb], cancellationToken);
+            shared = mutation.PublishImportedActivities.HasValue
+                ? await EfSharedTransaction.BeginSerializableAsync([importDb, activitiesDb, workflowsDb], cancellationToken)
+                : await EfSharedTransaction.BeginAsync([importDb, activitiesDb, workflowsDb], cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -345,7 +351,10 @@ public sealed class EfReusableActivityImportCommand(
                         throw new ReusableActivityImportCollisionException($"Workflow '{group.Key}' has an existing current draft. Review it before importing another version.");
                     continue;
                 }
-                await clone.Execute(new DesignOperationKey(ReusableActivityImportIdentity.Create("workflow-draft", newest.DefinitionId, newest.Id)), newest.Id, cancellationToken);
+                var draftId = await clone.Execute(OperationKey(commitAttemptId, "workflowDraft", newest.Id), newest.Id, cancellationToken);
+                var cloned = await drafts.FindByWorkflowDefinitionIdAsync(group.Key, cancellationToken);
+                if (cloned?.Id != draftId || cloned.SourceVersionId != newest.Id)
+                    throw new ReusableActivityImportCollisionException($"Workflow '{group.Key}' changed while its imported draft was being created.");
             }
         }
 
@@ -353,7 +362,7 @@ public sealed class EfReusableActivityImportCommand(
         // its authoring state and the draft of its first imported version, as Studio creates a definition.
         var activityWriter = new EfDesignAtomicWrite(activities, accessContextAccessor, shared.BeginOperationAsync);
         var projections = new EfActivityManagementProjectionWriter(activities, accessContextAccessor);
-        var activityStores = new EfActivityDesignStores(activities, accessContextAccessor, activityWriter, projections, shared.BeginOperationAsync);
+        var activityStores = new EfActivityDesignStores(activities, accessContextAccessor, activityWriter, projections);
         foreach (var definition in preflight.NewDefinitions)
         {
             var candidate = plan.ActivityFor(definition.Id);
@@ -385,7 +394,7 @@ public sealed class EfReusableActivityImportCommand(
                 var state = await ((IActivityDefinitionAuthoringStore)activityStores).FindAsync(version.DefinitionId, cancellationToken);
                 var head = state?.HeadVersionId;
                 await activityStores.ExecuteAsync(new CreateActivityDraftRequest(
-                    ReusableActivityImportDrafts.Draft(version, head), ReusableActivityImportDrafts.Layout(version), head), cancellationToken);
+                    ReusableActivityImportDrafts.Draft(version, head), ReusableActivityImportDrafts.Layout(version), head), shared.BeginOperationAsync, cancellationToken);
             }
         }
     }

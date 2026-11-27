@@ -111,6 +111,32 @@ public sealed class ActivityDefinitionPublisher(
     IActivityPublicationVersionPolicy? versionPolicy = null,
     IActivityDraftPublicationIdentity? reservedIdentities = null) : IActivityDefinitionPublisher
 {
+    public ActivityDefinitionPublisher(
+        IActivityDefinitionStore definitions,
+        IActivityDefinitionAuthoringStore authoringStore,
+        IActivityDefinitionDraftStore draftStore,
+        IActivityDefinitionVersionPublicationStore publicationStore,
+        IActivityDefinitionLayoutStore layoutStore,
+        IActivityDirectDependencyStore dependencyStore,
+        IActivityDraftValidator validator,
+        IActivityVersionDiffer differ,
+        IActivityTemplateCompiler compiler,
+        IActivityPublishingAuthorizationContext authorization,
+        ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> commitCommand,
+        IDistributedLockProvider lockProvider,
+        IIdentityGenerator identityGenerator,
+        TimeProvider timeProvider,
+        IActivityPublicationReceiptStore? receiptStore,
+        IEnumerable<IActivityActivationStrategy>? activityActivationStrategies,
+        IRuntimeDurableValueStorageDriverRegistry? storageDrivers,
+        IActivityPublicationCandidateEvaluator? publicationEvaluator,
+        IActivityPublicationReadiness? readiness,
+        IActivityCatalogProjection? catalogProjection,
+        IActivityPublicationVersionPolicy? versionPolicy)
+        : this(definitions, authoringStore, draftStore, publicationStore, layoutStore, dependencyStore, validator, differ,
+            compiler, authorization, commitCommand, lockProvider, identityGenerator, timeProvider, receiptStore, activityActivationStrategies,
+            storageDrivers, publicationEvaluator, readiness, catalogProjection, versionPolicy, null) { }
+
     private readonly IActivityPublicationReceiptStore _receiptStore =
         receiptStore ?? new InMemoryActivityPublicationReceiptStore();
     private readonly ActivityPublicationReviewPolicy _reviewPolicy =

@@ -68,6 +68,37 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Reimport_after_discard_restores_the_draft_but_another_source_version_preserves_the_current_one()
+    {
+        var service = Db.Service(access);
+        var draftImport = Assert.IsAssignableFrom<IReusableActivityDraftImport>(service);
+        async Task<ReusableActivityImportReceipt> Apply(int version, string key)
+        {
+            using var json = Json(Workflow("caller", $"v{version}", version, false, Leaf("root")));
+            var upload = await service.UploadAsync(json, null, Scope);
+            var plan = await service.AnalyzeAsync(upload.CollectionHandle, 0, 10, Scope);
+            return await draftImport.ApplyDraftsAsync(upload.CollectionHandle, plan.PlanId, [$"v{version}"], key, Scope, false, default);
+        }
+
+        await Apply(1, "first");
+        string discarded;
+        await using (var db = Db.Workflows())
+        {
+            var draft = await db.Drafts.SingleAsync();
+            discarded = draft.Id;
+            db.Drafts.Remove(draft);
+            await db.SaveChangesAsync();
+        }
+        await Apply(1, "second");
+        await Assert.ThrowsAsync<ReusableActivityImportCollisionException>(() => Apply(2, "conflict"));
+        await using var verify = Db.Workflows();
+        var current = await verify.Drafts.SingleAsync();
+        Assert.Equal("v1", current.SourceVersionId);
+        Assert.NotEqual(discarded, current.Id);
+        Assert.Single(await verify.Versions.AsNoTracking().ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Upload_is_bounded_immutable_scoped_cancellable_expiring_and_durable_across_restart()
     {
         var clock = new MutableTimeProvider(Now);

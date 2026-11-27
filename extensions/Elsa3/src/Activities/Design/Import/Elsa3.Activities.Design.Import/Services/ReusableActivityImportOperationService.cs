@@ -278,8 +278,8 @@ public sealed class ReusableActivityImportOperationService(
         ArgumentNullException.ThrowIfNull(selectedSourceVersionIds);
         var selected = selectedSourceVersionIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var selectionFingerprint = SelectionFingerprint(collectionHandle, planId, selected, accessScope, publishImportedActivities);
-        if (publishImportedActivities.HasValue && store is not IImportedActivityDraftReservations)
-            throw new NotSupportedException("The configured import store does not support draft imports.");
+        if (publishImportedActivities.HasValue && (!importer.SupportsDraftImport || store is not IImportedActivityDraftReservations))
+            throw new ReusableActivityDraftImportUnavailableException("The configured importer and store must support current drafts and reserved publication identities.");
         var prior = await store.FindReceiptAsync(idempotencyKey, accessScope, cancellationToken);
         if (prior is not null)
         {
@@ -313,7 +313,7 @@ public sealed class ReusableActivityImportOperationService(
                           idempotencyKey,
                           new InvalidOperationException("The atomic import adapter did not return a durable receipt."));
         await DiscardCollectionAsync(collectionHandle, accessScope);
-        return receipt;
+        return publishImportedActivities == false ? await WithPublicationsAsync(receipt, cancellationToken) : receipt;
     }
 
     /// <inheritdoc />
@@ -397,6 +397,7 @@ public sealed class ReusableActivityImportOperationService(
     /// upload costs its owner a new upload, keeping one may keep a credential at rest.
     /// </summary>
     private static bool LeavesUploadUsable(Exception exception) => exception is
+        ReusableActivityDraftImportUnavailableException or
         OperationCanceledException or
         ReusableActivityImportValidationException or
         ReusableActivityImportIdempotencyConflictException or
@@ -435,8 +436,12 @@ public sealed class ReusableActivityImportOperationService(
         string collectionHandle,
         string planId,
         IReadOnlyCollection<string> selectedSourceVersionIds,
-        ReusableActivityImportAccessScope accessScope,
-        bool? publishImportedActivities = null) =>
+        ReusableActivityImportAccessScope accessScope) =>
+        SelectionFingerprint(collectionHandle, planId, selectedSourceVersionIds, accessScope, null);
+
+    public static string SelectionFingerprint(
+        string collectionHandle, string planId, IReadOnlyCollection<string> selectedSourceVersionIds,
+        ReusableActivityImportAccessScope accessScope, bool? publishImportedActivities) =>
         ReusableActivityImportIdentity.Create(
             publishImportedActivities switch { true => "selection-publish-activities", false => "selection-drafts", null => "selection" },
             collectionHandle,

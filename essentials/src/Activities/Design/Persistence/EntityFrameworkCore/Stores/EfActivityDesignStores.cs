@@ -34,8 +34,7 @@ public sealed partial class EfActivityDesignStores(
     ActivitiesDesignDbContext db,
     IPersistenceAccessContextAccessor? accessContextAccessor = null,
     IDesignAtomicWriter? atomicWriter = null,
-    EfActivityManagementProjectionWriter? projectionWriter = null,
-    Func<CancellationToken, Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>>? draftTransactionFactory = null) :
+    EfActivityManagementProjectionWriter? projectionWriter = null) :
     IActivityDefinitionStore,
     IActivityDefinitionVersionStore,
     IActivityDefinitionAuthoringStore,
@@ -796,13 +795,17 @@ public sealed partial class EfActivityDesignStores(
             throw new ArgumentException("The initial activity draft and layout must have the same active revision.", nameof(request));
     }
 
-    public async Task ExecuteAsync(CreateActivityDraftRequest request, CancellationToken cancellationToken = default)
+    public Task ExecuteAsync(CreateActivityDraftRequest request, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(request, token => db.Database.BeginTransactionAsync(token), cancellationToken);
+
+    public async Task ExecuteAsync(CreateActivityDraftRequest request,
+        Func<CancellationToken, Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>> beginTransaction, CancellationToken cancellationToken)
     {
-        try { await CreateDraftCoreAsync(request, cancellationToken); }
+        try { await CreateDraftCoreAsync(request, beginTransaction, cancellationToken); }
         catch { db.ChangeTracker.Clear(); throw; }
     }
 
-    private async Task CreateDraftCoreAsync(CreateActivityDraftRequest request, CancellationToken cancellationToken = default)
+    private async Task CreateDraftCoreAsync(CreateActivityDraftRequest request, Func<CancellationToken, Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>> beginTransaction, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Draft.Id != request.Layout.DraftId || request.Draft.TenantId != request.Layout.TenantId || request.Draft.Revision != request.Layout.Revision || request.Draft.Status != ActivityDefinitionDraftStatus.Active)
@@ -812,7 +815,7 @@ public sealed partial class EfActivityDesignStores(
         EnsureDesignAuthoring(authoring, request.Draft.DefinitionId, request.Draft.TenantId);
         if (authoring.HeadVersionId != request.ExpectedDefinitionHeadVersionId) throw new DbUpdateConcurrencyException("Activity definition head is stale.");
         if (await ById(Access(db.ActivityDefinitionDrafts), request.Draft.Id).AnyAsync(cancellationToken) || await ByReference(Access(db.ActivityDefinitionDraftLayouts), nameof(ActivityDefinitionDraftLayout.DraftId), request.Draft.Id).AnyAsync(cancellationToken)) throw new InvalidOperationException("Activity draft already exists.");
-        await using var tx = await (draftTransactionFactory?.Invoke(cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        await using var tx = await beginTransaction(cancellationToken);
         // Advance only the shadow concurrency token inside the same transaction. This conditional
         // EF update fences the authoring read without changing the public authoring timestamp.
         await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionAuthoringStates, authoring, "Activity definition head is stale.", cancellationToken);

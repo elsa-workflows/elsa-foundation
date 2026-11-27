@@ -385,7 +385,7 @@ export function Elsa3ReusableImportPage({
         expireCollection();
         return;
       }
-      if (error instanceof StudioHttpError && (error.status === 404 || error.status === 501)) {
+      if (error instanceof StudioHttpError && error.status === 501) {
         setApplyStatus("failed");
         setMessage("This server could not apply the collection as drafts. Check that the server supports draft imports and that the collection is still available.");
         return;

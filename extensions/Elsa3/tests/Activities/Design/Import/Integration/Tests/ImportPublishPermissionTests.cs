@@ -33,6 +33,32 @@ public sealed class ImportPublishPermissionTests
         Assert.Equal(HttpStatusCode.NotFound, (await host.GetImportStatusAsync("without-publish")).StatusCode);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Draft_apply_binds_the_reviewed_publication_choice(bool publish)
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var handle = await host.UploadCollectionAsync("reusable-rejects");
+        var (plan, items) = await host.AnalyzeAsync(handle);
+        var id = Elsa3ImportHost.Required(Assert.Single(items), "sourceVersionId");
+        using var response = await host.Send(HttpMethod.Post, $"migration/elsa3/reusable-activities/collections/{handle}/apply-drafts",
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["planId"] = plan,
+                ["selectedSourceVersionIds"] = new System.Text.Json.Nodes.JsonArray(id),
+                ["idempotencyKey"] = "draft-choice",
+                ["publishImportedActivities"] = publish
+            });
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.Created, body);
+        var receipt = System.Text.Json.Nodes.JsonNode.Parse(body)!;
+        Assert.Equal(publish, (bool?)receipt["publishImportedActivities"]);
+        Assert.NotNull(receipt["sources"]![0]!["activityDraftId"]);
+        var expected = publish ? ReusableActivityPublicationStatus.Published : ReusableActivityPublicationStatus.NotPublished;
+        Assert.Equal(expected, Assert.Single(PublicationEntry.Of(receipt)).Status);
+    }
+
     [Fact]
     public async Task Apply_with_both_permissions_publishes_in_the_callers_tenant()
     {

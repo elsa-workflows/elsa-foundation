@@ -196,3 +196,9 @@ states (spec 188 credential-literal contract, Known gaps).
 - Activity catalog reconciliation that consumes the imported data: [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../../../../../../../essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
 - Repo-wide index: [`EXTENSION_POINTS.md`](../../../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.22.1.
+
+## Draft-first collection Apply
+
+Studio posts the reviewed collection to `collections/{collectionHandle}/apply-drafts`. The published activity choice is bound to its idempotency key. The existing `apply` operation keeps its legacy default. Both routes require import and publication management permission. A composed activity publisher is required for reusable selections so deferred publication can resolve reserved identities.
+
+Custom operation services implement `IReusableActivityDraftImport` to offer draft Apply. The commit command must implement `IReusableActivityDraftImportCommand` and write current workflow drafts, reusable drafts and their reservations atomically. The operation store implements `IImportedActivityDraftReservations` for tenant-scoped lookup of the reserved version ID. Missing draft support returns HTTP 501 before mutation.

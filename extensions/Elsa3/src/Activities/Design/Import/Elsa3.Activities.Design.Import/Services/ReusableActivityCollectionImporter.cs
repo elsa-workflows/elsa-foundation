@@ -43,6 +43,8 @@ public sealed class ReusableActivityCollectionImporter(
     ReusableActivityImportPublishPhase? publishPhase = null,
     bool requirePublishing = false) : IReusableActivityCollectionImporter
 {
+    public bool SupportsDraftImport => command is IReusableActivityDraftImportCommand;
+
     public ValueTask<ReusableActivityImportPlan> AnalyzeAsync(
         ReusableActivityImportCollection collection,
         CancellationToken cancellationToken = default) =>
@@ -129,6 +131,8 @@ public sealed class ReusableActivityCollectionImporter(
         }
 
         var mutation = await materializer.MaterializeAsync(request.Collection, plan, selection, cancellationToken);
+        if (request.PublishImportedActivities.HasValue && command is not IReusableActivityDraftImportCommand)
+            throw new ReusableActivityDraftImportUnavailableException("The configured import command does not support current drafts.");
         mutation = mutation with { PublishImportedActivities = request.PublishImportedActivities };
         await AdmitAsync(mutation, cancellationToken);
         // After the conversion and admission findings, which the engineer must see first; before anything is written.

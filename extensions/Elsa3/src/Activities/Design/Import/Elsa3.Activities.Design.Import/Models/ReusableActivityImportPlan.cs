@@ -308,6 +308,8 @@ public sealed class ReusableActivityImportIdempotencyConflictException(string id
     public string IdempotencyKey { get; } = idempotencyKey;
 }
 
+public sealed class ReusableActivityDraftImportUnavailableException(string message) : NotSupportedException(message);
+
 public sealed class ReusableActivityImportCollisionException(string message, Exception? innerException = null)
     : InvalidOperationException(message, innerException);
 

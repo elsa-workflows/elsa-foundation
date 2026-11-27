@@ -36,10 +36,10 @@ public static class ReusableActivityImportApi
 
 public sealed record ReusableActivityImportSelectionRequest(string PlanId, IReadOnlyCollection<string> SelectedSourceVersionIds);
 
-public sealed record ReusableActivityImportApplyHttpRequest(string PlanId, IReadOnlyCollection<string> SelectedSourceVersionIds, string IdempotencyKey)
-{
-    public bool PublishImportedActivities { get; init; }
-}
+public sealed record ReusableActivityImportApplyHttpRequest(string PlanId, IReadOnlyCollection<string> SelectedSourceVersionIds, string IdempotencyKey);
+
+public sealed record ReusableActivityDraftApplyHttpRequest(
+    string PlanId, IReadOnlyCollection<string> SelectedSourceVersionIds, string IdempotencyKey, bool? PublishImportedActivities = null);
 
 internal static class Elsa3ImportPermissions
 {
@@ -77,6 +77,7 @@ public static class ReusableActivityImportHttp
     {
         var (status, code, title) = exception switch
         {
+            ReusableActivityDraftImportUnavailableException => (501, "elsa3.import.drafts-unavailable", "Draft import unavailable"),
             ReusableActivityImportNotFoundException => (404, "elsa3.import.not-found", "Elsa 3 import resource not found"),
             ReusableActivityImportExpiredException => (410, "elsa3.import.collection-expired", "Elsa 3 import collection expired"),
             ReusableActivityImportIdempotencyConflictException => (409, "elsa3.import.idempotency-conflict", "Idempotency key conflict"),
