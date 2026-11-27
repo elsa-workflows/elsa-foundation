@@ -85,6 +85,10 @@ internal sealed class OutputSwap : IDisposable
                 Move(Path.Combine(StagingFolder, name), Path.Combine(_outputFolder, name));
                 movedIn.Add(name);
             }
+
+            // The old output in .previous is superseded from here on. Mark the folder at once, so that a later run's
+            // sweep removes it even if this process stops or cannot delete it.
+            TryWriteMarker(Path.Combine(StagingFolder, CommittedMarkerName));
         }
         catch (Exception exception)
         {
@@ -105,9 +109,6 @@ internal sealed class OutputSwap : IDisposable
         }
 
         _committed = true;
-        // The old output in .previous is superseded now. Mark the folder first, so that if deleting it fails a later run's
-        // sweep knows it holds no only-copy.
-        TryWriteMarker(Path.Combine(StagingFolder, CommittedMarkerName));
         TryDelete(previous);
         TryDelete(StagingFolder);
     }
@@ -135,17 +136,49 @@ internal sealed class OutputSwap : IDisposable
         var cutoff = DateTime.UtcNow - StaleAfter;
         foreach (var stale in Directory.EnumerateDirectories(outputFolder, StagingPrefix + "*"))
         {
-            if (Directory.GetLastWriteTimeUtc(stale) > cutoff)
+            if (NewestWriteUtc(stale) > cutoff)
                 continue;
             if (File.Exists(Path.Combine(stale, CommittedMarkerName)) || !HoldsPreviousOutput(stale))
                 TryDelete(stale);
         }
     }
 
+    /// <summary>Whether the staging folder still holds moved-aside previous output; when that cannot be read, it is kept.</summary>
     private static bool HoldsPreviousOutput(string stagingFolder)
     {
-        var previous = Path.Combine(stagingFolder, PreviousName);
-        return Directory.Exists(previous) && Directory.EnumerateFileSystemEntries(previous).Any();
+        try
+        {
+            var previous = Path.Combine(stagingFolder, PreviousName);
+            return Directory.Exists(previous) && Directory.EnumerateFileSystemEntries(previous).Any();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// The newest write time of the folder or anything in it: a folder's own time changes only when its direct entries
+    /// do, so a long run writing deep inside migrated/ still counts as live. When it cannot be read, the folder is live.
+    /// </summary>
+    private static DateTime NewestWriteUtc(string folder)
+    {
+        try
+        {
+            var newest = Directory.GetLastWriteTimeUtc(folder);
+            foreach (var entry in Directory.EnumerateFileSystemEntries(folder, "*", SearchOption.AllDirectories))
+            {
+                var written = File.GetLastWriteTimeUtc(entry);
+                if (written > newest)
+                    newest = written;
+            }
+
+            return newest;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return DateTime.MaxValue;
+        }
     }
 
     private static void TryWriteMarker(string path)

@@ -73,6 +73,17 @@ internal sealed record MigrationRequest(
                 return new(MigrationRefusal.Arguments, "The --out path lies inside a file; it must be a folder.");
         }
 
+        // The run replaces these entries of --out; an export that is one of them, or lies inside one, would be deleted.
+        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var export = Path.TrimEndingDirectorySeparator(Path.GetFullPath(ExportPath));
+        var output = Path.GetFullPath(OutputPath);
+        foreach (var replaced in new[] { OutputSwap.MigratedName, OutputSwap.ReportJsonName, OutputSwap.ReportHtmlName })
+        {
+            var entry = Path.TrimEndingDirectorySeparator(Path.Combine(output, replaced));
+            if (string.Equals(export, entry, comparison) || export.StartsWith(entry + Path.DirectorySeparatorChar, comparison))
+                return new(MigrationRefusal.Arguments, $"The export lies in --out's '{replaced}', which the run replaces; choose another --out.");
+        }
+
         return null;
     }
 }

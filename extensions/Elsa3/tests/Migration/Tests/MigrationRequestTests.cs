@@ -64,6 +64,27 @@ public sealed class MigrationRequestTests : IDisposable
         Assert.Equal(MigrationRefusal.Arguments, (Request() with { ExportPath = "exp\0" }).Validate()?.Reason);
     }
 
+    [Theory]
+    [InlineData("migrated")]
+    [InlineData("migrated/workflows")]
+    [InlineData("report.json")]
+    public void An_export_inside_an_entry_the_run_replaces_refuses(string relative)
+    {
+        var output = Path.Combine(_root, "out");
+
+        var refusal = (Request() with { OutputPath = output, ExportPath = Path.Combine(output, relative) }).Validate();
+
+        Assert.Equal(MigrationRefusal.Arguments, refusal?.Reason);
+    }
+
+    [Fact]
+    public void An_export_beside_the_replaced_entries_is_valid()
+    {
+        var output = Path.Combine(_root, "out");
+
+        Assert.Null((Request() with { OutputPath = output, ExportPath = Path.Combine(output, "migrated-export") }).Validate());
+    }
+
     [Fact]
     public void Validation_creates_nothing()
     {

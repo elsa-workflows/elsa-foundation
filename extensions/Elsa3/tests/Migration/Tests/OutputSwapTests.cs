@@ -97,8 +97,8 @@ public sealed class OutputSwapTests : IDisposable
         Directory.CreateDirectory(stranded);
         File.WriteAllText(Path.Combine(stranded, "report.json"), "only copy");
         Old(Path.GetDirectoryName(stranded)!, null);
-        var young = Path.Combine(_out, OutputSwap.StagingPrefix + "live");
-        Directory.CreateDirectory(young);
+        var young = Old(Path.Combine(_out, OutputSwap.StagingPrefix + "live"), "migrated");
+        File.WriteAllText(Path.Combine(young, "migrated", "fresh.json"), "[]"); // a long run still writing deep inside
 
         using (OutputSwap.Begin(_out))
         {
@@ -124,7 +124,16 @@ public sealed class OutputSwapTests : IDisposable
     private static string Old(string folder, string? child)
     {
         Directory.CreateDirectory(child is null ? folder : Path.Combine(folder, child));
-        Directory.SetLastWriteTimeUtc(folder, DateTime.UtcNow.AddDays(-1));
+        var old = DateTime.UtcNow.AddDays(-1);
+        foreach (var entry in Directory.EnumerateFileSystemEntries(folder, "*", SearchOption.AllDirectories))
+        {
+            if (Directory.Exists(entry))
+                Directory.SetLastWriteTimeUtc(entry, old);
+            else
+                File.SetLastWriteTimeUtc(entry, old);
+        }
+
+        Directory.SetLastWriteTimeUtc(folder, old);
         return folder;
     }
 
