@@ -95,6 +95,8 @@ if (args is ["kernel-public-event-starts", var publicEventProvider and ("postgre
     return await KernelAuthoredEventChecks.RunPublicStartsAsync(publicEventProvider, publicEventFence == "in-batch");
 if (args is ["kernel-paged-event-publication", var pagedEventProvider and ("postgres" or "sqlite"), var pagedEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedEventProvider, pagedEventFence == "in-batch");
+if (args is ["kernel-physical-event-pages", var eventPageProvider and ("postgres" or "sqlite"), var eventPageFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(eventPageProvider, eventPageFence == "in-batch", physicalPages: true);
 if (args is ["kernel-authored-events", var authoredEventProvider and ("postgres" or "sqlite"), var authoredEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunAsync(authoredEventProvider, authoredEventFence == "in-batch");
 if (args is ["kernel-http-waits"]) return await KernelHttpWaitChecks.RunAsync();
