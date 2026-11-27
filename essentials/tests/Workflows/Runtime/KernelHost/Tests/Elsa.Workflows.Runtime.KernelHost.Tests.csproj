@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- NativeExecutableMapper's checks: compiled executables, built as publishing compiles them, mapped onto the Native
+       model, and a few run through the Native model's turn; and the kernel coordinator's, on the old runtime's in-memory stores. -->
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj" />
+    <ProjectReference Include="../../../../../src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+    <!-- The in-memory slot authority, switch, projection stores and executable store the coordinator checks run on. -->
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
+    <!-- The old core's HTTP route-table observer, which the kernel feature leaves out of a shell. -->
+    <ProjectReference Include="../../../../../../extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />
+    <!-- The old core's HTTP endpoint middleware, which the kernel feature unmounts from a shell. -->
+    <ProjectReference Include="../../../../../../extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
+  </ItemGroup>
+</Project>

@@ -146,7 +146,7 @@ public sealed class WorkflowInstanceListService(
                     if (!matches)
                         continue;
                 }
-                await authorizedStore.SaveAsync(state, cancellationToken);
+                authorizedStore.Insert(state);
             }
             candidateCursor = candidates.NextCursor;
         } while (candidateCursor is not null);

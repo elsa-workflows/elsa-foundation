@@ -47,9 +47,10 @@ describe("Decisions Studio journeys", () => {
     const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => frames.push(callback));
     try {
       const api = stubApi(), { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} isNew />);
-    await beginDecision();
+      await beginDecision();
       await vi.waitFor(() => expect(host.querySelector(".decision-metadata input")).not.toBeNull());
       await vi.waitFor(() => expect(frames).toHaveLength(1));
+      click(host.querySelector<HTMLButtonElement>('[role="tab"][data-tab-id="settings"]')!);
       const inputs = Array.from(host.querySelectorAll<HTMLInputElement>(".decision-metadata input"));
       const name = inputs.find(input => input.labels?.[0]?.textContent === "Name")!;
       const description = inputs.find(input => input.labels?.[0]?.textContent === "Description")!;
@@ -65,18 +66,21 @@ describe("Decisions Studio journeys", () => {
     } finally { animation.mockRestore(); }
   });
 
-  it("keeps initial keyboard focus when the author has not selected another control", async () => {
+  it("opens a newly created decision on the Rules tab and keeps initial keyboard focus on the heading", async () => {
     const frames: FrameRequestCallback[] = [];
     const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => frames.push(callback));
     try {
       const { host } = mount(<DecisionsPage api={stubApi()} navigate={vi.fn()} isNew />);
-    await beginDecision();
-      await vi.waitFor(() => expect(host.querySelector(".decision-metadata input")).not.toBeNull());
+      await beginDecision();
+      await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
       expect(host.querySelector("h1#decision-title")?.textContent).toBe("New decision");
+      expect(host.querySelector('[role="tab"][data-tab-id="rules"]')?.getAttribute("aria-selected")).toBe("true");
+      expect(host.querySelector(".decision-rules-panel")?.hasAttribute("hidden")).toBe(false);
+      expect(host.querySelector(".decision-settings-panel")?.hasAttribute("hidden")).toBe(true);
       expect(button(host, "Publish").disabled).toBe(true);
       await vi.waitFor(() => expect(frames).toHaveLength(1));
       frames[0](0);
-      expect(document.activeElement).toBe(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name"));
+      expect(document.activeElement).toBe(host.querySelector("h1#decision-title[tabindex]"));
     } finally { animation.mockRestore(); }
   });
 
@@ -153,13 +157,15 @@ describe("Decisions Studio journeys", () => {
     const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => frames.push(callback));
     try {
       const api = stubApi(), { host, update } = mount(<DecisionsPage api={api} navigate={vi.fn()} isNew />);
-    await beginDecision();
+      await beginDecision();
       await vi.waitFor(() => expect(frames).toHaveLength(1));
+      host.querySelector<HTMLButtonElement>('[role="tab"][data-tab-id="settings"]')!.focus();
       update(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
       expect(host.querySelector("h1#decision-title")?.textContent).toBe("Loading decision");
       await vi.waitFor(() => expect(host.querySelector<HTMLInputElement>(".decision-metadata input")?.value).toBe(asset.name));
       await vi.waitFor(() => expect(frames).toHaveLength(2));
       const prior = document.activeElement;
+      expect(prior).not.toBe(host.querySelector("h1#decision-title[tabindex]"));
       frames[0](0);
       expect(document.activeElement).toBe(prior);
       frames[1](0);
@@ -326,6 +332,7 @@ describe("Decisions Studio journeys", () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
     await beginDecision();
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+    click(host.querySelector<HTMLButtonElement>('[role="tab"][data-tab-id="settings"]')!);
     type(host.querySelector<HTMLInputElement>('.decision-metadata input')!, "");
     if (field === "description") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!, "Only unsaved metadata");
     else click(host.querySelector<HTMLInputElement>('.decision-metadata input[type="checkbox"]')!);
@@ -572,34 +579,146 @@ describe("Decisions Studio journeys", () => {
     expect(api.backend.http.postJson).toHaveBeenLastCalledWith("/tenant/decisions/approval/test", expect.objectContaining({ cases: [{ id: "outcome-case", revision: "case-r1" }] }));
     if (status === "NoMatch") expect(host.textContent).toContain("Actual: null");
   });
-  it("keeps published tables read only and clones through revision-checked API", async () => {
-    const api = stubApi(), published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
-    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? published : asset);
-    api.backend.http.postJson.mockResolvedValue(asset as never); const navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} versionId="v1" />);
+  it("keeps published versions editable for authors, keeps them read only for read-only principals, and restores through revision-checked API", async () => {
+    const api = stubApi(), olderXml = editTable(asset.xml!, { kind: "cell", ruleId: parseTable(asset.xml!).rules[0].id, output: false, column: 0, text: "< 500" });
+    const v1 = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: olderXml, sourceHash: "hash-v1", publishedAt: asset.createdAt };
+    const v2 = { id: "v2", assetId: asset.id, number: 2, name: asset.name, xml: asset.xml, sourceHash: asset.sourceHash, publishedAt: asset.createdAt };
+    const currentAsset = { ...asset, publishedVersionId: "v2" };
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [v2, v1] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? v1 : currentAsset);
+    api.backend.http.postJson.mockResolvedValue({ ...currentAsset, xml: olderXml, sourceHash: "hash-v1", revision: "r2" } as never);
+    const navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} versionId="v1" />);
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     expect(host.querySelector("h1#decision-title")?.textContent).toBe(asset.name);
     expect(host.querySelector('[aria-current="page"]')?.textContent).toContain(asset.name);
-    expect(host.querySelector(".decision-editor-title .studio-status-chip")?.textContent).toBe("Version 1 · Read only");
-    expect(host.querySelector('[role="grid"]')?.getAttribute("aria-readonly")).toBe("true");
-    expect(host.querySelector('button[aria-label="Publish"]')).toBeNull();
-    click(button(host, "Clone to draft"));
+    expect(host.querySelector(".decision-editor-title .studio-status-chip")?.textContent).toBe("Version 1");
+    expect(host.querySelector('[role="grid"]')?.getAttribute("aria-readonly")).toBe("false");
+    expect(button(host, "Publish").disabled).toBe(true);
+    click(button(host, "Restore to draft"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
+    expect(api.dialogs.confirm).not.toHaveBeenCalled();
     expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions/approval/clone-to-draft", expect.objectContaining({ expectedRevision: "r1", versionId: "v1" }));
-    expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Version copied to the draft" });
-    expect(host.textContent).not.toContain("Version copied to the draft");
+    expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Version restored to the draft" });
+    expect(host.textContent).not.toContain("Version restored to the draft");
+
+    const readOnlyApi = stubApi(["read", "source"]);
+    readOnlyApi.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [v2, v1] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? v1 : currentAsset);
+    const readOnlyView = mount(<DecisionsPage api={readOnlyApi} navigate={vi.fn()} assetId={asset.id} versionId="v1" />);
+    await vi.waitFor(() => expect(readOnlyView.host.querySelector('[role="grid"]')).not.toBeNull());
+    expect(readOnlyView.host.querySelector(".decision-editor-title .studio-status-chip")?.textContent).toBe("Version 1 · Read only");
+    expect(readOnlyView.host.querySelector('[role="grid"]')?.getAttribute("aria-readonly")).toBe("true");
+    expect(button(readOnlyView.host, "Save").disabled).toBe(true);
+    expect(button(readOnlyView.host, "Publish").disabled).toBe(true);
+    expect(() => button(readOnlyView.host, "Restore to draft")).toThrow();
   });
-  it("keeps validation evidence inline and confirms publication through shared notifications", async () => {
+  it("stays editable after publishing, tracks clean vs unpublished badge state, and refreshes revision for subsequent edits", async () => {
     const api = stubApi(), navigate = vi.fn();
-    api.backend.http.postJson.mockImplementation(async path => path.endsWith("/validate") ? { success: true, diagnostics: [] } : { id: "v1", number: 1 });
+    let currentAsset = { ...asset, publishedVersionId: null as string | null };
+    let publishedVersions: Array<Record<string, unknown>> = [];
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: publishedVersions } : path.endsWith("/cases") ? { items: [] } : currentAsset as never);
+    api.backend.http.postJson.mockImplementation(async path => {
+      if (path.endsWith("/validate")) return { success: true, diagnostics: [] } as never;
+      const version = { id: "v1", assetId: asset.id, number: 1, name: currentAsset.name, xml: currentAsset.xml, sourceHash: currentAsset.sourceHash, publishedAt: asset.createdAt };
+      publishedVersions = [version];
+      currentAsset = { ...currentAsset, revision: "r2", publishedVersionId: "v1" };
+      return version as never;
+    });
+    api.backend.http.putJson.mockImplementation(async (_path, body) => {
+      currentAsset = { ...currentAsset, ...(body as Record<string, unknown>), revision: "r3", sourceHash: "hash-edited" };
+      return currentAsset as never;
+    });
     const { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} />);
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     decisionAction(host, "Validate");
     await vi.waitFor(() => expect(api.notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("The saved draft is valid for the supported DMN profile.") })));
     decisionAction(host, "Publish");
-    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval&version=v1"));
-    expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions/approval/publish", expect.objectContaining({ expectedRevision: asset.revision, operationId: expect.any(String) }));
-    expect(api.notifications.notify).toHaveBeenCalledTimes(2); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Version 1 published" });
+    await vi.waitFor(() => expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Version 1 published" }));
+    expect(navigate).not.toHaveBeenCalled();
+    expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions/approval/publish", expect.objectContaining({ expectedRevision: "r1", operationId: expect.any(String) }));
+    expect(api.notifications.notify).toHaveBeenCalledTimes(2);
     expect(host.textContent).not.toContain("Version 1 published");
+    const badge = host.querySelector(".decision-editor-title .studio-status-chip")!;
+    expect(badge.textContent).toBe("Published · v1");
+    expect(badge.getAttribute("data-tone")).toBe("success");
+    expect(host.querySelector(".decision-save-status")?.textContent).toBe("Up to date");
+    expect(button(host, "Publish").disabled).toBe(true);
+    expect(host.querySelector('[role="grid"]')?.getAttribute("aria-readonly")).toBe("false");
+    expect(host.textContent).toContain("Version 1");
+
+    editGridCell(host, "Rule 1, input amount", "<= 250");
+    expect(host.querySelector(".decision-editor-title .studio-status-chip")?.textContent).toBe("Draft · Unpublished changes");
+    expect(host.querySelector(".decision-editor-title .studio-status-chip")?.getAttribute("data-tone")).toBe("warning");
+    expect(button(host, "Publish").disabled).toBe(false);
+    click(button(host, "Save"));
+    await vi.waitFor(() => expect(api.backend.http.putJson).toHaveBeenCalledWith("/tenant/decisions/approval", expect.objectContaining({ expectedRevision: "r2" })));
+  });
+  it("edits a published version inline without autosave and saves directly to draft when no unpublished draft changes exist", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = stubApi(), navigate = vi.fn();
+      const v1Xml = editTable(asset.xml!, { kind: "cell", ruleId: parseTable(asset.xml!).rules[0].id, output: false, column: 0, text: "<= 100" });
+      const v1 = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: v1Xml, sourceHash: "hash-v1", publishedAt: asset.createdAt };
+      const v2 = { id: "v2", assetId: asset.id, number: 2, name: asset.name, xml: asset.xml, sourceHash: asset.sourceHash, publishedAt: asset.createdAt };
+      const currentAsset = { ...asset, publishedVersionId: "v2" };
+      api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [v2, v1] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? v1 : currentAsset);
+      api.backend.http.putJson.mockImplementation(async (_path, body) => ({ ...currentAsset, ...(body as Record<string, unknown>), revision: "r2", sourceHash: "hash-v1-edited" }) as never);
+      const { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} versionId="v1" />);
+      await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+      expect(button(host, "Restore to draft").disabled).toBe(false);
+      expect(button(host, "Save").disabled).toBe(true);
+      expect(button(host, "Publish").disabled).toBe(true);
+
+      editGridCell(host, "Rule 1, input amount", "<= 150");
+      expect(host.querySelector(".decision-editor-title .studio-status-chip")?.textContent).toBe("Editing from v1");
+      expect(host.querySelector(".decision-version-edit-banner")?.textContent).toContain("Editing from Version 1. Save to update the draft with these changes.");
+      expect(() => button(host, "Restore to draft")).toThrow();
+      expect(button(host, "Save").disabled).toBe(false);
+      expect(button(host, "Publish").disabled).toBe(false);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(api.backend.http.putJson).not.toHaveBeenCalled();
+
+      const probe = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?decision=approval&version=v1", toPath: "/decisions?decision=approval", intent: "probe" } });
+      window.dispatchEvent(probe);
+      expect(probe.defaultPrevented).toBe(true);
+
+      click(button(host, "Discard changes"));
+      expect(gridCell(host, "Rule 1, input amount").textContent).toBe("<= 100");
+      expect(host.querySelector(".decision-version-edit-banner")).toBeNull();
+      expect(host.querySelector(".decision-editor-title .studio-status-chip")?.textContent).toBe("Version 1");
+
+      editGridCell(host, "Rule 1, input amount", "<= 175");
+      flushSync(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true })); });
+      await vi.waitFor(() => expect(api.backend.http.putJson).toHaveBeenCalledWith("/tenant/decisions/approval", expect.objectContaining({ expectedRevision: "r1" })));
+      expect(api.dialogs.confirm).not.toHaveBeenCalled();
+      expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Decision saved" });
+      expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval");
+    } finally { vi.useRealTimers(); }
+  });
+  it("prompts before overwriting diverged draft changes when saving or publishing inline edits from a published version", async () => {
+    const api = stubApi(), navigate = vi.fn();
+    const v1 = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash-v1", publishedAt: asset.createdAt };
+    const divergedAsset = { ...asset, sourceHash: "hash-diverged", publishedVersionId: "v1" };
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [v1] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? v1 : divergedAsset);
+    api.backend.http.putJson.mockImplementation(async (_path, body) => ({ ...divergedAsset, ...(body as Record<string, unknown>), revision: "r2", sourceHash: "hash-v2" }) as never);
+    api.backend.http.postJson.mockResolvedValue({ id: "v2", assetId: asset.id, number: 2, name: asset.name, xml: asset.xml, sourceHash: "hash-v2", publishedAt: asset.createdAt } as never);
+    const { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} versionId="v1" />);
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+    editGridCell(host, "Rule 1, input amount", "<= 50");
+    expect(host.querySelector(".decision-version-edit-banner")?.textContent).toContain("Saving will replace your current draft's unpublished changes.");
+
+    api.dialogs.confirm.mockResolvedValueOnce(false);
+    click(button(host, "Save"));
+    await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Replace current draft?", confirmLabel: "Replace draft" })));
+    expect(api.backend.http.putJson).not.toHaveBeenCalled();
+    expect(gridCell(host, "Rule 1, input amount").textContent).toBe("<= 50");
+
+    await vi.waitFor(() => expect(button(host, "Publish").disabled).toBe(false));
+    api.dialogs.confirm.mockResolvedValueOnce(true);
+    click(button(host, "Publish"));
+    await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Replace current draft and publish?", confirmLabel: "Replace and publish" })));
+    await vi.waitFor(() => expect(api.backend.http.putJson).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions/approval/publish", expect.objectContaining({ expectedRevision: "r2" })));
+    await vi.waitFor(() => expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Version 2 published" }));
+    expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval");
   });
   it("keeps failed saves inline and confirms only the successful retry", async () => {
     const api = stubApi();
@@ -614,32 +733,40 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => { expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Decision saved" }); });
     expect(host.textContent).not.toContain("Save unavailable"); expect(host.textContent).not.toContain("Decision saved");
   });
-  it("does not confirm a cancelled clone", async () => {
-    const api = stubApi(), published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
-    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? published : asset);
+  it("does not confirm a cancelled restore when the current draft has unpublished changes, and hides restore when the draft already matches", async () => {
+    const api = stubApi(), published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash-v1", publishedAt: asset.createdAt };
+    const divergedAsset = { ...asset, sourceHash: "hash-diverged" };
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? published : divergedAsset);
     api.dialogs.confirm.mockResolvedValue(false);
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} versionId="v1" />);
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
-    click(button(host, "Clone to draft")); await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalled());
+    click(button(host, "Restore to draft")); await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalled());
     expect(api.backend.http.postJson).not.toHaveBeenCalled(); expect(api.notifications.notify).not.toHaveBeenCalled();
+
+    const cleanApi = stubApi(), cleanVersion = { ...published, sourceHash: asset.sourceHash };
+    cleanApi.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [cleanVersion] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? cleanVersion : asset);
+    const cleanView = mount(<DecisionsPage api={cleanApi} navigate={vi.fn()} assetId={asset.id} versionId="v1" />);
+    await vi.waitFor(() => expect(cleanView.host.querySelector('[role="grid"]')).not.toBeNull());
+    expect(() => button(cleanView.host, "Restore to draft")).toThrow();
   });
-  it.each(["save", "publish", "clone"])("suppresses a retired %s completion when the notification controller changes scope", async operation => {
+  it.each(["save", "publish", "restore"])("suppresses a retired %s completion when the notification controller changes scope", async operation => {
     const api = stubApi(), controller = createNotificationController(), navigate = vi.fn();
     controller.setScope("backend-a:user-a"); Object.assign(api, { notifications: controller.api });
-    const published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
-    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? published : asset);
+    const published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash-v1", publishedAt: asset.createdAt };
+    const divergedAsset = { ...asset, sourceHash: "hash-diverged" };
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions/v1") ? published : divergedAsset);
     let complete!: (result: unknown) => void;
     const pending = new Promise(resolve => { complete = resolve; });
     const request = operation === "save" ? api.backend.http.putJson : api.backend.http.postJson;
     request.mockImplementation(() => pending);
-    const { host, update } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} versionId={operation === "clone" ? "v1" : undefined} />);
+    const { host, update } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} versionId={operation === "restore" ? "v1" : undefined} />);
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     if (operation === "save") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!, "Updated");
     if (operation === "publish") decisionAction(host, "Publish");
-    else click(button(host, operation === "save" ? "Save" : "Clone to draft"));
+    else click(button(host, operation === "save" ? "Save" : "Restore to draft"));
     await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
     update(<button>Current backend</button>); controller.setScope("backend-b:user-a");
-    complete(operation === "publish" ? published : { ...asset, revision: "r2" });
+    complete(operation === "publish" ? published : { ...divergedAsset, revision: "r2" });
     await pending; await Promise.resolve(); await Promise.resolve();
     expect(controller.getEntries()).toEqual([]); expect(navigate).not.toHaveBeenCalled();
   });
@@ -889,5 +1016,124 @@ describe("Decisions Studio journeys", () => {
     editGridCell(host, "Rule 1, input amount", "<= 1000");
     const close = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "close" } }); window.dispatchEvent(close);
     expect(close.defaultPrevented).toBe(true); await new Promise(resolve => setTimeout(resolve, 0)); expect(navigate).not.toHaveBeenCalled(); expect(api.dialogs.confirm).not.toHaveBeenCalled();
+  });
+
+  it("autosaves existing draft edits after the debounce window without toast spam", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = stubApi();
+      api.backend.http.putJson.mockImplementation(async (_path, body) => ({ ...asset, ...(body as Record<string, unknown>), revision: "r2", sourceHash: "hash2" }) as never);
+      const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
+      await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+      expect(host.querySelector(".decision-editor-title .studio-status-chip")?.textContent).toBe("Draft");
+      expect(host.querySelector(".decision-save-status")?.textContent).toBe("Saved draft");
+      editGridCell(host, "Rule 1, input amount", "<= 1000");
+      expect(host.querySelector(".decision-save-status")?.textContent).toBe("Autosaving…");
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(api.backend.http.putJson).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(150);
+      await vi.waitFor(() => expect(api.backend.http.putJson).toHaveBeenCalledOnce());
+      await vi.waitFor(() => expect(host.querySelector(".decision-save-status")?.textContent).toBe("Autosaved"));
+      expect(api.notifications.notify).not.toHaveBeenCalled();
+      expect(button(host, "Save").disabled).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("cancels a pending autosave when Autosave is turned off in the overflow menu", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = stubApi();
+      api.backend.http.putJson.mockImplementation(async (_path, body) => ({ ...asset, ...(body as Record<string, unknown>), revision: "r2" }) as never);
+      const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
+      await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+      editGridCell(host, "Rule 1, input amount", "<= 1000");
+      expect(host.querySelector(".decision-save-status")?.textContent).toBe("Autosaving…");
+      const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="More decision actions"]')!;
+      click(trigger);
+      const menu = document.getElementById(trigger.getAttribute("aria-controls")!)!;
+      const toggle = menu.querySelector<HTMLButtonElement>('[role="menuitemcheckbox"]')!;
+      expect(toggle.getAttribute("aria-checked")).toBe("true");
+      click(toggle);
+      expect(toggle.getAttribute("aria-checked")).toBe("false");
+      expect(host.querySelector(".decision-save-status")?.textContent).toBe("Unsaved changes");
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(api.backend.http.putJson).not.toHaveBeenCalled();
+      click(toggle);
+      expect(toggle.getAttribute("aria-checked")).toBe("true");
+      await vi.advanceTimersByTimeAsync(1250);
+      await vi.waitFor(() => expect(api.backend.http.putJson).toHaveBeenCalledOnce());
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("preserves edits made while an autosave is in flight and saves them on the next revision", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = stubApi();
+      let resolveFirst!: (value: unknown) => void;
+      api.backend.http.putJson
+        .mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve; }) as never)
+        .mockImplementationOnce(async (_path, body) => ({ ...asset, ...(body as Record<string, unknown>), revision: "r3" }) as never);
+      const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
+      await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+      editGridCell(host, "Rule 1, input amount", "<= 100");
+      await vi.advanceTimersByTimeAsync(1250);
+      await vi.waitFor(() => expect(api.backend.http.putJson).toHaveBeenCalledTimes(1));
+      const firstBody = api.backend.http.putJson.mock.calls[0][1] as Record<string, unknown>;
+      editGridCell(host, "Rule 1, input amount", "<= 200");
+      resolveFirst({ ...asset, ...firstBody, revision: "r2" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(gridCell(host, "Rule 1, input amount").textContent).toBe("<= 200");
+      await vi.advanceTimersByTimeAsync(1250);
+      await vi.waitFor(() => expect(api.backend.http.putJson).toHaveBeenCalledTimes(2));
+      expect(api.backend.http.putJson.mock.calls[1][1]).toEqual(expect.objectContaining({ expectedRevision: "r2" }));
+      await vi.waitFor(() => expect(host.querySelector(".decision-save-status")?.textContent).toBe("Autosaved"));
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("pauses autosave on a 409 conflict without retrying in a loop", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = stubApi();
+      api.backend.http.putJson.mockRejectedValue(Object.assign(new Error("The draft changed."), { status: 409 }));
+      const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
+      await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+      editGridCell(host, "Rule 1, input amount", "<= 500");
+      await vi.advanceTimersByTimeAsync(1250);
+      await vi.waitFor(() => expect(host.querySelector(".decision-conflict")).not.toBeNull());
+      expect(host.querySelector(".decision-save-status")?.textContent).toBe("Save conflict");
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(api.backend.http.putJson).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("flushes pending edits before publishing and supports Ctrl+S manual save", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = stubApi(), navigate = vi.fn();
+      api.backend.http.putJson.mockImplementation(async (_path, body) => ({ ...asset, ...(body as Record<string, unknown>), revision: "r2" }) as never);
+      api.backend.http.postJson.mockResolvedValue({ id: "v2", number: 2 } as never);
+      const { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} />);
+      await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+      editGridCell(host, "Rule 1, input amount", "<= 300");
+      click(button(host, "Publish"));
+      await vi.waitFor(() => expect(api.backend.http.putJson).toHaveBeenCalledOnce());
+      await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalledWith(
+        "/tenant/decisions/approval/publish",
+        expect.objectContaining({ expectedRevision: "r2" })
+      ));
+      await vi.waitFor(() => expect(host.querySelector(".decision-editor-title .studio-status-chip")?.textContent).toBe("Published · v2"));
+      expect(navigate).not.toHaveBeenCalled();
+
+      const secondApi = stubApi();
+      secondApi.backend.http.putJson.mockImplementation(async (_path, body) => ({ ...asset, ...(body as Record<string, unknown>), revision: "r2" }) as never);
+      const second = mount(<DecisionsPage api={secondApi} navigate={vi.fn()} assetId={asset.id} />);
+      await vi.waitFor(() => expect(second.host.querySelector('[role="grid"]')).not.toBeNull());
+      editGridCell(second.host, "Rule 1, input amount", "<= 400");
+      flushSync(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true })); });
+      await vi.waitFor(() => expect(secondApi.backend.http.putJson).toHaveBeenCalledOnce());
+      await vi.waitFor(() => expect(secondApi.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Decision saved" }));
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(secondApi.backend.http.putJson).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
   });
 });

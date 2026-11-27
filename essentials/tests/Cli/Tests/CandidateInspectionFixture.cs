@@ -141,7 +141,7 @@ internal sealed class CandidateInspectionFixture : IDisposable
             Path.GetFileName(workbenchHostPath));
         var actualWorkbenchDirectory = DotnetElsa.Workbench();
         CopyActualWorkbenchClosure(actualWorkbenchDirectory, _workbenchHostDirectory);
-        foreach (var fileName in new[] { "Elsa.Workbench.dll", "Elsa.Workbench.deps.json", "Elsa.Workbench.runtimeconfig.json" })
+        foreach (var fileName in new[] { "Elsa.Workbench.Host.dll", "Elsa.Workbench.Host.deps.json", "Elsa.Workbench.Host.runtimeconfig.json" })
             Assert.Equal(File.ReadAllBytes(Path.Join(actualWorkbenchDirectory, fileName)),
                 File.ReadAllBytes(Path.Join(_workbenchHostDirectory, fileName)));
 

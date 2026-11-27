@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http.Json;
 using System.ComponentModel;
 using System.Reflection;
 using System.Text.Json;
@@ -194,6 +195,11 @@ internal sealed class ChildHostProcess : IAsyncDisposable
 
     /// <summary>The status a request to <paramref name="path"/> is answered with, and its body.</summary>
     public Task<(HttpStatusCode Status, string Body)> GetAsync(string path) => SendAsync(new HttpRequestMessage(HttpMethod.Get, path));
+
+    /// <summary>The status a <c>POST</c> of <paramref name="body"/> as JSON to <paramref name="path"/> is answered with, and its body.</summary>
+    /// <remarks>The client keeps the cookies the host sets, so a sign-in posted here authenticates the requests after it.</remarks>
+    public Task<(HttpStatusCode Status, string Body)> PostJsonAsync(string path, object body) =>
+        SendAsync(new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) });
 
     /// <summary>The status and body of a root management GET, with its host credential header.</summary>
     public Task<(HttpStatusCode Status, string Body)> GetManagementAsync(string path, string? key)

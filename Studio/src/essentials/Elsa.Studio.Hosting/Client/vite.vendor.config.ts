@@ -1,3 +1,4 @@
+import { releaseInventory } from "../../../../vite.release-inventory";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -15,7 +16,7 @@ const reactShim = resolve(__dirname, "src/vendor/react.ts");
 export default defineConfig({
   // Needed to transform the JSX in the studio-ui primitives; the react/react-query
   // vendor shims are plain .ts and unaffected.
-  plugins: [react()],
+  plugins: [releaseInventory("vendor"),react()],
   define: {
     "process.env.NODE_ENV": JSON.stringify("production")
   },

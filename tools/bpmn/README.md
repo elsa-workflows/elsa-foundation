@@ -10,7 +10,7 @@ Build `DeliveryRecoveryRead/DeliveryRecoveryRead.csproj` through the normal buil
 
 ```sh
 python3 tools/bpmn/qualify-hosting.py capture-baseline \
-  --assembly /absolute/owned/build/Elsa.Workbench.dll \
+  --assembly /absolute/owned/build/Elsa.Workbench.Host.dll \
   --content-root /absolute/owned/content \
   --owner-manifest /absolute/owned/controller-manifest.json \
   --base-url http://127.0.0.1:53186 \
@@ -28,7 +28,7 @@ Output must be a new directory. A failed preparation retains its case journal/fa
 
 The partial-fork capture's `allWriterCaptureFamiliesComplete=false` is deliberately local to that producer. The frozen [complete baseline manifest](../../specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json) accounts for all original captures. `resume-upgrade --family` selects `partial-forks`, `native-parents`, `called-ack`, `broadcast`, `controls` or `multi-instance`; `verify-upgrade --manifest` checks the matching retained receipt without starting a host. The [final affected-source qualification](../../specs/1017-direct-bpmn-hosting/evidence/final-compatibility/README.md) retains all six families and the separate actual Studio repeat. There is no generic `qualify` phase.
 
-For Studio, build the browser workspace before Studio.Web and use `run_owned_studio_upgrade.py` over the `original` or `layout` captured pair. The browser performs actual export/edit/save/publish/run/inspect steps; controller `restart`/`finish` commands retain coupled provider-backed snapshots and stop only its own children. `verify_studio_upgrade.py` checks the source-bound receipt. Existing embedded Studio compatibility does not establish first-class direct-model Studio support.
+For Studio, build the browser workspace before Elsa.Studio.Workbench.Host and use `run_owned_studio_upgrade.py` over the `original` or `layout` captured pair. The browser performs actual export/edit/save/publish/run/inspect steps; controller `restart`/`finish` commands retain coupled provider-backed snapshots and stop only its own children. `verify_studio_upgrade.py` checks the source-bound receipt. Existing embedded Studio compatibility does not establish first-class direct-model Studio support.
 # Predecessor queue-reader witness
 
 `DeliveryRecoveryRead --check-predecessor-queue-reader <built-old-Workbench.dll> <new-fixture.sqlite>` writes the

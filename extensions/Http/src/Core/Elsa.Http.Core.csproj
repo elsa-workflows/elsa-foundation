@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- The shared framework, not the standalone Microsoft.AspNetCore.* packages: both declare the same type
+         names, so a project taking one while a collaborator takes the other ends up with two distinct types
+         of the same name and fails at load time on any member that crosses the boundary. This project's
+         contracts do cross it - IRouteMatcher passes RouteValueDictionary, and the endpoint contexts expose
+         HttpContext - and Elsa.Http, which implements them, uses the framework reference. Both are supplied
+         by Microsoft.AspNetCore.App, so nothing else is needed here. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../../essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
+</Project>

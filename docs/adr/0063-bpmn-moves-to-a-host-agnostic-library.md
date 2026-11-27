@@ -150,13 +150,13 @@ The [parity report and cut ledger](../reports/evidence/bpmn-adoption-0.5.0/cut-l
 distinguish the selected neutral profile from actual Foundation binding support.
 
 The delivered adapter uses `BpmnProcessRuntime`, `BpmnStateCodec` and `BpmnWorkLedger` in
-[`Elsa.Activities.Bpmn`](../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/README.md).
+[`Elsa.Activities.Bpmn`](../../extensions/Bpmn/src/Elsa.Activities.Bpmn/README.md).
 They replace the scheduler/persister implementation names anticipated above: the runtime applies
 library commands through normal Foundation scheduling, cancellation, notifications and checkpoint
 authority; the codec and ledger retain supported stored state and exact invocation identities.
 The library owns semantic evaluation and pruning. Foundation's duplicate engine, behavior registry,
 semantic state DTOs and pruning policy are deleted, with collision and retired-surface guards.
-The registered [interchange binder](../../Essentials/src/Activities/Bpmn/Interchange/README.md)
+The registered [interchange binder](../../extensions/Bpmn/src/Interchange/README.md)
 provides supported Delay, Event, PublishEvent, waited DispatchWorkflow and embedded-process bindings.
 
 The frozen `BpmnProcess`/`BpmnDecision` authoring fingerprint remains

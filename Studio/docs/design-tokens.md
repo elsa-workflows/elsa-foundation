@@ -26,7 +26,7 @@ ships layer 2 plus a light-theme layer-1 snapshot so it resolves standalone
 
 ### What a host must supply (layer 1)
 
-A host that mounts Studio widgets outside `Elsa.Studio.Web` supplies the layer-1 primitives.
+A host that mounts Studio widgets outside `Elsa.Studio.Workbench.Host` supplies the layer-1 primitives.
 The canonical minimal set is the two example hosts' `theme.css` — treat that file as the
 layer-1 reference:
 
@@ -331,7 +331,7 @@ The `--studio-material-*` token *names* are unchanged and now resolve to neutral
 ## Enforcement
 
 `pnpm lint:css` runs `elsa/no-raw-color-literal` over module Client CSS
-(`src/*/Client/src/**/*.css`, excluding the host shell `src/apps/Elsa.Studio.Web/**`, which owns the
+(`src/*/Client/src/**/*.css`, excluding the host shell `src/apps/Elsa.Studio.Workbench.Host/**`, which owns the
 theme palette). It is wired into `pnpm lint` so it runs in the same flow as ESLint. Host theme
 definition files (`app/ui/tokens.css`, `app/styles.css`, `app/themes/**`) are where literals
 legitimately live and are excluded.

@@ -44,6 +44,13 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Register: during `register(api)`. A top-level entry without a known placement is route-only. Navigation is discoverability, not an authorization boundary; routes keep their own gates.
 - Known implementations: every first-party Studio module; homes are listed in [Navigation](../../../docs/module-ui.md#navigation).
 
+### Home widgets and sections (SDK — Elsa.Studio.Hosting)
+
+- Kind: Contributor; the shell's Home at `/` (also `/dashboard` and `/overview`) is in every Studio flavor and is not replaceable.
+- Widgets: `studio.dashboard.widgets` (`api.homeWidgets`, alias `api.dashboardWidgets`). Register with `registerHomeWidget(api, { id, moduleId, title, defaultSize?, supportedSizes?, load?, settings?, isEmpty?, isComplete?, requiresFeature?, requiresBackend?, permissions?, component })`. The shell owns the frame, loading, refresh, timeout, the saved layout (`/_elsa/studio/home-layout`, with a device fallback) and the empty state.
+- Sections: `studio.home.sections` (`api.homeSections.add({ id, moduleId, order?, requiresFeature?, requiresBackend?, component })`). Fixed content above the grid, outside the saved layout.
+- Known implementations: `Elsa.Studio.Workflows.Dashboard` (the workflow task group section, the core Get started, Quick actions, Recent workflows, Recent runs, Needs attention and Tasks widgets, and the portfolio and run-health widgets), `Elsa.Studio.Attention` (`attention.queue`). All cross-domain. `Elsa.Studio.Dashboard` contributes no Home content; its saved dashboards and questions are their own routes.
+
 ### Expression scope preservation (SDK — Elsa.Studio.Hosting)
 
 - Kind: Contributor; optional `StudioExpressionEditorContribution.variableAdditionPreservation` on `api.expressionEditors`.

@@ -64,7 +64,7 @@ Elsa 4 has no variable that skips persistence. Do not keep the secret in a varia
 
 - Store the secret with the Secrets module and bind the activity input that needs it to a `Secret` reference. The
   `SecretsWorkflows` feature resolves the reference each time the activity is activated. The instance keeps only a
-  withheld marker, never the value. See [Elsa.Secrets.Workflows](../../essentials/src/Secrets/Workflows/README.md) and
+  withheld marker, never the value. See [Elsa.Secrets.Workflows](../../extensions/Secrets/src/Workflows/README.md) and
   [spec 188](../../specs/188-workflow-secret-safety/).
 - Only an input that accepts a secret reference can take one. Publication refuses a secret on an input that could
   echo, copy or compute with it (VF-ACT-012), such as a script, a log line or Set Variable, and a credential input

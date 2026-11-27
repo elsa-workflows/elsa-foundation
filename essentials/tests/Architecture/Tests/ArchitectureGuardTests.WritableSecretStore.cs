@@ -9,7 +9,7 @@ public sealed partial class ArchitectureGuardTests
     public void Owned_secret_and_oauth_grant_creates_do_not_hard_code_encrypted()
     {
         var connectionManager = File.ReadAllText(Path.Combine(
-            RepoRoot, "essentials", "src", "Connections", "Elsa.Connections", "Services", "DefaultConnectionManager.cs"));
+            RepoRoot, "extensions", "Connections", "src", "Elsa.Connections", "Services", "DefaultConnectionManager.cs"));
         var tokenService = File.ReadAllText(Path.Combine(
             RepoRoot, "extensions", "Integrations", "src", "Connectors", "OAuth2", "OAuth2TokenService.cs"));
         var scheme = File.ReadAllText(Path.Combine(

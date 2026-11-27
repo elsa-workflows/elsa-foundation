@@ -7,7 +7,7 @@ import { runOwnedCommand } from "./ui-owned-command.mjs";
 import { absoluteToolPath, assertToolchain, captureToolchain, isExecutableIdentity } from "./ui-toolchain.mjs";
 
 const repo = resolve(import.meta.dirname, "../../..");
-const studioBin = "Studio/src/apps/Elsa.Studio.Web/bin/Debug/net10.0";
+const studioBin = "Studio/src/apps/Elsa.Studio.Workbench.Host/bin/Debug/net10.0";
 const probeProject = "tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj";
 const moduleRoot = "extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/wwwroot";
 // The retained 153 completed traces span 58m25s, after 6m24s of setup.
@@ -69,7 +69,7 @@ function snapshot(root, label, include = () => true) {
 }
 function outputs(phase) {
   const bin = resolve(repo, phase === "studio" ? studioBin : "tools/identity/ExternalAuthentication.Probe/bin/Debug/net10.0");
-  const assembly = phase === "studio" ? "Elsa.Studio.Web" : "ExternalAuthentication.Probe";
+  const assembly = phase === "studio" ? "Elsa.Studio.Workbench.Host" : "ExternalAuthentication.Probe";
   for (const suffix of [".dll", ".deps.json", ".runtimeconfig.json"]) if (!existsSync(join(bin, assembly + suffix)))
     throw new Error("Required UI build output is missing.");
   const files = snapshot(bin, `${phase}/bin`, name => /(?:\.dll|\.so(?:\.\d+)*|\.dylib|\.deps\.json|\.runtimeconfig\.json|\.staticwebassets\.runtime\.json)$/u.test(name));
