@@ -8242,13 +8242,13 @@
         },
         {
           "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "pinned-transitive",
           "id": "Cronos",
           "version": "0.13.0"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
         },
         {
           "type": "pinned-transitive",
@@ -10880,6 +10880,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.KernelHosting",
           "path": "essentials/src/Workflows/Runtime/KernelHosting/Elsa.Workflows.Runtime.KernelHosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+          "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
