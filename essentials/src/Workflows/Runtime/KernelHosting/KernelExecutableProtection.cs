@@ -9,6 +9,7 @@ using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
 using Kernel.Foundation.Hosting;
 using Kernel.WorkflowActor;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -126,14 +127,27 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
                 logger.LogWarning(error, "Held executable protection refused the selected identity for tenant {Tenant}.", actors.Tenant);
                 return false;
             }
-            catch (Exception error) when (!token.IsCancellationRequested &&
-                error is OperationCanceledException or WorkflowExecutableRootWriteLeaseLostException or
-                    WorkflowExecutableRootWriteLeaseUnavailableException or TimeoutException or DbException { IsTransient: true })
+            catch (Exception error) when (error is WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
+                IsTransientHeldStorageFailure(error))
             {
+                token.ThrowIfCancellationRequested();
                 logger.LogDebug(error, "Held executable protection will retry for tenant {Tenant}.", actors.Tenant);
                 await Task.Delay(HeldRetryDelay, clock, token);
             }
         }
+    }
+
+    private static bool IsTransientHeldStorageFailure(Exception error)
+    {
+        // A Runtime store or a provider execution strategy can wrap the original failure. SQLite reports busy and locked by code.
+        for (Exception? cause = error; cause is not null; cause = cause.InnerException)
+        {
+            if (cause is InvalidDataException) return false;
+            if (cause is OperationCanceledException or TimeoutException or DbException { IsTransient: true } or
+                SqliteException { SqliteErrorCode: 5 or 6 })
+                return true;
+        }
+        return false;
     }
 
     internal ValueTask<bool> ProtectEventStartAsync(PendingRootStart start, EventStartTarget target, CancellationToken token)
@@ -193,7 +207,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
             source.DefinitionVersionId != publication.DefinitionVersionId || source.ArtifactVersion != publication.ArtifactVersion ||
             source.SlotId != publication.SlotId || (source.TenantId ?? PersistenceScope.DefaultValue) != actors.Tenant ||
             source.PublicationScope is { } protectedScope && protectedScope != scope || !source.IsLive(clock.GetUtcNow()) ||
-            KernelPublishedRunDispatcher.SourceDigest(source) != publication.SourceDigest) return false;
+            KernelSourceStamp.Digest(source) != publication.SourceDigest) return false;
         var slot = await services.GetRequiredService<IWorkflowActivationAuthority>()
             .FindAsync(selected.Definition, publication.SlotName, bounded.Token);
         if (slot is null || slot.SlotId != publication.SlotId || slot.ActiveActivationId != publication.ActivationId ||
@@ -213,7 +227,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
             source.ExpiresAt != test.ExpiresAt || source.SourceKind != test.SourceKind || source.SourceId != test.SourceId ||
             source.SourceVersion != test.SourceVersion || source.DefinitionVersionId != test.DefinitionVersionId ||
             source.ArtifactVersion != test.ArtifactVersion || !source.IsLive(clock.GetUtcNow()) ||
-            KernelPublishedRunDispatcher.SourceDigest(source) != test.SourceDigest)
+            KernelSourceStamp.Digest(source) != test.SourceDigest)
             return null;
         var expected = new WorkflowTestScope(test.ScopeId, test.ExpiresAt, test.Tenant, new(test.Partition));
         var current = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, token);

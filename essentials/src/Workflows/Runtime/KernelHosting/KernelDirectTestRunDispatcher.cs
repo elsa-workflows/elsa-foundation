@@ -113,7 +113,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             ? request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-id") : null;
         var selection = new WorkflowTestStart(test.ScopeId, test.ExpiresAt, test.TenantId, test.Partition.Value,
             source.SourceReferenceId, source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionVersionId,
-            source.ArtifactVersion, KernelPublishedRunDispatcher.SourceDigest(source), subject);
+            source.ArtifactVersion, KernelSourceStamp.Digest(source), subject);
         var native = NativeExecutionModel.Start(workflow.Id, mode.ToString(), input, request.TriggerNodeId, stimulus, workflow.Definition)
             with { ExecutableSelection = workflow.ExecutableSelection };
         var spec = WorkflowActor.Start(native, null, selection);
@@ -238,7 +238,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             };
         if (result.Run is not { Run: { TestStart: { } selected } run } found || !MatchesScope(selected, exact) ||
             run.Model != NativeExecutionModel.ModelKey || run.Workflow != source.ArtifactId || run.Definition != source.DefinitionId ||
-            selected.SourceDigest != KernelPublishedRunDispatcher.SourceDigest(source))
+            selected.SourceDigest != KernelSourceStamp.Digest(source))
             return null;
 
         return IsStopped(found.View) ? WorkflowDirectTestRunObservation.Ended : WorkflowDirectTestRunObservation.Started;

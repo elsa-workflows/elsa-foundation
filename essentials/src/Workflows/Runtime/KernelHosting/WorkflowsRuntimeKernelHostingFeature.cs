@@ -90,7 +90,10 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(new KernelServing(cronError: schedules ? CronosCalendar.Error : null,
             capabilities: new KernelHostCapabilities(Schedules: schedules, Timers: storage.TakesTimers,
                 Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends, HttpWaits: storage.TakesHttpWaits),
-            publicationScope: persistenceScope));
+            publicationScope: persistenceScope)
+        {
+            ProtectsHttpStarts = storage.TakesPreparedStarts
+        });
         services.AddSingleton<IScheduleActors>(schedules
             ? new RuntimeManagedScheduleActors()
             : new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
