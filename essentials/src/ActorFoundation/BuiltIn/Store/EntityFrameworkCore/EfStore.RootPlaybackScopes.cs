@@ -89,12 +89,29 @@ public sealed partial class EfStore
                 AND legacy.tgenabled IN ('O', 'A'))
         """;
 
-    private const string ScopedPlaybackRowsSql = """
+    private const string ExactPlaybackObservation = """
+        p."Partition" = member."Partition" AND p."Actor" = member."Actor"
+            AND p."Activity" = member."Activity" AND p."Sequence" = member."Sequence"
+        """;
+
+    // A scoped rank reads only the indexed window and its neighbors. Keep each PostgreSQL observation
+    // lookup correlated to one unique sequence, so the planner cannot pull the entire actor's prefix.
+    private static readonly string PostgresScopedObservation = $"""
+        CROSS JOIN LATERAL (
+            SELECT p."Activity", p."Revision", p."CommitOrdinal", p."Observation", p."RecordedAt"
+            FROM "{PlaybackName}" p WHERE {ExactPlaybackObservation}
+            LIMIT 1
+        ) p
+        """;
+
+    private static readonly string SqliteScopedObservation = $"""
+        JOIN "{PlaybackName}" p ON {ExactPlaybackObservation}
+        """;
+
+    private string ScopedPlaybackRowsSql() => $$"""
         /* playback scoped rank */
         SELECT p."Activity", member."Ordinal", member."Sequence", p."Revision", p."CommitOrdinal", p."Observation", p."RecordedAt"
-        FROM "FoundationJournalPlaybackScopes" member JOIN "FoundationJournalPlayback" p
-          ON p."Partition" = member."Partition" AND p."Actor" = member."Actor"
-          AND p."Activity" = member."Activity" AND p."Sequence" = member."Sequence"
+        FROM "{{PlaybackScopesName}}" member {{(postgres ? PostgresScopedObservation : SqliteScopedObservation)}}
         WHERE member."Partition" = {0} AND member."Actor" = {1} AND member."Scope" = {2}
         """;
 
@@ -115,14 +132,14 @@ public sealed partial class EfStore
                 """, root.Partition, root.Actor, scope, root.RetainedAfter, upper);
     }
 
-    private static FormattableString PlaybackRankRange(PlaybackRoot root, string? scope, long from, long through, long upper, int limit) =>
+    private FormattableString PlaybackRankRange(PlaybackRoot root, string? scope, long from, long through, long upper, int limit) =>
         scope is null
             ? FormattableStringFactory.Create(PlaybackRowsSql + """
 
                 AND "Ordinal" BETWEEN {2} AND {3} AND "Sequence" > {4} AND "Sequence" <= {5}
                 ORDER BY "Ordinal" LIMIT {6}
                 """, root.Partition, root.Actor, from, through, root.RetainedAfter, upper, limit)
-            : FormattableStringFactory.Create(ScopedPlaybackRowsSql + """
+            : FormattableStringFactory.Create(ScopedPlaybackRowsSql() + """
 
                 AND member."Ordinal" BETWEEN {3} AND {4} AND member."Sequence" > {5} AND member."Sequence" <= {6}
                 ORDER BY member."Ordinal" LIMIT {7}
