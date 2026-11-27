@@ -15,7 +15,8 @@ public sealed partial class EfStore
                 message.Id == Input.Id && message.InboxScope == RootPublicEventTicket.Scope && message.Kind == Kinds.Publish &&
                 message.Target == root.Actor && message.Partition == root.Partition && message.Seq == Sequence &&
                 message.Attempts == Attempts && !message.Done, token);
-            if (row is null || RootPublicEventTicket.Decode(row).ToMessage() != Input) return false;
+            if (row is null || !Input.HasIssuedTicket ||
+                RootPublicEventTicket.Decode(row).ToMessage().WithoutTicketAuthority() != Input.WithoutTicketAuthority()) return false;
             return await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Done" = true, "Trial" = 0, "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
                 WHERE "Id" = {row.Id} AND "InboxScope" = {RootPublicEventTicket.Scope} AND "Kind" = {Kinds.Publish}

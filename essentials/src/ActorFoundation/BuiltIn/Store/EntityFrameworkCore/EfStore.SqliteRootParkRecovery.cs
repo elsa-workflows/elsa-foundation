@@ -23,6 +23,7 @@ public sealed partial class EfStore
                 m."Kind", NULL, NULL, m."Due", NULL, m."KeepUntil", m."JobGeneration", m."Sender"
             FROM "Messages" m WHERE m."Target" = {"{0}"} AND m."Partition" = {"{1}"} AND m."EventMatch" IS NULL
                 AND m."Done" AND m."FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
+                AND m."InboxScope" <> {RootPublicEventTicket.Scope}
             """ : "";
         // Quote the arrivals before opening their envelopes. Clearing a consumed input needs only its metadata.
         var sql = $"""
