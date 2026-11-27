@@ -97,13 +97,13 @@ internal static class RetentionPolicyChecks
         var active = await policies.ReadRetentionPolicyAsync(tenant, token);
         if (active.Windows != immediate)
         {
-            var enabled = await policies.TryApplyRetentionPolicyAsync(tenant, active.Revision, immediate, long.MaxValue, token);
+            var enabled = await policies.TryApplyRetentionPolicyAsync(tenant, active.Revision, immediate, long.MaxValue, cancellationToken: token);
             Require(enabled.Outcome == Contract.ActorRetentionPolicyChangeOutcome.Applied, "the fixture activates immediate retention");
             active = enabled.Current;
         }
         Require(await admit() is { Outcome: Contract.AdmissionOutcome.Accepted } && await inbox.CountAsync(input => !input.Done, token) == 1,
             "the trusted retention delete is pending while the preceding owner is stopped");
-        var extension = await policies.TryApplyRetentionPolicyAsync(tenant, active.Revision, extended, 0, token);
+        var extension = await policies.TryApplyRetentionPolicyAsync(tenant, active.Revision, extended, 0, cancellationToken: token);
         Require(extension is { Outcome: Contract.ActorRetentionPolicyChangeOutcome.Applied, Quote.NewlyEligible: 0 },
             "a later durable retention policy extends eligibility before the pending command can settle");
         Require(await admit() is { Outcome: Contract.AdmissionOutcome.Refused } && await inbox.CountAsync(token) == 1,
@@ -118,7 +118,7 @@ internal static class RetentionPolicyChecks
                 !await db.Journal.AnyAsync(entry => entry.Instance == image.Actor.Id && entry.Revision < 0, token),
                 "a restarted owner with a stale immediate window consumes the command without retiring the actor or moving the journal");
 
-            Require(await policies.TryApplyRetentionPolicyAsync(tenant, extension.Current.Revision, immediate, long.MaxValue, token) is
+            Require(await policies.TryApplyRetentionPolicyAsync(tenant, extension.Current.Revision, immediate, long.MaxValue, cancellationToken: token) is
                 { Outcome: Contract.ActorRetentionPolicyChangeOutcome.Applied },
                 "a newer durable policy makes the same terminal selection eligible again");
             Require(await admit() is { Outcome: Contract.AdmissionOutcome.Accepted },

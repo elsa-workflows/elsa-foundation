@@ -24,7 +24,7 @@ internal static partial class SqliteHostLifetimeChecks
             var policies = (Contract.IActorRetentionPolicies)foundation;
             var scope = EmbeddedTenant.Bind(RetirementKind);
             var immediate = new Contract.ActorRetentionWindows(Finished: TimeSpan.Zero);
-            Require(await policies.TryApplyRetentionPolicyAsync(scope, 0, immediate, 0, token) is
+            Require(await policies.TryApplyRetentionPolicyAsync(scope, 0, immediate, 0, cancellationToken: token) is
                 { Outcome: Contract.ActorRetentionPolicyChangeOutcome.Applied, Current.Revision: 1 },
                 "the shipped SQLite fixture activates immediate Finished retention before any actor ends");
             var replies = SqliteEmbeddedHosting.CreateRequests(file, "retirement-owner", RetirementKind);
