@@ -49,6 +49,8 @@ internal static partial class WorkbenchPostgresPreview
                 Require(deniedPlayback.StatusCode == HttpStatusCode.Unauthorized, "the standard Playback route requires read authorization");
             }
             await host.StopAsync();
+            if (playback)
+                await VerifyPlaybackProviderAsync(connection, sqlite, runs[0].Run, token);
 
             async Task<(string Run, string CatchUp)> CheckHistoryAsync(string name)
             {

@@ -1,14 +1,27 @@
 using System.Data;
+using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Kernel.Foundation.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
     private const string PlaybackName = "FoundationJournalPlayback";
+    private const string PlaybackInvalidName = "FoundationJournalPlaybackInvalid";
     private const string PlaybackTrigger = "kernel_project_root_playback";
+    private const string PostgresPlaybackSource = """
+        pg_catalog.concat_ws('/', pg_catalog.to_regclass('"KernelStoreVersions"')::oid,
+            pg_catalog.to_regclass('"FoundationRootBirths"')::oid, pg_catalog.to_regclass('"Instances"')::oid,
+            pg_catalog.to_regclass('"FoundationSequencedJournal"')::oid, pg_catalog.to_regclass('"FoundationJournalPlayback"')::oid,
+            pg_catalog.to_regclass('"FoundationJournalPlaybackInvalid"')::oid)
+        """;
+    private static readonly string TimestampRange = FormattableString.Invariant(
+        $"BETWEEN {DateTimeOffset.MinValue.ToUnixTimeMilliseconds()} AND {DateTimeOffset.MaxValue.ToUnixTimeMilliseconds()}");
+    private const string PlaybackFields = "'NativeStructure', 'Kind', 'At', 'Frame', 'Node', 'Parent'";
 
     private static string PlaybackColumns(string integer, string text) => $"""
         "Partition" integer NOT NULL, "Actor" {text} NOT NULL, "Position" {integer} NOT NULL,
@@ -20,6 +33,14 @@ public sealed partial class EfStore
         PRIMARY KEY ("Partition", "Actor", "Activity"),
         UNIQUE ("Partition", "Actor", "Ordinal"),
         UNIQUE ("Partition", "Actor", "Sequence"),
+        FOREIGN KEY ("Partition", "Position") REFERENCES "{SequencedJournalName}" ("Partition", "Position") ON DELETE CASCADE
+        """;
+
+    private static string PlaybackInvalidColumns(string integer, string text) => $"""
+        "Partition" integer NOT NULL, "Actor" {text} NOT NULL, "Position" {integer} NOT NULL,
+        "Sequence" {integer} NOT NULL CHECK ("Sequence" > 0),
+        PRIMARY KEY ("Partition", "Actor", "Sequence"),
+        UNIQUE ("Partition", "Position"),
         FOREIGN KEY ("Partition", "Position") REFERENCES "{SequencedJournalName}" ("Partition", "Position") ON DELETE CASCADE
         """;
 
@@ -36,10 +57,18 @@ public sealed partial class EfStore
         FROM (
             SELECT observation.*, ROW_NUMBER() OVER (PARTITION BY "Activity" ORDER BY "Slot") AS "First"
             FROM ({entriesSql}) observation
+            WHERE observation."Disposition" = 1
         ) fresh
         WHERE fresh."First" = 1 AND NOT EXISTS (
             SELECT 1 FROM "{PlaybackName}" existing WHERE existing."Partition" = NEW."Partition"
                 AND existing."Actor" = NEW."Actor" AND existing."Activity" = fresh."Activity")
+        """;
+
+    private static string PlaybackInvalidInsert(string observations) => $"""
+        INSERT INTO "{PlaybackInvalidName}" ("Partition", "Actor", "Position", "Sequence")
+        SELECT NEW."Partition", NEW."Actor", NEW."Position", NEW."FirstSequence" + MIN(invalid."Slot")
+        FROM ({observations}) invalid WHERE invalid."Disposition" = 2
+        HAVING COUNT(*) > 0
         """;
 
     private const string PlaybackRawRow = """
@@ -47,25 +76,69 @@ public sealed partial class EfStore
             AND j."Instance" = NEW."Actor" AND j."Revision" = NEW."Revision"
         """;
 
+    private static string PlaybackObservations(string cells, Func<string, string> type, Func<string, string> value,
+        string number, string text, string timestamp, string objectFields, string projection)
+    {
+        var markerType = type("NativeStructure");
+        var kind = value("Kind");
+        var frame = $"({type("Frame")} = '{text}' AND length({value("Frame")}) > 0)";
+        var node = $"({type("Node")} = '{text}' AND length({value("Node")}) > 0)";
+        string Null(string field) => $"COALESCE({type(field)}, 'null') = 'null'";
+        var outcome = $"{kind} IN ('2', '3', '4', '5')";
+        return $"""
+            SELECT "Slot", {value("Frame")} AS "Activity", {projection} AS "Observation",
+                CASE WHEN {markerType} IS NULL THEN 0
+                    WHEN {markerType} = '{number}' AND {value("NativeStructure")} = '1' AND {type("Kind")} = '{number}'
+                        AND {timestamp} AND NOT EXISTS (
+                            SELECT 1 FROM {objectFields} field WHERE field.key IN ({PlaybackFields})
+                            GROUP BY field.key HAVING COUNT(*) > 1)
+                        AND (
+                            ({kind} IN ('0', '-0') AND {Null("Frame")} AND {Null("Node")} AND {Null("Parent")}) OR
+                            ({kind} = '1' AND {frame} AND {Null("Node")} AND {Null("Parent")}) OR
+                            ({outcome} AND {frame} AND {node} AND COALESCE({type("Parent")}, 'null') IN ('{text}', 'null')))
+                        THEN CASE WHEN {outcome} THEN 1 ELSE 0 END
+                    ELSE 2 END AS "Disposition"
+            FROM ({cells}) parsed
+            """;
+    }
+
+    // Keep the JSON number lexemes on PostgreSQL. jsonb would normalize exponent notation before
+    // validating At, making records playable that Native's integral JSON decoder refuses.
+    private static readonly string PostgresPlaybackObservations = PlaybackObservations($"""
+        SELECT slot - 1 AS "Slot", cell
+        FROM "Journal" j CROSS JOIN LATERAL json_array_elements(
+            CASE WHEN json_typeof(j."Entries"::json) = 'array'
+                THEN j."Entries"::json ELSE json_build_array(j."Entries"::json) END
+        ) WITH ORDINALITY item(cell, slot)
+        WHERE {PlaybackRawRow}
+        """, key => $"json_typeof(cell->'{key}')", key => $"(cell->>'{key}') COLLATE \"C\"", "number", "string", $"""
+        (CASE WHEN json_typeof(cell->'At') = 'number' AND length(cell->>'At') <= 16
+            AND cell->>'At' ~ '^-?(0|[1-9][0-9]*)$' THEN (cell->>'At')::bigint {TimestampRange} ELSE false END)
+        """, "json_each(CASE WHEN json_typeof(cell) = 'object' THEN cell ELSE json_build_object() END)", """
+        json_build_object('NativeStructure', 1, 'Kind', cell->'Kind', 'At', cell->'At',
+            'Frame', cell->'Frame', 'Node', cell->'Node', 'Parent', cell->'Parent')::text
+        """);
+
+    private static readonly string SqlitePlaybackObservations = PlaybackObservations($"""
+        SELECT CAST(item.key AS INTEGER) AS "Slot", CASE WHEN item.type = 'object' THEN item.value ELSE json_object() END AS cell
+        FROM "Journal" j, json_each(CASE WHEN json_type(j."Entries") = 'array' THEN j."Entries"
+            ELSE json_array(json(j."Entries")) END) item
+        WHERE {PlaybackRawRow}
+        """, key => $"json_type(cell, '$.{key}')", key => $"CAST(json_extract(cell, '$.{key}') AS TEXT) COLLATE BINARY",
+        "integer", "text", $"(typeof(json_extract(cell, '$.At')) = 'integer' AND json_extract(cell, '$.At') {TimestampRange})",
+        "json_each(cell)", """
+        json_object('NativeStructure', 1, 'Kind', json_extract(cell, '$.Kind'), 'At', json_extract(cell, '$.At'),
+            'Frame', json_extract(cell, '$.Frame'), 'Node', json_extract(cell, '$.Node'), 'Parent', json_extract(cell, '$.Parent'))
+        """);
+
     private static readonly string PostgresPlayback = $"""
         CREATE TABLE "{PlaybackName}" ({PlaybackColumns("bigint", """text COLLATE "C" """)});
+        CREATE TABLE "{PlaybackInvalidName}" ({PlaybackInvalidColumns("bigint", """text COLLATE "C" """)});
         CREATE INDEX kernel_playback_commit ON "{PlaybackName}" ("Partition", "Position");
         CREATE FUNCTION {PlaybackTrigger}() RETURNS trigger LANGUAGE plpgsql AS $fn$
         BEGIN
-            {PlaybackInsert($"""
-                SELECT slot - 1 AS "Slot", cell->>'Frame' COLLATE "C" AS "Activity",
-                    jsonb_build_object('NativeStructure', 1, 'Kind', cell->'Kind', 'At', cell->'At',
-                        'Frame', cell->'Frame', 'Node', cell->'Node', 'Parent', cell->'Parent')::text AS "Observation"
-                FROM "Journal" j CROSS JOIN LATERAL jsonb_array_elements(
-                    CASE WHEN jsonb_typeof(j."Entries"::jsonb) = 'array'
-                        THEN j."Entries"::jsonb ELSE jsonb_build_array(j."Entries"::jsonb) END
-                ) WITH ORDINALITY item(cell, slot)
-                WHERE {PlaybackRawRow} AND jsonb_typeof(cell->'NativeStructure') = 'number' AND cell->>'NativeStructure' = '1'
-                    AND jsonb_typeof(cell->'Kind') = 'number' AND cell->>'Kind' IN ('2', '3', '4', '5')
-                    AND jsonb_typeof(cell->'At') = 'number' AND jsonb_typeof(cell->'Frame') = 'string'
-                    AND length(cell->>'Frame') > 0 AND jsonb_typeof(cell->'Node') = 'string' AND length(cell->>'Node') > 0
-                    AND coalesce(jsonb_typeof(cell->'Parent'), 'null') IN ('string', 'null')
-                """)};
+            {PlaybackInsert(PostgresPlaybackObservations)};
+            {PlaybackInvalidInsert(PostgresPlaybackObservations)};
             RETURN NULL;
         END
         $fn$;
@@ -76,26 +149,13 @@ public sealed partial class EfStore
     private static IEnumerable<SqliteDefinition> SqlitePlaybackDefinitions()
     {
         yield return Table(PlaybackName, PlaybackColumns("INTEGER", "TEXT COLLATE BINARY"));
+        yield return Table(PlaybackInvalidName, PlaybackInvalidColumns("INTEGER", "TEXT COLLATE BINARY"));
         yield return Index("kernel_playback_commit", PlaybackName, """("Partition", "Position")""");
         yield return new("trigger", PlaybackTrigger, SequencedJournalName, $"""
             CREATE TRIGGER {PlaybackTrigger} AFTER INSERT ON "{SequencedJournalName}"
             BEGIN
-                {PlaybackInsert($"""
-                    SELECT "Slot", json_extract(cell, '$.Frame') COLLATE BINARY AS "Activity",
-                        json_object('NativeStructure', 1, 'Kind', json_extract(cell, '$.Kind'), 'At', json_extract(cell, '$.At'),
-                            'Frame', json_extract(cell, '$.Frame'), 'Node', json_extract(cell, '$.Node'),
-                            'Parent', json_extract(cell, '$.Parent')) AS "Observation"
-                    FROM (SELECT CAST(item.key AS INTEGER) AS "Slot",
-                            CASE WHEN item.type = 'object' THEN item.value ELSE json_object() END AS cell
-                        FROM "Journal" j, json_each(CASE WHEN json_type(j."Entries") = 'array' THEN j."Entries"
-                            ELSE json_array(json(j."Entries")) END) item
-                        WHERE {PlaybackRawRow}) parsed
-                    WHERE json_type(cell, '$.NativeStructure') = 'integer' AND json_extract(cell, '$.NativeStructure') = 1
-                        AND json_type(cell, '$.Kind') = 'integer' AND json_extract(cell, '$.Kind') IN (2, 3, 4, 5)
-                        AND json_type(cell, '$.At') = 'integer' AND json_type(cell, '$.Frame') = 'text'
-                        AND length(json_extract(cell, '$.Frame')) > 0 AND json_type(cell, '$.Node') = 'text'
-                        AND length(json_extract(cell, '$.Node')) > 0 AND coalesce(json_type(cell, '$.Parent'), 'null') IN ('text', 'null')
-                    """)};
+                {PlaybackInsert(SqlitePlaybackObservations)};
+                {PlaybackInvalidInsert(SqlitePlaybackObservations)};
             END
             """);
     }
@@ -104,6 +164,8 @@ public sealed partial class EfStore
         EXISTS (SELECT 1 FROM pg_catalog.pg_class format
             JOIN pg_catalog.pg_class playback ON playback.oid = pg_catalog.to_regclass('"{PlaybackName}"')
                 AND playback.relnamespace = format.relnamespace AND playback.relkind = 'r'
+            JOIN pg_catalog.pg_class invalid ON invalid.oid = pg_catalog.to_regclass('"{PlaybackInvalidName}"')
+                AND invalid.relnamespace = format.relnamespace AND invalid.relkind = 'r'
             JOIN pg_catalog.pg_trigger stamp ON stamp.tgrelid = pg_catalog.to_regclass('"{SequencedJournalName}"')
                 AND stamp.tgname = '{PlaybackTrigger}' AND stamp.tgenabled IN ('O', 'A')
                 AND stamp.tgtype = 5 AND NOT stamp.tgisinternal
@@ -129,8 +191,15 @@ public sealed partial class EfStore
     }
 
     private sealed record PlaybackRoot(int Partition, string Actor, long RetainedAfter, long Latest, long? LastRecordedAt);
+    private sealed record PlaybackOrdinal(long Ordinal);
+    private sealed record PlaybackInvalid(long Sequence);
+    private sealed record PlaybackSource(string? Stamp);
     private sealed record PlaybackRow(string Activity, long Ordinal, long Sequence, long Revision, int CommitOrdinal,
         string Observation, long RecordedAt);
+    private const string PlaybackRowsSql = """
+        SELECT "Activity", "Ordinal", "Sequence", "Revision", "CommitOrdinal", "Observation", "RecordedAt"
+        FROM "FoundationJournalPlayback" WHERE "Partition" = {0} AND "Actor" = {1}
+        """;
 
     internal async Task<ActorPlaybackPage?> ReadRootPlaybackAsync(string tenant, string reference, ActorPlaybackQuery query,
         CancellationToken token)
@@ -142,14 +211,19 @@ public sealed partial class EfStore
         await using var db = create();
         if (Engine is not null || !db.UsesRootPlayback)
             throw new NotSupportedException("This store does not carry the playback projection.");
+        string? source = null;
         if (db.UsesSqliteRootRuntime)
             return await ReadSqliteRootSnapshotAsync(db, ReadAsync, token);
         if (!postgres) throw new NotSupportedException("The playback projection requires a physical foundation store.");
 
         await using var snapshot = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
-        await RequireStoreVersionsAsync(db, token);
-        await RequirePostgresSequencedJournalAsync(db, token);
-        await RequirePostgresPlaybackAsync(db, token);
+        var marker = await PostgresRootAdmission.PinPlaybackReadSourcesAsync(db, token);
+        var stamp = FormattableStringFactory.Create($$"""
+            SELECT CASE WHEN marker.tableoid = {0}::oid THEN {{PostgresPlaybackSource}} END AS "Stamp"
+            FROM "KernelStoreVersions" marker WHERE marker."Id" = {1}
+            """, marker, StoreVersionEntity.MarkerId);
+        source = (await db.Database.SqlQuery<PlaybackSource>(stamp).SingleOrDefaultAsync(token))?.Stamp
+            ?? throw new StoreFormatException("The playback read changed its physical source.");
         var readAt = await db.Database.SqlQueryRaw<long>($"""SELECT {PostgresJournalClock} AS "Value" """).SingleAsync(token);
         var page = await ReadAsync(readAt);
         await snapshot.CommitAsync(token);
@@ -157,7 +231,8 @@ public sealed partial class EfStore
 
         async Task<ActorPlaybackPage?> ReadAsync(long asOf)
         {
-            var root = await db.Database.SqlQuery<PlaybackRoot>($"""
+            var roots = await ReadRowsAsync<PlaybackRoot>($"""
+                /* playback root bounds */
                 SELECT birth."Partition", birth."Actor",
                     COALESCE((SELECT "FirstSequence" - 1 FROM "FoundationSequencedJournal" s
                         WHERE s."Partition" = birth."Partition" AND s."Actor" = birth."Actor"
@@ -172,19 +247,23 @@ public sealed partial class EfStore
                     AND i."Id" = birth."Actor" AND i."FoundationReference" = birth."Reference"
                     AND i."FoundationTenant" = birth."Tenant"
                 WHERE birth."Tenant" = {tenant} AND birth."Reference" = {reference} AND birth."Creation" = 1 AND NOT i."Retired"
-                """).SingleOrDefaultAsync(token);
+                """);
+            var root = roots.SingleOrDefault();
             if (root is null) return null;
             var upper = query.UpperSequence ?? root.Latest;
             ActorPlaybackPage Result(ActorPlaybackAvailability state, string reason) =>
                 new(state, reason, root.Latest, upper, root.RetainedAfter, root.LastRecordedAt, null, null, [], asOf);
             if (upper > root.Latest || query.RetainedAfterSequence is { } retained && retained != root.RetainedAfter)
                 return Result(ActorPlaybackAvailability.Invalidated, "retained-range-changed");
+            var invalid = await ReadRowsAsync<PlaybackInvalid>($"""
+                SELECT "Sequence" FROM "FoundationJournalPlaybackInvalid"
+                WHERE "Partition" = {root.Partition} AND "Actor" = {root.Actor}
+                    AND "Sequence" > {root.RetainedAfter} AND "Sequence" <= {upper}
+                ORDER BY "Sequence" LIMIT 1
+                """);
+            if (invalid.Length != 0)
+                return Result(ActorPlaybackAvailability.Unavailable, "occurrence-observation-unknown");
 
-            var occurrences = db.Database.SqlQuery<PlaybackRow>(FormattableStringFactory.Create($$"""
-                SELECT "Activity", "Ordinal", "Sequence", "Revision", "CommitOrdinal", "Observation", "RecordedAt"
-                FROM "{{PlaybackName}}" WHERE "Partition" = {0} AND "Actor" = {1}
-                """, root.Partition, root.Actor));
-            var members = occurrences.Where(row => row.Sequence > root.RetainedAfter && row.Sequence <= upper);
             if (query.Activity is { } activity)
             {
                 var scoped = await FindMemberAsync(activity);
@@ -196,10 +275,20 @@ public sealed partial class EfStore
                 return Available(1, 0, [Entry(scoped, 0, null, null)]);
             }
 
-            var first = await members.OrderBy(row => row.Sequence).Select(row => (long?)row.Ordinal).FirstOrDefaultAsync(token);
+            var first = (await ReadRowsAsync<PlaybackOrdinal>($"""
+                SELECT "Ordinal" FROM "FoundationJournalPlayback"
+                WHERE "Partition" = {root.Partition} AND "Actor" = {root.Actor}
+                    AND "Sequence" > {root.RetainedAfter} AND "Sequence" <= {upper}
+                ORDER BY "Sequence" LIMIT 1
+                """)).SingleOrDefault()?.Ordinal;
             if (first is null)
                 return Result(ActorPlaybackAvailability.Unavailable, "occurrence-recording-unavailable");
-            var last = await members.OrderByDescending(row => row.Sequence).Select(row => row.Ordinal).FirstAsync(token);
+            var last = (await ReadRowsAsync<PlaybackOrdinal>($"""
+                SELECT "Ordinal" FROM "FoundationJournalPlayback"
+                WHERE "Partition" = {root.Partition} AND "Actor" = {root.Actor}
+                    AND "Sequence" > {root.RetainedAfter} AND "Sequence" <= {upper}
+                ORDER BY "Sequence" DESC LIMIT 1
+                """)).Single().Ordinal;
             var count = checked(last - first.Value + 1);
             var selected = query.Position ?? 0;
             if (query.Anchor is { } anchor)
@@ -214,8 +303,12 @@ public sealed partial class EfStore
             var end = Math.Min(last, start + query.Limit - 1);
             var from = Math.Max(first.Value, start - 1);
             var through = Math.Min(last, end + 1);
-            var rows = await members.Where(row => row.Ordinal >= from && row.Ordinal <= through)
-                .OrderBy(row => row.Ordinal).Take(query.Limit + 2).ToArrayAsync(token);
+            var rankRange = FormattableStringFactory.Create(PlaybackRowsSql + """
+
+                AND "Ordinal" BETWEEN {2} AND {3} AND "Sequence" > {4} AND "Sequence" <= {5}
+                ORDER BY "Ordinal" LIMIT {6}
+                """, root.Partition, root.Actor, from, through, root.RetainedAfter, upper, query.Limit + 2);
+            var rows = await ReadRowsAsync<PlaybackRow>(rankRange);
             if (rows.Length != through - from + 1 || rows.Where((row, index) => row.Ordinal != from + index).Any())
                 throw new StoreFormatException("The playback index has an incomplete occurrence range.");
             var items = rows.Select((row, index) => Entry(row, row.Ordinal - first.Value,
@@ -226,12 +319,40 @@ public sealed partial class EfStore
             // Seek the exact activity key first. Testing retained bounds on that one row keeps a
             // provider from choosing the range index and scanning the frozen prefix for an anchor.
             async Task<PlaybackRow?> FindMemberAsync(string activity) =>
-                await occurrences.SingleOrDefaultAsync(row => row.Activity == activity, token) is { } row &&
+                (await ReadRowsAsync<PlaybackRow>(FormattableStringFactory.Create(
+                    "/* playback exact anchor */\n" + PlaybackRowsSql + """ AND "Activity" = {2} LIMIT 2""",
+                    root.Partition, root.Actor, activity))).SingleOrDefault() is { } row &&
                     row.Sequence > root.RetainedAfter && row.Sequence <= upper ? row : null;
 
             ActorPlaybackPage Available(long total, long target, IReadOnlyList<ActorPlaybackEntry> items) =>
                 new(ActorPlaybackAvailability.Available, null, root.Latest, upper, root.RetainedAfter, root.LastRecordedAt,
                     total, target, items, asOf);
+        }
+
+        async Task<T[]> ReadRowsAsync<T>(FormattableString query) where T : class
+        {
+            if (source is null) return await db.Database.SqlQuery<T>(query).ToArrayAsync(token);
+            // Every data statement checks the pinned identities. A schema rename can change
+            // unqualified name resolution even while the transaction still holds table locks.
+            var sourceParameter = "{" + query.ArgumentCount.ToString(CultureInfo.InvariantCulture) + "}";
+            var guard = FormattableStringFactory.Create($$"""
+                WITH physical AS MATERIALIZED (
+                    SELECT {{PostgresPlaybackSource}} = {{sourceParameter}} AS "Matches"
+                )
+                SELECT CASE WHEN physical."Matches" THEN (
+                    SELECT COALESCE(pg_catalog.json_agg(hit), '[]'::json)::text FROM ({{query.Format}}) hit
+                ) END AS "Value" FROM physical
+                """, [.. query.GetArguments(), source]);
+            try
+            {
+                var payload = await db.Database.SqlQuery<string?>(guard).SingleAsync(token);
+                return payload is null ? throw new StoreFormatException("The playback read changed its physical source.")
+                    : JsonSerializer.Deserialize<T[]>(payload) ?? throw new StoreFormatException("The playback read returned invalid data.");
+            }
+            catch (PostgresException error) when (error.SqlState is "42P01" or "42703" or "3F000")
+            {
+                throw new StoreFormatException("The playback read changed its physical source.", error);
+            }
         }
 
         static ActorPlaybackEntry Entry(PlaybackRow row, long position, string? previous, string? next) =>
