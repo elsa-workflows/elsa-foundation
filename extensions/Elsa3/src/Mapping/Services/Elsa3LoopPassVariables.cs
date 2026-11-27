@@ -49,7 +49,9 @@ internal sealed record Elsa3PassRead(Elsa3PassReadKind Kind, string Name, string
 /// run, the read keeps today's handling; anything else is refused rather than guessed. The refusals for an inner loop and
 /// an id clash come first, even where a nested variable of that name would win (refusal over guessing). Where the read
 /// would reach the pass value, a reusable activity anywhere in the owning loop's body is refused, as its contents are not
-/// visible here.
+/// visible here. A reusable workflow is converted without its callers: a calling loop's block above it is modelled behind
+/// the reusable's own variables and inputs, but not a caller's container variable of the same name between the two, which
+/// Elsa 3 would read instead (a documented limit).
 /// </summary>
 internal static class Elsa3LoopPassVariables
 {

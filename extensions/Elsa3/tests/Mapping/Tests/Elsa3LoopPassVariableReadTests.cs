@@ -115,7 +115,7 @@ public sealed class Elsa3LoopPassVariableReadTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task In_a_reusable_workflow_a_body_variable_that_a_callers_pass_may_sit_behind_is_refused(bool reusable)
+    public async Task A_body_variable_of_the_name_is_refused_only_in_a_reusable_workflow_where_a_callers_pass_may_sit_behind_it(bool reusable)
     {
         // Run as a reusable activity, a calling loop's CurrentValue above this workflow is overwritten in place, behind the
         // body's own CurrentValue; run alone, the pass's variable is the body's and comes first.
