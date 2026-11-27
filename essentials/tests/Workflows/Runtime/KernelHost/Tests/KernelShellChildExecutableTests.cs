@@ -203,8 +203,8 @@ public sealed class KernelShellChildExecutableTests
                 Provider = provider, ConnectionString = runtime,
                 RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
             });
-            new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(services, KernelShellStorage.CreatePreparedStartsQualification(provider, path, foundation),
-                protectChildExecutables: true);
+            new WorkflowsRuntimeKernelHostingFeature { Provider = provider, SqlitePath = path, PostgresConnectionString = foundation }
+                .ConfigureServices(services);
             new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
             return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         }

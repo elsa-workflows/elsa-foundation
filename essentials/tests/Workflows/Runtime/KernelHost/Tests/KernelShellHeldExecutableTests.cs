@@ -184,8 +184,8 @@ public sealed class KernelShellHeldExecutableTests
             services.Remove(pinStore);
             services.AddScoped<IRuntimeKernelExecutablePinStore>(sp => new TestPins(
                 (IRuntimeKernelExecutablePinStore)ActivatorUtilities.CreateInstance(sp, pinStore.ImplementationType!), unavailable));
-            new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(services, KernelShellStorage.CreatePreparedStartsQualification(
-                provider, foundationPath, foundation));
+            new WorkflowsRuntimeKernelHostingFeature { Provider = provider, SqlitePath = foundationPath, PostgresConnectionString = foundation }
+                .ConfigureServices(services);
             new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
             return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         }

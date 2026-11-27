@@ -204,6 +204,14 @@ public static partial class PostgresPreviewHosting
         return db.UsesRootScheduleControls && db.UsesRootScheduleLineage;
     }
 
+    /// <summary>Whether the selected PostgreSQL profile supports protected held root preparation.</summary>
+    public static bool TakesPreparedStarts(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootPreparedStarts;
+    }
+
     /// <summary>Whether the selected format takes durable actor-owned timers, as used by the Native Delay activity.</summary>
     public static bool TakesTimers(Func<KernelDb> create)
     {
