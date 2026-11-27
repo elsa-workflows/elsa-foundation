@@ -2,9 +2,12 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Postgres;
+using Kernel.Foundation.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Kernel.Native.Run;
 
@@ -413,10 +416,28 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(keyedPostgres) is { StoreSchema: 1, MessageProtocol: 28, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(keyedSqlite) is { StoreSchema: 2, MessageProtocol: 31, JournalCodec: 0 },
             "first-generation caller keys have a distinct private profile and per-provider definitions");
+        using var testPostgres = KernelDb.ForPostgresRootDirectTestRunQualification(options);
+        using var testSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootDirectTestRunQualification);
+        Check(testPostgres.RequiredFormat.MessageProtocol == 131 && testSqlite.RequiredFormat == testPostgres.RequiredFormat &&
+            testPostgres.Capabilities == (RootProfiles.PreparedStartsQualification | RootCapabilities.DirectTestRuns) &&
+            testSqlite.Capabilities == testPostgres.Capabilities &&
+            testPostgres.UsesRootDirectTestRuns && testSqlite.UsesRootDirectTestRuns &&
+            !testPostgres.UsesRootInlinePromotion && !testSqlite.UsesRootInlinePromotion &&
+            !inlinePostgres.UsesRootDirectTestRuns && !inlineSqlite.UsesRootDirectTestRuns &&
+            !sharedPostgres.UsesRootDirectTestRuns && !sharedSqlite.UsesRootDirectTestRuns &&
+            !privateActivationPostgres.UsesRootDirectTestRuns && !privateActivationSqlite.UsesRootDirectTestRuns &&
+            !testPostgres.UsesRootAuthoredEvents && !testSqlite.UsesRootAuthoredEvents &&
+            !testPostgres.UsesRootEventStarts && !testSqlite.UsesRootEventStarts &&
+            RootScheduleOwnerMode.Applies(testPostgres) && RootScheduleOwnerMode.Applies(testSqlite) &&
+            RootProfiles.MissingPrerequisites(testPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(testPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(testPostgres) is { StoreSchema: 1, MessageProtocol: 20, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(testSqlite) is { StoreSchema: 2, MessageProtocol: 23, JournalCodec: 0 },
+            "private Test Runs share the installed definitions and require their own protocol on both providers");
         mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
             playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities | lineagePostgres.Capabilities |
-            inlinePostgres.Capabilities | authoredPostgres.Capabilities | startEventsPostgres.Capabilities | receiptsPostgres.Capabilities |
-            eventScanPostgres.Capabilities | keyedPostgres.Capabilities;
+            inlinePostgres.Capabilities | authoredPostgres.Capabilities | startEventsPostgres.Capabilities |
+            receiptsPostgres.Capabilities | eventScanPostgres.Capabilities | testPostgres.Capabilities | keyedPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -454,6 +475,7 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.EventStarts] = RootCapabilities.AuthoredEvents | RootCapabilities.PreparedStarts,
             [RootCapabilities.EventStartReceipts] = RootCapabilities.EventStarts,
             [RootCapabilities.EventStartScan] = RootCapabilities.EventStartReceipts,
+            [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
             [RootCapabilities.KeyedStarts] = RootCapabilities.PreparedStarts,
             [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
             [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
@@ -502,5 +524,53 @@ internal static class ProfileCapabilityChecks
                 if (Equals(keys[i].Key, keys[j].Key)) Check(false, $"{keys[i].Name} and {keys[j].Name} share a model cache key");
         Check(keys.Select(k => k.Key).Distinct().Count() == keys.Count, $"{keys.Count} profiles get {keys.Count} distinct model cache keys");
         return failures == 0 ? 0 : 1;
+    }
+
+    internal static async Task<int> RunDirectTestRunStoreAsync(bool postgres)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        var token = deadline.Token;
+        const string node = "stock-test-run-profile-check";
+        var actor = new PublicWorkflow([new NativeExecutionModel(new WorkflowRegistry())]);
+        static void EndProcess(string reason) => throw new InvalidOperationException(reason);
+
+        if (postgres)
+        {
+            var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
+                throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
+            var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+            KernelDb OpenStock() => PostgresPreviewHosting.CreateShippedContext(options);
+            await using (var empty = OpenStock())
+                if (!await PostgresFixtureDatabase.IsEmptyAsync(empty, token))
+                    throw new InvalidOperationException("The profile check requires an empty PostgreSQL database.");
+            await PostgresPreviewHosting.InstallDirectTestRunQualificationAsync(options, token);
+            var requests = PostgresPreviewHosting.CreateRequests(OpenStock, node, actor.Type);
+            await MustRefuseAsync(() => PostgresPreviewHosting.StartAsync(OpenStock, node, actor, EndProcess,
+                cancellationToken: token, requests: requests));
+        }
+        else
+        {
+            var directory = Directory.CreateTempSubdirectory("direct-test-run-profile");
+            try
+            {
+                var path = Path.Combine(directory.FullName, "store.db");
+                var privateStore = SqliteEmbeddedFoundation.ForDirectTestRunQualification(path, node, actor.Type,
+                    (_, _) => ValueTask.FromResult(false));
+                await privateStore.InstallShippedAsync(token);
+                await MustRefuseAsync(() => SqliteEmbeddedHosting.StartFoundationAsync(path, node, actor, EndProcess,
+                    cancellationToken: token));
+            }
+            finally { directory.Delete(recursive: true); }
+        }
+
+        Console.WriteLine("The stock owner refused the installed private Test Run profile.");
+        return 0;
+
+        static async Task MustRefuseAsync(Func<Task<Kernel.Runtime.Hosting.RuntimeNode>> start)
+        {
+            try { await using var owner = await start(); }
+            catch (StoreFormatException) { return; }
+            throw new InvalidOperationException("The stock owner unexpectedly opened the private Test Run profile.");
+        }
     }
 }

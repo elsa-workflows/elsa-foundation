@@ -97,7 +97,7 @@ internal sealed class KernelParkRecovery(KernelRunReader runs, KernelRuns founda
     private async Task<ActorView?> ReadAuthorizedAsync(string workflowExecutionId, HttpContext context, CancellationToken token)
     {
         if (KernelRunOperatorCaller.Read(context.User, principals) is not { } caller || !caller.Matches(foundation.Tenant) ||
-            await runs.GetAsync(workflowExecutionId, token) is not { View: { } view } run) return null;
+            await runs.GetAsync(workflowExecutionId, token) is not { View: { } view, IsolatedReads: null } run) return null;
         var permission = new PermissionEvaluationContext(caller.Principal, WorkflowRuntimePermissions.WorkflowRuntimeManage, caller.Tenant, run.State);
         return (await authorization.AuthorizeAsync(permission, token)).Succeeded ? view : null;
     }

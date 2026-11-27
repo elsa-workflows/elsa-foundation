@@ -18,8 +18,8 @@ using Admission = Kernel.Foundation.Contracts.Admission;
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
-    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention, TimeProvider clock, bool protectChildExecutables = false,
-    KernelEventPublicationRelay? events = null) : IAsyncDisposable
+    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention, TimeProvider clock,
+    bool protectChildExecutables = false, BoundScope? testTenant = null, KernelEventPublicationRelay? events = null) : IAsyncDisposable
 {
     private static readonly TimeSpan MaintenanceStopBudget = TimeSpan.FromSeconds(1);
 
@@ -28,6 +28,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     private HttpClient? _client;
     private KernelShellFoundation? _foundation;
     private IProtectedRootStarts? _publishedStarts;
+    private IProtectedRootStarts? _testStarts;
     private sealed record InlineStarts(InlineRootRequests Requests, NativeExecutionModel Model);
     private InlineStarts? _publishedInlineStarts;
     private readonly CancellationTokenSource _maintenanceStop = new();
@@ -37,7 +38,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     {
         var protection = protectChildExecutables || storage.TakesPreparedStarts
             ? new KernelExecutableProtection(scopes, persistenceScope, tenant, serving, storage, clock,
-                logs.CreateLogger<KernelExecutableProtection>())
+                logs.CreateLogger<KernelExecutableProtection>(), testTenant)
             : null;
         await storage.InstallAsync(token, storage.TakesPreparedStarts ? protection!.ProtectHeldStartAsync : null);
         _foundation = await storage.OpenAsync(token);
@@ -59,7 +60,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             Expressions = expressions,
             SelfSends = serving.Capabilities.SelfSends,
             UseStructuralJournal = Foundation.Reads is IActorSequencedJournalReads { SupportsSequencedJournal: true },
-            AuthoredEventStarts = storage.TakesEventStarts,
+            AuthoredEventStarts = storage.TakesDirectTestRuns || storage.TakesEventStarts,
             ServedWorkflow = serving.ServedWorkflow,
             ResolveWorkflow = ResolveWorkflowAsync
         });
@@ -72,6 +73,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             protectChildExecutables || inline is not null ? protection!.ProtectAsync : null, inline);
         await _owner.StartAsync(token);
         if (storage.TakesPreparedStarts) Volatile.Write(ref _publishedStarts, storage.BindPublishedStarts(tenant));
+        if (testTenant is not null) Volatile.Write(ref _testStarts, storage.BindPublishedStarts(testTenant));
         if (inline is not null) Volatile.Write(ref _publishedInlineStarts, new(inline, model));
         var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
         var worker = new KernelRetentionWorker(pass, tenant,
@@ -82,6 +84,12 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         List<Task> maintenance = [Task.Run(() => worker.RunAsync(maintenanceToken))];
         if (schedules is { } managed) maintenance.Add(Task.Run(() => managed.Worker.RunAsync(maintenanceToken)));
         if (protection is not null) maintenance.Add(Task.Run(() => protection.RunAsync(maintenanceToken)));
+        if (testTenant is not null)
+        {
+            var expired = new KernelDirectTestRunRetirement(testTenant, Foundation.Reads, storage.OpenOperatorsAsync, clock,
+                logs.CreateLogger<KernelDirectTestRunRetirement>());
+            maintenance.Add(Task.Run(() => expired.RunAsync(maintenanceToken)));
+        }
         if (events is not null) maintenance.Add(Task.Run(() => events.RunAsync(protection!, maintenanceToken)));
         _maintenance = Task.WhenAll(maintenance);
     }
@@ -89,6 +97,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     public async Task StopAsync(CancellationToken token)
     {
         Volatile.Write(ref _publishedStarts, null);
+        Volatile.Write(ref _testStarts, null);
         Interlocked.Exchange(ref _publishedInlineStarts, null)?.Requests.Close();
         using var maintenanceDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         maintenanceDeadline.CancelAfter(MaintenanceStopBudget);
@@ -124,6 +133,31 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ? starts.StartAsync(operationId, start, token)
             : ValueTask.FromResult(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.NodeBusy, RetryAfter: TimeSpan.FromSeconds(1)));
     }
+
+    public ValueTask<Admission> StartDirectTestAsync(string operationId, StartSpec start, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        return Volatile.Read(ref _testStarts) is { } starts
+            ? starts.StartAsync(operationId, start, token)
+            : ValueTask.FromResult(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.NodeBusy, RetryAfter: TimeSpan.FromSeconds(1)));
+    }
+
+    public async ValueTask<Reply> StartHeldTestAsync(string operationId, StartSpec start, WorkflowTestRunHttpBudget budget, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (testTenant is null || Volatile.Read(ref _testStarts) is null)
+            return new(null, null, Error: "lost") { RefusalReason = RefusalReason.NodeBusy, RetryAfter = TimeSpan.FromSeconds(1) };
+        var now = await storage.ReadClockAsync(token);
+        var remaining = budget.Remaining;
+        if (remaining <= TimeSpan.Zero) return new(null, null, Error: "timeout");
+        var deadline = checked(now + (long)Math.Ceiling(remaining.TotalMilliseconds));
+        return await Foundation.Ingress.RequestAsync(testTenant, new Target.Start(start), operationId, Kinds.Start, null,
+            null, new(null, deadline), token);
+    }
+
+    public Task<RootStartProof> ConfirmPreparedTestAsync(ActorRef actor, string issuance, CancellationToken token) =>
+        testTenant is null ? Task.FromResult(RootStartProof.Unresolved) :
+            storage.ConfirmPreparedStartAsync(testTenant, actor, issuance, token);
 
     internal ValueTask<InlineStartOutcome> StartInlinePublishedAsync(string operationId, StartSpec start, Workflow executable,
         CancellationToken token)
@@ -176,12 +210,17 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     private async ValueTask<Workflow?> ResolveWorkflowAsync(string artifactId, CancellationToken token)
     {
         await using var scope = await scopes.CreateAsyncScopeAsync(persistenceScope);
-        return await NativeExecutableMapper.MapStoredAsync(scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>(), artifactId, token);
+        var executable = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindAsync(artifactId, token);
+        // A stored actor already passed admission. The runtime only rebuilds its execution model here. Published
+        // routes still use their strict mapping and separate serving authority.
+        return executable is null ? null : NativeExecutableMapper.Map(executable, KernelHostCapabilities.All, definition: null,
+            scopedHttpTransport: testTenant is not null);
     }
 
     public async ValueTask DisposeAsync()
     {
         Volatile.Write(ref _publishedStarts, null);
+        Volatile.Write(ref _testStarts, null);
         Interlocked.Exchange(ref _publishedInlineStarts, null)?.Requests.Close();
         using var stop = new CancellationTokenSource(MaintenanceStopBudget);
         try
