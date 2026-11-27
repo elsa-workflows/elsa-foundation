@@ -1941,3 +1941,5 @@ Elsa.Workflows.Runtime.KernelHost.WorkflowsRuntimePublicationTriggersFeature
 Elsa.Workflows.Runtime.KernelHost.WorkflowsRuntimePublicationTriggersFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Workflows.Runtime.KernelHost.WorkflowsRuntimePublicationTriggersFeature.WorkflowsRuntimePublicationTriggersFeature() -> void
 const Elsa.Workflows.Runtime.KernelHost.WorkflowsRuntimePublicationTriggersFeature.FeatureName = "WorkflowsRuntimePublicationTriggers" -> string!
+Elsa.Workflows.Runtime.Extensions.WorkflowPublicationServiceCollectionExtensions
+static Elsa.Workflows.Runtime.Extensions.WorkflowPublicationServiceCollectionExtensions.AddWorkflowPublicationDefaults(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
