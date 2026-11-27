@@ -10,7 +10,7 @@ namespace Kernel.Native.Run;
 
 internal static partial class KernelAuthoredEventChecks
 {
-    internal static async Task<int> RunPublicEventHostAsync(string provider, bool inBatch, bool protectedStarts)
+    internal static async Task<int> RunPublicEventHostAsync(string provider, bool inBatch, bool protectedStarts, bool observeReplies = false)
     {
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var token = stop.Token;
@@ -21,7 +21,9 @@ internal static partial class KernelAuthoredEventChecks
         var host = new RootPublicEventHost(model.Type, protectedStarts);
         try
         {
-            var (open, ingress, reads, owner, _, restart) = await OpenAsync(model, provider, path, inBatch, token, publicEventHost: host);
+            var frames = new TaskCompletionSource<Reply>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var (open, ingress, reads, owner, _, restart) = await OpenAsync(model, provider, path, inBatch, token, publicEventHost: host,
+                observeReplies: observeReplies ? transport => new EventReplyObserver(transport, frames) : null);
             await using (owner)
             {
                 const string startKey = "outside-start";
@@ -46,6 +48,9 @@ internal static partial class KernelAuthoredEventChecks
 
                 var liveReply = await RequestAsync(PublicEventActor.Key, "live", "live item");
                 Check(liveReply is { Status: Contract.ActorStatus.Finished, Error: null }, "the Event host still holds replies from exact live waits");
+                if (observeReplies)
+                    Check(frames.Task.IsCompletedSuccessfully && frames.Task.Result is { Channel: null, Error: null } frame &&
+                        frame.Tenant == scope.Tenant, "the observer saw the tenant-bound terminal reply on the protected hosted node");
                 var details = await reads.GetAsync(scope, live.Actor!.Value, token);
                 Check(details is not null && DurableKeyJson.Read<string[]>(details.Header.TypeData) is [_, PublicEventActor.Key, "live", "live item", "live"],
                     "the live waiter received the exact outside Event even when generic starts were closed");
@@ -106,6 +111,15 @@ internal static partial class KernelAuthoredEventChecks
             }
         }
         finally { directory.Delete(recursive: true); }
+    }
+
+    private sealed class EventReplyObserver(IReplyTransport edge, TaskCompletionSource<Reply> frames) : IReplyTransport
+    {
+        public void Send(string node, Reply reply)
+        {
+            if (reply.Status is not null) frames.TrySetResult(reply);
+            edge.Send(node, reply);
+        }
     }
 
     private static async Task RequireRefusalAsync<TException>(Func<Task> work) where TException : Exception

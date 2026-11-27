@@ -183,7 +183,8 @@ internal static partial class KernelAuthoredEventChecks
         IAsyncDisposable Owner, EventStartPort? Events, Func<CancellationToken, Task<IAsyncDisposable>> Restart)>
         OpenAsync(Contract.IActorType model, string provider, string path, bool inBatch, CancellationToken token, bool eventStarts = false,
             bool retainReceipts = false, bool orderedScan = false, bool publicStarts = false,
-            Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator = null, RootPublicEventHost? publicEventHost = null)
+            Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator = null, RootPublicEventHost? publicEventHost = null,
+            Func<IReplyTransport, IReplyTransport>? observeReplies = null)
     {
         if (eventStarts) authorizeOperator ??= Authorize;
         const string node = "authored-event-owner";
@@ -261,9 +262,16 @@ internal static partial class KernelAuthoredEventChecks
             (scope, after, through, limit, ct) => admission.ReadEventStartPageAsync(scope.Tenant, after, through, limit, ct)) : null;
         return (OpenPostgres, foundation, foundation, hosted, port, StartPostgresAsync);
 
-        async Task<IAsyncDisposable> StartPostgresAsync(CancellationToken cancellationToken) =>
-            await PostgresPreviewHosting.StartAsync(OpenPostgres, node, model, EndProcess, loop, cancellationToken,
-                Console.Error.WriteLine, (IReplyTransport)requests, fenceInBatch: inBatch);
+        async Task<IAsyncDisposable> StartPostgresAsync(CancellationToken cancellationToken)
+        {
+            if (observeReplies is null)
+                return await PostgresPreviewHosting.StartAsync(OpenPostgres, node, model, EndProcess, loop, cancellationToken,
+                    Console.Error.WriteLine, (IReplyTransport)requests, fenceInBatch: inBatch);
+            var service = new PostgresPreviewHostedService(OpenPostgres, node, model, EndProcess, loop, requests: requests)
+                { ObserveReplies = observeReplies };
+            await service.StartAsync(cancellationToken);
+            return service;
+        }
 
         static ValueTask<bool> Protect(PendingRootStart _, CancellationToken __) => ValueTask.FromResult(true);
 
