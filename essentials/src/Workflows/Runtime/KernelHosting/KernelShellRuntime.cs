@@ -29,15 +29,14 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async Task StartAsync(CancellationToken token)
     {
-        await storage.InstallAsync(token);
+        var protection = protectChildExecutables || storage.TakesPreparedStarts
+            ? new KernelExecutableProtection(scopes, persistenceScope, tenant, serving, storage, clock,
+                logs.CreateLogger<KernelExecutableProtection>())
+            : null;
+        await storage.InstallAsync(token, storage.TakesPreparedStarts ? protection!.ProtectHeldStartAsync : null);
         _foundation = await storage.OpenAsync(token);
         var schedules = await CreateScheduleWorkerAsync(token);
-        KernelChildBirthProtection? protection = null;
-        if (protectChildExecutables)
-        {
-            protection = new(scopes, persistenceScope, tenant, serving, storage, clock, logs.CreateLogger<KernelChildBirthProtection>());
-            await protection.RequireAsync(token);
-        }
+        if (protection is not null) await protection.RequireAsync(token);
         await ServePublicationsAsync(token);
 
         _client = NativeHttpOptions.CreateClient();
@@ -57,7 +56,8 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ResolveWorkflow = ResolveWorkflowAsync
         });
         var auxiliary = schedules is null ? null : new ScheduleActor(schedules.Value.Calendar, schedules.Value.Worker.CreateAcceptor());
-        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window, auxiliary, protection is null ? null : protection.ProtectAsync);
+        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window, auxiliary,
+            protectChildExecutables ? protection!.ProtectAsync : null);
         await _owner.StartAsync(token);
         var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
         var worker = new KernelRetentionWorker(pass, tenant,
