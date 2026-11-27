@@ -3456,7 +3456,8 @@ internal static class PostgresRootParkedOperatorChecks
             await using var db = open();
             await using var transaction = await db.Database.BeginTransactionAsync(stop);
             await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_require_root_checkpoint_writer""", stop);
-            if (await db.Database.ExecuteSqlInterpolatedAsync(FormattableStringFactory.Create("UPDATE \"Instances\" SET " + change + " WHERE \"Id\" = {0}", root.Actor.Id), stop) != 1)
+            var format = change.Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal);
+            if (await db.Database.ExecuteSqlInterpolatedAsync(FormattableStringFactory.Create("UPDATE \"Instances\" SET " + format + " WHERE \"Id\" = {0}", root.Actor.Id), stop) != 1)
                 throw new InvalidOperationException("The bypass did not change exactly the root row.");
             // The child settlement trigger may have queued a deferred check for this same-revision update.
             await db.Database.ExecuteSqlRawAsync("SET CONSTRAINTS ALL IMMEDIATE", stop);
