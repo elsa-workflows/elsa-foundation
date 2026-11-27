@@ -55,7 +55,6 @@ public sealed partial class EfStore
                     root."HeadPosition", root."CancellationRevision", root."CancellationAt",
                     marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec", /*definitions-stamp*/ AS "DefinitionStamp"
                 FROM (VALUES (1)) stamp(id) LEFT JOIN root ON true LEFT JOIN page ON true LEFT JOIN marker ON true
-                ORDER BY page."Position"
                 """)).ToListAsync(cancellationToken);
         }
         catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
@@ -76,7 +75,9 @@ public sealed partial class EfStore
     private static RootJournalPage BuildRootJournalPage(IReadOnlyList<JournalProjection> sampled)
     {
         var first = sampled[0];
+        // The indexed query already capped and selected the page. Order just those rows after the metadata joins.
         var rows = sampled.Where(row => row.Position.HasValue)
+            .OrderBy(row => row.Position)
             .Select(row => new RootJournalEntry(row.Position!.Value, row.Revision!.Value, row.Entries!)).ToArray();
         var head = first.HeadRevision is { } revision
             ? new RootJournalHead(revision, first.HeadPosition ?? 0, first.CancellationRevision, first.CancellationAt)
