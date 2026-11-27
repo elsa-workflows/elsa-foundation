@@ -818,9 +818,12 @@ internal static class InlineRootPromotionChecks
                         """).SingleAsync(ct);
                 }
 
-                Task<InlineStartOutcome> StartAsync(string operation, Workflow selected) =>
-                    requests.StartAsync(operation, WorkflowActorType.Start(NativeExecutionModel.Start(selected, Modes.Ephemeral)),
+                Task<InlineStartOutcome> StartAsync(string operation, Workflow selected, string? input = null)
+                {
+                    var start = WorkflowActorType.Start(NativeExecutionModel.Start(selected, Modes.Ephemeral));
+                    return requests.StartAsync(operation, input is null ? start : start with { Input = input },
                         model.CaptureInlineMaterial(selected), token).AsTask();
+                }
 
                 async Task QualifyPressureAsync()
                 {
@@ -835,7 +838,9 @@ internal static class InlineRootPromotionChecks
                             await CountDurableRowsAsync() == before && protectionCalls == 0,
                             "the bound inline edge finishes write-free despite a full physical pressure list and occupied ordinary capacity");
                     }
-                    Check(pressure.PlaceInlineStart([new(0, 1, 0), new(1, 1, 0)])?.Partition == 1,
+                    const string preferred = "preferred-first-fence";
+                    var prefersZero = InstanceRef.Spread(preferred, 2) == 0 ? preferred : preferred + "1";
+                    Check(RootAdmissionPressure.PlaceInlineStart(prefersZero, [0, 1], pressure) == 1,
                         "placement prefers an under-water owned partition ahead of a full one");
                     Check(await StartAsync("rate-limited-before-turn", pure) is
                             { Disposition: InlineStartDisposition.Unavailable, RefusalReason: Contract.RefusalReason.RateLimited, RetryAfter: { } retry }
@@ -879,6 +884,32 @@ internal static class InlineRootPromotionChecks
                         protectionCalls == 1 && await StartAsync("post-promotion-rate-limit", pure) is
                             { Disposition: InlineStartDisposition.Unavailable, RefusalReason: Contract.RefusalReason.RateLimited },
                         "relief admits the fenced promotion with exactly one tenant permit");
+
+                    rateClock.Advance(TimeSpan.FromSeconds(10));
+                    var firstLarge = StartAsync("maximum-inline-input-1", pure, QualifiedInlineRootCoreChecks.MaximumInput());
+                    rateClock.Advance(TimeSpan.FromSeconds(10));
+                    var secondLarge = StartAsync("maximum-inline-input-2", pure, QualifiedInlineRootCoreChecks.MaximumInput());
+                    rateClock.Advance(TimeSpan.FromSeconds(10));
+                    var durableBeforeLimit = await CountDurableRowsAsync();
+                    Check(!firstLarge.IsCompleted && !secondLarge.IsCompleted && owner.QueuedInlineRootCount == 2 &&
+                        await StartAsync("over-owner-byte-budget", pure, QualifiedInlineRootCoreChecks.MaximumInput()) is
+                            { Disposition: InlineStartDisposition.Unavailable, RefusalReason: null },
+                        "maximum legal ASCII starts fit individually but their UTF-16 captures exhaust the owner budget before the count limit");
+                    var small = StartAsync("small-after-byte-refusal", pure);
+                    Check(!small.IsCompleted && owner.QueuedInlineRootCount == 3 && await CountDurableRowsAsync() == durableBeforeLimit &&
+                        await StartAsync("rate-after-small", pure) is { RefusalReason: Contract.RefusalReason.RateLimited },
+                        "a byte refusal refunds its reservation, and the same tenant can spend it on a small start without provider writes");
+                    await owner.ReleaseAsync(token);
+                    Check(await firstLarge is { Disposition: InlineStartDisposition.Unknown } &&
+                        await secondLarge is { Disposition: InlineStartDisposition.Unknown } &&
+                        await small is { Disposition: InlineStartDisposition.Unknown } &&
+                        await owner.GainAsync(0, token),
+                        "stand-down releases every queued capture and settles the original callers after ownership loss");
+                    rateClock.Advance(TimeSpan.FromSeconds(10));
+                    var largeAfterReset = StartAsync("maximum-after-reset", pure, QualifiedInlineRootCoreChecks.MaximumInput());
+                    await WaitForAsync(largeAfterReset);
+                    Check(await largeAfterReset is { Disposition: InlineStartDisposition.Volatile } && protectionCalls == 1,
+                        "the next owner interval admits a maximum input and completes it without invoking durable protection");
                     checkingPressure = false;
 
                     async Task SetBacklogAsync(int depth)

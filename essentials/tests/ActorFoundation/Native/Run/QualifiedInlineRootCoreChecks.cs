@@ -110,7 +110,86 @@ internal static class QualifiedInlineRootCoreChecks
             await owner.ReleaseAsync(token);
             Check(await shutdown.WaitAsync(token) == new InlineRootResult(InlineRootDisposition.OwnershipLost),
                 "shutdown settles a queued start whose owner was lost");
+
+            await using var bounded = Worker.ForNode("bounded-inline", store, new ActorAdapter(new InlineHeaders(MatchesMaterial), actor, self),
+                options with { MaxBatch = 4 });
+            await bounded.GainSetAsync([0, 1], token);
+            // Retain a full-sized creator without making its waiting actor state large as well.
+            var largeWaiting = Creator(shortWait, input: Creator(shortWait).Payload!.PadRight(FoundationMetadataLimits.StartContentBytes));
+            var waitingReceipt = Queue(bounded, largeWaiting, shortWait);
+            while (!bounded.Unwritten.Contains(largeWaiting.Target.Id) && !waitingReceipt.IsCompleted)
+            {
+                token.ThrowIfCancellationRequested();
+                await bounded.RunAsync(token);
+            }
+            Check(bounded.Unwritten.Contains(largeWaiting.Target.Id) && !waitingReceipt.IsCompleted,
+                "the maximum-sized creator is retained through a short in-memory wait");
+            var discarded = Queue(bounded, Creator(pure, partition: 1, input: MaximumInput()), pure);
+            var replacement = Creator(pure, input: MaximumInput());
+            Check(bounded.QueuedInlineRootCount == 1 &&
+                bounded.TryQueueQualifiedInlineStart(replacement, model.CaptureInlineMaterial(pure)) is null,
+                "a maximum legal input fits, but three such captures do not fit while one waits outside the queue");
+            Check((await bounded.LoseAsync([1], token)).SequenceEqual([1]) &&
+                await discarded.WaitAsync(token) == new InlineRootResult(InlineRootDisposition.OwnershipLost),
+                "handover settles the queued maximum input without giving it a turn");
+            var replacementReceipt = Queue(bounded, replacement, pure);
+            now += 100;
+            Check(await SettleAsync(bounded, replacementReceipt) == new InlineRootResult(InlineRootDisposition.WriteFree, InstanceStatus.Finished) &&
+                await SettleAsync(bounded, waitingReceipt) == new InlineRootResult(InlineRootDisposition.WriteFree, InstanceStatus.Finished),
+                "handover releases exactly the discarded bytes, and the retained short wait can still finish");
+
+            Check(await bounded.GainAsync(1, token), "both placement partitions are now held");
+            var pressure = RootAdmissionPressure.CreateDefault();
+            var leftName = ForPartition("left", 0);
+            var rightName = ForPartition("right", 1);
+            var left = Place(leftName, pure);
+            var right = Place(rightName, pure);
+            Check(left.Creator.Target.Partition == 0 && right.Creator.Target.Partition == 1 &&
+                await SettleAsync(bounded, left.Receipt) == new InlineRootResult(InlineRootDisposition.WriteFree, InstanceStatus.Finished) &&
+                await SettleAsync(bounded, right.Receipt) == new InlineRootResult(InlineRootDisposition.WriteFree, InstanceStatus.Finished),
+                "the stable actor-name placement spreads over both healthy owned partitions");
+
+            var handingOver = Place(ForPartition("handover", 1), shortWait, largeWaiting.Payload);
+            while (!bounded.Unwritten.Contains(handingOver.Creator.Target.Id) && !handingOver.Receipt.IsCompleted)
+            {
+                token.ThrowIfCancellationRequested();
+                await bounded.RunAsync(token);
+            }
+            (Message Creator, Task<InlineRootResult> Receipt)? duringHandover = null;
+            store.Locking = _ =>
+            {
+                store.Locking = null;
+                Check(bounded.Holds(1), "handover is committing the old partition's memory before dropping the fence");
+                duringHandover = Place(ForPartition("prefer-leaving", 1), pure);
+            };
+            Check((await bounded.LoseAsync([1], token)).SequenceEqual([1]) &&
+                await handingOver.Receipt.WaitAsync(token) == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Running) &&
+                duringHandover is { Creator.Target.Partition: 0 } available &&
+                await SettleAsync(bounded, available.Receipt) == new InlineRootResult(InlineRootDisposition.WriteFree, InstanceStatus.Finished),
+                "a start whose preferred fence is still held but handing over queues on the remaining fence");
+
+            var resetFirst = Queue(bounded, Creator(pure, input: MaximumInput()), pure);
+            var resetSecond = Queue(bounded, Creator(pure, input: MaximumInput()), pure);
+            Check(bounded.QueuedInlineRootCount == 2, "promotion frees the held maximum-sized capture");
+            await bounded.ReleaseAsync(token);
+            Check(await resetFirst.WaitAsync(token) == new InlineRootResult(InlineRootDisposition.OwnershipLost) &&
+                await resetSecond.WaitAsync(token) == new InlineRootResult(InlineRootDisposition.OwnershipLost) &&
+                await bounded.GainAsync(0, token) &&
+                await SettleAsync(bounded, Queue(bounded, Creator(pure, input: MaximumInput()), pure)) ==
+                    new InlineRootResult(InlineRootDisposition.WriteFree, InstanceStatus.Finished),
+                "reset clears all capture reservations before reacquisition");
             return 0;
+
+            static string ForPartition(string name, int partition) => InstanceRef.Spread(name, 2) == partition ? name : name + "1";
+
+            (Message Creator, Task<InlineRootResult> Receipt) Place(string name, Workflow selected, string? input = null)
+            {
+                var material = model.CaptureInlineMaterial(selected);
+                var spec = Creator(selected, input: input).Start!;
+                return bounded.TryPlaceQualifiedInlineStart(name, spec, material, null, pressure,
+                    target => Creator(selected, input: input, address: target)) ??
+                    throw new InvalidOperationException("The owner could not place a qualified creator.");
+            }
         }
         finally { WriteLine.Out = previous; }
 
@@ -118,16 +197,16 @@ internal static class QualifiedInlineRootCoreChecks
             start.Model == WorkflowActorType.ActorType && permittedStarts.TryGetValue(start.Definition, out var selected) &&
             model.MatchesInlineMaterial(material, selected.Id, selected.Definition, selected.ExecutableSelection);
 
-        Message Creator(Workflow workflow, int partition = 0)
+        Message Creator(Workflow workflow, int partition = 0, string? input = null, InstanceRef? address = null)
         {
             const string tenant = "ephemeral-fixture";
             var spec = WorkflowActorType.Start(NativeExecutionModel.Start(workflow, Modes.Ephemeral));
             var operation = Guid.NewGuid().ToString("N");
-            var address = InstanceRef.In(partition, tenant + "_" + operation);
-            var reference = store.ReferenceFor(tenant, new(address.Id, 1));
-            return FoundationRootCreator.Create(address, operation, FoundationRootCreator.OperationDigest(operation),
-                new StartSpec(spec.Type, spec.TypeData, spec.Input, Ephemeral: spec.Ephemeral), null, null)
-                with { FoundationRootBinding = (address.Id, tenant, reference) };
+            var target = address ?? InstanceRef.In(partition, tenant + "_" + operation);
+            var reference = store.ReferenceFor(tenant, new(target.Id, 1));
+            return FoundationRootCreator.Create(target, operation, FoundationRootCreator.OperationDigest(operation),
+                new StartSpec(spec.Type, spec.TypeData, input ?? spec.Input, Ephemeral: spec.Ephemeral), null, null)
+                with { FoundationRootBinding = (target.Id, tenant, reference) };
         }
 
         async Task<InlineRootResult> SettleAsync(Worker worker, Task<InlineRootResult> completion)
@@ -143,6 +222,18 @@ internal static class QualifiedInlineRootCoreChecks
         Task<InlineRootResult> Queue(Worker owner, Message creator, Workflow material) =>
             owner.TryQueueQualifiedInlineStart(creator, model.CaptureInlineMaterial(material))
             ?? throw new InvalidOperationException("The test owner could not queue its qualified creator.");
+    }
+
+    internal static string MaximumInput()
+    {
+        const string prefix = "{\"Mode\":\"Ephemeral\",\"Input\":{\"padding\":\"";
+        const string suffix = "\"}}";
+        return string.Create(FoundationMetadataLimits.StartContentBytes, (prefix, suffix), (destination, parts) =>
+        {
+            parts.prefix.CopyTo(destination);
+            destination[parts.prefix.Length..^parts.suffix.Length].Fill('a');
+            parts.suffix.CopyTo(destination[^parts.suffix.Length..]);
+        });
     }
 
     internal sealed record InlineHeaders(Func<StartSpec, object, bool>? ValidateInlineMaterial = null) : IRootDispatchHeaders
