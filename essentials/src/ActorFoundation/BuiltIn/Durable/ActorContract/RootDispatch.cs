@@ -24,6 +24,7 @@ internal interface IRootDispatchHeaders
     bool RecoversPark { get; }
     bool TakesLiveEventWaits => false;
     bool KeepsEventWaits => false;
+    bool SupportsPublicEventRequests => false;
     bool PublishesAuthoredEvents => false;
     bool RefusesParkedOperators { get; }
     bool SettlesEndedMailbox { get; }
@@ -480,6 +481,21 @@ internal sealed partial class ActorAdapter
         return null;
     }
 
+    private bool HasPublicEventReplyRoute(Durable.Delivery delivery) =>
+        roots?.SupportsPublicEventRequests == true && rootHeldReplies && delivery.Durable &&
+        delivery.ReplyRoute is { Tenant: not null } route &&
+        Durable.ReplyTo.Parse(route.Address) is { Node.Length: > 0, Request: var registration, Deadline: > 0 } &&
+        Durable.Request.EventRecipientSeparatorIndex(registration, out _) >= 0 &&
+        (delivery.Message is { Kind: Durable.Kinds.Event, ProjectedEvent: not null, InboxScope: Durable.InboxKey.FoundationOccurrenceScope } ||
+            delivery.Message is { Kind: Durable.Kinds.Start, FoundationRootBinding: not null, Start: not null, InboxScope: 0 } creator &&
+            creator.Id.StartsWith("event/", StringComparison.Ordinal) &&
+            Durable.FoundationRootCreator.IsGeneratedReference(creator.Id["event/".Length..]));
+
+    private bool SupportsExplicitRootReply(Durable.TurnOutcome outcome) =>
+        outcome.Replied is [var reply] && reply is { FromFoundation: true, Rpc: false } &&
+        outcome.Consumed is [var delivery] && HasPublicEventReplyRoute(delivery) &&
+        reply.Message == delivery.Message.InboxKey && reply.Route == delivery.ReplyRoute;
+
     private void RequireRootOutcome(Durable.TurnOutcome outcome, Durable.InstanceRow? previous, Durable.Message input)
     {
         var inline = roots?.SupportsInlineStarts == true &&
@@ -540,7 +556,7 @@ internal sealed partial class ActorAdapter
             !SupportsSends(next) ||
             outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||
             roots?.TakesLiveEventWaits != true && (outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0) ||
-            outcome.Replied.Count != 0 ||
+            outcome.Replied.Count != 0 && !SupportsExplicitRootReply(outcome) ||
             // Emitted output is live: the owner releases it to the callers it holds for the root, whichever turn consumed
             // their delivery, and drops it when it holds none (Worker.Release), as the in-memory reference does.
             outcome.FoundationCascade is not null && !settlesJobs && !childCascade || outcome.InMemory && !inline)
