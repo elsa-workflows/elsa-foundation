@@ -632,6 +632,10 @@ public sealed partial class ArchitectureGuardTests
         if (project.Name == "Elsa.Essentials.Host")
             return "apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj";
 
+        // The temporary Elsa 3 migration host (spec 1236), beside the other hosts; removed by the cleanup on #5800.
+        if (project.Name == "Elsa.Migration.Host")
+            return "apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj";
+
         if (RelocatedProjects.TryGetValue(project.Name, out var relocated))
             return relocated;
 
@@ -689,7 +693,7 @@ public sealed partial class ArchitectureGuardTests
 
         // Deployable host app under apps/ (see ExpectedProjectPath): grouped directly beneath the Apps
         // solution folder, alongside Elsa.Workbench.
-        if (project.Name is "Elsa.Foundation.Host" or "Elsa.Essentials.Host")
+        if (project.Name is "Elsa.Foundation.Host" or "Elsa.Essentials.Host" or "Elsa.Migration.Host")
             return "/apps/";
 
         var directory = Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/');

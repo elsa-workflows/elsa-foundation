@@ -230,6 +230,7 @@
   <Folder Name="/apps/">
     <Project Path="apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj" />
     <Project Path="apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
+    <Project Path="apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj" />
     <Project Path="apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj" />
   </Folder>
   <Folder Name="/essentials/" />
@@ -1031,6 +1032,10 @@
   </Folder>
   <Folder Name="/essentials/tests/Mediator/">
     <Project Path="essentials/tests/Mediator/Tests/Elsa.Mediator.Tests.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/Migration/" />
+  <Folder Name="/essentials/tests/Migration/Host/">
+    <Project Path="essentials/tests/Migration/Host/Tests/Elsa.Migration.Host.Tests.csproj" />
   </Folder>
   <Folder Name="/extensions/Http/tests/">
     <Project Path="extensions/Http/tests/Tests/Elsa.Http.Tests.csproj" />

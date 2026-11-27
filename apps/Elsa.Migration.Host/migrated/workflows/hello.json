@@ -1,0 +1,50 @@
+[
+  {
+    "definitionId": "wfdef_elsa3-migration-host-hello",
+    "name": "migration-host-hello",
+    "description": "Sample migrated workflow: GET /workflows/http/hello answers with a JSON greeting.",
+    "version": "1.0.0",
+    "state": {
+      "rootActivity": {
+        "nodeId": "hello-root",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "hello-endpoint",
+                "activityVersionId": "actver_f3Gb9cYEKGnvbNMN66qIRVo4hkRJe4Uc0BSf1ik7Bsk",
+                "inputs": [
+                  { "referenceKey": "Path", "value": { "value": "hello", "expressionType": "Literal" } },
+                  { "referenceKey": "SupportedMethods", "value": { "value": [ "GET" ], "expressionType": "Literal" } },
+                  { "referenceKey": "CanStartWorkflow", "value": { "value": true, "expressionType": "Literal" } },
+                  { "referenceKey": "ResponseMode", "value": { "value": 1, "expressionType": "Literal" } }
+                ],
+                "outputs": []
+              },
+              {
+                "nodeId": "hello-response",
+                "activityVersionId": "actver_bsCiMwFIlcFPvbcDBS9sazWvNl-W8Z1hps1Spm57_KM",
+                "inputs": [
+                  { "referenceKey": "StatusCode", "value": { "value": 200, "expressionType": "Literal" } },
+                  { "referenceKey": "ContentType", "value": { "value": "application/json", "expressionType": "Literal" } },
+                  { "referenceKey": "Body", "value": { "value": { "message": "Hello from the Elsa 3 migration host" }, "expressionType": "Literal" } }
+                ],
+                "outputs": []
+              }
+            ]
+          }
+        }
+      },
+      "variables": [],
+      "inputs": [],
+      "outputs": []
+    },
+    "sourceCreatedAt": "2026-11-27T00:00:00Z",
+    "deleted": false
+  }
+]
