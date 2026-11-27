@@ -91,7 +91,8 @@ def sqlite_shipped_markers():
 
 
 def sqlite_markers(path, expected):
-    with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as store:
+    # The owned writer has exited. Read a checkpointed WAL file without creating shared-memory sidecars.
+    with closing(sqlite3.connect(path.as_uri() + '?mode=ro&immutable=1', uri=True)) as store:
         markers = store.execute('SELECT "Id", "StoreSchema", "MessageProtocol", "JournalCodec" '
                                 'FROM "KernelStoreVersions" ORDER BY "Id"').fetchall()
     if markers != expected:
@@ -364,6 +365,8 @@ def run(output, journey=None, provider='postgres'):
                 if not report['postgres']['containerRemoved']:
                     raise ValueError('The owned PostgreSQL container outlived the run')
             else:
+                if processes['backend'].returncode != 0:
+                    raise ValueError('The SQLite Workbench did not stop cleanly before checking the markers')
                 report['sqlite']['markers'] = sqlite_markers(sqlite_path, report['sqlite']['expectedMarkers'])
             report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, selected)
         report['hostExitCodes'] = {key: process.returncode for key, process in processes.items()}

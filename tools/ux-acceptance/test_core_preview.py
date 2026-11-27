@@ -1,6 +1,7 @@
 """Synthetic controls for the Core Preview acceptance runner, never product or screenshot evidence."""
 import importlib.util
 import json
+import shutil
 import sqlite3
 from pathlib import Path
 from contextlib import closing
@@ -83,10 +84,16 @@ class CorePreviewCompositionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "kernel.sqlite"
             expected = acceptance.sqlite_shipped_markers()
-            with closing(sqlite3.connect(path)) as store, store:
+            with closing(sqlite3.connect(path)) as store:
+                store.execute('PRAGMA journal_mode = WAL')
                 store.execute('CREATE TABLE "KernelStoreVersions" ("Id", "StoreSchema", "MessageProtocol", "JournalCodec")')
                 store.executemany('INSERT INTO "KernelStoreVersions" VALUES (?, ?, ?, ?)', expected)
-            self.assertEqual(expected, acceptance.sqlite_markers(path, expected))
+                store.commit()
+                self.assertEqual((0, 0, 0), store.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone())
+            checkpointed = path.with_name('checkpointed.sqlite')
+            shutil.copyfile(path, checkpointed)
+            self.assertEqual(expected, acceptance.sqlite_markers(checkpointed, expected))
+            self.assertFalse(checkpointed.with_name('checkpointed.sqlite-shm').exists())
             with closing(sqlite3.connect(path)) as store, store:
                 store.execute('UPDATE "KernelStoreVersions" SET "MessageProtocol" = "MessageProtocol" + 1 WHERE "Id" = 1')
             with self.assertRaisesRegex(ValueError, "Expected SQLite shipped markers"):
