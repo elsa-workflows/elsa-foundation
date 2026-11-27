@@ -59,12 +59,20 @@ public sealed class KernelServing
 
     public KernelServedSlot? Find(string slotId) => _state.Slots.GetValueOrDefault(slotId);
 
-    internal (HttpRoute Route, Workflow Workflow)? HttpStart(HttpRoute matched)
+    internal (NativeHttpRouteMatch Route, KernelServedSlot? Slot)? MatchHttp(string method, string path)
+    {
+        var snapshot = _state;
+        var match = HttpRouteMatcher.Match(snapshot.Routes, method, path);
+        if (match.Route is not { } route || (!route.Start && !Capabilities.HttpWaits)) return null;
+        return (match, route.Start ? snapshot.Slots[snapshot.HttpStarts[(route.Method, route.Template.Text)].SlotId] : null);
+    }
+
+    internal (HttpRoute Route, KernelServedSlot Slot)? HttpStart(HttpRoute matched)
     {
         var snapshot = _state;
         return snapshot.HttpStarts.TryGetValue((matched.Method, matched.Template.Text), out var start) &&
             start.Route.Workflow == matched.Workflow && start.Route.Node == matched.Node &&
-            start.Route.RespondBeforeCommit == matched.RespondBeforeCommit ? start : null;
+            start.Route.RespondBeforeCommit == matched.RespondBeforeCommit ? (start.Route, snapshot.Slots[start.SlotId]) : null;
     }
 
     /// <summary>
@@ -155,19 +163,26 @@ public sealed class KernelServing
 
     private ServingState Build(Dictionary<string, KernelServedSlot> slots)
     {
-        var workflows = slots.Values.OrderBy(slot => slot.SlotId, StringComparer.Ordinal).Select(slot => slot.Workflow).ToArray();
+        var ordered = slots.Values.OrderBy(slot => slot.SlotId, StringComparer.Ordinal).ToArray();
         var registry = new WorkflowRegistry();
-        foreach (var workflow in workflows) registry.Add(workflow);
+        var routeSlots = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var slot in ordered)
+        {
+            registry.Add(slot.Workflow);
+            routeSlots[slot.Workflow.Id] = slot.SlotId;
+        }
         var routes = new HttpRoutes(registry);
+        // The installed slot supplies its committed revision after the route plan is built.
         var starts = routes.Routes.Where(route => route.Start).ToDictionary(route => (route.Method, route.Template.Text),
-            route => (route, registry.Get(route.Workflow)));
-        var schedules = NativeSchedules.ForPublications(workflows.DistinctBy(workflow => (workflow.Id, workflow.Definition)), _cronError);
+            route => (route, routeSlots[route.Workflow]));
+        var schedules = NativeSchedules.ForPublications(ordered.Select(slot => slot.Workflow)
+            .DistinctBy(workflow => (workflow.Id, workflow.Definition)), _cronError);
         return new(slots, routes, schedules, starts);
     }
 }
 
 internal sealed record ServingState(IReadOnlyDictionary<string, KernelServedSlot> Slots, HttpRoutes Routes, NativeSchedules Schedules,
-    IReadOnlyDictionary<(string Method, string Template), (HttpRoute Route, Workflow Workflow)> HttpStarts);
+    IReadOnlyDictionary<(string Method, string Template), (HttpRoute Route, string SlotId)> HttpStarts);
 
 /// <summary>A change to the serving set, checked: the slot, what it served before, what it serves after, and the state that results.</summary>
 internal sealed record KernelServingPlan(string SlotId, KernelServedSlot? Previous, KernelServedSlot? Served, ServingState State);

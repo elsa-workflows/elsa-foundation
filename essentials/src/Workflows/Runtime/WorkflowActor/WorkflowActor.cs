@@ -19,7 +19,7 @@ public sealed record WorkflowRunHeader(string Workflow, string Definition, bool 
     [System.Text.Json.Serialization.JsonIgnore]
     public bool Ephemeral { get; init; }
 
-    /// <summary>Exact publication and caller attribution of a standard published Execute request.</summary>
+    /// <summary>The exact publication selection and any caller attribution retained by a published start.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public WorkflowPublishedStart? PublishedStart { get; init; }
 

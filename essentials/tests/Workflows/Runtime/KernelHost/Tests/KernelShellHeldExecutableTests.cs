@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Kernel.Foundation.Hosting;
 using Kernel.Native;
+using Kernel.WorkflowActor;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Data.Sqlite;
@@ -75,6 +76,7 @@ public sealed class KernelShellHeldExecutableTests
         var identity = executable.Identity;
         var unavailable = new PinAvailability();
         Contract.ActorRef actor;
+        WorkflowPublishedStart selected;
 
         await using (var services = OpenShell())
         {
@@ -96,24 +98,24 @@ public sealed class KernelShellHeldExecutableTests
             {
                 var handler = new KernelHttpRequestHandler(services.GetRequiredService<KernelServing>(), shell.IngressAsync,
                     services.GetRequiredService<KernelShellStorage>().ReadClockAsync, tenant, "/workflows/http", TimeSpan.FromSeconds(10),
-                    maxRequestBodyBytes: 64 * 1024, enforceRequestTimeout: true);
+                    maxRequestBodyBytes: 64 * 1024, enforceRequestTimeout: true)
+                {
+                    ReadPublication = shell.ReadHeldPublicationAsync
+                };
                 var reads = await shell.ReadAsync(token);
-                unavailable.FailWrites = true;
-                var shortRequest = new KernelHttpRequestHandler(services.GetRequiredService<KernelServing>(), shell.IngressAsync,
-                    services.GetRequiredService<KernelShellStorage>().ReadClockAsync, tenant, "/workflows/http", TimeSpan.FromSeconds(1),
-                    maxRequestBodyBytes: 64 * 1024, enforceRequestTimeout: true);
-                Assert.Equal(408, (await RequestAsync(shortRequest, Route)).StatusCode);
-                Assert.True(unavailable.Attempts > 0);
-                Assert.Empty((await reads.ListAsync(tenant, new(), cancellationToken: token)).Items);
-                var probe = Wf.Workflow("held-probe", Wf.Sequence("main", Wf.HttpEndpoint("start", "held-probe"), Wf.Respond("out", "ok")));
-                await services.GetRequiredService<KernelServing>().ServeHostWorkflowAsync(probe, token);
-                var hosted = await RequestAsync(handler, "/workflows/http/held-probe");
-                Assert.Equal(200, hosted.StatusCode);
-                unavailable.FailWrites = false;
                 var context = await RequestAsync(handler, Route);
                 Assert.Equal(202, context.StatusCode);
                 actor = new(Assert.Single(context.Headers[KernelHttpEdge.WorkflowInstanceIdHeader])!);
-                Assert.Equal(Contract.ActorStatus.Running, (await reads.GetAsync(tenant, actor, token))?.Header.Status);
+                var birth = Assert.IsType<Contract.ActorView>(await reads.GetAsync(tenant, actor, token));
+                Assert.Equal(Contract.ActorStatus.Running, birth.Header.Status);
+                var publishedSourceId = WorkflowActivationReferenceIdentity.Create(published.Slot.ActiveActivationId!);
+                var references = stores.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+                var publishedSource = Assert.IsType<WorkflowExecutableSourceReference>(await references.FindAsync(publishedSourceId, token));
+                selected = Assert.IsType<WorkflowPublishedStart>(WorkflowActor.DescribeRun(birth.Header)?.PublishedStart);
+                Assert.Equal((publishedSourceId, published.Slot.ActiveActivationId, published.Slot.SlotId,
+                    published.Slot.SlotName, published.Slot.Revision),
+                    (selected.SourceReferenceId, selected.ActivationId, selected.SlotId, selected.SlotName, selected.SlotRevision));
+                Assert.Equal(KernelPublishedRunDispatcher.SourceDigest(publishedSource), selected.SourceDigest);
                 var pins = stores.GetRequiredService<IRuntimeKernelExecutablePinStore>();
                 var tail = await pins.ReadOpenTailAsync(Persistence, token);
                 Assert.NotNull(tail);
@@ -121,11 +123,44 @@ public sealed class KernelShellHeldExecutableTests
                 Assert.Equal((actor.Id, identity), (pin.ActorReference, pin.Executable));
                 Assert.True(PendingRootStart.OwnsIssuance(pin.Issuance));
 
-                var deactivated = await coordinator.DeactivateAsync(new(executable, KernelServing.DefaultSlotName,
-                    WorkflowActivationSource.Publishing, published.Slot.Revision), token);
-                Assert.True(deactivated.Succeeded, deactivated.Diagnostic);
-                Assert.True(await stores.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().RetireAsync(
-                    WorkflowActivationReferenceIdentity.Create(published.Slot.ActiveActivationId!), DateTimeOffset.UtcNow, "retired the source", token));
+                unavailable.FailWrites = true;
+                var shortRequest = new KernelHttpRequestHandler(services.GetRequiredService<KernelServing>(), shell.IngressAsync,
+                    services.GetRequiredService<KernelShellStorage>().ReadClockAsync, tenant, "/workflows/http", TimeSpan.FromSeconds(2),
+                    maxRequestBodyBytes: 64 * 1024, enforceRequestTimeout: true)
+                {
+                    ReadPublication = shell.ReadHeldPublicationAsync
+                };
+                Assert.Equal(408, (await RequestAsync(shortRequest, Route)).StatusCode);
+                Assert.True(unavailable.Attempts > 0);
+                Assert.Equal(actor, Assert.Single((await reads.ListAsync(tenant, new(), cancellationToken: token)).Items).Header.Ref);
+                var probe = Wf.Workflow("held-probe", Wf.Sequence("main", Wf.HttpEndpoint("start", "held-probe"), Wf.Respond("out", "ok")));
+                await services.GetRequiredService<KernelServing>().ServeHostWorkflowAsync(probe, token);
+                var hosted = await RequestAsync(handler, "/workflows/http/held-probe");
+                Assert.Equal(200, hosted.StatusCode);
+                unavailable.FailWrites = false;
+
+                var before = (await reads.ListAsync(tenant, new(), cancellationToken: token)).Items.Count;
+                var reached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                unavailable.BeforePublishedPin = async cancellation =>
+                {
+                    reached.TrySetResult();
+                    await release.Task.WaitAsync(cancellation);
+                };
+                var stale = RequestAsync(handler, Route);
+                try
+                {
+                    await reached.Task.WaitAsync(token);
+                    var deactivated = await coordinator.DeactivateAsync(new(executable, KernelServing.DefaultSlotName,
+                        WorkflowActivationSource.Publishing, published.Slot.Revision), token);
+                    Assert.True(deactivated.Succeeded, deactivated.Diagnostic);
+                }
+                finally { release.TrySetResult(); }
+                var refused = await stale;
+                Assert.Equal(404, refused.StatusCode);
+                Assert.False(refused.Headers.ContainsKey(KernelHttpEdge.WorkflowInstanceIdHeader));
+                Assert.Equal(before, (await reads.ListAsync(tenant, new(), cancellationToken: token)).Items.Count);
+                Assert.True(await references.RetireAsync(publishedSourceId, DateTimeOffset.UtcNow, "retired the source", token));
                 await stores.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>().SweepAsync(token);
                 Assert.NotNull(await materials.FindAsync(identity.ArtifactId, token));
             }
@@ -148,6 +183,7 @@ public sealed class KernelShellHeldExecutableTests
                 Assert.Equal(Contract.AdmissionOutcome.Accepted, resumed.Outcome);
                 var terminal = await WaitAsync(() => store.Reads.GetAsync(tenant, actor, token),
                     item => item?.Header.Status == Contract.ActorStatus.Finished, token);
+                Assert.Equal(selected, WorkflowActor.DescribeRun(terminal!.Header)?.PublishedStart);
                 Assert.Equal(JsonSerializer.Serialize(identity), serving.Registry.Get(identity.ArtifactId).ExecutableSelection);
 
                 var policy = await store.RetentionPolicies.ReadRetentionPolicyAsync(tenant, token);
@@ -207,15 +243,25 @@ public sealed class KernelShellHeldExecutableTests
     {
         internal volatile bool FailWrites;
         internal int Attempts;
+        internal Func<CancellationToken, Task>? BeforePublishedPin;
     }
 
     private sealed class TestPins(IRuntimeKernelExecutablePinStore inner, PinAvailability availability) : IRuntimeKernelExecutablePinStore
     {
-        public ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken token)
+        public ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken token) =>
+            inner.TryPinAsync(pins, token);
+
+        public async ValueTask<bool> TryPinPublishedAsync(RuntimeKernelExecutablePin pin, WorkflowActivationSlot slot,
+            WorkflowExecutableSourceReference source, CancellationToken token)
         {
-            if (!availability.FailWrites) return inner.TryPinAsync(pins, token);
-            Interlocked.Increment(ref availability.Attempts);
-            throw new WorkflowExecutableRootWriteLeaseUnavailableException(pins.First().Executable.ArtifactId, "qualification");
+            if (availability.FailWrites)
+            {
+                Interlocked.Increment(ref availability.Attempts);
+                throw new WorkflowExecutableRootWriteLeaseUnavailableException(pin.Executable.ArtifactId, "qualification");
+            }
+            if (Interlocked.Exchange(ref availability.BeforePublishedPin, null) is { } before)
+                await before(token);
+            return await inner.TryPinPublishedAsync(pin, slot, source, token);
         }
 
         public ValueTask<string?> ReadOpenTailAsync(PersistenceScope scope, CancellationToken token) => inner.ReadOpenTailAsync(scope, token);

@@ -64,9 +64,7 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
 
         var subjectId = request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-kind") == "persisted-user"
             ? request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-id") : null;
-        var publication = new WorkflowPublishedStart(source.SourceReferenceId, source.SourceKind, source.SourceId, source.SourceVersion,
-            source.DefinitionVersionId, source.ArtifactVersion, published.ActivationId, published.SlotId, published.SlotName,
-            published.Revision, SourceDigest(source), subjectId);
+        var publication = CreatePublication(source, published, subjectId);
         var spec = WorkflowActor.Start(NativeExecutionModel.Start(published.Workflow, mode.ToString(), input), publication);
 
         var operationId = Guid.NewGuid().ToString("N");
@@ -101,6 +99,10 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
         WorkflowExecutableReferenceRejectedException Rejected() => new(request.ArtifactId, requiredScope,
             WorkflowExecutableReferenceRejectionReason.NoLiveReference);
     }
+
+    internal static WorkflowPublishedStart CreatePublication(WorkflowExecutableSourceReference source, KernelServedSlot served, string? subjectId) =>
+        new(source.SourceReferenceId, source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionVersionId, source.ArtifactVersion,
+            served.ActivationId, served.SlotId, served.SlotName, served.Revision, SourceDigest(source), subjectId);
 
     internal static string SourceDigest(WorkflowExecutableSourceReference source) =>
         Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(source)));
