@@ -2,7 +2,6 @@ using System.Text.Json;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Foundation.Sqlite;
-using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -100,13 +99,25 @@ internal static class ShippedScheduleOwnerModeChecks
         KernelDb Open() => postgres ? PostgresPreviewHosting.CreateShippedContext(options.Options) :
             KernelDb.ForSqliteRootShipped(options.Options);
 
-        Task<RuntimeNode> StartOwnerAsync(string ownerNode, bool wantsManaged)
+        async Task<IAsyncDisposable> StartOwnerAsync(string ownerNode, bool wantsManaged)
         {
             if (sqlite is not null)
-                return SqliteEmbeddedHosting.StartFoundationAsync(path!, ownerNode, primary, Escalate,
-                    cancellationToken: token, auxiliaryActor: wantsManaged ? schedule : null);
+            {
+                var service = wantsManaged ? sqlite.CreateHostedServiceWithAuxiliaryActor(primary, schedule, Escalate) :
+                    sqlite.CreateHostedService(primary, Escalate);
+                try
+                {
+                    await service.StartAsync(token);
+                    return service;
+                }
+                catch
+                {
+                    await service.DisposeAsync();
+                    throw;
+                }
+            }
             var transport = ownerNode == node ? requests! : PostgresPreviewHosting.CreateRequests(Open, ownerNode, primary.Type);
-            return PostgresPreviewHosting.StartAsync(Open, ownerNode, primary, Escalate, null, token, null, transport,
+            return await PostgresPreviewHosting.StartAsync(Open, ownerNode, primary, Escalate, null, token, null, transport,
                 fenceInBatch: true, auxiliaryActor: wantsManaged ? schedule : null);
         }
 
