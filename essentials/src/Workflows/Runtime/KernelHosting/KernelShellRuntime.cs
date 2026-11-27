@@ -54,7 +54,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         await _owner.StartAsync(token);
         var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
         var worker = new KernelRetentionWorker(pass, tenant,
-            token => retention.InitializeAsync(Foundation.RetentionPolicies, Foundation.Reads, token),
+            token => retention.InitializeAsync(Foundation.RetentionPolicies, token),
             token => retention.RefreshAsync(Foundation.RetentionPolicies, token),
             retention.Unavailable, logs.CreateLogger<KernelRetentionWorker>());
         _retention = Task.Run(() => worker.RunAsync(_retentionStop.Token));
@@ -90,6 +90,9 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     public ValueTask<IIngress> IngressAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Ingress);
 
     public ValueTask<IActorReads> ReadAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Reads);
+
+    public ValueTask<KernelRetentionStatus> ReadRetentionStatusAsync(CancellationToken token) =>
+        retention.ReadStatusAsync(Foundation.RetentionPolicies, token);
 
     private KernelShellFoundation Foundation => _foundation ??
         throw new InvalidOperationException("The kernel shell has not opened its Actor Foundation.");

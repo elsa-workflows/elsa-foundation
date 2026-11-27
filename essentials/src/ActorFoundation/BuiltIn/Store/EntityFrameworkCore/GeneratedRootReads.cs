@@ -7,7 +7,7 @@ using Bookmark = Kernel.Durable.FoundationJournalPaging.Bookmark;
 namespace Kernel.EntityFramework;
 
 internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, int pageSize, string provider)
-    : IActorReads, IActorTerminalOutputReads, IActorSequencedJournalReads, IActorPlaybackReads, IActorRetentionConfirmation,
+    : IActorReads, IActorTerminalOutputReads, IActorSequencedJournalReads, IActorPlaybackReads,
       IActorRetentionReads
 {
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
@@ -17,8 +17,8 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
         new(store.ReadRootRetentionPolicyAsync(scope, actorType, token));
 
     internal ValueTask<ActorRetentionPolicyChange> TryApplyRetentionPolicyAsync(BoundScope scope, string actorType, long expectedRevision,
-        ActorRetentionWindows proposed, long maximumReviewedNewlyEligible, CancellationToken token) =>
-        new(store.TryApplyRootRetentionPolicyAsync(scope, actorType, expectedRevision, proposed, maximumReviewedNewlyEligible, token));
+        ActorRetentionWindows proposed, long automaticNewlyEligibleLimit, string? confirmation, CancellationToken token) =>
+        new(store.TryApplyRootRetentionPolicyAsync(scope, actorType, expectedRevision, proposed, automaticNewlyEligibleLimit, confirmation, token));
 
     public ValueTask<ActorRetentionQuote> ReadRetentionQuoteAsync(BoundScope scope, string actorType,
         ActorRetentionWindows previous, ActorRetentionWindows proposed, KeyValuePair<string, string>? definitionLabel = null,
@@ -88,30 +88,6 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
     }
 
     public bool SupportsSequencedJournal => store.SupportsSequencedJournal();
-    public ValueTask<string> ProtectRetentionQuoteAsync(BoundScope scope, ReadOnlyMemory<byte> quote,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        if (quote.Length is < 1 or > 256) throw new ArgumentOutOfRangeException(nameof(quote));
-        return ValueTask.FromResult(cursor.Seal(RetentionContext(scope), quote.Span));
-    }
-
-    public ValueTask<byte[]?> UnprotectRetentionQuoteAsync(BoundScope scope, string confirmation,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        if (confirmation.Length is < 4 or > 380 || confirmation.Length % 4 != 0)
-            return ValueTask.FromResult<byte[]?>(null);
-        var padding = confirmation.EndsWith("==", StringComparison.Ordinal) ? 2 : confirmation.EndsWith('=') ? 1 : 0;
-        var size = confirmation.Length / 4 * 3 - padding - FoundationReadCursor.Overhead;
-        if (size is < 1 or > 256) return ValueTask.FromResult<byte[]?>(null);
-        var plain = new byte[size];
-        return ValueTask.FromResult(cursor.TryOpen(RetentionContext(scope), confirmation, plain) ? plain : null);
-    }
-
-    private byte[] RetentionContext(BoundScope scope) =>
-        Encoding.UTF8.GetBytes(DurableKeyJson.Write(new { Read = $"{provider}-retention-confirmation/1", scope.Tenant }));
-
     public bool SupportsPlayback => store.SupportsPlayback();
 
     public ValueTask<ActorPlaybackPage?> ReadPlaybackAsync(BoundScope scope, ActorRef actor, ActorPlaybackQuery query,

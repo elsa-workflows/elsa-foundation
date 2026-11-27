@@ -365,7 +365,7 @@ internal static class PostgresShippedFormatChecks
             await RefusesRevisionAsync(() => store.ReadRootActorListAsync("tenant", "", null, null, [], null, null, 1, token));
             await RefusesRevisionAsync(() => store.ReadRootRetentionQuoteAsync("tenant", "workflow", new(), new(), null, null, token));
             await RefusesRevisionAsync(() => store.ReadRootRetentionPolicyAsync(ContractScopes.Bind("tenant"), "workflow", token));
-            await RefusesRevisionAsync(() => store.TryApplyRootRetentionPolicyAsync(ContractScopes.Bind("tenant"), "workflow", 0, new(), 0, token));
+            await RefusesRevisionAsync(() => store.TryApplyRootRetentionPolicyAsync(ContractScopes.Bind("tenant"), "workflow", 0, new(), 0, confirmation: null, token));
             await RefusesRevisionAsync(() => store.ReadRootJournalAsync("tenant", "missing", 1, 1, token));
             await RefusesRevisionAsync(() => store.ReadRootInboxAsync("tenant", "missing", 0, "", 1, token));
             await RefusesRevisionAsync(() => store.ReadRootWorkflowHistoryAsync("tenant", "type", null, null, null, null, null, null, 1, token));

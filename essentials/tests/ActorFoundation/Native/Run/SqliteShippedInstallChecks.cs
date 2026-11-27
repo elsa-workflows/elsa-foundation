@@ -88,7 +88,7 @@ internal static class SqliteShippedInstallChecks
             var policy = new EfStore(() => KernelDb.ForSqliteRootRuntime(Options(), verified), postgres: false);
             await RefusedAsync<StoreFormatException>(() => policy.ReadRootRetentionPolicyAsync(tenant, "workflow", token),
                 "the SQLite retention policy reader refuses the previous shipped protocol");
-            await RefusedAsync<StoreFormatException>(() => policy.TryApplyRootRetentionPolicyAsync(tenant, "workflow", 0, new(), 0, token),
+            await RefusedAsync<StoreFormatException>(() => policy.TryApplyRootRetentionPolicyAsync(tenant, "workflow", 0, new(), 0, confirmation: null, token),
                 "the SQLite retention policy activation refuses the previous shipped protocol");
             await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, StoreFormat.RootShipped.MessageProtocol), token);
             var marker = StoreDefinitionsRevision.Seed(db)!;

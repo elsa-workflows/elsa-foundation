@@ -101,7 +101,7 @@ public sealed class SqliteEmbeddedFoundation : Contract.IActorRetentionPolicies
         Contract.BoundScope scope, long expectedRevision, Contract.ActorRetentionWindows proposed, long maximumReviewedNewlyEligible,
         CancellationToken cancellationToken) =>
         SqliteEmbeddedHosting.RunRetentionPolicyAsync(InstalledPath, qualificationFormat,
-            store => store.TryApplyRootRetentionPolicyAsync(scope, actorType, expectedRevision, proposed, maximumReviewedNewlyEligible, cancellationToken),
+            store => store.TryApplyRootRetentionPolicyAsync(scope, actorType, expectedRevision, proposed, automaticNewlyEligibleLimit, confirmation, cancellationToken),
             cancellationToken);
 
     public Contract.IActorReads CreateReads(int pageSize = 100) => SqliteEmbeddedHosting.CreateFoundationReads(InstalledPath, pageSize, qualificationFormat);

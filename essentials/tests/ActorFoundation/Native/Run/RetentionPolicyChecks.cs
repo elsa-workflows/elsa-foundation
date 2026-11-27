@@ -13,7 +13,7 @@ internal static class RetentionPolicyChecks
         var expire = keep with { Finished = TimeSpan.Zero };
         var defaultPolicy = new Contract.ActorRetentionPolicy(0, keep);
         Task<Contract.ActorRetentionPolicyChange> ApplyAsync(long revision, Contract.ActorRetentionWindows windows, long maximum) =>
-            policies.TryApplyRetentionPolicyAsync(tenant, revision, windows, maximum, token).AsTask();
+            policies.TryApplyRetentionPolicyAsync(tenant, revision, windows, maximum, cancellationToken: token).AsTask();
 
         Require(await policies.ReadRetentionPolicyAsync(tenant, token) == defaultPolicy &&
             await policies.ReadRetentionPolicyAsync(other, token) == defaultPolicy,

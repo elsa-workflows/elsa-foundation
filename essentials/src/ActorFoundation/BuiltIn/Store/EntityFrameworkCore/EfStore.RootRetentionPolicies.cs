@@ -65,12 +65,12 @@ public sealed partial class EfStore
     }
 
     internal async Task<ActorRetentionPolicyChange> TryApplyRootRetentionPolicyAsync(BoundScope scope, string actorType,
-        long expectedRevision, ActorRetentionWindows proposed, long maximumReviewedNewlyEligible, CancellationToken token)
+        long expectedRevision, ActorRetentionWindows proposed, long automaticNewlyEligibleLimit, string? confirmation, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(proposed);
         ArgumentOutOfRangeException.ThrowIfNegative(expectedRevision);
-        ArgumentOutOfRangeException.ThrowIfNegative(maximumReviewedNewlyEligible);
+        ArgumentOutOfRangeException.ThrowIfNegative(automaticNewlyEligibleLimit);
         var after = RetentionMillis.From(proposed);
         var type = EncodeRetentionActorType(actorType);
         var tenant = scope.Tenant;
@@ -86,8 +86,8 @@ public sealed partial class EfStore
             var key = await SqliteRootAdmission.ReadRootIssuerKeyAsync(db, token);
             var current = await ReadSqliteRetentionPolicyAsync(db, tenant, type, key, token);
             var at = await ReadSqliteRetentionClockAsync(db, token);
-            var change = await EvaluatePolicyChangeAsync(current, expectedRevision, proposed, maximumReviewedNewlyEligible, at,
-                before => ReadSqliteRetentionQuoteAtAsync(db, tenant, type, null, before, after, at, token));
+            var change = await EvaluatePolicyChangeAsync(current, expectedRevision, proposed, automaticNewlyEligibleLimit, at,
+                new RetentionApproval(tenant, type, key), confirmation, before => ReadSqliteRetentionQuoteAtAsync(db, tenant, type, null, before, after, at, token));
             if (change.Outcome == ActorRetentionPolicyChangeOutcome.Applied)
             {
                 var row = EncodeRetentionPolicy(tenant, type, change.Current, key);
@@ -104,8 +104,8 @@ public sealed partial class EfStore
         await db.Database.ExecuteSqlRawAsync("""LOCK TABLE "FoundationRetentionPolicies" IN SHARE ROW EXCLUSIVE MODE""", token);
         var stored = await ReadPostgresRetentionPolicyAsync(db, marker, tenant, token);
         var effective = DecodePostgresRetentionPolicy(tenant, type, stored);
-        var result = await EvaluatePolicyChangeAsync(effective, expectedRevision, proposed, maximumReviewedNewlyEligible, stored.AsOf,
-            async before =>
+        var result = await EvaluatePolicyChangeAsync(effective, expectedRevision, proposed, automaticNewlyEligibleLimit, stored.AsOf,
+            new RetentionApproval(tenant, type, stored.Key), confirmation, async before =>
             {
                 // Owner commits update this projection transactionally. Wait for existing writers and keep the latest
                 // committed projection stable until the policy is applied or refused.
@@ -137,14 +137,16 @@ public sealed partial class EfStore
     }
 
     private static async Task<ActorRetentionPolicyChange> EvaluatePolicyChangeAsync(ActorRetentionPolicy current, long expected,
-        ActorRetentionWindows proposed, long maximum, long at, Func<RetentionMillis, Task<ActorRetentionQuote>> quote)
+        ActorRetentionWindows proposed, long automaticLimit, long at, RetentionApproval approval, string? confirmation, Func<RetentionMillis, Task<ActorRetentionQuote>> quote)
     {
         var impact = current.Windows == proposed
             ? new ActorRetentionQuote(0, at)
             : await quote(RetentionMillis.From(current.Windows));
         if (current.Revision != expected) return new(ActorRetentionPolicyChangeOutcome.Stale, current, impact);
         if (current.Windows == proposed) return new(ActorRetentionPolicyChangeOutcome.Unchanged, current, impact);
-        if (impact.NewlyEligible > maximum) return new(ActorRetentionPolicyChangeOutcome.OverLimit, current, impact);
+        var maximum = Math.Max(automaticLimit, approval.ReviewedCount(confirmation, current.Revision, proposed));
+        if (impact.NewlyEligible > maximum)
+            return new(ActorRetentionPolicyChangeOutcome.OverLimit, current, impact, approval.Seal(current.Revision, proposed, impact));
         return new(ActorRetentionPolicyChangeOutcome.Applied, new(checked(expected + 1), proposed), impact);
     }
 

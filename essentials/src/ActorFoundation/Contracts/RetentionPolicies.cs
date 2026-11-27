@@ -14,7 +14,7 @@ public enum ActorRetentionPolicyChangeOutcome
 
 /// <summary>The effective policy after the attempt and the provider's newly eligible count.</summary>
 public sealed record ActorRetentionPolicyChange(ActorRetentionPolicyChangeOutcome Outcome, ActorRetentionPolicy Current,
-    ActorRetentionQuote Quote);
+    ActorRetentionQuote Quote, string? Confirmation = null);
 
 /// <summary>Trusted host access to the tenant default for this Foundation's configured actor type.</summary>
 public interface IActorRetentionPolicies
@@ -23,8 +23,8 @@ public interface IActorRetentionPolicies
 
     /// <summary>
     /// Changes the policy only at the expected revision and if the freshly evaluated increase is within the approved count.
-    /// An unchanged policy returns a zero count. A refusal returns the effective policy and an evaluation against that policy.
+    /// An unchanged policy returns a zero count. An over-limit count returns a receipt bound to the current store and revision.
     /// </summary>
     ValueTask<ActorRetentionPolicyChange> TryApplyRetentionPolicyAsync(BoundScope scope, long expectedRevision,
-        ActorRetentionWindows proposed, long maximumReviewedNewlyEligible, CancellationToken cancellationToken = default);
+        ActorRetentionWindows proposed, long automaticNewlyEligibleLimit, string? confirmation = null, CancellationToken cancellationToken = default);
 }

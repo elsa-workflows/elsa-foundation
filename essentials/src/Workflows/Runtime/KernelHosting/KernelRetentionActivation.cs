@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using Kernel.Foundation.Contracts;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
@@ -31,14 +30,8 @@ internal sealed class KernelRetentionActivation(BoundScope tenant, ActorRetentio
         };
     }
 
-    internal async ValueTask<bool> InitializeAsync(IActorRetentionPolicies policies, IActorReads reads, CancellationToken token)
+    internal async ValueTask<bool> InitializeAsync(IActorRetentionPolicies policies, CancellationToken token)
     {
-        if (reads is not IActorRetentionConfirmation protection)
-            throw new InvalidOperationException("The installed actor store does not provide guarded retention policies.");
-
-        var approved = configuredConfirmation is { Length: > 0 } confirmation
-            ? Change.Decode(await protection.UnprotectRetentionQuoteAsync(tenant, confirmation, token))
-            : null;
         var current = await policies.ReadRetentionPolicyAsync(tenant, token);
         for (var attempt = 0; attempt < 4; attempt++)
         {
@@ -46,7 +39,7 @@ internal sealed class KernelRetentionActivation(BoundScope tenant, ActorRetentio
             var relaxed = SaferWindows(current.Windows, proposed);
             if (relaxed != current.Windows)
             {
-                var extension = await policies.TryApplyRetentionPolicyAsync(tenant, current.Revision, relaxed, 0, token);
+                var extension = await policies.TryApplyRetentionPolicyAsync(tenant, current.Revision, relaxed, 0, cancellationToken: token);
                 current = extension.Current;
                 if (extension.Outcome == ActorRetentionPolicyChangeOutcome.Stale) continue;
                 if (extension.Outcome == ActorRetentionPolicyChangeOutcome.OverLimit)
@@ -55,16 +48,14 @@ internal sealed class KernelRetentionActivation(BoundScope tenant, ActorRetentio
                     return SetStatus(current, extension.Quote);
             }
 
-            var reviewedCount = approved is { } approvedChange && approvedChange.Revision == current.Revision &&
-                approvedChange.Proposed == proposed ? Math.Max(ConfirmationThreshold, approvedChange.AffectedRuns) : ConfirmationThreshold;
-            var result = await policies.TryApplyRetentionPolicyAsync(tenant, current.Revision, proposed, reviewedCount, token);
+            var result = await policies.TryApplyRetentionPolicyAsync(tenant, current.Revision, proposed, ConfirmationThreshold,
+                configuredConfirmation, token);
             current = result.Current;
             if (result.Outcome == ActorRetentionPolicyChangeOutcome.Stale) continue;
             if (result.Outcome != ActorRetentionPolicyChangeOutcome.OverLimit)
                 return SetStatus(current, result.Quote);
 
-            var change = new Change(current.Revision, proposed, result.Quote.AsOf, result.Quote.NewlyEligible);
-            var receipt = await protection.ProtectRetentionQuoteAsync(tenant, change.Encode(), token);
+            var receipt = result.Confirmation ?? throw new InvalidOperationException("The store did not seal the retention quote.");
             return SetStatus(current, result.Quote, receipt);
         }
 
@@ -84,8 +75,25 @@ internal sealed class KernelRetentionActivation(BoundScope tenant, ActorRetentio
         return enabled;
     }
 
+    internal async ValueTask<KernelRetentionStatus> ReadStatusAsync(IActorRetentionPolicies policies, CancellationToken token)
+    {
+        var current = await policies.ReadRetentionPolicyAsync(tenant, token);
+        var status = Status;
+        return current.Revision == status.Revision || status.State == "evaluating"
+            ? status
+            : status with
+            {
+                State = status.State == "unavailable" ? "unavailable" : "policy-changed",
+                Effective = current.Windows,
+                Revision = current.Revision,
+                AsOf = null,
+                AffectedRuns = null,
+                Confirmation = null
+            };
+    }
+
     internal void Unavailable() =>
-        Volatile.Write(ref _status, new("unavailable", Indefinite, proposed, null, null, null, ConfirmationThreshold, null));
+        Volatile.Write(ref _status, Status with { State = "unavailable", AsOf = null, AffectedRuns = null, Confirmation = null });
 
     private static ActorRetentionWindows SaferWindows(ActorRetentionWindows previous, ActorRetentionWindows proposed) =>
         new(Longer(previous.Finished, proposed.Finished), Longer(previous.Cancelled, proposed.Cancelled),
@@ -101,36 +109,5 @@ internal sealed class KernelRetentionActivation(BoundScope tenant, ActorRetentio
         Volatile.Write(ref _status, new(state, current.Windows, proposed, current.Revision, quote.AsOf, quote.NewlyEligible,
             ConfirmationThreshold, confirmation));
         return enabled;
-    }
-
-    private sealed record Change(long Revision, ActorRetentionWindows Proposed, long AsOf, long AffectedRuns)
-    {
-        private const int Size = 6 * sizeof(long);
-
-        internal byte[] Encode()
-        {
-            long[] values = [
-                Revision, AsOf, AffectedRuns, Proposed.Finished?.Ticks ?? -1, Proposed.Cancelled?.Ticks ?? -1, Proposed.Faulted?.Ticks ?? -1
-            ];
-            var bytes = new byte[Size];
-            for (var i = 0; i < values.Length; i++)
-                BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(i * sizeof(long)), values[i]);
-            return bytes;
-        }
-
-        internal static Change? Decode(byte[]? bytes)
-        {
-            if (bytes?.Length != Size) return null;
-            Span<long> values = stackalloc long[6];
-            for (var i = 0; i < values.Length; i++)
-                values[i] = BinaryPrimitives.ReadInt64LittleEndian(bytes.AsSpan(i * sizeof(long)));
-            if (values[0] < 0 || values[1] <= 0 || values[2] < 0) return null;
-            foreach (var ticks in values[3..])
-                if (ticks < -1) return null;
-
-            return new(values[0], new(Window(values[3]), Window(values[4]), Window(values[5])), values[1], values[2]);
-
-            static TimeSpan? Window(long ticks) => ticks == -1 ? null : TimeSpan.FromTicks(ticks);
-        }
     }
 }
