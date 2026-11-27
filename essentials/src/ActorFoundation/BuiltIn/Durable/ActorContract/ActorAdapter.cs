@@ -398,6 +398,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             var growth = ValidateTerminalEnvelope(nextRow, nextHeader);
             if (roots is not null)
             {
+                outcome.ClearsPrivateSelfOnEnd = issueSelf is { DistinguishesTimers: true } &&
+                    input.Row is { Status: Durable.InstanceStatus.Running } && nextRow.Status != Durable.InstanceStatus.Running;
                 // Withholds can run before this turn has landed. Carry its own metadata in the owner's row.
                 outcome.Row = nextRow with
                 {

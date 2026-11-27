@@ -3,6 +3,7 @@ using Kernel.Durable;
 using Kernel.EntityFramework;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
@@ -27,10 +28,11 @@ internal static class RootSelfTimedParkChecks
                 }.ConnectionString);
 
             var definitions = new SqliteAdmissionDefinitions();
+            DbContextOptions<KernelDb>? shadowOptions = null;
             KernelDb Open() => (postgres, rearm) switch
             {
                 (true, false) => KernelDb.ForPostgresRootSelfTimedParkQualification(options.Options),
-                (true, true) => KernelDb.ForPostgresRootTimerRearmQualification(options.Options),
+                (true, true) => KernelDb.ForPostgresRootTimerRearmQualification(shadowOptions ?? options.Options),
                 (false, false) => KernelDb.ForSqliteRootSelfTimedParkQualification(options.Options, definitions),
                 _ => KernelDb.ForSqliteRootTimerRearmQualification(options.Options, definitions)
             };
@@ -132,6 +134,32 @@ internal static class RootSelfTimedParkChecks
                 Check(before.Single(row => row.Id == settled) is { Done: true, KeptBy: null } &&
                       before.All(row => row.Id != originals[0].Id),
                     "the Park includes both a missing and an ordinarily Done timer in its saved recipes");
+                if (postgres)
+                {
+                    var source = await db.Database.SqlQueryRaw<string>("""SELECT pg_catalog.current_schema() AS "Value" """).SingleAsync(token);
+                    await db.Database.ExecuteSqlRawAsync("""
+                        CREATE SCHEMA timer_rearm_shadow;
+                        CREATE VIEW timer_rearm_shadow."FoundationRootMessages" AS
+                            SELECT * FROM "FoundationRootMessages" WHERE false;
+                        """, token);
+                    var connection = new NpgsqlConnectionStringBuilder(db.Database.GetConnectionString())
+                    {
+                        SearchPath = "timer_rearm_shadow," + new NpgsqlCommandBuilder().QuoteIdentifier(source)
+                    }.ConnectionString;
+                    try
+                    {
+                        shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+                        var timer = DurableKeyJson.Read<Contract.TimerSpec[]>(parked.State!)[4];
+                        var recipe = new ParkTimerRecipe(timer.Id, timer.Kind, "changed", timer.Due);
+                        Check(!await store.RootSelfIssuer!.CheckTimerRearms!(parked.Actor.Id, 0, [recipe], token),
+                            "the recovery preflight checks the Done body in the marker schema despite a shadow private view");
+                    }
+                    finally
+                    {
+                        shadowOptions = null;
+                        await db.Database.ExecuteSqlRawAsync("DROP SCHEMA timer_rearm_shadow CASCADE", token);
+                    }
+                }
             }
 
             var parkedView = (await reads.GetAsync(scope, root, token))!;

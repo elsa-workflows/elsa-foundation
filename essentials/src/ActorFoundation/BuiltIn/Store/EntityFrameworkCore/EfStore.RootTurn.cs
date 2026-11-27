@@ -79,6 +79,8 @@ public sealed partial class EfStore
             if (SettledJobs is { Length: > 0 } && !await DeleteRootTimedRowsAsync(db, Current.Actor, SettledJobs, cancellationToken))
                 return false;
             var ended = Status is InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled;
+            if (ended && !await ClearTerminalRootSelfAsync(db, Current.Actor, home, Current.Revision, Issue, cancellationToken))
+                return false;
             var nextJobGeneration = JobState is null ? Current.NextJobGeneration : JobState.NextGeneration;
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
             // UnsubscribeAll here only when the exact root has no physical subscriptions.

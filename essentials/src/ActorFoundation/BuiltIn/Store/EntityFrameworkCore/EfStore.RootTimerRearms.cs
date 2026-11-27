@@ -16,8 +16,7 @@ public sealed partial class EfStore
         if (RootSelfIssuer is not { RearmsTimers: true } issuer || RootTimerMessages(actor, issuer, recipes) is not { } messages)
             return false;
         await using var db = create();
-        if (db.UsesSqliteRootRuntime) await RequireSqliteOperationalFormatAsync(db, token);
-        else await RequireStoreVersionsAsync(db, token);
+        await using var pinned = await BeginPinnedRootOperationAsync(db, token);
         return db.UsesRootTimerRearm &&
             await MatchPriorRootTimersAsync(db, actor, partition, issuer, messages, lockRows: false, token) is not null;
     }

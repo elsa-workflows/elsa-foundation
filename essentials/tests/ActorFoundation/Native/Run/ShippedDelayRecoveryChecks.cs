@@ -18,9 +18,11 @@ internal static class ShippedDelayRecoveryChecks
 {
     private const string NativeDefinition = "authored-native-delay";
     private const string FlowDefinition = "authored-flowchart-delay";
+    private const string TerminalDefinition = "authored-far-future-delay";
     private const string Fault = "park-delay-probe";
     private const int NativeDelay = 10_000;
     private const int FlowDelay = 4_000;
+    private const int FarFutureDelay = 120_000;
 
     internal static async Task<int> RunAsync(bool postgres, bool inBatch)
     {
@@ -51,7 +53,7 @@ internal static class ShippedDelayRecoveryChecks
 
             var scope = EmbeddedTenant.Bind("shipped-delay");
             bool Authorize(Contract.BoundScope caller, Contract.ActorRef _, string kind) =>
-                ReferenceEquals(caller, scope) && kind == Contract.Kinds.Recover;
+                ReferenceEquals(caller, scope) && kind is Contract.Kinds.Recover or Contract.Kinds.Terminate or Contract.Kinds.Delete;
             Contract.IIngress ingress;
             Contract.IActorReads reads;
             if (postgres)
@@ -87,6 +89,8 @@ internal static class ShippedDelayRecoveryChecks
                 Variable("v-finished", "finished", false, "Boolean")), capabilities);
             await serving.ServeHostWorkflowAsync(native, token);
             await serving.ServeHostWorkflowAsync(flowchart, token);
+            await serving.ServeHostWorkflowAsync(Wf.Workflow(TerminalDefinition, Wf.Sequence("root",
+                Wf.Delay("wait", FarFutureDelay), Wf.Set("never-reached", "finished", true))), token);
             Check(capabilities is { Timers: true, SelfSends: true, Schedules: false, Children: false, HttpWaits: false },
                 "the shipped capabilities serve Native and mapped Flowchart Delay with no schedule-actor dependency");
 
@@ -100,7 +104,7 @@ internal static class ShippedDelayRecoveryChecks
             };
             await using var db = Open();
             var marker = await db.StoreVersions.AsNoTracking().SingleAsync(row => row.Id == StoreVersionEntity.MarkerId, token);
-            Check(marker.Format == new StoreFormat(3, 27, 1), "the journey runs on the widened shipped marker");
+            Check(marker.Format == StoreFormat.RootShipped, "the journey runs on the widened shipped marker");
             Contract.ActorRef nativeRoot, flowRoot;
             DelayWait nativeWait, flowWait;
             Contract.ActorView nativePark, flowPark;
@@ -155,6 +159,7 @@ internal static class ShippedDelayRecoveryChecks
                 Check(visible is { Park: null, Header.Status: Contract.ActorStatus.Finished },
                     "the public actor read shows a finished run with its Park cleared");
             }
+            await CheckTerminationAsync();
             await successor.StopAsync(token);
             Check(failures.IsEmpty, "the retained provider owners stop cleanly");
             return 0;
@@ -171,11 +176,57 @@ internal static class ShippedDelayRecoveryChecks
                         token, Faulted, SqliteEmbeddedHosting.CreateRequests(path, node, PublicActor.ActorType));
             }
 
-            async Task<Contract.ActorRef> AdmitAsync(string definition)
+            async Task<Contract.ActorRef> AdmitAsync(string definition, string? operation = null)
             {
-                var receipt = await runtime.StartAsync(scope, definition, NativeExecutionModel.Start(definition), cancellationToken: token);
+                var receipt = await runtime.StartAsync(scope, operation ?? definition, NativeExecutionModel.Start(definition), cancellationToken: token);
                 Check(receipt is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "the public ingress admits " + definition);
                 return receipt.Actor!.Value;
+            }
+
+            async Task CheckTerminationAsync()
+            {
+                var plain = await AdmitAsync(TerminalDefinition, "separate-termination");
+                var compound = await AdmitAsync(TerminalDefinition, "compound-termination");
+                var unrelated = await AdmitAsync(TerminalDefinition, "unrelated-running-delay");
+                var plainTimer = await WaitingAsync(plain, FarFutureDelay);
+                var compoundTimer = await WaitingAsync(compound, FarFutureDelay);
+                var unrelatedTimer = await WaitingAsync(unrelated, FarFutureDelay);
+
+                var runningPlain = (await reads.GetAsync(scope, plain, token))!;
+                Check(await runtime.TerminateAsync(scope, "terminate-delay", runningPlain, cancellationToken: token)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted }, "the shipped provider admits Terminate of a running Delay");
+                var ended = await UntilAsync(async () => await cold.ReadFirstRootAsync(scope.Tenant, plain.Id, token)
+                    is { Status: InstanceStatus.Cancelled, TerminalRevision: not null } row ? row : null);
+                Check(ended.AsOf < plainTimer.Due && await FindTimerAsync(plainTimer.Actor, plainTimer.PhysicalKey) is null,
+                    "Terminate clears the authentic far-future private timer in the terminal checkpoint");
+
+                var terminal = (await reads.GetAsync(scope, plain, token))!.Selection;
+                Check(terminal is not null && await ingress.SendAsync(scope, new Contract.Target.Ref(plain), "delete-delay",
+                    Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(terminal)), cancellationToken: token)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted }, "the shipped provider admits Delete of the exact terminal selection");
+                await RetiredAsync(plain, plainTimer);
+
+                var runningCompound = (await reads.GetAsync(scope, compound, token))!;
+                Check(await runtime.TerminateThenDeleteAsync(scope, "terminate-and-delete-delay", runningCompound, token)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted }, "the shipped provider admits qualified compound Terminate and Delete");
+                var retiredAt = await RetiredAsync(compound, compoundTimer);
+                Check(retiredAt < compoundTimer.Due &&
+                    await FindTimerAsync(unrelatedTimer.Actor, unrelatedTimer.PhysicalKey) is { Done: false } alive &&
+                    alive.Due == unrelatedTimer.Due && alive.Sequence == unrelatedTimer.Sequence &&
+                    timers.All(timer => timer.Actor != plain && timer.Actor != compound && timer.Actor != unrelated),
+                    "both deletion paths leave the other actor's far-future timer intact and fire none of them");
+            }
+
+            async Task<long> RetiredAsync(Contract.ActorRef reference, DelayWait timer)
+            {
+                await UntilAsync(async () => await db.Instances.AsNoTracking().SingleOrDefaultAsync(i => i.Id == timer.Actor, token)
+                    is { Retired: true, Status: InstanceStatus.Cancelled } retired ? retired : null);
+                Check(await reads.GetAsync(scope, reference, token) is null && await FindTimerAsync(timer.Actor, timer.PhysicalKey) is null &&
+                    (await cold.ReadJournalOfAsync(0, timer.Actor, 0, token)).Any(entry => entry.Revision == -1 && entry.Entries == """["delete"]"""),
+                    "the terminal root retires with its deletion marker and no private timer");
+                return await db.Database.SqlQuery<long>($"""
+                    SELECT "FoundationTerminalAt" AS "Value" FROM "Instances" WHERE "Id" = {timer.Actor}
+                    """).SingleAsync(token);
             }
 
             async Task<DelayWait> WaitingAsync(Contract.ActorRef root, int duration) =>

@@ -333,7 +333,10 @@ public sealed partial class EfStore
         if (db.UsesRootParkRecovery)
         {
             if (db.UsesRootPrivateParkInputs)
+            {
                 yield return Index("IX_FoundationRootInbox_ParkTimers", "Messages", ParkTimerIndex);
+                yield return Index("IX_FoundationRootInbox_TerminalSelf", "Messages", TerminalRootSelfIndex(db));
+            }
             yield return Index("IX_FoundationRootInbox_Released", "Messages", $"""
                 ("Partition", "Target", "FoundationReleasedBy", "Seq")
                 WHERE {ParkInputPredicate(db, "\"InboxScope\"")} AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationReleasedBy" IS NOT NULL

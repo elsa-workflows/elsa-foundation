@@ -208,6 +208,8 @@ public sealed partial class EfStore
                 """, token);
         if (turn.SettledJobs is { Length: > 0 } jobIds && !await DeleteRootTimedRowsAsync(db, actor, jobIds, token)) return false;
 
+        if (ended && !await ClearTerminalRootSelfAsync(db, actor, home, turn.Current.Revision, turn.Issue, token))
+            return false;
         var revision = turn.JournalRevision;
         FormattableString update = $"""
             UPDATE "Instances" SET "State" = {family + turn.State}, "FoundationHeader" = {turn.Header},

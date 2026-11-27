@@ -78,6 +78,31 @@ internal static class PostgresShippedFormatChecks
             }
         }
         await store.InstallPreviewRootSchemaAsync(stop);
+        await using (var db = Open())
+        {
+            var source = await db.Database.SqlQueryRaw<string>("""SELECT pg_catalog.current_schema() AS "Value" """).SingleAsync(stop);
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE SCHEMA timer_startup_shadow;
+                CREATE VIEW timer_startup_shadow."FoundationRootMessages" AS SELECT "Id" FROM "Messages";
+                DROP VIEW "FoundationRootMessages";
+                """, stop);
+            var shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(new NpgsqlConnectionStringBuilder(connection)
+            {
+                SearchPath = "timer_startup_shadow," + new NpgsqlCommandBuilder().QuoteIdentifier(source)
+            }.ConnectionString).Options;
+            var shadowed = new EfStore(() => PostgresPreviewHosting.CreateShippedContext(shadowOptions), postgres: true);
+            try
+            {
+                await shadowed.EnableRootSelfSendsAsync(stop);
+                throw new InvalidOperationException("The shipped owner took a private inbox view from another schema.");
+            }
+            catch (StoreFormatException)
+            {
+                Require(true, "shipped startup refuses a private inbox view outside the marker schema");
+            }
+            await db.Database.ExecuteSqlRawAsync("DROP SCHEMA timer_startup_shadow CASCADE", stop);
+        }
+        await store.InstallPreviewRootSchemaAsync(stop);
 
         await RefusalsAsync(connection, options, stop);
 
