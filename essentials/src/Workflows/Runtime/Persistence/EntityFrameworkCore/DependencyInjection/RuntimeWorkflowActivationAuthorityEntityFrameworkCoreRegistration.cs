@@ -20,7 +20,7 @@ public static class RuntimeWorkflowActivationAuthorityEntityFrameworkCoreRegistr
             .ToArray();
         try
         {
-            RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime workflow activation-authority EF persistence");
+            RuntimeEfContractBackendRegistration.EnsurePublicationContext(services, "Runtime workflow activation-authority EF persistence");
             var existing = WorkflowActivationAuthorityBackend.Find(services);
             if (existing?.Name == WorkflowActivationAuthorityBackend.EntityFramework)
             {

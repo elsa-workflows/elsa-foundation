@@ -14,7 +14,27 @@ internal static class RuntimeEfContractBackendRegistration
                 $"{owner} requires an EF runtime operational-state backend. Register Runtime operational-state EF persistence first.");
 
         operational.EnsureOwnsRegisteredContracts(services);
+        EnsureOwnedContext(services, owner, operational);
+    }
 
+    public static void EnsurePublicationContext(IServiceCollection services, string owner)
+    {
+        var artifacts = RuntimeArtifactStoreBackend.Find(services);
+        if (artifacts?.Name != RuntimeArtifactStoreBackend.EntityFramework)
+        {
+            EnsureSharedContext(services, owner);
+            return;
+        }
+
+        artifacts.EnsureOwnsRegisteredContracts(services);
+        var operational = RuntimeOperationalStateStoreBackend.Find(services);
+        if (operational?.Name == RuntimeOperationalStateStoreBackend.EntityFramework)
+            operational.EnsureOwnsRegisteredContracts(services);
+        EnsureOwnedContext(services, owner, operational);
+    }
+
+    private static void EnsureOwnedContext(IServiceCollection services, string owner, RuntimeOperationalStateStoreBackend? operational)
+    {
         var contextDescriptors = services
             .Where(descriptor => descriptor.ServiceType == typeof(RuntimeDbContext))
             .ToArray();
@@ -24,7 +44,7 @@ internal static class RuntimeEfContractBackendRegistration
 
         var context = contextDescriptors[0];
         var ownsContext =
-            operational.Owns(context) ||
+            operational?.Owns(context) == true ||
             RuntimeArtifactStoreBackend.Find(services)?.Owns(context) == true ||
             RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(context) == true ||
             BookmarkStateStoreBackend.Find(services)?.Owns(context) == true ||

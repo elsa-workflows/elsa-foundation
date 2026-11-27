@@ -43,6 +43,7 @@ internal static class SqliteChildWorkflowChecks
             .Add(Wf.Workflow("bulk-parent", Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("wait")))
             .Add(Wf.Workflow("detached-parent", Wf.Dispatch("dispatch", "detached-child", wait: false)))
             .Add(Wf.Workflow("detached-child", Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("wait")));
+        if (shipped) NativeChildOutcomeChecks.AddTo(aliases);
         var partner = new PostgresChildWorkflowChecks.BlockingPartner();
         using var http = new HttpClient(partner);
         var model = new Fixture(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases,
@@ -107,6 +108,7 @@ internal static class SqliteChildWorkflowChecks
             var replacementIngress = await replacement.OpenIngressWithOperatorsAsync(
                 (scope, _, kind) => ReferenceEquals(scope, tenant) &&
                     kind is Contract.Kinds.Terminate or Contract.Kinds.Delete or Contract.Kinds.Recover, token);
+            if (shipped) await NativeChildOutcomeChecks.VerifyAsync(Open, tenant, replacementIngress, reads, token);
             await SendAsync(childRef, "arm-child-fault", Fixture.ArmFault);
             var parked = await WaitAsync(childRef, row => row.ParkAt is not null);
             var waitingAfterPark = await WaitAsync(parentRef, row => row.Revision > 1);
