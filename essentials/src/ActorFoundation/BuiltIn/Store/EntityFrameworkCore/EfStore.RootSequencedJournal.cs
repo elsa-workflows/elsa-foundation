@@ -133,7 +133,7 @@ public sealed partial class EfStore
         return db.UsesRootSequencedJournal;
     }
 
-    private sealed record SequencedJournalRow(long AsOf, bool SourceReady, long? RootRevision, int? History, long? FirstRevision,
+    private sealed record SequencedJournalRow(long AsOf, bool SourceReady, long? RootRevision, int? History, long? FirstRevision, long? ExpectedFirstRevision,
         long? RetainedFromSequence, long? LatestSequence, long? LastRecordedAt, long? FirstSequence, long? LastSequence,
         long? Revision, long? RecordedAt, long? EntryBytes, string? Entries,
         int? StoreSchema, int? MessageProtocol, int? JournalCodec, string? DefinitionStamp);
@@ -166,7 +166,7 @@ public sealed partial class EfStore
                 SELECT "StoreSchema", "MessageProtocol", "JournalCodec" /* marker-identity */
                 FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
             ), root AS (
-                SELECT b."Actor", b."Partition", i."Revision", i."History"
+                SELECT b."Actor", b."Partition", i."Revision", i."History", /*first-revision*/ AS "ExpectedFirstRevision"
                 FROM "FoundationRootBirths" b JOIN "Instances" i
                     ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
                     AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
@@ -213,7 +213,7 @@ public sealed partial class EfStore
                 WHERE q."PageBytes" <= {SequencedJournalPageBytes}
             )
             SELECT /* journal-clock */ AS "AsOf", /* journal-ready */ AS "SourceReady",
-                h."Revision" AS "RootRevision", h."History", h."FirstRevision",
+                h."Revision" AS "RootRevision", h."History", h."FirstRevision", h."ExpectedFirstRevision",
                 h."RetainedFromSequence", h."LatestSequence",
                 (SELECT s."RecordedAt" FROM "FoundationSequencedJournal" s
                     WHERE s."Partition" = h."Partition" AND s."Actor" = h."Actor"
@@ -226,6 +226,7 @@ public sealed partial class EfStore
             ORDER BY p."LastSequence"
             """;
         var sql = query.Format
+            .Replace("/*first-revision*/", db.UsesRootInlinePromotion ? """b."FirstRevision" """ : "CAST(1 AS bigint)", StringComparison.Ordinal)
             .Replace("/* journal-clock */", sqlite ? SqliteCommitDialect.MillisecondClock :
                 "floor(extract(epoch from statement_timestamp()) * 1000)::bigint", StringComparison.Ordinal)
             .Replace("/* marker-identity */", sqlite ? "" : """, tableoid AS "PhysicalMarker" """, StringComparison.Ordinal)
@@ -290,6 +291,7 @@ public sealed partial class EfStore
         if (through == after && through < upper)
             throw new StoreFormatException("The sequenced journal has no retained rows in its acknowledged range.");
         return new(items, head.RetainedFromSequence ?? 0, upper, through, head.LastRecordedAt,
-            head.FirstRevision == 1 && head.History == (int)Durable.History.Full, asOf);
+            head.FirstRevision is not null && head.FirstRevision == head.ExpectedFirstRevision &&
+            head.History == (int)Durable.History.Full, asOf);
     }
 }

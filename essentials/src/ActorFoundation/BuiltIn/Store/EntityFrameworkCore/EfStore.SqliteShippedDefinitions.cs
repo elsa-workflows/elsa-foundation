@@ -297,7 +297,7 @@ public sealed partial class EfStore
             """);
         if (db.UsesRootRetentionPolicy)
             yield return Table(RetentionPolicyTable, RetentionPolicyColumns(sqlite: true));
-        yield return Table("FoundationRootBirths", """
+        const string births = """
             "Reference" TEXT NOT NULL PRIMARY KEY,
             "Tenant" TEXT NOT NULL CHECK (length("Tenant") BETWEEN 1 AND 64 AND instr("Tenant", char(0)) = 0
                 AND "Tenant" NOT GLOB '*[^a-z0-9-]*'),
@@ -307,7 +307,11 @@ public sealed partial class EfStore
             "Creator" TEXT NOT NULL,
             "Fingerprint" TEXT NOT NULL,
             UNIQUE ("Actor", "Creation")
-            """);
+            """;
+        yield return Table("FoundationRootBirths", db.UsesRootInlinePromotion
+            ? RootInlineBirthRevision.Columns(births, sqlite: true) : births);
+        if (db.UsesRootInlinePromotion)
+            yield return new("trigger", RootInlineBirthRevision.Guard, "FoundationRootBirths", RootInlineBirthRevision.SqliteGuard);
         if (db.UsesRootScheduleInventory)
         {
             yield return Table(RootScheduleInventory.Table, RootScheduleInventory.Columns(sqlite: true));
@@ -322,7 +326,7 @@ public sealed partial class EfStore
         }
         if (db.UsesRootPreparedStarts)
         {
-            yield return Table(RootPreparedStarts.Table, RootPreparedStarts.Columns(sqlite: true));
+            yield return Table(RootPreparedStarts.Table, RootPreparedStarts.Columns(sqlite: true, inlinePromotion: db.UsesRootInlinePromotion));
             yield return Index(RootPreparedStarts.DeadlineIndex, RootPreparedStarts.Table, RootPreparedStarts.DeadlineColumns);
         }
         yield return Table("FoundationRootReceipts", """
@@ -419,7 +423,7 @@ public sealed partial class EfStore
         yield return new("trigger", "kernel_job_generation", "Instances", "CREATE TRIGGER " + SqliteGenerationClause);
         foreach (var guard in SqliteFirstRootGuards(db)) yield return guard;
         foreach (var projector in SqliteRootProjectors()) yield return projector;
-        foreach (var history in SqliteRootWorkflowHistoryDefinitions()) yield return history;
+        foreach (var history in SqliteRootWorkflowHistoryDefinitions(db)) yield return history;
         if (db.UsesRootSequencedJournal)
             foreach (var segment in SqliteSequencedJournalDefinitions()) yield return segment;
         if (db.UsesRootPlayback)

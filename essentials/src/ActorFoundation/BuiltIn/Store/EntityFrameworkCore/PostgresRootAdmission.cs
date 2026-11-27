@@ -131,7 +131,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         await EfStore.LockCompatibleStoreFormatAsync(db, cancellationToken, exclusiveFormat || db.UsesRootTerminalSelection);
         await EfStore.RequirePreviewInstallSchemaAsync(db, cancellationToken);
         // A second Embedded process can open the same preview database while the first is installing.
-        await db.Database.ExecuteSqlRawAsync("""
+        const string definitions = """
             SELECT pg_advisory_xact_lock(48602345, 1);
             CREATE TABLE IF NOT EXISTS "FoundationRootIssuer" (
                 "Singleton" boolean PRIMARY KEY CHECK ("Singleton"), "Key" bytea NOT NULL,
@@ -149,7 +149,10 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_Pending"
                 ON "Messages" ("Partition", "Target" COLLATE "C", "Seq", "Id" COLLATE "C")
                 WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND NOT "Done";
-            """, cancellationToken);
+            """;
+        await db.Database.ExecuteSqlRawAsync(db.UsesRootInlinePromotion
+            ? RootInlineBirthRevision.Columns(definitions, sqlite: false) : definitions, cancellationToken);
+        if (db.UsesRootInlinePromotion) await RootInlineBirthRevision.InstallPostgresAsync(db, cancellationToken);
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO "FoundationRootIssuer" SELECT true, {RandomNumberGenerator.GetBytes(32)}, count(*)::integer FROM "Partitions"

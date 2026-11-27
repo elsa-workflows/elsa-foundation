@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 using Kernel.Durable;
 using Kernel.Foundation.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,8 @@ namespace Kernel.EntityFramework;
 
 /// <summary>The exact root prepared before its executable can be pinned.</summary>
 internal sealed record PreparedRootStart(string Tenant, string Reference, string Actor, int Partition,
-    string Operation, string Fingerprint, long Deadline);
+    string Operation, string Fingerprint, long Deadline,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? FirstRevision = null);
 
 internal sealed class BoundProtectedRootStarts(string actorType,
     Func<string, StartSpec, CancellationToken, CancellationToken, Task<Contract.Admission?>> admit) : IProtectedRootStarts
@@ -116,6 +118,7 @@ internal static class RootPreparedStarts
         stage.Tenant is { Length: > 0 and <= 64 } &&
         stage.Actor is { Length: > 0 and <= 256 } && stage.Partition >= 0 &&
         StoreBatchRules.AddressPartition(stage.Actor) == stage.Partition && stage.Deadline > 0 &&
+        stage.FirstRevision is null or > 0 &&
         FoundationRootCreator.IsGeneratedReference(stage.Operation) &&
         stage.Fingerprint is { Length: 67 } fingerprint && fingerprint.StartsWith("v1:", StringComparison.Ordinal) &&
         FoundationRootCreator.IsGeneratedReference(fingerprint[3..]) &&
@@ -123,24 +126,25 @@ internal static class RootPreparedStarts
 
     internal static Task<bool> RecordAsync(KernelDb db, PreparedRootStart stage, CancellationToken token,
         Func<FormattableString, FormattableString>? bindSource = null) =>
-        ChangeAsync(db, $$"""
+        ChangeAsync(db, WithFirstRevision(db, stage, $$"""
             WITH source AS MATERIALIZED (/*prepared-start-source*/)
-            INSERT INTO "FoundationPreparedRootStarts" ("Tenant", "Reference", "Actor", "Partition", "Operation", "Fingerprint", "Deadline")
-            SELECT {{stage.Tenant}}, {{stage.Reference}}, {{stage.Actor}}, {{stage.Partition}}, {{stage.Operation}}, {{stage.Fingerprint}}, {{stage.Deadline}}
+            INSERT INTO "FoundationPreparedRootStarts" ("Tenant", "Reference", "Actor", "Partition", "Operation", "Fingerprint", "Deadline"/*first-column*/)
+            SELECT {{stage.Tenant}}, {{stage.Reference}}, {{stage.Actor}}, {{stage.Partition}}, {{stage.Operation}}, {{stage.Fingerprint}}, {{stage.Deadline}}/*first-value*/
             WHERE (SELECT "SourceReady" FROM source)
-            """, token, bindSource);
+            """), token, bindSource);
 
     /// <summary>Consumes the exact preparation in the transaction that admits its birth.</summary>
     internal static Task<bool> ConsumeAsync(KernelDb db, PreparedRootStart stage, CancellationToken token,
         Func<FormattableString, FormattableString>? bindSource = null) =>
-        ChangeAsync(db, $$"""
+        ChangeAsync(db, WithFirstRevision(db, stage, $$"""
             WITH source AS MATERIALIZED (/*prepared-start-source*/)
             DELETE FROM /*prepared-only*/"FoundationPreparedRootStarts"
             WHERE "Tenant" = {{stage.Tenant}} AND "Reference" = {{stage.Reference}} AND "Actor" = {{stage.Actor}}
                 AND "Partition" = {{stage.Partition}} AND "Operation" = {{stage.Operation}}
                 AND "Fingerprint" = {{stage.Fingerprint}} AND "Deadline" = {{stage.Deadline}}
+                /*first-match*/
                 AND (SELECT "SourceReady" FROM source)
-            """, token, bindSource);
+            """), token, bindSource);
 
     internal static async Task<bool> AdmitInlineBirthAsync(KernelDb db, PreparedRootStart stage, long now, long until,
         CancellationToken token, Func<FormattableString, FormattableString>? bindSource)
@@ -153,12 +157,25 @@ internal static class RootPreparedStarts
             ON CONFLICT ("Tenant", "Operation") DO UPDATE SET "Reference" = excluded."Reference", "Until" = excluded."Until"
                 WHERE "FoundationRootReceipts"."Until" < {now}
             """, token, bindSource)) return false;
-        return await ChangeAsync(db, $"""
+        return await ChangeAsync(db, WithFirstRevision(db, stage, $"""
             WITH source AS MATERIALIZED (/*prepared-start-source*/)
-            INSERT INTO "FoundationRootBirths" ("Tenant", "Reference", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
-            SELECT {stage.Tenant}, {stage.Reference}, {stage.Actor}, {stage.Partition}, 1, {"root:" + stage.Actor}, {stage.Fingerprint}
+            INSERT INTO "FoundationRootBirths" ("Tenant", "Reference", "Actor", "Partition", "Creation", "Creator", "Fingerprint"/*first-column*/)
+            SELECT {stage.Tenant}, {stage.Reference}, {stage.Actor}, {stage.Partition}, 1, {"root:" + stage.Actor}, {stage.Fingerprint}/*first-value*/
             FROM source WHERE "SourceReady"
-            """, token, bindSource);
+            """), token, bindSource);
+    }
+
+    private static FormattableString WithFirstRevision(KernelDb db, PreparedRootStart stage, FormattableString sql)
+    {
+        if (!db.UsesRootInlinePromotion && stage.FirstRevision is not null)
+            throw new StoreFormatException("The selected store cannot bind an inline first revision.");
+        var enabled = db.UsesRootInlinePromotion;
+        var parameter = FormattableString.Invariant($"{{{sql.ArgumentCount}}}");
+        var format = sql.Format.Replace("/*first-column*/", enabled ? """, "FirstRevision" """ : "", StringComparison.Ordinal)
+            .Replace("/*first-value*/", enabled ? ", " + parameter : "", StringComparison.Ordinal)
+            .Replace("/*first-match*/", enabled ? """AND "FirstRevision" IS NOT DISTINCT FROM """ + " " + parameter : "", StringComparison.Ordinal)
+            .Replace("/*first-birth-match*/", enabled ? """AND b."FirstRevision" = coalesce(""" + parameter + ", 1)" : "", StringComparison.Ordinal);
+        return FormattableStringFactory.Create(format, enabled ? [.. sql.GetArguments(), stage.FirstRevision!] : sql.GetArguments());
     }
 
     internal static async Task ExpireAsync(KernelDb db, PreparedRootStart stage, long now, CancellationToken token,
@@ -183,7 +200,7 @@ internal static class RootPreparedStarts
         Func<FormattableString, FormattableString>? bindSource = null)
     {
         var creator = "root:" + stage.Actor;
-        var query = Bind(db, $"""
+        var query = Bind(db, WithFirstRevision(db, stage, $"""
             WITH source AS MATERIALIZED (/*prepared-start-source*/)
             SELECT CASE
                 WHEN NOT source."SourceReady" THEN 0
@@ -195,6 +212,7 @@ internal static class RootPreparedStarts
                         AND j."Revision" = -1 AND j."Entries" = '["delete"]'
                     WHERE b."Tenant" = {stage.Tenant} AND b."Reference" = {stage.Reference} AND b."Actor" = {stage.Actor}
                         AND b."Partition" = {stage.Partition} AND b."Creation" = 1 AND b."Creator" = {creator}
+                        /*first-birth-match*/
                         AND b."Fingerprint" = {stage.Fingerprint} AND i."Retired" AND i."Status" <> {(int)InstanceStatus.Running}
                         AND i."FoundationTerminalRevision" > 0 AND i."FoundationTerminalAt" IS NOT NULL
                         AND i."FoundationWriteRevision" = i."Revision") THEN 1
@@ -203,7 +221,7 @@ internal static class RootPreparedStarts
                     AND NOT EXISTS (SELECT 1 FROM /*prepared-only*/"Instances" WHERE "Partition" = {stage.Partition} AND "Id" = {stage.Actor})
                     AND NOT EXISTS (SELECT 1 FROM /*prepared-only*/"Messages" WHERE "InboxScope" = 0 AND "Id" = {creator}) THEN 2
                 ELSE 0 END AS "Value" FROM source
-            """, bindSource);
+            """), bindSource);
         return (RootStartProof)await db.Database.SqlQuery<int>(query).SingleAsync(token);
     }
 
@@ -223,10 +241,11 @@ internal static class RootPreparedStarts
             format.Replace(Source, """SELECT true AS "SourceReady" """, StringComparison.Ordinal), query.GetArguments());
     }
 
-    internal static string Columns(bool sqlite)
+    internal static string Columns(bool sqlite, bool inlinePromotion = false)
     {
         var text = sqlite ? "TEXT" : """text COLLATE "C" """;
         var deadline = sqlite ? "INTEGER" : "bigint";
+        var firstRevision = inlinePromotion ? $""", "FirstRevision" {deadline} CHECK ("FirstRevision" > 0)""" : "";
         return $$"""
             "Reference" {{text}} NOT NULL PRIMARY KEY CHECK (length("Reference") = 64),
             "Tenant" {{text}} NOT NULL,
@@ -234,14 +253,14 @@ internal static class RootPreparedStarts
             "Partition" integer NOT NULL REFERENCES "Partitions" ("Id"),
             "Operation" {{text}} NOT NULL CHECK (length("Operation") = 64),
             "Fingerprint" {{text}} NOT NULL CHECK (length("Fingerprint") = 67),
-            "Deadline" {{deadline}} NOT NULL CHECK ("Deadline" > 0)
+            "Deadline" {{deadline}} NOT NULL CHECK ("Deadline" > 0){{firstRevision}}
             """;
     }
 
     internal static async Task InstallPostgresAsync(KernelDb db, CancellationToken token)
     {
         await db.Database.ExecuteSqlRawAsync($"""
-            CREATE TABLE IF NOT EXISTS "{Table}" ({Columns(sqlite: false)}) USING heap;
+            CREATE TABLE IF NOT EXISTS "{Table}" ({Columns(sqlite: false, inlinePromotion: db.UsesRootInlinePromotion)}) USING heap;
             CREATE INDEX IF NOT EXISTS "{DeadlineIndex}" ON "{Table}" {DeadlineColumns};
             """, token);
     }

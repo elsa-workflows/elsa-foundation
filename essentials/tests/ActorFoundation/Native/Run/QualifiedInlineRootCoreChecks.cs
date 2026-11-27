@@ -142,7 +142,7 @@ internal static class QualifiedInlineRootCoreChecks
             ?? throw new InvalidOperationException("The test owner could not queue its qualified creator.");
     }
 
-    private sealed record InlineHeaders(Func<StartSpec, object, bool>? ValidateInlineMaterial = null) : IRootDispatchHeaders
+    internal sealed record InlineHeaders(Func<StartSpec, object, bool>? ValidateInlineMaterial = null) : IRootDispatchHeaders
     {
         public bool RequiresCommittedTerminal => false;
         public bool KeepsParkInputs => false;

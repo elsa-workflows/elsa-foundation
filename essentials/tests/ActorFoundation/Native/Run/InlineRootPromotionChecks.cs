@@ -5,12 +5,14 @@ using Kernel.Foundation.Hosting;
 using Kernel.Runtime;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Contract = Kernel.Foundation.Contracts;
+using WorkflowActorType = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Kernel.Native.Run;
 
 internal static class InlineRootPromotionChecks
 {
-    internal static async Task<int> RunAsync(bool postgres, bool fenceInBatch)
+    internal static async Task<int> RunAsync(bool postgres, bool fenceInBatch, bool laterRevision = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var token = timeout.Token;
@@ -28,8 +30,11 @@ internal static class InlineRootPromotionChecks
                     DataSource = Path.Combine(directory!.FullName, "inline-promotion.db"), ForeignKeys = true, Pooling = false
                 }.ToString());
             var sqliteDefinitions = new SqliteAdmissionDefinitions();
-            KernelDb Open() => postgres ? KernelDb.ForPostgresRootPreparedStartsQualification(options.Options)
-                : KernelDb.ForSqliteRootRuntime(options.Options, sqliteDefinitions, StoreFormat.RootPreparedStartsQualification);
+            KernelDb Open() => postgres
+                ? laterRevision ? KernelDb.ForPostgresRootInlinePromotionQualification(options.Options)
+                    : KernelDb.ForPostgresRootPreparedStartsQualification(options.Options)
+                : KernelDb.ForSqliteRootRuntime(options.Options, sqliteDefinitions, laterRevision
+                    ? StoreFormat.RootInlinePromotionQualification : StoreFormat.RootPreparedStartsQualification);
 
             var store = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
             await using (var db = Open())
@@ -50,17 +55,20 @@ internal static class InlineRootPromotionChecks
                 key = postgres ? await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token)
                     : await SqliteRootAdmission.ReadRootIssuerKeyAsync(db, token);
 
-            var (later, laterTurn) = Sealed("late-first-write", 3);
-            try
+            if (!laterRevision)
             {
-                await PromoteAsync(later, laterTurn, fence, (_, _) =>
-                    throw new InvalidOperationException("An unsupported revision entered protection."));
-                throw new InvalidOperationException("An unsupported initial revision was accepted.");
-            }
-            catch (NotSupportedException)
-            {
-                Check(await CountAsync(later, "FoundationPreparedRootStarts", "Actor", token) == 0,
-                    "a revision that the installed history projector cannot seed is refused before preparation");
+                var (later, laterTurn) = Sealed("late-first-write", 3);
+                try
+                {
+                    await PromoteAsync(later, laterTurn, fence, (_, _) =>
+                        throw new InvalidOperationException("An unsupported revision entered protection."));
+                    throw new InvalidOperationException("An unsupported initial revision was accepted.");
+                }
+                catch (NotSupportedException)
+                {
+                    Check(await CountAsync(later, "FoundationPreparedRootStarts", "Actor", token) == 0,
+                        "a revision that the installed history projector cannot seed is refused before preparation");
+                }
             }
 
             var (creator, turn) = Sealed("selected-operation", 1);
@@ -80,7 +88,9 @@ internal static class InlineRootPromotionChecks
                 await CountAsync(creator, "Subscriptions", "Instance", token) == 1 &&
                 await CountAsync(creator, "Journal", "Instance", token) == 1 &&
                 await CountAsync(creator, "Messages", "Target", token) == 0 &&
-                await CountAsync(creator, "FoundationPreparedRootStarts", "Actor", token) == 0,
+                await CountAsync(creator, "FoundationPreparedRootStarts", "Actor", token) == 0 &&
+                await store.ReadRootSequencedJournalAsync(scope.Tenant, selected, 0, null, 16, token) is
+                    { CapturedFromStart: true, RetainedFromSequence: 1, Items.Count: 2 },
                 "the exact actor, revision, wait and journal commit without a replay creator");
 
             fence = fence with { Position = fence.Position + 1 };
@@ -113,6 +123,23 @@ internal static class InlineRootPromotionChecks
                 await CountAsync(stale, "Journal", "Instance", token) == 0,
                 "owner movement during executable protection leaves no durable continuation");
             await store.ReleaseAsync(fence.Partition, fence.Epoch, token);
+            if (laterRevision)
+            {
+                fence = await TakeAsync("inline-stage-change");
+                var (changed, changedTurn) = Sealed("changed-stage-revision", 2);
+                Check(await PromoteAsync(changed, changedTurn, fence, async (offer, ct) =>
+                {
+                    await using var db = Open();
+                    return await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "FoundationPreparedRootStarts" SET "FirstRevision" = 3 WHERE "Reference" = {offer.Actor.Id}
+                        """, ct) == 1;
+                }) is { Landed: false } &&
+                    await CountAsync(changed, "Instances", "Id", token) == 0 &&
+                    await CountAsync(changed, "Journal", "Instance", token) == 0,
+                    "a changed physical first revision cannot consume a previously authenticated preparation");
+                await store.ReleaseAsync(fence.Partition, fence.Epoch, token);
+                await QualifyLaterNativeAsync();
+            }
             return 0;
 
             async Task<PartitionFence> TakeAsync(string node) =>
@@ -121,6 +148,156 @@ internal static class InlineRootPromotionChecks
 
             ValueTask<Committed> PromoteAsync(Message message, TurnCommit sealedTurn, PartitionFence owned, ProtectRootStartAsync protect) =>
                 store.PromoteInlineRootAsync(scope, message, sealedTurn, owned, lease, TimeSpan.FromHours(1), protect, token);
+
+            async Task QualifyLaterNativeAsync()
+            {
+                var workflow = new Workflow("inline-native", Wf.Sequence("steps", Wf.WriteLine("before", "volatile work"),
+                    Wf.Delay("one", 100), Wf.Delay("two", 100), Wf.Event("wait", "resume"), Wf.WriteLine("after", "cold work")))
+                    { ExecutableSelection = "private-125-material" };
+                var registry = new WorkflowRegistry().Add(workflow);
+                var model = new NativeExecutionModel(registry, new NativeExecutionOptions { UseStructuralJournal = true });
+                var actor = new WorkflowActorType([model]);
+                var spec = WorkflowActorType.Start(NativeExecutionModel.Start(workflow, Modes.Ephemeral));
+                var address = InstanceRef.In(0, scope.Tenant + "_" + Guid.NewGuid().ToString("N"));
+                var reference = FoundationRootCreator.ReferenceFor(key, scope.Tenant, new(address.Id, 1));
+                var operation = RootPreparedStarts.InlineOperation("later-native");
+                var local = FoundationRootCreator.Create(address, operation, FoundationRootCreator.OperationDigest(operation),
+                    new StartSpec(spec.Type, spec.TypeData, spec.Input, Ephemeral: true), null, null)
+                    with { FoundationRootBinding = (address.Id, scope.Tenant, reference) };
+                long now = 10_000;
+                long unwrittenRevision = 0;
+                TurnCommit? checkpoint = null;
+                Message? firstCreator = null;
+                var headers = new QualifiedInlineRootCoreChecks.InlineHeaders((requested, material) =>
+                    WorkflowActorType.DescribeStart(requested.Model, requested.Definition) is { } selected &&
+                    model.MatchesInlineMaterial(material, selected.Workflow, selected.Definition, selected.ExecutableSelection));
+                var inMemory = new InMemoryStore(1, () => now);
+                var memoryOptions = new WorkerOptions
+                {
+                    Monotonic = () => now,
+                    OnKeptInMemory = (_, revision) => unwrittenRevision = revision,
+                    OnPreparedCheckpoint = (sealedTurn, _, accepted) =>
+                    {
+                        checkpoint = sealedTurn;
+                        firstCreator = accepted;
+                    }
+                };
+                var self = new FoundationSelfIssuer(seed => FoundationSelfSend.Handle(key, seed), SupportsTimers: true);
+                await using var volatileOwner = new Worker("inline-volatile", 0, inMemory, new ActorAdapter(headers, actor, self), memoryOptions);
+                await volatileOwner.TakeAsync(token);
+                var originalTrace = WriteLine.Out;
+                using var trace = new StringWriter();
+                WriteLine.Out = trace;
+                try
+                {
+                    var receipt = volatileOwner.TryQueueQualifiedInlineStart(local, model.CaptureInlineMaterial(workflow)) ??
+                        throw new InvalidOperationException("Could not admit the local fixture turn.");
+                    await WaitUnwrittenAsync(1);
+                    Check(!receipt.IsCompleted && checkpoint is null && await store.ReadFirstRootAsync(scope.Tenant, reference, token) is null,
+                        "the first short Delay has no physical checkpoint or receipt");
+                    now += 100;
+                    await WaitUnwrittenAsync(2);
+                    Check(!receipt.IsCompleted && checkpoint is null && await store.ReadFirstRootAsync(scope.Tenant, reference, token) is null,
+                        "the second short Delay still has no physical checkpoint or receipt");
+                    now += 100;
+                    while (!receipt.IsCompleted)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        await volatileOwner.RunAsync(token);
+                    }
+                    Check(checkpoint?.Row?.Revision == 3 && firstCreator?.InboxKey == local.InboxKey,
+                        "the existing local owner seals the external wait at logical revision three with its original creator");
+                    var promotedFence = await TakeAsync("inline-promoting-owner");
+                    Check(await PromoteAsync(firstCreator!, checkpoint!, promotedFence, (offer, _) =>
+                        ValueTask.FromResult(RootPreparedStarts.Verify(key, scope, new(reference), offer.Issuance) is { FirstRevision: 3 })) is { Landed: true },
+                        "protocol 125 persists the sealed Native wait without running the workflow again");
+                    var before = await store.ReadRootSequencedJournalAsync(scope.Tenant, reference, 0, null, 64, token);
+                    Check(before is { CapturedFromStart: true, RetainedFromSequence: 1 } &&
+                        before.Items.Count > 2 && before.Items.All(entry => entry.Revision == 3) &&
+                        await CountAsync(local, "Journal", "Instance", token) == 1 &&
+                        await CountAsync(local, "Messages", "Target", token) == 0,
+                        "the first physical journal and cursor contain only sealed revision three");
+                    var playback = await store.ReadRootPlaybackAsync(scope.Tenant, reference, new(16, null, null, null), token);
+                    Check(playback is { Availability: Contract.ActorPlaybackAvailability.Available } &&
+                        playback.Items.Count > 0 && playback.Items.All(entry => entry.Revision == 3),
+                        "Playback starts at the committed occurrence sequence without pseudo revisions");
+                    var listed = await store.ReadRootActorListAsync(scope.Tenant, "", actor.Type, (int)InstanceStatus.Running,
+                        [], null, null, 16, token);
+                    var history = await store.ReadRootWorkflowHistoryAsync(scope.Tenant, actor.Type, workflow.Definition,
+                        (int)InstanceStatus.Running, null, null, null, null, 16, token);
+                    Check(listed.Items.Any(item => item.Reference == reference) && history.Items.Any(item => item.Reference == reference),
+                        "the normal actor list and workflow history project the exact promoted run");
+
+                    await using (var db = Open())
+                    {
+                        var changed = false;
+                        try
+                        {
+                            changed = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                                UPDATE "FoundationRootBirths" SET "FirstRevision" = 2 WHERE "Reference" = {reference}
+                                """, token) != 0;
+                        }
+                        catch (System.Data.Common.DbException error) when (error.Message.Contains("first revision is immutable", StringComparison.Ordinal)) { }
+                        Check(!changed && await db.Database.SqlQuery<long>($"""
+                            SELECT "FirstRevision" AS "Value" FROM "FoundationRootBirths" WHERE "Reference" = {reference}
+                            """).SingleAsync(token) == 3, "the physical birth protects the authenticated first revision from update");
+                    }
+                    await store.ReleaseAsync(promotedFence.Partition, promotedFence.Epoch, token);
+                    await volatileOwner.ReleaseAsync(token);
+
+                    var cold = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
+                    var coldModel = new NativeExecutionModel(new WorkflowRegistry().Add(workflow),
+                        new NativeExecutionOptions { UseStructuralJournal = true });
+                    var coldActor = new WorkflowActorType([coldModel]);
+                    await cold.EnableRootSelfSendsAsync(token);
+                    await cold.EnableRootJobsAsync(token);
+                    await cold.EnableRootChildrenAsync(token);
+                    var roots = postgres ? cold.BindWorkerNode(ActorAdapter.RootWithholding(coldActor, null))
+                        : cold.BindSqliteWorkerNode(ActorAdapter.RootWithholding(coldActor, null));
+                    var adapter = new ActorAdapter(cold.WorkerHeaders(roots), coldActor, cold.RootSelfIssuer, cold.RootJobHandle,
+                        rootTimedJobClock: cold.ReadRootTimedJobPublicationTimeAsync);
+                    var observed = 0;
+                    var turns = 0;
+                    await using var coldOwner = Worker.ForNode("inline-cold-owner", cold, adapter, new WorkerOptions
+                    {
+                        OnObservedDelivery = _ => observed++,
+                        OnTurn = (_, _, _) => turns++
+                    });
+                    Check(await coldOwner.GainAsync(0, token), "a fresh physical owner claims the promoted root's partition");
+                    var input = Durable.Json.Write(new ResumeStimulus("resume"));
+                    var accepted = postgres
+                        ? await new PostgresRootAdmission(Open, TimeSpan.FromHours(1)).AdmitDirectAsync(scope.Tenant, reference,
+                            "resume-inline", NativeKinds.Resume, input, cancellationToken: token) == true
+                        : (await new SqliteRootAdmission(Open, TimeSpan.FromHours(1), sqliteDefinitions).SendAsync(scope.Tenant,
+                            new(reference), "resume-inline", NativeKinds.Resume, input, null, null, token)).Outcome == Contract.AdmissionOutcome.Accepted;
+                    Check(accepted, "trusted ordinary ingress admits the cold continuation");
+                    await coldOwner.WokenAsync(address, token);
+                    for (var attempt = 0; attempt < 20 &&
+                         await cold.ReadFirstRootAsync(scope.Tenant, reference, token) is { Status: InstanceStatus.Running }; attempt++)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        await coldOwner.RunAsync(token);
+                    }
+                    var settled = await cold.ReadFirstRootAsync(scope.Tenant, reference, token);
+                    Check(settled is { Status: InstanceStatus.Finished },
+                        $"the cold continuation finishes (checkpoint {settled?.Status}, {observed} observed, {turns} turns, {settled?.Fault})");
+                    var after = await cold.ReadRootSequencedJournalAsync(scope.Tenant, reference, before!.UpperSequence, null, 64, token);
+                    Check(after is { CapturedFromStart: true } && after.Items.Count > 0 && after.Items.All(entry => entry.Revision == 4) &&
+                        trace.ToString().Split("volatile work", StringSplitOptions.None).Length == 2 &&
+                        trace.ToString().Split("cold work", StringSplitOptions.None).Length == 2,
+                        "a restarted owner appends revision four and does not replay the earlier volatile work");
+                }
+                finally { WriteLine.Out = originalTrace; }
+
+                async Task WaitUnwrittenAsync(long revision)
+                {
+                    while (unwrittenRevision < revision)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        await volatileOwner.RunAsync(token);
+                    }
+                }
+            }
 
             (Message Creator, TurnCommit Turn) Sealed(string operation, long revision)
             {

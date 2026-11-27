@@ -63,6 +63,8 @@ if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
 if (args is ["qualified-inline-root-core"]) return await QualifiedInlineRootCoreChecks.RunAsync();
 if (args is ["inline-root-promotion", var inlineProvider and ("postgres" or "sqlite"), var inlineFence and ("checked" or "in-batch")])
     return await InlineRootPromotionChecks.RunAsync(inlineProvider == "postgres", inlineFence == "in-batch");
+if (args is ["inline-root-promotion", var lateInlineProvider and ("postgres" or "sqlite"), var lateInlineFence and ("checked" or "in-batch"), "125"])
+    return await InlineRootPromotionChecks.RunAsync(lateInlineProvider == "postgres", lateInlineFence == "in-batch", laterRevision: true);
 if (args is ["root-auxiliary-owner", var auxiliaryProvider and ("postgres" or "sqlite"), var auxiliaryFence and ("checked" or "in-batch")])
     return await RootAuxiliaryOwnerChecks.RunAsync(auxiliaryProvider == "postgres", auxiliaryFence == "in-batch");
 if (args is ["root-schedule-controls", var controlsProvider and ("postgres" or "sqlite"), var controlsFence and ("checked" or "in-batch")])

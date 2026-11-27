@@ -70,6 +70,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootScheduleLineageQualification => new(3, 122, 1);
     internal static StoreFormat RootManagedSchedulesQualification => new(3, 123, 1);
     internal static StoreFormat RootPreparedStartsQualification => new(3, 124, 1);
+    internal static StoreFormat RootInlinePromotionQualification => new(3, 125, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -124,7 +125,8 @@ internal enum RootCapabilities : long
     ScheduleSettlement = 1L << 31,
     ScheduleControls = 1L << 32,
     ScheduleLineage = 1L << 33,
-    PreparedStarts = 1L << 34
+    PreparedStarts = 1L << 34,
+    InlinePromotion = 1L << 35
 }
 
 internal static class RootProfiles
@@ -168,6 +170,7 @@ internal static class RootProfiles
     internal const RootCapabilities ScheduleLineageQualification = ScheduleSettlementQualification | RootCapabilities.ScheduleLineage;
     internal const RootCapabilities ManagedSchedulesQualification = Shipped34 | ScheduleControlsQualification | ScheduleLineageQualification;
     internal const RootCapabilities PreparedStartsQualification = ManagedSchedulesQualification | RootCapabilities.PreparedStarts;
+    internal const RootCapabilities InlinePromotionQualification = PreparedStartsQualification | RootCapabilities.InlinePromotion;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
     internal const RootCapabilities PlaybackDescendantsQualification = Shipped34;
@@ -243,7 +246,8 @@ internal static class RootProfiles
         [RootCapabilities.ScheduleInventory] = RootCapabilities.Timers | RootCapabilities.ParkOpening,
         [RootCapabilities.ScheduleSettlement] = RootCapabilities.ScheduleInventory | RootCapabilities.JobProtocol,
         [RootCapabilities.ScheduleControls] = RootCapabilities.ScheduleInventory | RootCapabilities.TimedJobSettlement,
-        [RootCapabilities.ScheduleLineage] = RootCapabilities.ScheduleSettlement | RootCapabilities.Children | RootCapabilities.Retirement
+        [RootCapabilities.ScheduleLineage] = RootCapabilities.ScheduleSettlement | RootCapabilities.Children | RootCapabilities.Retirement,
+        [RootCapabilities.InlinePromotion] = RootCapabilities.PreparedStarts | RootCapabilities.SequencedJournal
     };
 
     // The prerequisites of the set's members that the set lacks. None means the set is closed.
@@ -450,6 +454,8 @@ internal static class StoreDefinitionsRevision
     private const int SqliteManagedSchedulesRevision = 21;
     private const int PostgreSqlPreparedStartsRevision = 19;
     private const int SqlitePreparedStartsRevision = 22;
+    private const int PostgreSqlInlinePromotionRevision = 21;
+    private const int SqliteInlinePromotionRevision = 24;
     private const int SqliteParkRecoverRevision = 5;
     private const int PostgreSqlDueBacklogRevision = 5;
     private const int SqliteDueBacklogRevision = 10;
@@ -484,6 +490,8 @@ internal static class StoreDefinitionsRevision
                     sqlite ? SqlitePlaybackDescendantsRevision : PostgreSqlPlaybackDescendantsRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPreparedStartsQualification =>
                     sqlite ? SqlitePreparedStartsRevision : PostgreSqlPreparedStartsRevision,
+                _ when db.RequiredFormat == StoreFormat.RootInlinePromotionQualification =>
+                    sqlite ? SqliteInlinePromotionRevision : PostgreSqlInlinePromotionRevision,
                 _ when db.RequiredFormat == StoreFormat.RootManagedSchedulesQualification =>
                     sqlite ? SqliteManagedSchedulesRevision : PostgreSqlManagedSchedulesRevision,
                 _ when db.RequiredFormat == StoreFormat.RootScheduleLineageQualification =>
