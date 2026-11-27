@@ -77,9 +77,9 @@ internal sealed partial class PostgresRootAdmission
         return await RootScheduleInventory.ListAsync(db, tenant, definition, actorType, after, limit, token, sql => BindScheduleSource(sql, pin));
     }
 
-    private static async Task<PinnedRootSource> PinScheduleStoreAsync(KernelDb db, bool writing, CancellationToken token)
+    private static async Task<PinnedRootSource> PinScheduleStoreAsync(KernelDb db, bool writing, CancellationToken token, bool loadIssuer = false)
     {
-        var pin = await PinRootNamespaceAsync(db, loadIssuer: writing, token)
+        var pin = await PinRootNamespaceAsync(db, loadIssuer: writing || loadIssuer, token)
             ?? throw new StoreFormatException("PostgreSQL schedule inventory requires a pinned root store.");
         try
         {

@@ -66,6 +66,8 @@ if (args is ["root-schedule-inventory", var scheduleProvider and ("postgres" or 
     return await RootScheduleInventoryChecks.RunAsync(scheduleProvider == "postgres");
 if (args is ["root-schedule-occurrence", var occurrenceProvider and ("postgres" or "sqlite")])
     return await RootScheduleInventoryChecks.RunAsync(occurrenceProvider == "postgres", settleOccurrences: true);
+if (args is ["root-schedule-occurrence", var occurrenceLifecycleProvider and ("postgres" or "sqlite"), var occurrenceFence and ("checked" or "in-batch")])
+    return await RootScheduleInventoryChecks.RunAsync(occurrenceLifecycleProvider == "postgres", settleOccurrences: true, fenceInBatch: occurrenceFence == "in-batch");
 if (args is ["pg-live-remote-http"]) return await PostgresLiveRemoteHttpChecks.RunAsync();
 if (args is ["kernel-http-waits"]) return await KernelHttpWaitChecks.RunAsync();
 if (args is ["kernel-http-waits", var httpWaitProvider and ("postgres" or "sqlite"), var httpWaitFence and ("checked" or "in-batch")])
