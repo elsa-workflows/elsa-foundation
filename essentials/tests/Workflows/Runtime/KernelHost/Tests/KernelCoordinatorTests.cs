@@ -3,9 +3,12 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Options;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Kernel.WorkflowActor;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -60,13 +63,23 @@ public sealed class KernelCoordinatorTests
     {
         public List<string> Refreshes { get; } = [];
         public bool Fail { get; set; }
+        public bool FailNext { get; set; }
 
         public ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default)
         {
-            if (Fail) throw new InvalidOperationException("The workflow library is unavailable.");
+            if (Fail || FailNext)
+            {
+                FailNext = false;
+                throw new InvalidOperationException("The workflow library is unavailable.");
+            }
             Refreshes.Add($"{snapshot.DefinitionId} {snapshot.ArtifactId} {snapshot.RequiresProjectionRefresh} {snapshot.Bindings.Count}");
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class ScopedAccess(PersistenceScope scope) : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(scope);
     }
 
     /// <summary>A switch that holds an activation's slot move until it is released, so another can start meanwhile.</summary>
@@ -608,6 +621,68 @@ public sealed class KernelCoordinatorTests
         Assert.Equal("ticks@1", host.Serving.ServedWorkflow("ticks").Workflow);
         Assert.Equal("ticks@1", host.Schedules.Runs["schedule-start:ticks:tick"]!.Workflow);
         Assert.Equal(claim, Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1")));
+    }
+
+    [Fact]
+    public async Task Failed_managed_deactivation_restores_all_claims_and_reservations()
+    {
+        var host = new Host();
+        var executable = Ticks("ticks@1");
+        var identity = executable.Identity;
+        var scope = new TriggerScope(new(PersistenceScope.DefaultValue), null);
+        var access = new ScopedAccess(scope.Persistence);
+        await using var services = new ServiceCollection().AddWorkflowRuntime()
+            .AddSingleton<IPersistenceAccessContextAccessor>(access).BuildServiceProvider();
+        await using var request = services.CreateAsyncScope();
+        var reader = request.ServiceProvider.GetRequiredService<IRuntimeIngressReservationReader>();
+        var state = services.GetRequiredService<InMemoryRuntimeCheckpointStoreState>();
+        var activationSwitch = new InMemoryWorkflowActivationSwitch(host.Authority, host.References, host.Clock, state,
+            access, host.Bindings, host.RecurringSchedules);
+        host.Coordinator = host.NewCoordinator(activationSwitch, new RuntimeManagedScheduleActors());
+
+        const string activation = "ticks-1";
+        const string channel = KernelServing.DefaultSlotName;
+        const string scheduleKey = "schedule:ticks:tick";
+        var slotId = WorkflowActivationSlotIdentity.Create(identity.DefinitionId, channel);
+        var now = host.Clock.GetUtcNow();
+        await host.Executables.SaveAsync(executable);
+        await host.References.SaveAsync(new(WorkflowActivationReferenceIdentity.Create(activation), identity.ArtifactId, "definition",
+            identity.DefinitionId, "1", identity.DefinitionId, identity.DefinitionVersionId, identity.ArtifactVersion,
+            now, now, WorkflowExecutableReferenceScope.Published, ActivationId: activation, SlotId: slotId));
+        WorkflowTriggerBinding Claim(string type, string hash, Dictionary<string, string> metadata) => new(
+            WorkflowTriggerBinding.BuildId(activation, identity.ArtifactId, "tick", hash), identity.ArtifactId,
+            identity.DefinitionId, identity.ArtifactVersion, identity.ArtifactHash, "tick", type, hash, null,
+            metadata, now, activation, slotId, TriggerCardinality.ReservationOnly, false);
+        WorkflowTriggerBinding[] claims =
+        [
+            Claim(RuntimeKernelScheduleOccurrence.ReservationType, RuntimeKernelScheduleOccurrence.ReservationKey(scheduleKey),
+                new() { [RuntimeKernelScheduleControl.ScheduleKeyMetadata] = scheduleKey }),
+            Claim("unrelated", "unrelated:identity", new() { ["owner"] = "other" })
+        ];
+        await host.Bindings.PrepareActivationAsync(activation, claims);
+        await host.RecurringSchedules.PrepareActivationAsync(activation, []);
+        var initial = await activationSwitch.TryActivateAsync(new(identity.DefinitionId, channel, activation, WorkflowActivationSource.Publishing, 0, now));
+        Assert.True(initial.Succeeded);
+        Assert.True((await host.Coordinator.EnsureServingAsync(identity.DefinitionId, channel)).Succeeded);
+        var previous = new List<RuntimeIngressReservation>();
+        foreach (var claim in claims)
+            previous.Add(Assert.IsType<RuntimeIngressReservation>(await reader.FindAsync(scope, claim.StimulusType, claim.StimulusHash)));
+
+        host.Observer.FailNext = true;
+        var failed = await host.DeactivateAsync(executable);
+
+        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.TriggerObserverNotification), (failed.Outcome, failed.FailedStep));
+        Assert.Equal((activation, initial.Slot.Revision + 2), (failed.Slot.ActiveActivationId, failed.Slot.Revision));
+        Assert.Null(failed.CompensationDiagnostic);
+        Assert.Equal(identity.ArtifactId, host.Serving.ServedWorkflow(identity.DefinitionId).Workflow);
+        var restored = await host.Bindings.ListAllByActivationAsync(activation);
+        Assert.Equal(claims.Select(claim => claim with { IsActive = true }).OrderBy(claim => claim.TriggerBindingId),
+            restored.OrderBy(claim => claim.TriggerBindingId));
+        foreach (var prior in previous)
+        {
+            var reservation = Assert.IsType<RuntimeIngressReservation>(await reader.FindAsync(scope, prior.StimulusType, prior.StimulusHash));
+            Assert.Equal(prior with { OwnerRevision = failed.Slot.Revision, ConfigurationRevision = failed.Slot.Revision }, reservation);
+        }
     }
 
     [Fact]

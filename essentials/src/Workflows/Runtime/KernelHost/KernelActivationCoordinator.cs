@@ -249,7 +249,8 @@ public sealed class KernelActivationCoordinator(
             after = state.Schedules.All.Where(schedule => schedule.Workflow == served.Workflow.Id).ToArray();
             if (schedules.RequiresPublicationClaims && after.Length > 0)
             {
-                var claims = await ReadPublicationClaimsAsync(served.ActivationId, cancellationToken);
+                var claims = (await ReadPublicationClaimsAsync(served.ActivationId, cancellationToken))
+                    .Where(claim => claim.StimulusType == RuntimeKernelScheduleOccurrence.ReservationType).ToArray();
                 if (claims.Length != after.Length || after.Any(schedule => !claims.Any(claim => KernelScheduleClaim.Matches(claim, served, schedule))))
                     throw new InvalidOperationException("The activation's schedules need publication claims before they can be served.");
             }
@@ -708,8 +709,7 @@ public sealed class KernelActivationCoordinator(
         try
         {
             return (await triggerBindingStore.ListAllByActivationAsync(activationId, cancellationToken))
-                .Where(binding => binding.Cardinality == TriggerCardinality.ReservationOnly &&
-                    binding.StimulusType == RuntimeKernelScheduleOccurrence.ReservationType).ToArray();
+                .Where(binding => binding.Cardinality == TriggerCardinality.ReservationOnly).ToArray();
         }
         catch (NotSupportedException) when (!schedules.RequiresPublicationClaims)
         {
