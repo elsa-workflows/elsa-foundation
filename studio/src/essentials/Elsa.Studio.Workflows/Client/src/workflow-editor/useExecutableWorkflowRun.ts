@@ -54,16 +54,15 @@ export async function resolvePublishedDefinitionRunTarget(
 }
 
 function describePublishedRun(name: string, result: WorkflowExecutableRunResponse): {
-  level: "success" | "error" | "info";
+  level: ExecutableRunState["severity"];
   title: string;
   summary: string;
 } {
-  if (result.persistenceOutcome === "Volatile" && result.actorStatus === "Finished")
-    return { level: "success", title: "Run completed in memory", summary: `${name} completed in memory` };
-
-  if (result.persistenceOutcome === "Committed") {
+  if (result.persistenceOutcome === "Volatile" || result.persistenceOutcome === "Committed") {
     switch (result.actorStatus) {
-      case "Finished": return { level: "success", title: "Run completed", summary: `${name} completed` };
+      case "Finished": return result.persistenceOutcome === "Volatile"
+        ? { level: "success", title: "Run completed in memory", summary: `${name} completed in memory` }
+        : { level: "success", title: "Run completed", summary: `${name} completed` };
       case "Faulted": return { level: "error", title: "Run faulted", summary: `${name} faulted` };
       case "Cancelled": return { level: "info", title: "Run cancelled", summary: `${name} was cancelled` };
     }
@@ -120,8 +119,9 @@ export function createExecutableWorkflowRunFeedback({ setStatus, setLastRun, set
       setError("");
     },
     onStarted: (target: ExecutableWorkflowRunTarget, result: WorkflowExecutableRunResponse) => {
-      setLastRun({ artifactId: target.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result) });
-      setStatus(describePublishedRun(target.artifactId, result).summary);
+      const { level, summary } = describePublishedRun(target.artifactId, result);
+      setLastRun({ artifactId: target.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result), severity: level });
+      setStatus(summary);
     },
     onError: (error: unknown) => setError(formatExecutableRunError(error))
   };

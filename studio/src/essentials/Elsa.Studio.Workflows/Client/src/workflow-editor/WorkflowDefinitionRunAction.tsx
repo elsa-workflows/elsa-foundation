@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDefinitionSummary } from "../workflowTypes";
-import { formatExecutableRunError } from "./executableRunHelpers";
+import { describeExecutableRunError, formatExecutableRunError } from "./executableRunHelpers";
 import { getNotifications, useNotificationGuard } from "./notifications";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
 import { notifyPublishedRunOutcome, resolvePublishedDefinitionRunTarget, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
@@ -23,11 +23,14 @@ export function WorkflowDefinitionRunAction({ context, definition, requestId, ru
     },
     onError: error => {
       const feedback = pendingRunFeedback.current;
-      if (feedback.canNotify?.()) getNotifications().notify({
-        level: "error",
-        title: `Couldn't start ${feedback.name}`,
-        message: formatExecutableRunError(error)
-      });
+      if (feedback.canNotify?.()) {
+        const { outcomeUnknown, message } = describeExecutableRunError(error);
+        getNotifications().notify({
+          level: outcomeUnknown ? "info" : "error",
+          title: outcomeUnknown ? "Run outcome unavailable" : `Couldn't start ${feedback.name}`,
+          message
+        });
+      }
     }
   });
   const request = useRef({ context, definition, requestId, captureNotificationGuard, run: runAction.request });

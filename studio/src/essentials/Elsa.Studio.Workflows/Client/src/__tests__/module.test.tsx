@@ -444,12 +444,23 @@ describe("workflows module", () => {
       label: "committed fault",
       dispatch: { workflowExecutionId: "wfexec-faulted", persistenceOutcome: "Committed", actorStatus: "Faulted" },
       feedback: { level: "error", title: "Run faulted", message: "Hello World faulted." }
+    },
+    {
+      label: "in-memory fault",
+      dispatch: { workflowExecutionId: null, persistenceOutcome: "Volatile", actorStatus: "Faulted" },
+      feedback: { level: "error", title: "Run faulted", message: "Hello World faulted." }
+    },
+    {
+      label: "unconfirmed execution",
+      dispatch: { workflowExecutionId: null, persistenceOutcome: "Unknown", reason: "InlineStartOutcomeUnknown" },
+      httpStatus: 504,
+      feedback: { level: "info", title: "Run outcome unavailable", message: "The workflow may still run. Check Runs before starting it again." }
     }
-  ])("loads the published definition run action on demand and reports $label", async ({ dispatch, feedback }) => {
+  ])("loads the published definition run action on demand and reports $label", async ({ dispatch, feedback, httpStatus }) => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/runtime/workflows/executables/artifact-current/execute") && init?.method === "POST") {
-        return response(dispatch);
+        return response(dispatch, httpStatus);
       }
       if (url.includes("/runtime/workflows/executables")) return response([
         executable({
@@ -2333,10 +2344,12 @@ describe("workflows module", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === "POST") return response({ workflowExecutionId: "wfexec-published-1" });
+      if (init?.method === "POST") return response({
+        workflowExecutionId: "wfexec-published-1", persistenceOutcome: "Committed", actorStatus: "Faulted"
+      });
       if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-published-1")) {
         return response(workflowInstanceDetails({
-          instance: workflowInstance({ workflowExecutionId: "wfexec-published-1", sourceReferenceId: "ref-new", activityCount: 3 }),
+          instance: workflowInstance({ workflowExecutionId: "wfexec-published-1", sourceReferenceId: "ref-new", status: "Faulted", activityCount: 3 }),
           activities: [
             activityExecution({
               activityExecutionId: "root-execution",
@@ -2420,6 +2433,7 @@ describe("workflows module", () => {
     await fill(inputByLabel(document.body, "Greeting"), "Hello from published run");
     await click(buttonByText(document.body, "Run workflow"));
     await waitForText(container, "Open Run wfexec-published-1");
+    expect(container.querySelector('.wf-status-line[data-severity="error"]')?.textContent).toContain("artifact-1 faulted");
     await click(buttonByText(container, "Open Run wfexec-published-1"));
     await waitForRunWorkbench(container);
 
