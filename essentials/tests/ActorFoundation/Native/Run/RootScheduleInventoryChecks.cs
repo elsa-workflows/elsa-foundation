@@ -187,22 +187,38 @@ internal static class RootScheduleInventoryChecks
         const string tenant = "tenant-a";
         var occurrence = new RootScheduleOccurrence(timer, reference, 1, "~timer-a", 1000);
         var pinned = new StartSpec("workflow", """{"Workflow":"version-a"}""", Input: "original");
+        var foundation = postgres ? null : SqliteEmbeddedFoundation.ForScheduleQualification(db.Database.GetDbConnection().DataSource,
+            "scheduled-occurrence-relay", pinned.Model);
+        if (foundation is not null) await foundation.InstallShippedAsync(token);
+        var bound = EmbeddedTenant.Bind(tenant);
+        var relay = postgres
+            ? PostgresPreviewHosting.BindScheduleOccurrences(open, bound, pinned.Model, ScheduleActor.ActorType)
+            : foundation!.BindScheduleOccurrences(bound, ScheduleActor.ActorType);
+        try
+        {
+            await relay.AdmitAsync(Wire(occurrence), new(ScheduleActor.ActorType, "{}"), token);
+            throw new InvalidOperationException("A host occurrence admitted the auxiliary type as its workflow.");
+        }
+        catch (ArgumentException) { Console.WriteLine("ok the host occurrence relay enforces the configured primary workflow type"); }
         var before = await db.Messages.CountAsync(token);
-        var otherTenant = await AdmitAsync("tenant-b", occurrence, pinned);
+        var foreign = postgres
+            ? await pg.ReadScheduleRootsAsync("tenant-b", timer.Definition, null, 1, token)
+            : await sqlite.ReadScheduleRootsAsync("tenant-b", timer.Definition, null, 1, token);
+        var otherTenant = await AdmitAsync(occurrence with { ScheduleReference = foreign.Roots.Single().Reference }, pinned);
         Require(otherTenant is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch },
             "an occurrence cannot use a different tenant's schedule binding");
-        var contenders = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(() => AdmitAsync(tenant, occurrence, pinned), token)));
+        var contenders = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(() => AdmitAsync(occurrence, pinned), token)));
         var first = contenders.Single(item => item.Outcome == Contract.AdmissionOutcome.Accepted);
         Require(first.Actor is not null && contenders.Count(item => item.Outcome == Contract.AdmissionOutcome.Duplicate && item.Actor == first.Actor) == 3 &&
             await db.Messages.CountAsync(token) == before + 1, "a repeated relay acceptance writes one workflow birth and queues one creator");
-        Require((await AdmitAsync(tenant, occurrence, pinned)) is { Outcome: Contract.AdmissionOutcome.Duplicate } replay && replay.Actor == first.Actor &&
+        Require((await AdmitAsync(occurrence, pinned)) is { Outcome: Contract.AdmissionOutcome.Duplicate } replay && replay.Actor == first.Actor &&
             !await db.Database.SqlQueryRaw<bool>("""SELECT EXISTS (SELECT 1 FROM "FoundationRootReceipts") AS "Value" """).SingleAsync(token),
             "replay uses the durable birth even with no generic operation receipt");
 
         await MustRefuseAsync(occurrence, pinned with { Definition = """{"Workflow":"version-b"}""" });
         await MustRefuseAsync(occurrence with { Due = 2000 }, pinned);
         Require(await db.Messages.CountAsync(token) == before + 1, "changed pinned workflow or due time adds no creator to the existing occurrence");
-        var next = await AdmitAsync(tenant, occurrence with { ArmGeneration = 2 }, pinned);
+        var next = await AdmitAsync(occurrence with { ArmGeneration = 2 }, pinned);
         Require(next.Outcome == Contract.AdmissionOutcome.Accepted && next.Actor != first.Actor &&
             await db.Messages.CountAsync(token) == before + 2, "the next arm generation has a distinct occurrence even with the same timer identity");
         Require(!await RetiredAsync(occurrence, first.Actor!.Value.Id),
@@ -210,7 +226,7 @@ internal static class RootScheduleInventoryChecks
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "Target" = (SELECT "Actor" FROM "FoundationRootBirths" WHERE "Reference" = {first.Actor?.Id})
             """, token);
-        Require((await AdmitAsync(tenant, occurrence, pinned)).Actor == first.Actor &&
+        Require((await AdmitAsync(occurrence, pinned)).Actor == first.Actor &&
             await db.Messages.CountAsync(token) == before + 1, "replay does not require or recreate the original inbox row");
         Require(!await RetiredAsync(occurrence, first.Actor.Value.Id), "an absent actor body never proves retirement");
         if (postgres)
@@ -224,7 +240,7 @@ internal static class RootScheduleInventoryChecks
                 """, token);
             try { await MustRefuseAsync(blocked, pinned); }
             finally { await db.Database.ExecuteSqlRawAsync("""DROP TRIGGER schedule_reject_creator ON "Messages"; DROP FUNCTION schedule_reject_creator();""", token); }
-            Require((await AdmitAsync(tenant, blocked, pinned)).Outcome == Contract.AdmissionOutcome.Accepted &&
+            Require((await AdmitAsync(blocked, pinned)).Outcome == Contract.AdmissionOutcome.Accepted &&
                 await db.Messages.CountAsync(token) == before + 2, "a suppressed PostgreSQL creator rolls back its birth and the exact retry can enqueue it");
         }
 
@@ -246,13 +262,16 @@ internal static class RootScheduleInventoryChecks
         Require(!await RetiredAsync(nextOccurrence, first.Actor.Value.Id),
             "retirement proof is tied to the exact occurrence birth");
         var messageCount = await db.Messages.CountAsync(token);
-        var retiredReplay = await AdmitAsync(tenant, nextOccurrence, pinned);
+        var retiredReplay = await AdmitAsync(nextOccurrence, pinned);
         Require(retiredReplay is { Outcome: Contract.AdmissionOutcome.Duplicate } && retiredReplay.Actor == nextActor &&
             await db.Messages.CountAsync(token) == messageCount, "the retired birth replays without recreating its inbox");
 
-        Task<Contract.Admission> AdmitAsync(string tenantId, RootScheduleOccurrence item, StartSpec spec) => postgres
-            ? pg.AdmitScheduledOccurrenceAsync(tenantId, item, spec, token)
-            : sqlite.AdmitScheduledOccurrenceAsync(tenantId, item, spec, token);
+        Task<Contract.Admission> AdmitAsync(RootScheduleOccurrence item, StartSpec spec) =>
+            relay.AdmitAsync(Wire(item),
+                new(spec.Model, spec.Definition, spec.Input, spec.Ephemeral, (Contract.History)spec.History), token).AsTask();
+
+        static Contract.AcceptedScheduleOccurrence Wire(RootScheduleOccurrence item) =>
+            new(item.Schedule.Definition, item.Schedule.Key, new(item.ScheduleReference), item.ArmGeneration, item.TimerDelivery, item.Due);
 
         Task<bool> RetiredAsync(RootScheduleOccurrence item, string actorReference) => postgres
             ? pg.IsScheduledOccurrenceRetiredAsync(tenant, item, pinned, actorReference, token)
@@ -262,7 +281,7 @@ internal static class RootScheduleInventoryChecks
         {
             try
             {
-                await AdmitAsync(tenant, item, spec);
+                await AdmitAsync(item, spec);
                 throw new InvalidOperationException("A changed immutable occurrence was accepted.");
             }
             catch (StoreFormatException) { }

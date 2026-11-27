@@ -7,7 +7,7 @@ namespace Kernel.Foundation.Sqlite;
 
 /// <summary>Composes one shipped Embedded owner and its caller interface over a dedicated SQLite file.</summary>
 /// <remarks>Install the file with <see cref="InstallShippedAsync"/> on this instance before starting the owner or using the interfaces.</remarks>
-public sealed class SqliteEmbeddedFoundation : Contract.IActorRetentionPolicies
+public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionPolicies
 {
     private readonly string path;
     private readonly string node;
