@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
+using Kernel.Foundation.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
@@ -158,6 +159,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         if (db.UsesRootScheduleInventory) await RootScheduleInventory.InstallPostgresAsync(db, cancellationToken);
         if (db.UsesRootScheduleControls) await RootScheduleControls.InstallPostgresAsync(db, cancellationToken);
         if (db.UsesRootScheduleLineage) await RootScheduleLineage.InstallPostgresAsync(db, cancellationToken);
+        if (db.UsesRootPreparedStarts) await RootPreparedStarts.InstallPostgresAsync(db, cancellationToken);
         if (db.UsesRootChildren) await EfStore.InstallRootChildCascadeAsync(db, cancellationToken);
         if (db.UsesRootStableBody)
             await db.Database.ExecuteSqlRawAsync("""
@@ -221,12 +223,15 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     /// to nothing. Null when the request's deadline has passed by database time: nothing is admitted.
     /// </summary>
     internal Task<Receipt?> AdmitRootRequestAsync(string tenant, string operation, StartSpec spec, string node, Request request,
-        bool early, CancellationToken cancellationToken, TimeSpan? keepFor = null)
+        bool early, CancellationToken cancellationToken, TimeSpan? keepFor = null, ProtectRootStartAsync? protectRootStart = null)
     {
         if (request.Tenant != tenant || request.Done || string.IsNullOrWhiteSpace(node) || node.Length > 256 ||
             node.Contains('|') || node.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(node))
             throw new ArgumentException("A held root start needs an open request of its tenant and an issued reply node.", nameof(request));
-        return AdmitCoreAsync(tenant, operation, spec, null, keepFor, new(request.ReplyAddress(node, early), request.Deadline), cancellationToken);
+        var reply = new DirectReply(request.ReplyAddress(node, early), request.Deadline);
+        return protectRootStart is null
+            ? AdmitCoreAsync(tenant, operation, spec, null, keepFor, reply, cancellationToken)
+            : AdmitProtectedRootRequestAsync(tenant, operation, spec, keepFor, reply, protectRootStart, cancellationToken);
     }
 
     private async Task<Receipt?> AdmitCoreAsync(string tenant, string operation, StartSpec spec, long? due,
@@ -263,7 +268,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         {
             // Preserve the one-round-trip claim/write on the accepted small-start path. A refused attempt
             // only reads the already installed receipt and has made no change to the store.
-            var existing = await ReadReceiptAsync(liveOnly: true);
+            var existing = await ReadStartReceiptAsync(db, pin, tenant, digest, liveOnly: true, cancellationToken);
             if (existing is null) throw;
             return new(existing, true);
         }
@@ -291,8 +296,31 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var (header, payload) = EncodeCreator(creator);
         var fits = FitsEnvelope(header, payload, reply?.Address);
 
-        // A live receipt wins even when the replay's encoded envelope is too large. When no receipt
-        // wins, this transaction rolls back the claim if its creator cannot be stored.
+        var write = await WriteStartAsync(db, pin, tenant, digest, reference, windowMs, claimFirst,
+            creator, fingerprint, fits, header, payload, reply, cancellationToken);
+        if (!write.Claimed) return await Replay();
+        if (!fits) throw new MetadataLimitExceeded(nameof(spec), EfStore.RootContentBytes);
+        if (!write.Enqueued)
+            throw new InvalidOperationException("A generated root start must commit its creator with the receipt.");
+        await transaction.CommitAsync(cancellationToken);
+        attempt?.Committed();
+        return new(reference, false);
+
+        async Task<Receipt> Replay()
+        {
+            var existing = await ReadStartReceiptAsync(db, pin, tenant, digest, liveOnly: false, cancellationToken)
+                ?? throw new InvalidOperationException("The conflicting root receipt no longer exists.");
+            await transaction.CommitAsync(cancellationToken);
+            return new(existing, true);
+        }
+    }
+
+    // A live receipt wins even when the replay's encoded envelope is too large. When no receipt
+    // wins, this transaction rolls back the claim if its creator cannot be stored.
+    private static async Task<StartWrite> WriteStartAsync(KernelDb db, PinnedRootSource? pin, string tenant, string digest,
+        string reference, long windowMs, bool claimFirst, Message creator, string fingerprint, bool fits, string header,
+        string? payload, DirectReply? reply, CancellationToken cancellationToken)
+    {
         var command = """
             WITH source AS MATERIALIZED (/*start-source*/), receipt AS (
             """ + ClaimReceiptSql + """
@@ -317,39 +345,26 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             FROM source
             """;
         var writeQuery = FormattableStringFactory.Create(command, tenant, digest, reference, windowMs, claimFirst,
-            actor.Id, actor.Partition, creator.InboxKey.Id, fingerprint, fits, creator.Kind, creator.Due ?? 0,
+            creator.Target.Id, creator.Target.Partition, creator.InboxKey.Id, fingerprint, fits, creator.Kind, creator.Due ?? 0,
             (fits ? payload : null)!, fits ? header : "", (reply?.Address)!);
         var write = (await db.Database.SqlQuery<StartWrite>(WithStartSource(writeQuery, pin)).ToListAsync(cancellationToken)).Single();
         RequireStartSource(write.SourceReady);
-        if (!write.Claimed) return await Replay();
-        if (!fits) throw new MetadataLimitExceeded(nameof(spec), EfStore.RootContentBytes);
-        if (!write.Enqueued)
-            throw new InvalidOperationException("A generated root start must commit its creator with the receipt.");
-        await transaction.CommitAsync(cancellationToken);
-        attempt?.Committed();
-        return new(reference, false);
+        return write;
+    }
 
-        async Task<Receipt> Replay()
-        {
-            var existing = await ReadReceiptAsync(liveOnly: false)
-                ?? throw new InvalidOperationException("The conflicting root receipt no longer exists.");
-            await transaction.CommitAsync(cancellationToken);
-            return new(existing, true);
-        }
-
-        async Task<string?> ReadReceiptAsync(bool liveOnly)
-        {
-            var result = await db.Database.SqlQuery<StartReceipt>(WithStartSource($"""
-                WITH source AS MATERIALIZED (/*start-source*/)
-                SELECT source."SourceReady", (SELECT r."Reference" FROM "FoundationRootReceipts" r
-                    WHERE source."SourceReady" AND r."Tenant" = {tenant} AND r."Operation" = {digest}
-                        AND (NOT {liveOnly} OR r."Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint))
-                    AS "Reference"
-                FROM source
-                """, pin)).SingleAsync(cancellationToken);
-            RequireStartSource(result.SourceReady);
-            return result.Reference;
-        }
+    private static async Task<string?> ReadStartReceiptAsync(KernelDb db, PinnedRootSource? pin, string tenant, string digest,
+        bool liveOnly, CancellationToken cancellationToken)
+    {
+        var result = await db.Database.SqlQuery<StartReceipt>(WithStartSource($"""
+            WITH source AS MATERIALIZED (/*start-source*/)
+            SELECT source."SourceReady", (SELECT r."Reference" FROM "FoundationRootReceipts" r
+                WHERE source."SourceReady" AND r."Tenant" = {tenant} AND r."Operation" = {digest}
+                    AND (NOT {liveOnly} OR r."Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint))
+                AS "Reference"
+            FROM source
+            """, pin)).SingleAsync(cancellationToken);
+        RequireStartSource(result.SourceReady);
+        return result.Reference;
     }
 
     private static FormattableString WithStartSource(FormattableString query, PinnedRootSource? pin) =>

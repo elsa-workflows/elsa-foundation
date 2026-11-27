@@ -13,7 +13,12 @@ public sealed record WorkflowStart(
     string? Input = null,
     bool Ephemeral = false,
     History History = History.Full,
-    string? Definition = null);
+    string? Definition = null)
+{
+    /// <summary>The optional opaque executable identity selected by the publishing host for this start.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExecutableSelection { get; init; }
+}
 
 /// <summary>The workflow model and its versioned state format.</summary>
 public interface IExecutionModel

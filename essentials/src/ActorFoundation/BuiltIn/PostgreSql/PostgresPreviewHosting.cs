@@ -264,6 +264,7 @@ public static partial class PostgresPreviewHosting
     {
         ArgumentNullException.ThrowIfNull(create);
         PostgresRootAdmission.RequireActorType(actorType);
+        requests?.RequireRootStartProtectionBinding(create, actorType);
         if (requests is not null && deduplicationWindow is { } asked && asked != requests.DeduplicationWindow)
             throw new ArgumentException("Held requests carry their own deduplication window.", nameof(deduplicationWindow));
         var window = requests?.DeduplicationWindow ?? deduplicationWindow ?? TimeSpan.FromHours(1);
@@ -296,17 +297,27 @@ public static partial class PostgresPreviewHosting
     public static PostgresDirectRequests CreateRequests(Func<KernelDb> create, string node, string actorType, TimeSpan? deduplicationWindow = null)
         => CreateRequests(create, node, actorType, deduplicationWindow, null);
 
+    /// <summary>Creates held requests that protect each exact prepared root before admitting its creator.</summary>
+    public static PostgresDirectRequests CreateRequestsWithRootStartProtection(Func<KernelDb> create, string node, string actorType,
+        ProtectRootStartAsync protectRootStart, TimeSpan? deduplicationWindow = null)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return CreateRequests(create, node, actorType, deduplicationWindow, null, protectRootStart);
+    }
+
     internal static PostgresDirectRequests CreateRequests(Func<KernelDb> create, string node, string actorType,
-        TimeSpan? deduplicationWindow, RootAdmissionPressure? pressure)
+        TimeSpan? deduplicationWindow, RootAdmissionPressure? pressure, ProtectRootStartAsync? protectRootStart = null)
     {
         ArgumentNullException.ThrowIfNull(create);
         PostgresRootAdmission.RequireActorType(actorType);
         var window = deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         using var db = create();
+        if (protectRootStart is not null && (!db.UsesRootReplyProtocol || !db.UsesRootPreparedStarts))
+            throw new NotSupportedException("Held root protection requires an installed PostgreSQL prepared-start profile.");
         if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
         return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: pressure), new EfStore(create, postgres: true),
-            node, actorType) { DeduplicationWindow = window };
+            node, actorType, protectRootStart) { DeduplicationWindow = window };
     }
 
     /// <summary>
@@ -342,6 +353,7 @@ public static partial class PostgresPreviewHosting
         if (node.Contains('\0') || !FoundationMetadataLimits.FitsName(node))
             throw new ArgumentException("Invalid PostgreSQL node name.", nameof(node));
         PostgresRootAdmission.RequireActorType(actor.Type);
+        (replies as PostgresDirectRequests)?.RequireRootStartProtectionBinding(create, actor.Type);
         if (auxiliaryActor is not null) ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
 
         options ??= new LoopOptions();

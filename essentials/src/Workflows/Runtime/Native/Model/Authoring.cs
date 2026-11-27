@@ -178,6 +178,10 @@ public sealed class Workflow
     /// </summary>
     public string Definition { get; }
 
+    /// <summary>Opaque identity of the exact executable this compiled workflow represents, when supplied by a publishing host.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExecutableSelection { get; init; }
+
     public Node Root { get; }
     public IReadOnlyDictionary<string, JsonNode?> Variables { get; }
     public Dictionary<string, Node> Nodes { get; } = new(StringComparer.Ordinal);

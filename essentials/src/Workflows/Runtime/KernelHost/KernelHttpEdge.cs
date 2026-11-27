@@ -35,7 +35,7 @@ public static class KernelHttpEdge
     {
         ArgumentNullException.ThrowIfNull(serving);
         var match = HttpRouteMatcher.Match(serving.Routes, method, path);
-        return match.Route is { } route && (route.Start || serving.Capabilities.HttpWaits) && serving.Registry.Contains(route.Workflow)
+        return match.Route is { } route && (route.Start || serving.Capabilities.HttpWaits)
             ? match : null;
     }
 
@@ -50,10 +50,13 @@ public static class KernelHttpEdge
         ArgumentNullException.ThrowIfNull(match);
         ArgumentNullException.ThrowIfNull(request);
         // What serves now: the route the match found, still served by the same workflow's node.
-        if (match.Route is not { Start: true } route || !serving.Routes.TryStart(route.Method, route.Template.Text, out var served) ||
-            served != (route.Workflow, route.Node) || !serving.Registry.TryGet(route.Workflow, out var workflow)) return null;
+        if (match.Route is not { Start: true } matched || serving.HttpStart(matched) is not { } startBinding) return null;
+        var (route, workflow) = startBinding;
         var trigger = Values.From(request with { RouteValues = match.Values });
-        var start = NativeExecutionModel.Start(workflow.Id, Modes.Balanced, null, route.Node, trigger, workflow.Definition);
+        var start = NativeExecutionModel.Start(workflow.Id, Modes.Balanced, null, route.Node, trigger, workflow.Definition) with
+        {
+            ExecutableSelection = workflow.ExecutableSelection
+        };
         return new(Kernel.WorkflowActor.WorkflowActor.Start(start), workflow.Id, route.RespondBeforeCommit);
     }
 
