@@ -18,7 +18,9 @@ namespace Elsa.Activities.Scheduling.StandaloneTriggers;
     DependsOn = new object[] { "WorkflowsRuntimeRecurringTriggers" })]
 public class StandaloneScheduleTriggersFeature : IShellFeature
 {
-    public virtual void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services) => AddServices(services);
+
+    internal static void AddServices(IServiceCollection services)
     {
         services.AddStandaloneTriggerIngress<TimerScheduleSource>(new("timer", 1, ScheduleSourceContext.TimerFamily, ScheduleSourceContext.Schema));
         services.AddStandaloneTriggerIngress<CronScheduleSource>(new("cron", 1, ScheduleSourceContext.CronFamily, ScheduleSourceContext.Schema));

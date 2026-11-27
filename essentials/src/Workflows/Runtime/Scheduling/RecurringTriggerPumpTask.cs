@@ -73,6 +73,7 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
     private const string PumpRequestedBy = "runtime.recurring-trigger";
 
     private readonly IPersistenceScopeRunner? _scopeRunner;
+    private readonly bool _resourceOwnedOnly;
     private readonly IRecurringTriggerScheduleStore? _store;
     private readonly IWorkflowTriggerBindingStore? _bindingStore;
     private readonly IStimulusRouter? _router;
@@ -93,6 +94,14 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
         ArgumentNullException.ThrowIfNull(scopeRunner);
         _scopeRunner = scopeRunner;
     }
+
+    internal RecurringTriggerPumpTask(
+        IPersistenceScopeRunner scopeRunner,
+        IOptions<RecurringTriggerPumpOptions> options,
+        TimeProvider timeProvider,
+        ILogger<RecurringTriggerPumpTask> logger,
+        bool resourceOwnedOnly) : this(scopeRunner, options, timeProvider, logger) =>
+        _resourceOwnedOnly = resourceOwnedOnly;
 
     /// <summary>Direct-construction seam retained for focused pump tests and custom hosts.</summary>
     public RecurringTriggerPumpTask(
@@ -158,8 +167,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
                 await SweepAsync(
                     persistenceScope,
                     operationScope.ServiceProvider.GetRequiredService<IRecurringTriggerScheduleStore>(),
-                    operationScope.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>(),
-                    operationScope.ServiceProvider.GetRequiredService<IStimulusRouter>(),
+                    GetWorkflowDependency<IWorkflowTriggerBindingStore>(operationScope.ServiceProvider),
+                    GetWorkflowDependency<IStimulusRouter>(operationScope.ServiceProvider),
                     operationScope.ServiceProvider.GetRequiredService<IRecurringScheduleCalculator>(),
                     options,
                     now,
@@ -171,6 +180,9 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
         }
     }
 
+    private T? GetWorkflowDependency<T>(IServiceProvider services) where T : class =>
+        _resourceOwnedOnly ? null : services.GetRequiredService<T>();
+
     protected override void OnSweepFailed(Exception exception, int consecutiveFailures, TimeSpan backoffInterval) =>
         Logger.LogError(
             exception,
@@ -181,8 +193,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
     private async Task SweepAsync(
         PersistenceScope persistenceScope,
         IRecurringTriggerScheduleStore store,
-        IWorkflowTriggerBindingStore bindingStore,
-        IStimulusRouter router,
+        IWorkflowTriggerBindingStore? bindingStore,
+        IStimulusRouter? router,
         IRecurringScheduleCalculator calculator,
         RecurringTriggerPumpOptions options,
         DateTimeOffset now,
@@ -191,9 +203,10 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
         IRuntimeAdmissionLoadSignal? loadSignal = null,
         IReadOnlyList<IStandaloneScheduleSource>? resourceSources = null)
     {
-        var claims = await store.ClaimDueAsync(
-            new RecurringTriggerOccurrenceClaimRequest(_claimOwnerId, now, options.ClaimVisibilityTimeout, options.MaxSchedulesPerTick),
-            cancellationToken);
+        var request = new RecurringTriggerOccurrenceClaimRequest(_claimOwnerId, now, options.ClaimVisibilityTimeout, options.MaxSchedulesPerTick);
+        var claims = _resourceOwnedOnly
+            ? await store.ClaimDueResourceOccurrencesAsync(request, cancellationToken)
+            : await store.ClaimDueAsync(request, cancellationToken);
         async ValueTask<RecurringTriggerOccurrenceClaim?> RenewAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset at,
             TimeSpan visibility, CancellationToken ct)
         {
@@ -214,8 +227,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
                     {
                         await using var scope = await scopeFactory.CreateAsync(persistenceScope, ct);
                         if (await FireAsync(scope.ServiceProvider.GetRequiredService<IRecurringTriggerScheduleStore>(),
-                                scope.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>(),
-                                scope.ServiceProvider.GetRequiredService<IStimulusRouter>(),
+                                GetWorkflowDependency<IWorkflowTriggerBindingStore>(scope.ServiceProvider),
+                                GetWorkflowDependency<IStimulusRouter>(scope.ServiceProvider),
                                 scope.ServiceProvider.GetRequiredService<IRecurringScheduleCalculator>(),
                                 lease, claim, options, now, ct, loadSignal, keepRenewing: true,
                                 resourceSources: scope.ServiceProvider.GetServices<IStandaloneScheduleSource>().ToArray(), persistenceScope: persistenceScope))
@@ -242,8 +255,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
     // occurrence in the cursor to be fired again.
     private async Task<bool> FireAsync(
         IRecurringTriggerScheduleStore store,
-        IWorkflowTriggerBindingStore bindingStore,
-        IStimulusRouter router,
+        IWorkflowTriggerBindingStore? bindingStore,
+        IStimulusRouter? router,
         IRecurringScheduleCalculator calculator,
         FencedClaimLease<RecurringTriggerOccurrenceClaim> lease,
         RecurringTriggerOccurrenceClaim claim,
@@ -256,6 +269,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
         PersistenceScope? persistenceScope = null)
     {
         var schedule = claim.Schedule;
+        if (_resourceOwnedOnly && schedule.Resource is null)
+            throw new InvalidDataException("A resource recurrence claim returned a workflow-owned occurrence.");
         DateTimeOffset? next;
         try
         {
@@ -292,7 +307,7 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
                 StandaloneScheduleAuthority.Validate(claim, accepted.Item.StandaloneIngress);
                 return RouteOutcome.Routed;
             }
-            return await RouteAsync(bindingStore, router, schedule, ct);
+            return await RouteAsync(bindingStore!, router!, schedule, ct);
         }
         // Custom direct hosts may share the renewal store's context with routing, so retain renew-before-only there.
         var run = keepRenewing

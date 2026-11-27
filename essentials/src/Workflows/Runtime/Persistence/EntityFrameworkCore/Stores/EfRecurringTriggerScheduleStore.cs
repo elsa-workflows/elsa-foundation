@@ -413,7 +413,16 @@ public sealed partial class EfRecurringTriggerScheduleStore(
         return row is null ? null : Read(row, scope, scheduleId);
     }
 
-    public async ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(RecurringTriggerOccurrenceClaimRequest request, CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(
+        RecurringTriggerOccurrenceClaimRequest request, CancellationToken cancellationToken = default) =>
+        ClaimDueAsync(request, resourceOwnedOnly: false, cancellationToken);
+
+    public ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueResourceOccurrencesAsync(
+        RecurringTriggerOccurrenceClaimRequest request, CancellationToken cancellationToken = default) =>
+        ClaimDueAsync(request, resourceOwnedOnly: true, cancellationToken);
+
+    private async ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(
+        RecurringTriggerOccurrenceClaimRequest request, bool resourceOwnedOnly, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         ValidateIdentity(request.OwnerId, nameof(request.OwnerId));
@@ -426,10 +435,12 @@ public sealed partial class EfRecurringTriggerScheduleStore(
         // Only the (scope, active, NextOccurrence) range is served by an index; the visibility filter and the order key's
         // tie-break are evaluated on the rows in that range. That is acceptable because recurring schedules are few: one per
         // Timer/Cron start trigger of an active publication.
-        var rows = await context.RecurringTriggerSchedules.AsNoTracking()
+        var due = context.RecurringTriggerSchedules.AsNoTracking()
             .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey && x.IsActive && x.NextOccurrenceUtcTicks <= now &&
-                        (x.VisibleAfterUtcTicks == null || x.VisibleAfterUtcTicks <= now))
-            .OrderBy(x => x.NextOccurrenceUtcTicks)
+                        (x.VisibleAfterUtcTicks == null || x.VisibleAfterUtcTicks <= now));
+        // Resource recurrence has no artifact id. Read validates that the physical projection agrees with the document.
+        if (resourceOwnedOnly) due = due.Where(x => x.ArtifactId == null);
+        var rows = await due.OrderBy(x => x.NextOccurrenceUtcTicks)
             .ThenBy(x => x.ScheduleIdOrderKey)
             .Take(request.Limit)
             .ToArrayAsync(cancellationToken);
@@ -439,8 +450,9 @@ public sealed partial class EfRecurringTriggerScheduleStore(
         {
             cancellationToken.ThrowIfCancellationRequested();
             var schedule = Read(row, scope);
-            if (!schedule.IsActive || schedule.NextOccurrence > request.Now || row.VisibleAfterUtcTicks is { } visible && visible > now)
-                throw new InvalidDataException("Recurring-trigger claim query returned a row outside its active, due and visible predicate.");
+            if (!schedule.IsActive || schedule.NextOccurrence > request.Now || row.VisibleAfterUtcTicks is { } visible && visible > now ||
+                resourceOwnedOnly && schedule.Resource is null)
+                throw new InvalidDataException("Recurring-trigger claim query returned a row outside its owner, active, due or visible predicate.");
             var originalRevision = row.Revision;
             row.ClaimOwnerId = Encode(request.OwnerId);
             row.ClaimToken = NextFencingToken(row);
