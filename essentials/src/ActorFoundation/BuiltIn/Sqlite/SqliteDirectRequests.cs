@@ -50,6 +50,7 @@ public static partial class SqliteEmbeddedHosting
         internal TimeSpan DeduplicationWindow { get; }
         internal RootAdmissionPressure? Pressure { get; }
         internal StoreFormat? QualificationFormat { get; }
+        internal Requests Pending => edge.Pending;
 
         internal void RequireBinding(string databasePath, string configuredType, string? owner = null)
         {
@@ -168,6 +169,10 @@ public static partial class SqliteEmbeddedHosting
             public Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>
                 WriteAsync(request.Tenant, RootAdmissionKind.Input, (admission, attempt, ct) =>
                     admission.PublishRequestAsync(request, key, payload, ct, attempt), token);
+
+            public bool SupportsPublicEvents => owner.QualificationFormat is { } format
+                ? format == StoreFormat.RootPublicEventStartsQualification
+                : RootProfiles.Shipped.HasFlag(RootCapabilities.PublicEventStarts);
 
             public bool SupportsKeys => owner.QualificationFormat == StoreFormat.RootKeyedStartsQualification;
 

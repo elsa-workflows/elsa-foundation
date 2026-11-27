@@ -77,7 +77,8 @@ public sealed class Request(string id, long deadline)
     internal bool AnyOutput { get; init; }
     internal string? Tenant { get; init; }
     internal object? Ambient { get; init; }
-    internal HashSet<InboxKey> AmbientGiven { get; } = [];
+    private readonly HashSet<InboxKey> _ambientDeliveries = [];
+    private HashSet<int>? _ambientEventRecipients;
     private TaskCompletionSource<Reply>? _completion;
     private int _eventRecipientCount;
     private HashSet<int>? _endedEventRecipients;
@@ -88,8 +89,22 @@ public sealed class Request(string id, long deadline)
     // Event admission binds the exact count before its transaction makes any of the aliases deliverable.
     internal void ExpectEventRecipients(int count) => Volatile.Write(ref _eventRecipientCount, count);
 
+    // All of an Event recipient's turns share one local Ambient claim.
+    internal bool ClaimAmbient(InboxKey delivery, int? eventRecipient) => eventRecipient is { } index
+        ? (_ambientEventRecipients ??= []).Add(index)
+        : _ambientDeliveries.Add(delivery);
+
     internal string EventRegistration(int recipient) =>
         FormattableString.Invariant($"{Registration}{EventRecipientSeparator}{recipient}");
+
+    internal static int EventRecipientSeparatorIndex(string registration, out int recipient)
+    {
+        var separator = registration.LastIndexOf(EventRecipientSeparator);
+        recipient = -1;
+        return separator > 0 &&
+            int.TryParse(registration.AsSpan(separator + 1), NumberStyles.None, CultureInfo.InvariantCulture, out recipient)
+            ? separator : -1;
+    }
 
     internal Task<Reply> Completion() => Done
         ? Task.FromResult(AcceptedResponse ?? new Reply(Registration, Key: "", Channel: null, Item: null, Status: Status, Error: Error))
@@ -150,10 +165,8 @@ public sealed class Requests
     {
         eventRecipient = null;
         if (_open.TryGetValue(registration, out var single)) return single.EventRecipientCount == 0 ? single : null;
-        var separator = registration.LastIndexOf(Request.EventRecipientSeparator);
-        if (separator < 0 || !_open.TryGetValue(registration[..separator], out var group) ||
-            !int.TryParse(registration.AsSpan(separator + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var recipient) ||
-            recipient < 0 || recipient >= group.EventRecipientCount)
+        var separator = Request.EventRecipientSeparatorIndex(registration, out var recipient);
+        if (separator < 0 || !_open.TryGetValue(registration[..separator], out var group) || recipient >= group.EventRecipientCount)
             return null;
         eventRecipient = recipient;
         return group;
@@ -182,8 +195,12 @@ public sealed class Requests
         var route = ReplyTo.Parse(address);
         if (route.Node != node || route.Deadline <= now) return null;
         lock (_gate)
-            return _open.GetValueOrDefault(route.Request) is { Done: false, Ambient: { } ambient } request &&
-                request.Tenant == tenant && request.Deadline == route.Deadline && request.AmbientGiven.Add(delivery) ? ambient : null;
+        {
+            if (FindReplyRecipient(route.Request, out var recipient) is not { Done: false, Ambient: { } ambient } request ||
+                request.Tenant != tenant || request.Deadline != route.Deadline)
+                return null;
+            return request.ClaimAmbient(delivery, recipient) ? ambient : null;
+        }
     }
 
     internal Task<Reply> CompletionOf(Request request)

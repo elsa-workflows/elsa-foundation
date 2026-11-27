@@ -85,7 +85,8 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
                 Kernel.Durable.IReplyTransport? replies = requests;
                 if (replies is not null && ObserveReplies is { } observe) replies = observe(replies);
                 return PostgresPreviewHosting.StartAsync(create, node, actor, escalate, options, token, fault, replies,
-                    retentionWindow: RetentionWindow, auxiliaryActor: auxiliaryActor, protectChildBirths: protectChildBirths, inlineStarts: inlineStarts);
+                    retentionWindow: RetentionWindow, auxiliaryActor: auxiliaryActor, protectChildBirths: protectChildBirths, inlineStarts: inlineStarts,
+                    localRequests: requests);
             }, logger);
     }
 
