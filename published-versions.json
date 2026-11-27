@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "edc75cc957a319938971be87bb490d28880eeb70",
+  "last_publish_commit": "aa8a034adc805bba8258c92e30e293c0a84d0d5d",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -154,8 +154,8 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
-      "version": "4.0.19-preview",
-      "commit": "edc75cc957a319938971be87bb490d28880eeb70"
+      "version": "4.0.20-preview",
+      "commit": "aa8a034adc805bba8258c92e30e293c0a84d0d5d"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Runtime",
@@ -164,13 +164,13 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Sqlite",
-      "version": "4.0.12-preview",
-      "commit": "edc75cc957a319938971be87bb490d28880eeb70"
+      "version": "4.0.13-preview",
+      "commit": "aa8a034adc805bba8258c92e30e293c0a84d0d5d"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
-      "version": "4.0.55-preview",
-      "commit": "edc75cc957a319938971be87bb490d28880eeb70"
+      "version": "4.0.56-preview",
+      "commit": "aa8a034adc805bba8258c92e30e293c0a84d0d5d"
     },
     {
       "package_id": "Elsa.ActorFoundation.Contracts",
@@ -1159,18 +1159,18 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
-      "version": "4.0.119-preview",
-      "commit": "4f7922adc1aa34e1c7c1a6345ca0da1757245d5a"
+      "version": "4.0.120-preview",
+      "commit": "aa8a034adc805bba8258c92e30e293c0a84d0d5d"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
-      "version": "4.0.61-preview",
-      "commit": "4f7922adc1aa34e1c7c1a6345ca0da1757245d5a"
+      "version": "4.0.62-preview",
+      "commit": "aa8a034adc805bba8258c92e30e293c0a84d0d5d"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.102-preview",
-      "commit": "e937c2cebeba738adebef2e8ca4da25eee24bdb6"
+      "version": "4.0.103-preview",
+      "commit": "aa8a034adc805bba8258c92e30e293c0a84d0d5d"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
@@ -1204,8 +1204,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.KernelApi",
-      "version": "4.0.4-preview",
-      "commit": "4f7922adc1aa34e1c7c1a6345ca0da1757245d5a"
+      "version": "4.0.5-preview",
+      "commit": "aa8a034adc805bba8258c92e30e293c0a84d0d5d"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.KernelHost",
@@ -1214,8 +1214,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.KernelHosting",
-      "version": "4.0.1-preview",
-      "commit": "e937c2cebeba738adebef2e8ca4da25eee24bdb6"
+      "version": "4.0.2-preview",
+      "commit": "aa8a034adc805bba8258c92e30e293c0a84d0d5d"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Activities",
@@ -1229,8 +1229,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
-      "version": "4.0.72-preview",
-      "commit": "e937c2cebeba738adebef2e8ca4da25eee24bdb6"
+      "version": "4.0.73-preview",
+      "commit": "aa8a034adc805bba8258c92e30e293c0a84d0d5d"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Reconciliation",
@@ -1259,8 +1259,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.WorkflowActor",
-      "version": "4.0.12-preview",
-      "commit": "e937c2cebeba738adebef2e8ca4da25eee24bdb6"
+      "version": "4.0.13-preview",
+      "commit": "aa8a034adc805bba8258c92e30e293c0a84d0d5d"
     },
     {
       "package_id": "Elsa3.Activities.Design.Import",
