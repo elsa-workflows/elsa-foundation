@@ -29,11 +29,13 @@ internal sealed partial class PostgresRootAdmission
     }
 
     private async Task<Receipt?> AdmitProtectedRootAsync(string tenant, string operation, StartSpec spec,
-        TimeSpan? keepFor, DirectReply? reply, ProtectRootStartAsync protectRootStart, CancellationToken token, CancellationToken commitToken)
+        TimeSpan? keepFor, DirectReply? reply, ProtectRootStartAsync protectRootStart, CancellationToken token, CancellationToken commitToken,
+        string? eventTarget = null)
     {
         RequireCreator(operation, spec);
         var windowMs = (long)ReceiptWindow(deduplicationWindow, keepFor).TotalMilliseconds;
-        var storedOperation = reply is null ? RootPreparedStarts.OneWayOperation(operation) : operation;
+        var storedOperation = eventTarget is not null ? RootEventStarts.Operation(eventTarget) :
+            reply is null ? RootPreparedStarts.OneWayOperation(operation) : operation;
         var digest = FoundationRootCreator.OperationDigest(storedOperation);
         using var attempt = pressure?.Begin(tenant, RootAdmissionKind.Start);
         var (duplicate, plan) = await PrepareAsync();
@@ -47,10 +49,22 @@ internal sealed partial class PostgresRootAdmission
         var (pin, source) = await PinPreparedStartSourceAsync(db, loadIssuer: false, token);
         if (source != plan.Source) throw new StoreFormatException("The root preparation's physical source changed before admission.");
         var stage = plan.Stage;
+        Func<FormattableString, FormattableString>? bindEvent = null;
+        if (eventTarget is not null)
+        {
+            await LockEventStartTablesAsync(db, token);
+            bindEvent = sql => BindEventStarts(sql, pin);
+            if (await RootEventStarts.CheckTargetAsync(db, tenant, eventTarget, spec, bindEvent, lockRow: true, token) is { } settled)
+            {
+                await RootPreparedStarts.ConsumeAsync(db, stage, token, query => BindPreparedStart(query, pin, source.Table, deadline: null));
+                await transaction.CommitAsync(token);
+                return new(settled, true);
+            }
+        }
         if (!protectedStart)
         {
             await RootPreparedStarts.ConsumeAsync(db, stage, token, query => BindPreparedStart(query, pin, source.Table, deadline: null));
-            var winner = await ReadStartReceiptAsync(db, pin, tenant, digest, liveOnly: true, token);
+            var winner = eventTarget is null ? await ReadStartReceiptAsync(db, pin, tenant, digest, liveOnly: true, token) : null;
             var open = await IsBeforeDeadlineAsync(db, stage.Deadline, token);
             await transaction.CommitAsync(token);
             if (!open) return null;
@@ -61,7 +75,7 @@ internal sealed partial class PostgresRootAdmission
         if (!await IsBeforeDeadlineAsync(db, stage.Deadline, token)) return null;
         if (!await RootPreparedStarts.ConsumeAsync(db, stage, token, query => BindPreparedStart(query, pin, source.Table, stage.Deadline)))
         {
-            var winner = await ReadStartReceiptAsync(db, pin, tenant, digest, liveOnly: true, token);
+            var winner = eventTarget is null ? await ReadStartReceiptAsync(db, pin, tenant, digest, liveOnly: true, token) : null;
             return winner is null ? null : new(winner, true);
         }
 
@@ -71,12 +85,15 @@ internal sealed partial class PostgresRootAdmission
         if (!await IsBeforeDeadlineAsync(db, stage.Deadline, token)) return null;
         if (!write.Claimed)
         {
+            if (eventTarget is not null) throw new StoreFormatException("An event start receipt has no settled target.");
             var winner = await ReadStartReceiptAsync(db, pin, tenant, digest, liveOnly: false, token)
                 ?? throw new InvalidOperationException("The conflicting root receipt no longer exists.");
             await transaction.CommitAsync(token);
             return new(winner, true);
         }
         if (!write.Enqueued) throw new InvalidOperationException("A protected root start must commit its creator with the receipt.");
+        if (eventTarget is not null) await RootEventStarts.SettleAsync(db, tenant, eventTarget, spec, stage, bindEvent, token);
+        if (eventTarget is not null && !await IsBeforeDeadlineAsync(db, stage.Deadline, token)) return null;
         // Once COMMIT starts, local one-way expiry cannot turn a landed birth into a NodeBusy refusal.
         token.ThrowIfCancellationRequested();
         await transaction.CommitAsync(commitToken);
@@ -89,8 +106,13 @@ internal sealed partial class PostgresRootAdmission
             RequirePressureProfile(preparation);
             await using var transaction = await preparation.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
             var (pin, source) = await PinPreparedStartSourceAsync(preparation, loadIssuer: true, token);
+            if (eventTarget is not null) await LockEventStartTablesAsync(preparation, token);
+            async Task<string?> ReadExistingAsync() => eventTarget is null
+                ? await ReadStartReceiptAsync(preparation, pin, tenant, digest, liveOnly: true, token)
+                : await RootEventStarts.CheckTargetAsync(preparation, tenant, eventTarget, spec,
+                    sql => BindEventStarts(sql, pin), lockRow: false, token);
             if (reply is not null && !await IsBeforeDeadlineAsync(preparation, reply.Deadline, token)) return (null, null);
-            var existing = await ReadStartReceiptAsync(preparation, pin, tenant, digest, liveOnly: true, token);
+            var existing = await ReadExistingAsync();
             if (existing is not null) return (new(existing, true), null);
 
             var issuer = pin.Issuer ?? throw new StoreFormatException(RootIssuerMissing);
@@ -101,7 +123,7 @@ internal sealed partial class PostgresRootAdmission
             catch (RootAdmissionRefused)
             {
                 // A concurrent ingress may have committed while the attempted placement was refused.
-                existing = await ReadStartReceiptAsync(preparation, pin, tenant, digest, liveOnly: true, token);
+                existing = await ReadExistingAsync();
                 if (existing is null) throw;
                 return (new(existing, true), null);
             }
@@ -112,7 +134,7 @@ internal sealed partial class PostgresRootAdmission
             var (header, payload) = EncodeCreator(creator);
             if (!FitsEnvelope(header, payload, reply?.Address))
             {
-                existing = await ReadStartReceiptAsync(preparation, pin, tenant, digest, liveOnly: true, token);
+                existing = await ReadExistingAsync();
                 if (existing is not null) return (new(existing, true), null);
                 throw new MetadataLimitExceeded(nameof(spec), EfStore.RootContentBytes);
             }

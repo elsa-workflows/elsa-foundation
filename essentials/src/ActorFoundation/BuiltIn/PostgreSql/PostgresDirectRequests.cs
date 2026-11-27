@@ -60,6 +60,12 @@ public sealed class PostgresDirectRequests : IReplyTransport
     internal Requests Pending => edge.Pending;
     internal RootAdmissionPressure? Pressure => admission.Pressure;
 
+    internal void RequireEventBinding(Func<KernelDb> create)
+    {
+        if (!admission.UsesDatabaseFactory(create))
+            throw new ArgumentException("Event starts and held requests must use the same PostgreSQL store factory.");
+    }
+
     internal void RequireScheduleBinding(Func<KernelDb> create, string actorType)
     {
         if (!admission.UsesDatabaseFactory(create) || _startType != actorType)

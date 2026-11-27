@@ -69,6 +69,30 @@ public static partial class SqliteEmbeddedHosting
                 (operation, spec, token, _) => admission.StartProtectedOneWayAsync(scope, operation, spec, protect, token));
         }
 
+        internal Task<EventRegistrationResult> ApplyEventStartsAsync(Contract.BoundScope scope, string slot, long revision,
+            IReadOnlyList<EventStartRegistration> registrations, CancellationToken token) =>
+            admission.ApplyEventStartsAsync(scope.Tenant, slot, revision, registrations, token);
+
+        internal Task<IReadOnlyList<EventStartTarget>> ListEventStartsAsync(Contract.BoundScope scope, string? after, CancellationToken token) =>
+            admission.ListEventStartsAsync(scope.Tenant, after, token);
+
+        internal Task<long> ReadEventStartTailAsync(Contract.BoundScope scope, CancellationToken token) =>
+            admission.ReadEventStartTailAsync(scope.Tenant, token);
+
+        internal Task<IReadOnlyList<EventStartScanItem>> ReadEventStartPageAsync(Contract.BoundScope scope, long after, long through, int limit,
+            CancellationToken token) => admission.ReadEventStartPageAsync(scope.Tenant, after, through, limit, token);
+
+        internal Task<Contract.Admission> AdmitEventStartAsync(Contract.BoundScope scope, string target,
+            Func<EventStartTarget, Contract.StartSpec> start, ProtectRootStartAsync protect, CancellationToken token) =>
+            RootEventStarts.RelayAsync(target, start, ct => admission.ReadEventStartAsync(scope.Tenant, target, ct),
+                (spec, ct) => admission.StartProtectedOneWayAsync(scope, target, spec, protect, ct, eventTarget: target), token);
+
+        internal Task<int> PruneSettledEventStartsAsync(Contract.BoundScope scope, CancellationToken token) =>
+            admission.PruneSettledEventStartsAsync(scope.Tenant, token);
+
+        internal Task<bool> ConfirmEventStartRegistrationDrainedAsync(Contract.BoundScope scope, string slot, long revision,
+            CancellationToken token) => admission.ConfirmEventStartRegistrationDrainedAsync(scope.Tenant, slot, revision, token);
+
         internal Task<RootStartProof> ConfirmHeldStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
             CancellationToken token) => admission.ConfirmHeldStartAsync(scope, actor, issuance, token);
 
@@ -131,7 +155,8 @@ public static partial class SqliteEmbeddedHosting
                 ? format == StoreFormat.RootLiveEventQualification || format == StoreFormat.RootPlaybackDescendantsQualification ||
                   format == StoreFormat.RootManagedSchedulesQualification || format == StoreFormat.RootPreparedStartsQualification ||
                   format == StoreFormat.RootInlinePromotionQualification ||
-                  format == StoreFormat.RootAuthoredEventsQualification
+                  format == StoreFormat.RootAuthoredEventsQualification || format == StoreFormat.RootEventStartsQualification ||
+                  format == StoreFormat.RootEventStartReceiptsQualification || format == StoreFormat.RootEventStartScanQualification
                 : TakesHttpWaits;
 
             public Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>
@@ -155,17 +180,17 @@ public static partial class SqliteEmbeddedHosting
             }
 
             internal Task<Contract.Admission?> StartProtectedOneWayAsync(Contract.BoundScope scope, string operation, StartSpec spec,
-                ProtectRootStartAsync protect, CancellationToken token) =>
+                ProtectRootStartAsync protect, CancellationToken token, string? eventTarget = null) =>
                 // SQLite's bounded synchronous commands may keep running briefly after cancellation. Await
                 // the worker so the linked token stays registered and a landed COMMIT can still be reported.
-                Task.Run(() => StartProtectedAsync(scope.Tenant, operation, spec, null, protect, token), token);
+                Task.Run(() => StartProtectedAsync(scope.Tenant, operation, spec, null, protect, token, eventTarget), token);
 
             private async Task<Contract.Admission?> StartProtectedAsync(string tenant, string operation, StartSpec spec,
-                HeldRootRequest? request, ProtectRootStartAsync protect, CancellationToken token)
+                HeldRootRequest? request, ProtectRootStartAsync protect, CancellationToken token, string? eventTarget = null)
             {
                 using var attempt = owner.Pressure?.Begin(tenant, RootAdmissionKind.Start);
                 var prepared = await WriteWithFileAsync(RootAdmissionKind.Start, attempt,
-                    (admission, ct) => admission.PrepareProtectedStartAsync(tenant, operation, spec, request, attempt, ct), token);
+                    (admission, ct) => admission.PrepareProtectedStartAsync(tenant, operation, spec, request, attempt, ct, eventTarget), token);
                 if (prepared.Stage is not { } stage || prepared.Offer is not { } offer)
                     return Duplicate(prepared.Existing);
                 var protectedStart = await RootPreparedStarts.ProtectAsync(protect, offer, token);
@@ -178,11 +203,40 @@ public static partial class SqliteEmbeddedHosting
                 }
                 token.ThrowIfCancellationRequested();
                 return await WriteWithFileAsync(RootAdmissionKind.Start, attempt,
-                    (admission, ct) => admission.StartProtectedAsync(tenant, operation, spec, request, ct, attempt, stage), token);
+                    (admission, ct) => admission.StartProtectedAsync(tenant, operation, spec, request, ct, attempt, stage, eventTarget), token);
 
                 static Contract.Admission? Duplicate(string? existing) => existing is null ? null :
                     new(Contract.AdmissionOutcome.Duplicate, new Contract.ActorRef(existing));
             }
+
+            internal Task<EventRegistrationResult> ApplyEventStartsAsync(string tenant, string slot, long revision,
+                IReadOnlyList<EventStartRegistration> registrations, CancellationToken token) =>
+                OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.ApplyEventStartsAsync(tenant, slot, revision, registrations, ct), token), token);
+
+            internal Task<IReadOnlyList<EventStartTarget>> ListEventStartsAsync(string tenant, string? after, CancellationToken token) =>
+                OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.ListEventStartsAsync(tenant, after, ct), token), token);
+
+            internal Task<long> ReadEventStartTailAsync(string tenant, CancellationToken token) =>
+                OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.ReadEventStartTailAsync(tenant, ct), token), token);
+
+            internal Task<IReadOnlyList<EventStartScanItem>> ReadEventStartPageAsync(string tenant, long after, long through, int limit,
+                CancellationToken token) => OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.ReadEventStartPageAsync(tenant, after, through, limit, ct), token), token);
+
+            internal Task<(EventStartTarget? Pending, string? Settled)> ReadEventStartAsync(string tenant, string target, CancellationToken token) =>
+                OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.ReadEventStartAsync(tenant, target, ct), token), token);
+
+            internal Task<int> PruneSettledEventStartsAsync(string tenant, CancellationToken token) =>
+                OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.PruneSettledEventStartsAsync(tenant, ct), token), token);
+
+            internal Task<bool> ConfirmEventStartRegistrationDrainedAsync(string tenant, string slot, long revision, CancellationToken token) =>
+                OnWriteWorkerAsync(() => WriteWithFileAsync(RootAdmissionKind.Start, null,
+                    (admission, ct) => admission.ConfirmEventStartRegistrationDrainedAsync(tenant, slot, revision, ct), token), token);
 
             internal Task<RootStartProof> ConfirmHeldStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
                 CancellationToken token) =>

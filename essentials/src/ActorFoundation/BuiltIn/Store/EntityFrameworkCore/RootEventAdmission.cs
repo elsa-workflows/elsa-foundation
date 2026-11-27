@@ -114,6 +114,7 @@ internal static class RootEventAdmission
         long bytes = 0;
         foreach (var publication in publications)
         {
+            var until = checked(now + publication.KeepUntil);
             var waits = await ReadWaitsAsync(db, publication.FoundationTenant!, publication.Key, BindSource, postgres, token);
             count += waits.Count;
             if (count > FoundationMetadataLimits.MaxTurnSends) throw AuthoredFanoutFull();
@@ -133,7 +134,13 @@ internal static class RootEventAdmission
                     Target = wait.Actor!, Partition = wait.Partition!.Value, Kind = kind, Start = header, Payload = body
                 });
             }
-            var until = checked(now + publication.KeepUntil);
+            if (db.UsesRootEventStarts)
+            {
+                var captured = await RootEventStarts.CaptureAsync(db, publication, until, FoundationMetadataLimits.MaxTurnSends - count,
+                    FoundationMetadataLimits.MessageContentBytes - bytes, bindPostgresSource, token);
+                count += captured.Count;
+                bytes += captured.Bytes;
+            }
             var receipt = await db.Database.ExecuteSqlInterpolatedAsync(BindSource($"""
                 WITH source AS MATERIALIZED (/*event-source*/)
                 INSERT INTO "Events" ("Key", "Id", "KeepUntil")

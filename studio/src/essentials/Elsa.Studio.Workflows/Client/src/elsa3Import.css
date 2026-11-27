@@ -35,8 +35,15 @@
 }
 
 .elsa3-import-field {
+  min-width: 0;
+  overflow-wrap: anywhere;
   display: grid;
   gap: 0.5rem;
+}
+
+.elsa3-import-field input {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .elsa3-import-or {
@@ -55,6 +62,11 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
   gap: 0.75rem;
+}
+
+.elsa3-import-identity-grid dd {
+  margin-inline-start: 0;
+  overflow-wrap: anywhere;
 }
 
 .elsa3-import-group-stack {
@@ -138,6 +150,12 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
   gap: 0.5rem;
+}
+
+.elsa3-import-selection-list > span {
+  display: grid;
+  gap: 0.25rem;
+  overflow-wrap: anywhere;
 }
 
 .elsa3-import-receipt {

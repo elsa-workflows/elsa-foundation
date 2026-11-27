@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
 using Kernel.Foundation.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -89,6 +90,23 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
                 await Task.Delay(HeldRetryDelay, clock, token);
             }
         }
+    }
+
+    internal ValueTask<bool> ProtectEventStartAsync(PendingRootStart start, EventStartTarget target, CancellationToken token)
+    {
+        var authority = target.Registration;
+        if (start.Tenant != actors.Tenant || target.Tenant != actors.Tenant || scope.Value != actors.Tenant ||
+            start.Type != authority.Template.Type || start.TypeData != authority.Template.TypeData ||
+            KernelExecutableSelection.Read(start.Type, start.TypeData) is not
+                { Executable: { } exact, PublishedStart: { } publication } ||
+            exact.ArtifactId != authority.ArtifactId || publication.ActivationId != authority.ActivationId ||
+            publication.SourceReferenceId != authority.SourceReferenceId || publication.SlotId != target.Slot ||
+            publication.SlotRevision != target.Revision)
+            return ValueTask.FromResult(false);
+
+        // The accepted provider target already chose this immutable publication before replacement.
+        // The tentative pin is still created under the ordinary material root write fence.
+        return TryPinAsync([new(scope, actors.Tenant, start.Actor.Id, exact, start.Issuance)], token);
     }
 
     private async ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken token,

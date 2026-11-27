@@ -83,6 +83,12 @@ if (args is ["root-schedule-lineage", var lineageProvider and ("postgres" or "sq
     return await RootScheduleInventoryChecks.RunAsync(lineageProvider == "postgres", settleOccurrences: true,
         fenceInBatch: lineageFence == "in-batch", trackLineage: true);
 if (args is ["pg-live-remote-http"]) return await PostgresLiveRemoteHttpChecks.RunAsync();
+if (args is ["kernel-event-starts", var eventStartProvider and ("postgres" or "sqlite"), var eventStartFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunStartsAsync(eventStartProvider, eventStartFence == "in-batch");
+if (args is ["kernel-event-receipts", var receiptProvider and ("postgres" or "sqlite"), var receiptFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunStartsAsync(receiptProvider, receiptFence == "in-batch", retainReceipts: true);
+if (args is ["kernel-event-scan", var scanProvider and ("postgres" or "sqlite"), var scanFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunStartsAsync(scanProvider, scanFence == "in-batch", retainReceipts: true, orderedScan: true);
 if (args is ["kernel-authored-events", var authoredEventProvider and ("postgres" or "sqlite"), var authoredEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunAsync(authoredEventProvider, authoredEventFence == "in-batch");
 if (args is ["kernel-http-waits"]) return await KernelHttpWaitChecks.RunAsync();

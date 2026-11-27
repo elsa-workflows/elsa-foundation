@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal abstract class KernelShellStorage
 {
-    private enum Profile { Shipped, ManagedSchedules, PreparedStarts, InlineStarts }
+    private enum Profile { Shipped, ManagedSchedules, PreparedStarts, InlineStarts, EventStarts, EventStartReceipts, EventStartScan }
 
     public abstract bool TakesSelfSends { get; }
     public abstract bool TakesTimers { get; }
@@ -25,6 +25,11 @@ internal abstract class KernelShellStorage
     public abstract ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token);
     public abstract bool TakesPreparedStarts { get; }
     public abstract bool TakesInlineStarts { get; }
+    internal virtual bool TakesEventStarts => false;
+    internal virtual bool RetainsEventStartReceipts => false;
+    internal virtual bool TakesOrderedEventScan => false;
+    internal virtual IEventStartAdmissions BindEventStarts(BoundScope scope) =>
+        throw new InvalidOperationException("The store does not take Event starts.");
     public abstract IProtectedRootStarts BindPublishedStarts(BoundScope scope);
     public abstract Task InstallAsync(CancellationToken token, ProtectRootStartAsync? protectRootStart = null);
     public abstract Task<RootStartProof> ConfirmPreparedStartAsync(BoundScope scope, ActorRef actor, string issuance,
@@ -50,6 +55,15 @@ internal abstract class KernelShellStorage
 
     internal static KernelShellStorage CreateInlineStartsQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
         Create(provider, sqlitePath, postgresConnectionString, Profile.InlineStarts);
+
+    internal static KernelShellStorage CreateEventStartsQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
+        Create(provider, sqlitePath, postgresConnectionString, Profile.EventStarts);
+
+    internal static KernelShellStorage CreateEventStartReceiptsQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
+        Create(provider, sqlitePath, postgresConnectionString, Profile.EventStartReceipts);
+
+    internal static KernelShellStorage CreateEventStartScanQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
+        Create(provider, sqlitePath, postgresConnectionString, Profile.EventStartScan);
 
     private static KernelShellStorage Create(string provider, string? sqlitePath, string? postgresConnectionString, Profile profile)
     {
@@ -102,7 +116,7 @@ internal abstract class KernelShellStorage
         private SqliteEmbeddedFoundation? _foundation = profile switch
         {
             Profile.ManagedSchedules => SqliteEmbeddedFoundation.ForManagedSchedulesQualification(path, node, WorkflowActor.ActorType),
-            Profile.PreparedStarts or Profile.InlineStarts => null,
+            Profile.PreparedStarts or Profile.InlineStarts or Profile.EventStarts or Profile.EventStartReceipts or Profile.EventStartScan => null,
             Profile.Shipped when SqliteEmbeddedHosting.TakesPreparedStarts => null,
             _ => new(path, node, WorkflowActor.ActorType)
         };
@@ -115,9 +129,13 @@ internal abstract class KernelShellStorage
         public override bool TakesChildren => SqliteEmbeddedHosting.TakesChildren;
         public override bool TakesHttpWaits => SqliteEmbeddedHosting.TakesHttpWaits;
         public override bool TakesManagedSchedules => TakesPreparedStarts || Foundation.TakesManagedSchedules;
-        public override bool TakesPreparedStarts => profile is Profile.PreparedStarts or Profile.InlineStarts ||
+        public override bool TakesPreparedStarts => profile is Profile.PreparedStarts or Profile.InlineStarts or Profile.EventStarts or Profile.EventStartReceipts or Profile.EventStartScan ||
             profile == Profile.Shipped && SqliteEmbeddedHosting.TakesPreparedStarts;
         public override bool TakesInlineStarts => profile == Profile.InlineStarts;
+        internal override bool TakesEventStarts => profile is Profile.EventStarts or Profile.EventStartReceipts or Profile.EventStartScan;
+        internal override bool RetainsEventStartReceipts => profile is Profile.EventStartReceipts or Profile.EventStartScan;
+        internal override bool TakesOrderedEventScan => profile == Profile.EventStartScan;
+        internal override IEventStartAdmissions BindEventStarts(BoundScope scope) => Foundation.BindEventStarts(scope);
         public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Foundation.BindProtectedRootStarts(scope);
 
         public override ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token) =>
@@ -131,6 +149,9 @@ internal abstract class KernelShellStorage
                 _foundation ??= profile switch
                 {
                     Profile.InlineStarts => SqliteEmbeddedFoundation.ForInlineStartsQualification(path, node, WorkflowActor.ActorType, protectRootStart),
+                    Profile.EventStarts => SqliteEmbeddedFoundation.ForEventStartsQualification(path, node, WorkflowActor.ActorType, protectRootStart),
+                    Profile.EventStartReceipts => SqliteEmbeddedFoundation.ForEventStartReceiptsQualification(path, node, WorkflowActor.ActorType, protectRootStart),
+                    Profile.EventStartScan => SqliteEmbeddedFoundation.ForEventStartScanQualification(path, node, WorkflowActor.ActorType, protectRootStart),
                     Profile.PreparedStarts => SqliteEmbeddedFoundation.ForPreparedStartsQualification(path, node, WorkflowActor.ActorType, protectRootStart),
                     _ => SqliteEmbeddedFoundation.WithRootStartProtection(path, node, WorkflowActor.ActorType, protectRootStart)
                 };
@@ -200,6 +221,10 @@ internal abstract class KernelShellStorage
         public override bool TakesManagedSchedules => PostgresPreviewHosting.TakesManagedSchedules(OpenDatabase);
         public override bool TakesPreparedStarts => PostgresPreviewHosting.TakesPreparedStarts(OpenDatabase);
         public override bool TakesInlineStarts => _profile == Profile.InlineStarts;
+        internal override bool TakesEventStarts => _profile is Profile.EventStarts or Profile.EventStartReceipts or Profile.EventStartScan;
+        internal override bool RetainsEventStartReceipts => _profile is Profile.EventStartReceipts or Profile.EventStartScan;
+        internal override bool TakesOrderedEventScan => _profile == Profile.EventStartScan;
+        internal override IEventStartAdmissions BindEventStarts(BoundScope scope) => PostgresPreviewHosting.BindEventStarts(OpenDatabase, scope, Requests);
         public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Requests.BindProtectedRootStarts(scope);
         private PostgresDirectRequests Requests => _requests ??
             throw new InvalidOperationException("Install the PostgreSQL prepared-start store before opening it.");
@@ -210,6 +235,15 @@ internal abstract class KernelShellStorage
             {
                 case Profile.InlineStarts:
                     await PostgresPreviewHosting.InstallInlineStartsQualificationAsync(_options, token);
+                    break;
+                case Profile.EventStarts:
+                    await PostgresPreviewHosting.InstallEventStartsQualificationAsync(_options, token);
+                    break;
+                case Profile.EventStartReceipts:
+                    await PostgresPreviewHosting.InstallEventStartReceiptsQualificationAsync(_options, token);
+                    break;
+                case Profile.EventStartScan:
+                    await PostgresPreviewHosting.InstallEventStartScanQualificationAsync(_options, token);
                     break;
                 case Profile.PreparedStarts:
                     await PostgresPreviewHosting.InstallPreparedStartsQualificationAsync(_options, token);
@@ -287,6 +321,9 @@ internal abstract class KernelShellStorage
             Profile.ManagedSchedules => PostgresPreviewHosting.CreateManagedSchedulesQualificationContext(_options),
             Profile.PreparedStarts => PostgresPreviewHosting.CreatePreparedStartsQualificationContext(_options),
             Profile.InlineStarts => PostgresPreviewHosting.CreateInlineStartsQualificationContext(_options),
+            Profile.EventStarts => PostgresPreviewHosting.CreateEventStartsQualificationContext(_options),
+            Profile.EventStartReceipts => PostgresPreviewHosting.CreateEventStartReceiptsQualificationContext(_options),
+            Profile.EventStartScan => PostgresPreviewHosting.CreateEventStartScanQualificationContext(_options),
             _ => PostgresPreviewHosting.CreateShippedContext(_options)
         };
     }

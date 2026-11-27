@@ -96,6 +96,7 @@ file static class RuntimeProviderModel
         modelBuilder.Entity<RuntimeKernelScheduleOccurrenceEntity>().Property(row => row.ScopeKey).HasColumnType(type);
         modelBuilder.Entity<RuntimeKernelScheduleOccurrenceEntity>().Property(row => row.TenantKey).HasColumnType(type);
         modelBuilder.Entity<RuntimeKernelScheduleControlEntity>().Property(row => row.ContentJson).HasColumnType(type);
+        modelBuilder.Entity<RuntimeKernelEventPublicationEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<RuntimeKernelExecutablePinEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<RuntimeKernelExecutablePinEntity>().Property(row => row.ScopeKey).HasColumnType(type);
         modelBuilder.Entity<RuntimeKernelExecutablePinEntity>().Property(row => row.ArtifactId).HasColumnType(type);

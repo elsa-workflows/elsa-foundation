@@ -27,5 +27,5 @@ public static class NativeStartTriggers
 
     /// <summary>The Events a run of <paramref name="workflow"/> can begin at, by their event: where a run begins, and allowed to start one.</summary>
     public static IEnumerable<Node> StartEvents(Workflow workflow) =>
-        HttpRoutes.StartsOf(workflow.Root).Where(node => node.Type == typeof(Event) && CanStart(node));
+        HttpRoutes.StartsOf(workflow.Root, Flowchart.IsEventEntry).Where(node => node.Type == typeof(Event) && CanStart(node));
 }

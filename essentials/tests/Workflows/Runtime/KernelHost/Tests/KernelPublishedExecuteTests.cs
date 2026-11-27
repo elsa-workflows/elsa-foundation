@@ -729,7 +729,7 @@ public sealed class KernelPublishedExecuteTests
             canonical.InputContract, canonical.Dependencies, canonical.RuntimeRequirements, canonical.StorageDriverRequirements, canonical.IncidentStrategy,
             workflowVariables: canonical.WorkflowVariables);
 
-    private sealed class FixtureAuthentication(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
+    internal sealed class FixtureAuthentication(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
         : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -764,7 +764,7 @@ public sealed class KernelPublishedExecuteTests
         }
     }
 
-    private sealed class FixturePolicy : IWorkflowExecutableStartPolicy
+    internal sealed class FixturePolicy : IWorkflowExecutableStartPolicy
     {
         public ValueTask<WorkflowExecutableStartDecision> EvaluateAsync(WorkflowExecutableStartPolicyContext context, CancellationToken cancellationToken)
         {
@@ -803,7 +803,7 @@ public sealed class KernelPublishedExecuteTests
             inner.ListPinnedExecutableArtifactIdsAsync(token);
     }
 
-    private sealed class FixtureTypes : IWellKnownTypeRegistry
+    internal sealed class FixtureTypes : IWellKnownTypeRegistry
     {
         public void RegisterType(Type type, string alias) => throw new NotSupportedException();
         public bool TryGetAlias(Type type, out string alias) { alias = "String"; return type == typeof(string); }
