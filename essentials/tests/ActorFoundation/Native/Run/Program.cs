@@ -13,8 +13,6 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
-if (args is ["kernel-shell-managed-schedules", var scheduleShellProvider and ("sqlite" or "postgres")])
-    return await KernelShellManagedScheduleChecks.RunAsync(scheduleShellProvider == "postgres");
 if (args is ["workbench-shipped-flowcharts", var graphProvider and ("sqlite" or "postgres"), var graphWorkbench])
 {
     await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedFlowchartsAsync(graphWorkbench, graphProvider == "postgres");
@@ -74,7 +72,6 @@ if (args is ["root-schedule-occurrence", var occurrenceProvider and ("postgres" 
     return await RootScheduleInventoryChecks.RunAsync(occurrenceProvider == "postgres", settleOccurrences: true);
 if (args is ["root-schedule-occurrence", var occurrenceLifecycleProvider and ("postgres" or "sqlite"), var occurrenceFence and ("checked" or "in-batch")])
     return await RootScheduleInventoryChecks.RunAsync(occurrenceLifecycleProvider == "postgres", settleOccurrences: true, fenceInBatch: occurrenceFence == "in-batch");
-if (args is ["kernel-schedule-reconciliation"]) return await KernelScheduleReconciliationChecks.RunAsync();
 if (args is ["root-schedule-lineage", var lineageProvider and ("postgres" or "sqlite"), var lineageFence and ("checked" or "in-batch")])
     return await RootScheduleInventoryChecks.RunAsync(lineageProvider == "postgres", settleOccurrences: true,
         fenceInBatch: lineageFence == "in-batch", trackLineage: true);
@@ -119,6 +116,8 @@ if (args is ["sqlite-root-timed-jobs", var sqliteJobFence and ("checked" or "in-
     return await SqliteHostLifetimeChecks.RunTimedJobsAsync(sqliteJobFence == "in-batch");
 if (args is ["sqlite-root-held-replies", var sqliteReplyFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunHeldRepliesAsync(sqliteReplyFence == "in-batch");
+if (args is ["sqlite-prepared-starts", var preparedFence and ("checked" or "in-batch")])
+    return await SqlitePreparedStartChecks.RunAsync(preparedFence == "in-batch");
 if (args is ["sqlite-held-reply-peer", var sqliteReplyPath, var sqlitePeerFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunHeldReplyPeerAsync(sqliteReplyPath, sqlitePeerFence == "in-batch");
 if (args is ["sqlite-root-terminate", var sqliteTerminateFence and ("checked" or "in-batch")])
@@ -154,6 +153,7 @@ if (args is ["pg-http-event-owner-loss", var eventOwnerFence and ("checked" or "
 if (args is ["pg-http-event-owner-process", var eventWorkerFence and ("checked" or "in-batch"), var eventPause and ("before" or "resume"), var eventOwnerRef])
     return await PostgresHttpOwnerLoss.RunOwnerAsync(eventWorkerFence, eventPause, new(eventOwnerRef), heldEvent: true);
 if (args is ["pg-held-start"]) return await PostgresHeldStartChecks.RunAsync();
+if (args is ["pg-protected-held-start"]) return await PostgresHeldStartChecks.RunAsync(protectedStarts: true);
 if (args is ["pg-child-workflows"]) return await PostgresChildWorkflowChecks.RunAsync();
 if (args is ["pg-child-workflows", var pgChildFence and ("checked" or "in-batch")])
     return await PostgresChildWorkflowChecks.RunAsync(pgChildFence == "in-batch");

@@ -66,7 +66,33 @@ internal sealed class KernelScheduleReconciliationWorker
     internal IScheduleOccurrenceAcceptor CreateAcceptor() =>
         new KernelScheduleOccurrenceAcceptor(_controlScope, _actors, _readScheduleClock, (occurrence, attemptDeadline, readClock, token) =>
             WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleOccurrenceStore>()
-                .TryAcceptAttemptAsync(occurrence, attemptDeadline, readClock, token)));
+                .TryAcceptAttemptAsync(occurrence, attemptDeadline, readClock, token)), TryHandoffAsync);
+
+    private ValueTask<RuntimeKernelScheduleAttemptOutcome> TryHandoffAsync(ScheduleOccurrence job,
+        RuntimeKernelScheduleOccurrence origin, string continuity, DateTimeOffset attemptDeadline,
+        Func<CancellationToken, ValueTask<DateTimeOffset>> readClock, CancellationToken token) =>
+        WithRuntimeAsync(async services =>
+        {
+            var control = await services.GetRequiredService<IRuntimeKernelScheduleControlReader>()
+                .FindAsync(origin.Scope, origin.ScheduleKey, token);
+            if (control is not { Owner: { Continuity: { } span } owner } ||
+                owner.SlotName != origin.SlotName || span.Stamp != continuity)
+                return RuntimeKernelScheduleAttemptOutcome.Refused;
+            if (owner.PublicationRevision < origin.PublicationRevision)
+                throw new InvalidDataException("A schedule publication control moved backwards.");
+            if (owner.PublicationRevision == origin.PublicationRevision)
+                return RuntimeKernelScheduleAttemptOutcome.Retry;
+
+            var header = await KernelScheduleAuthority.BindAsync(control, _controlScope, _actors,
+                services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(), services.GetRequiredService<IWorkflowExecutableStore>(),
+                _capabilities, _calendar, services.GetRequiredService<IPersistenceAccessContextAccessor>(), _clock, token);
+            if (header?.Authority is not { } authority ||
+                KernelScheduleAuthority.ReadOffer(job with { Authority = authority }, _controlScope, _actors) is not { } successor)
+                return RuntimeKernelScheduleAttemptOutcome.Retry;
+
+            return await services.GetRequiredService<IRuntimeKernelScheduleOccurrenceStore>()
+                .TryHandoffAttemptAsync(origin, successor, continuity, attemptDeadline, readClock, token);
+        });
 
     internal async Task RunAsync(CancellationToken token)
     {

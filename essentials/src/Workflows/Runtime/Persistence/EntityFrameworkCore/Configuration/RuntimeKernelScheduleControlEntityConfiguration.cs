@@ -34,7 +34,21 @@ internal sealed class RuntimeKernelScheduleControlScanEntityConfiguration : IEnt
         builder.Property(row => row.ScopeKeyHash).HasMaxLength(64);
         builder.Property(row => row.TenantKeyHash).HasMaxLength(64);
         builder.Property(row => row.AfterId).HasMaxLength(64);
+        builder.Property(row => row.SchemaVersion).HasMaxLength(32).IsRequired()
+            .HasDefaultValue(RuntimeKernelScheduleControlEfModule.InitialSchemaVersion);
         builder.Property(row => row.LastOrdinal).IsConcurrencyToken();
         builder.Property(row => row.Pass).IsConcurrencyToken();
+        builder.Property(row => row.SchemaVersion).IsConcurrencyToken();
+    }
+}
+
+internal sealed class RuntimeKernelScheduleCutoverEntityConfiguration : IEntityTypeConfiguration<RuntimeKernelScheduleCutoverEntity>
+{
+    public void Configure(EntityTypeBuilder<RuntimeKernelScheduleCutoverEntity> builder)
+    {
+        builder.ToTable(RuntimeKernelScheduleControlEfModule.CutoverTableName);
+        builder.HasKey(row => row.Id);
+        builder.Property(row => row.Id).HasMaxLength(64);
+        builder.Property(row => row.SchemaVersion).HasMaxLength(32).IsRequired();
     }
 }

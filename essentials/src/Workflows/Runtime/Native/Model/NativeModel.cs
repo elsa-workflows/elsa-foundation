@@ -123,10 +123,13 @@ public class NativeExecutionOptions
 /// <summary>What a publishing host serves for a definition (<see cref="NativeExecutionOptions.ServedWorkflow"/>): one workflow, none, or several.</summary>
 public readonly record struct ServedDefinition
 {
-    private ServedDefinition(string? workflow, bool several) => (Workflow, Several) = (workflow, several);
+    private ServedDefinition(string? workflow, bool several, Workflow? selected = null) =>
+        (Workflow, Several, Selected) = (workflow, several, selected);
 
     /// <summary>The workflow that serves the definition, when one does.</summary>
     public string? Workflow { get; }
+
+    internal Workflow? Selected { get; }
 
     /// <summary>Whether several serve it and none is the one a Dispatch reaches first.</summary>
     public bool Several { get; }
@@ -134,6 +137,14 @@ public readonly record struct ServedDefinition
     public static ServedDefinition None => default;
     public static ServedDefinition SeveralServe => new(null, true);
     public static ServedDefinition By(string workflow) => new(workflow ?? throw new ArgumentNullException(nameof(workflow)), false);
+
+    /// <summary>Captures the served workflow and its exact executable selection in one read.</summary>
+    public static ServedDefinition FromWorkflow(Workflow workflow) =>
+        new((workflow ?? throw new ArgumentNullException(nameof(workflow))).Id, false, workflow);
+
+    // Selection evidence travels with the answer. The public serving decision is still its workflow ID and ambiguity.
+    public bool Equals(ServedDefinition other) => Workflow == other.Workflow && Several == other.Several;
+    public override int GetHashCode() => HashCode.Combine(Workflow, Several);
 }
 
 // ---- the state: live frames, scheduled work, waits, variables, results ---------------------------------------------
@@ -590,7 +601,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     }
 
     // Every leak of the activity map ends here: each trigger and effect is one kernel call, made by the model.
-    private void Register(Frame frame, Trigger trigger, IReadOnlyDictionary<string, string>? children)
+    private void Register(Frame frame, Trigger trigger, IReadOnlyDictionary<string, ChildWorkflowTarget>? children)
     {
         var id = NewId("w");
         switch (trigger)
@@ -635,10 +646,10 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     /// read once per id here. On a publishing host, a Dispatch the host serves nothing for, and whose id the registry does not
     /// hold, is refused with the fault returned, as is one several serve; nothing starts then.
     /// </summary>
-    private Dictionary<string, string>? ChildTargets(Transition t, out ActivityFault? refused)
+    private Dictionary<string, ChildWorkflowTarget>? ChildTargets(Transition t, out ActivityFault? refused)
     {
         refused = null;
-        Dictionary<string, string>? targets = null;
+        Dictionary<string, ChildWorkflowTarget>? targets = null;
         var named = (t.Triggers ?? []).OfType<ChildTrigger>().Select(child => child.Workflow)
             .Concat((t.Effects ?? []).OfType<DispatchEffect>().Select(dispatch => dispatch.Workflow));
         foreach (var id in named)
@@ -647,18 +658,19 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             if (targets.ContainsKey(id)) continue;
             if (options.ServedWorkflow is not { } served)
             {
-                targets[id] = id;
+                targets[id] = Registered(id);
                 continue;
             }
             var answer = served(id);
-            if (answer.Workflow is { } workflow) targets[id] = workflow;
+            if (answer.Workflow is { } workflow)
+                targets[id] = answer.Selected is { } selected ? new(workflow, selected) : Registered(workflow);
             else if (answer.Several)
             {
                 refused = new ActivityFault(AmbiguousFaultCode,
                     $"Definition '{id}' is published in several channels and none is 'default'. Publish it to the default channel.");
                 return null;
             }
-            else if (registry.Contains(id)) targets[id] = id;
+            else if (registry.TryGet(id, out var registered)) targets[id] = new(id, registered);
             else
             {
                 refused = new ActivityFault(UnpublishedFaultCode,
@@ -667,6 +679,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             }
         }
         return targets;
+
+        ChildWorkflowTarget Registered(string workflow) =>
+            new(workflow, registry.TryGet(workflow, out var registered) ? registered : null);
     }
 
     private void Unregister(string id, WaitEntry wait, bool cancel)
@@ -682,7 +697,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         }
     }
 
-    private void Do(Frame frame, Effect effect, IReadOnlyDictionary<string, string>? children)
+    private void Do(Frame frame, Effect effect, IReadOnlyDictionary<string, ChildWorkflowTarget>? children)
     {
         switch (effect)
         {

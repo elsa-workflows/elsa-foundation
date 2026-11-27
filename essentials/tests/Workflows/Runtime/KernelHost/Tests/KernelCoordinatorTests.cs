@@ -250,6 +250,8 @@ public sealed class KernelCoordinatorTests
         var claim = Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1"));
         Assert.Equal(TriggerCardinality.ReservationOnly, claim.Cardinality);
         Assert.True(claim.IsActive);
+        // A custom direct adapter can reserve the logical schedule without a bound Foundation clock.
+        Assert.Equal(RuntimeKernelScheduleControl.ScheduleKeyMetadata, Assert.Single(claim.Metadata).Key);
         var scheduleKey = claim.Metadata[RuntimeKernelScheduleControl.ScheduleKeyMetadata];
         Assert.Equal("schedule:ticks:tick", scheduleKey);
         Assert.Equal(RuntimeKernelScheduleOccurrence.ReservationKey(scheduleKey), claim.StimulusHash);
@@ -266,8 +268,13 @@ public sealed class KernelCoordinatorTests
         var second = await host.ActivateAsync(Ticks("ticks@2"), "ticks-2");
         Assert.True(first.Succeeded);
         Assert.True(second.Succeeded);
-        Assert.False(Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1")).IsActive);
-        Assert.Equal(TriggerCardinality.ReservationOnly, Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-2")).Cardinality);
+        var original = Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1"));
+        var replacement = Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-2"));
+        Assert.False(original.IsActive);
+        Assert.Equal(TriggerCardinality.ReservationOnly, replacement.Cardinality);
+        var stimulus = original.Metadata[RuntimeKernelScheduleControl.ScheduleStimulusMetadata];
+        Assert.Equal(64, stimulus.Length);
+        Assert.Equal(stimulus, replacement.Metadata[RuntimeKernelScheduleControl.ScheduleStimulusMetadata]);
         Assert.Equal("ticks@2", Assert.Single(host.Serving.Schedules.All).Workflow);
 
         Assert.True((await host.DeactivateAsync(Ticks("ticks@2"))).Succeeded);
@@ -962,6 +969,31 @@ public sealed class KernelCoordinatorTests
         Assert.Equal("in", native["TriggerNode"]?.GetValue<string>());
         Assert.Equal("A-7", native["Trigger"]?["RouteValues"]?["id"]?.GetValue<string>());
         Assert.Equal("Ada", native["Trigger"]?["Body"]?["by"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task A_matched_start_selects_the_served_executable_even_when_the_historical_registry_has_a_same_id_replacement()
+    {
+        var host = new Host(capabilities: StartRoutesOnly);
+        var published = Orders("orders@1");
+        Assert.True((await host.ActivateAsync(published, "orders-1")).Succeeded);
+        var original = host.Serving.Registry.Get("orders@1");
+        var match = Assert.IsType<Native.NativeHttpRouteMatch>(KernelHttpEdge.Route(host.Serving, "POST", "/orders"));
+        var different = Orders("orders@1", "replacement");
+        var replacement = NativeExecutableMapper.Map(new WorkflowExecutable(
+            published.Identity with { ArtifactHash = "sha256:replacement" }, different.RootActivity,
+            different.ResumeTargets, different.CreatedAt, different.CompatibilityMetadata, different.IncidentStrategy));
+        Assert.Equal(original.Id, replacement.Id);
+        Assert.NotNull(original.ExecutableSelection);
+        Assert.NotEqual(original.ExecutableSelection, replacement.ExecutableSelection);
+        host.Serving.Registry.Add(replacement);
+        Assert.Same(replacement, host.Serving.Registry.Get("orders@1"));
+
+        var start = Assert.IsType<KernelHttpStart>(
+            KernelHttpEdge.Start(host.Serving, match, new Native.HttpRequest("POST", "/workflows/http/orders")));
+
+        using var header = System.Text.Json.JsonDocument.Parse(start.Spec.TypeData);
+        Assert.Equal(original.ExecutableSelection, header.RootElement.GetProperty("ExecutableSelection").GetString());
     }
 
     [Fact]

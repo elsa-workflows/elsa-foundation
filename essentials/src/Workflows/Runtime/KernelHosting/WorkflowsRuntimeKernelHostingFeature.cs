@@ -10,6 +10,7 @@ using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Modularity.Core.Models;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHost;
@@ -76,6 +77,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(retention);
         services.AddSingleton(new ShellRestartRequirement(FeatureName));
         var schedules = storage.TakesManagedSchedules;
+        if (schedules) services.AddSingleton(new WorkflowScheduleCutoverClock(persistenceScope, storage.ReadClockAsync));
         services.AddSingleton(new KernelServing(cronError: schedules ? CronosCalendar.Error : null,
             capabilities: new KernelHostCapabilities(Schedules: schedules, Timers: storage.TakesTimers,
                 Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends, HttpWaits: storage.TakesHttpWaits),

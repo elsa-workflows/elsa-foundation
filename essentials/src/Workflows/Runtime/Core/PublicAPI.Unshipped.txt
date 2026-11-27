@@ -12982,3 +12982,30 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanPage.Items.
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanStore
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanStore.ReadScanPageAsync(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, int limit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanPage?>
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanStore.TryAdvanceScanAsync(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeKernelExecutablePinScanPage! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.Continuity.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControlOwner.Continuity.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.RuntimeKernelScheduleContinuity(string! Stamp, string! Stimulus, System.DateTimeOffset FoundationActivatedAt) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.Stamp.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.Stamp.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.Stimulus.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.Stimulus.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.FoundationActivatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.FoundationActivatedAt.init -> void
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleContinuity? right) -> bool
+const Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl.ScheduleStimulusMetadata = "schedule-stimulus" -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Origin.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence.Origin.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.RuntimeKernelScheduleOccurrenceOrigin(string? TenantId, string! Fingerprint) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.TenantId.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.TenantId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.Fingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.Fingerprint.init -> void
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrenceOrigin? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IRuntimeKernelScheduleOccurrenceStore.TryHandoffAttemptAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! origin, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleOccurrence! successor, string! continuity, System.DateTimeOffset attemptDeadline, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<System.DateTimeOffset>>! readScheduleClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleAttemptOutcome>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.WorkflowScheduleCutoverClock
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.WorkflowScheduleCutoverClock.WorkflowScheduleCutoverClock(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<long>>! readMilliseconds) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.WorkflowScheduleCutoverClock.ReadAsync(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! selected, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.DateTimeOffset>

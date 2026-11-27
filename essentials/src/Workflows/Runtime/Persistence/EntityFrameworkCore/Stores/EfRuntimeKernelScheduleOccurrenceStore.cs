@@ -33,10 +33,35 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         return await TryAcceptAttemptAsync(occurrence, occurrence.AcceptBefore, readScheduleClock, cancellationToken) == AttemptOutcome.Accepted;
     }
 
-    public async ValueTask<AttemptOutcome> TryAcceptAttemptAsync(RuntimeKernelScheduleOccurrence occurrence, DateTimeOffset attemptDeadline,
-        Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default)
+    public ValueTask<AttemptOutcome> TryAcceptAttemptAsync(RuntimeKernelScheduleOccurrence occurrence, DateTimeOffset attemptDeadline,
+        Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default) =>
+        AcceptAsync(occurrence, null, null, attemptDeadline, readScheduleClock, cancellationToken);
+
+    public ValueTask<AttemptOutcome> TryHandoffAttemptAsync(RuntimeKernelScheduleOccurrence origin, RuntimeKernelScheduleOccurrence successor,
+        string continuity, DateTimeOffset attemptDeadline, Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock,
+        CancellationToken cancellationToken = default)
+    {
+        Validate(origin);
+        Validate(successor);
+        if (origin.Origin is not null || successor.Origin is not null || !IsReference(continuity) ||
+            RuntimeKernelScheduleControl.CanonicalScope(origin.Scope) != RuntimeKernelScheduleControl.CanonicalScope(successor.Scope) ||
+            origin.Executable.DefinitionId != successor.Executable.DefinitionId || origin.ScheduleKey != successor.ScheduleKey ||
+            origin.TriggerNode != successor.TriggerNode || origin.SlotName != successor.SlotName ||
+            origin.ScheduleReference != successor.ScheduleReference || origin.ArmGeneration != successor.ArmGeneration ||
+            origin.TimerDeliveryId != successor.TimerDeliveryId || origin.Due != successor.Due ||
+            origin.AcceptBefore != successor.AcceptBefore || origin.PublicationRevision >= successor.PublicationRevision)
+            throw new ArgumentException("The successor must carry the same timer and logical publication slot.", nameof(successor));
+        return AcceptAsync(successor, origin, continuity, attemptDeadline, readScheduleClock, cancellationToken);
+    }
+
+    private async ValueTask<AttemptOutcome> AcceptAsync(RuntimeKernelScheduleOccurrence occurrence, RuntimeKernelScheduleOccurrence? origin,
+        string? continuity, DateTimeOffset attemptDeadline, Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock,
+        CancellationToken cancellationToken)
     {
         Validate(occurrence);
+        if (occurrence.Origin is not null) throw new ArgumentException("The store stamps the original offer on acceptance.", nameof(occurrence));
+        var original = origin ?? occurrence;
+        if (origin is not null) occurrence = occurrence with { Origin = new(origin.Scope.TenantId, IntentFingerprint(origin)) };
         if (attemptDeadline < occurrence.AcceptBefore)
             throw new ArgumentOutOfRangeException(nameof(attemptDeadline), "A renewed attempt cannot shorten the original offer.");
         ArgumentNullException.ThrowIfNull(readScheduleClock);
@@ -52,6 +77,8 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         if (await ReplayAsync(cancellationToken)) return AttemptOutcome.Accepted;
         if (!IsDue(await readScheduleClock(cancellationToken))) return AttemptOutcome.Retry;
 
+        var authority = new EfWorkflowActivationAuthority(context, access);
+        var stale = origin is null ? AttemptOutcome.Refused : AttemptOutcome.Retry;
         var outcome = AttemptOutcome.Retry;
         try
         {
@@ -66,14 +93,19 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
                         return;
                     }
                     var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token);
-                    var slot = await new EfWorkflowActivationAuthority(context, access).FindAsync(occurrence.Executable.DefinitionId, occurrence.SlotName, token);
-                    if (slot is null || slot.ActiveActivationId != occurrence.ActivationId || slot.Revision != occurrence.PublicationRevision)
+                    var slot = await ReadSlotAsync(token);
+                    if (!MatchesSlot(slot))
+                    {
+                        outcome = stale;
+                        return;
+                    }
+                    var published = await FencePublicationAsync(scope, occurrence, slot!, sources, bindings, token);
+                    if (published is null) return;
+                    if (origin is not null && !await CanCarryAsync(origin, occurrence, continuity!, slot!, published.Value.Binding, token))
                     {
                         outcome = AttemptOutcome.Refused;
                         return;
                     }
-                    var published = await FencePublicationAsync(scope, occurrence, slot, sources, bindings, token);
-                    if (published is null) return;
                     var acceptedAt = await readScheduleClock(token);
                     if (!IsDue(acceptedAt)) return;
 
@@ -90,12 +122,14 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
                         ContentJson = renewed ? RuntimeArtifactJson.Serialize(new RenewedAcceptance(occurrence, attemptDeadline.UtcTicks))
                             : RuntimeArtifactJson.Serialize(occurrence),
                         SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily,
-                            renewed ? RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion : RuntimeKernelScheduleOccurrenceEfModule.RetirementSchemaVersion),
+                            origin is not null ? RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion :
+                            renewed ? RuntimeKernelScheduleOccurrenceEfModule.RenewedSchemaVersion :
+                            RuntimeKernelScheduleOccurrenceEfModule.RetirementSchemaVersion),
                         Revision = 1,
                         AcceptedAtUtcTicks = acceptedAt.UtcTicks
                     });
                     await context.SaveChangesAsync(token);
-                    if (!IsDue(await readScheduleClock(token)) || !published.IsLive(clock.GetUtcNow())) return;
+                    if (!IsDue(await readScheduleClock(token)) || !published.Value.Source.IsLive(clock.GetUtcNow())) return;
                     foreach (var deadline in deadlines)
                         if (clock.GetUtcNow() >= deadline.ExpiresAt)
                             throw new WorkflowExecutableRootWriteLeaseLostException(deadline.Grant.ArtifactId, deadline.Grant.LeaseId);
@@ -109,16 +143,23 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         catch
         {
             // Reconcile a concurrent identical acceptance or a lost acknowledgement after its transaction was disposed.
-            if (!await ReplayAsync(cancellationToken)) throw;
-            return AttemptOutcome.Accepted;
+            if (await ReplayAsync(cancellationToken)) return AttemptOutcome.Accepted;
+            if (!MatchesSlot(await ReadSlotAsync(cancellationToken))) return stale;
+            throw;
         }
         return outcome;
+
+        ValueTask<WorkflowActivationSlot?> ReadSlotAsync(CancellationToken token) =>
+            authority.FindAsync(occurrence.Executable.DefinitionId, occurrence.SlotName, token);
+
+        bool MatchesSlot(WorkflowActivationSlot? slot) =>
+            slot is not null && slot.ActiveActivationId == occurrence.ActivationId && slot.Revision == occurrence.PublicationRevision;
 
         async Task<bool> ReplayAsync(CancellationToken token)
         {
             var row = await FindAsync(id, token);
             if (row is null) return false;
-            if (!MatchesOccurrence(row, scope, occurrence))
+            if (!MatchesAcceptedAttempt(row, scope, occurrence, original))
                 throw new InvalidDataException("A schedule occurrence cannot change its accepted workflow or delivery identity.");
             return true;
         }
@@ -241,7 +282,29 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         return key;
     }
 
-    private async ValueTask<WorkflowExecutableSourceReference?> FencePublicationAsync(string scope, RuntimeKernelScheduleOccurrence occurrence,
+    private async ValueTask<bool> CanCarryAsync(RuntimeKernelScheduleOccurrence origin, RuntimeKernelScheduleOccurrence successor,
+        string continuity, WorkflowActivationSlot selected, WorkflowTriggerBinding binding, CancellationToken token)
+    {
+        var control = await new EfRuntimeKernelScheduleControlStore(context, access).FindAsync(successor.Scope, successor.ScheduleKey, token);
+        if (control is not { Owner: { Continuity: { } claim } owner } || control.Scope != successor.Scope ||
+            control.DefinitionId != successor.Executable.DefinitionId || control.TriggerNode != successor.TriggerNode ||
+            owner.SlotId != selected.SlotId || owner.SlotName != successor.SlotName || owner.ActivationId != successor.ActivationId ||
+            owner.PublicationRevision != successor.PublicationRevision || owner.Executable != successor.Executable ||
+            claim.Stamp != continuity ||
+            !binding.Metadata.TryGetValue(RuntimeKernelScheduleControl.ScheduleStimulusMetadata, out var stimulus) || stimulus != claim.Stimulus)
+            return false;
+
+        var cutoffId = EfRuntimeKernelScheduleControlStore.CutoverId(origin.Scope.Persistence, selected.SlotId, origin.PublicationRevision, continuity);
+        var cutover = await context.KernelScheduleCutovers.AsNoTracking().SingleOrDefaultAsync(row => row.Id == cutoffId, token);
+        if (cutover is null) return false;
+        if (cutover.SchemaVersion == RuntimeKernelScheduleControlEfModule.InitialSchemaVersion ||
+            EfSchemaVersion.NotReadable(RuntimeKernelScheduleControlEfModule.Chain, cutover.SchemaVersion) ||
+            cutover.ActivatedAtUtcTicks <= DateTimeOffset.UnixEpoch.UtcTicks || cutover.ActivatedAtUtcTicks > DateTimeOffset.MaxValue.UtcTicks)
+            throw new InvalidDataException("The schedule cutover receipt has an unreadable stamp or instant.");
+        return cutover.ActivatedAtUtcTicks >= origin.Due.UtcTicks;
+    }
+
+    private async ValueTask<(WorkflowExecutableSourceReference Source, WorkflowTriggerBinding Binding)?> FencePublicationAsync(string scope, RuntimeKernelScheduleOccurrence occurrence,
         WorkflowActivationSlot slot, EfWorkflowExecutableSourceReferenceStore sources, EfWorkflowTriggerBindingStore bindings, CancellationToken token)
     {
         var identity = occurrence.Executable;
@@ -275,7 +338,7 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
             return null;
         try { await reservations.FenceAsync(reservation, token); }
         catch (TriggerOperationException error) when (error.Code == "conflict") { return null; }
-        return source;
+        return (source, binding);
     }
 
     bool IRuntimeMaterialRetentionRootSource.IsCoveredBy(IWorkflowExecutableStore material) =>
@@ -313,7 +376,7 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         var renewed = document.RootElement.TryGetProperty("occurrence", out _)
             ? RuntimeArtifactJson.Deserialize<RenewedAcceptance>(row.ContentJson)
             : null;
-        if (renewed is not null && row.SchemaVersion != RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion)
+        if (renewed is not null && !SupportsRenewal(row.SchemaVersion))
             throw new InvalidDataException("The stored schedule receipt does not support renewed acceptance.");
         var occurrence = renewed is null
             ? RuntimeArtifactJson.Deserialize<RuntimeKernelScheduleOccurrence>(row.ContentJson)
@@ -321,13 +384,17 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         Validate(occurrence);
         attemptDeadlineUtcTicks = renewed?.AttemptDeadlineUtcTicks ?? occurrence.AcceptBefore.UtcTicks;
         var tenant = JsonSerializer.Serialize(occurrence.Scope.TenantId);
-        if (occurrence.Scope.Persistence.Value != scope || row.Id != CompositeId(scope, occurrence.Id) ||
+        if (occurrence.Origin is not null && row.SchemaVersion != RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion ||
+            occurrence.Scope.Persistence.Value != scope || row.Id != CompositeId(scope, occurrence.Id) ||
             row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || row.TenantKey != Encode(tenant) ||
             row.TenantKeyHash != Hash(tenant) || row.ArtifactId != Encode(occurrence.Executable.ArtifactId) ||
             !MatchesAcceptanceTime(row.AcceptedAtUtcTicks, occurrence, renewed?.AttemptDeadlineUtcTicks))
             throw new InvalidDataException("The accepted schedule occurrence differs from its physical identity.");
         return occurrence;
     }
+
+    private static bool SupportsRenewal(string schemaVersion) =>
+        schemaVersion is RuntimeKernelScheduleOccurrenceEfModule.RenewedSchemaVersion or RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion;
 
     private static bool MatchesAcceptanceTime(long acceptedAt, RuntimeKernelScheduleOccurrence occurrence, long? renewedBefore)
     {
@@ -347,7 +414,10 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(occurrence.TriggerNode);
         ArgumentException.ThrowIfNullOrWhiteSpace(occurrence.TimerDeliveryId);
         ArgumentException.ThrowIfNullOrWhiteSpace(occurrence.PinnedStart);
-        if (!IsReference(occurrence.ScheduleReference) ||
+        if (occurrence.Origin is { } origin && (!IsReference(origin.Fingerprint) ||
+            RuntimeKernelScheduleControl.CanonicalScope(occurrence.Scope) !=
+            RuntimeKernelScheduleControl.CanonicalScope(occurrence.Scope with { TenantId = origin.TenantId })) ||
+            !IsReference(occurrence.ScheduleReference) ||
             occurrence.PublicationRevision <= 0 || occurrence.ArmGeneration <= 0 ||
             occurrence.Due <= DateTimeOffset.UnixEpoch || occurrence.AcceptBefore <= occurrence.Due ||
             Encoding.UTF8.GetByteCount(occurrence.PinnedStart) > 128 * 1024)

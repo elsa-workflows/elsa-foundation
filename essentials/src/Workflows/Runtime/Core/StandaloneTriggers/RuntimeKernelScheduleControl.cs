@@ -1,10 +1,18 @@
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 
 /// <summary>The exact published source currently claiming one logical schedule.</summary>
 public sealed record RuntimeKernelScheduleControlOwner(string SlotId, string SlotName, string ActivationId,
-    long PublicationRevision, string SourceReferenceId, WorkflowExecutableIdentity Executable);
+    long PublicationRevision, string SourceReferenceId, WorkflowExecutableIdentity Executable)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeKernelScheduleContinuity? Continuity { get; init; }
+}
+
+/// <summary>A trigger's unchanged publication span and the activation time of its current owner.</summary>
+public sealed record RuntimeKernelScheduleContinuity(string Stamp, string Stimulus, DateTimeOffset FoundationActivatedAt);
 
 /// <summary>A schedule's desired control at one monotone revision, including a retained tombstone after release.</summary>
 public sealed record RuntimeKernelScheduleControl(TriggerScope Scope, string ScheduleKey, string DefinitionId, string TriggerNode,
@@ -12,6 +20,9 @@ public sealed record RuntimeKernelScheduleControl(TriggerScope Scope, string Sch
 {
     /// <summary>Binding metadata entry for the logical key behind a schedule reservation hash.</summary>
     public const string ScheduleKeyMetadata = "schedule-key";
+
+    /// <summary>Binding metadata for equality of the authored Timer interval or Cron expression.</summary>
+    public const string ScheduleStimulusMetadata = "schedule-stimulus";
 
     /// <summary>
     /// The scope of the actor's control revision. The two default publication aliases share one actor in the default
