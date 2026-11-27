@@ -65,8 +65,10 @@ public sealed class KernelShellManagedScheduleTests
 
     private static async Task RunCoreAsync(string provider, string? foundation, string runtime, string? path, CancellationToken token)
     {
-        var timer = ExecutableOf("managed-timer-v1", "managed-timer", Sequence("sequence",
+        var material = ExecutableOf("managed-timer-v1", "original-timer-source", Sequence("sequence",
             Node(Trigger, Types.Timer, [Literal("Interval", "PT5S", "String")]), Completion(marker: "timer")));
+        var timer = PublishedVersion(material, "managed-timer", "2");
+        var shadow = PublishedVersion(material, "managed-shadow-timer", "5");
         var cron = ExecutableOf("managed-cron-v1", "managed-cron", Node("flowchart", Types.Flowchart,
             structure: Structure("elsa.flowchart.structure", new
             {
@@ -75,7 +77,7 @@ public sealed class KernelShellManagedScheduleTests
             }),
             slots: [Slot("Flowchart.Activities",
                 Node(Trigger, "Elsa.Cron", [Literal("Expression", "*/2 * * * * *", "String")]), Completion(marker: "cron"))]));
-        WorkflowActivationResult timerPublication, cronPublication;
+        WorkflowActivationResult timerPublication, shadowPublication, cronPublication;
         await using (var publisher = OpenShell())
         {
             await publisher.GetRequiredService<KernelShellStorage>().InstallAsync(token);
@@ -84,8 +86,10 @@ public sealed class KernelShellManagedScheduleTests
             {
                 var database = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
                 await database.Database.MigrateAsync(token);
+                await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(material, token);
             }
             timerPublication = await PublishAsync(publishingScopes, timer, tenant: null);
+            shadowPublication = await PublishAsync(publishingScopes, shadow, tenant: PersistenceScope.DefaultValue);
             cronPublication = await PublishAsync(publishingScopes, cron, tenant: PersistenceScope.DefaultValue);
         }
 
@@ -99,24 +103,31 @@ public sealed class KernelShellManagedScheduleTests
             try
             {
                 Require(serving.Slots.Select(slot => slot.ActivationId).ToHashSet(StringComparer.Ordinal)
-                        .SetEquals([timerPublication.Slot.ActiveActivationId!, cronPublication.Slot.ActiveActivationId!]),
-                    "the cold shell restored both exact durable publications before serving");
-                await VerifyAsync(host, timer, timerPublication, tenant: null);
-                await VerifyAsync(host, cron, cronPublication, tenant: PersistenceScope.DefaultValue);
+                        .SetEquals([timerPublication.Slot.ActiveActivationId!, shadowPublication.Slot.ActiveActivationId!, cronPublication.Slot.ActiveActivationId!]),
+                    "the cold shell restored both logical Timer publications and the Flowchart Cron");
+                var timerRun = await VerifyAsync(host, timer, material.Identity, timerPublication, tenant: null);
+                var shadowRun = await VerifyAsync(host, shadow, material.Identity, shadowPublication, tenant: PersistenceScope.DefaultValue);
+                Require(timerRun.Occurrence.ScheduleReference != shadowRun.Occurrence.ScheduleReference && timerRun.ActorReference != shadowRun.ActorReference,
+                    "both logical definitions sharing a canonical artifact keep independent timers and workflow births");
+                await VerifyAsync(host, cron, cron.Identity, cronPublication, tenant: PersistenceScope.DefaultValue);
             }
             finally { await StopAsync(shell); }
         }
 
         // Let one Timer become due with the Foundation owner down, then replace its Runtime publication before a new owner starts.
         await Task.Delay(TimerInterval + TimeSpan.FromMilliseconds(300), token);
-        var replacement = ExecutableOf("managed-timer-v2", "managed-timer", Sequence("sequence",
+        var replacementMaterial = ExecutableOf("managed-timer-v2", "replacement-timer-source", Sequence("sequence",
             Node(Trigger, Types.Timer, [Literal("Interval", "PT5S", "String")]), Completion(marker: "republished-timer")));
+        var replacement = PublishedVersion(replacementMaterial, timer.Identity.DefinitionId, "3");
         WorkflowActivationResult republished;
         await using (var publisher = OpenShell())
         {
             await publisher.GetRequiredService<KernelShellStorage>().InstallAsync(token);
-            republished = await PublishAsync(publisher.GetRequiredService<IServiceScopeFactory>(), replacement,
-                tenant: PersistenceScope.DefaultValue, expectedRevision: timerPublication.Slot.Revision);
+            var scopes = publisher.GetRequiredService<IServiceScopeFactory>();
+            await using (var write = await scopes.CreateAsyncScopeAsync(Persistence))
+                await write.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(replacementMaterial, token);
+            republished = await PublishAsync(scopes, replacement, tenant: PersistenceScope.DefaultValue,
+                expectedRevision: timerPublication.Slot.Revision);
         }
         await using (var restarted = OpenShell())
         {
@@ -124,7 +135,7 @@ public sealed class KernelShellManagedScheduleTests
             await new StartKernelShell(shell).InitializeAsync(token);
             try
             {
-                var carried = await VerifyAsync(restarted, replacement, republished, tenant: PersistenceScope.DefaultValue);
+                var carried = await VerifyAsync(restarted, replacement, replacementMaterial.Identity, republished, tenant: PersistenceScope.DefaultValue);
                 await using var read = await restarted.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
                 var controls = read.ServiceProvider.GetRequiredService<IRuntimeKernelScheduleControlReader>();
                 var active = await controls.FindAsync(carried.Occurrence.Scope, carried.Occurrence.ScheduleKey, token);
@@ -137,7 +148,7 @@ public sealed class KernelShellManagedScheduleTests
         }
 
         async Task<RuntimeKernelScheduleMaterializedOccurrence> VerifyAsync(ServiceProvider host, WorkflowExecutable executable,
-            WorkflowActivationResult publication, string? tenant)
+            WorkflowExecutableIdentity canonicalMaterial, WorkflowActivationResult publication, string? tenant)
         {
             var scopes = host.GetRequiredService<IServiceScopeFactory>();
             var shellRuns = host.GetRequiredService<KernelRuns>();
@@ -158,6 +169,10 @@ public sealed class KernelShellManagedScheduleTests
                         Require(occurrence.Scope == scope && occurrence.ActivationId == publication.Slot.ActiveActivationId &&
                             occurrence.PublicationRevision == publication.Slot.Revision && occurrence.Executable == executable.Identity &&
                             occurrence.TriggerNode == Trigger, $"the occurrence retains exact publication and trigger authority for {key}");
+                        var start = JsonSerializer.Deserialize<Contract.StartSpec>(occurrence.PinnedStart);
+                        Require(start is not null && KernelExecutableSelection.Read(start.Type, start.TypeData) is { } selection &&
+                            selection.Definition == executable.Identity.DefinitionId && selection.Executable == canonicalMaterial,
+                            $"the accepted start pins exact canonical material separately from {key}'s logical definition");
                         var actor = await shellRuns.GetAsync(new(delivery.ActorReference), wait.Token);
                         if (actor.Run is not { } run || run.View.Header.Status == Contract.ActorStatus.Running) continue;
                         Require(run.View.Header.Status == Contract.ActorStatus.Finished && run.Run.Workflow == executable.Identity.ArtifactId &&
@@ -217,11 +232,15 @@ public sealed class KernelShellManagedScheduleTests
                 identity.ArtifactVersion, identity.DefinitionId, identity.DefinitionVersionId, identity.ArtifactVersion, now, now,
                 WorkflowExecutableReferenceScope.Published, TenantId: tenant);
             var result = await provider.GetRequiredService<IWorkflowActivationCoordinator>().ActivateAsync(new(executable, source,
-                KernelServing.DefaultSlotName, $"publish-{identity.ArtifactId}", WorkflowActivationSource.Publishing, expectedRevision), token);
+                KernelServing.DefaultSlotName, $"publish-{identity.DefinitionId}-{identity.ArtifactId}", WorkflowActivationSource.Publishing, expectedRevision), token);
             Require(result.Succeeded, $"publication of {identity.ArtifactId} failed at {result.FailedStep}: {result.Diagnostic}");
             return result;
         }
     }
+
+    private static WorkflowExecutable PublishedVersion(WorkflowExecutable material, string definition, string version) =>
+        new(material.Identity with { DefinitionId = definition, DefinitionVersionId = $"{definition}-{version}", ArtifactVersion = version },
+            material.RootActivity, material.ResumeTargets, material.CreatedAt, material.CompatibilityMetadata, material.IncidentStrategy);
 
     private sealed class SkewedRuntimeClock : TimeProvider
     {

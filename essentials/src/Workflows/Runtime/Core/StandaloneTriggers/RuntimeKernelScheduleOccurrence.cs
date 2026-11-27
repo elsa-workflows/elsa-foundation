@@ -57,11 +57,25 @@ public interface IRuntimeKernelScheduleOccurrenceStore
             : RuntimeKernelScheduleAttemptOutcome.Retry;
     }
 
+    /// <summary>Decides an occurrence whose selected Native start carries the exact canonical material identity.</summary>
+    ValueTask<RuntimeKernelScheduleAttemptOutcome> TryAcceptSelectedAttemptAsync(RuntimeKernelScheduleOccurrence occurrence,
+        WorkflowExecutableIdentity material, DateTimeOffset attemptDeadline,
+        Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default) =>
+        material == occurrence.Executable ? TryAcceptAttemptAsync(occurrence, attemptDeadline, readScheduleClock, cancellationToken) :
+            throw new NotSupportedException("The Runtime provider does not support distinct scheduled source and material identities.");
+
     /// <summary>Decides the same timer under a currently authorized successor publication.</summary>
     ValueTask<RuntimeKernelScheduleAttemptOutcome> TryHandoffAttemptAsync(RuntimeKernelScheduleOccurrence origin,
         RuntimeKernelScheduleOccurrence successor, string continuity, DateTimeOffset attemptDeadline,
         Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("The Runtime provider does not support schedule publication handoff.");
+
+    /// <summary>Decides a carried timer using the successor's exact canonical material identity.</summary>
+    ValueTask<RuntimeKernelScheduleAttemptOutcome> TryHandoffSelectedAttemptAsync(RuntimeKernelScheduleOccurrence origin,
+        RuntimeKernelScheduleOccurrence successor, WorkflowExecutableIdentity material, string continuity, DateTimeOffset attemptDeadline,
+        Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default) =>
+        material == successor.Executable ? TryHandoffAttemptAsync(origin, successor, continuity, attemptDeadline, readScheduleClock, cancellationToken) :
+            throw new NotSupportedException("The Runtime provider does not support distinct scheduled source and material identities.");
 }
 
 /// <summary>Whether a managed schedule attempt resolved its immutable occurrence.</summary>

@@ -41,6 +41,19 @@ public static class NativeExecutableMapper
     public static Native.Workflow Map(WorkflowExecutable executable, KernelHostCapabilities capabilities) =>
         Map(executable, capabilities, definition: null);
 
+    internal static WorkflowExecutableIdentity? ReadMaterialSelection(string? token, string artifactId)
+    {
+        if (string.IsNullOrEmpty(token)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<WorkflowExecutableIdentity>(token) is { } identity && identity.ArtifactId == artifactId &&
+                !string.IsNullOrWhiteSpace(identity.DefinitionId) && !string.IsNullOrWhiteSpace(identity.DefinitionVersionId) &&
+                !string.IsNullOrWhiteSpace(identity.ArtifactHash) && !string.IsNullOrWhiteSpace(identity.ArtifactVersion) &&
+                token == JsonSerializer.Serialize(identity) ? identity : null;
+        }
+        catch (JsonException) { return null; }
+    }
+
     /// <summary>Maps canonical material under the logical definition of its selected publication.</summary>
     internal static Native.Workflow Map(WorkflowExecutable executable, KernelHostCapabilities capabilities, string? definition)
     {

@@ -43,8 +43,9 @@ public sealed class KernelScheduleAuthorityTests
         {
             Assert.Equal(attempt.Token, token);
             return ValueTask.FromResult(checkedOn.AddSeconds(reads++).ToUnixTimeMilliseconds());
-        }, async (occurrence, deadline, readClock, token) =>
+        }, async (occurrence, material, deadline, readClock, token) =>
         {
+            Assert.Equal(fixture.Control.Owner!.Executable, material);
             Assert.Equal(attempt.Token, token);
             Assert.True(deadline >= occurrence.AcceptBefore);
             offers.Add(occurrence);
@@ -73,7 +74,10 @@ public sealed class KernelScheduleAuthorityTests
         Assert.Equal(fixture.Source.ArtifactId, stored.Executable.ArtifactId);
         Assert.Equal("trigger", stored.TriggerNode);
         var expected = WorkflowActor.Start(NativeExecutionModel.Start(fixture.Source.ArtifactId,
-            triggerNode: "trigger", trigger: JsonValue.Create(fixture.Control.ScheduleKey), definition: fixture.Control.DefinitionId));
+            triggerNode: "trigger", trigger: JsonValue.Create(fixture.Control.ScheduleKey), definition: fixture.Control.DefinitionId) with
+        {
+            ExecutableSelection = JsonSerializer.Serialize(fixture.Control.Owner!.Executable)
+        });
         Assert.Equal(JsonSerializer.Serialize(expected), stored.PinnedStart);
 
         // The active source may retire before replay. The exact callback still offers the original pinned bytes.
@@ -123,7 +127,7 @@ public sealed class KernelScheduleAuthorityTests
         var calls = 0;
         var acceptor = new KernelScheduleOccurrenceAcceptor(fixture.Control.Scope, fixture.FoundationTenant,
             _ => throw new InvalidOperationException("A preflight refusal cannot read the Foundation clock."),
-            (_, _, _, _) => { calls++; return ValueTask.FromResult(RuntimeKernelScheduleAttemptOutcome.Accepted); });
+            (_, _, _, _, _) => { calls++; return ValueTask.FromResult(RuntimeKernelScheduleAttemptOutcome.Accepted); });
         var payload = JsonNode.Parse(header.Authority!)!.AsObject();
         var pinned = JsonSerializer.Deserialize<StartSpec>(payload["PinnedStart"]!.GetValue<string>())!;
         payload["PinnedStart"] = JsonSerializer.Serialize(pinned with { Input = """{"Mode":"Balanced","TriggerNode":"different"}""" });
@@ -143,7 +147,39 @@ public sealed class KernelScheduleAuthorityTests
 
         Assert.Equal(0, calls);
         Assert.Throws<ArgumentException>(() => new KernelScheduleOccurrenceAcceptor(new(new("tenant-a"), null), ContractScopes.Bind("tenant-a"),
-            _ => ValueTask.FromResult(0L), (_, _, _, _) => ValueTask.FromResult(RuntimeKernelScheduleAttemptOutcome.Accepted)));
+            _ => ValueTask.FromResult(0L), (_, _, _, _, _) => ValueTask.FromResult(RuntimeKernelScheduleAttemptOutcome.Accepted)));
+    }
+
+    [Fact]
+    public async Task Predecessor_authority_replays_its_exact_bytes_and_new_authority_requires_the_material_token()
+    {
+        var fixture = await Publication(null);
+        var header = Assert.IsType<ScheduleHeader>(await fixture.BindAsync());
+        var payload = JsonNode.Parse(header.Authority!)!.AsObject();
+        var original = Offer(fixture, header);
+        var pinned = JsonSerializer.Deserialize<StartSpec>(payload["PinnedStart"]!.GetValue<string>())!;
+        var typeData = JsonNode.Parse(pinned.TypeData)!.AsObject();
+        var token = typeData["ExecutableSelection"]!.GetValue<string>();
+        typeData["ExecutableSelection"] = JsonSerializer.Serialize(fixture.Control.Owner!.Executable with { ArtifactHash = "replaced" });
+        payload["PinnedStart"] = JsonSerializer.Serialize(pinned with { TypeData = typeData.ToJsonString() });
+        Assert.Null(KernelScheduleAuthority.ReadOffer(original with { Authority = payload.ToJsonString() }, fixture.Control.Scope, fixture.FoundationTenant));
+
+        typeData["ExecutableSelection"] = JsonSerializer.Serialize(fixture.Control.Owner.Executable, new JsonSerializerOptions { WriteIndented = true });
+        payload["PinnedStart"] = JsonSerializer.Serialize(pinned with { TypeData = typeData.ToJsonString() });
+        Assert.Null(KernelScheduleAuthority.ReadOffer(original with { Authority = payload.ToJsonString() }, fixture.Control.Scope, fixture.FoundationTenant));
+
+        typeData.Remove("ExecutableSelection");
+        var legacyPinned = JsonSerializer.Serialize(pinned with { TypeData = typeData.ToJsonString() });
+        payload["PinnedStart"] = legacyPinned;
+        Assert.Null(KernelScheduleAuthority.ReadOffer(original with { Authority = payload.ToJsonString() }, fixture.Control.Scope, fixture.FoundationTenant));
+
+        payload["Version"] = 1;
+        var replay = Assert.IsType<RuntimeKernelScheduleOccurrence>(KernelScheduleAuthority.ReadOffer(
+            original with { Authority = payload.ToJsonString() }, fixture.Control.Scope, fixture.FoundationTenant, out _, out var material));
+        Assert.Null(material);
+        Assert.Equal(legacyPinned, replay.PinnedStart);
+        Assert.Equal(fixture.Control.Owner.Executable, replay.Executable);
+        Assert.Equal(fixture.Control.Owner.Executable, JsonSerializer.Deserialize<WorkflowExecutableIdentity>(token));
     }
 
     [Fact]
@@ -155,7 +191,7 @@ public sealed class KernelScheduleAuthorityTests
         // Configure the host with the explicit default alias. Each committed source carries its own exact alias.
         var configured = control.Scope with { TenantId = PersistenceScope.DefaultValue };
         var acceptor = new KernelScheduleOccurrenceAcceptor(configured, fixture.FoundationTenant,
-            _ => ValueTask.FromResult(Now.ToUnixTimeMilliseconds()), (occurrence, _, _, _) =>
+            _ => ValueTask.FromResult(Now.ToUnixTimeMilliseconds()), (occurrence, _, _, _, _) =>
             {
                 offers.Add(occurrence);
                 return ValueTask.FromResult(RuntimeKernelScheduleAttemptOutcome.Accepted);

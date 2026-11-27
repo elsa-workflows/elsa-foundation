@@ -259,7 +259,8 @@ public sealed class KernelActivationCoordinator(
         NativeSchedule[] after = [];
         if (plan.Served is { } served)
         {
-            after = state.Schedules.All.Where(schedule => schedule.Workflow == served.Workflow.Id).ToArray();
+            after = state.Schedules.All.Where(schedule => schedule.Workflow == served.Workflow.Id &&
+                schedule.Definition == served.DefinitionId).ToArray();
             if (schedules.RequiresPublicationClaims && after.Length > 0)
             {
                 var claims = (await ReadPublicationClaimsAsync(served.ActivationId, cancellationToken))
@@ -650,7 +651,13 @@ public sealed class KernelActivationCoordinator(
         try
         {
             var plan = serving.Plan(slot.SlotId, new KernelServedSlot(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activation, workflow, slot.Revision));
-            return (new(plan, executable.Identity, source), null);
+            var identity = executable.Identity with
+            {
+                DefinitionId = source.DefinitionId,
+                DefinitionVersionId = source.DefinitionVersionId,
+                ArtifactVersion = source.ArtifactVersion
+            };
+            return (new(plan, identity, source), null);
         }
         catch (Exception refused) when (refused is ArgumentException or InvalidOperationException)
         {
@@ -712,7 +719,7 @@ public sealed class KernelActivationCoordinator(
     private WorkflowTriggerBinding[] PublicationClaims(KernelServingPlan plan, WorkflowExecutableIdentity identity,
         string activationId, DateTimeOffset createdAt) =>
         schedules.RequiresPublicationClaims
-            ? plan.State.Schedules.All.Where(schedule => schedule.Workflow == identity.ArtifactId)
+            ? plan.State.Schedules.All.Where(schedule => schedule.Workflow == identity.ArtifactId && schedule.Definition == identity.DefinitionId)
                 .Select(schedule => KernelScheduleClaim.Create(identity, activationId, plan.SlotId, schedule, createdAt,
                     managed: schedules is RuntimeManagedScheduleActors))
                 .ToArray()
