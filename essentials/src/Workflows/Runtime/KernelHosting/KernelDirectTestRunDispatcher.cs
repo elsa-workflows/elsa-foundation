@@ -134,7 +134,6 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             if (held.Reply is not { } reply) return InlineResult(held.Start);
             if (reply.Error is not null)
                 return InlineResult(new(InlineStartDisposition.Unknown), PresentHttpReply(reply));
-            if (held.Start.Disposition == InlineStartDisposition.Unknown) return UnknownInlineResult();
             return InlineResult(held.Start, PresentHttpReply(reply with { Actor = held.Start.Actor }) with { OwnerAccepted = true });
         }
         if (inline) return InlineResult(await runtime.StartInlineTestAsync(test, spec, workflow, cancellationToken));

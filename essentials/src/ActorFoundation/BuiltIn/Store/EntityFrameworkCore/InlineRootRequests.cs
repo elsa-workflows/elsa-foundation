@@ -148,12 +148,16 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
             token.ThrowIfCancellationRequested();
             return new(unqueued, reply.Error == "timeout" ? reply : null);
         }
-        var observation = accepted.Result.IsCompletedSuccessfully ? ReadOutcome(accepted.Actor, accepted.Result.Result) :
-            new InlineStartOutcome(InlineStartDisposition.Unknown);
+        var unknown = new InlineStartOutcome(InlineStartDisposition.Unknown);
+        // A running owner can send its authored response before it has a terminal outcome or a stored actor.
+        if (!accepted.Result.IsCompleted) return new(unknown, reply);
+
+        var observation = accepted.Result.IsCompletedSuccessfully ? ReadOutcome(accepted.Actor, accepted.Result.Result) : unknown;
         if (observation.Disposition is InlineStartDisposition.Volatile or InlineStartDisposition.Refused)
             observation = await offer.Receipt!.WaitAsync(token);
         if (refusal.Task.IsCompletedSuccessfully) return new(refusal.Task.Result, null);
-        return new(observation, reply);
+        // A terminal no-actor response needs its exact durable outcome. An error can still report the live observer's deadline.
+        return new(observation, observation.Disposition == InlineStartDisposition.Unknown && reply.Error is null ? null : reply);
 
         Task<Contract.Reply?> IssueAsync(HeldRootRequest caller, CancellationToken budget)
         {

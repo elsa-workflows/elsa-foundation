@@ -835,10 +835,17 @@ public sealed partial class KernelPublishedExecuteTests
 
             async Task VerifyHeldEphemeralTestsAsync(bool recordCompletion)
             {
-                var immediate = HeldExecutable("held-immediate");
-                var blocked = HeldExecutable("held-blocked", Node("script", Types.RunJavaScript, [Literal("Script", "return 1;", "String")]));
+                var immediate = HeldExecutable("held-immediate", HeldResponse());
+                var blocked = HeldExecutable("held-blocked", Node("script", Types.RunJavaScript, [Literal("Script", "return 1;", "String")]), HeldResponse());
+                var replyFirst = HeldExecutable("held-reply-first", HeldResponse(),
+                    Node("wait", Types.Delay, [Literal("Duration", "00:00:01", "TimeSpan")]),
+                    Node("script", Types.RunJavaScript, [Literal("Script", BlockingScript.AfterReplySource, "String")]));
                 await materials.SaveAsync(immediate, token);
-                if (!recordCompletion) await materials.SaveAsync(blocked, token);
+                if (!recordCompletion)
+                {
+                    await materials.SaveAsync(blocked, token);
+                    await materials.SaveAsync(replyFirst, token);
+                }
                 await using var authoring = await scopes.CreateAsyncScopeAsync(Scope);
                 var services = authoring.ServiceProvider;
                 var dispatcher = services.GetRequiredService<IWorkflowDirectTestRunDispatcher>();
@@ -939,6 +946,26 @@ public sealed partial class KernelPublishedExecuteTests
                 var finished = await beginning;
                 await RequireNoRecordAsync(finished.Test, finished.Source);
                 Assert.Equal(1, scripts.Calls);
+                Assert.Equal(durableBefore, await DurableRowCountAsync());
+
+                var answering = StartAsync(replyFirst, TimeSpan.FromSeconds(8));
+                try
+                {
+                    await scripts.AfterReply.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
+                    var live = await answering.WaitAsync(TimeSpan.FromSeconds(5), token);
+                    var reply = Assert.IsType<WorkflowTestRunHttpReply>(live.Dispatch.TestRunHttpReply);
+                    Assert.Equal(201, reply.StatusCode);
+                    Assert.Equal("held-ephemeral-owner", reply.Body);
+                    Assert.True(reply.OwnerAccepted);
+                    Assert.False(reply.Headers.ContainsKey("x-elsa-workflow-instance-id"));
+                    Assert.False(live.Dispatch.TestRunCompletedWithoutRecord);
+                    Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, live.Dispatch.CommandDispatch.Status);
+                    Assert.Equal(WorkflowTestRunInlineState.Pending, (await scopeStore.FindAsync(live.Test.ScopeId, token))?.InlineStart);
+                }
+                finally { scripts.AfterReply.Released.TrySetResult(); }
+                var answered = await answering;
+                await RequireNoRecordAsync(answered.Test, answered.Source);
+                Assert.Equal(2, scripts.Calls);
                 Assert.Equal(durableBefore, await DurableRowCountAsync());
 
                 var (fenced, _, _) = await PrepareAsync(immediate);
@@ -1609,16 +1636,20 @@ public sealed partial class KernelPublishedExecuteTests
 
     private sealed class BlockingScript : IJavaScriptScriptEvaluator
     {
+        public const string AfterReplySource = "return 2;";
         private int _calls;
         public int Calls => Volatile.Read(ref _calls);
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public (TaskCompletionSource Entered, TaskCompletionSource Released) AfterReply { get; } =
+            (new(TaskCreationOptions.RunContinuationsAsynchronously), new(TaskCreationOptions.RunContinuationsAsynchronously));
 
         public async ValueTask<JsonElement?> EvaluateAsync(JavaScriptScriptEvaluationRequest request)
         {
             Interlocked.Increment(ref _calls);
-            Entered.TrySetResult();
-            await Released.Task.WaitAsync(request.CancellationToken);
+            var (entered, released) = request.Source == AfterReplySource ? AfterReply : (Entered, Released);
+            entered.TrySetResult();
+            await released.Task.WaitAsync(request.CancellationToken);
             return JsonSerializer.SerializeToElement(1);
         }
     }
@@ -1628,12 +1659,13 @@ public sealed partial class KernelPublishedExecuteTests
         executable.RuntimeRequirements, executable.StorageDriverRequirements, executable.IncidentStrategy,
         persistenceMode: PersistenceMode.Ephemeral, workflowVariables: executable.WorkflowVariables);
 
-    private static WorkflowExecutable HeldExecutable(string id, params ExecutableNode[] beforeResponse) => Ephemeral(ExecutableOf(id, id,
+    private static WorkflowExecutable HeldExecutable(string id, params ExecutableNode[] afterEndpoint) => Ephemeral(ExecutableOf(id, id,
         Sequence("root", [Node("http", Types.HttpEndpoint,
             [Literal("Path", "held/entry", "String"), Literal("SupportedMethods", new[] { "POST" }),
-             Literal("CanStartWorkflow", true, "Boolean"), Literal("ResponseMode", "Sync", "String")]), .. beforeResponse,
-            Node("response", Types.WriteHttpResponse, [Literal("StatusCode", 201, "Int32"), Literal("ContentType", "text/plain", "String"),
-                Literal("Body", "held-ephemeral-owner", "String")])])));
+             Literal("CanStartWorkflow", true, "Boolean"), Literal("ResponseMode", "Sync", "String")]), .. afterEndpoint])));
+
+    private static ExecutableNode HeldResponse() => Node("response", Types.WriteHttpResponse,
+        [Literal("StatusCode", 201, "Int32"), Literal("ContentType", "text/plain", "String"), Literal("Body", "held-ephemeral-owner", "String")]);
 
     private static WorkflowExecutable WithInputContract(WorkflowExecutable executable, WorkflowExecutableInputContract? contract = null) =>
         new(executable.Identity, executable.RootActivity, executable.ResumeTargets, executable.CreatedAt,
