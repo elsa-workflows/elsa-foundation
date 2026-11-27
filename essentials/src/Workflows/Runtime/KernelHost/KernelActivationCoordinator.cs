@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Options;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Kernel.Native;
 using Kernel.WorkflowActor;
 using Microsoft.Extensions.Logging;
@@ -14,7 +15,7 @@ namespace Elsa.Workflows.Runtime.KernelHost;
 /// channel policy, answers an unchanged republish as <see cref="WorkflowActivationOutcome.AlreadyActive"/>, checks and
 /// repairs serving, discards an activation that fails before the switch and reverts one that fails after it, and on
 /// deactivate retires the references of the other serving activations. It moves the slot through
-/// <see cref="IWorkflowActivationSwitch"/> with an empty projection in each projection store. What serves is its
+/// <see cref="IWorkflowActivationSwitch"/> with reservation claims for recurring start triggers. What serves is its
 /// <see cref="KernelServing"/>:
 /// <list type="number">
 /// <item>Map: the executable becomes a Native workflow (<see cref="NativeExecutableMapper"/>), or the activation fails at
@@ -166,7 +167,8 @@ public sealed class KernelActivationCoordinator(
 
         try
         {
-            await PrepareProjectionsAsync(command.ActivationId, cancellationToken);
+            await PrepareProjectionsAsync(command.ActivationId,
+                PublicationClaims(plan, command.Executable.Identity, command.ActivationId, reference.CreatedAt), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
         catch (Exception exception)
@@ -180,6 +182,10 @@ public sealed class KernelActivationCoordinator(
         {
             transition = await activationSwitch.TryActivateAsync(new WorkflowActivationSlotRequest(definitionId, command.SlotName, command.ActivationId,
                 command.Source, command.ExpectedRevision, timeProvider.GetUtcNow(), command.OwnershipIntent), cancellationToken);
+        }
+        catch (TriggerOperationException exception) when (exception.Code == "route-conflict")
+        {
+            return await AbandonAsync(command, reference, plan, cancellationToken, exception, WorkflowActivationStep.ServingCheck);
         }
         catch (Exception exception)
         {
@@ -236,12 +242,21 @@ public sealed class KernelActivationCoordinator(
     private async ValueTask ServeAsync(KernelServingPlan plan, long revision, CancellationToken cancellationToken, Workflow? replaced = null)
     {
         var state = plan.State;
+        NativeSchedule[] after = [];
         if (plan.Served is { } served)
+        {
+            after = state.Schedules.All.Where(schedule => schedule.Workflow == served.Workflow.Id).ToArray();
+            if (schedules.RequiresPublicationClaims && after.Length > 0)
+            {
+                var claims = await ReadPublicationClaimsAsync(served.ActivationId, cancellationToken);
+                if (claims.Length != after.Length || after.Any(schedule => !claims.Any(claim => KernelScheduleClaim.Matches(claim, served, schedule))))
+                    throw new InvalidOperationException("The activation's schedules need publication claims before they can be served.");
+            }
             // The slot's revision is known only once the switch commits.
             state = state with { Slots = new Dictionary<string, KernelServedSlot>(state.Slots, StringComparer.Ordinal) { [plan.SlotId] = served with { Revision = revision } } };
+        }
         var before = (replaced ?? serving.Find(plan.SlotId)?.Workflow) is { } previous ? serving.SchedulesOf(previous) : [];
         serving.Apply(plan with { State = state });
-        var after = plan.Served is { } now ? [.. state.Schedules.All.Where(schedule => schedule.Workflow == now.Workflow.Id)] : Array.Empty<NativeSchedule>();
         foreach (var schedule in after)
         {
             await schedules.RegisterRunAsync(schedule.StartKey, schedule.Start(), cancellationToken);
@@ -321,9 +336,13 @@ public sealed class KernelActivationCoordinator(
 
         WorkflowActivationTransition transition;
         IReadOnlyCollection<string> others = [];
+        IReadOnlyCollection<WorkflowTriggerBinding> claims = [];
+        var switchAttempted = false;
         try
         {
             others = await ListOtherServingActivationsAsync(slot.SlotId, activationId, cancellationToken);
+            claims = await ReadPublicationClaimsAsync(activationId, cancellationToken);
+            switchAttempted = true;
             transition = await activationSwitch.TryDeactivateAsync(
                 new(definitionId, command.SlotName, command.Source, command.ExpectedRevision, timeProvider.GetUtcNow()), others, cancellationToken);
         }
@@ -334,7 +353,7 @@ public sealed class KernelActivationCoordinator(
             // deactivation is finished as one that committed; one that names another was moved by another writer, whose
             // activation is served here as it stands.
             var current = await CurrentSlotAsync(definitionId, command.SlotName);
-            if (current.ActiveActivationId is null && current.Revision > slot.Revision)
+            if (switchAttempted && current.ActiveActivationId is null && current.Revision > slot.Revision)
             {
                 logger?.LogWarning(exception, "The deactivation of definition {DefinitionId} slot {SlotName} committed before its answer was lost; it is finished",
                     definitionId, command.SlotName);
@@ -371,7 +390,7 @@ public sealed class KernelActivationCoordinator(
         }
         catch (Exception exception)
         {
-            return await FailDeactivationAsync(command, slot, served, transition, exception);
+            return await FailDeactivationAsync(command, slot, served, claims, transition, exception);
         }
 
         await RetireReferencesAsync(slot, others);
@@ -385,7 +404,7 @@ public sealed class KernelActivationCoordinator(
     /// keeps it, and it serves again.
     /// </summary>
     private async ValueTask<WorkflowActivationResult> FailDeactivationAsync(WorkflowDeactivationCommand command, WorkflowActivationSlot slot,
-        KernelServedSlot? served, WorkflowActivationTransition transition, Exception failure)
+        KernelServedSlot? served, IReadOnlyCollection<WorkflowTriggerBinding> claims, WorkflowActivationTransition transition, Exception failure)
     {
         var definitionId = slot.WorkflowDefinitionId;
         var activationId = slot.ActiveActivationId!;
@@ -393,7 +412,7 @@ public sealed class KernelActivationCoordinator(
             activationId, definitionId, slot.SlotName);
         var failures = new List<string>();
         WorkflowActivationTransition? restored = null;
-        await CaptureAsync(failures, "Projection preparation", () => PrepareProjectionsAsync(activationId, CancellationToken.None));
+        await CaptureAsync(failures, "Projection preparation", () => PrepareProjectionsAsync(activationId, claims, CancellationToken.None));
         await CaptureAsync(failures, "Authority compensation", async () =>
         {
             restored = await activationSwitch.TryActivateAsync(new WorkflowActivationSlotRequest(definitionId, slot.SlotName, activationId, command.Source,
@@ -629,10 +648,34 @@ public sealed class KernelActivationCoordinator(
 
     // ---- the old core's activation duties --------------------------------------------------------------------------
 
-    private async ValueTask PrepareProjectionsAsync(string activationId, CancellationToken cancellationToken)
+    private WorkflowTriggerBinding[] PublicationClaims(KernelServingPlan plan, WorkflowExecutableIdentity identity,
+        string activationId, DateTimeOffset createdAt) =>
+        schedules.RequiresPublicationClaims
+            ? plan.State.Schedules.All.Where(schedule => schedule.Workflow == identity.ArtifactId)
+                .Select(schedule => KernelScheduleClaim.Create(identity, activationId, plan.SlotId, schedule, createdAt))
+                .ToArray()
+            : [];
+
+    private async ValueTask<WorkflowTriggerBinding[]> ReadPublicationClaimsAsync(string activationId, CancellationToken cancellationToken)
     {
-        // The switch commits a slot with its serving projections; a kernel host serves from its own state, so each is empty.
-        await triggerBindingStore.PrepareActivationAsync(activationId, [], cancellationToken);
+        try
+        {
+            return (await triggerBindingStore.ListAllByActivationAsync(activationId, cancellationToken))
+                .Where(binding => binding.Cardinality == TriggerCardinality.ReservationOnly).ToArray();
+        }
+        catch (NotSupportedException) when (!schedules.RequiresPublicationClaims)
+        {
+            // Legacy stores could support switching without exposing an activation-scoped binding query.
+            return [];
+        }
+    }
+
+    private async ValueTask PrepareProjectionsAsync(string activationId, IReadOnlyCollection<WorkflowTriggerBinding> claims,
+        CancellationToken cancellationToken)
+    {
+        // The activation switch claims each logical schedule in the same transaction as the slot change.
+        // These bindings stay out of stimulus routing.
+        await triggerBindingStore.PrepareActivationAsync(activationId, claims, cancellationToken);
         if (recurringScheduleStore is not null)
             await recurringScheduleStore.PrepareActivationAsync(activationId, [], cancellationToken);
     }

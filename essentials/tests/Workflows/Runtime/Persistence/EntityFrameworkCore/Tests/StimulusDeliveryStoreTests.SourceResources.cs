@@ -272,6 +272,66 @@ public sealed partial class StimulusDeliveryStoreTests
             (await ingress.Slots.FindAsync("concurrent-definition", "Published"))?.ActiveActivationId == "concurrent-publication");
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Concurrent_reservation_only_publications_have_one_owner_and_no_stimulus_route(bool ef)
+    {
+        const string definition = "scheduled-definition";
+        const string stimulusType = "Test.ScheduleClaim";
+        const string key = "scheduled-definition-claim";
+        await using var database = new TemporarySqliteDatabase("publication-only-reservations");
+        await using var first = ef ? await Harness.OpenConcurrentAsync(database.ConnectionStringWith("Pooling=False")) : await Harness.Create(false);
+        if (ef) await first.Context!.Database.EnsureCreatedAsync();
+        await using var second = ef ? await Harness.OpenConcurrentAsync(database.ConnectionStringWith("Pooling=False")) : null;
+        var ingress = await PrepareIngressAsync(first);
+        var blue = first.Management(ingress);
+        var green = blue;
+        if (second is not null)
+        {
+            var selected = second.Ingress();
+            green = second.Management(new(selected.Port, selected.Resources, selected.Slots, ingress.Request,
+                ingress.Material, ingress.Reference, selected.Queue));
+        }
+
+        await blue.PreparePublicationAsync(definition, "Blue", "blue", key, stimulusType, TriggerCardinality.ReservationOnly);
+        await green.PreparePublicationAsync(definition, "Green", "green", key, stimulusType, TriggerCardinality.ReservationOnly);
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<TriggerOperationException?> Compete(ManagementFixture fixture, string channel, string activation) => Task.Run(async () =>
+        {
+            await start.Task;
+            try
+            {
+                Assert.True((await fixture.Switch.TryActivateAsync(new(definition, channel, activation, WorkflowActivationSource.Publishing, 0, Now))).Succeeded);
+                return null;
+            }
+            catch (TriggerOperationException exception)
+            {
+                return exception;
+            }
+        });
+        var blueTask = Compete(blue, "Blue", "blue");
+        var greenTask = Compete(green, "Green", "green");
+        start.SetResult();
+        var results = await Task.WhenAll(blueTask, greenTask);
+
+        Assert.Single(results, item => item is null);
+        Assert.Equal("route-conflict", Assert.Single(results.OfType<TriggerOperationException>()).Code);
+        var winner = results[0] is null ? "Blue" : "Green";
+        var loser = winner == "Blue" ? "Green" : "Blue";
+        var active = (await ingress.Slots.FindAsync(definition, winner))!;
+        Assert.Null(await ingress.Slots.FindAsync(definition, loser));
+        Assert.Equal(active.SlotId, (await blue.Reservations.FindAsync(blue.Scope, stimulusType, key))!.OwnerId);
+        Assert.Empty(await blue.Bindings.ListAllByStimulusAsync(stimulusType, key));
+        Assert.Empty(await blue.Bindings.ListAllByStimulusTypeAsync(stimulusType));
+        Assert.Empty(await blue.Bindings.ListActiveStimulusHashesAsync(stimulusType));
+
+        Assert.True((await blue.Switch.TryDeactivateAsync(new(definition, winner, WorkflowActivationSource.Publishing, active.Revision, Now), [])).Succeeded);
+        Assert.Null(await blue.Reservations.FindAsync(blue.Scope, stimulusType, key));
+        var next = await blue.Switch.TryActivateAsync(new(definition, loser, loser.ToLowerInvariant(), WorkflowActivationSource.Publishing, 0, Now));
+        Assert.True(next.Succeeded);
+        Assert.Equal(next.Slot.SlotId, (await blue.Reservations.FindAsync(blue.Scope, stimulusType, key))!.OwnerId);
+    }
+
     private static RuntimeIngressReservationDescriptor Route(string route) => new("Test.Exclusive", route, new Dictionary<string, string>());
     private static TriggerStoreWrite ManagedWrite(string id, long revision, TriggerDesiredState desired, IReadOnlyList<TriggerSubscription> subscriptions, TriggerScope? scope = null) =>
         new($"{id}-{desired}-{revision}", $"{id}-{desired}-{revision}", "operator", revision == 1 ? null : revision - 1,
@@ -306,15 +366,16 @@ public sealed partial class StimulusDeliveryStoreTests
             await PreparePublicationAsync(definition, slotName, activation, route);
             Assert.True((await activationSwitch.TryActivateAsync(new(definition, slotName, activation, WorkflowActivationSource.Publishing, 0, Now))).Succeeded);
         }
-        public async Task PreparePublicationAsync(string definition, string slotName, string activation, string? route)
+        public async Task PreparePublicationAsync(string definition, string slotName, string activation, string? route,
+            string stimulusType = "Test.Exclusive", TriggerCardinality cardinality = TriggerCardinality.Exclusive)
         {
             var slotId = WorkflowActivationSlotIdentity.Create(definition, slotName);
             await harness.References.SaveAsync(new(WorkflowActivationReferenceIdentity.Create(activation), ingress.Material.Identity.ArtifactId,
                 "definition", definition, "1", definition, "version-" + activation, "label", Now, Now, WorkflowExecutableReferenceScope.Published,
                 ActivationId: activation, SlotId: slotId, TenantId: Scope.TenantId));
             WorkflowTriggerBinding[] rows = route is null ? [] : [new(WorkflowTriggerBinding.BuildId(activation, ingress.Material.Identity.ArtifactId, "node", route),
-                ingress.Material.Identity.ArtifactId, definition, "1", "hash", "node", "Test.Exclusive", route, null, new Dictionary<string, string>(), Now,
-                activation, slotId, TriggerCardinality.Exclusive, false)];
+                ingress.Material.Identity.ArtifactId, definition, "1", "hash", "node", stimulusType, route, null, new Dictionary<string, string>(), Now,
+                activation, slotId, cardinality, false)];
             await bindings.PrepareActivationAsync(activation, rows);
         }
     }

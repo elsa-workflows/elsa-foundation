@@ -1,7 +1,11 @@
+using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -71,6 +75,30 @@ public sealed class WorkflowPublicationPreflightPlanTests
         Assert.Equal(canActivate, plan.CanActivate);
         // The trigger verdict stays the core service's own: the owner is folded in on the plan, not into the result.
         Assert.Equal(!triggerConflict, plan.Result.CanActivate);
+    }
+
+    [Fact]
+    public async Task Schedule_ownership_is_excluded_from_the_publish_change_preview()
+    {
+        var slot = await ActivateAsync(WorkflowActivationSource.Publishing);
+        var activationId = slot.ActiveActivationId!;
+        var bindings = new InMemoryWorkflowTriggerBindingStore();
+        var node = new ExecutableNode("node", "node", "Test.Timer", "1",
+            new RuntimeActivityDescriptor("test", "1", JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
+        var executable = new WorkflowExecutable(new("artifact", DefinitionId, "version-1", "1", "hash"), node,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(), new("default", "1"));
+        await bindings.PrepareActivationAsync(activationId,
+            [new("schedule-claim", "artifact", DefinitionId, "1", "hash", "node", "kernel-schedule-publication-v1", "schedule-key", null,
+                new Dictionary<string, string>(), Now, activationId, slot.SlotId, TriggerCardinality.ReservationOnly)]);
+        await bindings.ActivateAsync(activationId, null);
+        var reader = new WorkflowPublicationPreflightReader(new InMemoryPublicationPolicyStore(), new PublicationPolicyResolver(),
+            _authority, new PublicationPreflightService(), new TriggerConflictSupport.StubTriggerExtractor(), bindings, TimeProvider.System);
+
+        var plan = await reader.EvaluateAsync(executable, requestIntent: null, expectedPublicationId: activationId, "candidate");
+
+        Assert.True(plan.CanActivate);
+        Assert.Empty(plan.Result.Changes);
     }
 
     private async Task ArrangeAsync(SlotState state)

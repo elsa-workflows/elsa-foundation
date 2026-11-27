@@ -99,14 +99,14 @@ export async function kernelHttpJourney(page: Page, request: APIRequestContext, 
     "/runtime/workflows/instances/page?status=Completed&take=10&definitionId=" + encodeURIComponent(order.definition.id));
   expect(list.items.map(item => item.workflowExecutionId)).toContain(run);
 
-  const delay = await activity("delay", "Elsa.Activities.Scheduling.Activities.Delay", { Duration: "00:00:01" });
-  const unsupported = await draft("Kernel HTTP unsupported delay", [delay]);
+  const readLine = await activity("console-input", "Elsa.Activities.Primitives.Activities.ReadLine");
+  const unsupported = await draft("Kernel HTTP unsupported console input", [readLine]);
   const refusal = await reviewAndPublish(unsupported.definition.id);
   expect(refusal.status()).toBe(409);
   const problem = await refusal.json() as { code?: string; errorCode?: string };
   expect(problem.code ?? problem.errorCode).toBe("definition_unsupported");
   const rejected = page.getByRole("dialog", { name: "Couldn’t publish", exact: true });
-  await expect(rejected).toContainText("Delay doesn't run on this host yet.");
+  await expect(rejected).toContainText("ReadLine does not run on this host in release 1.");
   await expect(rejected.getByRole("button", { name: "Retry publication", exact: true })).toHaveCount(0);
   await expect(rejected.getByRole("button", { name: "Close", exact: true })).toBeEnabled();
   await capture(page, info, "kernel-http-refusal");
