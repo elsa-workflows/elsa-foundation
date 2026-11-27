@@ -5,7 +5,7 @@ import { corePreviewSmokeJourney, type CorePreviewStack } from "./corePreviewSmo
 import { corePreviewActivityTimelineJourney } from "./corePreviewActivityTimelineJourney";
 
 // The Core Preview journeys (tools/ux-acceptance/core_preview.py): a Workbench whose default shell serves its
-// publications on the kernel, on a throwaway PostgreSQL store, with Studio and a local HTTP stub.
+// publications on the kernel, on an owned provider store, with Studio and a local HTTP stub.
 const backend = process.env.UX_BACKEND_URL;
 const stub = process.env.UX_HTTP_STUB_URL;
 if (process.env.UX_ACCEPTANCE_SUITE !== "core-preview" || !backend || !stub) {

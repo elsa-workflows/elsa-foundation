@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Run the Core Preview acceptance journeys against owned hosts: a Workbench whose default shell serves its
-publications on the kernel (Elsa:CorePreview:Publications, the shipped PostgreSQL format in a throwaway container), Studio, and
+publications on the kernel (Elsa:CorePreview:Publications, the shipped PostgreSQL or SQLite format), Studio, and
 a local HTTP stub for the workflows' outbound requests. Every process, container and store is owned and removed."""
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import closing, contextmanager, nullcontext
 import hashlib
 import http.server
 import importlib.util
@@ -16,12 +16,14 @@ import re
 import secrets
 import signal
 import socket
+import sqlite3
 import subprocess
 import tempfile
 import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+STORE_VERSIONS = ROOT / 'essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/EfStore.Versions.cs'
 
 # Share the acceptance runner's process ownership, readiness, clean-environment and copy guards.
 _spec = importlib.util.spec_from_file_location('current_acceptance_runner', ROOT / 'tools/ux-acceptance/run.py')
@@ -61,10 +63,41 @@ def inventory(journeys=None):
     return {(PROJECT, title) for title in selected}
 
 
-def kernel_environment(connection):
+def kernel_environment(connection=None, *, sqlite_path=None):
     """The Core Preview's switches and its own database, for this composition's Workbench only."""
-    return {'Elsa__CorePreview__Enabled': 'true', 'Elsa__CorePreview__Publications': 'true',
-            'Elsa__CorePreview__Tenant': TENANT, 'ConnectionStrings__KernelCorePreview': connection}
+    switches = {'Elsa__CorePreview__Enabled': 'true', 'Elsa__CorePreview__Publications': 'true',
+                'Elsa__CorePreview__Tenant': TENANT}
+    if sqlite_path is not None:
+        return dict(switches, Elsa__CorePreview__Provider='SQLite', Elsa__CorePreview__SqlitePath=str(sqlite_path))
+    return dict(switches, ConnectionStrings__KernelCorePreview=connection)
+
+
+def sqlite_shipped_markers():
+    # Derive the expected release from the same source as Workbench. Refuse an unrecognized declaration.
+    source = STORE_VERSIONS.read_text(encoding='utf-8')
+
+    def number(pattern):
+        match = re.search(pattern, source)
+        if not match:
+            raise ValueError('Cannot derive SQLite shipped markers from EfStore.Versions.cs')
+        return int(match.group(1))
+
+    def constant(name):
+        return number(rf'\bconst int {name}\s*=\s*(\d+)\s*;')
+
+    protocol = number(r'\bStoreFormat RootShipped\s*=>\s*Current with\s*\{\s*MessageProtocol\s*=\s*(\d+)\s*\}\s*;')
+    return [(1, constant('StoreSchemaVersion'), protocol, constant('JournalCodecVersion')),
+            (2, constant('Sqlite'), constant('SqliteShippedRevision'), 0)]
+
+
+def sqlite_markers(path, expected):
+    # The owned writer has exited. Read a checkpointed WAL file without creating shared-memory sidecars.
+    with closing(sqlite3.connect(path.as_uri() + '?mode=ro&immutable=1', uri=True)) as store:
+        markers = store.execute('SELECT "Id", "StoreSchema", "MessageProtocol", "JournalCodec" '
+                                'FROM "KernelStoreVersions" ORDER BY "Id"').fetchall()
+    if markers != expected:
+        raise ValueError(f'Expected SQLite shipped markers {expected}, got {markers}')
+    return markers
 
 
 LABEL = 'elsa.ux-acceptance=core-preview'
@@ -256,15 +289,16 @@ def verdict(report, artifacts, journeys=None):
     return len(rows)
 
 
-def run(output, journey=None):
+def run(output, journey=None, provider='postgres'):
     output.mkdir(parents=True, exist_ok=False)
     sha, dirty = source_state(ROOT)
     selected = [journey] if journey else None
+    provider_name = 'SQLite' if provider == 'sqlite' else 'PostgreSQL'
     report = {'sourceSha': sha, 'headSha': os.environ.get('UX_PR_HEAD_SHA', sha), 'dirty': bool(dirty), 'kind': 'composed-source',
               'suite': SUITE, 'project': PROJECT, 'journeys': sorted(title for _, title in inventory(selected)),
               'sharedHostHelperSha256': hashlib.sha256((ROOT / 'tools/ux-acceptance/run.py').read_bytes()).hexdigest(),
               'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'status': 'failed', 'stage': 'build',
-              'composition': {'corePreview': {'publications': True, 'tenant': TENANT, 'format': 'the shipped PostgreSQL format'}},
+              'composition': {'corePreview': {'publications': True, 'tenant': TENANT, 'format': f'the shipped {provider_name} format'}},
               'visualApproval': 'requires independent review', 'ownedPids': {}}
     processes = {}
     try:
@@ -287,15 +321,25 @@ def run(output, journey=None):
             (data / 'home').mkdir()
             env = dict(clean_environment(), DOTNET_PROCESSOR_COUNT='2', HOME=str(data / 'home'), DOTNET_CLI_HOME=str(data / 'home'),
                        **{'Logging__LogLevel__Microsoft.Hosting.Lifetime': 'Information'})
-            report['stage'] = 'postgres'
-            report['staleContainers'] = sweep_stale_containers()
-            with postgres(output / 'postgres.log') as database, Stub() as stub:
-                # The database is empty: the Workbench installs the shipped format itself before its node starts.
-                report['postgres'] = {key: database[key] for key in ('container', 'image', 'database')}
+            report['stage'] = provider
+            sqlite_path = data / 'kernel.sqlite' if provider == 'sqlite' else None
+            if sqlite_path is None:
+                report['staleContainers'] = sweep_stale_containers()
+                store = postgres(output / 'postgres.log')
+            else:
+                store = nullcontext()
+                report['sqlite'] = {'database': sqlite_path.name, 'expectedMarkers': sqlite_shipped_markers()}
+            with store as database, Stub() as stub:
+                # The store is empty: the Workbench installs the shipped format itself before its node starts.
+                if sqlite_path is None:
+                    report['postgres'] = {key: database[key] for key in ('container', 'image', 'database')}
+                    kernel = kernel_environment(database['connection'])
+                else:
+                    kernel = kernel_environment(sqlite_path=sqlite_path)
                 report.update(stage='host-start', backendUrl=backend_url, studioUrl=studio_url, stubUrl=stub.url)
                 backend_log = output / 'backend.log'
                 with host(backend, 'Elsa.Workbench.Host.dll', backend_url, '/health/ready', backend_log,
-                          dict(env, **kernel_environment(database['connection']))) as backend_process:
+                          dict(env, **kernel)) as backend_process:
                     processes['backend'] = backend_process
                     report['ownedPids']['backend'] = backend_process.pid
                     report['kernelServing'] = wait_for_kernel_serving(backend_log, backend_process)
@@ -316,14 +360,21 @@ def run(output, journey=None):
                     calls = [item for item in report['stubRequests'] if item['path'] == '/core-preview/k10-order']
                     if calls != [{'method': 'POST', 'path': '/core-preview/k10-order', 'body': 'kernel-outbound'}] * 2:
                         raise ValueError(f'Expected the two kernel workflow requests at the stub, got {calls!r}')
-            report['postgres']['containerRemoved'] = container_gone(report['postgres']['container'])
+            if sqlite_path is None:
+                report['postgres']['containerRemoved'] = container_gone(report['postgres']['container'])
+                if not report['postgres']['containerRemoved']:
+                    raise ValueError('The owned PostgreSQL container outlived the run')
+            else:
+                if processes['backend'].returncode != 0:
+                    raise ValueError('The SQLite Workbench did not stop cleanly before checking the markers')
+                report['sqlite']['markers'] = sqlite_markers(sqlite_path, report['sqlite']['expectedMarkers'])
             report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, selected)
         report['hostExitCodes'] = {key: process.returncode for key, process in processes.items()}
         report['ownedRootRemoved'] = not data.exists()
+        if not report['ownedRootRemoved']:
+            raise ValueError('The owned host and store directory outlived the run')
         if (sha, dirty) != source_state(ROOT):
             raise ValueError('Source changed during acceptance; rerun the exact committed revision')
-        if not report['postgres']['containerRemoved']:
-            raise ValueError('The owned PostgreSQL container outlived the run')
         report.update(status='passed', stage='complete')
     except Exception as error:
         report['error'] = str(error)
@@ -338,10 +389,11 @@ def run(output, journey=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
+    parser.add_argument('--provider', choices=['postgres', 'sqlite'], default='postgres', help='Owned kernel store (default: postgres)')
     parser.add_argument('--journey', choices=sorted(JOURNEYS), help='Run one journey; the report certifies only that journey')
     args = parser.parse_args()
 
     def terminate(_signum, _frame):
-        raise InterruptedError('Acceptance interrupted; owned hosts and the container will be stopped')
+        raise InterruptedError('Acceptance interrupted; owned resources will be stopped')
     signal.signal(signal.SIGTERM, terminate)
-    run(args.output.resolve(), args.journey)
+    run(args.output.resolve(), args.journey, args.provider)
