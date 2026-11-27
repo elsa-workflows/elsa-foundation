@@ -20,6 +20,7 @@ internal static class SqlitePreparedStartChecks
         {
             var offered = new TaskCompletionSource<PendingRootStart>(TaskCreationOptions.RunContinuationsAsynchronously);
             var refused = new TaskCompletionSource<PendingRootStart>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var expired = new TaskCompletionSource<PendingRootStart>(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var calls = 0;
             var foundation = SqliteEmbeddedFoundation.ForPreparedStartsQualification(
@@ -54,6 +55,18 @@ internal static class SqlitePreparedStartChecks
                     await foundation.ConfirmPreparedStartAsync(scope, second.Actor, second.Issuance, token) == RootStartProof.PreparationDisarmed,
                 "a definitive protection refusal disarms the exact preparation without an actor birth");
 
+            var expiredCall = CallAsync("expired-operation", "expire", 1_500);
+            if (await Task.WhenAny(expiredCall, expired.Task).WaitAsync(token) == expiredCall)
+                throw new InvalidOperationException("The expiry witness did not enter protection.");
+            var late = await expired.Task;
+            Require((await expiredCall).Error == "timeout", "the held deadline expires while material protection is pending");
+            while (await foundation.PrunePreparedStartsAsync(scope, token) == 0) await Task.Delay(20, token);
+            Require(await foundation.ConfirmPreparedStartAsync(scope, late.Actor, late.Issuance, token) == RootStartProof.PreparationDisarmed,
+                "pruning durably disarms an expired preparation before reporting absence");
+
+            var policy = await ((Contract.IActorRetentionPolicies)foundation).TryApplyRetentionPolicyAsync(
+                scope, 0, new(Finished: TimeSpan.Zero), long.MaxValue, cancellationToken: token);
+            Require(policy.Outcome == Contract.ActorRetentionPolicyChangeOutcome.Applied, "the host configures eligibility for terminal retirement");
             var terminal = await foundation.CreateReads().GetAsync(scope, first.Actor, token);
             Require(terminal?.Selection is not null, "the committed root exposes an exact retirement selection");
             Require((await foundation.AdmitRetentionDeleteAsync(scope, first.Actor, terminal!.Selection!, token)).Outcome ==
@@ -73,6 +86,11 @@ internal static class SqlitePreparedStartChecks
                 {
                     refused.SetResult(start);
                     return false;
+                }
+                if (start.TypeData == "expire")
+                {
+                    expired.SetResult(start);
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
                 }
                 offered.SetResult(start);
                 await release.Task.WaitAsync(ct);
