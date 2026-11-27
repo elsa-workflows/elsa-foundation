@@ -54,7 +54,7 @@ public sealed class KernelActivationCoordinator(
     private readonly ActivationChannelOptions _channels = channels ?? new();
     private readonly IReadOnlyCollection<IWorkflowTriggerIndexObserver> _observers = triggerObservers?.ToArray() ?? [];
     internal IKernelEventPublicationRegistration? EventPublications { get; init; }
-    internal IRuntimePersistenceModeResolver? EventPersistenceModes { get; init; }
+    internal Func<WorkflowExecutable, PersistenceMode>? SelectEventPersistenceMode { get; init; }
 
     public bool RequiresInactiveAcknowledgment => EventPublications is not null;
 
@@ -186,7 +186,7 @@ public sealed class KernelActivationCoordinator(
         {
             var mode = EventPublications is { SupportsDurableMode: true } &&
                 plan.Served?.Workflow is { } native && NativeStartTriggers.StartEvents(native).Any()
-                ? EventPersistenceModes!.Resolve(command.Executable)
+                ? SelectEventPersistenceMode!(command.Executable)
                 : (PersistenceMode?)null;
             if (mode is not (null or PersistenceMode.Balanced or PersistenceMode.Durable))
                 throw new InvalidOperationException("An authored Event start requires Balanced or Durable persistence.");
@@ -737,7 +737,7 @@ public sealed class KernelActivationCoordinator(
     {
         var served = restore.Serving.Served!;
         if (!NativeStartTriggers.StartEvents(served.Workflow).Any()) return [];
-        var mode = EventPersistenceModes!.Resolve(restore.Executable);
+        var mode = SelectEventPersistenceMode!(restore.Executable);
         if (mode == PersistenceMode.Ephemeral) return [];
         try
         {
