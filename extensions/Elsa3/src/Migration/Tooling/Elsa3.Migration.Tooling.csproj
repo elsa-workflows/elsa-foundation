@@ -7,12 +7,20 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Elsa3.Migration.Cli" />
     <InternalsVisibleTo Include="Elsa3.Migration.Tests" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="report.schema.json" LogicalName="Elsa3.Migration.Tooling.report.schema.json" />
     <EmbeddedResource Include="Report\report.html" LogicalName="Elsa3.Migration.Tooling.report.html" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The in-process composition (T009): a generic host that is never started, an ephemeral Data Protection key ring, and
+         the run's one in-memory SQLite database, held open for the whole run. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
   </ItemGroup>
 
   <ItemGroup>

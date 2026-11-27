@@ -12,10 +12,14 @@
     <PackageReference Include="JsonSchema.Net" />
     <PackageReference Include="Xunit.SkippableFact" />
     <Using Include="Xunit" />
+    <!-- As the migration host's own tests: the composition runs ASP.NET Core services in process. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Migration\Tooling\Elsa3.Migration.Tooling.csproj" />
+    <!-- The CLI brings the migration host and its feature projects into deps.json for WithHostAssemblies() (T001). -->
+    <ProjectReference Include="..\..\..\src\Migration\Cli\Elsa3.Migration.Cli.csproj" />
     <!-- The fixture feature project (spec 1237 T003). -->
     <ProjectReference Include="..\Fixtures\AcmeFeature\Acme.Elsa3MigrationFixture.csproj" />
   </ItemGroup>

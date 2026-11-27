@@ -18,7 +18,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class EfCoreDependencyGuardTests
 {
     private static readonly string[] RestoreConfigurations = ["Release", "Debug"];
-    private static readonly string[] AllowedEfConsumers = ["Elsa.Essentials.Host", "Elsa.Foundation.Host", "Elsa.Migration.Host", "Elsa.Workbench.Host"];
+    private static readonly string[] AllowedEfConsumers = ["Elsa.Essentials.Host", "Elsa.Foundation.Host", "Elsa.Migration.Host", "Elsa.Workbench.Host", "Elsa3.Migration.Cli"];
 
     /// <summary>
     /// <c>Elsa.Foundation.Host</c> carries EF Core (#2151, #2191) for its opt-in
@@ -80,6 +80,13 @@ public sealed class EfCoreDependencyGuardTests
         "OpenIddict.EntityFrameworkCore",
         "OpenIddict.EntityFrameworkCore.Models"
     ];
+
+    /// <summary>
+    /// <c>Elsa3.Migration.Cli</c>, the Elsa 3 migration CLI (spec 1237 R-7), is a composition root over the migration host: it
+    /// references the host project and composes the host's features in process, so it resolves exactly the host's reviewed
+    /// closure. Its own SQLite use (the run's in-memory database) is <c>Microsoft.Data.Sqlite</c>, not an EF package.
+    /// </summary>
+    private static readonly string[] AllowedMigrationCliEfPackages = AllowedMigrationHostEfPackages;
 
     private static readonly string[] AllowedWorkbenchEfPackages =
     [
@@ -169,6 +176,7 @@ public sealed class EfCoreDependencyGuardTests
         "Elsa.Essentials.Host" => AllowedEssentialsHostEfPackages,
         "Elsa.Foundation.Host" => AllowedFoundationHostEfPackages,
         "Elsa.Migration.Host" => AllowedMigrationHostEfPackages,
+        "Elsa3.Migration.Cli" => AllowedMigrationCliEfPackages,
         "Elsa.Workbench.Host" => AllowedWorkbenchEfPackages,
         _ => throw new ArgumentOutOfRangeException(nameof(host), host, "An admitted EF consumer needs a reviewed EF closure of its own.")
     };
@@ -1507,9 +1515,9 @@ public sealed class EfCoreDependencyGuardTests
                 ["extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"],
                 // The migration tooling (spec 1237 R-7) resolves EF only through the import ledger it composes; its tests
-                // resolve the tooling's closure.
+                // reference the CLI, so they resolve the migration host's reviewed closure (SQLite among it).
                 ["extensions/Elsa3/src/Migration/Tooling/Elsa3.Migration.Tooling.csproj"] = CorePackages(),
-                ["extensions/Elsa3/tests/Migration/Tests/Elsa3.Migration.Tests.csproj"] = CorePackages()
+                ["extensions/Elsa3/tests/Migration/Tests/Elsa3.Migration.Tests.csproj"] = AllowedMigrationHostEfPackages
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;

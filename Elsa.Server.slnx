@@ -116,6 +116,7 @@
   </Folder>
   <Folder Name="/extensions/Elsa3/src/Mapping/" />
   <Folder Name="/extensions/Elsa3/src/Migration/">
+    <Project Path="extensions/Elsa3/src/Migration/Cli/Elsa3.Migration.Cli.csproj" />
     <Project Path="extensions/Elsa3/src/Migration/Tooling/Elsa3.Migration.Tooling.csproj" />
   </Folder>
   <Folder Name="/extensions/Elsa3/tests/Activities/" />
