@@ -2,6 +2,7 @@ using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.KernelHost;
@@ -49,7 +50,10 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
         ReplaceService(typeof(IRuntimeHistoryPageReader), typeof(RuntimeHistoryInspectionService), typeof(KernelRuntimeHistoryPageReader));
         ReplaceService(typeof(IRuntimeHistoryOccurrencePageReader), typeof(RuntimeHistoryInspectionService), typeof(KernelPlaybackPageReader));
         if (services.Any(descriptor => descriptor.ServiceType == typeof(KernelOperatorIngress) && !descriptor.IsKeyedService))
+        {
             ReplaceService(typeof(IWorkflowInstanceDeletionService), typeof(WorkflowInstanceDeletionService), typeof(KernelWorkflowInstanceDeletionService));
+            services.TryAddSingleton<SelectedRunDeletionAvailable>();
+        }
 
         void ReplaceService(Type service, Type runtimeImplementation, Type kernelImplementation)
         {

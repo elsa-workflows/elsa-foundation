@@ -20,6 +20,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
 {
     private readonly PostgresRootAdmission admission;
     private readonly HeldRootRequests edge;
+    private readonly EfStore _store;
     private readonly string? _startType;
     private readonly ProtectRootStartAsync? _protectRootStart;
     private PostgresReplyRelay? _liveReplies;
@@ -30,6 +31,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
         if (startType is not null) PostgresRootAdmission.RequireActorType(startType);
         this.admission = admission;
+        _store = store;
         _startType = startType;
         _protectRootStart = protectRootStart;
         Node = node;
@@ -101,6 +103,12 @@ public sealed class PostgresDirectRequests : IReplyTransport
     internal ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target,
         string id, string kind, string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken stop) =>
         edge.RequestAsync(scope, target, id, kind, payload, add, request, stop);
+
+    internal ValueTask<Contract.Reply> RequestOperatorAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        string id, Contract.AddOptions? add, Contract.RequestOptions request,
+        Func<HeldRootRequest, CancellationToken, Task<Contract.Admission?>> admit, CancellationToken token) =>
+        edge.RequestOperatorAsync(scope, id, request, add?.KeepFor, admit,
+            async ct => (Contract.ActorStatus?)(await _store.ReadFirstRootAsync(scope.Tenant, actor.Id, ct))?.Status, token);
 
     private sealed class Admission(PostgresRootAdmission admission, EfStore store, ProtectRootStartAsync? protectRootStart) : IHeldRootAdmission
     {

@@ -15,7 +15,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.KernelApi;
 
 internal sealed record KernelOperatorIngress(
-    Func<Func<BoundScope, ActorRef, string, bool>, CancellationToken, Task<IIngress>> Open);
+    Func<Func<BoundScope, ActorRef, string, bool>, CancellationToken, Task<IIngress>> Open,
+    Func<CancellationToken, ValueTask<long>> ReadClock);
 
 internal sealed class KernelWorkflowInstanceDeletionService(
     KernelRunReader runs,
@@ -46,7 +47,8 @@ internal sealed class KernelWorkflowInstanceDeletionService(
         {
             return await DeleteCoreAsync(workflowExecutionId, principal, tenant, budget.Token);
         }
-        catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        catch (Exception error) when (!cancellationToken.IsCancellationRequested &&
+            (error is TimeoutException || error is OperationCanceledException && deadline.IsCancellationRequested))
         {
             throw new RuntimeRunDeletionRejectedSignal(StatusCodes.Status409Conflict,
                 "The deletion did not settle in time. Refresh its status and retry deletion.");
@@ -72,22 +74,28 @@ internal sealed class KernelWorkflowInstanceDeletionService(
 
             var actor = view.Header.Ref;
             var kind = view.Header.Status == ActorStatus.Running ? Kinds.Terminate : Kinds.Delete;
-            var command = new OperatorCommand(selection, ThenDelete: kind == Kinds.Terminate, ExpectedTarget: actor);
+            var command = new OperatorCommand(selection, ExpectedTarget: actor);
             var ingress = await operators.Open((scope, target, operation) =>
-                scope.Tenant == binding.Tenant && target == actor &&
-                (operation == kind || command.ThenDelete && operation == Kinds.Delete), cancellationToken);
-            var admission = await ingress.SendAsync(binding, new Target.Ref(actor), Guid.NewGuid().ToString("N"), kind,
-                JsonSerializer.Serialize(command), cancellationToken: cancellationToken);
-            if (admission.Outcome is AdmissionOutcome.Accepted or AdmissionOutcome.Duplicate)
+                scope.Tenant == binding.Tenant && target == actor && operation == kind, cancellationToken);
+            var now = await operators.ReadClock(cancellationToken);
+            var deadline = checked(now + (long)DeletionBudget.TotalMilliseconds);
+            var reply = await ingress.RequestAsync(binding, new Target.Ref(actor), Guid.NewGuid().ToString("N"), kind,
+                JsonSerializer.Serialize(command), null, new(null, deadline), cancellationToken);
+
+            if (kind == Kinds.Terminate && reply is { Error: null, Item: "terminated" or "terminated and kept" })
+                continue; // Refresh the selected terminal state and authorize the purge separately.
+            if (kind == Kinds.Delete && reply is { Error: null, Item: "deleted" or "started" })
             {
                 while (!(await foundation.GetAsync(actor, cancellationToken)).Missing)
                     await Task.Delay(ReadDelay, clock, cancellationToken);
                 return new WorkflowInstanceDeletionView(workflowExecutionId);
             }
-
-            if (admission.Reason is RefusalReason.RateLimited or RefusalReason.NodeBusy or RefusalReason.InboxFull)
+            if (reply is { Error: "stale selection" or "parked" }) continue;
+            if (reply is { Error: "protected" or "protection unavailable" or "park outstanding" })
                 throw new RuntimeRunDeletionRejectedSignal(StatusCodes.Status409Conflict,
-                    "The run could not be stopped yet. Refresh its status and retry deletion.");
+                    "The run is retained or its deletion protection could not be verified.");
+            throw new RuntimeRunDeletionRejectedSignal(StatusCodes.Status409Conflict,
+                "The run could not be stopped or deleted yet. Refresh its status and retry deletion.");
         }
 
         throw Changed();

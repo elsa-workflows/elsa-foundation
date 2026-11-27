@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Primitives.Models;
@@ -99,6 +100,7 @@ public sealed class KernelPublishedExecuteTests
             { "KernelExecuteFixture" });
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IWorkflowExecutableStartPolicy, FixturePolicy>();
+        builder.Services.AddSingleton<IPermissionResourceHandler, DeleteResourcePolicy>();
         builder.Services.AddSingleton<IWellKnownTypeRegistry, FixtureTypes>();
         builder.Services.AddWorkflowRuntime();
         builder.Services.AddRuntimeEntityFrameworkCore(new()
@@ -189,17 +191,29 @@ public sealed class KernelPublishedExecuteTests
             Assert.NotNull(await reads.GetAsync(bound, new(completed), token));
             await VerifyDeletedAsync(completed);
 
-            using var delayed = await ExecuteAsync(waiting.Identity.ArtifactId, new { });
-            Assert.Equal(HttpStatusCode.OK, delayed.StatusCode);
-            var delayedRun = (await delayed.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token))!.WorkflowExecutionId;
-            Contract.ActorView? delayedActor;
-            do
+            var delayed = await StartWaitingAsync();
+            await VerifyDeletedAsync(delayed);
+
+            var reauthorized = await StartWaitingAsync();
+            using var deniedPurge = await DeleteAsync(reauthorized, manage: true, subject: "deny-terminal-purge");
+            Assert.Equal(HttpStatusCode.NotFound, deniedPurge.StatusCode);
+            Assert.Equal(Contract.ActorStatus.Cancelled, (await reads.GetAsync(bound, new(reauthorized), token))?.Header.Status);
+            await VerifyDeletedAsync(reauthorized);
+
+            async Task<string> StartWaitingAsync()
             {
-                await Task.Delay(50, token);
-                delayedActor = await reads.GetAsync(bound, new(delayedRun), token);
-            } while (delayedActor is null);
-            Assert.Equal(Contract.ActorStatus.Running, delayedActor.Header.Status);
-            await VerifyDeletedAsync(delayedRun);
+                using var delayed = await ExecuteAsync(waiting.Identity.ArtifactId, new { });
+                Assert.Equal(HttpStatusCode.OK, delayed.StatusCode);
+                var receipt = Assert.IsType<WorkflowExecutionStartDispatchView>(await delayed.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token));
+                Contract.ActorView? actor;
+                do
+                {
+                    await Task.Delay(50, token);
+                    actor = await reads.GetAsync(bound, new(receipt.WorkflowExecutionId), token);
+                } while (actor is null);
+                Assert.Equal(Contract.ActorStatus.Running, actor.Header.Status);
+                return receipt.WorkflowExecutionId;
+            }
 
             async Task VerifyDeletedAsync(string run)
             {
@@ -209,10 +223,10 @@ public sealed class KernelPublishedExecuteTests
                 Assert.Null(await reads.GetAsync(bound, new(run), token));
             }
 
-            async Task<HttpResponseMessage> DeleteAsync(string run, bool manage, string? tenant = null)
+            async Task<HttpResponseMessage> DeleteAsync(string run, bool manage, string? tenant = null, string subject = "accepted")
             {
                 using var request = new HttpRequestMessage(HttpMethod.Delete, $"/runtime/workflows/instances/{run}");
-                request.Headers.Add("X-Fixture-Subject", "accepted");
+                request.Headers.Add("X-Fixture-Subject", subject);
                 if (manage) request.Headers.Add("X-Fixture-Manage", "yes");
                 if (tenant is not null) request.Headers.Add("X-Fixture-Tenant", tenant);
                 return await http.SendAsync(request, token);
@@ -295,6 +309,16 @@ public sealed class KernelPublishedExecuteTests
             if (Request.Headers.ContainsKey("X-Fixture-Manage")) claims.Add(new(IdentityClaimTypes.Permission, "workflows/runtime:manage"));
             if (Request.Headers.TryGetValue("X-Fixture-Tenant", out var tenant)) claims.Add(new(IdentityClaimTypes.TenantId, tenant.ToString()));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name)), Scheme.Name)));
+        }
+    }
+
+    private sealed class DeleteResourcePolicy : IPermissionResourceHandler
+    {
+        public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
+        {
+            var deny = context.Resource is WorkflowExecutionState { Status: WorkflowExecutionStatus.Cancelled } &&
+                context.Principal.FindFirstValue(IdentityClaimTypes.UserId) == "deny-terminal-purge";
+            return ValueTask.FromResult<PermissionEvaluationResult?>(deny ? PermissionEvaluationResult.Denied() : null);
         }
     }
 
