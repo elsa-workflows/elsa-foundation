@@ -62,6 +62,9 @@ public class NativeExecutionOptions
     public NativeFlaw Flaws { get; init; }
     public int MaxActivitiesPerTurn { get; init; } = 1000;
 
+    /// <summary>Uses versioned structural journal records for an opted-in host.</summary>
+    public bool UseStructuralJournal { get; init; }
+
     /// <summary>
     /// Whether the host's foundation takes the model's self-sends. With them, a Balanced or Ephemeral burst that reaches
     /// <see cref="MaxActivitiesPerTurn"/> continues in the next turn. Without them a burst runs on to its next wait or end in
@@ -341,7 +344,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             {
                 // Not replay-safe: commit the attempt first, run it in the next turn. After a crash the row says it may have run.
                 work.Attempt = 1;
-                turn.Record($"a:{work.Frame}:{work.Attempt}");
+                turn.RecordFrameScheduled(work.Frame, work.Attempt);
                 turn.SendToSelf(NativeKinds.Continue);
                 return;
             }
@@ -722,7 +725,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         }
         CloseInbox(frame.Id, "completed");
         _s.Frames.Remove(frame.Id);
-        turn.Record($"c:{frame.Id}:{frame.Node}");
+        turn.RecordFrameOutcome(NativeJournalKind.Completed, frame);
         var node = _wf.Nodes[boundary.Node];
         Guard(boundary, () => ((IExitBoundary)RestoreActivity(boundary, node)).OnExit(new CompositeContext(this, boundary, node), exit.Outcome));
     }
@@ -735,7 +738,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         DisposeLexicalScopes(frame.Id);
         if (result is not null) _s.Results[frame.Node] = result;
         foreach (var (variable, path) in _wf.Nodes[frame.Node].Captures) Assign(frame, variable, Values.Path(result, path)?.DeepClone());
-        turn.Record($"c:{frame.Id}:{frame.Node}");
+        turn.RecordFrameOutcome(NativeJournalKind.Completed, frame);
         NotifyParent(frame, outcome, result);
     }
 
@@ -765,7 +768,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             Complete(frame, "Done", null);
             return;
         }
-        turn.Record($"c:{frame.Id}:{frame.Node}");     // MUTATION: the parent hears of it, the frame and its branches live on
+        turn.RecordFrameOutcome(NativeJournalKind.Completed, frame);     // MUTATION: the parent hears of it, the frame and its branches live on
         NotifyParent(frame, "Done", null);
     }
 
@@ -790,7 +793,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
         DisposeLexicalScopes(frame.Id);
-        turn.Record($"f:{frame.Id}:{frame.Node}");
+        turn.RecordFrameOutcome(NativeJournalKind.Faulted, frame);
         if (frame.Parent is null || !_s.Frames.TryGetValue(frame.Parent, out var parent))
         {
             if (frame.Parent is null) End(Contract.ActorStatus.Faulted, fault.Code, Values.From(fault));
@@ -839,7 +842,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             }
             CancelChildren(frame);
             DisposeLexicalScopes(frame);
-            turn.Record($"x:{f.Id}:{f.Node}");
+            turn.RecordFrameOutcome(NativeJournalKind.Cancelled, f);
         }
         _s.Agenda.RemoveAll(w => !w.Resume && w.Frame == frame);
     }

@@ -10,7 +10,7 @@ internal sealed class KernelHistoryCursor(IDataProtectionProvider protection)
     private const string Prefix = "kernel-history-v1:";
     private readonly IDataProtector _protector = protection.CreateProtector("Elsa.Workflows.Runtime.KernelHistory.v1");
 
-    internal sealed record Position(long AfterSequence, long? UpperSequence, long? OccurrenceRevision = null, DateTimeOffset? OccurredAt = null);
+    internal sealed record Position(long AfterSequence, long? UpperSequence, long? LastRevision = null);
     private sealed record Ticket(string Binding, Position Position);
 
     internal static bool IsKernelCursor(string? cursor) => cursor?.StartsWith(Prefix, StringComparison.Ordinal) == true;

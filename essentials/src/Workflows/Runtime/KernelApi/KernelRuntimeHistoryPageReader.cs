@@ -65,8 +65,7 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
 
         var events = new List<RuntimeHistoryEventView>();
         var previous = Math.Max(position.AfterSequence, snapshot.RetainedFromSequence - 1);
-        var revision = position.OccurrenceRevision;
-        var occurredAt = position.OccurredAt;
+        var revision = position.LastRevision;
         var omitted = false;
         try
         {
@@ -76,18 +75,14 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
                     entry.Revision <= 0 || entry.Revision < revision || entry.CommitOrdinal < 0)
                     return Invalid(readAt);
                 previous = entry.Sequence;
-                if (revision != entry.Revision)
-                {
-                    revision = entry.Revision;
-                    occurredAt = null;
-                }
+                revision = entry.Revision;
                 if (entry.Entry is null)
                 {
                     omitted = true;
                     continue;
                 }
                 var item = KernelHistoryJournal.Project(query.WorkflowExecutionId, entry.Sequence, entry.Revision,
-                    entry.CommitOrdinal, entry.Entry, entry.RecordedAt, ref occurredAt);
+                    entry.CommitOrdinal, entry.Entry, entry.RecordedAt);
                 if (item is not null && KernelHistoryJournal.Matches(query, item))
                     events.Add(item);
             }
@@ -98,21 +93,20 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
         }
         if (previous != snapshot.ScannedThroughSequence) return Invalid(readAt);
 
-        const string vocabularyLimitation = "Only retained committed activity starts and outcomes are available.";
+        const string vocabularyLimitation = "History shows retained activity starts and outcomes with structural records.";
         var scopeLimitation = query.IncludeDescendants ? "Some descendant activity history is unavailable." :
             query.BookmarkId is not null ? "Kernel bookmark history is unavailable." :
             omitted ? "Some retained journal entries could not be projected." :
             query.Category is not (null or RuntimeHistoryEventCategory.ActivityLifecycle) ||
                 query.Name is { } name && !KernelHistoryJournal.SupportedKinds.Contains(name, StringComparer.Ordinal)
                 ? vocabularyLimitation : null;
-        var fromStart = snapshot.CapturedFromStart && snapshot.RetainedFromSequence == 1;
+        // A complete raw sequence alone cannot establish that structural recording was enabled from the run's start.
         var coverage = new RuntimeHistoryCoverageView("partial", vocabularyLimitation, KernelHistoryJournal.Policy, 1,
-            KernelHistoryJournal.SupportedKinds, fromStart, !fromStart || omitted, snapshot.RetainedFromSequence,
+            KernelHistoryJournal.SupportedKinds, CapturedFromStart: false, HasGaps: true, snapshot.RetainedFromSequence,
             snapshot.UpperSequence, snapshot.UpperSequence, Math.Max(0, snapshot.RetainedFromSequence - 1), null,
-            snapshot.LastRecordedAt is { } recorded ? DateTimeOffset.FromUnixTimeMilliseconds(recorded) : null)
-        { CaptureAvailable = true };
+            snapshot.LastRecordedAt is { } recorded ? DateTimeOffset.FromUnixTimeMilliseconds(recorded) : null);
         var next = snapshot.ScannedThroughSequence < snapshot.UpperSequence
-            ? cursor.Seal(query, tenant, workflow, new(snapshot.ScannedThroughSequence, snapshot.UpperSequence, revision, occurredAt))
+            ? cursor.Seal(query, tenant, workflow, new(snapshot.ScannedThroughSequence, snapshot.UpperSequence, revision))
             : null;
         var catchUp = cursor.Seal(query, tenant, workflow, new(snapshot.UpperSequence, null));
         return new(coverage, events, snapshot.UpperSequence, snapshot.ScannedThroughSequence, snapshot.Items.Count, next, catchUp,

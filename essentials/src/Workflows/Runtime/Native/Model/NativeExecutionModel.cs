@@ -79,8 +79,9 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
 
     private ValueTask RunTurnAsync(Models.ITurn turn, CancellationToken cancellationToken)
     {
-        turn.Record(FormattableString.Invariant($"t:{turn.Now}"));
-        return new Burst(registry, _options, new ContractTurn(turn, outbound, definitionOf: DefinitionOf), cancellationToken).RunAsync();
+        var bridge = new ContractTurn(turn, outbound, definitionOf: DefinitionOf, structuralJournal: _options.UseStructuralJournal);
+        bridge.RecordClock();
+        return new Burst(registry, _options, bridge, cancellationToken).RunAsync();
     }
 
     private string? DefinitionOf(string workflow) => registry.TryGet(workflow, out var found) ? found.Definition : null;
@@ -151,7 +152,8 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     public bool HandlesMetadata(Contract.Message message) => Burst.HandlesMetadata(message.Kind);
     public ValueTask MetadataAsync(Models.ITurn turn, Contract.ActorStatus status, long? endedAt, CancellationToken cancellationToken)
     {
-        var bridge = new ContractTurn(turn, outbound, endedAt);
+        var bridge = new ContractTurn(turn, outbound, endedAt, structuralJournal: _options.UseStructuralJournal);
+        if (_options.UseStructuralJournal) bridge.RecordClock();
         return turn.State is NativeState
             ? new Burst(registry, _options, bridge, cancellationToken, status).MetadataAsync()
             : InvocationLifetime.Missing(bridge);

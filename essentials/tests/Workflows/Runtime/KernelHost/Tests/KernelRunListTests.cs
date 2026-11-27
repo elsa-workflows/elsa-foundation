@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
@@ -16,6 +17,7 @@ using Kernel.Foundation.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
+using Native = Kernel.Native;
 
 namespace Elsa.Workflows.Runtime.KernelHost.Tests;
 
@@ -45,10 +47,11 @@ public sealed class KernelRunListTests
             Assert.Equal(Tenant, scope.Tenant);
             Assert.Contains(views, view => view.Header.Ref == actor);
             SequenceReads++;
-            var upper = upperSequence ?? Sequence!.Count;
-            var items = Sequence!.Where(entry => entry.Sequence > afterSequence && entry.Sequence <= upper).Take(limit).ToArray();
+            var sequence = Assert.IsType<List<SequencedJournalEntry>>(Sequence);
+            var upper = upperSequence ?? sequence.Count;
+            var items = sequence.Where(entry => entry.Sequence > afterSequence && entry.Sequence <= upper).Take(limit).ToArray();
             return ValueTask.FromResult<ActorSequencedJournalPage?>(new(items, upper == 0 ? 0 : 1, upper,
-                items.LastOrDefault()?.Sequence ?? afterSequence, Sequence.LastOrDefault(entry => entry.Sequence == upper)?.RecordedAt,
+                items.LastOrDefault()?.Sequence ?? afterSequence, sequence.LastOrDefault(entry => entry.Sequence == upper)?.RecordedAt,
                 CapturedFromStart: true, AsOf: 3_000));
         }
 
@@ -149,39 +152,62 @@ public sealed class KernelRunListTests
     [Fact]
     public async Task Standard_history_pages_committed_structure_and_catches_up_without_reopening_the_snapshot()
     {
+        const string node = "branch:leaf";
+        var root = new Native.Node("parent", typeof(Native.Sequence));
+        root.Children.Add(new Native.Node(node, typeof(HistoryDiagnostic)));
+        var workflow = new Native.Workflow("structural-history", root);
+        var typed = await NativeTurn.StartAsync(workflow, new() { UseStructuralJournal = true });
+        var legacy = await NativeTurn.StartAsync(workflow);
+        Assert.All(legacy.Recorded, entry => Assert.Equal(JsonValueKind.String, entry.ValueKind));
+        var legacyStart = Assert.Single(legacy.Recorded, entry => entry.GetString() == "b:f2:branch:leaf:f1");
+        var genuine = typed.Recorded.Where(entry => entry.ValueKind == JsonValueKind.Object &&
+            entry.TryGetProperty("Node", out var path) && path.GetString() == node).ToArray();
+        Assert.Equal(2, genuine.Length);
+        var diagnostic = typed.Recorded.Where(entry => entry.ValueKind == JsonValueKind.String &&
+            entry.GetString()!.Contains("private-diagnostic", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(2, diagnostic.Length);
         var reads = new Reads(Views)
         {
+            Journal = new Dictionary<string, JournalEntry[]>
+            {
+                ["run-1"] = typed.Recorded.Select(entry => new JournalEntry(1, entry.GetRawText())).ToArray()
+            },
             Sequence =
             [
                 new(1, 1, 0, "\"start\"", 1_200),
-                new(2, 1, 1, "\"t:1000\"", 1_200),
-                new(3, 1, 2, "\"b:frame:branch:leaf:parent\"", 1_200),
-                new(4, 1, 3, "{\"value\":\"private\"}", 1_200)
+                new(2, 1, 1, diagnostic[0].GetRawText(), 1_200),
+                new(3, 1, 2, diagnostic[1].GetRawText(), 1_200),
+                new(4, 1, 3, legacyStart.GetRawText(), 1_200),
+                new(5, 1, 4, genuine[0].GetRawText(), 1_200),
+                new(6, 1, 5, "{\"value\":\"private\"}", 1_200)
             ]
         };
-        using var shell = Shell(reads, HostTenant);
+        var authorization = new InspectionAccess(structure: true, values: false);
+        using var shell = Shell(reads, HostTenant, authorization);
         using var scope = shell.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>();
         var endpoint = new Elsa.Workflows.Runtime.Api.Endpoints.History.Page.Endpoint(service);
-        var request = new GetRuntimeHistory("run-1", Limit: 2, ActivityExecutionId: "frame");
+        var request = new GetRuntimeHistory("run-1", Limit: 4, ActivityExecutionId: "f2");
         var first = await endpoint.HandleAsync(request, CancellationToken.None);
         Assert.Empty(first.Items);
-        Assert.Equal(4, first.UpperSequence);
+        Assert.Equal(6, first.UpperSequence);
+        Assert.False(first.Coverage.CapturedFromStart);
+        Assert.True(first.Coverage.HasGaps);
         Assert.NotNull(first.NextContinuationToken);
         Assert.NotNull(first.CatchUpToken);
-        reads.Sequence!.Add(new(5, 2, 0, "\"c:frame:branch:leaf\"", 2_000));
+        reads.Sequence!.Add(new(7, 2, 0, genuine[1].GetRawText(), 2_000));
         var frozen = await endpoint.HandleAsync(request with { Cursor = first.NextContinuationToken }, CancellationToken.None);
         var started = Assert.Single(frozen.Items);
-        Assert.Equal(("ActivityStarted", "branch:leaf", "parent", 3L),
+        Assert.Equal(("ActivityStarted", node, "f1", 5L),
             (started.Name, started.ExecutableNodeId, started.ParentActivityExecutionId, started.Sequence));
-        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1_000), started.OccurredAt);
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(typed.Now), started.OccurredAt);
         Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1_200), started.RecordedAt);
-        Assert.Equal(4, frozen.ScannedThroughSequence);
+        Assert.Equal(6, frozen.ScannedThroughSequence);
         Assert.Null(frozen.NextContinuationToken);
         var live = await endpoint.HandleAsync(request with { Cursor = first.CatchUpToken }, CancellationToken.None);
         var completed = Assert.Single(live.Items);
-        Assert.Equal(("ActivityCompleted", 5L), (completed.Name, completed.Sequence));
-        Assert.Null(completed.OccurredAt);
+        Assert.Equal(("ActivityCompleted", 7L), (completed.Name, completed.Sequence));
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(typed.Now), completed.OccurredAt);
         await Assert.ThrowsAsync<ArgumentException>(() => endpoint.HandleAsync(
             request with { Cursor = first.CatchUpToken, ActivityExecutionId = "different" }, CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentException>(() => endpoint.HandleAsync(
@@ -191,6 +217,28 @@ public sealed class KernelRunListTests
         using var foreignScope = foreign.CreateScope();
         Assert.Null(await foreignScope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>().ReadAsync(request));
         Assert.Equal(3, reads.SequenceReads);
+
+        var browse = scope.ServiceProvider.GetRequiredService<IActivityExecutionBrowseSource>();
+        var run = (await browse.FindWorkflowAsync("run-1", CancellationToken.None))!;
+        var timeline = (await run.BrowseAsync(new("run-1", 10), null, CancellationToken.None))!;
+        Assert.Equal(2, timeline.Page.TotalCount);
+        Assert.All(timeline.Page.Items, item => Assert.Equal(ActivityExecutionStatus.Completed, item.Execution.Status));
+    }
+
+    public sealed class HistoryDiagnostic : Native.CompositeActivity
+    {
+        protected override void Execute(Native.CompositeContext context)
+        {
+            context.Record($"f:{context.FrameId}:private-diagnostic");
+            context.Record(JsonSerializer.Serialize(new
+            {
+                NativeStructure = 1, Kind = 4, At = 1000, Frame = context.FrameId, Node = "private-diagnostic", Parent = "f1"
+            }));
+            context.Complete();
+        }
+
+        protected override void OnChildCompleted(Native.CompositeContext context, Native.ChildCompleted child) =>
+            throw new InvalidOperationException("The diagnostic fixture has no children.");
     }
 
     [Fact]

@@ -29,6 +29,7 @@ internal sealed class KernelActivityTimeline(KernelRuns runs)
         long sequence = 0;
         long? revision = null;
         DateTimeOffset? turnTime = null;
+        var typedRevision = false;
         DateTimeOffset? cancelledAt = null;
         PageToken? from = null;
         var finished = false;
@@ -60,6 +61,7 @@ internal sealed class KernelActivityTimeline(KernelRuns runs)
                 {
                     revision = entry.Revision;
                     turnTime = null;
+                    typedRevision = false;
                 }
                 if (Apply(entry.Entry))
                 {
@@ -94,7 +96,13 @@ internal sealed class KernelActivityTimeline(KernelRuns runs)
         bool Apply(string entry)
         {
             using var json = JsonDocument.Parse(entry);
-            if (json.RootElement.ValueKind != JsonValueKind.String ||
+            if (NativeStructuralJournal.Read(json.RootElement) is { } record)
+            {
+                typedRevision = true;
+                return record.Frame is { } frame && ReadTime(record.At) is { } at &&
+                    ApplyFrame(record.Kind, frame, record.Node, record.Parent, at);
+            }
+            if (typedRevision || json.RootElement.ValueKind != JsonValueKind.String ||
                 json.RootElement.GetString() is not { Length: > 2 } text || text[1] != ':')
                 return false;
             if (text[0] == 't')
@@ -107,33 +115,50 @@ internal sealed class KernelActivityTimeline(KernelRuns runs)
             if (split <= 2 || split == text.Length - 1) return false;
             var id = text[2..split];
             var value = text[(split + 1)..];
-            if (text[0] == 'a')
-            {
-                if (activity is null || activity == id) scheduled.TryAdd(id, time);
-                return false;
-            }
+            if (text[0] == 'a') return ApplyFrame(NativeJournalKind.Scheduled, id, null, null, time);
             if (text[0] == 'b')
             {
                 var parentAt = value.LastIndexOf(':');
                 if (parentAt <= 0) return false;
+                var parent = parentAt == value.Length - 1 ? null : value[(parentAt + 1)..];
+                return ApplyFrame(NativeJournalKind.Started, id, value[..parentAt], parent, time);
+            }
+            var kind = text[0] switch
+            {
+                'c' => NativeJournalKind.Completed,
+                'f' => NativeJournalKind.Faulted,
+                'x' => NativeJournalKind.Cancelled,
+                _ => NativeJournalKind.Turn
+            };
+            return ApplyFrame(kind, id, value, null, time);
+        }
+
+        bool ApplyFrame(NativeJournalKind kind, string id, string? node, string? parent, DateTimeOffset time)
+        {
+            if (kind == NativeJournalKind.Scheduled)
+            {
+                if (activity is null || activity == id) scheduled.TryAdd(id, time);
+                return false;
+            }
+            if (kind == NativeJournalKind.Started && node is not null)
+            {
                 sequence++;
                 if (activity is null || activity == id)
                 {
-                    var parent = parentAt == value.Length - 1 ? null : value[(parentAt + 1)..];
                     var start = scheduled.Remove(id, out var earlier) ? earlier : time;
-                    frames.TryAdd(id, new JournalFrame(id, value[..parentAt], parent, sequence, start, time));
+                    frames.TryAdd(id, new JournalFrame(id, node, parent, sequence, start, time));
                 }
                 return false;
             }
-            var status = text[0] switch
+            var status = kind switch
             {
-                'c' => ActivityExecutionStatus.Completed,
-                'f' => ActivityExecutionStatus.Faulted,
-                'x' => ActivityExecutionStatus.Cancelled,
+                NativeJournalKind.Completed => ActivityExecutionStatus.Completed,
+                NativeJournalKind.Faulted => ActivityExecutionStatus.Faulted,
+                NativeJournalKind.Cancelled => ActivityExecutionStatus.Cancelled,
                 _ => ActivityExecutionStatus.Running
             };
             if (status == ActivityExecutionStatus.Running || !frames.TryGetValue(id, out var frame) ||
-                frame.Node != value || frame.CompletedAt is not null)
+                frame.Node != node || frame.CompletedAt is not null)
                 return false;
             frames[id] = frame with { Status = status, CompletedAt = time };
             return activity is not null;
