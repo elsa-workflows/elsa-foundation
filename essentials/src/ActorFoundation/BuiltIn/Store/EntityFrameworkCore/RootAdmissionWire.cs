@@ -23,11 +23,16 @@ internal static class RootAdmissionWire
     internal const string DirectPrefix = "!kernel-direct/1:";
     internal const string HeldDirectPrefix = "!kernel-held-direct/1:";
     internal const string AuthoredEventDirectPrefix = "!kernel-authored-event/1:";
+    internal const string PublicEventDirectPrefix = "!kernel-public-event/1:";
+    internal const string HeldPublicEventDirectPrefix = "!kernel-held-public-event/1:";
     internal const string KeyedDirectPrefix = "!kernel-keyed-direct/1:";
     internal const string HeldKeyedDirectPrefix = "!kernel-held-keyed-direct/1:";
 
     internal static string AuthoredEventOccurrence(string reference, string id, string wait) =>
         $"{reference}/{FoundationRootCreator.OperationDigest(id)}/{FoundationRootCreator.OperationDigest(wait)}";
+
+    internal static string PublicEventOccurrence(string reference, string publication, string id, string wait) =>
+        AuthoredEventOccurrence(reference, DurableKeyJson.Write(new[] { publication, id }), wait);
 
     internal sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput, bool ExplicitZeroDue = false);
     internal sealed record StoredEventWait(string Key, string Wait);
@@ -37,6 +42,9 @@ internal static class RootAdmissionWire
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public StoredEventWait? EventWait { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? EventOccurrence { get; init; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public StoredScheduleControl? ScheduleControl { get; init; }
@@ -70,27 +78,39 @@ internal static class RootAdmissionWire
 
     internal static (string Header, string? Payload, string Kind) EncodeDirect(string id, long creation, string kind, string? payload,
         long? due, bool held, StoredEventWait? eventWait = null, StoredScheduleControl? scheduleControl = null,
-        bool authoredEvent = false, bool keyed = false)
+        bool authoredEvent = false, string? eventOccurrence = null, bool keyed = false)
     {
-        var escaped = RequiresEnvelope(payload);
+        var (storedPayload, escaped) = EncodePayload(payload);
         var escapedKind = kind.Contains('\0') ? kind : null;
-        var prefix = (authoredEvent, keyed, held) switch
+        var prefix = (eventOccurrence is not null, authoredEvent, keyed, held) switch
         {
-            (true, _, _) => AuthoredEventDirectPrefix,
-            (_, true, true) => HeldKeyedDirectPrefix,
-            (_, true, false) => KeyedDirectPrefix,
-            (_, false, true) => HeldDirectPrefix,
+            (true, _, _, true) => HeldPublicEventDirectPrefix,
+            (true, _, _, false) => PublicEventDirectPrefix,
+            (_, true, _, _) => AuthoredEventDirectPrefix,
+            (_, _, true, true) => HeldKeyedDirectPrefix,
+            (_, _, true, false) => KeyedDirectPrefix,
+            (_, _, false, true) => HeldDirectPrefix,
             _ => DirectPrefix
         };
         var header = new StoredDirect(id, creation, escaped, due == 0, escapedKind)
-            { EventWait = eventWait, ScheduleControl = scheduleControl };
-        return (prefix + DurableKeyJson.Write(header),
-            escaped ? DurableKeyJson.Write(payload!) : payload, escapedKind is null ? kind : "input");
+            { EventWait = eventWait, ScheduleControl = scheduleControl, EventOccurrence = eventOccurrence };
+        return (prefix + DurableKeyJson.Write(header), storedPayload, escapedKind is null ? kind : "input");
     }
 
     internal static bool FitsEnvelope(string header, string? payload, string? replyTo = null) =>
         Encoding.UTF8.GetByteCount(header) + (payload is null ? 0L : Encoding.UTF8.GetByteCount(payload)) +
         (replyTo is null ? 0 : Encoding.UTF8.GetByteCount(replyTo)) <= EfStore.RootContentBytes;
+
+    internal static (string? Text, bool Escaped) EncodePayload(string? payload) =>
+        RequiresEnvelope(payload) ? (DurableKeyJson.Write(payload!), true) : (payload, false);
+
+    internal static string? DecodePayload(string? text, bool escaped) =>
+        escaped ? DurableKeyJson.Read<string>(text!) : text;
+
+    internal static bool FitsRetainedEventPayload(string? payload) =>
+        FoundationMetadataLimits.FitsContent(payload, FoundationMetadataLimits.EventContentBytes) &&
+        (!RequiresEnvelope(payload) ||
+         FoundationMetadataLimits.FitsContent(DurableKeyJson.Write(payload!), FoundationMetadataLimits.EventContentBytes));
 
     private static bool RequiresEnvelope(string? value) =>
         value is not null && (value.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(value));

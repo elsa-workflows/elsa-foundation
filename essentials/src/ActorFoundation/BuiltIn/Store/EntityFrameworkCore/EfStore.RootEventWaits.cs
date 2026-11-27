@@ -4,23 +4,23 @@ public sealed partial class EfStore
 {
     private static class RootEventWaits
     {
-        internal static TurnCommit Lower(WorkerRoot root, TurnCommit submitted, TurnCommit journal)
+        internal static TurnCommit Lower(WorkerRoot root, TurnCommit submitted, TurnCommit journal, bool keepsEvents)
         {
             var prefix = root.Tenant + "_";
             if (submitted.Subscribed.Concat(submitted.Unsubscribed).Any(wait =>
                 wait.Creation != 1 || wait.Instance != root.Actor || wait.FoundationTenant != root.Tenant ||
-                wait.Start is not null || wait.FoundationKeepsEvents || !wait.Key.StartsWith(prefix, StringComparison.Ordinal) ||
+                wait.Start is not null || wait.FoundationKeepsEvents && !keepsEvents || !wait.Key.StartsWith(prefix, StringComparison.Ordinal) ||
                 !FoundationMetadataLimits.FitsLiveWaitName(wait.Key[prefix.Length..]) || !FoundationMetadataLimits.FitsLiveWaitName(wait.Wait)))
                 throw RootShape();
 
-            // The bound generated-root address embeds its partition and cannot be reused. Pass only the physical
-            // columns to the owned writer, which writes waits and their checkpoint under the same fence.
+            // The bound generated-root address embeds its partition and cannot be reused. The owned writer commits
+            // each physical wait and its optional retention coverage under the checkpoint's fence.
             return submitted.Unsubscribe
                 ? journal with { Unsubscribe = true }
                 : journal with
                 {
-                    Subscribed = LowerRows(submitted.Subscribed),
-                    Unsubscribed = LowerRows(submitted.Unsubscribed)
+                    Subscribed = LowerRows(submitted.Subscribed, keepsEvents),
+                    Unsubscribed = LowerRows(submitted.Unsubscribed, keepsEvents)
                 };
         }
 
@@ -53,7 +53,9 @@ public sealed partial class EfStore
             }
         }
 
-        private static SubscriptionRow[] LowerRows(IReadOnlyList<SubscriptionRow> rows) =>
-            rows.Select(wait => new SubscriptionRow(wait.Key, wait.Instance, wait.Wait)).ToArray();
+        private static SubscriptionRow[] LowerRows(IReadOnlyList<SubscriptionRow> rows, bool keepsEvents) =>
+            rows.Select(wait => new SubscriptionRow(wait.Key, wait.Instance, wait.Wait)
+                { FoundationTenant = keepsEvents ? wait.FoundationTenant : null, FoundationKeepsEvents = keepsEvents && wait.FoundationKeepsEvents })
+                .ToArray();
     }
 }

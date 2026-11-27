@@ -178,7 +178,7 @@ public sealed partial class EfStore
             row.FoundationNullState ? null : row.State, row.StateVersion, header.TypeData, header.Labels, turn.Journal,
             jobState: row.NextJobGeneration is null ? null : new RootJobState(row.Jobs, row.NextJobGeneration), status: row.Status,
             terminalGrowth: dispatch.TerminalGrowth, creatorFault: park is null ? null : row.Fault, revision: row.Revision), children, null);
-        var journal = RootEventWaits.Lower(root, turn, first.JournalTurn! with { Sent = sends });
+        var journal = RootEventWaits.Lower(root, turn, first.JournalTurn! with { Sent = sends }, _ordinaryRoots?.KeepsEventWaits == true);
         PreparedRootStart stage;
         PendingRootStart offer;
         (uint Marker, uint Namespace, long Table)? source;

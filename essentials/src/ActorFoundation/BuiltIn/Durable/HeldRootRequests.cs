@@ -9,6 +9,9 @@ internal sealed record HeldRootRequest(string Tenant, string Node, Request Calle
 {
     internal bool IsOpen => Caller.Tenant == Tenant && !Caller.Done;
     internal string Address => Caller.ReplyAddress(Node, ReleaseBeforeCommit);
+
+    internal string EventAddress(int recipient) =>
+        ReplyTo.Of(Node, Caller.EventRegistration(recipient), Caller.Deadline, ReleaseBeforeCommit);
 }
 
 internal interface IHeldRootAdmission

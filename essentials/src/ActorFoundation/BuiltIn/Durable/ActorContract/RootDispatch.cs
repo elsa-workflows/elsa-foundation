@@ -24,6 +24,7 @@ internal interface IRootDispatchHeaders
     bool KeepsPrivateParkInputs { get; }
     bool RecoversPark { get; }
     bool TakesLiveEventWaits => false;
+    bool KeepsEventWaits => false;
     bool PublishesAuthoredEvents => false;
     bool RefusesParkedOperators { get; }
     bool SettlesEndedMailbox { get; }
@@ -288,19 +289,24 @@ internal sealed partial class ActorAdapter
             var plan = handler.RestoreWaits(header, row.State);
             if (!CanRecoverTimers(row, facts, plan.Timers, plan.Jobs.Count, rearms, out var timerBytes))
                 return false;
-            var subscriptionBytes = (long)plan.Subscriptions.Count * Durable.InMemoryStore.SubscriptionRestoreAllowance;
+            var subscriptionBytes = 0L;
             if (plan.Subscriptions.Count != 0)
             {
-                if (roots?.TakesLiveEventWaits != true || plan.Subscriptions.Count > Durable.InMemoryStore.MaxRestoreWaits - plan.Timers.Count - plan.Jobs.Count ||
-                    timerBytes + subscriptionBytes > Durable.InMemoryStore.MaxRestoreBytes) return false;
+                if (roots?.TakesLiveEventWaits != true ||
+                    plan.Subscriptions.Count > Durable.InMemoryStore.MaxRestoreWaits - plan.Timers.Count - plan.Jobs.Count)
+                    return false;
+                var keeping = plan.Subscriptions.Count(subscription => subscription.Keep);
+                subscriptionBytes = Durable.InMemoryStore.SubscriptionRestoreBytes(plan.Subscriptions.Count, keeping);
+                if (keeping != 0 && !roots.KeepsEventWaits || timerBytes + subscriptionBytes > Durable.InMemoryStore.MaxRestoreBytes)
+                    return false;
                 var distinct = new HashSet<(string Key, string Wait)>();
                 foreach (var subscription in plan.Subscriptions)
                 {
-                    if (subscription.Keep || subscription.Key is null || subscription.Wait is null ||
+                    if (subscription.Key is null || subscription.Wait is null ||
                         !Durable.FoundationMetadataLimits.FitsLiveWaitName(subscription.Key) || !Durable.FoundationMetadataLimits.FitsLiveWaitName(subscription.Wait) ||
                         !distinct.Add((subscription.Key, subscription.Wait))) return false;
                     subscriptions.Add(new(header.Tenant + "_" + subscription.Key, row.Id, subscription.Wait, Creation: row.Creation)
-                        { FoundationTenant = header.Tenant });
+                        { FoundationTenant = header.Tenant, FoundationKeepsEvents = subscription.Keep });
                 }
             }
             var registered = Durable.JobRegistry.Read(row.Jobs);

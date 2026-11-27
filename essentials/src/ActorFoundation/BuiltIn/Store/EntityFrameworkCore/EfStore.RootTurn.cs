@@ -188,7 +188,7 @@ public sealed partial class EfStore
                         parkRecovery: db.UsesRootParkRecovery, composedRecovery: db.UsesRootComposedParkRecovery)
                     : PostgresRootAdmission.DecodeOperator(db, row, reference)
                 : PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol, db.UsesRootLiveEventWaits, db.UsesRootScheduleControls,
-                    authoredEvents: db.UsesRootAuthoredEvents, keyedStarts: db.UsesRootKeyedStarts)
+                    authoredEvents: db.UsesRootAuthoredEvents, publicEvents: db.UsesRootPublicEventStarts, keyedStarts: db.UsesRootKeyedStarts)
         };
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,

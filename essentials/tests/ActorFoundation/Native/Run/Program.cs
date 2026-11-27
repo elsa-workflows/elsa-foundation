@@ -93,6 +93,8 @@ if (args is ["kernel-event-receipts", var receiptProvider and ("postgres" or "sq
     return await KernelAuthoredEventChecks.RunStartsAsync(receiptProvider, receiptFence == "in-batch", retainReceipts: true);
 if (args is ["kernel-event-scan", var scanProvider and ("postgres" or "sqlite"), var scanFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunStartsAsync(scanProvider, scanFence == "in-batch", retainReceipts: true, orderedScan: true);
+if (args is ["kernel-public-event-starts", var publicEventProvider and ("postgres" or "sqlite"), var publicEventFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPublicStartsAsync(publicEventProvider, publicEventFence == "in-batch");
 if (args is ["kernel-authored-events", var authoredEventProvider and ("postgres" or "sqlite"), var authoredEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunAsync(authoredEventProvider, authoredEventFence == "in-batch");
 if (args is ["kernel-http-waits"]) return await KernelHttpWaitChecks.RunAsync();
@@ -119,6 +121,8 @@ if (args is ["pg-root-operators", var operatorWriter and ("owned" or "ef"), var 
         return await PostgresRootOperatorChecks.RunAsync([a, b, c], operatorWriter == "owned", operatorFence == "in-batch", operatorPhase == "resume");
 }
 if (args is ["sqlite-plan-projection", ..]) return await SqlitePlanFixtureCommand.RunAsync(args);
+if (args is ["kernel-public-event-recover", var recoverEventProvider and ("postgres" or "sqlite"), var recoverEventFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPublicEventRecoverAsync(recoverEventProvider, recoverEventFence == "in-batch");
 if (args is ["keyed-root", var keyedProvider and ("postgres" or "sqlite"), var keyedFence and ("checked" or "in-batch")])
     return await KeyedRootChecks.RunAsync(keyedProvider == "postgres", keyedFence == "in-batch");
 if (args is ["pg-k12-ownership", .. var k12Args])

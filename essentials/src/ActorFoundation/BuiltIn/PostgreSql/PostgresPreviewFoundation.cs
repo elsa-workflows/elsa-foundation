@@ -52,7 +52,8 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(kind);
-        if (kind is Contract.Kinds.Suspend or Contract.Kinds.Resume || kind == Contract.Kinds.Terminate && payload is null)
+        if ((kind is Contract.Kinds.Suspend or Contract.Kinds.Resume || kind == Contract.Kinds.Terminate && payload is null) &&
+            (target is not Contract.Target.Event || !admission.SupportsPublicEvents()))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (target is not Contract.Target.Ref exact || payload is not null || !FoundationMetadataLimits.IsOutsideMessageId(id) ||
@@ -145,7 +146,7 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
 
     public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
         CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("Event starts are outside this preview.");
+        ingress.SetStartAsync(scope, key, wait, spec, cancellationToken);
 
     public ValueTask<Contract.Page<Contract.ActorView>> ListAsync(Contract.BoundScope scope, Contract.ActorQuery query,
         Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
