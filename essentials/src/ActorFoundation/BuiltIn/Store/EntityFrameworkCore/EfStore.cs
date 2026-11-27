@@ -645,6 +645,18 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new Committed(false, 0, []);
                 throw error.StoreFailure;
             }
+            catch (RootMarkPreparationFailure error)
+            {
+                var cause = error.InnerException!;
+                if (cause is not (OperationCanceledException or NotSupportedException) &&
+                    Classify(cause) is { Failure: Failure.Definite or Failure.Transient } failure)
+                {
+                    if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new Committed(false, 0, []);
+                    if (!ReferenceEquals(cause, failure)) throw failure;
+                }
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(cause);
+                throw;
+            }
             catch (PostgresException error) when (error.SqlState == PgCommitWindow.Expired)
             {
                 throw new StoreException(Failure.WindowExpired, "Database commit window expired.", error);
@@ -847,6 +859,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         internal StoreException StoreFailure { get; } = failure;
     }
+
+    private sealed class RootMarkPreparationFailure(Exception cause) : Exception(cause.Message, cause);
 
     private async ValueTask CheckRootBeforeWriteAsync(QualifiedRootCheckpoint root, KernelDb db, CancellationToken cancellationToken)
     {
