@@ -52,11 +52,21 @@ public sealed class UnpublishPublicationSlotRequestHandler(
         var slot = await activationAuthority.FindAsync(workflowDefinitionId, slotName, cancellationToken)
             ?? throw new PublicationSlotNotFoundException($"Publication slot '{slotName}' does not exist.");
         if (expectedRevision is { } reviewedRevision && slot.Revision != reviewedRevision)
-            throw new PublicationActivationException(new PublicationFailure(
-                PublicationFailureCodes.SlotRevisionConflict,
-                $"Publication slot '{slotName}' changed after it was reviewed. Review the current slot before unpublishing it."));
+            throw SlotChanged();
         if (slot.ActiveActivationId is not { } publicationId)
+        {
+            if (activationCoordinator.RequiresInactiveAcknowledgment)
+            {
+                var completion = await activationCoordinator.EnsureServingAsync(workflowDefinitionId, slotName, cancellationToken);
+                if (completion.Slot.SlotId != slot.SlotId || completion.Slot.Revision != slot.Revision ||
+                    completion.Slot.ActiveActivationId is not null)
+                    throw SlotChanged();
+                if (!completion.Succeeded)
+                    throw new PublicationActivationException(new(PublicationFailureCodes.ProjectionActivationFailed,
+                        completion.Diagnostic ?? "The external publication withdrawal has not been confirmed."));
+            }
             return slot;
+        }
 
         // Publishing can retract only a slot it owns. An activation inserted by another runtime source may have no
         // PublicationRecord at all; that is an ownership refusal, not missing publishing data.
@@ -89,7 +99,8 @@ public sealed class UnpublishPublicationSlotRequestHandler(
                 PublicationActivator.Source, slot.Revision), cancellationToken)
             : await activationCoordinator.DeactivateAsync(new WorkflowDeactivationCommand(executable!, slotName,
                 PublicationActivator.Source, slot.Revision), cancellationToken);
-        if (!deactivation.Succeeded)
+        var awaitingAcknowledgment = deactivation.Outcome == WorkflowActivationOutcome.CommittedPending;
+        if (!deactivation.Succeeded && !awaitingAcknowledgment)
         {
             if (deactivation.Outcome == WorkflowActivationOutcome.Conflict)
                 throw new PublicationActivationException(ToFailure(deactivation.Conflict, deactivation.Diagnostic));
@@ -116,7 +127,13 @@ public sealed class UnpublishPublicationSlotRequestHandler(
             await sourceReferenceStore.RetireAsync(sourceReferenceId, now, "publication-unpublished", cancellationToken);
         }
 
+        if (awaitingAcknowledgment)
+            throw new PublicationActivationException(new(PublicationFailureCodes.ProjectionActivationFailed, deactivation.Diagnostic!));
         return deactivation.Slot;
+
+        PublicationActivationException SlotChanged() => new(new PublicationFailure(
+            PublicationFailureCodes.SlotRevisionConflict,
+            $"Publication slot '{slotName}' changed after it was reviewed. Review the current slot before unpublishing it."));
     }
 
     private static bool IsOwnedByPublishing(WorkflowActivationSlot slot) =>

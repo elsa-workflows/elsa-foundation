@@ -10,6 +10,7 @@ public sealed partial class EfWorkflowExecutableStore
         var scope = accessContextAccessor.Current.RequireScope(admitPrivileged: true);
         var births = await EfRuntimeKernelExecutablePinStore.ReadPinnedExecutableIdsAsync(context, scope, cancellationToken);
         var occurrences = await EfRuntimeKernelScheduleOccurrenceStore.ReadPinnedExecutableIdsAsync(context, scope.Value, cancellationToken);
-        return [.. births, .. occurrences];
+        var eventStarts = await EfRuntimeKernelEventPublicationStore.ReadPinnedExecutableIdsAsync(context, scope, cancellationToken);
+        return [.. births, .. occurrences, .. eventStarts];
     }
 }

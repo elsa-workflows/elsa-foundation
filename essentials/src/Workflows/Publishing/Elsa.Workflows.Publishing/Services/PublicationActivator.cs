@@ -124,7 +124,12 @@ public sealed class PublicationActivator(
         if (!activation.Succeeded)
         {
             var failure = MapFailure(activation);
-            var failed = await FailCandidateAsync(candidate, failure, cancellationToken);
+            // A committed slot whose serving acknowledgment is pending still names this candidate.
+            // Completion can mark it Active once the selected provider repeats the acknowledgment.
+            var failed = activation.Outcome == WorkflowActivationOutcome.CommittedPending &&
+                         activation.Slot.ActiveActivationId == candidate.PublicationId
+                ? candidate
+                : await FailCandidateAsync(candidate, failure, cancellationToken);
             return new PublicationActivationResult(
                 false,
                 failed,

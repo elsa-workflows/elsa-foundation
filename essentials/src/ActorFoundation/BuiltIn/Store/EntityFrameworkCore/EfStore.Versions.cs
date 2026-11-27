@@ -71,6 +71,9 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootManagedSchedulesQualification => new(3, 123, 1);
     internal static StoreFormat RootPreparedStartsQualification => new(3, 124, 1);
     internal static StoreFormat RootAuthoredEventsQualification => new(3, 126, 1);
+    internal static StoreFormat RootEventStartsQualification => new(3, 127, 1);
+    internal static StoreFormat RootEventStartReceiptsQualification => new(3, 128, 1);
+    internal static StoreFormat RootEventStartScanQualification => new(3, 129, 1);
     internal static StoreFormat RootDirectTestRunQualification => new(3, 131, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
@@ -128,6 +131,9 @@ internal enum RootCapabilities : long
     ScheduleLineage = 1L << 33,
     PreparedStarts = 1L << 34,
     AuthoredEvents = 1L << 36,
+    EventStarts = 1L << 37,
+    EventStartReceipts = 1L << 38,
+    EventStartScan = 1L << 39,
     DirectTestRuns = 1L << 41
 }
 
@@ -173,6 +179,9 @@ internal static class RootProfiles
     internal const RootCapabilities ManagedSchedulesQualification = Shipped34 | ScheduleControlsQualification | ScheduleLineageQualification;
     internal const RootCapabilities PreparedStartsQualification = ManagedSchedulesQualification | RootCapabilities.PreparedStarts;
     internal const RootCapabilities AuthoredEventsQualification = PreparedStartsQualification | RootCapabilities.AuthoredEvents;
+    internal const RootCapabilities EventStartsQualification = AuthoredEventsQualification | RootCapabilities.EventStarts;
+    internal const RootCapabilities EventStartReceiptsQualification = EventStartsQualification | RootCapabilities.EventStartReceipts;
+    internal const RootCapabilities EventStartScanQualification = EventStartReceiptsQualification | RootCapabilities.EventStartScan;
     internal const RootCapabilities DirectTestRunQualification = PreparedStartsQualification | RootCapabilities.DirectTestRuns;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
@@ -244,6 +253,9 @@ internal static class RootProfiles
         [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
         [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
         [RootCapabilities.AuthoredEvents] = RootCapabilities.LiveEventWaits | RootCapabilities.SelfProtocol,
+        [RootCapabilities.EventStarts] = RootCapabilities.AuthoredEvents | RootCapabilities.PreparedStarts,
+        [RootCapabilities.EventStartReceipts] = RootCapabilities.EventStarts,
+        [RootCapabilities.EventStartScan] = RootCapabilities.EventStartReceipts,
         [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
         [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
         [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
@@ -507,6 +519,9 @@ internal static class StoreDefinitionsRevision
                     sqlite ? SqliteLiveEventRevision : PostgreSqlLiveEventRevision,
                 // Protocol 126 adds a wire and write path, using the same physical definitions as protocol 35.
                 _ when db.RequiredFormat == StoreFormat.RootAuthoredEventsQualification => sqlite ? 23 : 20,
+                _ when db.RequiredFormat == StoreFormat.RootEventStartsQualification => sqlite ? 26 : 23,
+                _ when db.RequiredFormat == StoreFormat.RootEventStartReceiptsQualification => sqlite ? 27 : 24,
+                _ when db.RequiredFormat == StoreFormat.RootEventStartScanQualification => sqlite ? 28 : 25,
                 // Direct Test Runs change the actor header and message protocol while using the shipped SQL definitions.
                 _ when db.RequiredFormat == StoreFormat.RootDirectTestRunQualification || db.RequiredFormat == StoreFormat.RootShipped =>
                     sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,

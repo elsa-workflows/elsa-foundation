@@ -66,6 +66,8 @@ public class Elsa3ImportActivitiesFeature : IWebShellFeature
         services.AddOptions<ReusableActivityImportOptions>().Configure(options =>
         {
             options.MaximumUploadBytes = ImportOptions.MaximumUploadBytes;
+            options.MaximumExpandedBytes = ImportOptions.MaximumExpandedBytes;
+            options.MaximumArchiveEntries = ImportOptions.MaximumArchiveEntries;
             options.MaximumSourceVersions = ImportOptions.MaximumSourceVersions;
             options.DefaultPageSize = ImportOptions.DefaultPageSize;
             options.MaximumPageSize = ImportOptions.MaximumPageSize;
