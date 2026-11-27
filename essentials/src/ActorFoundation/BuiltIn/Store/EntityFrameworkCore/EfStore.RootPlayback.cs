@@ -13,11 +13,16 @@ public sealed partial class EfStore
     private const string PlaybackName = "FoundationJournalPlayback";
     private const string PlaybackInvalidName = "FoundationJournalPlaybackInvalid";
     private const string PlaybackTrigger = "kernel_project_root_playback";
-    private const string PostgresPlaybackSource = """
-        pg_catalog.concat_ws('/', pg_catalog.to_regclass('"KernelStoreVersions"')::oid,
+    private static string PostgresPlaybackSource(bool descendants) => $"""
+        pg_catalog.concat_ws('/', {PostgresPlaybackSourceRelations}{(descendants
+            ? $", pg_catalog.to_regclass('\"{PlaybackScopesName}\"')::oid" : "")})
+        """;
+
+    private const string PostgresPlaybackSourceRelations = """
+        pg_catalog.to_regclass('"KernelStoreVersions"')::oid,
             pg_catalog.to_regclass('"FoundationRootBirths"')::oid, pg_catalog.to_regclass('"Instances"')::oid,
             pg_catalog.to_regclass('"FoundationSequencedJournal"')::oid, pg_catalog.to_regclass('"FoundationJournalPlayback"')::oid,
-            pg_catalog.to_regclass('"FoundationJournalPlaybackInvalid"')::oid)
+            pg_catalog.to_regclass('"FoundationJournalPlaybackInvalid"')::oid
         """;
     private static readonly string TimestampRange = FormattableString.Invariant(
         $"BETWEEN {DateTimeOffset.MinValue.ToUnixTimeMilliseconds()} AND {DateTimeOffset.MaxValue.ToUnixTimeMilliseconds()}");
@@ -131,14 +136,16 @@ public sealed partial class EfStore
             'Frame', json_extract(cell, '$.Frame'), 'Node', json_extract(cell, '$.Node'), 'Parent', json_extract(cell, '$.Parent'))
         """);
 
-    private static readonly string PostgresPlayback = $"""
+    private static string PostgresPlaybackDefinitions(bool descendants) => $"""
         CREATE TABLE "{PlaybackName}" ({PlaybackColumns("bigint", """text COLLATE "C" """)});
         CREATE TABLE "{PlaybackInvalidName}" ({PlaybackInvalidColumns("bigint", """text COLLATE "C" """)});
         CREATE INDEX kernel_playback_commit ON "{PlaybackName}" ("Partition", "Position");
+        {(descendants ? PostgresPlaybackScopes : "")}
         CREATE FUNCTION {PlaybackTrigger}() RETURNS trigger LANGUAGE plpgsql AS $fn$
         BEGIN
             {PlaybackInsert(PostgresPlaybackObservations)};
             {PlaybackInvalidInsert(PostgresPlaybackObservations)};
+            {(descendants ? PostgresPlaybackScopeInsert + ";" : "")}
             RETURN NULL;
         END
         $fn$;
@@ -146,21 +153,23 @@ public sealed partial class EfStore
             FOR EACH ROW EXECUTE FUNCTION {PlaybackTrigger}();
         """;
 
-    private static IEnumerable<SqliteDefinition> SqlitePlaybackDefinitions()
+    private static IEnumerable<SqliteDefinition> SqlitePlaybackDefinitions(bool descendants)
     {
         yield return Table(PlaybackName, PlaybackColumns("INTEGER", "TEXT COLLATE BINARY"));
         yield return Table(PlaybackInvalidName, PlaybackInvalidColumns("INTEGER", "TEXT COLLATE BINARY"));
         yield return Index("kernel_playback_commit", PlaybackName, """("Partition", "Position")""");
+        if (descendants)
+            foreach (var definition in SqlitePlaybackScopes()) yield return definition;
         yield return new("trigger", PlaybackTrigger, SequencedJournalName, $"""
             CREATE TRIGGER {PlaybackTrigger} AFTER INSERT ON "{SequencedJournalName}"
             BEGIN
                 {PlaybackInsert(SqlitePlaybackObservations)};
-                {PlaybackInvalidInsert(SqlitePlaybackObservations)};
+                {PlaybackInvalidInsert(SqlitePlaybackObservations)};{(descendants ? $"\n{SqlitePlaybackScopeInsert};" : "")}
             END
             """);
     }
 
-    internal static string PostgresPlaybackReady(string marker) => $"""
+    internal static string PostgresPlaybackReady(string marker, bool descendants) => $"""
         EXISTS (SELECT 1 FROM pg_catalog.pg_class format
             JOIN pg_catalog.pg_class playback ON playback.oid = pg_catalog.to_regclass('"{PlaybackName}"')
                 AND playback.relnamespace = format.relnamespace AND playback.relkind = 'r'
@@ -171,13 +180,14 @@ public sealed partial class EfStore
                 AND stamp.tgtype = 5 AND NOT stamp.tgisinternal
             JOIN pg_catalog.pg_proc implementation ON implementation.oid = stamp.tgfoid
                 AND implementation.proname = stamp.tgname AND implementation.pronamespace = format.relnamespace
-            WHERE format.oid = {marker})
+            WHERE format.oid = {marker}
+            {(descendants ? PostgresPlaybackScopeReady : "")})
         """;
 
     private static async Task RequirePostgresPlaybackAsync(KernelDb db, CancellationToken token)
     {
         var check = FormattableStringFactory.Create($$"""
-            SELECT {{PostgresPlaybackReady("marker.tableoid")}} AS "Value"
+            SELECT {{PostgresPlaybackReady("marker.tableoid", db.UsesRootPlaybackDescendants)}} AS "Value"
             FROM "KernelStoreVersions" marker WHERE marker."Id" = {0}
             """, StoreVersionEntity.MarkerId);
         if (!await db.Database.SqlQuery<bool>(check).SingleOrDefaultAsync(token))
@@ -188,6 +198,12 @@ public sealed partial class EfStore
     {
         using var db = create();
         return db.UsesRootPlayback;
+    }
+
+    internal bool SupportsDescendantPlayback()
+    {
+        using var db = create();
+        return db.UsesRootPlaybackDescendants;
     }
 
     private sealed record PlaybackRoot(int Partition, string Actor, long RetainedAfter, long Latest, long? LastRecordedAt);
@@ -211,6 +227,11 @@ public sealed partial class EfStore
         await using var db = create();
         if (Engine is not null || !db.UsesRootPlayback)
             throw new NotSupportedException("This store does not carry the playback projection.");
+        if (query.IncludeDescendants && query.Activity is null)
+            throw new ArgumentException("Descendant playback requires an exact activity scope.", nameof(query));
+        if (query.IncludeDescendants && !db.UsesRootPlaybackDescendants)
+            throw new NotSupportedException("This store does not carry the descendant playback projection.");
+        var physicalSource = PostgresPlaybackSource(db.UsesRootPlaybackDescendants);
         string? source = null;
         if (db.UsesSqliteRootRuntime)
             return await ReadSqliteRootSnapshotAsync(db, ReadAsync, token);
@@ -219,7 +240,7 @@ public sealed partial class EfStore
         await using var snapshot = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
         var marker = await PostgresRootAdmission.PinPlaybackReadSourcesAsync(db, token);
         var stamp = FormattableStringFactory.Create($$"""
-            SELECT CASE WHEN marker.tableoid = {0}::oid THEN {{PostgresPlaybackSource}} END AS "Stamp"
+            SELECT CASE WHEN marker.tableoid = {0}::oid THEN {{physicalSource}} END AS "Stamp"
             FROM "KernelStoreVersions" marker WHERE marker."Id" = {1}
             """, marker, StoreVersionEntity.MarkerId);
         source = (await db.Database.SqlQuery<PlaybackSource>(stamp).SingleOrDefaultAsync(token))?.Stamp
@@ -264,54 +285,58 @@ public sealed partial class EfStore
             if (invalid.Length != 0)
                 return Result(ActorPlaybackAvailability.Unavailable, "occurrence-observation-unknown");
 
-            if (query.Activity is { } activity)
+            var scope = query.Activity;
+            PlaybackOrdinal? scopeStart = null;
+            if (scope is not null)
             {
-                var scoped = await FindMemberAsync(activity);
+                var scoped = await FindMemberAsync(scope);
                 if (scoped is null) return Result(ActorPlaybackAvailability.Unavailable, "scope-unavailable");
-                if (query.Anchor is { } exact && exact != activity)
-                    return Result(ActorPlaybackAvailability.TargetUnavailable, "anchor-outside-scope");
-                if (query.Position is > 0)
-                    return Result(ActorPlaybackAvailability.TargetUnavailable, "position-outside-range");
-                return Available(1, 0, [Entry(scoped, 0, null, null)]);
+                if (!query.IncludeDescendants)
+                {
+                    if (query.Anchor is { } exact && exact != scope)
+                        return Result(ActorPlaybackAvailability.TargetUnavailable, "anchor-outside-scope");
+                    if (query.Position is > 0)
+                        return Result(ActorPlaybackAvailability.TargetUnavailable, "position-outside-range");
+                    return Available(1, 0, [Entry(scoped, 0, null, null)]);
+                }
+
+                var unknown = await ReadRowsAsync<PlaybackInvalid>($"""
+                    SELECT "Sequence" FROM "FoundationJournalPlaybackScopes"
+                    WHERE "Partition" = {root.Partition} AND "Actor" = {root.Actor} AND "Known" = 0
+                        AND "Sequence" > {root.RetainedAfter} AND "Sequence" <= {upper}
+                    ORDER BY "Sequence" LIMIT 1
+                    """);
+                if (unknown.Length != 0)
+                    return Result(ActorPlaybackAvailability.Unavailable, "scope-ancestry-unknown");
+                scopeStart = await FindScopedOrdinalAsync(scope, scoped)
+                    ?? throw new StoreFormatException("The playback index is missing its scope's first occurrence.");
             }
 
-            var first = (await ReadRowsAsync<PlaybackOrdinal>($"""
-                SELECT "Ordinal" FROM "FoundationJournalPlayback"
-                WHERE "Partition" = {root.Partition} AND "Actor" = {root.Actor}
-                    AND "Sequence" > {root.RetainedAfter} AND "Sequence" <= {upper}
-                ORDER BY "Sequence" LIMIT 1
-                """)).SingleOrDefault()?.Ordinal;
+            var first = scopeStart ?? (await ReadRowsAsync<PlaybackOrdinal>(PlaybackOrdinalBound(root, scope, upper, last: false))).SingleOrDefault();
             if (first is null)
                 return Result(ActorPlaybackAvailability.Unavailable, "occurrence-recording-unavailable");
-            var last = (await ReadRowsAsync<PlaybackOrdinal>($"""
-                SELECT "Ordinal" FROM "FoundationJournalPlayback"
-                WHERE "Partition" = {root.Partition} AND "Actor" = {root.Actor}
-                    AND "Sequence" > {root.RetainedAfter} AND "Sequence" <= {upper}
-                ORDER BY "Sequence" DESC LIMIT 1
-                """)).Single().Ordinal;
-            var count = checked(last - first.Value + 1);
+            var last = (await ReadRowsAsync<PlaybackOrdinal>(PlaybackOrdinalBound(root, scope, upper, last: true))).Single().Ordinal;
+            var count = checked(last - first.Ordinal + 1);
             var selected = query.Position ?? 0;
             if (query.Anchor is { } anchor)
             {
                 var target = await FindMemberAsync(anchor);
                 if (target is null) return Result(ActorPlaybackAvailability.TargetUnavailable, "anchor-outside-range");
-                selected = target.Ordinal - first.Value;
+                var ordinal = scope is null ? new PlaybackOrdinal(target.Ordinal) : await FindScopedOrdinalAsync(scope, target);
+                if (ordinal is null) return Result(ActorPlaybackAvailability.TargetUnavailable, "anchor-outside-scope");
+                selected = ordinal.Ordinal - first.Ordinal;
             }
             if (selected < 0 || selected >= count)
                 return Result(ActorPlaybackAvailability.TargetUnavailable, "position-outside-range");
-            var start = first.Value + Math.Min(Math.Max(0, count - query.Limit), Math.Max(0, selected - query.Limit / 2));
+            var start = first.Ordinal + Math.Min(Math.Max(0, count - query.Limit), Math.Max(0, selected - query.Limit / 2));
             var end = Math.Min(last, start + query.Limit - 1);
-            var from = Math.Max(first.Value, start - 1);
+            var from = Math.Max(first.Ordinal, start - 1);
             var through = Math.Min(last, end + 1);
-            var rankRange = FormattableStringFactory.Create(PlaybackRowsSql + """
-
-                AND "Ordinal" BETWEEN {2} AND {3} AND "Sequence" > {4} AND "Sequence" <= {5}
-                ORDER BY "Ordinal" LIMIT {6}
-                """, root.Partition, root.Actor, from, through, root.RetainedAfter, upper, query.Limit + 2);
+            var rankRange = PlaybackRankRange(root, scope, from, through, upper, query.Limit + 2);
             var rows = await ReadRowsAsync<PlaybackRow>(rankRange);
             if (rows.Length != through - from + 1 || rows.Where((row, index) => row.Ordinal != from + index).Any())
                 throw new StoreFormatException("The playback index has an incomplete occurrence range.");
-            var items = rows.Select((row, index) => Entry(row, row.Ordinal - first.Value,
+            var items = rows.Select((row, index) => Entry(row, row.Ordinal - first.Ordinal,
                     index == 0 ? null : rows[index - 1].Activity, index == rows.Length - 1 ? null : rows[index + 1].Activity))
                 .Where((_, index) => rows[index].Ordinal >= start && rows[index].Ordinal <= end).ToArray();
             return Available(count, selected, items);
@@ -323,6 +348,13 @@ public sealed partial class EfStore
                     "/* playback exact anchor */\n" + PlaybackRowsSql + """ AND "Activity" = {2} LIMIT 2""",
                     root.Partition, root.Actor, activity))).SingleOrDefault() is { } row &&
                     row.Sequence > root.RetainedAfter && row.Sequence <= upper ? row : null;
+
+            async Task<PlaybackOrdinal?> FindScopedOrdinalAsync(string scopeId, PlaybackRow member) =>
+                (await ReadRowsAsync<PlaybackOrdinal>($"""
+                    SELECT "Ordinal" FROM "FoundationJournalPlaybackScopes" WHERE "Partition" = {root.Partition}
+                        AND "Actor" = {root.Actor} AND "Scope" = {scopeId} AND "Activity" = {member.Activity}
+                        AND "Sequence" = {member.Sequence}
+                    """)).SingleOrDefault();
 
             ActorPlaybackPage Available(long total, long target, IReadOnlyList<ActorPlaybackEntry> items) =>
                 new(ActorPlaybackAvailability.Available, null, root.Latest, upper, root.RetainedAfter, root.LastRecordedAt,
@@ -337,7 +369,7 @@ public sealed partial class EfStore
             var sourceParameter = "{" + query.ArgumentCount.ToString(CultureInfo.InvariantCulture) + "}";
             var guard = FormattableStringFactory.Create($$"""
                 WITH physical AS MATERIALIZED (
-                    SELECT {{PostgresPlaybackSource}} = {{sourceParameter}} AS "Matches"
+                    SELECT {{physicalSource}} = {{sourceParameter}} AS "Matches"
                 )
                 SELECT CASE WHEN physical."Matches" THEN (
                     SELECT COALESCE(pg_catalog.json_agg(hit), '[]'::json)::text FROM ({{query.Format}}) hit

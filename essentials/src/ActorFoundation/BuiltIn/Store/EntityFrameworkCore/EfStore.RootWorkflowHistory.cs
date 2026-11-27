@@ -103,7 +103,7 @@ public sealed partial class EfStore
             if (db.UsesRootSequencedJournal)
                 await db.Database.ExecuteSqlRawAsync(PostgresSequencedJournal, token);
             if (db.UsesRootPlayback)
-                await db.Database.ExecuteSqlRawAsync(PostgresPlayback, token);
+                await db.Database.ExecuteSqlRawAsync(PostgresPlaybackDefinitions(db.UsesRootPlaybackDescendants), token);
         }
         await transaction.CommitAsync(token);
     }

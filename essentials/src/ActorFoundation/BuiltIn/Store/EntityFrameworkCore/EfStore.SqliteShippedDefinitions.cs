@@ -406,7 +406,7 @@ public sealed partial class EfStore
         if (db.UsesRootSequencedJournal)
             foreach (var segment in SqliteSequencedJournalDefinitions()) yield return segment;
         if (db.UsesRootPlayback)
-            foreach (var playback in SqlitePlaybackDefinitions()) yield return playback;
+            foreach (var playback in SqlitePlaybackDefinitions(db.UsesRootPlaybackDescendants)) yield return playback;
         if (db.UsesRootTerminalOutput) yield return SqliteRootTerminalOutputDefinition();
         foreach (var outcome in SqliteRootOutcomes(db)) yield return outcome;
     }

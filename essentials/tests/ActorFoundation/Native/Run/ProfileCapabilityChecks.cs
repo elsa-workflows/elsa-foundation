@@ -252,12 +252,25 @@ internal static class ProfileCapabilityChecks
             playbackPostgres.Capabilities == (sequencedPostgres.Capabilities | RootCapabilities.Children | RootCapabilities.Playback) &&
             playbackSqlite.Capabilities == playbackPostgres.Capabilities && !sharedPostgres.UsesRootPlayback &&
             !sharedSqlite.UsesRootPlayback && !playbackPostgres.UsesRootLiveEventWaits && !playbackSqlite.UsesRootLiveEventWaits &&
+            !playbackPostgres.UsesRootPlaybackDescendants && !playbackSqlite.UsesRootPlaybackDescendants &&
             RootProfiles.MissingPrerequisites(playbackPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(playbackPostgres.RequiredFormat) &&
             StoreDefinitionsRevision.Seed(playbackPostgres) is { StoreSchema: 1, MessageProtocol: 12, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(playbackSqlite) is { StoreSchema: 2, MessageProtocol: 15, JournalCodec: 0 },
             "private playback retains exactly protocol 31 plus indexed occurrences and its own provider definitions");
-        mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities | playbackPostgres.Capabilities;
+        using var descendantsPostgres = KernelDb.ForPostgresRootPlaybackDescendantsQualification(options);
+        using var descendantsSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootPlaybackDescendantsQualification);
+        Check(descendantsPostgres.RequiredFormat == new StoreFormat(3, 118, 1) && descendantsSqlite.RequiredFormat == descendantsPostgres.RequiredFormat &&
+            descendantsPostgres.Capabilities == (playbackPostgres.Capabilities | RootCapabilities.LiveEventWaits |
+                RootCapabilities.RetentionPolicy | RootCapabilities.PlaybackDescendants) &&
+            descendantsSqlite.Capabilities == descendantsPostgres.Capabilities &&
+            RootProfiles.MissingPrerequisites(descendantsPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(descendantsPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(descendantsPostgres) is { StoreSchema: 1, MessageProtocol: 14, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(descendantsSqlite) is { StoreSchema: 2, MessageProtocol: 17, JournalCodec: 0 },
+            "private descendant Playback composes protocol 33, indexed scopes and independent provider definitions");
+        mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
+            playbackPostgres.Capabilities | descendantsPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -292,6 +305,7 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
             [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
             [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
+            [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
             [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection
         };
         Check(RootProfiles.Prerequisites.Count == expectedEdges.Count &&

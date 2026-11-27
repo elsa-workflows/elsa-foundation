@@ -89,6 +89,7 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
 
     public bool SupportsSequencedJournal => store.SupportsSequencedJournal();
     public bool SupportsPlayback => store.SupportsPlayback();
+    public bool SupportsDescendantPlayback => store.SupportsDescendantPlayback();
 
     public ValueTask<ActorPlaybackPage?> ReadPlaybackAsync(BoundScope scope, ActorRef actor, ActorPlaybackQuery query,
         CancellationToken cancellationToken)
