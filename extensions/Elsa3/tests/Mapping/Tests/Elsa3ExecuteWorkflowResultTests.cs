@@ -334,6 +334,16 @@ public sealed class Elsa3ExecuteWorkflowResultTests
     }
 
     [Fact]
+    public async Task A_result_captured_into_a_memory_slot_that_is_no_variable_is_refused()
+    {
+        // Its reads could not be rewritten, so they would silently get the Output shape.
+        var result = await ConvertAsync(Sequence("root", Execute(), Write("getCredit().Output.Decision")));
+
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.OutputNotRepresentable);
+        Assert.Contains("no workflow variable", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_status_read_before_the_node_is_refused()
     {
         // "Finished" holds only once the node ran; Elsa 3 read V's earlier value before it.

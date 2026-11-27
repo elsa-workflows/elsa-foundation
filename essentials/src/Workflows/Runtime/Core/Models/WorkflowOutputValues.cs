@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// protection policy forbids carrying them, or that are not stored inline, are left out and named in
 /// <see cref="WithheldNames"/>; their values never appear here.
 /// </summary>
-public sealed record WorkflowOutputValues
+public sealed class WorkflowOutputValues
 {
     public WorkflowOutputValues(JsonElement values, IReadOnlyList<string> withheldNames)
     {

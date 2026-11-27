@@ -152,14 +152,16 @@ public sealed class RuntimeWorkflowOutputStateProjectionTests
         // view, so neither is truncated nor redacted.
         var summary = new string('x', 1000);
         var durableValues = States(RuntimeWorkflowStateSeed.BuildWorkflowOutputChanges(
-                ExecutionId, new Dictionary<string, object?> { ["Summary"] = summary, ["token"] = "abc" }, _now))
+                ExecutionId, new Dictionary<string, object?> { ["Summary"] = summary, ["token"] = "abc", ["Text"] = "a+b Prüfung" }, _now))
             .Append(NewDurableValue("output:Decision", "Decision", "first", _now))
             .Append(NewDurableValue("output:Decision", "Decision", "approved", _now.AddMinutes(1)))
             .ToArray();
 
         var values = RuntimeWorkflowOutputStateProjection.ProjectValues(durableValues);
 
-        Assert.Equal(["Decision", "Summary", "token"], values.Values.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(["Decision", "Summary", "Text", "token"], values.Values.EnumerateObject().Select(property => property.Name));
+        // Written with the baseline encoder (ADR 0091): no escaping of '+' or non-ASCII letters.
+        Assert.Equal("\"a+b Prüfung\"", values.Values.GetProperty("Text").GetRawText());
         Assert.Equal("approved", values.Values.GetProperty("Decision").GetString());
         Assert.Equal(summary, values.Values.GetProperty("Summary").GetString());
         Assert.Equal("abc", values.Values.GetProperty("token").GetString());

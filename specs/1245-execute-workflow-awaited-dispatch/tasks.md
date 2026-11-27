@@ -33,6 +33,7 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   - Fire-and-forget gives no `Output`, and a variable that captures it and holds `"before"` still holds `"before"`.
   - Faulted, cancelled and dispatch-failed children give `Output` `{}`. A captured variable that was never set reads
     `undefined` for a member after them, and does not throw.
+  > **Implementation note (PR #5999):** covered at the activity result: no `output` key on Dispatched, `{}` on Faulted, Cancelled and DispatchFailed. The variable-level checks (`"before"` kept, `undefined` member read) rely on the generic capture projector and are not run here; the import integration runs the faulted `{}` read end to end.
 - [x] T003 Policy-free read of a child's committed workflow outputs (plan D-2): `IWorkflowOutputSource.ReadValuesAsync`,
   returning `WorkflowOutputValues`, implemented in `WorkflowOutputSource`. Update both `EXTENSION_POINTS.md` entries and
   `PublicAPI.Unshipped.txt` (the member and the record), and
@@ -102,6 +103,7 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
     `ValueFlow/UnavailableProducer`.
   - Run-time tests: US3 scenario 4 with a child that completes and with one that faults. The whole-value read is
     checked against the Elsa 3 key set.
+  > **Implementation note (PR #5999):** the publish test for `ValueFlow/UnavailableProducer` is not written (the mapping suite cannot publish); run-time rows are covered in the import integration for Output.X, Status, SubStatus, WorkflowInstanceId and the whole value.
 - [x] T010 Implement the `ExecuteWorkflowAsDispatch` rewrite (`ActivityMap/Rewrites/`) and register it in
   `Elsa3MappingFeature`, with a feature-registration test. `WaitForCompletion` becomes
   `Structure("WaitForCompletion", Elsa3MemberKind.Input)`, and the rewrite emits it with `SetProperty`, so
@@ -126,6 +128,7 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   - a cancelled child ends the branch (FR-011).
 
   Keep one Sequence-parent case as a regression check that a faulted child still runs the next step.
+  > **Implementation note (PR #5999):** the cancelled-child run-time case is not written (it needs a live child cancelled through the host); `Cancelled` routing is pinned by converter tests and `Output` `{}` on Cancelled by a dispatch end-to-end test.
 - [x] T013 [P] Converter README (`extensions/Elsa3/src/Mapping/README.md`): add the FR-006 to FR-011 rows, the six
   accepted differences (a faulted child's outputs, a cancelled child, a failed child start, `ParentInstanceId`,
   output-name case, the suspended-child shape) with their Flowchart and Sequence behaviour, and Execute Workflow's always-wait.

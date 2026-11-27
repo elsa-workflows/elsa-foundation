@@ -56,7 +56,7 @@ public static class RuntimeWorkflowOutputStateProjection
         // Write each committed value through unchanged (ADR 0091); no node model re-reads its numbers.
         var buffer = new System.Buffers.ArrayBufferWriter<byte>();
         var withheld = new List<string>();
-        using (var writer = new System.Text.Json.Utf8JsonWriter(buffer))
+        using (var writer = new System.Text.Json.Utf8JsonWriter(buffer, new System.Text.Json.JsonWriterOptions { Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder }))
         {
             writer.WriteStartObject();
             foreach (var (name, value) in LatestByName(durableValues))

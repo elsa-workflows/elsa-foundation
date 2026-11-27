@@ -111,8 +111,9 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     node may not have run (after a branch that skips it) it reads `"Finished"` where Elsa 3 read `V`'s earlier value. `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` refuses: a variable with another writer
     (another capture, a Set Variable, a declared initial value, or a script that calls `setV`, `setVariable('V', …)`,
     assigns `V` or a member of it, or writes a variable by a computed name); any other member of `V`; any other Liquid
-    read of `V`, or a Liquid read of the node's result through the `Output` root; and a script that reads a variable by
-    a computed name.
+    read of `V`, or a Liquid read of the node's result through the `Output` root; a script that reads a variable by
+    a computed name while `V` is in its scope; and, beyond the spec, a `Result` captured into a memory slot that is no
+    declared workflow variable, whose reads could not be rewritten.
   - **`Done`** (FR-007, FR-009): Dispatch Workflow's `Done` maps to `Dispatched`, `Completed` and `Faulted`; Execute
     Workflow's to `Completed` and `Faulted`. Elsa 3 continued after a child that faulted. `Cancelled` and
     `DispatchFailed` stay unmapped.
