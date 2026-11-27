@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -85,16 +86,36 @@ internal sealed class PostgresReplyFrames(byte[] key)
         writer.WriteStringValueSegment(remaining, isFinalSegment: true);
     }
 
+    private static void WriteName(Utf8JsonWriter writer, string name)
+    {
+        if (name.Length <= StringSegment)
+        {
+            writer.WritePropertyName(name);
+            return;
+        }
+
+        var space = MaxReplyBytes - writer.BytesCommitted - writer.BytesPending - 4;
+        if (name.Length > space) throw TooLarge();
+        // Charge the exact escaped size before encoding a large name, so the writer can reserve its UTF-8 bytes directly.
+        Span<char> escaped = stackalloc char[6 * StringSegment];
+        var rest = name.AsSpan();
+        while (!rest.IsEmpty)
+        {
+            var count = Math.Min(StringSegment, rest.Length);
+            if (count < rest.Length && char.IsHighSurrogate(rest[count - 1])) count--;
+            var encoded = JavaScriptEncoder.Default.Encode(rest[..count], escaped, out var consumed, out var written, isFinalBlock: true);
+            if (encoded != OperationStatus.Done || (space -= written) < 0) throw TooLarge();
+            rest = rest[consumed..];
+        }
+        writer.WritePropertyName(JsonEncodedText.Encode(name));
+    }
+
     private sealed class SegmentedString : JsonConverter<string>
     {
         public override string Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => throw new NotSupportedException();
         public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) => WriteString(writer, value);
 
-        public override void WriteAsPropertyName(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
-        {
-            if (value.Length > MaxReplyBytes) throw TooLarge();
-            writer.WritePropertyName(value);
-        }
+        public override void WriteAsPropertyName(Utf8JsonWriter writer, string value, JsonSerializerOptions options) => WriteName(writer, value);
     }
 
     private sealed class SegmentedNode : JsonConverter<JsonNode>
@@ -110,8 +131,7 @@ internal sealed class PostgresReplyFrames(byte[] key)
                     writer.WriteStartObject();
                     foreach (var (name, item) in properties)
                     {
-                        if (name.Length > MaxReplyBytes) throw TooLarge();
-                        writer.WritePropertyName(name);
+                        WriteName(writer, name);
                         WriteItem(item);
                     }
                     writer.WriteEndObject();
@@ -145,7 +165,7 @@ internal sealed class PostgresReplyFrames(byte[] key)
     private sealed class ReplyBuffer : IBufferWriter<byte>
     {
         // A writer may reserve space for one escaped segment or padding beyond the bytes it advances.
-        private const int CapacityLimit = MaxReplyBytes + 8 * StringSegment;
+        private const int CapacityLimit = MaxReplyBytes + 18 * StringSegment + 256;
         private byte[] _buffer = [];
         private int _length;
         internal ReadOnlySpan<byte> Written => _buffer.AsSpan(0, _length);
@@ -159,6 +179,7 @@ internal sealed class PostgresReplyFrames(byte[] key)
 
         public Memory<byte> GetMemory(int sizeHint = 0)
         {
+            ArgumentOutOfRangeException.ThrowIfNegative(sizeHint);
             var required = (long)_length + Math.Max(sizeHint, 1);
             if (required > CapacityLimit) throw TooLarge();
             if (required > _buffer.Length)

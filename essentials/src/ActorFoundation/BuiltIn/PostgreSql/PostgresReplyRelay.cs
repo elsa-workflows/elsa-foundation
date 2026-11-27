@@ -138,6 +138,7 @@ internal sealed class PostgresReplyRelay(Func<KernelDb> create, string node, Pos
                 {
                     var channel = frames.Channel(outgoing.Node);
                     var payloads = frames.Encode(channel, outgoing.Reply);
+                    token.ThrowIfCancellationRequested();
                     await using var db = create();
                     await db.Database.OpenConnectionAsync(token);
                     var connection = (NpgsqlConnection)db.Database.GetDbConnection();

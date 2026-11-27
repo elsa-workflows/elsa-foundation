@@ -26,6 +26,13 @@ internal static class PostgresLiveRemoteHttpChecks
 {
     internal static async Task<int> RunAsync()
     {
+        var frames = new PostgresReplyFrames(new byte[32]);
+        var channel = frames.Channel("wire-limit");
+        var fits = new Reply("accepted", "answer", LiveRequest.Response, new string('π', 682 * 4_096));
+        var wideName = new JsonObject { [new string('n', 6 * 1024 * 1024)] = true };
+        Check(frames.Encode(channel, fits).Length > 3_000 && frames.Encode(channel, fits with { Item = wideName }).Length > 1_000,
+            "wire-legal Unicode text and long JSON names fit within the byte limit");
+
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var stop = timeout.Token;
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
