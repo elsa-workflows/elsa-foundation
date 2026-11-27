@@ -36,7 +36,7 @@ export function HttpTestResponse({ result, context }: { result: HttpTestResult; 
   const issueMessage = runFeedback?.result === result ? runFeedback.message : null;
   const acceptedMessage = issueMessage ?? result.acceptedMessage;
   const runLink = result.workflowExecutionId
-    ? <StudioLink href={`/workflows/instances/${encodeURIComponent(result.workflowExecutionId)}`}>Inspect run</StudioLink>
+    ? <StudioLink className="wf-link-button" href={`/workflows/instances/${encodeURIComponent(result.workflowExecutionId)}`}>Inspect run</StudioLink>
     : null;
   return <section className="wf-http-test-result" aria-label="HTTP response">
     <header>

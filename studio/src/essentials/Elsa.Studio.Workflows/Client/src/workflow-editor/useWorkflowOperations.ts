@@ -389,7 +389,7 @@ export function useWorkflowOperations({
             : {}),
           publicationUnsupported,
           failureMessage: publicationUnsupported
-            ? `${failureMessage} The promoted version was retained. Close this review to edit the workflow.`
+            ? `${failureMessage} Close this review to edit the workflow.`
             : publicationValidationErrors.length
               ? `Publication was blocked by ${publicationValidationErrors.length} expression validation error${publicationValidationErrors.length === 1 ? "" : "s"} (listed above). The promoted version was retained; correct the expressions, then review and publish again.`
               : `Publication failed after promotion: ${failureMessage}. The promoted version was retained; retry Publish or close this review and publish it later.`
