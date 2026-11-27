@@ -91,10 +91,11 @@ public static partial class SqliteEmbeddedHosting
         using var file = AcquireFile(databasePath, requests: requests);
         requests?.RequireBinding(file.Path, actorType);
         var format = requests?.QualificationFormat;
+        var eventHost = requests?.PublicEventHost ?? (format is null ? new(actorType, false) : null);
         var pressure = requests?.Pressure;
         using (var db = KernelDb.ForSqliteRootShipped(file.Options, format))
             if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
-        var admission = CreateAdmission(file, window, pressure, format, requests?.PublicEventHost);
+        var admission = CreateAdmission(file, window, pressure, format, eventHost);
         await admission.VerifyAsync(cancellationToken);
         var path = file.Path;
         if (pressure is not null && requests?.Pressure is null)
@@ -102,7 +103,7 @@ public static partial class SqliteEmbeddedHosting
             await ReadPressureAsync(cancellationToken);
             pressure.RefreshOnDemand(ReadPressureAsync);
         }
-        return new Ingress(path, actorType, window, requests, pressure, authorizeOperator);
+        return new Ingress(path, actorType, window, requests, pressure, eventHost, authorizeOperator);
 
         async Task ReadPressureAsync(CancellationToken token)
         {
@@ -125,7 +126,7 @@ public static partial class SqliteEmbeddedHosting
         new(() => KernelDb.ForSqliteRootShipped(file.Options, format, publicEventHost), window, file.AdmissionDefinitions, pressure);
 
     private sealed class Ingress(string path, string actorType, TimeSpan window, SqliteDirectRequests? requests, RootAdmissionPressure? pressure,
-        Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator) : Contract.IIngress
+        RootPublicEventHost? eventHost, Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator) : Contract.IIngress
     {
         public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
             string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
@@ -154,7 +155,7 @@ public static partial class SqliteEmbeddedHosting
                 format is null && RootProfiles.Shipped.HasFlag(RootCapabilities.PublicEventStarts)))
             {
                 using var writer = AcquireFile(path);
-                var publications = CreateAdmission(writer, window, pressure, format, requests?.PublicEventHost);
+                var publications = CreateAdmission(writer, window, pressure, format, eventHost);
                 return await publications.PublishPublicEventAsync(scope.Tenant, publish.CorrelationKey, id, payload, options, cancellationToken);
             }
             if (Contract.Kinds.IsCommand(kind))
@@ -162,13 +163,13 @@ public static partial class SqliteEmbeddedHosting
                 var (actor, command, refusal) = ReadCommand(scope, target, kind, payload);
                 if (command is null) return new(Contract.AdmissionOutcome.Refused, Reason: refusal);
                 using var write = AcquireFile(path);
-                var operators = CreateAdmission(write, window, pressure, requests?.QualificationFormat, requests?.PublicEventHost);
+                var operators = CreateAdmission(write, window, pressure, format, eventHost);
                 return await operators.OperateAsync(scope.Tenant, actor, id, kind, command.Selection!, options?.DueAt, options?.KeepFor,
                     cancellationToken, thenDelete: command.ThenDelete);
             }
 
             using var file = AcquireFile(path);
-            var admission = CreateAdmission(file, window, pressure, requests?.QualificationFormat, requests?.PublicEventHost);
+            var admission = CreateAdmission(file, window, pressure, format, eventHost);
             if (target is Contract.Target.Start start)
             {
                 var spec = start.Spec;
@@ -245,7 +246,7 @@ public static partial class SqliteEmbeddedHosting
             cancellationToken.ThrowIfCancellationRequested();
             RootPublicEventStarts.Validate(actorType, key, wait, spec);
             using var file = AcquireFile(path);
-            var admission = CreateAdmission(file, window, pressure, requests?.QualificationFormat, requests?.PublicEventHost);
+            var admission = CreateAdmission(file, window, pressure, requests?.QualificationFormat, eventHost);
             await admission.SetPublicEventStartAsync(scope.Tenant, key, wait, spec, cancellationToken);
         }
     }

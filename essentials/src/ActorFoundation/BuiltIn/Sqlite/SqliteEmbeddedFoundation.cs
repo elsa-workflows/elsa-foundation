@@ -140,7 +140,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         this.node = node;
         this.actorType = actorType;
         this.qualificationFormat = qualificationFormat;
-        if (qualificationFormat == StoreFormat.RootPublicEventHostQualification)
+        if (qualificationFormat is null || qualificationFormat == StoreFormat.RootPublicEventHostQualification)
             publicEventHost = new(actorType, protectRootStart is not null);
         requests = new(() => SqliteEmbeddedHosting.CreateRequests(InstalledPath, node, actorType,
             qualificationFormat: qualificationFormat, protectRootStart: protectRootStart), LazyThreadSafetyMode.PublicationOnly);

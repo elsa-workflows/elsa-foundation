@@ -46,10 +46,14 @@ public static partial class SqliteEmbeddedHosting
     /// <summary>Whether the shipped Embedded profile supports ordered Event replay.</summary>
     public static bool TakesOrderedEventScan => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStartScan);
 
-    /// <summary>Installs or verifies a dedicated shipped SQLite file for one Embedded owner.</summary>
-    /// <remarks>The parent directory must exist. An existing file must be empty or carry this build's shipped definitions.</remarks>
+    /// <summary>Verifies a dedicated shipped SQLite file with an installed Event host.</summary>
     public static Task InstallShippedAsync(string databasePath, CancellationToken cancellationToken = default) =>
         InstallShippedFileAsync(databasePath, cancellationToken);
+
+    /// <summary>Installs or verifies the shipped SQLite file for the configured actor and root start protection.</summary>
+    public static Task InstallShippedAsync(string databasePath, string actorType, bool protectsStarts,
+        CancellationToken cancellationToken = default) =>
+        InstallShippedFileAsync(databasePath, cancellationToken, publicEventHost: new(actorType, protectsStarts));
 
     internal static async Task<string> InstallShippedFileAsync(string databasePath, CancellationToken cancellationToken,
         StoreFormat? qualificationFormat = null, RootPublicEventHost? publicEventHost = null)
@@ -122,8 +126,9 @@ public static partial class SqliteEmbeddedHosting
         {
             if (rootType is not null) requests?.RequireBinding(file.Path, rootType, node);
             var shipped = rootType is not null;
+            var eventHost = requests?.PublicEventHost ?? (requests is null && rootType is not null ? new(rootType, false) : null);
             KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
-                qualificationFormat: requests?.QualificationFormat, publicEventHost: requests?.PublicEventHost) : new(file.Options);
+                qualificationFormat: requests?.QualificationFormat, publicEventHost: eventHost) : new(file.Options);
 
             int partitions;
             bool selfSends, publicEventMaintenance;

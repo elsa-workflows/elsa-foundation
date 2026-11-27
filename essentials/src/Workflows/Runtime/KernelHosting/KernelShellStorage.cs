@@ -316,7 +316,7 @@ internal abstract class KernelShellStorage
                     await PostgresPreviewHosting.InstallManagedSchedulesQualificationAsync(_options, token);
                     break;
                 default:
-                    await PostgresPreviewHosting.InstallShippedAsync(_options, token);
+                    await PostgresPreviewHosting.InstallShippedAsync(_options, WorkflowActor.ActorType, protectsStarts: true, token);
                     break;
             }
             if (TakesPreparedStarts)
@@ -394,7 +394,7 @@ internal abstract class KernelShellStorage
             Profile.EphemeralTestRuns => PostgresPreviewHosting.CreateEphemeralTestRunQualificationContext(_options),
             Profile.AttachedTestRuns => PostgresPreviewHosting.CreateAttachedTestRunQualificationContext(_options),
             Profile.HeldEphemeralHttp => PostgresPreviewHosting.CreateHeldEphemeralHttpQualificationContext(_options),
-            _ => PostgresPreviewHosting.CreateShippedContext(_options)
+            _ => PostgresPreviewHosting.CreateShippedContext(_options, WorkflowActor.ActorType, protectsStarts: true)
         };
     }
 }

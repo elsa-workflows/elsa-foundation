@@ -29,7 +29,7 @@ internal sealed partial class PostgresRootAdmission
         string? payload, long? due, TimeSpan? keepFor, string? actorType, HeldRootRequest? caller, CancellationToken token)
     {
         await using var db = create();
-        if (!db.UsesRootKeyedStarts) throw new NotSupportedException("Caller keys require their PostgreSQL qualification profile.");
+        if (!db.UsesRootKeyedStarts) throw new NotSupportedException("The installed PostgreSQL profile does not support caller keys.");
         RequirePressureProfile(db);
         var window = ReceiptWindow(deduplicationWindow, keepFor);
         if (RootKeyedAdmission.Prepare(tenant, target, id, kind, payload, due, (long)window.TotalMilliseconds, actorType) is not { } request)
@@ -40,6 +40,12 @@ internal sealed partial class PostgresRootAdmission
         var pin = await PinRootNamespaceAsync(db, loadIssuer: true, token)
             ?? throw new StoreFormatException("Caller keys require an exact PostgreSQL source.");
         var issuer = pin.Issuer ?? throw new StoreFormatException("The PostgreSQL root issuer is missing.");
+        if (request.Start is not null && db.UsesRootPublicEventHost)
+        {
+            await LockPublicEventStartTablesAsync(db, token);
+            if (await RootPublicEventHost.ReadAsync(db, sql => BindPublicEventStarts(db, sql, pin), token) is { ProtectsStarts: true })
+                throw new NotSupportedException("Starting a caller-key root requires a host without root start protection.");
+        }
         await db.Database.ExecuteSqlRawAsync("""
             LOCK TABLE "FoundationKeyBindings", "FoundationKeyReceipts", "FoundationRootChildCascades" IN ACCESS SHARE MODE
             """, token);

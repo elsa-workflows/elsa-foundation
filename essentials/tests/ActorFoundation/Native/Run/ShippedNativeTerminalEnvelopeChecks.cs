@@ -184,7 +184,7 @@ internal static class ShippedNativeTerminalEnvelopeChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => PostgresPreviewHosting.CreateShippedContext(options);
+        KernelDb Open() => PostgresPreviewHosting.CreateShippedContext(options, PublicActor.ActorType, protectsStarts: false);
         await using var database = Open();
         Check(await PostgresFixtureDatabase.IsEmptyAsync(database, token), "the fixture uses an empty PostgreSQL database");
         var store = new EfStore(Open, postgres: true);
@@ -197,7 +197,7 @@ internal static class ShippedNativeTerminalEnvelopeChecks
 
     private static async Task<(Func<KernelDb>, Contract.IIngress, Contract.IActorReads)> OpenSqliteAsync(string path, Contract.BoundScope scope, CancellationToken token)
     {
-        await SqliteEmbeddedHosting.InstallShippedAsync(path, token);
+        await SqliteEmbeddedHosting.InstallShippedAsync(path, PublicActor.ActorType, protectsStarts: false, token);
         var connection = new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true, Pooling = false }.ToString();
         var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connection).Options;
         var definitions = new SqliteAdmissionDefinitions();

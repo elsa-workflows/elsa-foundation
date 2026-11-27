@@ -679,10 +679,9 @@ public sealed partial class KernelPublishedExecuteTests
                 if (directory is not null && otherSelection is null)
                 {
                     var pathToFoundation = Path.Combine(directory, "foundation.db");
-                    var ingress = await Kernel.Foundation.Sqlite.SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(pathToFoundation,
-                        Kernel.WorkflowActor.WorkflowActor.ActorType,
+                    var ingress = await app.Services.GetRequiredService<KernelShellStorage>().OpenOperatorsAsync(
                         (scope, target, kind) => scope.Tenant == bound.Tenant && target == actor && kind == Contract.Kinds.Recover,
-                        cancellationToken: token);
+                        token);
                     await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
                         { DataSource = pathToFoundation, Pooling = false }.ToString());
                     await connection.OpenAsync(token);

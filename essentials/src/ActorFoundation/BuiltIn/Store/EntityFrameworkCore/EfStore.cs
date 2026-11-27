@@ -210,7 +210,8 @@ public class KernelDb : DbContext
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
     internal static KernelDb ForPostgresRootChildrenQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.PostgresRootChildrenQualification, RootProfiles.ChildQualification);
-    internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
+    internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options, RootPublicEventHost? publicEventHost = null) =>
+        new(options, StoreFormat.RootShipped, RootProfiles.Shipped, publicEventHost: publicEventHost);
     internal static KernelDb ForPostgresRootSequencedJournalQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootSequencedJournalQualification, RootProfiles.SequencedJournalQualification);
     internal static KernelDb ForPostgresRootPlaybackQualification(DbContextOptions<KernelDb> options) =>
@@ -353,7 +354,8 @@ public class KernelDb : DbContext
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         return qualificationFormat is { } format
             ? ForRootTerminalOutputQualification(options, sqliteShippedInstall: true, definitions, format)
-            : new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+            : new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true,
+                sqliteRuntimeDefinitions: definitions, publicEventHost: publicEventHost);
     }
 
     internal static KernelDb ForRootTerminalOutputQualification(DbContextOptions<KernelDb> options,

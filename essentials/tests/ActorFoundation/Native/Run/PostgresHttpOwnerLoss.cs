@@ -361,7 +361,7 @@ internal static class PostgresHttpOwnerLoss
     }
 
     private static Func<KernelDb> OpenDatabase(DbContextOptions<KernelDb> options, bool heldEvent) => heldEvent
-        ? () => PostgresPreviewHosting.CreateShippedContext(options)
+        ? () => PostgresPreviewHosting.CreateShippedContext(options, WorkflowActor.WorkflowActor.ActorType, protectsStarts: false)
         : () => KernelDb.ForPostgresRootReplies(options);
 
     private static async Task<KernelServing> CreateEventServingAsync(CancellationToken stop)
