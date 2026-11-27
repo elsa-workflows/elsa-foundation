@@ -10888,6 +10888,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.KernelHosting",
+          "path": "essentials/src/Workflows/Runtime/KernelHosting/Elsa.Workflows.Runtime.KernelHosting.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.WorkflowActor",
           "path": "essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj"
         },
