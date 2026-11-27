@@ -9,10 +9,11 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Acme;
 
 // catalog:case-09 begin
-// A start trigger: an incoming invoice starts the workflow at this node, and the activity completes with it.
-// A custom trigger only starts workflows; it never waits mid-flow (publishing refuses a start trigger that is not
-// on the workflow's start path). The stimulus provider below tells publishing which stimulus starts the workflow;
-// AcmeFeature registers it.
+// A start trigger: an incoming invoice starts the workflow at this node, and the activity completes with it. A
+// direct start (a test run, the start API, a child workflow start) has no invoice, so it completes without one, as
+// Elsa's own triggers do. A custom trigger only starts workflows; it never waits mid-flow (publishing refuses a start
+// trigger that is not on the workflow's start path). The stimulus provider below tells publishing which stimulus
+// starts the workflow; AcmeFeature registers it.
 [TriggerActivity]
 public sealed class InvoiceReceived : StatefulTriggerActivity<InvoiceReceivedResult, InvoiceReceivedState, IncomingInvoice>
 {
@@ -28,17 +29,12 @@ public sealed class InvoiceReceived : StatefulTriggerActivity<InvoiceReceivedRes
 
     protected override ValueTask<ActivityTransition<InvoiceReceivedResult, InvoiceReceivedState>> ExecuteAsync(
         ActivityStartContext<IncomingInvoice> context) =>
-        ValueTask.FromResult(context.TryGetTrigger(out var invoice)
-            ? Complete(new InvoiceReceivedResult(invoice.InvoiceNumber))
-            : NotStartedByAnInvoice());
+        ValueTask.FromResult(Complete(new InvoiceReceivedResult(context.TryGetTrigger(out var invoice) ? invoice.InvoiceNumber : null)));
 
     // Never reached: the trigger never suspends.
     protected override ValueTask<ActivityTransition<InvoiceReceivedResult, InvoiceReceivedState>> ResumeAsync(
         ActivityResumeContext<InvoiceReceivedState, IncomingInvoice> context) =>
-        ValueTask.FromResult(NotStartedByAnInvoice());
-
-    private static ActivityTransition<InvoiceReceivedResult, InvoiceReceivedState> NotStartedByAnInvoice() =>
-        Fault(new ActivityFault("acme.invoice-trigger-not-started", "InvoiceReceived only starts workflows; it ran without an incoming invoice."));
+        ValueTask.FromResult(Fault(new ActivityFault("acme.invoice-trigger-resumed", "InvoiceReceived only starts workflows; it cannot be resumed.")));
 }
 
 public sealed record IncomingInvoice(string InvoiceNumber);
@@ -46,7 +42,7 @@ public sealed record IncomingInvoice(string InvoiceNumber);
 // The private state a stateful base class requires; a start-only trigger keeps none.
 public sealed record InvoiceReceivedState;
 
-public sealed record InvoiceReceivedResult([property: Output(Key = "Result")] string InvoiceNumber);
+public sealed record InvoiceReceivedResult([property: Output(Key = "Result", IsRequired = false)] string? InvoiceNumber);
 
 internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulusProvider
 {

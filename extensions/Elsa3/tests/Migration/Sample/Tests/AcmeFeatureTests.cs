@@ -51,14 +51,14 @@ public sealed class AcmeFeatureTests
     }
 
     [Fact]
-    public async Task Trigger_faults_when_no_invoice_started_the_workflow_here()
+    public async Task Trigger_completes_without_an_invoice_on_a_direct_start()
     {
         IActivity activity = new InvoiceReceived { Mailbox = "invoices@acme.test" };
 
         var transition = await activity.ExecuteAsync(TestContext.Create());
 
-        var fault = Assert.IsAssignableFrom<IActivityFaultTransition>(transition);
-        Assert.Equal("acme.invoice-trigger-not-started", fault.Fault.Code);
+        var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<InvoiceReceivedResult>>(transition);
+        Assert.Null(completion.Result.InvoiceNumber);
     }
 
     [Fact]

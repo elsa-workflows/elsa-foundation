@@ -284,7 +284,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   | 6 | Outcomes | Outcome attributes on the class; select by name in the completion | port |
   | 7 | Scheduling child activities | None for activity authors: scheduling children is engine-only | redesign: a reusable Activity Graph definition, or the built-in composites |
   | 8 | Signals and bookmarks | Bookmarks: a stateful activity that suspends and resumes on a resume target. Signals: none | port (bookmarks); redesign (signals) |
-  | 9 | Triggers | A trigger activity plus a trigger stimulus provider registered in the feature; a custom trigger only starts workflows | port (start triggers); redesign (a trigger that waits mid-flow: split the workflow at the wait, or wait on Elsa 4's Event activity) |
+  | 9 | Triggers | A trigger activity plus a trigger stimulus provider registered in the feature; a custom trigger only starts workflows | port (start triggers); redesign (a trigger that waits mid-flow: split the workflow at the wait, or wait on Elsa 4's Event activity with CanStartWorkflow off) |
   | 10 | Services | Constructor injection; the execution context offers no service lookup | port |
   | 11 | Variables and workflow state | Variable-reference inputs read and written through the step's variables; undeclared names and workflow state need their access markers; a free-form properties bag has no counterpart | port; redesign for the properties bag |
   | 12 | Background and task activities | The background-execution-safe marker; the workflow author chooses background placement (spec 1230) | port when the activity meets the eligibility criteria |

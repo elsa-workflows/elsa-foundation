@@ -465,10 +465,11 @@ public class InvoiceReceived : Trigger<string>
 
 **After (Elsa 4)** <!-- sample: case-09 -->
 ```csharp
-// A start trigger: an incoming invoice starts the workflow at this node, and the activity completes with it.
-// A custom trigger only starts workflows; it never waits mid-flow (publishing refuses a start trigger that is not
-// on the workflow's start path). The stimulus provider below tells publishing which stimulus starts the workflow;
-// AcmeFeature registers it.
+// A start trigger: an incoming invoice starts the workflow at this node, and the activity completes with it. A
+// direct start (a test run, the start API, a child workflow start) has no invoice, so it completes without one, as
+// Elsa's own triggers do. A custom trigger only starts workflows; it never waits mid-flow (publishing refuses a start
+// trigger that is not on the workflow's start path). The stimulus provider below tells publishing which stimulus
+// starts the workflow; AcmeFeature registers it.
 [TriggerActivity]
 public sealed class InvoiceReceived : StatefulTriggerActivity<InvoiceReceivedResult, InvoiceReceivedState, IncomingInvoice>
 {
@@ -484,17 +485,12 @@ public sealed class InvoiceReceived : StatefulTriggerActivity<InvoiceReceivedRes
 
     protected override ValueTask<ActivityTransition<InvoiceReceivedResult, InvoiceReceivedState>> ExecuteAsync(
         ActivityStartContext<IncomingInvoice> context) =>
-        ValueTask.FromResult(context.TryGetTrigger(out var invoice)
-            ? Complete(new InvoiceReceivedResult(invoice.InvoiceNumber))
-            : NotStartedByAnInvoice());
+        ValueTask.FromResult(Complete(new InvoiceReceivedResult(context.TryGetTrigger(out var invoice) ? invoice.InvoiceNumber : null)));
 
     // Never reached: the trigger never suspends.
     protected override ValueTask<ActivityTransition<InvoiceReceivedResult, InvoiceReceivedState>> ResumeAsync(
         ActivityResumeContext<InvoiceReceivedState, IncomingInvoice> context) =>
-        ValueTask.FromResult(NotStartedByAnInvoice());
-
-    private static ActivityTransition<InvoiceReceivedResult, InvoiceReceivedState> NotStartedByAnInvoice() =>
-        Fault(new ActivityFault("acme.invoice-trigger-not-started", "InvoiceReceived only starts workflows; it ran without an incoming invoice."));
+        ValueTask.FromResult(Fault(new ActivityFault("acme.invoice-trigger-resumed", "InvoiceReceived only starts workflows; it cannot be resumed.")));
 }
 
 public sealed record IncomingInvoice(string InvoiceNumber);
@@ -502,7 +498,7 @@ public sealed record IncomingInvoice(string InvoiceNumber);
 // The private state a stateful base class requires; a start-only trigger keeps none.
 public sealed record InvoiceReceivedState;
 
-public sealed record InvoiceReceivedResult([property: Output(Key = "Result")] string InvoiceNumber);
+public sealed record InvoiceReceivedResult([property: Output(Key = "Result", IsRequired = false)] string? InvoiceNumber);
 
 internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulusProvider
 {
@@ -529,7 +525,9 @@ internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulus
 1. Mark the class `[TriggerActivity]` and derive from `StatefulTriggerActivity<TResult, TState, TTrigger>`, the base
    class that hands the activity its typed trigger. `TState` is an empty record: a start trigger keeps no state.
 2. In `ExecuteAsync`, `context.TryGetTrigger(out var trigger)` is true when a delivery started the workflow at this
-   node: complete from it. Otherwise return a fault: the trigger only starts workflows. `ResumeAsync` is never reached.
+   node: complete from it. Otherwise the workflow was started directly (a test run, the start API, a child workflow
+   start): complete without the trigger's data, as Elsa's own triggers do, so make those outputs optional
+   (`IsRequired = false`). The trigger never suspends, so `ResumeAsync` is never reached.
 3. Write an `IActivityTriggerStimulusProvider` that recognises the activity type and describes the stimulus from the
    node's literal inputs, the way `GetTriggerPayload` did. Register it in the feature (case 18).
 
@@ -537,10 +535,12 @@ internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulus
 path, so an Elsa 3 definition that reaches the trigger mid-flow does not publish. Choose one of:
 - **split the workflow** at the wait: the part after it becomes its own workflow, started by the trigger, with the
   data it needs passed along or correlated;
-- **wait on Elsa 4's `Event` activity** instead: the workflow waits for a named event (optionally correlated), and the
-  code that fed the Elsa 3 trigger publishes that event.
+- **wait on Elsa 4's `Event` activity** instead, with *Start new workflows* (`CanStartWorkflow`) turned off: the
+  workflow waits for a named event (optionally correlated), and the code that fed the Elsa 3 trigger publishes that
+  event. Left on, the `Event` is a start trigger too and the same refusal follows.
 
-Record the choice in the plan; write no waiting code into the trigger.
+Record the choice in the plan; write no waiting code into the trigger. The publish refusal also suggests setting
+`CanStartWorkflow` to false: that applies to Elsa's own triggers, not to a ported one, which has no such input.
 
 ## Case 10: Services
 
