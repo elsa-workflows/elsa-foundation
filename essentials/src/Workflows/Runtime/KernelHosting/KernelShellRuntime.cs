@@ -64,10 +64,21 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ServedWorkflow = serving.ServedWorkflow,
             ResolveWorkflow = ResolveWorkflowAsync
         });
-        var inline = storage.TakesInlineStarts ? new InlineRootRequests(tenant, WorkflowActor.ActorType,
-            (spec, material) => WorkflowActor.DescribeStart(spec.Type, spec.TypeData) is { } selected &&
-                model.MatchesInlineMaterial(material, selected.Workflow, selected.Definition, selected.ExecutableSelection),
-            protection!.ProtectHeldStartAsync) : null;
+        InlineRootRequests? inline = null;
+        if (storage.TakesEphemeralTestRuns)
+        {
+            await using var runtime = await scopes.CreateAsyncScopeAsync(persistenceScope);
+            var recordCompletion = runtime.ServiceProvider.GetRequiredService<PersistenceModeOptions>().RecordCompletion;
+            inline = new(tenant, WorkflowActor.ActorType, MatchesInlineMaterial, protection!.ProtectHeldStartAsync,
+                testTenant ?? throw new InvalidOperationException("Inline Test Runs require the isolated tenant."),
+                status => !recordCompletion && status == ActorStatus.Finished);
+        }
+        else if (storage.TakesInlineStarts)
+            inline = new(tenant, WorkflowActor.ActorType, MatchesInlineMaterial, protection!.ProtectHeldStartAsync);
+
+        bool MatchesInlineMaterial(StartSpec spec, object material) =>
+            WorkflowActor.DescribeStart(spec.Type, spec.TypeData) is { } selected &&
+            model.MatchesInlineMaterial(material, selected.Workflow, selected.Definition, selected.ExecutableSelection);
         var auxiliary = schedules is null ? null : new ScheduleActor(schedules.Value.Calendar, schedules.Value.Worker.CreateAcceptor());
         (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window, auxiliary,
             protectChildExecutables || inline is not null ? protection!.ProtectAsync : null, inline);
@@ -158,6 +169,17 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     public Task<RootStartProof> ConfirmPreparedTestAsync(ActorRef actor, string issuance, CancellationToken token) =>
         testTenant is null ? Task.FromResult(RootStartProof.Unresolved) :
             storage.ConfirmPreparedStartAsync(testTenant, actor, issuance, token);
+
+    internal bool TakesEphemeralTestRuns => storage.TakesEphemeralTestRuns;
+
+    internal ValueTask<InlineStartOutcome> StartInlineTestAsync(string operationId, StartSpec start, Workflow executable,
+        CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        return Volatile.Read(ref _publishedInlineStarts) is { } inline
+            ? inline.Requests.StartAdditionalAsync(operationId, start, inline.Model.CaptureInlineMaterial(executable), token)
+            : ValueTask.FromResult(new InlineStartOutcome(InlineStartDisposition.Unavailable));
+    }
 
     internal ValueTask<InlineStartOutcome> StartInlinePublishedAsync(string operationId, StartSpec start, Workflow executable,
         CancellationToken token)

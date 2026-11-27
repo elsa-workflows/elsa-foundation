@@ -421,6 +421,19 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(testPostgres) is { StoreSchema: 1, MessageProtocol: 20, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(testSqlite) is { StoreSchema: 2, MessageProtocol: 23, JournalCodec: 0 },
             "private Test Runs share the installed definitions and require their own protocol on both providers");
+        using var ephemeralTestPostgres = KernelDb.ForPostgresRootEphemeralTestRunQualification(options);
+        using var ephemeralTestSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(),
+            StoreFormat.RootEphemeralTestRunQualification);
+        Check(ephemeralTestPostgres.RequiredFormat == StoreFormat.RootEphemeralTestRunQualification &&
+            ephemeralTestSqlite.RequiredFormat == ephemeralTestPostgres.RequiredFormat &&
+            ephemeralTestPostgres.RequiredFormat != testPostgres.RequiredFormat &&
+            ephemeralTestPostgres.Capabilities == (sharedPostgres.Capabilities | RootCapabilities.DirectTestRuns) &&
+            ephemeralTestSqlite.Capabilities == ephemeralTestPostgres.Capabilities &&
+            RootProfiles.MissingPrerequisites(ephemeralTestPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(ephemeralTestPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(ephemeralTestPostgres) is { StoreSchema: 1, MessageProtocol: 26, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(ephemeralTestSqlite) is { StoreSchema: 2, MessageProtocol: 29, JournalCodec: 0 },
+            "Ephemeral Test Runs qualify privately with shipped Event and inline definitions on both providers");
         mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
             playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities | lineagePostgres.Capabilities |
             inlinePostgres.Capabilities | authoredPostgres.Capabilities | startEventsPostgres.Capabilities |
@@ -512,7 +525,7 @@ internal static class ProfileCapabilityChecks
         return failures == 0 ? 0 : 1;
     }
 
-    internal static async Task<int> RunDirectTestRunStoreAsync(bool postgres)
+    internal static async Task<int> RunDirectTestRunStoreAsync(bool postgres, bool ephemeral = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var token = deadline.Token;
@@ -529,7 +542,8 @@ internal static class ProfileCapabilityChecks
             await using (var empty = OpenStock())
                 if (!await PostgresFixtureDatabase.IsEmptyAsync(empty, token))
                     throw new InvalidOperationException("The profile check requires an empty PostgreSQL database.");
-            await PostgresPreviewHosting.InstallDirectTestRunQualificationAsync(options, token);
+            if (ephemeral) await PostgresPreviewHosting.InstallEphemeralTestRunQualificationAsync(options, token);
+            else await PostgresPreviewHosting.InstallDirectTestRunQualificationAsync(options, token);
             var requests = PostgresPreviewHosting.CreateRequests(OpenStock, node, actor.Type);
             await MustRefuseAsync(() => PostgresPreviewHosting.StartAsync(OpenStock, node, actor, EndProcess,
                 cancellationToken: token, requests: requests));
@@ -540,8 +554,10 @@ internal static class ProfileCapabilityChecks
             try
             {
                 var path = Path.Combine(directory.FullName, "store.db");
-                var privateStore = SqliteEmbeddedFoundation.ForDirectTestRunQualification(path, node, actor.Type,
-                    (_, _) => ValueTask.FromResult(false));
+                ProtectRootStartAsync refuse = (_, _) => ValueTask.FromResult(false);
+                var privateStore = ephemeral
+                    ? SqliteEmbeddedFoundation.ForEphemeralTestRunQualification(path, node, actor.Type, refuse)
+                    : SqliteEmbeddedFoundation.ForDirectTestRunQualification(path, node, actor.Type, refuse);
                 await privateStore.InstallShippedAsync(token);
                 await MustRefuseAsync(() => SqliteEmbeddedHosting.StartFoundationAsync(path, node, actor, EndProcess,
                     cancellationToken: token));

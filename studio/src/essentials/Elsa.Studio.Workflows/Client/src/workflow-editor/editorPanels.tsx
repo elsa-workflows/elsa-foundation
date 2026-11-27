@@ -333,6 +333,7 @@ function runtimeSummary(view: WorkflowTestRunView, observation: TestRunObservati
   if (!terminal && (view.status === "StopRequested" || view.status === "Stopped" && execution))
     return { status: "Stopping", description: "Stop requested. Waiting for runtime confirmation." };
   if (view.status === "Stopped" && !execution) return { status: "Stopped", description: "The test run was stopped." };
+  if (view.status === "CompletedWithoutRecord") return { status: "Completed", description: "Test run completed without an execution record." };
   if (execution) {
     const status = ["Completed", "Faulted", "Cancelled"].includes(execution.status) ? execution.status
       : observation?.waits.length || execution.status === "Suspended" ? "Waiting" : execution.status;

@@ -79,5 +79,7 @@ public enum WorkflowDirectTestRunObservation
     Disarmed,
     Started,
     Ended,
-    Retired
+    Retired,
+    CompletedWithoutRecord,
+    Unavailable
 }

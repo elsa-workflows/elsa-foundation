@@ -72,6 +72,15 @@ public enum WorkflowTestScopeCloseReason
 /// <summary>The single root and provider issuance protected for an isolated Test Run scope.</summary>
 public sealed record WorkflowTestRunActorBinding(string ActorReference, string Issuance);
 
+/// <summary>The scoped inline start intent or a definite outcome with no committed actor.</summary>
+public enum WorkflowTestRunInlineState
+{
+    Pending,
+    CompletedWithoutRecord,
+    Refused,
+    Unavailable
+}
+
 /// <summary>Durable monotonic lifecycle evidence for one immutable test scope.</summary>
 public sealed record WorkflowTestScopeRecord
 {
@@ -117,6 +126,8 @@ public sealed record WorkflowTestScopeRecord
     public WorkflowTestScopeCloseReason? CloseReason { get; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowTestRunActorBinding? IsolatedActor { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestRunInlineState? InlineStart { get; init; }
 }
 
 public sealed record WorkflowTestScopeCloseRequest
@@ -251,7 +262,7 @@ public static class WorkflowTestScopeTransitions
             WorkflowTestScopeState.Closing,
             existing.CreatedAt,
             request.RequestedAt,
-            closeReason: request.Reason) { IsolatedActor = existing.IsolatedActor };
+            closeReason: request.Reason) { IsolatedActor = existing.IsolatedActor, InlineStart = existing.InlineStart };
         return new WorkflowTestScopeCloseResult(WorkflowTestScopeCloseDisposition.Accepted, closing);
     }
 
@@ -269,6 +280,6 @@ public static class WorkflowTestScopeTransitions
             existing.CreatedAt,
             existing.ClosingAt,
             completedAt,
-            existing.CloseReason) { IsolatedActor = existing.IsolatedActor };
+            existing.CloseReason) { IsolatedActor = existing.IsolatedActor, InlineStart = existing.InlineStart };
     }
 }

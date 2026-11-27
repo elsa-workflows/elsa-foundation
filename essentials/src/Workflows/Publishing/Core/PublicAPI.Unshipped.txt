@@ -938,6 +938,7 @@ Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunDraftSnapshot.State.get -> 
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunDraftSnapshot.State.init -> void
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunDraftSnapshot.WorkflowTestRunDraftSnapshot(string! DefinitionId, string! DefinitionVersionId, string! ArtifactVersion, Elsa.Workflows.Design.Core.Models.WorkflowDefinitionState! State, System.DateTimeOffset RequestedAt, System.DateTimeOffset? ExpiresAt) -> void
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
+Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.CompletedWithoutRecord = 8 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.DispatchAccepted = 1 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.DispatchDeferred = 4 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.DispatchDuplicate = 2 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus

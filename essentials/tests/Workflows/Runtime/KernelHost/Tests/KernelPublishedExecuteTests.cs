@@ -60,6 +60,12 @@ public sealed partial class KernelPublishedExecuteTests
     [Fact]
     public Task Sqlite_direct_test_runs_use_an_isolated_prepared_root() => RunAsync(false, directTests: true);
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task Sqlite_ephemeral_test_runs_preserve_completion_policy(bool recordCompletion) =>
+        RunAsync(false, directTests: true, recordEphemeralTestCompletion: recordCompletion);
+
     [SkippableFact]
     public Task PostgreSql_standard_execute_admits_published_native_and_flowchart()
     {
@@ -76,6 +82,19 @@ public sealed partial class KernelPublishedExecuteTests
         return RunAsync(true, directTests: true);
     }
 
+    [SkippableFact]
+    public Task PostgreSql_ephemeral_test_runs_record_completion_when_configured() => PostgreSqlEphemeralTestAsync(recordCompletion: true);
+
+    [SkippableFact]
+    public Task PostgreSql_ephemeral_test_runs_report_write_free_completion_and_promotion() => PostgreSqlEphemeralTestAsync(recordCompletion: false);
+
+    private static Task PostgreSqlEphemeralTestAsync(bool recordCompletion)
+    {
+        Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)), "Requires two dedicated PostgreSQL databases.");
+        return RunAsync(true, directTests: true, recordEphemeralTestCompletion: recordCompletion);
+    }
+
     [Fact]
     public Task Sqlite_shipped_ephemeral_execute_reports_volatile_completion_and_committed_promotion() => RunAsync(false, inline: true);
 
@@ -87,7 +106,7 @@ public sealed partial class KernelPublishedExecuteTests
         return RunAsync(true, inline: true);
     }
 
-    private static async Task RunAsync(bool postgres, bool directTests = false, bool inline = false)
+    private static async Task RunAsync(bool postgres, bool directTests = false, bool inline = false, bool? recordEphemeralTestCompletion = null)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var directory = postgres ? null : Directory.CreateTempSubdirectory("kernel-published-execute-");
@@ -100,12 +119,14 @@ public sealed partial class KernelPublishedExecuteTests
             }.ToString();
             if (postgres) Assert.NotEqual(new Npgsql.NpgsqlConnectionStringBuilder(foundation).Database,
                 new Npgsql.NpgsqlConnectionStringBuilder(runtime).Database);
-            await RunAsync(postgres ? "PostgreSql" : "Sqlite", directory?.FullName, foundation, runtime, directTests, inline, deadline.Token);
+            await RunAsync(postgres ? "PostgreSql" : "Sqlite", directory?.FullName, foundation, runtime, directTests, inline,
+                recordEphemeralTestCompletion, deadline.Token);
         }
         finally { directory?.Delete(recursive: true); }
     }
 
-    private static async Task RunAsync(string provider, string? directory, string? foundation, string runtime, bool directTests, bool inline, CancellationToken token)
+    private static async Task RunAsync(string provider, string? directory, string? foundation, string runtime, bool directTests, bool inline,
+        bool? recordEphemeralTestCompletion, CancellationToken token)
     {
         var canonical = ExecutableOf("execute-native", "canonical-publication", Sequence("sequence",
             SetOutput("input", "message", Request("input", "message")), SetOutput("variable", "seed", VariableRead("input", "seed-key"))),
@@ -185,13 +206,19 @@ public sealed partial class KernelPublishedExecuteTests
             (IRuntimeKernelExecutablePinStore)ActivatorUtilities.CreateInstance(services, pinDescriptor.ImplementationType!), pinBoundary));
         var api = new WorkflowsRuntimeApiFeature();
         api.ConfigureServices(builder.Services);
+        if (recordEphemeralTestCompletion is { } record)
+            builder.Services.AddPersistenceModeOptions(new PersistenceModeOptions { RecordCompletion = record });
         var kernelHosting = new WorkflowsRuntimeKernelHostingFeature
         {
             Provider = provider,
             SqlitePath = directory is null ? null : Path.Combine(directory, "foundation.db"),
             PostgresConnectionString = foundation
         };
-        if (directTests)
+        if (recordEphemeralTestCompletion.HasValue)
+            kernelHosting.ConfigureServices(builder.Services,
+                KernelShellStorage.CreateEphemeralTestRunQualification(provider, kernelHosting.SqlitePath, foundation),
+                protectChildExecutables: true);
+        else if (directTests)
             kernelHosting.ConfigureServices(builder.Services,
                 KernelShellStorage.CreateDirectTestRunQualification(provider, kernelHosting.SqlitePath, foundation),
                 protectChildExecutables: true);
@@ -245,6 +272,7 @@ public sealed partial class KernelPublishedExecuteTests
         await PublishAsync(recoverableFlowchart, "default");
         await materials.SaveAsync(pure, token);
         await PublishAsync(pure, "default");
+        if (recordEphemeralTestCompletion.HasValue) await materials.SaveAsync(slow, token);
         if (inline)
         {
             foreach (var candidate in new[] { slow, retractedInline, initialFault, uncertain })
@@ -261,6 +289,12 @@ public sealed partial class KernelPublishedExecuteTests
             var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
             using var http = new HttpClient { BaseAddress = new(address) };
             var isolatedActors = new List<Contract.ActorRef>();
+            if (recordEphemeralTestCompletion is { } recordCompletion)
+            {
+                await VerifyEphemeralTestAsync(pure, recordCompletion);
+                if (!recordCompletion) await VerifyEphemeralTestAsync(slow, expectActor: true);
+                return;
+            }
             if (directTests)
             {
                 await VerifyDirectTestAsync(canonical, "workflow-draft-snapshot", "draft:witness", closeBeforePin: false, interruptAfterPin: true);
@@ -723,6 +757,74 @@ public sealed partial class KernelPublishedExecuteTests
                 Assert.Equal(message, document.RootElement.GetProperty("message").GetString());
                 if (seed is not null) Assert.Equal(seed, document.RootElement.GetProperty("seed").GetString());
                 return actor.Id;
+            }
+
+            async Task VerifyEphemeralTestAsync(WorkflowExecutable executable, bool expectActor)
+            {
+                var isolated = app.Services.GetRequiredService<KernelTestRuns>().Reads;
+                var production = app.Services.GetRequiredService<KernelRuns>();
+                var before = await DurableRowCountAsync();
+                await using var authoring = await scopes.CreateAsyncScopeAsync(Scope);
+                var author = authoring.ServiceProvider;
+                var scopeStore = author.GetRequiredService<IWorkflowTestScopeStore>();
+                var dispatcher = author.GetRequiredService<IWorkflowDirectTestRunDispatcher>();
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                var (test, source, receipt) = await SubmitAsync();
+                while (receipt.CommandDispatch.Metadata.GetValueOrDefault("elsa.kernel.start.persistence-outcome") == "Unavailable" &&
+                    System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(8))
+                {
+                    // An owner may still be acquiring its partitions. A definitive shed response did not enter the queue.
+                    await Task.Delay(100, token);
+                    (test, source, receipt) = await SubmitAsync();
+                }
+                Assert.True(receipt.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Accepted, receipt.CommandDispatch.Reason);
+                Assert.Equal(source.SourceReferenceId, receipt.PinnedSource?.SourceReferenceId);
+                var durable = Assert.IsType<WorkflowTestScopeRecord>(await scopeStore.FindAsync(test.ScopeId, token));
+                if (!expectActor)
+                {
+                    Assert.True(receipt.TestRunCompletedWithoutRecord);
+                    Assert.Null(durable.IsolatedActor);
+                    Assert.Equal(WorkflowTestRunInlineState.CompletedWithoutRecord, durable.InlineStart);
+                    Assert.Equal(before, await DurableRowCountAsync());
+                    await using var recovered = await scopes.CreateAsyncScopeAsync(Scope);
+                    var recoveredScope = await recovered.ServiceProvider.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, token);
+                    Assert.Equal(WorkflowDirectTestRunObservation.CompletedWithoutRecord,
+                        await recovered.ServiceProvider.GetRequiredService<IWorkflowDirectTestRunDispatcher>()
+                            .ObserveAsync(recoveredScope!, source, token));
+                    return;
+                }
+
+                Assert.False(receipt.TestRunCompletedWithoutRecord);
+                var actor = new Contract.ActorRef(receipt.WorkflowExecutionId);
+                Assert.Equal(actor.Id, durable.IsolatedActor?.ActorReference);
+                Assert.True((await production.GetAsync(actor, token)).Missing);
+                Assert.Null(await author.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(actor.Id, token));
+                var read = (await isolated.GetAsync(actor, token)).Run;
+                Assert.NotNull(read);
+                Assert.Equal(test.ScopeId, read.Value.Run.TestStart?.ScopeId);
+                Assert.True(read.Value.Run.Ephemeral);
+
+                async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Receipt)> SubmitAsync()
+                {
+                    var now = DateTimeOffset.UtcNow;
+                    var selected = new WorkflowTestScope(Guid.NewGuid().ToString("N"), now.AddMinutes(30), Scope.Value, new(Scope.Value));
+                    await scopeStore.CreateAsync(selected, now, token);
+                    var id = executable.Identity;
+                    var reference = new WorkflowExecutableSourceReference(selected.ScopeId, id.ArtifactId, "workflow-draft-snapshot", "draft:witness",
+                        id.ArtifactVersion, id.DefinitionId, id.DefinitionVersionId, id.ArtifactVersion, now, null,
+                        WorkflowExecutableReferenceScope.TestRun, ExpiresAt: selected.ExpiresAt, TenantId: selected.TenantId);
+                    await author.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(reference, token);
+                    var start = new WorkflowExecutionStartDispatchRequest(id.ArtifactId, "workflow-designer-test-run",
+                        workflowExecutionId: null, idempotencyKey: null, metadata: null, variables: null, inputs: null,
+                        stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.TestRun,
+                        sourceSelection: new(sourceReferenceId: reference.SourceReferenceId),
+                        provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
+                        parentWorkflowExecutionId: null, correlationId: null, tenantId: Scope.Value, partition: selected.Partition,
+                        authority: WorkflowExecutionAuthoritySnapshot.CreateRoot("workflow-designer-test-run",
+                            new Dictionary<string, string> { ["elsa.identity.subject-id"] = "accepted", ["elsa.identity.subject-kind"] = "persisted-user" }),
+                        startAuthority: null, dispatchNestingDepth: 0, testScope: selected);
+                    return (selected, reference, await dispatcher.DispatchAsync(start, WorkflowExecutableReferenceScope.TestRun, cancellationToken: token));
+                }
             }
 
             async Task VerifyDirectTestAsync(WorkflowExecutable executable, string sourceKind, string version, bool closeBeforePin,

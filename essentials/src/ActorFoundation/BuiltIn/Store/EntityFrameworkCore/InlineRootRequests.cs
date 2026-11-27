@@ -22,8 +22,21 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
     Func<Contract.StartSpec, object, bool> validate, ProtectRootStartAsync protect)
 {
     private readonly object _gate = new();
+    private readonly Contract.BoundScope? _additionalScope;
+    private readonly Func<Contract.ActorStatus, bool>? _allowAdditionalWriteFreeCompletion;
     private (EfStore Store, Worker Worker, Action<Kernel.Runtime.InstanceRef> Wake)? _owner;
     private bool _closed;
+
+    internal InlineRootRequests(Contract.BoundScope scope, string actorType,
+        Func<Contract.StartSpec, object, bool> validate, ProtectRootStartAsync protect,
+        Contract.BoundScope additionalScope, Func<Contract.ActorStatus, bool> allowAdditionalWriteFreeCompletion)
+        : this(scope, actorType, validate, protect)
+    {
+        if (additionalScope.Tenant == scope.Tenant)
+            throw new ArgumentException("The additional inline scope must name a distinct tenant.", nameof(additionalScope));
+        _additionalScope = additionalScope;
+        _allowAdditionalWriteFreeCompletion = allowAdditionalWriteFreeCompletion;
+    }
 
     internal Task PrepareAsync(EfStore store, CancellationToken token)
     {
@@ -31,7 +44,7 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
         return store.EnableInlinePromotionAsync(scope,
             (spec, material) => spec.Model == actorType &&
                 validate(new(spec.Model, spec.Definition, spec.Input, spec.Ephemeral, (Contract.History)spec.History), material),
-            protect, TimeSpan.FromHours(1), token);
+            protect, TimeSpan.FromHours(1), token, _additionalScope, _allowAdditionalWriteFreeCompletion);
     }
 
     internal void Attach(EfStore store, Worker worker, Action<Kernel.Runtime.InstanceRef> wake)
@@ -54,8 +67,16 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
     }
 
     /// <summary>Offers an exact start and its trusted local material to this owner, then observes its outcome.</summary>
-    public async ValueTask<InlineStartOutcome> StartAsync(string operationId, Contract.StartSpec start, object material,
-        CancellationToken token)
+    public ValueTask<InlineStartOutcome> StartAsync(string operationId, Contract.StartSpec start, object material,
+        CancellationToken token) => StartCoreAsync(scope, operationId, start, material, token);
+
+    internal ValueTask<InlineStartOutcome> StartAdditionalAsync(string operationId, Contract.StartSpec start, object material,
+        CancellationToken token) => _additionalScope is { } additional
+        ? StartCoreAsync(additional, operationId, start, material, token)
+        : ValueTask.FromResult(new InlineStartOutcome(InlineStartDisposition.Refused));
+
+    private async ValueTask<InlineStartOutcome> StartCoreAsync(Contract.BoundScope selectedScope, string operationId,
+        Contract.StartSpec start, object material, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (start.Type != actorType || EfStore.CreateInlineRootSpec(operationId, start) is not { } trusted || !validate(start, material))
@@ -65,7 +86,7 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
         {
             token.ThrowIfCancellationRequested();
             if (_owner is not { } owner) return new(InlineStartDisposition.Unavailable);
-            using var attempt = owner.Store.AdmissionPressure!.BeginInlineStart(scope.Tenant);
+            using var attempt = owner.Store.AdmissionPressure!.BeginInlineStart(selectedScope.Tenant);
             try { attempt.RequireInlineTenantRate(); }
             catch (RootAdmissionRefused refusal)
             {
@@ -73,7 +94,7 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
                 return new(InlineStartDisposition.Unavailable)
                     { RefusalReason = admission.Reason, RetryAfter = admission.RetryAfter };
             }
-            pending = owner.Store.QueueInlineRoot(owner.Worker, operationId, trusted, material, owner.Wake);
+            pending = owner.Store.QueueInlineRoot(owner.Worker, operationId, trusted, material, owner.Wake, selectedScope);
             // Queued authored work spends its start permit even if it finishes without a checkpoint.
             if (pending is not null) attempt.Committed();
         }

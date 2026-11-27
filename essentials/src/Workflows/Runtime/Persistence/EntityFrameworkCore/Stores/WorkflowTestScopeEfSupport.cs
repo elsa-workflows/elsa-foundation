@@ -62,6 +62,8 @@ internal static class WorkflowTestScopeEfSupport
             row.PartitionOrderKey == Order(partition) &&
             row.ExpiresAtUtcTicks == record.Scope.ExpiresAt.UtcTicks &&
             row.State == (int)record.State &&
+            (record.InlineStart is null or WorkflowTestRunInlineState.Pending ||
+                record.IsolatedActor is null && Enum.IsDefined(record.InlineStart.Value)) &&
             row.Revision >= 0;
         if (!valid)
             throw new InvalidDataException("The workflow test-scope projections do not match its durable content.");

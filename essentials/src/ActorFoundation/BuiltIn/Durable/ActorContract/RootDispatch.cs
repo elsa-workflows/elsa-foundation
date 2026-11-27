@@ -12,6 +12,7 @@ internal interface IRootDispatchHeaders
     Func<Durable.StartSpec, object, bool>? ValidateInlineMaterial => null;
     object? InlineIssuer => null;
     bool SupportsInlineStarts => ValidateInlineMaterial is not null;
+    bool AllowsWriteFreeInlineCompletion(string tenant, Contract.ActorStatus status) => true;
     bool RecoversInlineInitialRoots => false;
     bool SupportsChildren => false;
     Func<string, string>? ChildMessageHandle => null;

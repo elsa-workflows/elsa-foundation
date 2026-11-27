@@ -1274,8 +1274,12 @@ Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Disarmed 
 Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Started = 3 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
 Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Ended = 4 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
 Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Retired = 5 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.CompletedWithoutRecord = 6 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Unavailable = 7 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore.AdmitIsolatedActorAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, string! actorReference, System.Func<System.DateTimeOffset>! readClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore.BeginInlineStartAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, System.Func<System.DateTimeOffset>! readClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore.SettleInlineStartAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState outcome, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore.AssertOpenAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, System.DateTimeOffset observedAt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeCleaner
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeCleaner.CloseAsync(string! scopeId, Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeCloseReason reason, System.DateTimeOffset requestedAt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeCleanupResult!>
@@ -6972,6 +6976,8 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.Agent.ge
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.CommandDispatch.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandDispatchResult!
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.PinnedExecutable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.PinnedSource.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceProvenance?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.TestRunCompletedWithoutRecord.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.TestRunCompletedWithoutRecord.init -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.WorkflowExecutionId.get -> string!
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchResult.WorkflowExecutionStartDispatchResult(string! workflowExecutionId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! pinnedExecutable, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandDispatchResult! commandDispatch, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionActorDescriptor! agent, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceProvenance? pinnedSource = null) -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState
@@ -7218,10 +7224,17 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.ClosedAt.get -> Syste
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.ClosingAt.get -> System.DateTimeOffset?
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.CreatedAt.get -> System.DateTimeOffset
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.InlineStart.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState?
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.InlineStart.init -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.Scope.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope!
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.State.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeRecord.WorkflowTestScopeRecord(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState state, System.DateTimeOffset createdAt, System.DateTimeOffset? closingAt = null, System.DateTimeOffset? closedAt = null, Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeCloseReason? closeReason = null) -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.Pending = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.CompletedWithoutRecord = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.Refused = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.Unavailable = 3 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState.Closed = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState.Closing = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState.Open = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState

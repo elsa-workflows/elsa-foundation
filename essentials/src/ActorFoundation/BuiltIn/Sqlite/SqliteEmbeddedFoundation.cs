@@ -47,6 +47,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     internal SqliteEmbeddedHosting.SqliteDirectRequests EventStarts =>
         qualificationFormat == StoreFormat.RootEventStartsQualification || qualificationFormat == StoreFormat.RootEventStartReceiptsQualification ||
         qualificationFormat == StoreFormat.RootEventStartScanQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
+        qualificationFormat == StoreFormat.RootEphemeralTestRunQualification ||
         qualificationFormat is null && SqliteEmbeddedHosting.TakesEventStarts
             ? requests.Value :
             throw new InvalidOperationException("The selected SQLite profile does not support Event starts.");
@@ -89,6 +90,13 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return new(databasePath, node, actorType, StoreFormat.RootDirectTestRunQualification, protectRootStart);
     }
 
+    internal static SqliteEmbeddedFoundation ForEphemeralTestRunQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootEphemeralTestRunQualification, protectRootStart);
+    }
+
     /// <summary>Binds the private SQLite inline start qualification profile with its executable protection.</summary>
     public static SqliteEmbeddedFoundation ForInlineStartsQualification(string databasePath, string node, string actorType,
         ProtectRootStartAsync protectRootStart)
@@ -112,6 +120,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     public bool TakesManagedSchedules => qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
         qualificationFormat == StoreFormat.RootPreparedStartsQualification ||
         qualificationFormat == StoreFormat.RootDirectTestRunQualification ||
+        qualificationFormat == StoreFormat.RootEphemeralTestRunQualification ||
         qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
         qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);

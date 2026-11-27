@@ -22,6 +22,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
 {
     private static readonly TimeSpan StopBudget = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan OutcomeBudget = TimeSpan.FromSeconds(5);
 
     public bool SupportsTrigger(string driverId) => driverId is "Elsa.Event" or "Elsa.HttpEndpoint" or "Elsa.Timer" or "Elsa.Cron";
 
@@ -63,7 +64,8 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
 
         var provenance = WorkflowExecutableSourceProvenance.From(source);
         var mode = services.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(executable);
-        if (mode == PersistenceMode.Ephemeral) return Refused("EphemeralTestRunUnavailable");
+        if (mode == PersistenceMode.Ephemeral && (!runtime.TakesEphemeralTestRuns || triggered))
+            return Refused("EphemeralTestRunUnavailable");
 
         Workflow workflow;
         try
@@ -107,6 +109,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         var native = NativeExecutionModel.Start(workflow.Id, mode.ToString(), input, request.TriggerNodeId, stimulus, workflow.Definition)
             with { ExecutableSelection = workflow.ExecutableSelection };
         var spec = WorkflowActor.Start(native, null, selection);
+        if (mode == PersistenceMode.Ephemeral) return await StartInlineAsync();
         if (http && request.TriggerMetadata.GetValueOrDefault("http:responseMode") == "Sync")
         {
             if (dispatchOptions?.TestRunHttpBudget is not { } budget)
@@ -142,6 +145,37 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
 
         WorkflowExecutionStartDispatchResult Refused(string reason) => KernelPublishedRunDispatcher.Result(
             test.ScopeId, executable.Identity, provenance, new(AdmissionOutcome.Refused), clock.GetUtcNow(), reason);
+
+        async ValueTask<WorkflowExecutionStartDispatchResult> StartInlineAsync()
+        {
+            var admissions = services.GetRequiredService<IWorkflowTestScopeAdmissionStore>();
+            WorkflowExecutionStartDispatchResult Result(InlineStartOutcome outcome) => KernelPublishedRunDispatcher.InlineResult(
+                test.ScopeId, executable.Identity, provenance, outcome, clock.GetUtcNow(), testRun: true);
+            var unknown = new InlineStartOutcome(InlineStartDisposition.Unknown);
+            if (!await admissions.BeginInlineStartAsync(test, clock.GetUtcNow, cancellationToken)) return Result(unknown);
+
+            var outcome = await runtime.StartInlineTestAsync(test.ScopeId, spec, workflow, cancellationToken);
+            var settlement = outcome switch
+            {
+                { Disposition: InlineStartDisposition.Volatile, Status: ActorStatus.Finished } => WorkflowTestRunInlineState.CompletedWithoutRecord,
+                { Disposition: InlineStartDisposition.Volatile } => throw new InvalidOperationException("An inline Test Run without a record must have completed."),
+                { Disposition: InlineStartDisposition.Refused } => WorkflowTestRunInlineState.Refused,
+                { Disposition: InlineStartDisposition.Unavailable } => WorkflowTestRunInlineState.Unavailable,
+                _ => (WorkflowTestRunInlineState?)null
+            };
+            if (settlement is not { } definite) return Result(outcome);
+
+            // A disconnected HTTP caller does not undo an outcome already returned by the owner.
+            using var record = new CancellationTokenSource(OutcomeBudget, clock);
+            try
+            {
+                return await admissions.SettleInlineStartAsync(test, definite, record.Token) ? Result(outcome) : Result(unknown);
+            }
+            catch (OperationCanceledException) when (record.IsCancellationRequested)
+            {
+                return Result(unknown);
+            }
+        }
     }
 
     public async ValueTask<WorkflowDirectTestRunObservation?> ObserveAsync(WorkflowTestScopeRecord scope,
@@ -152,7 +186,15 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             source.Scope != WorkflowExecutableReferenceScope.TestRun || source.SourceReferenceId != exact.ScopeId ||
             source.TenantId != exact.TenantId || source.CreatedAt != scope.CreatedAt || source.ExpiresAt != exact.ExpiresAt)
             return null;
-        if (scope.IsolatedActor is not { } binding) return WorkflowDirectTestRunObservation.Prepared;
+        if (scope.IsolatedActor is not { } binding)
+            return scope.InlineStart switch
+            {
+                WorkflowTestRunInlineState.Pending => WorkflowDirectTestRunObservation.Pending,
+                WorkflowTestRunInlineState.CompletedWithoutRecord => WorkflowDirectTestRunObservation.CompletedWithoutRecord,
+                WorkflowTestRunInlineState.Refused => WorkflowDirectTestRunObservation.Disarmed,
+                WorkflowTestRunInlineState.Unavailable => WorkflowDirectTestRunObservation.Unavailable,
+                _ => WorkflowDirectTestRunObservation.Prepared
+            };
 
         var actor = new ActorRef(binding.ActorReference);
         var result = await testRuns.Reads.GetAsync(actor, cancellationToken);

@@ -159,6 +159,7 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
         {
             var (row, record) = await EfRuntimeCheckpointTestScopeParticipantStaging.RequireOpenAsync(context, expected.Scope,
                 clock.GetUtcNow(), scope, token);
+            if (record.InlineStart is not (null or WorkflowTestRunInlineState.Pending)) return false;
             var selected = new WorkflowTestRunActorBinding(pin.ActorReference, pin.Issuance);
             if (record.IsolatedActor != selected && record.IsolatedActor != expected.ObservedBinding) return false;
             WorkflowTestScopeEfSupport.Copy(row, record with { IsolatedActor = selected }, checked(row.Revision + 1));
