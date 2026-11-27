@@ -102,6 +102,8 @@ if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batc
     return await PostgresHttpOwnerLoss.RunOwnerAsync(workerFence, pause, new(ownerRef));
 if (args is ["pg-held-start"]) return await PostgresHeldStartChecks.RunAsync();
 if (args is ["pg-child-workflows"]) return await PostgresChildWorkflowChecks.RunAsync();
+if (args is ["pg-child-workflows", var pgChildFence and ("checked" or "in-batch")])
+    return await PostgresChildWorkflowChecks.RunAsync(pgChildFence == "in-batch");
 if (args is ["sqlite-child-workflows", var sqliteChildFence and ("checked" or "in-batch")])
     return await SqliteChildWorkflowChecks.RunAsync(sqliteChildFence == "in-batch");
 if (args is ["pg-shipped-format"]) return await PostgresShippedFormatChecks.RunAsync();

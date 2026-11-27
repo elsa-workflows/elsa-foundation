@@ -530,8 +530,9 @@ public sealed partial class EfStore
                     ? await PrepareRootParkedTerminateAsync(root, turn, cancellationToken)
                     : await PrepareRootParkedRefusalAsync(root, turn, cancellationToken);
         }
-        if (!postgres && turn.OpensPark && turn.Expected is null)
-            return await PrepareSqliteCreatorParkAsync(root, turn, fence, cancellationToken);
+        if (turn.OpensPark && turn.Expected is null &&
+            (!postgres || _rootChildReference is not null && turn.Row?.Parent is not null))
+            return await PrepareRootCreatorParkAsync(root, turn, fence, cancellationToken);
         if (turn.OpensPark || turn.FoundationKept is { Count: > 0 })
         {
             await using var profile = create();

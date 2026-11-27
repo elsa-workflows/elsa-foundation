@@ -247,7 +247,8 @@ public sealed partial class EfStore
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal);
         static string ParkedRegistry(string column, bool endsAttached) => endsAttached
             ? $"""(CASE WHEN OLD."Parent" IS NOT NULL THEN NULL ELSE OLD."{column}" END)""" : $"OLD.\"{column}\"";
-        var keptScope = db.UsesSqliteShippedInstall ? "" : """k."InboxScope" = -4 AND """;
+        var keptScope = db.UsesSqliteShippedInstall ? "" : db.UsesRootChildren
+            ? $"{PostgresKeptParkInput(db, "k")} AND " : """k."InboxScope" = -4 AND """;
         const string pageKind = """ AND NEW."FoundationParkClearingKind" = OLD."FoundationParkClearingKind" """;
         string End(string ended, string kind, string entries) => $$$"""
             ({{{ended}}} AND NOT NEW."Retired"

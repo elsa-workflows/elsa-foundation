@@ -81,6 +81,8 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             if (db.UsesSqliteRootRuntime) return await BindSqliteFirstRootAsync(db, this, cancellationToken);
+            if (db.UsesRootChildren && Row is { Status: InstanceStatus.Faulted, Fault: not null })
+                return await BindPostgresCreatorParkAsync(db, this, cancellationToken);
             // The existing transaction owns the fence. Return the exact deleted envelope for application-side
             // comparison. A missing bind or changed envelope returns false and rolls back all effects.
             var family = RootStatePrefix(db);

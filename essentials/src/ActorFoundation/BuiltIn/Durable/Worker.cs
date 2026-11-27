@@ -3796,7 +3796,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (unit.Row is not null)
             {
                 (committed.Row, committed.AbsentAt) = (unit.InMemory ? unit.Row : unit.Row.WithoutInlineBirth(), 0);
-                if (unit.Row.FoundationDispatchHeader is { RefreshTerminal: true }) committed.Loaded = false;
+                // A first-turn attached Park has no in-memory dispatch header until the creator bind commits it.
+                if (unit.Row.FoundationDispatchHeader is { RefreshTerminal: true } ||
+                    unit.OpensPark && unit.Expected is null && unit.FoundationRootChildSends is { Count: > 0 })
+                    committed.Loaded = false;
             }
             if (unit.Delete && unit.Row is not { Retired: true } || committed.Unwritten && !unit.InMemory && unit.Row is null)
                 (committed.Row, committed.AbsentAt) = (null, _store.HasActorAliases ? _aliasBirths : 0);
