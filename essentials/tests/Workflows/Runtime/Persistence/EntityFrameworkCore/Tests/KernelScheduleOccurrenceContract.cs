@@ -66,7 +66,22 @@ internal static class KernelScheduleOccurrenceContract
             "schedule-a", 1, 1, "timer-a", Now, Now.AddMinutes(1), first, node, "{\"version\":1}");
         await PublishAsync(first, original.ActivationId, 0);
         Assert.False(await AcceptAsync(original with { Due = Now.AddSeconds(1) }));
-        Assert.True(await AcceptAsync(original));
+        var clockReads = 0;
+        Assert.False(await store.TryAcceptAsync(original, _ => ValueTask.FromResult(++clockReads == 3 ? original.AcceptBefore : Now)));
+        Assert.Empty(await store.ListPendingAsync(scope, null, 1));
+        Assert.Empty(await store.ListPinnedExecutableArtifactIdsAsync());
+
+        await using var contenderContext = open();
+        var contender = Store(contenderContext, access, clock);
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var contenderTask = Task.Run(async () =>
+        {
+            await start.Task;
+            return await contender.TryAcceptAsync(original, _ => ValueTask.FromResult(Now));
+        });
+        start.SetResult();
+        Assert.All(await Task.WhenAll(contenderTask, AcceptAsync(original).AsTask()), accepted => Assert.True(accepted));
+        Assert.Single(await store.ListPendingAsync(scope, null, 2));
         await PublishAsync(second, "schedule-b", 1);
         Assert.False(await AcceptAsync(original with { ArmGeneration = 2, TimerDeliveryId = "stale-timer" }));
         await Assert.ThrowsAsync<InvalidDataException>(() => AcceptAsync(original with { PinnedStart = "{\"version\":2}" }).AsTask());

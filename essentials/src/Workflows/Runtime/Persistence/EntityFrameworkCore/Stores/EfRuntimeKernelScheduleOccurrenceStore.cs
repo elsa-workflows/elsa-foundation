@@ -39,47 +39,57 @@ internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
         if (!IsDue(await readScheduleClock(cancellationToken))) return false;
 
         var accepted = false;
-        await leases.ExecuteFencedAsync([occurrence.Executable], $"kernel-schedule:{occurrence.Id}:{Guid.NewGuid():N}", async (grants, token) =>
+        try
         {
-            await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
-            try
+            await leases.ExecuteFencedAsync([occurrence.Executable], $"kernel-schedule:{occurrence.Id}:{Guid.NewGuid():N}", async (grants, token) =>
             {
-                if (await ReplayAsync(token))
+                await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
+                try
                 {
-                    accepted = true;
-                    return;
-                }
-                var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token);
-                var published = await FencePublicationAsync(scope, occurrence, sources, bindings, token);
-                if (published is null) return;
-                var acceptedAt = await readScheduleClock(token);
-                if (!IsDue(acceptedAt)) return;
+                    if (await ReplayAsync(token))
+                    {
+                        accepted = true;
+                        return;
+                    }
+                    var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token);
+                    var published = await FencePublicationAsync(scope, occurrence, sources, bindings, token);
+                    if (published is null) return;
+                    var acceptedAt = await readScheduleClock(token);
+                    if (!IsDue(acceptedAt)) return;
 
-                var tenant = JsonSerializer.Serialize(occurrence.Scope.TenantId);
-                context.KernelScheduleOccurrences.Add(new()
-                {
-                    Id = id,
-                    ScopeKey = Encode(scope),
-                    ScopeKeyHash = Hash(scope),
-                    TenantKey = Encode(tenant),
-                    TenantKeyHash = Hash(tenant),
-                    ArtifactId = Encode(occurrence.Executable.ArtifactId),
-                    ContentJson = RuntimeArtifactJson.Serialize(occurrence),
-                    SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily,
-                        RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion),
-                    Revision = 1,
-                    AcceptedAtUtcTicks = acceptedAt.UtcTicks
-                });
-                await context.SaveChangesAsync(token);
-                if (!IsDue(await readScheduleClock(token)) || !published.IsLive(clock.GetUtcNow())) return;
-                foreach (var deadline in deadlines)
-                    if (clock.GetUtcNow() >= deadline.ExpiresAt)
-                        throw new WorkflowExecutableRootWriteLeaseLostException(deadline.Grant.ArtifactId, deadline.Grant.LeaseId);
-                await transaction.CommitAsync(token);
-                accepted = true;
-            }
-            finally { context.ChangeTracker.Clear(); }
-        }, cancellationToken);
+                    var tenant = JsonSerializer.Serialize(occurrence.Scope.TenantId);
+                    context.KernelScheduleOccurrences.Add(new()
+                    {
+                        Id = id,
+                        ScopeKey = Encode(scope),
+                        ScopeKeyHash = Hash(scope),
+                        TenantKey = Encode(tenant),
+                        TenantKeyHash = Hash(tenant),
+                        ArtifactId = Encode(occurrence.Executable.ArtifactId),
+                        ContentJson = RuntimeArtifactJson.Serialize(occurrence),
+                        SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily,
+                            RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion),
+                        Revision = 1,
+                        AcceptedAtUtcTicks = acceptedAt.UtcTicks
+                    });
+                    await context.SaveChangesAsync(token);
+                    if (!IsDue(await readScheduleClock(token)) || !published.IsLive(clock.GetUtcNow())) return;
+                    foreach (var deadline in deadlines)
+                        if (clock.GetUtcNow() >= deadline.ExpiresAt)
+                            throw new WorkflowExecutableRootWriteLeaseLostException(deadline.Grant.ArtifactId, deadline.Grant.LeaseId);
+                    await transaction.CommitAsync(token);
+                    accepted = true;
+                }
+                finally { context.ChangeTracker.Clear(); }
+            }, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch
+        {
+            // Reconcile a concurrent identical acceptance or a lost acknowledgement after its transaction was disposed.
+            if (!await ReplayAsync(cancellationToken)) throw;
+            return true;
+        }
         return accepted;
 
         async Task<bool> ReplayAsync(CancellationToken token)
