@@ -10,6 +10,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Kernel.Native.Run" />
     <ProjectReference Include="../../../Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="../../../ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
     <ProjectReference Include="../../../ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj" />

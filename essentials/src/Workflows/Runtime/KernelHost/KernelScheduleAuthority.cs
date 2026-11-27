@@ -70,7 +70,8 @@ internal static class KernelScheduleAuthority
                     { Version: AuthorityVersion, Scope: { Persistence: not null } exactScope, Owner: { Executable: { } executable } owner } authority ||
                 CanonicalScope(exactScope) != CanonicalScope(scope) || authority.FoundationTenant != actors.Tenant ||
                 !MatchesClaim(authority.ScheduleKey, executable.DefinitionId, authority.TriggerNode, owner) ||
-                !MatchesStart(authority)) return null;
+                ReadPinnedStart(authority.PinnedStart, authority.FoundationTenant, executable, authority.TriggerNode, authority.ScheduleKey) is null)
+                return null;
 
             return new(exactScope, authority.ScheduleKey, offer.Schedule.Id, owner.SlotName, owner.ActivationId,
                 owner.PublicationRevision, offer.ArmGeneration, timer, DateTimeOffset.FromUnixTimeMilliseconds(offer.DueAtUnixMilliseconds),
@@ -97,24 +98,25 @@ internal static class KernelScheduleAuthority
         owner.SourceReferenceId == WorkflowActivationReferenceIdentity.Create(owner.ActivationId);
 
     // Verify the pinned start structurally and retain the original bytes for immutable receipt replay.
-    private static bool MatchesStart(Authority authority)
+    internal static StartSpec? ReadPinnedStart(string? pinned, string tenant, WorkflowExecutableIdentity executable, string triggerNode, string scheduleKey)
     {
-        if (authority.PinnedStart is not { Length: > 0 } pinned ||
+        if (pinned is not { Length: > 0 } || !FitsTypeData(pinned) ||
             JsonSerializer.Deserialize<StartSpec>(pinned) is not
                 { Type: WorkflowActor.ActorType, TypeData.Length: > 0, Input: { } input, Ephemeral: false, History: History.Full } start)
-            return false;
+            return null;
         using var typeData = JsonDocument.Parse(start.TypeData);
         var header = typeData.RootElement;
         if (header.ValueKind != JsonValueKind.Object ||
             header.TryGetProperty("Version", out var version) && version.ValueKind != JsonValueKind.Null ||
             header.TryGetProperty("Ephemeral", out var ephemeral) && ephemeral.ValueKind != JsonValueKind.False)
-            return false;
-        var run = WorkflowActor.DescribeRun(new(default, start.Type, authority.FoundationTenant, ActorStatus.Running,
+            return null;
+        var run = WorkflowActor.DescribeRun(new(default, start.Type, tenant, ActorStatus.Running,
             null, null, null, start.TypeData, new Dictionary<string, string>()));
-        return run is { Model: NativeExecutionModel.ModelKey, StartedAt: null, Suspended: false, SubStatus: null, History: History.Full } &&
-            run.Workflow == authority.Owner.Executable.ArtifactId && run.Definition == authority.Owner.Executable.DefinitionId &&
+        var matches = run is { Model: NativeExecutionModel.ModelKey, StartedAt: null, Suspended: false, SubStatus: null, History: History.Full } &&
+            run.Workflow == executable.ArtifactId && run.Definition == executable.DefinitionId &&
             JsonSerializer.Deserialize<NativeStart>(input) is { Mode: Modes.Balanced, Input: null, Trigger: System.Text.Json.Nodes.JsonValue key } native &&
-            native.TriggerNode == authority.TriggerNode && key.TryGetValue<string>(out var value) && value == authority.ScheduleKey;
+            native.TriggerNode == triggerNode && key.TryGetValue<string>(out var value) && value == scheduleKey;
+        return matches ? start : null;
     }
 
     private static string? CronError(ICronCalendar calendar, string expression)
@@ -126,7 +128,7 @@ internal static class KernelScheduleAuthority
 
     private static bool FitsTypeData(string json) => json.Length <= MaxTypeDataBytes && Encoding.UTF8.GetByteCount(json) <= MaxTypeDataBytes;
 
-    private static bool IsReference(string? value) =>
+    internal static bool IsReference(string? value) =>
         value is { Length: 64 } && value.AsSpan().IndexOfAnyExcept("0123456789ABCDEF") < 0;
 
     private sealed record Authority(int Version, TriggerScope Scope, string FoundationTenant, string ScheduleKey, string TriggerNode,
