@@ -13,7 +13,6 @@
     <PackageReference Include="Nuplane" />
     <PackageReference Include="Nuplane.Admin" />
     <PackageReference Include="Nuplane.Loading" />
-    <PackageReference Include="Nuplane.Sources.Directory" />
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
     <AdditionalFiles Include="PublicAPI.Shipped.txt" />
     <AdditionalFiles Include="PublicAPI.Unshipped.txt" />

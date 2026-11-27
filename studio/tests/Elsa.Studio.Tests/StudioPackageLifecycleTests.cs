@@ -41,7 +41,7 @@ public sealed class StudioPackageLifecycleTests
             builder.Logging.AddProvider(logs);
             // Feed registration consumes configuration during addon composition. Prepare the owned file first.
             var management = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "WebHost", "nuplane-management.json"), token))!;
-            management["Nuplane"]!["Setup"]!["AutomaticReconciliation"] = false;
+            management["Nuplane"]!["Reconciliation"]!["EnableAutomaticReconciliation"] = false;
             management["Nuplane"]!["Setup"]!["Feeds"]![0]!["DirectoryPath"] = feed;
             management["Nuplane"]!["Setup"]!["Feeds"]![0]!["Directory"]!["Watch"] = false;
             await File.WriteAllTextAsync(Path.Combine(root, "nuplane-management.json"), management.ToJsonString(), token);

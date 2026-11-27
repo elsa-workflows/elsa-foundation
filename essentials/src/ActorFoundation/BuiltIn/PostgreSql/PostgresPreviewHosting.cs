@@ -1,3 +1,4 @@
+using Kernel.Foundation.Hosting;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Runtime;
@@ -8,7 +9,7 @@ using Contract = Kernel.Foundation.Contracts;
 namespace Kernel.Foundation.Postgres;
 
 /// <summary>Starts the Built-in Actor Foundation on an installed PostgreSQL Core Preview store.</summary>
-public static class PostgresPreviewHosting
+public static partial class PostgresPreviewHosting
 {
     /// <summary>Selects the preview format for a dedicated PostgreSQL database with one outstanding untimed Native job per generated root.</summary>
     public static KernelDb CreateNativeJobContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootJobs(options);
@@ -31,6 +32,47 @@ public static class PostgresPreviewHosting
     /// <summary>Selects the dedicated preview format for qualifying descendant playback.</summary>
     public static KernelDb CreatePlaybackDescendantsQualificationContext(DbContextOptions<KernelDb> options) =>
         KernelDb.ForPostgresRootPlaybackDescendantsQualification(options);
+
+    /// <summary>Selects the dedicated preview format for qualifying trusted schedule controls.</summary>
+    public static KernelDb CreateScheduleControlsQualificationContext(DbContextOptions<KernelDb> options) =>
+        KernelDb.ForPostgresRootScheduleControlsQualification(options);
+
+    /// <summary>Installs or verifies a dedicated schedule-control qualification database.</summary>
+    public static Task InstallScheduleControlsQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return InstallPreviewFormatAsync(() => CreateScheduleControlsQualificationContext(options), cancellationToken);
+    }
+
+    /// <summary>Selects the private profile for qualifying managed schedules with the complete shipped workflow runtime.</summary>
+    public static KernelDb CreateManagedSchedulesQualificationContext(DbContextOptions<KernelDb> options) =>
+        KernelDb.ForPostgresRootManagedSchedulesQualification(options);
+
+    /// <summary>Installs or verifies a dedicated managed schedule qualification database.</summary>
+    public static Task InstallManagedSchedulesQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return InstallPreviewFormatAsync(() => CreateManagedSchedulesQualificationContext(options), cancellationToken);
+    }
+
+    /// <summary>Binds the trusted control transport to the host's chosen auxiliary schedule actor.</summary>
+    public static Contract.IScheduleRootControls BindScheduleControls(Func<KernelDb> create, string scheduleActorType)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        RootScheduleInventory.RequireActorType(scheduleActorType);
+        return new ScheduleControls(new PostgresRootAdmission(create, TimeSpan.Zero, scheduleActorType: scheduleActorType));
+    }
+
+    private sealed class ScheduleControls(PostgresRootAdmission admission) : Contract.IScheduleRootControls
+    {
+        public async ValueTask<Contract.ScheduleControlResult> ApplyScheduleControlAsync(Contract.BoundScope scope,
+            string definition, string scheduleKey, long revision, Contract.ScheduleControlKind kind, string? setHeader,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(scope);
+            return await admission.ApplyScheduleControlAsync(scope.Tenant, new(new(definition, scheduleKey), revision, kind, setHeader), cancellationToken);
+        }
+    }
 
     /// <summary>Installs or verifies a dedicated descendant playback qualification database.</summary>
     public static Task InstallPlaybackDescendantsQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
@@ -154,6 +196,22 @@ public static class PostgresPreviewHosting
         return db.UsesRootSelfProtocol;
     }
 
+    /// <summary>Whether the selected profile supports managed schedule delivery and irreversible cohort retirement.</summary>
+    public static bool TakesManagedSchedules(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootScheduleControls && db.UsesRootScheduleLineage;
+    }
+
+    /// <summary>Whether the selected PostgreSQL profile supports protected held root preparation.</summary>
+    public static bool TakesPreparedStarts(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootPreparedStarts;
+    }
+
     /// <summary>Whether the selected format takes durable actor-owned timers, as used by the Native Delay activity.</summary>
     public static bool TakesTimers(Func<KernelDb> create)
     {
@@ -197,8 +255,8 @@ public static class PostgresPreviewHosting
         OpenFoundationCoreAsync(create, actorType, requests, deduplicationWindow, pageSize, cancellationToken, null);
 
     /// <summary>
-    /// Opens ingress and reads with one-way operator commands. The host authorizes each command against its bound scope
-    /// and exact actor reference. The installed store determines which commands it accepts.
+    /// Opens ingress and reads with selected operator commands. The host authorizes each command against its bound scope
+    /// and exact actor reference. Held commands require the matching reply edge and a store that supports operator replies.
     /// </summary>
     public static Task<PostgresPreviewFoundation> OpenFoundationWithOperatorsAsync(Func<KernelDb> create, string actorType,
         Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorizeOperator, PostgresDirectRequests? requests = null,
@@ -214,6 +272,8 @@ public static class PostgresPreviewHosting
     {
         ArgumentNullException.ThrowIfNull(create);
         PostgresRootAdmission.RequireActorType(actorType);
+        requests?.RequireRootStartProtectionBinding(create, actorType);
+        if (authorizeOperator is not null) requests?.RequireOperatorBinding(create, actorType);
         if (requests is not null && deduplicationWindow is { } asked && asked != requests.DeduplicationWindow)
             throw new ArgumentException("Held requests carry their own deduplication window.", nameof(deduplicationWindow));
         var window = requests?.DeduplicationWindow ?? deduplicationWindow ?? TimeSpan.FromHours(1);
@@ -246,17 +306,27 @@ public static class PostgresPreviewHosting
     public static PostgresDirectRequests CreateRequests(Func<KernelDb> create, string node, string actorType, TimeSpan? deduplicationWindow = null)
         => CreateRequests(create, node, actorType, deduplicationWindow, null);
 
+    /// <summary>Creates held requests that protect each exact prepared root before admitting its creator.</summary>
+    public static PostgresDirectRequests CreateRequestsWithRootStartProtection(Func<KernelDb> create, string node, string actorType,
+        ProtectRootStartAsync protectRootStart, TimeSpan? deduplicationWindow = null)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return CreateRequests(create, node, actorType, deduplicationWindow, null, protectRootStart);
+    }
+
     internal static PostgresDirectRequests CreateRequests(Func<KernelDb> create, string node, string actorType,
-        TimeSpan? deduplicationWindow, RootAdmissionPressure? pressure)
+        TimeSpan? deduplicationWindow, RootAdmissionPressure? pressure, ProtectRootStartAsync? protectRootStart = null)
     {
         ArgumentNullException.ThrowIfNull(create);
         PostgresRootAdmission.RequireActorType(actorType);
         var window = deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         using var db = create();
+        if (protectRootStart is not null && (!db.UsesRootReplyProtocol || !db.UsesRootPreparedStarts))
+            throw new NotSupportedException("Held root protection requires an installed PostgreSQL prepared-start profile.");
         if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
         return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: pressure), new EfStore(create, postgres: true),
-            node, actorType) { DeduplicationWindow = window };
+            node, actorType, protectRootStart) { DeduplicationWindow = window };
     }
 
     /// <summary>
@@ -282,7 +352,8 @@ public static class PostgresPreviewHosting
     internal static async Task<RuntimeNode> StartAsync(Func<KernelDb> create, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options, CancellationToken cancellationToken,
         Action<Exception>? onFault, IReplyTransport? replies, bool? fenceInBatch = null,
-        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null)
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null,
+        ProtectChildBirthsAsync? protectChildBirths = null)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -291,6 +362,7 @@ public static class PostgresPreviewHosting
         if (node.Contains('\0') || !FoundationMetadataLimits.FitsName(node))
             throw new ArgumentException("Invalid PostgreSQL node name.", nameof(node));
         PostgresRootAdmission.RequireActorType(actor.Type);
+        (replies as PostgresDirectRequests)?.RequireRootStartProtectionBinding(create, actor.Type);
         if (auxiliaryActor is not null) ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
 
         options ??= new LoopOptions();
@@ -320,11 +392,14 @@ public static class PostgresPreviewHosting
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             if (db.UsesRootSequencedJournal) await EfStore.RequirePostgresSequencedJournalAsync(db, cancellationToken);
             if (db.UsesRootPlaybackDescendants) await EfStore.RequirePostgresPlaybackAsync(db, cancellationToken);
+            if (db.UsesRootScheduleControls) await RootScheduleControls.RequirePostgresDefinitionsAsync(db, cancellationToken);
             partitions = await PostgresRootAdmission.ReadInstalledPartitionCountAsync(db, cancellationToken);
+            await PostgresRootAdmission.BindScheduleOwnerAsync(db, auxiliaryActor?.Type, cancellationToken);
         }
 
         var pressure = (replies as PostgresDirectRequests)?.Pressure;
-        var store = new EfStore(create, postgres: true, fenceInBatch: fenceInBatch) { AdmissionPressure = pressure };
+        var store = new EfStore(create, postgres: true, fenceInBatch: fenceInBatch)
+            { AdmissionPressure = pressure, ProtectChildBirths = protectChildBirths };
         if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
         if (nativeJobs) await store.EnableRootJobsAsync(cancellationToken);
         await store.EnableRootChildrenAsync(cancellationToken);

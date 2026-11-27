@@ -3,6 +3,7 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { kernelHttpJourney } from "./kernelHttpJourney";
 import { corePreviewSmokeJourney, type CorePreviewStack } from "./corePreviewSmokeJourney";
 import { corePreviewActivityTimelineJourney } from "./corePreviewActivityTimelineJourney";
+import { corePreviewParkRecoveryJourney } from "./corePreviewParkRecoveryJourney";
 
 // The Core Preview journeys (tools/ux-acceptance/core_preview.py): a Workbench whose default shell serves its
 // publications on the kernel, on an owned provider store, with Studio and a local HTTP stub.
@@ -48,3 +49,6 @@ test.afterEach(async ({ page }) => {
 test("core preview stack is ready", async ({ page, request }, info) => corePreviewSmokeJourney(page, request, info, stack, capture, receipt));
 test("Studio opens the committed kernel activity timeline", async ({ page }, info) => corePreviewActivityTimelineJourney(page, info, stack, capture, receipt));
 test("kernel HTTP response opens the committed run", async ({ page, request }, info) => kernelHttpJourney(page, request, info, stack, capture, receipt));
+if (process.env.UX_CORE_PREVIEW_PARK_RECOVERY === "1") {
+  test("Studio recovers the selected parked workflow", async ({ page }, info) => corePreviewParkRecoveryJourney(page, info, stack, capture, receipt));
+}

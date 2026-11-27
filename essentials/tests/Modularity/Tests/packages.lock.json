@@ -3066,10 +3066,9 @@
       "elsa.workflows.runtime.kernelhosting": {
         "type": "Project",
         "dependencies": {
+          "Cronos": "[0.13.0, )",
           "CShells.Abstractions": "[0.0.31, )",
           "CShells.AspNetCore.Abstractions": "[0.0.31, )",
-          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
-          "Elsa.Activities.Http": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.BuiltIn.PostgreSql": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.BuiltIn.Sqlite": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",

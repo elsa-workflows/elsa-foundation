@@ -66,6 +66,11 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootPlaybackDescendantsQualification => new(3, 118, 1);
     internal static StoreFormat RootScheduleInventoryQualification => new(3, 119, 1);
     internal static StoreFormat RootScheduleSettlementQualification => new(3, 120, 1);
+    internal static StoreFormat RootScheduleControlsQualification => new(3, 121, 1);
+    internal static StoreFormat RootScheduleLineageQualification => new(3, 122, 1);
+    internal static StoreFormat RootManagedSchedulesQualification => new(3, 123, 1);
+    internal static StoreFormat RootPreparedStartsQualification => new(3, 124, 1);
+    internal static StoreFormat RootAuthoredEventsQualification => new(3, 126, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -74,7 +79,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 34 };
+    internal static StoreFormat RootShipped => Current with { MessageProtocol = 35 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -83,7 +88,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
 // What a store format selects in the generated-root protocol. A later protocol in one chain carries the earlier
 // capabilities of that chain, so a set is always written out closed. Marker and refusal checks compare formats.
 [Flags]
-internal enum RootCapabilities
+internal enum RootCapabilities : long
 {
     None = 0,
     SelfProtocol = 1 << 0,
@@ -117,7 +122,11 @@ internal enum RootCapabilities
     RetentionPolicy = 1 << 28,
     PlaybackDescendants = 1 << 29,
     ScheduleInventory = 1 << 30,
-    ScheduleSettlement = 1 << 31
+    ScheduleSettlement = 1L << 31,
+    ScheduleControls = 1L << 32,
+    ScheduleLineage = 1L << 33,
+    PreparedStarts = 1L << 34,
+    AuthoredEvents = 1L << 36
 }
 
 internal static class RootProfiles
@@ -152,11 +161,16 @@ internal static class RootProfiles
     private const RootCapabilities Shipped31 = Shipped29 | RootCapabilities.Children | RootCapabilities.SequencedJournal;
     private const RootCapabilities Shipped33 = Shipped31 | RootCapabilities.LiveEventWaits | RootCapabilities.RetentionPolicy;
     private const RootCapabilities Shipped34 = Shipped33 | RootCapabilities.Playback | RootCapabilities.PlaybackDescendants;
-    internal const RootCapabilities Shipped = Shipped34;
+    internal const RootCapabilities Shipped = PreparedStartsQualification;
     // Freeze this private profile to the base it qualified. Playback has its own qualification profile.
     internal const RootCapabilities ScheduleInventoryQualification = Shipped31 | RootCapabilities.LiveEventWaits |
         RootCapabilities.RetentionPolicy | RootCapabilities.ScheduleInventory;
     internal const RootCapabilities ScheduleSettlementQualification = ScheduleInventoryQualification | RootCapabilities.ScheduleSettlement;
+    internal const RootCapabilities ScheduleControlsQualification = ScheduleSettlementQualification | RootCapabilities.ScheduleControls;
+    internal const RootCapabilities ScheduleLineageQualification = ScheduleSettlementQualification | RootCapabilities.ScheduleLineage;
+    internal const RootCapabilities ManagedSchedulesQualification = Shipped34 | ScheduleControlsQualification | ScheduleLineageQualification;
+    internal const RootCapabilities PreparedStartsQualification = ManagedSchedulesQualification | RootCapabilities.PreparedStarts;
+    internal const RootCapabilities AuthoredEventsQualification = PreparedStartsQualification | RootCapabilities.AuthoredEvents;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
     internal const RootCapabilities PlaybackDescendantsQualification = Shipped34;
@@ -226,11 +240,14 @@ internal static class RootProfiles
         [RootCapabilities.TerminalOutput] = RootCapabilities.TerminalSelection | RootCapabilities.Retention,
         [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
         [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery,
+        [RootCapabilities.AuthoredEvents] = RootCapabilities.LiveEventWaits | RootCapabilities.SelfProtocol,
         [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
         [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
         [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
         [RootCapabilities.ScheduleInventory] = RootCapabilities.Timers | RootCapabilities.ParkOpening,
-        [RootCapabilities.ScheduleSettlement] = RootCapabilities.ScheduleInventory | RootCapabilities.JobProtocol
+        [RootCapabilities.ScheduleSettlement] = RootCapabilities.ScheduleInventory | RootCapabilities.JobProtocol,
+        [RootCapabilities.ScheduleControls] = RootCapabilities.ScheduleInventory | RootCapabilities.TimedJobSettlement,
+        [RootCapabilities.ScheduleLineage] = RootCapabilities.ScheduleSettlement | RootCapabilities.Children | RootCapabilities.Retirement
     };
 
     // The prerequisites of the set's members that the set lacks. None means the set is closed.
@@ -421,14 +438,22 @@ internal static class StoreDefinitionsRevision
     private const int SqliteSequencedJournalRevision = 14;
     private const int PostgreSqlLiveEventRevision = 11;
     private const int SqliteLiveEventRevision = 14;
-    private const int PostgreSqlShippedRevision = PostgreSqlPlaybackDescendantsRevision;
-    private const int SqliteShippedRevision = SqlitePlaybackDescendantsRevision;
+    private const int PostgreSqlShippedRevision = 20;
+    private const int SqliteShippedRevision = 23;
     private const int PostgreSqlPlaybackRevision = 12;
     private const int SqlitePlaybackRevision = 15;
     private const int PostgreSqlPlaybackDescendantsRevision = 14;
     private const int SqlitePlaybackDescendantsRevision = 17;
     private const int PostgreSqlScheduleInventoryRevision = 15;
     private const int SqliteScheduleInventoryRevision = 18;
+    private const int PostgreSqlScheduleControlsRevision = 16;
+    private const int SqliteScheduleControlsRevision = 19;
+    private const int PostgreSqlScheduleLineageRevision = 17;
+    private const int SqliteScheduleLineageRevision = 20;
+    private const int PostgreSqlManagedSchedulesRevision = 18;
+    private const int SqliteManagedSchedulesRevision = 21;
+    private const int PostgreSqlPreparedStartsRevision = 19;
+    private const int SqlitePreparedStartsRevision = 22;
     private const int SqliteParkRecoverRevision = 5;
     private const int PostgreSqlDueBacklogRevision = 5;
     private const int SqliteDueBacklogRevision = 10;
@@ -461,13 +486,23 @@ internal static class StoreDefinitionsRevision
                     sqlite ? SqlitePlaybackRevision : PostgreSqlPlaybackRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPlaybackDescendantsQualification =>
                     sqlite ? SqlitePlaybackDescendantsRevision : PostgreSqlPlaybackDescendantsRevision,
+                _ when db.RequiredFormat == StoreFormat.RootPreparedStartsQualification =>
+                    sqlite ? SqlitePreparedStartsRevision : PostgreSqlPreparedStartsRevision,
+                _ when db.RequiredFormat == StoreFormat.RootManagedSchedulesQualification =>
+                    sqlite ? SqliteManagedSchedulesRevision : PostgreSqlManagedSchedulesRevision,
+                _ when db.RequiredFormat == StoreFormat.RootScheduleLineageQualification =>
+                    sqlite ? SqliteScheduleLineageRevision : PostgreSqlScheduleLineageRevision,
                 _ when db.RequiredFormat == StoreFormat.RootScheduleInventoryQualification ||
                     db.RequiredFormat == StoreFormat.RootScheduleSettlementQualification =>
                     sqlite ? SqliteScheduleInventoryRevision : PostgreSqlScheduleInventoryRevision,
+                _ when db.RequiredFormat == StoreFormat.RootScheduleControlsQualification =>
+                    sqlite ? SqliteScheduleControlsRevision : PostgreSqlScheduleControlsRevision,
                 _ when db.RequiredFormat == StoreFormat.RootTerminalOutputQualification => sqlite ? SqliteTerminalOutputRevision : PostgreSqlTerminalOutputRevision,
                 _ when db.RequiredFormat == StoreFormat.RootS6TerminalOutputQualification => sqlite ? SqliteS6TerminalOutputRevision : PostgreSqlS6TerminalOutputRevision,
                 _ when db.RequiredFormat == StoreFormat.RootLiveEventQualification =>
                     sqlite ? SqliteLiveEventRevision : PostgreSqlLiveEventRevision,
+                // Protocol 126 adds a wire and write path, using the same physical definitions as protocol 35.
+                _ when db.RequiredFormat == StoreFormat.RootAuthoredEventsQualification => sqlite ? 23 : 20,
                 _ when db.RequiredFormat == StoreFormat.RootShipped =>
                     sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,
                 _ => sqlite ? SqliteRevision : PostgreSqlRevision
@@ -491,11 +526,12 @@ internal static class StoreDefinitionsRevision
     // Query the stamp inside the same statement as the format, so a reader cannot combine two store revisions.
     private static readonly string PostgresStampSql = FormattableString.Invariant($"""
         SELECT d."StoreSchema"::text || '/' || d."MessageProtocol"::text || '/' || d."JournalCodec"::text
-        FROM "KernelStoreVersions" d WHERE d."Id" = {MarkerId}
+        FROM /*physical-relation*/"KernelStoreVersions" d WHERE d."Id" = {MarkerId}
         """);
 
-    internal static string AddPostgresStampSql(string sql, bool lockDefinitions = false) =>
-        sql.Replace("/*definitions-stamp*/", "(" + PostgresStampSql + (lockDefinitions ? " FOR SHARE OF d)" : ")"), StringComparison.Ordinal);
+    internal static string AddPostgresStampSql(string sql, bool lockDefinitions = false, bool only = false) =>
+        sql.Replace("/*definitions-stamp*/", "(" + PostgresStampSql.Replace("/*physical-relation*/", only ? "ONLY " : "", StringComparison.Ordinal)
+            + (lockDefinitions ? " FOR SHARE OF d)" : ")"), StringComparison.Ordinal);
 
     internal static FormattableString AddPostgresStamp(FormattableString sql) =>
         FormattableStringFactory.Create(AddPostgresStampSql(sql.Format), sql.GetArguments());

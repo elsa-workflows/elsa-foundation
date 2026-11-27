@@ -1,3 +1,4 @@
+using Kernel.Foundation.Hosting;
 using Kernel.EntityFramework;
 using Microsoft.Data.Sqlite;
 using Contract = Kernel.Foundation.Contracts;
@@ -6,13 +7,22 @@ namespace Kernel.Foundation.Sqlite;
 
 public static partial class SqliteEmbeddedHosting
 {
+    internal static async ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(string path, StoreFormat? qualificationFormat,
+        Contract.BoundScope scope, Contract.ActorRef child, string issuance, CancellationToken token)
+    {
+        using var file = AcquireFile(path, forRuntime: false);
+        KernelDb Open() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
+        return await EfStore.ConfirmRootChildBirthAsync(Open, scope, child, issuance, token);
+    }
+
     internal static Contract.IActorReads CreateFoundationReads(string databasePath, int pageSize = 100, StoreFormat? qualificationFormat = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
         ArgumentOutOfRangeException.ThrowIfEqual(pageSize, int.MaxValue);
         using var file = AcquireFile(databasePath);
-        return new SqliteEmbeddedReads(file.Path, pageSize, qualificationFormat);
+        using var db = KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
+        return new SqliteEmbeddedReads(file.Path, pageSize, qualificationFormat, db.UsesRootParkRecovery);
     }
 
     internal static async ValueTask<T> RunRetentionPolicyAsync<T>(string path, StoreFormat? qualificationFormat,
@@ -32,10 +42,17 @@ public static partial class SqliteEmbeddedHosting
         }
     }
 
-    private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat)
+    private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat, bool supportsParkInbox)
         : Contract.IActorReads, Contract.IActorTerminalOutputReads, Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads,
-          Contract.IActorRetentionReads
+          Contract.IActorRetentionReads, Contract.IActorParkInboxReads
     {
+        public bool SupportsParkInbox => supportsParkInbox;
+
+        public ValueTask<Contract.Page<Contract.ParkInboxEntry>?> ReadParkInboxAsync(Contract.BoundScope scope,
+            Contract.ActorRef actor, string selection, Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
+            ReadAsync(reads => reads.ReadParkInboxAsync(scope, actor, selection, from, cancellationToken),
+                cancellationToken, normalizeLockTimeout: true);
+
         public bool SupportsSequencedJournal => qualificationFormat is null
             ? TakesSequencedJournal
             : qualificationFormat is { } format &&
@@ -47,7 +64,10 @@ public static partial class SqliteEmbeddedHosting
 
         public bool SupportsDescendantPlayback => qualificationFormat is null
             ? RootProfiles.Shipped.HasFlag(RootCapabilities.PlaybackDescendants)
-            : qualificationFormat == StoreFormat.RootPlaybackDescendantsQualification;
+            : qualificationFormat == StoreFormat.RootPlaybackDescendantsQualification ||
+              qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
+              qualificationFormat == StoreFormat.RootPreparedStartsQualification ||
+              qualificationFormat == StoreFormat.RootAuthoredEventsQualification;
 
         public ValueTask<Contract.ActorPlaybackPage?> ReadPlaybackAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             Contract.ActorPlaybackQuery query, CancellationToken cancellationToken = default) =>

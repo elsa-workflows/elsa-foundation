@@ -72,7 +72,7 @@ public sealed partial class EfStore
             var message = PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
                 ? PostgresRootAdmission.DecodeOperator(row, root.Reference, terminations: true, retirements: true, terminateThenDelete: true,
                     retentionDeletes: true, operatorReplies: true, parkedTerminate: true)
-                : PostgresRootAdmission.DecodeDirect(row, root.Reference, replies: true, liveEventWaits: db.UsesRootLiveEventWaits);
+                : PostgresRootAdmission.DecodeDirect(row, root.Reference, replies: true, liveEventWaits: db.UsesRootLiveEventWaits, scheduleControls: db.UsesRootScheduleControls, authoredEvents: db.UsesRootAuthoredEvents);
             if (message.ReplyTo is { } route)
                 (db.RetiredReplies ??= []).Add(new(row.Id, new(route, root.Tenant)));
         }
@@ -97,6 +97,8 @@ public sealed partial class EfStore
                 AND NOT EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {root.Actor} AND "Partition" = {root.Partition})
                 AND NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition}
                     AND (NOT "Done" OR "Payload" IS NOT NULL OR "Start" IS NOT NULL OR "ReplyTo" IS NOT NULL))
-            """, token) == 1;
+            """, token) == 1 &&
+            (!db.UsesRootScheduleLineage || await RootScheduleLineage.MarkRetiredAsync(db, root.Tenant, root.Reference,
+                root.Actor, root.Partition, retire.Position, token));
     }
 }

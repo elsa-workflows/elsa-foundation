@@ -3,14 +3,15 @@ using CShells;
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using CShells.Lifecycle;
-using Elsa.Activities.Http.Options;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Modularity.Core.Models;
 using Elsa.Workflows.Runtime.Api.Authorization;
+using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHost;
@@ -20,9 +21,9 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
@@ -66,6 +67,11 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString);
+        ConfigureServices(services, storage, protectChildExecutables: storage.TakesPreparedStarts);
+    }
+
+    internal void ConfigureServices(IServiceCollection services, KernelShellStorage storage, bool protectChildExecutables = false)
+    {
         var tenant = EmbeddedTenant.Bind(Tenant);
         var persistenceScope = new PersistenceScope(tenant.Tenant);
         var proposedRetention = new ActorRetentionWindows(RetentionWindow(FinishedRetentionSeconds, nameof(FinishedRetentionSeconds)),
@@ -73,21 +79,34 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             RetentionWindow(FaultedRetentionSeconds, nameof(FaultedRetentionSeconds)));
         var retention = new KernelRetentionActivation(tenant, proposedRetention, RetentionConfirmation);
         services.AddSingleton(storage);
+        services.AddSingleton(new KernelOperatorIngress(storage.OpenOperatorsAsync, storage.ReadClockAsync));
         services.AddSingleton(retention);
         services.AddSingleton(new ShellRestartRequirement(FeatureName));
-        services.AddSingleton(new KernelServing(capabilities: new KernelHostCapabilities(
-            Schedules: false, Timers: storage.TakesTimers, Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends,
-            HttpWaits: storage.TakesHttpWaits),
+        var schedules = storage.TakesManagedSchedules;
+        if (schedules) services.AddSingleton(new WorkflowScheduleCutoverClock(persistenceScope, storage.ReadClockAsync));
+        services.AddSingleton(new KernelServing(cronError: schedules ? CronosCalendar.Error : null,
+            capabilities: new KernelHostCapabilities(Schedules: schedules, Timers: storage.TakesTimers,
+                Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends, HttpWaits: storage.TakesHttpWaits),
             publicationScope: persistenceScope));
-        services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
+        services.AddSingleton<IScheduleActors>(schedules
+            ? new RuntimeManagedScheduleActors()
+            : new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),
             sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILoggerFactory>(),
-            persistenceScope, tenant, retention));
+            persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System, protectChildExecutables));
+        if (storage.TakesPreparedStarts)
+            services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutionStartService>(sp =>
+            {
+                var dispatcher = new KernelPublishedRunDispatcher(sp.GetRequiredService<IServiceScopeFactory>(),
+                    sp.GetRequiredService<KernelServing>(), persistenceScope, sp.GetRequiredService<KernelShellRuntime>().StartPublishedAsync);
+                return new WorkflowExecutionStartService(dispatcher, tenant.Tenant, sp.GetService<IHttpContextAccessor>(),
+                    sp.GetService<NormalizedPrincipalValidator>());
+            }));
         services.AddSingleton(sp => new KernelRuns(tenant, sp.GetRequiredService<KernelShellRuntime>().ReadAsync));
         services.AddSingleton(sp =>
         {
             var runtime = sp.GetRequiredService<KernelShellRuntime>();
-            var http = sp.GetRequiredService<IOptions<HttpEndpointOptions>>().Value;
+            var http = RequireHttpSettings(sp);
             var shellPath = sp.GetRequiredService<ShellSettings>().GetConfigurationRoot()["WebRouting:Path"]?.Trim().Trim('/');
             var basePath = HttpBasePath(http);
             var requestBasePath = string.IsNullOrEmpty(shellPath) ? basePath : "/" + shellPath + basePath;
@@ -138,7 +157,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             .RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeManage)
             .WithName("GetKernelWorkflowRetention");
 
-        var http = endpoints.ServiceProvider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value;
+        var http = RequireHttpSettings(endpoints.ServiceProvider);
         endpoints.Map(HttpBasePath(http) + "/{**path}", static (HttpContext context) =>
                 context.RequestServices.GetRequiredService<KernelHttpRequestHandler>().HandleAsync(context))
             .WithOwner(FeatureName)
@@ -146,7 +165,11 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             .AllowPublic("kernel workflow HTTP endpoints", "Starts or resumes a published workflow on its configured HTTP route and returns its response.");
     }
 
-    internal static string HttpBasePath(HttpEndpointOptions options)
+    internal static WorkflowHttpEndpointSettings RequireHttpSettings(IServiceProvider services) =>
+        services.GetService<WorkflowHttpEndpointSettings>() ?? throw new InvalidOperationException(
+            "Kernel workflow HTTP endpoints require an Elsa.Activities.Http package that provides the shell's workflow HTTP settings.");
+
+    internal static string HttpBasePath(WorkflowHttpEndpointSettings options)
     {
         var basePath = "/" + options.BasePath.Trim().Trim('/');
         if (basePath == "/" || basePath.IndexOfAny(['?', '#', '%', '{', '}']) >= 0)

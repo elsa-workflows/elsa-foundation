@@ -30,7 +30,7 @@ public sealed class KernelServing
     private readonly Func<string, string?>? _cronError;
     private readonly Lock _lock = new();
     private readonly SemaphoreSlim _turn = new(1, 1);
-    private ServingState _state;
+    private volatile ServingState _state;
 
     /// <param name="cronError">The host's check of a cron expression (<see cref="NativeSchedules"/>): null when it reads.</param>
     /// <param name="capabilities">
@@ -59,6 +59,14 @@ public sealed class KernelServing
 
     public KernelServedSlot? Find(string slotId) => _state.Slots.GetValueOrDefault(slotId);
 
+    internal (HttpRoute Route, Workflow Workflow)? HttpStart(HttpRoute matched)
+    {
+        var snapshot = _state;
+        return snapshot.HttpStarts.TryGetValue((matched.Method, matched.Template.Text), out var start) &&
+            start.Route.Workflow == matched.Workflow && start.Route.Node == matched.Node &&
+            start.Route.RespondBeforeCommit == matched.RespondBeforeCommit ? start : null;
+    }
+
     /// <summary>
     /// What serves a definition now, for a Dispatch that names it (<see cref="NativeExecutionOptions.ServedWorkflow"/>): its
     /// default slot's workflow, else the one slot's that serves it; none when no slot serves it; several when other slots do
@@ -69,8 +77,12 @@ public sealed class KernelServing
         var serving = _state.Slots.Values.Where(slot => slot.DefinitionId == definition).ToArray();
         if (serving.Length == 0) return ServedDefinition.None;
         var reached = serving.FirstOrDefault(slot => slot.SlotName == DefaultSlotName) ?? (serving.Length == 1 ? serving[0] : null);
-        return reached is null ? ServedDefinition.SeveralServe : ServedDefinition.By(reached.Workflow.Id);
+        return reached is null ? ServedDefinition.SeveralServe : ServedDefinition.FromWorkflow(reached.Workflow);
     }
+
+    internal bool IsHostWorkflow(string workflow, string definition) =>
+        _state.Slots.GetValueOrDefault("host:" + workflow) is { } host && host.Workflow.Definition == definition &&
+        host.Workflow.ExecutableSelection is null && Registry.TryGet(workflow, out var registered) && ReferenceEquals(registered, host.Workflow);
 
     /// <summary>What the host's foundation runs, which the coordinator maps executables against.</summary>
     public KernelHostCapabilities Capabilities { get; }
@@ -109,9 +121,11 @@ public sealed class KernelServing
     /// </summary>
     internal NativeSchedule[] SchedulesOf(Workflow workflow)
     {
-        var served = _state.Schedules.All.Where(schedule => schedule.Workflow == workflow.Id).ToArray();
-        if (served.Length > 0 || _state.Slots.Values.Any(slot => slot.Workflow.Id == workflow.Id)) return served;
-        try { return [.. new NativeSchedules(new WorkflowRegistry().Add(workflow), _cronError).All]; }
+        var snapshot = _state;
+        var served = snapshot.Schedules.All.Where(schedule => schedule.Workflow == workflow.Id && schedule.Definition == workflow.Definition).ToArray();
+        if (served.Length > 0 || snapshot.Slots.Values.Any(slot => slot.Workflow.Id == workflow.Id && slot.DefinitionId == workflow.Definition))
+            return served;
+        try { return [.. NativeSchedules.ForPublications([workflow], _cronError).All]; }
         catch (ArgumentException) { return []; }
     }
 
@@ -141,13 +155,19 @@ public sealed class KernelServing
 
     private ServingState Build(Dictionary<string, KernelServedSlot> slots)
     {
+        var workflows = slots.Values.OrderBy(slot => slot.SlotId, StringComparer.Ordinal).Select(slot => slot.Workflow).ToArray();
         var registry = new WorkflowRegistry();
-        foreach (var slot in slots.Values.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)) registry.Add(slot.Workflow);
-        return new(slots, new HttpRoutes(registry), new NativeSchedules(registry, _cronError));
+        foreach (var workflow in workflows) registry.Add(workflow);
+        var routes = new HttpRoutes(registry);
+        var starts = routes.Routes.Where(route => route.Start).ToDictionary(route => (route.Method, route.Template.Text),
+            route => (route, registry.Get(route.Workflow)));
+        var schedules = NativeSchedules.ForPublications(workflows.DistinctBy(workflow => (workflow.Id, workflow.Definition)), _cronError);
+        return new(slots, routes, schedules, starts);
     }
 }
 
-internal sealed record ServingState(IReadOnlyDictionary<string, KernelServedSlot> Slots, HttpRoutes Routes, NativeSchedules Schedules);
+internal sealed record ServingState(IReadOnlyDictionary<string, KernelServedSlot> Slots, HttpRoutes Routes, NativeSchedules Schedules,
+    IReadOnlyDictionary<(string Method, string Template), (HttpRoute Route, Workflow Workflow)> HttpStarts);
 
 /// <summary>A change to the serving set, checked: the slot, what it served before, what it serves after, and the state that results.</summary>
 internal sealed record KernelServingPlan(string SlotId, KernelServedSlot? Previous, KernelServedSlot? Served, ServingState State);

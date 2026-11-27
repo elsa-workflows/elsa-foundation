@@ -29,7 +29,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <c>AddRuntimeEntityFrameworkCore</c> registers together, and refuses any other: nothing else could commit with them.
 /// </para>
 /// </remarks>
-public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
+public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwitch, IWorkflowScheduleAdoption
 {
     private static readonly EfWriteRetry Commits = new(
         MaximumAttempts,
@@ -42,6 +42,7 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
     private readonly EfWorkflowTriggerBindingStore _bindings;
     private readonly EfRecurringTriggerScheduleStore? _schedules;
     private readonly EfWorkflowExecutableSourceReferenceStore _references;
+    private readonly WorkflowScheduleCutoverClock? _scheduleCutoverClock;
 
     public EfWorkflowActivationSwitch(
         IWorkflowActivationAuthority authority,
@@ -55,7 +56,15 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
     public EfWorkflowActivationSwitch(IWorkflowActivationAuthority authority, IWorkflowTriggerBindingStore triggerBindingStore,
         IWorkflowExecutableSourceReferenceStore sourceReferenceStore, IPersistenceAccessContextAccessor accessContextAccessor,
         TimeProvider timeProvider, IEnumerable<IIngressReservationPolicy> reservationPolicies, IRecurringTriggerScheduleStore? recurringScheduleStore = null)
+        : this(authority, triggerBindingStore, sourceReferenceStore, accessContextAccessor, timeProvider, reservationPolicies,
+            recurringScheduleStore, scheduleCutoverClock: null) { }
+
+    public EfWorkflowActivationSwitch(IWorkflowActivationAuthority authority, IWorkflowTriggerBindingStore triggerBindingStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore, IPersistenceAccessContextAccessor accessContextAccessor,
+        TimeProvider timeProvider, IEnumerable<IIngressReservationPolicy> reservationPolicies, IRecurringTriggerScheduleStore? recurringScheduleStore,
+        WorkflowScheduleCutoverClock? scheduleCutoverClock)
     {
+        _scheduleCutoverClock = scheduleCutoverClock;
         _reservationPolicies = RuntimeIngressReservationRules.Policies(reservationPolicies);
         _authority = authority as EfWorkflowActivationAuthority ?? throw Unsupported(authority);
         _context = _authority.Context;
@@ -82,8 +91,8 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(request.ActivationId), current => ResumeFailed(current, request.ActivationId), cancellationToken);
                 if (replaced is not null)
                     await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(replaced), current => RetireReplaced(current, request.UpdatedAt), cancellationToken);
-                await StageReservationsAsync(transition.Slot, cancellationToken);
-                return Step.Commit(transition);
+                var afterSave = await StageReservationsAsync(transition.Slot, cancellationToken, slotFenced: true);
+                return Step.Commit(transition, afterSave);
             },
             cancellationToken);
     }
@@ -114,8 +123,8 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 if (replaced is not null)
                     await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(replaced), current => RestoreReplaced(current, replaced), cancellationToken);
                 await _references.StageMoveAsync(revert.Reference.SourceReferenceId, current => RetireFailed(current, revert.Reference, _timeProvider.GetUtcNow()), cancellationToken);
-                await StageReservationsAsync(reverted.Slot, cancellationToken);
-                return Step.Commit(true);
+                var afterSave = await StageReservationsAsync(reverted.Slot, cancellationToken, slotFenced: true);
+                return Step.Commit(true, afterSave);
             },
             cancellationToken);
     }
@@ -138,8 +147,8 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 foreach (var activationId in serving.OfType<string>().Distinct(StringComparer.Ordinal))
                     if (await StageDeletionAsync(scope, activationId, unlessServing: false, cancellationToken) == ProjectionStaging.Moved)
                         return Step.Moved<WorkflowActivationTransition>();
-                await StageReservationsAsync(transition.Slot, cancellationToken);
-                return Step.Commit(transition);
+                var afterSave = await StageReservationsAsync(transition.Slot, cancellationToken, slotFenced: true);
+                return Step.Commit(transition, afterSave);
             },
             cancellationToken);
     }
@@ -181,18 +190,23 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                         await _authority.StageFindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken),
                         await StageStatesAsync(scope, plan.ActivationId, cancellationToken)))
                     return Step.Discard(false);
-                if (await StageSwitchAsync(scope, plan.ActivationId, null, deleteReplaced: false, cancellationToken))
-                    return Step.Moved<bool>();
-                foreach (var other in plan.ServingInItsPlace)
-                    if (await StageDeletionAsync(scope, other, unlessServing: false, cancellationToken) == ProjectionStaging.Moved)
-                        return Step.Moved<bool>();
-                await _references.StageMoveAsync(plan.ReferenceId, plan.ResumeOwn, cancellationToken);
-                foreach (var (referenceId, retire) in plan.Retirements(_timeProvider.GetUtcNow()))
-                    await _references.StageMoveAsync(referenceId, retire, cancellationToken);
-                await StageReservationsAsync(slot, cancellationToken);
-                return Step.Commit(true);
+                if (await StageRepairAsync(scope, plan, cancellationToken)) return Step.Moved<bool>();
+                var afterSave = await StageReservationsAsync(slot, cancellationToken);
+                return Step.Commit(true, afterSave);
             },
             cancellationToken);
+    }
+
+    private async ValueTask<bool> StageRepairAsync(string scope, WorkflowActivationRepairPlan plan, CancellationToken token)
+    {
+        if (await StageSwitchAsync(scope, plan.ActivationId, null, deleteReplaced: false, token)) return true;
+        foreach (var other in plan.ServingInItsPlace)
+            if (await StageDeletionAsync(scope, other, unlessServing: false, token) == ProjectionStaging.Moved)
+                return true;
+        await _references.StageMoveAsync(plan.ReferenceId, plan.ResumeOwn, token);
+        foreach (var (referenceId, retire) in plan.Retirements(_timeProvider.GetUtcNow()))
+            await _references.StageMoveAsync(referenceId, retire, token);
+        return false;
     }
 
     /// <summary>The activation's projection state in each store, read in the transaction.</summary>
@@ -223,7 +237,8 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
     /// Runs <paramref name="stage"/> in one transaction until it settles: a step that commits is saved and committed, one
     /// that discards is rolled back with its value, and one whose state moved, or whose commit lost a race, runs again.
     /// </summary>
-    private ValueTask<T> RunAsync<T>(string operation, Func<string, ValueTask<Step<T>>> stage, CancellationToken cancellationToken) =>
+    private ValueTask<T> RunAsync<T>(string operation, Func<string, ValueTask<Step<T>>> stage, CancellationToken cancellationToken,
+        bool retryStageConflicts = false) =>
         Commits.RunUntilSettledAsync<T>(
             _context,
             async () =>
@@ -237,6 +252,11 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 {
                     step = await stage(scope);
                 }
+                catch (Exception error) when (retryStageConflicts && EfRelationalExceptionClassifier.IsTransientWriteConflict(error))
+                {
+                    await _context.RollbackAndClearAsync(transaction);
+                    return EfWriteAttempt<T>.Retry(error);
+                }
                 catch
                 {
                     await _context.RollbackAndClearAsync(transaction);
@@ -249,9 +269,18 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                     return step.HasMoved ? EfWriteAttempt<T>.Retry() : step.Value;
                 }
 
-                return await _context.TryCommitAndClearAsync(transaction, Commits, operation, cancellationToken) is { } conflict
-                    ? EfWriteAttempt<T>.Retry(conflict)
-                    : step.Value;
+                try
+                {
+                    return await _context.TryCommitAndClearAsync(transaction, Commits, operation, cancellationToken,
+                            step.AfterSave ?? EfRuntimeKernelScheduleControlStore.AssignOrdinalsAfterSave(_context, scope)) is { } conflict
+                        ? EfWriteAttempt<T>.Retry(conflict)
+                        : step.Value;
+                }
+                catch
+                {
+                    _context.ChangeTracker.Clear();
+                    throw;
+                }
             },
             conflict => throw EfRuntimeOperationalStoreSupport.CommitFailure(operation, conflict),
             cancellationToken);
@@ -266,11 +295,11 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
         "Compose the slot authority, the projection stores and the source-reference store through AddRuntimeEntityFrameworkCore (#2230).");
 
     /// <summary>What one attempt staged: a value to commit, a value to roll back, or a state that moved.</summary>
-    private readonly record struct Step<T>(T Value, bool Commits, bool HasMoved);
+    private readonly record struct Step<T>(T Value, bool Commits, bool HasMoved, Func<CancellationToken, Task>? AfterSave = null);
 
     private static class Step
     {
-        public static Step<T> Commit<T>(T value) => new(value, true, false);
+        public static Step<T> Commit<T>(T value, Func<CancellationToken, Task>? afterSave = null) => new(value, true, false, afterSave);
 
         public static Step<T> Discard<T>(T value) => new(value, false, false);
 

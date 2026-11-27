@@ -1,8 +1,6 @@
 {
   "Nuplane": {
     "Setup": {
-      "AutomaticReconciliation": true,
-      "PollInterval": "00:01:00",
       "Feeds": [
         {
           "Name": "studio-local-packages",
@@ -13,12 +11,17 @@
           "Directory": {
             "Watch": true,
             "DebounceWindow": "00:00:01"
-          }
+          },
+          "Trust": "Trusted"
         }
       ]
     },
     "Loading": {
       "Enabled": true
+    },
+    "Reconciliation": {
+      "EnableAutomaticReconciliation": true,
+      "PollInterval": "00:01:00"
     }
   },
   "Studio": {

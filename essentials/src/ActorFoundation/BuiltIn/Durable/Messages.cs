@@ -132,6 +132,7 @@ public sealed record Message(
     internal bool BindFoundationChild { get; init; }
     internal bool FoundationRootChildNotice { get; init; }
     internal bool FoundationRootChildInput { get; init; }
+    internal (string Tenant, string ActorType)? FoundationScheduleControl { get; init; }
     internal bool StoreStartInputOnce { get; init; }
     internal Message? StoredEnvelope { get; init; }
     internal EventMatch? ProjectedEvent { get; init; }

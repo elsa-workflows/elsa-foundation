@@ -1,37 +1,45 @@
 using System.Text.Json.Nodes;
 using CShells.Lifecycle;
-using Elsa.Activities.Http.Options;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Foundation.Contracts;
+using Kernel.Foundation.Hosting;
 using Kernel.Native;
 using Kernel.WorkflowActor;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using Admission = Kernel.Foundation.Contracts.Admission;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
-    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention) : IAsyncDisposable
+    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention, TimeProvider clock, bool protectChildExecutables = false) : IAsyncDisposable
 {
-    private static readonly TimeSpan RetentionStopBudget = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan MaintenanceStopBudget = TimeSpan.FromSeconds(1);
 
     private IHostedService? _owner;
     private IAsyncDisposable? _lifetime;
     private HttpClient? _client;
     private KernelShellFoundation? _foundation;
-    private readonly CancellationTokenSource _retentionStop = new();
-    private Task? _retention;
+    private IProtectedRootStarts? _publishedStarts;
+    private readonly CancellationTokenSource _maintenanceStop = new();
+    private Task? _maintenance;
 
     public async Task StartAsync(CancellationToken token)
     {
-        await storage.InstallAsync(token);
+        var protection = protectChildExecutables || storage.TakesPreparedStarts
+            ? new KernelExecutableProtection(scopes, persistenceScope, tenant, serving, storage, clock,
+                logs.CreateLogger<KernelExecutableProtection>())
+            : null;
+        await storage.InstallAsync(token, storage.TakesPreparedStarts ? protection!.ProtectHeldStartAsync : null);
         _foundation = await storage.OpenAsync(token);
+        var schedules = await CreateScheduleWorkerAsync(token);
+        if (protection is not null) await protection.RequireAsync(token);
         await ServePublicationsAsync(token);
 
         _client = NativeHttpOptions.CreateClient();
@@ -50,44 +58,60 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ServedWorkflow = serving.ServedWorkflow,
             ResolveWorkflow = ResolveWorkflowAsync
         });
-        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window);
+        var auxiliary = schedules is null ? null : new ScheduleActor(schedules.Value.Calendar, schedules.Value.Worker.CreateAcceptor());
+        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window, auxiliary,
+            protectChildExecutables ? protection!.ProtectAsync : null);
         await _owner.StartAsync(token);
+        if (storage.TakesPreparedStarts) Volatile.Write(ref _publishedStarts, storage.BindPublishedStarts(tenant));
         var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
         var worker = new KernelRetentionWorker(pass, tenant,
             token => retention.InitializeAsync(Foundation.RetentionPolicies, token),
             token => retention.RefreshAsync(Foundation.RetentionPolicies, token),
             retention.Unavailable, logs.CreateLogger<KernelRetentionWorker>());
-        _retention = Task.Run(() => worker.RunAsync(_retentionStop.Token));
+        var maintenanceToken = _maintenanceStop.Token;
+        List<Task> maintenance = [Task.Run(() => worker.RunAsync(maintenanceToken))];
+        if (schedules is { } managed) maintenance.Add(Task.Run(() => managed.Worker.RunAsync(maintenanceToken)));
+        if (protection is not null) maintenance.Add(Task.Run(() => protection.RunAsync(maintenanceToken)));
+        _maintenance = Task.WhenAll(maintenance);
     }
 
     public async Task StopAsync(CancellationToken token)
     {
-        using var retentionDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-        retentionDeadline.CancelAfter(RetentionStopBudget);
-        try { await StopRetentionAsync(retentionDeadline.Token); }
+        Volatile.Write(ref _publishedStarts, null);
+        using var maintenanceDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        maintenanceDeadline.CancelAfter(MaintenanceStopBudget);
+        try { await StopMaintenanceAsync(maintenanceDeadline.Token); }
         finally
         {
             if (_owner is not null) await _owner.StopAsync(token);
         }
     }
 
-    private async Task<bool> StopRetentionAsync(CancellationToken token)
+    private async Task<bool> StopMaintenanceAsync(CancellationToken token)
     {
-        if (_retention is null) return true;
+        if (_maintenance is null) return true;
         try
         {
-            await _retentionStop.CancelAsync().WaitAsync(token);
-            await _retention.WaitAsync(token);
+            await _maintenanceStop.CancelAsync().WaitAsync(token);
+            await _maintenance.WaitAsync(token);
             return true;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            logs.CreateLogger<KernelShellRuntime>().LogWarning("Kernel retention did not stop within the shell's shutdown deadline.");
+            logs.CreateLogger<KernelShellRuntime>().LogWarning("Kernel maintenance did not stop within the shell's shutdown deadline.");
             return false;
         }
     }
 
     public ValueTask<IIngress> IngressAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Ingress);
+
+    public ValueTask<Admission> StartPublishedAsync(string operationId, StartSpec start, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        return Volatile.Read(ref _publishedStarts) is { } starts
+            ? starts.StartAsync(operationId, start, token)
+            : ValueTask.FromResult(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.NodeBusy, RetryAfter: TimeSpan.FromSeconds(1)));
+    }
 
     public ValueTask<IActorReads> ReadAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Reads);
 
@@ -96,6 +120,22 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     private KernelShellFoundation Foundation => _foundation ??
         throw new InvalidOperationException("The kernel shell has not opened its Actor Foundation.");
+
+    private async ValueTask<(KernelScheduleReconciliationWorker Worker, ICronCalendar Calendar)?> CreateScheduleWorkerAsync(CancellationToken token)
+    {
+        if (!serving.Capabilities.Schedules) return null;
+        await using var runtime = await scopes.CreateAsyncScopeAsync(persistenceScope);
+        var services = runtime.ServiceProvider;
+        _ = services.GetRequiredService<IRuntimeKernelScheduleControlScanStore>();
+        _ = services.GetRequiredService<IRuntimeKernelScheduleOccurrenceStore>();
+        _ = services.GetRequiredService<IRuntimeKernelScheduleOccurrenceDeliveryStore>();
+        _ = services.GetRequiredService<IRuntimeKernelScheduleOccurrenceRetirementStore>();
+        var scope = RuntimeKernelScheduleControl.CanonicalScope(new(persistenceScope, tenant.Tenant));
+        var provider = await storage.OpenSchedulesAsync(tenant, token);
+        var calendar = new CronosCalendar();
+        return (new(scopes, scope, tenant, serving.Capabilities, calendar, provider, storage.ReadClockAsync,
+            clock, logs.CreateLogger<KernelScheduleReconciliationWorker>()), calendar);
+    }
 
     private async Task ServePublicationsAsync(CancellationToken token)
     {
@@ -120,10 +160,11 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async ValueTask DisposeAsync()
     {
-        using var stop = new CancellationTokenSource(RetentionStopBudget);
+        Volatile.Write(ref _publishedStarts, null);
+        using var stop = new CancellationTokenSource(MaintenanceStopBudget);
         try
         {
-            if (await StopRetentionAsync(stop.Token)) _retentionStop.Dispose();
+            if (await StopMaintenanceAsync(stop.Token)) _maintenanceStop.Dispose();
         }
         finally
         {
@@ -147,7 +188,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     }
 }
 
-internal sealed class PrepareKernelShell(IShell shell, IShellRegistry registry, IOptions<HttpEndpointOptions> http,
+internal sealed class PrepareKernelShell(IShell shell, IShellRegistry registry, IServiceProvider services,
     ILogger<PrepareKernelShell> logger) : IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken)
@@ -160,7 +201,7 @@ internal sealed class PrepareKernelShell(IShell shell, IShellRegistry registry, 
             logger.LogWarning("Kernel hosting requires a host restart to replace the active shell {ShellName}.", defaultShell);
             throw new InvalidOperationException("Kernel hosting requires a host restart to replace the active shell.");
         }
-        _ = WorkflowsRuntimeKernelHostingFeature.HttpBasePath(http.Value);
+        _ = WorkflowsRuntimeKernelHostingFeature.HttpBasePath(WorkflowsRuntimeKernelHostingFeature.RequireHttpSettings(services));
         return Task.CompletedTask;
     }
 }

@@ -50,9 +50,21 @@ public sealed class AdministrationCompositionTests
     }
 
     [Fact]
+    public async Task A_callback_cannot_override_the_reserved_fallback_feed()
+    {
+        var error = await Assert.ThrowsAsync<ArgumentException>(async () =>
+        {
+            await using var host = await AdministrationHost.StartAsync(nuplane =>
+                nuplane.AddDirectoryFeed(StudioNuplaneSettings.FallbackFeedName, "other"));
+        });
+
+        Assert.Contains("reserved for Studio", error.Message);
+    }
+
+    [Fact]
     public async Task Callback_directory_feed_replaces_the_inactive_fallback()
     {
-        await using var host = await AdministrationHost.StartAsync(nuplane => nuplane.AddDirectoryFeed("application-feed", "custom-feed", feed => { feed.Watch = false; feed.IncludeAll(); }));
+        await using var host = await AdministrationHost.StartAsync(nuplane => nuplane.AddDirectoryFeed("application-feed", "custom-feed", feed => { feed.Trust = Nuplane.Abstractions.FeedTrustLevel.Trusted; feed.Watch = false; feed.IncludeAll(); }));
         var feeds = host.App.Services.GetRequiredService<IOptions<FeedResolutionOptions>>().Value.Feeds;
         var selected = Assert.Single(feeds, feed => feed.ServiceIndex.IsFile);
         Assert.Equal("application-feed", selected.Name);
@@ -109,7 +121,7 @@ internal sealed class AdministrationHost : IAsyncDisposable
             builder.Configuration.Sources.Clear();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Nuplane:Setup:AutomaticReconciliation"] = "false",
+                ["Nuplane:Reconciliation:EnableAutomaticReconciliation"] = "false",
                 ["Nuplane:Loading:Enabled"] = loadPackages.ToString()
             });
             if (managedFeatures)
@@ -129,7 +141,7 @@ internal sealed class AdministrationHost : IAsyncDisposable
                     nuplane.WithStateFile(state).UseCoordinatedPackageStore([new("default", "studio", state)], true);
                     nuplane.Services.Configure<FeedResolutionOptions>(options => options.PackageInstallRoot = Path.Combine(host.Root, "native-store", "installs"));
                     nuplane.Services.Configure<LockFileOptions>(options => options.Path = Path.Combine(host.Root, "native-store", "nuplane.lock.json"));
-                    nuplane.AddDirectoryFeed("native-feed", "feed", feed => { feed.Watch = false; feed.IncludeAll(); });
+                    nuplane.AddDirectoryFeed("native-feed", "feed", feed => { feed.Trust = Nuplane.Abstractions.FeedTrustLevel.Trusted; feed.Watch = false; feed.IncludeAll(); });
                 }
                 configureNuplane?.Invoke(nuplane);
             });

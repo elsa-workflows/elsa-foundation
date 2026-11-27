@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Core.Services;
@@ -28,6 +29,7 @@ public sealed class WorkbenchCorePreviewKernelShellTests
     private static IReadOnlyCollection<string> Addable(bool servesOnKernel)
     {
         var services = new ServiceCollection();
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
         services.Configure<ActivityAvailabilityOptions>(options =>
         {
             options.Sets["mine"] = ["Custom.Hidden"];

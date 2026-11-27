@@ -200,7 +200,7 @@ public sealed partial class EfStore
                     """).AsNoTracking().ToListAsync(token);
                 foreach (var row in held)
                 {
-                    var message = PostgresRootAdmission.DecodeDirect(row, Root.Reference, replies: true, liveEventWaits: db.UsesRootLiveEventWaits);
+                    var message = PostgresRootAdmission.DecodeDirect(row, Root.Reference, replies: true, liveEventWaits: db.UsesRootLiveEventWaits, scheduleControls: db.UsesRootScheduleControls, authoredEvents: db.UsesRootAuthoredEvents);
                     if (message.ReplyTo is { } route)
                         (db.RetiredReplies ??= []).Add(new(row.Id, new(route, Root.Tenant)));
                 }
@@ -240,7 +240,9 @@ public sealed partial class EfStore
                 marker = FormattableStringFactory.Create(marker.Format.Replace("/*history-residue*/", $$"""
                     AND NOT EXISTS (SELECT 1 FROM "FoundationWorkflowHistory" WHERE "Tenant" = {{{marker.ArgumentCount}}} AND "Reference" = {{{marker.ArgumentCount + 1}}})
                     """, StringComparison.Ordinal), [.. marker.GetArguments(), Root.Tenant, Root.Reference]);
-            return await db.Database.ExecuteSqlInterpolatedAsync(marker, token) == 1;
+            return await db.Database.ExecuteSqlInterpolatedAsync(marker, token) == 1 &&
+                (!db.UsesRootScheduleLineage || await RootScheduleLineage.MarkRetiredAsync(db, Root.Tenant, Root.Reference,
+                    Root.Actor, Root.Partition, Position, token));
 
             // The Park, its clearing and its kept set as decided; the last kept rows are cleared as format 22 clears them.
             async Task<bool> ClearParkedAsync(ParkedRetirement parked)

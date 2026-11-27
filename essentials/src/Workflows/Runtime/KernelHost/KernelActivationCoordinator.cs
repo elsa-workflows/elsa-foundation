@@ -107,10 +107,11 @@ public sealed class KernelActivationCoordinator(
         }
 
         // 2. Check the routes and schedules over the serving set with the candidate in its slot's place.
+        var requested = new KernelServedSlot(slotId, definitionId, command.SlotName, command.ActivationId, workflow, 0);
         KernelServingPlan plan;
         try
         {
-            plan = serving.Plan(slotId, new KernelServedSlot(slotId, definitionId, command.SlotName, command.ActivationId, workflow, 0));
+            plan = serving.Plan(slotId, requested);
         }
         catch (Exception refused) when (refused is ArgumentException or InvalidOperationException)
         {
@@ -130,8 +131,20 @@ public sealed class KernelActivationCoordinator(
         try
         {
             var leaseId = $"activation:{command.ActivationId}:{Guid.NewGuid():N}";
-            await rootWriteLeaseManager.ExecuteAsync(identity, leaseId,
-                async leaseToken => result = await RunSequenceAsync(command, reference, plan, leaseToken), cancellationToken);
+            await rootWriteLeaseManager.ExecuteAsync(identity, leaseId, async leaseToken =>
+            {
+                // Publishing can reuse an artifact with a new source version. Pin the catalog's immutable material
+                // under this lease while leaving source provenance and logical definition on the selected publication.
+                var material = await executableStore.FindAsync(identity.ArtifactId, leaseToken);
+                if (material is null || material.Identity.ArtifactId != identity.ArtifactId ||
+                    material.Identity.ArtifactHash != identity.ArtifactHash)
+                    throw new InvalidOperationException($"Artifact '{identity.ArtifactId}' does not match the selected publication.");
+                var selected = material.Identity == identity ? plan : serving.Plan(slotId, requested with
+                {
+                    Workflow = NativeExecutableMapper.Map(material, serving.Capabilities, definitionId)
+                });
+                result = await RunSequenceAsync(command, reference, selected, leaseToken);
+            }, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (WorkflowActivationException) { throw; }
@@ -233,7 +246,8 @@ public sealed class KernelActivationCoordinator(
     /// <summary>
     /// Serves <paramref name="plan"/>: its workflow joins the registry and its routes replace the table, then each schedule of
     /// the workflow it serves has its run pointed at it and its schedule set at <paramref name="revision"/>, and each schedule
-    /// only the workflow it replaces had is stopped and its run removed, in that order.
+    /// only the workflow it replaces had is stopped and its run removed, in that order. A managed owner reconciles
+    /// the Runtime transaction's schedule controls separately, so it only checks the active claims here.
     /// </summary>
     /// <param name="replaced">
     /// The workflow whose schedules the slot served before, when this host may not serve it (a deactivation after a restart);
@@ -245,10 +259,12 @@ public sealed class KernelActivationCoordinator(
         NativeSchedule[] after = [];
         if (plan.Served is { } served)
         {
-            after = state.Schedules.All.Where(schedule => schedule.Workflow == served.Workflow.Id).ToArray();
+            after = state.Schedules.All.Where(schedule => schedule.Workflow == served.Workflow.Id &&
+                schedule.Definition == served.DefinitionId).ToArray();
             if (schedules.RequiresPublicationClaims && after.Length > 0)
             {
-                var claims = await ReadPublicationClaimsAsync(served.ActivationId, cancellationToken);
+                var claims = (await ReadPublicationClaimsAsync(served.ActivationId, cancellationToken))
+                    .Where(claim => claim.StimulusType == RuntimeKernelScheduleOccurrence.ReservationType).ToArray();
                 if (claims.Length != after.Length || after.Any(schedule => !claims.Any(claim => KernelScheduleClaim.Matches(claim, served, schedule))))
                     throw new InvalidOperationException("The activation's schedules need publication claims before they can be served.");
             }
@@ -257,6 +273,8 @@ public sealed class KernelActivationCoordinator(
         }
         var before = (replaced ?? serving.Find(plan.SlotId)?.Workflow) is { } previous ? serving.SchedulesOf(previous) : [];
         serving.Apply(plan with { State = state });
+        if (schedules is RuntimeManagedScheduleActors) return;
+
         foreach (var schedule in after)
         {
             await schedules.RegisterRunAsync(schedule.StartKey, schedule.Start(), cancellationToken);
@@ -458,7 +476,7 @@ public sealed class KernelActivationCoordinator(
         try
         {
             return new(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activationId,
-                NativeExecutableMapper.Map(executable, serving.Capabilities), slot.Revision);
+                NativeExecutableMapper.Map(executable, serving.Capabilities, slot.WorkflowDefinitionId), slot.Revision);
         }
         catch (NativeMappingRefusedException) { return null; }
     }
@@ -543,6 +561,9 @@ public sealed class KernelActivationCoordinator(
     {
         var activationId = slot.ActiveActivationId!;
         var repaired = false;
+        var adopted = false;
+        RestorePlan? restore = null;
+        var adoption = schedules is RuntimeManagedScheduleActors ? activationSwitch as IWorkflowScheduleAdoption : null;
         try
         {
             for (var repairs = 0; ; repairs++)
@@ -557,6 +578,19 @@ public sealed class KernelActivationCoordinator(
                     return (current, NotServingFailure(current, "its projection is missing or replaced, which only a fault or a manual change leaves. " +
                                                                  "Unpublish the slot, which turns every activation serving it off, then publish again."));
                 var others = await ListOtherServingActivationsAsync(current.SlotId, activationId, cancellationToken);
+                if (adoption is not null)
+                {
+                    (restore, var refusal) = await PlanRestoreAsync(slot, cancellationToken);
+                    if (refusal is not null) return (slot, refusal);
+                    var claims = PublicationClaims(restore!.Serving, restore.Identity, activationId, restore.Source.CreatedAt);
+                    if (claims.Length > 0)
+                    {
+                        if (!await adoption.TryAdoptSchedulesAsync(slot, restore.Source, claims, others, cancellationToken))
+                            return await ScheduleAdoptionMovedAsync(slot, cancellationToken);
+                        adopted = repaired = true;
+                        break;
+                    }
+                }
                 if (await activationSwitch.TryRepairAsync(current, others, cancellationToken))
                 {
                     logger?.LogWarning("Activation {ActivationId} of definition {DefinitionId} slot {SlotName} did not serve everywhere and was repaired",
@@ -572,29 +606,21 @@ public sealed class KernelActivationCoordinator(
                 if (repaired) await NotifyServingAsync(slot, served.Workflow.Id);
                 return (slot, null);
             }
-            var reference = await sourceReferenceStore.FindAsync(WorkflowActivationReferenceIdentity.Create(activationId), cancellationToken)
-                            ?? throw new InvalidOperationException($"Activation '{activationId}' has no source reference to name its artifact.");
-            var executable = await executableStore.FindAsync(reference.ArtifactId, cancellationToken)
-                             ?? throw new InvalidOperationException($"Artifact '{reference.ArtifactId}' of activation '{activationId}' is not in the executable store.");
-            Workflow workflow;
-            try
+            if (restore is null)
             {
-                workflow = NativeExecutableMapper.Map(executable, serving.Capabilities);
+                (restore, var refusal) = await PlanRestoreAsync(slot, cancellationToken);
+                if (refusal is not null) return (slot, refusal);
             }
-            catch (NativeMappingRefusedException refused)
+            if (adoption is not null && !adopted)
             {
-                return (slot, NotServingFailure(slot, $"{refused.Code}: {refused.Message}", WorkflowActivationStep.Mapping));
+                var claims = PublicationClaims(restore!.Serving, restore.Identity, activationId, restore.Source.CreatedAt);
+                if (claims.Length > 0 && !await adoption.TryAdoptSchedulesAsync(slot, restore.Source, claims, [], cancellationToken))
+                    return await ScheduleAdoptionMovedAsync(slot, cancellationToken);
             }
-            KernelServingPlan plan;
-            try { plan = serving.Plan(slot.SlotId, new KernelServedSlot(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activationId, workflow, slot.Revision)); }
-            catch (Exception refused) when (refused is ArgumentException or InvalidOperationException)
-            {
-                return (slot, NotServingFailure(slot, refused.Message, WorkflowActivationStep.ServingCheck));
-            }
-            await ServeAsync(plan, slot.Revision, cancellationToken);
+            await ServeAsync(restore!.Serving, slot.Revision, cancellationToken);
             logger?.LogInformation("Activation {ActivationId} of definition {DefinitionId} slot {SlotName} serves on this host again",
                 activationId, slot.WorkflowDefinitionId, slot.SlotName);
-            if (repaired) await NotifyServingAsync(slot, workflow.Id);
+            if (repaired) await NotifyServingAsync(slot, restore.Identity.ArtifactId);
             return (slot, null);
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
@@ -603,6 +629,48 @@ public sealed class KernelActivationCoordinator(
                 activationId, slot.WorkflowDefinitionId, slot.SlotName);
             return (slot, NotServingFailure(slot, $"whether it serves could not be checked or repaired: {SafeMessage(exception)}"));
         }
+    }
+
+    private sealed record RestorePlan(KernelServingPlan Serving, WorkflowExecutableIdentity Identity, WorkflowExecutableSourceReference Source);
+
+    private async ValueTask<(RestorePlan? Plan, WorkflowActivationResult? Refusal)> PlanRestoreAsync(WorkflowActivationSlot slot,
+        CancellationToken token)
+    {
+        var activation = slot.ActiveActivationId!;
+        var source = await sourceReferenceStore.FindAsync(WorkflowActivationReferenceIdentity.Create(activation), token)
+            ?? throw new InvalidOperationException($"Activation '{activation}' has no source reference to name its artifact.");
+        var executable = await executableStore.FindAsync(source.ArtifactId, token)
+            ?? throw new InvalidOperationException($"Artifact '{source.ArtifactId}' of activation '{activation}' is not in the executable store.");
+        Workflow workflow;
+        try { workflow = NativeExecutableMapper.Map(executable, serving.Capabilities, slot.WorkflowDefinitionId); }
+        catch (NativeMappingRefusedException refused)
+        {
+            return (null, NotServingFailure(slot, $"{refused.Code}: {refused.Message}", WorkflowActivationStep.Mapping));
+        }
+
+        try
+        {
+            var plan = serving.Plan(slot.SlotId, new KernelServedSlot(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activation, workflow, slot.Revision));
+            var identity = executable.Identity with
+            {
+                DefinitionId = source.DefinitionId,
+                DefinitionVersionId = source.DefinitionVersionId,
+                ArtifactVersion = source.ArtifactVersion
+            };
+            return (new(plan, identity, source), null);
+        }
+        catch (Exception refused) when (refused is ArgumentException or InvalidOperationException)
+        {
+            return (null, NotServingFailure(slot, refused.Message, WorkflowActivationStep.ServingCheck));
+        }
+    }
+
+    private async ValueTask<(WorkflowActivationSlot Slot, WorkflowActivationResult? Unserved)> ScheduleAdoptionMovedAsync(
+        WorkflowActivationSlot slot, CancellationToken token)
+    {
+        var current = await authority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, token) ?? EmptySlot(slot.WorkflowDefinitionId, slot.SlotName);
+        return current.ActiveActivationId is null && serving.Find(current.SlotId) is null ? (current, null) :
+            (current, NotServingFailure(current, "its publication authority changed during schedule adoption. Retry against the current publication."));
     }
 
     /// <summary>
@@ -651,8 +719,9 @@ public sealed class KernelActivationCoordinator(
     private WorkflowTriggerBinding[] PublicationClaims(KernelServingPlan plan, WorkflowExecutableIdentity identity,
         string activationId, DateTimeOffset createdAt) =>
         schedules.RequiresPublicationClaims
-            ? plan.State.Schedules.All.Where(schedule => schedule.Workflow == identity.ArtifactId)
-                .Select(schedule => KernelScheduleClaim.Create(identity, activationId, plan.SlotId, schedule, createdAt))
+            ? plan.State.Schedules.All.Where(schedule => schedule.Workflow == identity.ArtifactId && schedule.Definition == identity.DefinitionId)
+                .Select(schedule => KernelScheduleClaim.Create(identity, activationId, plan.SlotId, schedule, createdAt,
+                    managed: schedules is RuntimeManagedScheduleActors))
                 .ToArray()
             : [];
 

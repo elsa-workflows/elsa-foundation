@@ -14,7 +14,16 @@ public sealed record WorkflowRunHeader(string Workflow, string Definition, bool 
 
     /// <summary>The journal history retained for the committed run.</summary>
     public History History { get; init; } = History.Full;
+
+    /// <summary>Exact publication and caller attribution of a standard published Execute request.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public WorkflowPublishedStart? PublishedStart { get; init; }
 }
+
+/// <summary>Publication selection retained independently of the executable material selected to run.</summary>
+public sealed record WorkflowPublishedStart(string SourceReferenceId, string SourceKind, string SourceId, string? SourceVersion,
+    string DefinitionVersionId, string ArtifactVersion, string ActivationId, string SlotId, string SlotName, long SlotRevision,
+    string SourceDigest, string? SubjectId);
 
 /// <summary>Runs workflow models through the public actor contract.</summary>
 public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType
@@ -25,10 +34,19 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
 
     public string Type => ActorType;
 
-    public static StartSpec Start(WorkflowStart start) =>
+    public static StartSpec Start(WorkflowStart start) => Start(start, null);
+
+    internal static StartSpec Start(WorkflowStart start, WorkflowPublishedStart? publishedStart) =>
         new(ActorType, JsonSerializer.Serialize(new WorkflowHeader(start.Model, start.Workflow, null,
-            Ephemeral: start.Ephemeral, History: start.History, Definition: start.Definition == start.Workflow ? null : start.Definition)),
+            Ephemeral: start.Ephemeral, History: start.History, Definition: start.Definition == start.Workflow ? null : start.Definition,
+            ExecutableSelection: start.ExecutableSelection, PublishedStart: publishedStart)),
             start.Input, start.Ephemeral, start.History);
+
+    internal static (string Model, string Workflow, string Definition, string? ExecutableSelection, WorkflowPublishedStart? PublishedStart)? DescribeStart(string type, string typeData)
+    {
+        if (type != ActorType || JsonSerializer.Deserialize<WorkflowHeader>(typeData) is not { } header) return null;
+        return (header.Model, header.Workflow, header.Definition ?? header.Workflow, header.ExecutableSelection, header.PublishedStart);
+    }
 
     public bool Withholds(ActorHeader header)
     {
@@ -173,7 +191,10 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         {
             var start = inbox.FirstOrDefault(message => message.Kind == Kinds.Start) ??
                 throw new InvalidOperationException("A workflow without state needs its start message.");
-            return model.CreateState(new WorkflowStart(workflow.Model, workflow.Workflow, start.Payload, workflow.Ephemeral, workflow.History, workflow.Definition));
+            return model.CreateState(new WorkflowStart(workflow.Model, workflow.Workflow, start.Payload, workflow.Ephemeral, workflow.History, workflow.Definition)
+            {
+                ExecutableSelection = workflow.ExecutableSelection
+            });
         }
         if (workflow.Version is not { } version || version > model.StateVersion)
             throw new InvalidOperationException("This model cannot read the stored state version.");
@@ -205,7 +226,11 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     }
 
     private static InstanceInfo Instance(ActorHeader header, WorkflowHeader workflow) =>
-        new(header.Ref, header.Tenant, workflow.Model, workflow.Workflow, header.Parent);
+        new(header.Ref, header.Tenant, workflow.Model, workflow.Workflow, header.Parent)
+        {
+            Definition = workflow.Definition,
+            ExecutableSelection = workflow.ExecutableSelection
+        };
 
     private static string? SerializeValue(object? value) => value is null ? null : JsonSerializer.Serialize(value, value.GetType());
 
@@ -217,7 +242,11 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     private sealed record WorkflowHeader(string Model, string Workflow, int? Version, bool Suspended = false,
         string? SubStatus = null, bool Ephemeral = false, History History = History.Full,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Definition = null,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? StartedAt = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? StartedAt = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        string? ExecutableSelection = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        WorkflowPublishedStart? PublishedStart = null);
 
     /// <summary>
     /// What a workflow actor's header says about its run, for reads that list runs: the workflow it runs (an artifact on a
@@ -233,7 +262,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         catch (JsonException) { return null; }
         return workflow is null ? null : new(workflow.Workflow, workflow.Definition ?? workflow.Workflow,
             workflow.Suspended, workflow.SubStatus, workflow.StartedAt is { } started ? DateTimeOffset.FromUnixTimeMilliseconds(started) : null)
-            { Model = workflow.Model, History = workflow.History };
+            { Model = workflow.Model, History = workflow.History, PublishedStart = workflow.PublishedStart };
     }
 
     private sealed record WorkflowJobArguments(string Model, string? Arguments);

@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Hosting;
 using Kernel.Runtime;
 using Kernel.Runtime.Hosting;
 using Microsoft.Data.Sqlite;
@@ -29,6 +30,9 @@ public static partial class SqliteEmbeddedHosting
 
     /// <summary>Whether the shipped profile can register and deliver live HTTP waits.</summary>
     public static bool TakesHttpWaits => RootProfiles.Shipped.HasFlag(RootCapabilities.LiveEventWaits);
+
+    /// <summary>Whether the shipped Embedded profile supports protected held root preparation.</summary>
+    public static bool TakesPreparedStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.PreparedStarts);
 
     /// <summary>Installs or verifies a dedicated shipped SQLite file for one Embedded owner.</summary>
     /// <remarks>The parent directory must exist. An existing file must be empty or carry this build's shipped definitions.</remarks>
@@ -68,7 +72,8 @@ public static partial class SqliteEmbeddedHosting
     internal static Task<RuntimeNode> StartFoundationAsync(string databasePath, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
         CancellationToken cancellationToken = default, Action<Exception>? onFault = null, SqliteDirectRequests? requests = null,
-        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null)
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null,
+        ProtectChildBirthsAsync? protectChildBirths = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         RequireFoundationActorType(actor.Type);
@@ -79,12 +84,13 @@ public static partial class SqliteEmbeddedHosting
                 retentionWindow: retentionWindow,
                 rootTerminalOutputLimit: terminalOutputLimit, auxiliaryActor: auxiliaryActor),
             actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests,
-            hostsAuxiliaryActor: auxiliaryActor is not null);
+            auxiliaryActorType: auxiliaryActor?.Type, protectChildBirths: protectChildBirths);
     }
 
     private static async Task<RuntimeNode> StartCoreAsync(string databasePath, string node, Func<EfStore, int, IActorType> createActor,
         string? rootType, Action<string> endProcess, LoopOptions? options, bool fenceInBatch, CancellationToken cancellationToken,
-        Action<Exception>? onFault, SqliteDirectRequests? requests, bool hostsAuxiliaryActor = false)
+        Action<Exception>? onFault, SqliteDirectRequests? requests, string? auxiliaryActorType = null,
+        ProtectChildBirthsAsync? protectChildBirths = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -111,13 +117,13 @@ public static partial class SqliteEmbeddedHosting
             await using (var db = Open())
             {
                 selfSends = db.UsesRootSelfProtocol;
-                if (hostsAuxiliaryActor && (!db.UsesRootScheduleInventory || !db.UsesRootTimedJobSettlement))
+                if (auxiliaryActorType is not null && (!db.UsesRootScheduleInventory || !db.UsesRootTimedJobSettlement))
                     throw new NotSupportedException("This SQLite root profile does not host an auxiliary actor.");
                 terminalOutputLimit = db.UsesRootTerminalOutput ? EfStore.RootContentBytes : 0;
                 if (shipped)
                 {
                     var admission = new SqliteRootAdmission(Open, TimeSpan.Zero, file.AdmissionDefinitions);
-                    partitions = await admission.VerifyAsync(cancellationToken);
+                    partitions = await admission.VerifyOwnerAsync(auxiliaryActorType, cancellationToken);
                 }
                 else
                 {
@@ -126,13 +132,12 @@ public static partial class SqliteEmbeddedHosting
                     if (partitions == 0)
                         throw new InvalidOperationException("The SQLite kernel database has no installed partitions.");
                 }
-
                 await UseWalAsync(db, cancellationToken);
             }
 
             var pressure = requests?.Pressure;
             var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch)
-                { CommitSql = CommitSql.Owned, AdmissionPressure = pressure };
+                { CommitSql = CommitSql.Owned, AdmissionPressure = pressure, ProtectChildBirths = protectChildBirths };
             if (shipped)
             {
                 if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);

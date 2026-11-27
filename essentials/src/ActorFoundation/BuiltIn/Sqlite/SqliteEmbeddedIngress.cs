@@ -28,10 +28,21 @@ public static partial class SqliteEmbeddedHosting
         return OpenFoundationCoreAsync(databasePath, actorType, null, deduplicationWindow, cancellationToken, authorizeOperator);
     }
 
-    internal static Task<Contract.IIngress> OpenFoundationWithOperatorsAsync(string databasePath, string actorType,
+    internal static async Task<Contract.IIngress> OpenFoundationWithOperatorsAsync(string databasePath, string actorType,
         Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorizeOperator, SqliteDirectRequests requests,
-        CancellationToken cancellationToken = default) =>
-        OpenFoundationCoreAsync(databasePath, actorType, requests, requests.DeduplicationWindow, cancellationToken, authorizeOperator);
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await OpenFoundationCoreAsync(databasePath, actorType, requests, requests.DeduplicationWindow,
+                cancellationToken, authorizeOperator);
+        }
+        catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TimeoutException("SQLite operator ingress could not acquire its verification lock.", error);
+        }
+    }
 
     internal static async ValueTask<Contract.Admission> AdmitRetentionDeleteAsync(string databasePath, Contract.BoundScope scope,
         Contract.ActorRef actor, string selection, TimeSpan deduplicationWindow, CancellationToken token, StoreFormat? format = null)
@@ -47,6 +58,23 @@ public static partial class SqliteEmbeddedHosting
         {
             token.ThrowIfCancellationRequested();
             throw new TimeoutException("SQLite retention admission could not acquire its write lock.", error);
+        }
+    }
+
+    internal static async ValueTask<Contract.ScheduleControlResult> ApplyScheduleControlAsync(string path, StoreFormat? format,
+        string tenant, string scheduleActorType, ScheduleControlIntent intent, CancellationToken token)
+    {
+        try
+        {
+            using var file = AcquireFile(path);
+            var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options, format), TimeSpan.Zero,
+                file.AdmissionDefinitions, scheduleActorType: scheduleActorType);
+            return await admission.ApplyScheduleControlAsync(tenant, intent, token);
+        }
+        catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
+        {
+            token.ThrowIfCancellationRequested();
+            throw new TimeoutException("SQLite schedule control could not acquire its write lock.", error);
         }
     }
 
@@ -103,6 +131,11 @@ public static partial class SqliteEmbeddedHosting
         {
             try { return await SendCoreAsync(scope, target, id, kind, payload, options, cancellationToken); }
             catch (RootAdmissionRefused refusal) { return refusal.Admission; }
+            catch (SqliteException error) when (kind == Contract.Kinds.Recover && error.SqliteErrorCode is 5 or 6)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.NodeBusy, RetryAfter: TimeSpan.FromSeconds(1));
+            }
         }
 
         private async ValueTask<Contract.Admission> SendCoreAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,

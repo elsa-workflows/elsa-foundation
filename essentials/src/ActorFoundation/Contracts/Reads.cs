@@ -72,6 +72,19 @@ public interface IActorReads
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>Reads kept delivery metadata for a single committed Park mark, under the host's bound tenant.</summary>
+public interface IActorParkInboxReads
+{
+    bool SupportsParkInbox { get; }
+
+    /// <summary>Returns null if the selected mark changed or the Park advanced since the preceding page.</summary>
+    ValueTask<Page<ParkInboxEntry>?> ReadParkInboxAsync(BoundScope scope, ActorRef actor, string selection,
+        PageToken? from = null, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Metadata for one delivery kept by the selected Park.</summary>
+public sealed record ParkInboxEntry(string Handle, string Kind, DeliveryState State, long? Due, int Attempts);
+
 /// <summary>Optional exact read of a completed actor's retained named outputs, under the host's bound scope.</summary>
 public interface IActorTerminalOutputReads
 {

@@ -491,28 +491,6 @@
         "resolved": "0.8.8",
         "contentHash": "UIDFkA5DC3en3tOJ3Mof11yBx9kUQLsaeo/oFdvN6Bbkr9E9+VCqfIadHci8cu+I51K2Sl7XYWVl2R/mA75NBQ=="
       },
-      "elsa.activities.design.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Events.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )",
-          "Elsa.Serialization.Core": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.activities.http": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
-          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
-          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
-          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "Elsa.Http.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )",
-          "Elsa.Serialization.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
-        }
-      },
       "elsa.activities.runtime.core": {
         "type": "Project",
         "dependencies": {
@@ -649,9 +627,6 @@
       "elsa.foundation.identity.core": {
         "type": "Project"
       },
-      "elsa.http.core": {
-        "type": "Project"
-      },
       "elsa.mediator.core": {
         "type": "Project",
         "dependencies": {
@@ -765,10 +740,9 @@
       "elsa.workflows.runtime.kernelhosting": {
         "type": "Project",
         "dependencies": {
+          "Cronos": "[0.13.0, )",
           "CShells.Abstractions": "[0.0.31, )",
           "CShells.AspNetCore.Abstractions": "[0.0.31, )",
-          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
-          "Elsa.Activities.Http": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.BuiltIn.PostgreSql": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.BuiltIn.Sqlite": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",

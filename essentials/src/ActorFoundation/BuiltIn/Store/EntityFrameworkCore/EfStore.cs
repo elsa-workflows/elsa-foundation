@@ -173,11 +173,16 @@ public class KernelDb : DbContext
     internal bool UsesRootTerminalOutput => Has(RootCapabilities.TerminalOutput);
     internal bool UsesRootSequencedJournal => Has(RootCapabilities.SequencedJournal);
     internal bool UsesRootLiveEventWaits => Has(RootCapabilities.LiveEventWaits);
+    internal bool UsesRootAuthoredEvents => Has(RootCapabilities.AuthoredEvents);
     internal bool UsesRootRetentionPolicy => Has(RootCapabilities.RetentionPolicy);
     internal bool UsesRootPlayback => Has(RootCapabilities.Playback);
     internal bool UsesRootPlaybackDescendants => Has(RootCapabilities.PlaybackDescendants);
     internal bool UsesRootScheduleInventory => Has(RootCapabilities.ScheduleInventory);
     internal bool UsesRootScheduleSettlement => Has(RootCapabilities.ScheduleSettlement);
+    internal bool UsesRootScheduleControls => Has(RootCapabilities.ScheduleControls);
+    internal bool UsesRootScheduleLineage => Has(RootCapabilities.ScheduleLineage);
+    internal bool UsesRootPreparedStarts => Has(RootCapabilities.PreparedStarts);
+    internal uint? ScheduleLineageCommitMarker { get; set; }
     internal bool SeparateRootFormatLock =>
         RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput || UsesRootChildren;
     internal bool UsesRootComposedParkRecovery =>
@@ -200,12 +205,23 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootPlaybackQualification, RootProfiles.PlaybackQualification);
     internal static KernelDb ForPostgresRootPlaybackDescendantsQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootPlaybackDescendantsQualification, RootProfiles.PlaybackDescendantsQualification);
+    internal static KernelDb ForPostgresRootAuthoredEventsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootAuthoredEventsQualification, RootProfiles.AuthoredEventsQualification);
     internal static KernelDb ForPostgresRootLiveEventQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootLiveEventQualification, RootProfiles.LiveEventQualification);
     internal static KernelDb ForPostgresRootScheduleInventoryQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootScheduleInventoryQualification, RootProfiles.ScheduleInventoryQualification);
     internal static KernelDb ForPostgresRootScheduleSettlementQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootScheduleSettlementQualification, RootProfiles.ScheduleSettlementQualification);
+
+    internal static KernelDb ForPostgresRootScheduleControlsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootScheduleControlsQualification, RootProfiles.ScheduleControlsQualification);
+    internal static KernelDb ForPostgresRootScheduleLineageQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootScheduleLineageQualification, RootProfiles.ScheduleLineageQualification);
+    internal static KernelDb ForPostgresRootPreparedStartsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootPreparedStartsQualification, RootProfiles.PreparedStartsQualification);
+    internal static KernelDb ForPostgresRootManagedSchedulesQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootManagedSchedulesQualification, RootProfiles.ManagedSchedulesQualification);
     internal static KernelDb ForPostgresRootSelfTimedQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootSelfTimedQualification, RootProfiles.SelfTimedQualification);
     internal static KernelDb ForSqliteRootSelfTimedQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
@@ -239,6 +255,9 @@ public class KernelDb : DbContext
         if (qualificationFormat == StoreFormat.RootPlaybackDescendantsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.PlaybackDescendantsQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootAuthoredEventsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.AuthoredEventsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootLiveEventQualification)
             return new(options, qualificationFormat.Value, RootProfiles.LiveEventQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
@@ -247,6 +266,18 @@ public class KernelDb : DbContext
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootScheduleSettlementQualification)
             return new(options, qualificationFormat.Value, RootProfiles.ScheduleSettlementQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootScheduleControlsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ScheduleControlsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootScheduleLineageQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ScheduleLineageQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootPreparedStartsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PreparedStartsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootManagedSchedulesQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ManagedSchedulesQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         return qualificationFormat is { } format
             ? ForRootTerminalOutputQualification(options, sqliteShippedInstall: true, definitions, format)
@@ -367,6 +398,7 @@ public class KernelDb : DbContext
             });
             if (StoreDefinitionsRevision.Seed(this) is { } definitions) entity.HasData(definitions);
         });
+        if (RootScheduleOwnerMode.Applies(this)) RootScheduleOwnerMode.ConfigureModel(model, sqliteShippedInstall);
         model.Entity<PartitionEntity>(e =>
         {
             e.ToTable("Partitions");
@@ -646,6 +678,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey is { Match: null } key &&
                 (key.Scope == InboxKey.FoundationOccurrenceScope || root is null && (key.Scope is RootSelfScope or RootJobScope or RootTimedJobScope))))))
             throw new StoreException(Failure.Definite, "Qualified PostgreSQL inputs require their root checkpoint writer.");
+        if (batch.Turns.Any(turn => turn.FoundationRootPublications is not null))
+            throw new StoreException(Failure.Definite, "Generated-root event publication requires its qualified writer.");
         if (root is null && batch.Turns.Any(turn => turn.FoundationRootJobCompletion is not null))
             throw new StoreException(Failure.Definite, "Generated-root job completions require the qualified writer.");
         // The ordinary Done mark remains eligible for sweeping. It cannot preserve a Park's kept inputs.
@@ -913,8 +947,10 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         try
         {
-            return await PostgresRootAdmission.PinRootCommitNamespaceAsync(db,
+            var marker = await PostgresRootAdmission.PinRootCommitNamespaceAsync(db,
                 writesJournal: db.UsesRootSequencedJournal && batch.Turns.Any(turn => turn.Journal is not null), cancellationToken);
+            if (db.UsesRootScheduleLineage) db.ScheduleLineageCommitMarker = marker;
+            return marker;
         }
         catch (Exception error) when (error is not OperationCanceledException &&
             Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)

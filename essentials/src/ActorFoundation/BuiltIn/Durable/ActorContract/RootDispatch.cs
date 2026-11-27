@@ -19,6 +19,7 @@ internal interface IRootDispatchHeaders
     bool KeepsPrivateParkInputs { get; }
     bool RecoversPark { get; }
     bool TakesLiveEventWaits => false;
+    bool PublishesAuthoredEvents => false;
     bool RefusesParkedOperators { get; }
     bool SettlesEndedMailbox { get; }
 }
@@ -416,6 +417,14 @@ internal sealed partial class ActorAdapter
                 if (!MatchesRootChildInput(input.Row, message)) return "WrongParent";
                 continue;
             }
+            if (message.FoundationScheduleControl is { } trusted)
+            {
+                if (!auxiliary || !delivery.Durable || input.Row is not { FoundationDispatchHeader: { } dispatch } controlled ||
+                    controlled.Model != trusted.ActorType || dispatch.Tenant != trusted.Tenant ||
+                    message.Target.Id != controlled.Id || message.TargetCreation != controlled.Creation)
+                    return "RootDispatchUnavailable";
+                continue;
+            }
             var childStart = !auxiliary && roots?.SupportsChildren == true && message.BindFoundationChild && message.Start is not null;
             if (auxiliary && (message.Start is null || message.BindFoundationChild || message.ReplyTo is not null ||
                 message.FoundationRootBinding is null))
@@ -447,6 +456,13 @@ internal sealed partial class ActorAdapter
 
     private void RequireRootOutcome(Durable.TurnOutcome outcome, Durable.InstanceRow? previous, Durable.Message input)
     {
+        if (roots?.PublishesAuthoredEvents == true && outcome.Sent.Any(IsAuthoredPublication))
+        {
+            // The store binds these effects in the same transaction as the checkpoint, using the qualified wait rows.
+            outcome.FoundationRootPublications = outcome.Sent.Where(IsAuthoredPublication).ToArray();
+            outcome.Sent.RemoveAll(IsAuthoredPublication);
+        }
+
         if (roots?.SupportsChildren == true && outcome.Sent.Any(IsChildEffect))
         {
             // The qualified writer commits these rows. Their recipients obtain the stored envelope through polling.
@@ -499,6 +515,8 @@ internal sealed partial class ActorAdapter
             outcome.FoundationCascade is not null && !settlesJobs && !childCascade || outcome.InMemory)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
+
+        static bool IsAuthoredPublication(Durable.Message message) => message.FoundationPublish?.Authored is not null;
 
         static bool IsChildEffect(Durable.Message message) =>
             message.BindFoundationChild || message.FoundationRootChildInput || message.CascadeOrigin || message.Kind == Durable.Kinds.ChildFinished;

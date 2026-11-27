@@ -69,13 +69,14 @@ def stage_packages(archives, version, output, profile):
 def stage_configuration(output, settings_directory):
     settings = json.loads((settings_directory / "appsettings.json").read_text(encoding="utf-8"))
     nuplane = settings.setdefault("Nuplane", {})
-    nuplane["Convergence"] = {"Manifest": {"Enabled": True, "Path": f"{PROFILE_ROOT}/desired.json"}}
+    nuplane["DesiredState"] = {"Manifest": {"Enabled": True, "Path": f"{PROFILE_ROOT}/desired.json"}}
     nuplane["LockFile"] = {"Mode": "Enforce", "Path": f"{PROFILE_ROOT}/nuplane.lock.json", "FailOnHashMismatch": True}
     write_json(output / "appsettings.json", settings)
 
     management = json.loads((settings_directory / "nuplane-management.json").read_text(encoding="utf-8"))
     management["Nuplane"]["Setup"]["Feeds"].append({
         "Name": FEED_NAME,
+        "Trust": "Trusted",
         "DirectoryPath": f"{PROFILE_ROOT}/packages",
         "Directory": {"Role": "Cache", "Watch": False},
     })

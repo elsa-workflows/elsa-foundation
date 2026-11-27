@@ -47,12 +47,20 @@ public sealed record ScheduleHeader(RecurringSchedule Schedule, string StartKey,
     /// <summary>The host's immutable publication authority for a managed schedule.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Authority { get; init; }
+
+    /// <summary>The Runtime publication span across which the same due trigger can be carried.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Continuity { get; init; }
+
+    /// <summary>When the current Runtime publication took authority, in Unix milliseconds.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public long Cutover { get; init; }
 }
 
 /// <summary>Disarms a managed schedule through this durable control revision.</summary>
 public sealed record ScheduleStop(long Revision);
 
-/// <summary>The immutable offer from one committed managed schedule timer.</summary>
+/// <summary>The immutable offer from one committed managed schedule timer, including its first attempt's deadline.</summary>
 public sealed record ScheduleOccurrence(string Tenant, ActorRef Schedule, long ArmGeneration, string TimerDeliveryId,
     long DueAtUnixMilliseconds, long OfferUntilUnixMilliseconds, string Authority);
 
@@ -61,9 +69,14 @@ public interface IScheduleOccurrenceAcceptor
 {
     /// <summary>
     /// True means the exact offer was accepted, including a replay of a prior acceptance. False is a definitive refusal.
-    /// An unknown outcome must throw. The next attempt uses the same offer and deadline.
+    /// An unknown outcome must throw. A retry preserves the original offer.
     /// </summary>
     ValueTask<bool> TryAcceptAsync(ScheduleOccurrence occurrence, CancellationToken cancellationToken = default);
+
+    /// <summary>Decides the original offer within the current provider-issued job deadline.</summary>
+    /// <remarks>Expiry without an authoritative answer must throw so the actor can renew the attempt.</remarks>
+    ValueTask<bool> TryAcceptAttemptAsync(ScheduleOccurrence occurrence, long attemptDeadline, CancellationToken cancellationToken = default) =>
+        TryAcceptAsync(occurrence, cancellationToken);
 }
 
 /// <summary>
@@ -96,7 +109,7 @@ public sealed class ScheduleActor : IActorType
     /// <summary>The wait name of a schedule's start registration.</summary>
     public const string StartWait = "schedule";
 
-    /// <summary>How long an occurrence's publication waits for its start: a minute.</summary>
+    /// <summary>The bounded duration of one managed acceptance window or a legacy start publication.</summary>
     public static readonly TimeSpan PublicationWindow = TimeSpan.FromMinutes(1);
 
     private const string AcceptJob = "schedule.accept";
@@ -113,10 +126,14 @@ public sealed class ScheduleActor : IActorType
 
     private sealed record ScheduleState(long Revision, long Due = 0, string Timer = "", bool Stopped = false, string? Error = null,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long ArmGeneration = 0,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] PendingAcceptance? Pending = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] PendingAcceptance? Pending = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ArmAuthority = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long LastAcceptedAt = 0,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long DeferredUntil = 0);
 
     // Store the original arguments verbatim for a retry or Park restoration.
-    private sealed record PendingAcceptance(string Arguments, long Deadline, string RetryTimer = "", long RetryAt = 0, bool Superseded = false);
+    private sealed record PendingAcceptance(string Arguments, long Deadline, string RetryTimer = "", long RetryAt = 0, bool Superseded = false,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Inherited = false);
 
     public string Type => ActorType;
 
@@ -233,10 +250,26 @@ public sealed class ScheduleActor : IActorType
                     break;
                 case SetKind when ReadMessage<ScheduleHeader>(message) is { Schedule: not null, Authority: { } authority } next:
                     if (string.IsNullOrWhiteSpace(authority) || next.Revision <= (state?.Revision ?? header.Revision)) break;
-                    state = ReplaceManaged(turn, state, next.Revision, stopped: false);
+                    var sameTrigger = header.Continuity is not null && header.Continuity == next.Continuity && state is { Stopped: false };
+                    // When revisions were skipped, Runtime verifies the original first cutover from its durable receipt.
+                    var carry = sameTrigger && state is { Due: > 0 } current &&
+                        (current.Timer.Length != 0 || current.Pending is { Superseded: false }) &&
+                        (current.Due <= next.Cutover || next.Revision - current.Revision > 1 || current.ArmAuthority is not null ||
+                            current.Pending is { Inherited: true });
+                    if (carry && state is { } inherited)
+                    {
+                        state = inherited.Pending is { } pending
+                            ? inherited with { Revision = next.Revision, Pending = pending with { Inherited = true }, ArmAuthority = null }
+                            : inherited with { Revision = next.Revision, ArmAuthority = inherited.ArmAuthority ?? header.Authority };
+                    }
+                    else
+                    {
+                        var lastAccepted = sameTrigger ? state!.LastAcceptedAt : 0;
+                        state = ReplaceManaged(turn, state, next.Revision, stopped: false) with { LastAcceptedAt = lastAccepted };
+                    }
                     header = next;
                     turn.SetHeader(message.Payload!, turn.Header.Labels);
-                    if (state.Pending is null) state = ArmManaged(turn, header, state, turn.Now);
+                    if (!carry && state.Pending is null) state = ArmManaged(turn, header, state, FirstAfter(turn, header, state));
                     break;
                 case StopKind when ReadMessage<ScheduleStop>(message) is { } stop:
                     if (stop.Revision < (state?.Revision ?? header.Revision)) break;
@@ -247,7 +280,7 @@ public sealed class ScheduleActor : IActorType
                 {
                     var deadline = checked(turn.Now + (long)PublicationWindow.TotalMilliseconds);
                     var occurrence = new ScheduleOccurrence(turn.Header.Tenant, turn.Header.Ref, state.ArmGeneration,
-                        state.Timer, state.Due, deadline, header.Authority!);
+                        state.Timer, state.Due, deadline, state.ArmAuthority ?? header.Authority!);
                     var pending = new PendingAcceptance(JsonSerializer.Serialize(occurrence), deadline);
                     StartAcceptance(turn, pending);
                     state = state with { Timer = "", Pending = pending };
@@ -255,25 +288,27 @@ public sealed class ScheduleActor : IActorType
                 }
                 case RetryKind when state is { Stopped: false, Pending: { Superseded: false, RetryTimer.Length: > 0 } pending } &&
                     IsTimer(turn, message, pending.RetryTimer, pending.RetryAt):
-                    if (turn.Now >= pending.Deadline)
-                        state = AfterAcceptance(turn, header, state);
-                    else
+                {
+                    var attempt = pending with
                     {
-                        StartAcceptance(turn, pending);
-                        state = state with { Pending = pending with { RetryTimer = "", RetryAt = 0 } };
-                    }
+                        Deadline = turn.Now < pending.Deadline ? pending.Deadline : checked(turn.Now + (long)PublicationWindow.TotalMilliseconds),
+                        RetryTimer = "",
+                        RetryAt = 0
+                    };
+                    StartAcceptance(turn, attempt);
+                    state = state with { Pending = attempt };
                     break;
+                }
                 case Kinds.JobFinished when state?.Pending is { RetryTimer.Length: 0 } pending &&
                     message.Sender == turn.Header.Ref && ReadMessage<JobFinished>(message) is { Key: AcceptJob } outcome:
                     if (!state.Stopped && !pending.Superseded &&
-                        (outcome.Error is not null || outcome.Result is not ("true" or "false")) &&
-                        turn.Now < pending.Deadline)
+                        (outcome.Error is not null || outcome.Result is not ("true" or "false")))
                     {
-                        var retryAt = Math.Min(checked(turn.Now + RetryDelayMilliseconds), pending.Deadline);
+                        var retryAt = checked(turn.Now + RetryDelayMilliseconds);
                         var id = turn.Send(turn.Header.Ref, RetryKind, DuePayload(retryAt), retryAt);
                         state = state with { Pending = pending with { RetryTimer = id, RetryAt = retryAt } };
                     }
-                    else state = AfterAcceptance(turn, header, state);
+                    else state = AfterAcceptance(turn, header, state, outcome.Result == "true" && !pending.Superseded);
                     break;
             }
         }
@@ -295,15 +330,21 @@ public sealed class ScheduleActor : IActorType
         return new(revision, Stopped: stopped, ArmGeneration: state?.ArmGeneration ?? 0, Pending: pending);
     }
 
-    private ScheduleState AfterAcceptance(IActorTurn turn, ScheduleHeader header, ScheduleState state)
+    private ScheduleState AfterAcceptance(IActorTurn turn, ScheduleHeader header, ScheduleState state, bool accepted)
     {
-        var ready = state with { Pending = null };
-        return state.Stopped ? ready : ArmManaged(turn, header, ready, Math.Max(turn.Now, state.Due));
+        var ready = state with { Pending = null, LastAcceptedAt = accepted ? turn.Now : state.LastAcceptedAt };
+        if (state.Stopped) return ready;
+        var replaced = state.ArmAuthority is not null || state.Pending is { Superseded: true } or { Inherited: true };
+        var after = !accepted && replaced ? FirstAfter(turn, header, ready) : Math.Max(turn.Now, state.Due);
+        return ArmManaged(turn, header, ready, after);
     }
+
+    private static long FirstAfter(IActorTurn turn, ScheduleHeader header, ScheduleState state) =>
+        header.Cutover > 0 ? Math.Max(header.Cutover, state.LastAcceptedAt) : turn.Now;
 
     private ScheduleState ArmManaged(IActorTurn turn, ScheduleHeader header, ScheduleState state, long after)
     {
-        var armed = Arm(turn, header, state, after);
+        var armed = Arm(turn, header, state with { ArmAuthority = null }, after, preserveDue: true);
         return armed.Timer.Length == 0 ? armed : armed with { ArmGeneration = checked(state.ArmGeneration + 1) };
     }
 
@@ -324,7 +365,7 @@ public sealed class ScheduleActor : IActorType
 
     // The next occurrence after a time: an interval counts from it, a cron expression gives its next occurrence. None, or a
     // schedule it cannot read, leaves the schedule idle.
-    private ScheduleState Arm(IActorTurn turn, ScheduleHeader header, ScheduleState state, long after)
+    private ScheduleState Arm(IActorTurn turn, ScheduleHeader header, ScheduleState state, long after, bool preserveDue = false)
     {
         long? due;
         switch (header.Schedule.Kind)
@@ -342,8 +383,13 @@ public sealed class ScheduleActor : IActorType
                 return state with { Due = 0, Timer = "", Error = $"The schedule {header.Schedule.Kind} '{header.Schedule.Value}' does not read." };
         }
         if (due is not { } next) return state with { Due = 0, Timer = "" };     // the expression has no further occurrence
-        next = Math.Max(next, checked(turn.Now + 1));
-        return state with { Due = next, Timer = turn.Send(turn.Header.Ref, FireKind, next.ToString(CultureInfo.InvariantCulture), next), Error = null };
+        var deliverAt = Math.Max(next, checked(turn.Now + 1));
+        if (!preserveDue) next = deliverAt;
+        return state with
+        {
+            Due = next, DeferredUntil = deliverAt == next ? 0 : deliverAt,
+            Timer = turn.Send(turn.Header.Ref, FireKind, DuePayload(next), deliverAt), Error = null
+        };
     }
 
     private static void Disarm(IActorTurn turn, ScheduleState? state)
@@ -361,10 +407,10 @@ public sealed class ScheduleActor : IActorType
         var offer = JsonSerializer.Deserialize<ScheduleOccurrence>(arguments);
         if (offer is not { ArmGeneration: > 0, TimerDeliveryId.Length: > 0, Authority.Length: > 0 } ||
             offer.Schedule != job.Actor || offer.OfferUntilUnixMilliseconds <= offer.DueAtUnixMilliseconds ||
-            offer.OfferUntilUnixMilliseconds != job.Deadline)
+            job.Deadline is not { } deadline || deadline < offer.OfferUntilUnixMilliseconds)
             throw new InvalidOperationException("The occurrence does not match its schedule job.");
         cancellationToken.ThrowIfCancellationRequested();
-        return await _occurrences.TryAcceptAsync(offer, cancellationToken);
+        return await _occurrences.TryAcceptAttemptAsync(offer, deadline, cancellationToken);
     }
 
     public RestorePlan RestoreWaits(ActorHeader header, string state)
@@ -376,7 +422,7 @@ public sealed class ScheduleActor : IActorType
                 new([new(pending.RetryTimer, RetryKind, DuePayload(pending.RetryAt), pending.RetryAt)], [], []),
             { Pending: { } pending } =>
                 new([], [new(AcceptJob, pending.Arguments) { Deadline = pending.Deadline }], []),
-            { Timer.Length: > 0 } => new([new(schedule.Timer, FireKind, DuePayload(schedule.Due), schedule.Due)], [], []),
+            { Timer.Length: > 0 } => new([new(schedule.Timer, FireKind, DuePayload(schedule.Due), Math.Max(schedule.Due, schedule.DeferredUntil))], [], []),
             _ => new([], [], [])
         };
     }

@@ -177,6 +177,9 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             services.AddScoped<IWorkflowExecutableSourceReferenceStore>(p => p.GetRequiredService<EfWorkflowExecutableSourceReferenceStore>());
             services.AddScoped<IWorkflowExecutableSourceReferenceReader>(p => p.GetRequiredService<EfWorkflowExecutableSourceReferenceStore>());
             services.AddScoped<IWorkflowExecutableSourceReferenceWriter>(p => p.GetRequiredService<EfWorkflowExecutableSourceReferenceStore>());
+            services.AddScoped<IRuntimeKernelExecutablePinStore, EfRuntimeKernelExecutablePinStore>();
+            services.AddScoped<IRuntimeKernelExecutablePinScanStore, EfRuntimeKernelExecutablePinStore>();
+            ownedInfrastructure.Add(services[^1]);
             RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(
                 RuntimeArtifactStoreBackend.EntityFramework,
                 RuntimeArtifactStoreBackend.CaptureArtifactSurfaceRegistrations(services)

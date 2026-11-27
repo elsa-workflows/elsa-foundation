@@ -40,7 +40,7 @@ public sealed class PackageMetadataTests
     {
         await using var host = await AdministrationHost.StartAsync(nativeStore: kind != "archive-missing", configureNuplane: nuplane =>
         {
-            if (kind == "archive-missing") nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); });
+            if (kind == "archive-missing") nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Trust = Nuplane.Abstractions.FeedTrustLevel.Trusted; feed.Watch = false; feed.IncludeAll(); });
         });
         var manifest = kind switch { "oversized" => new string(' ', 1024 * 1024 + 1), "invalid" => "{invalid", "missing" => null, _ => Manifest };
         PackageAssetTests.Pack(host, "1.0.0", "asset", manifest: manifest);
@@ -62,7 +62,7 @@ public sealed class PackageMetadataTests
     public async Task Catalog_reads_verified_manifest_with_an_ordinary_store()
     {
         await using var host = await AdministrationHost.StartAsync(nuplane =>
-            nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); }));
+            nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Trust = Nuplane.Abstractions.FeedTrustLevel.Trusted; feed.Watch = false; feed.IncludeAll(); }));
         PackageAssetTests.Pack(host, "1.0.0", "asset", manifest: Manifest);
         await PackageAssetTests.Reconcile(host);
         var package = Assert.Single((await host.App.Services.GetRequiredService<INuplaneAdminOperations>().GetPackagesAsync(CancellationToken.None)).Packages);

@@ -17,7 +17,7 @@ public sealed partial class EfStore
     private static string PostgresKeptParkInput(KernelDb db, string row)
     {
         var ordinary = ParkInputPredicate(db, $"""{row}."InboxScope" """.TrimEnd());
-        return db.UsesRootChildren ? $"({ordinary} OR {KeptChildCreator(row)})" : ordinary;
+        return db.UsesRootChildren ? $"({ordinary} OR {KeptRootCreator(db, row)})" : ordinary;
     }
 
     private static string WithParkInputScopes(KernelDb db, string sql) =>

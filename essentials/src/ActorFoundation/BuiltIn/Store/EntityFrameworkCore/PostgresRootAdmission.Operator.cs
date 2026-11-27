@@ -512,6 +512,7 @@ internal sealed partial class PostgresRootAdmission
         pin.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
         var journalReady = pinSequencedJournal ? ", " + EfStore.PostgresSequencedJournalReady("marker.oid") +
             (db.UsesRootPlayback ? " AND " + EfStore.PostgresPlaybackReady("marker.oid", db.UsesRootPlaybackDescendants) : "") : "";
+        var lineageReady = db.UsesRootScheduleLineage ? " AND " + RootScheduleLineage.PostgresReady("marker.oid") : "";
         var validate = new NpgsqlBatchCommand($$"""
             SELECT marker.oid, marker.relnamespace, (
                 SELECT count(*) = $1
@@ -522,7 +523,7 @@ internal sealed partial class PostgresRootAdmission
                 JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name) AND c.relkind = 'r'
                     AND c.relnamespace = marker.relnamespace
                 WHERE ($2 OR required.name <> '"FoundationOperatorReceipts"')
-                    AND ($3 OR required.name <> '"FoundationRootChildCascades"')){{journalReady}}
+                    AND ($3 OR required.name <> '"FoundationRootChildCascades"')){{lineageReady}}{{journalReady}}
             FROM pg_catalog.pg_class marker WHERE marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
             """);
         validate.Parameters.Add(new NpgsqlParameter<int> { TypedValue = (receipts ? 14 : 13) + (childLedger ? 1 : 0) });
@@ -532,6 +533,8 @@ internal sealed partial class PostgresRootAdmission
         // Resolve lock targets after setting the local search path. The batch contains only reads and locks.
         // Before sending any business SQL, confirm the locked relations belong to the same physical marker.
         List<NpgsqlBatchCommand> commands = [pin, new(lockTables)];
+        // Keep the validated lineage table free of user DDL for the whole proof or fenced write.
+        if (db.UsesRootScheduleLineage) commands.Add(new(RootScheduleLineage.PostgresLock));
         // Keep trigger state stable until the fenced write commits. ROW EXCLUSIVE permits other
         // writers but conflicts with ALTER TABLE ... ENABLE/DISABLE TRIGGER.
         if (pinSequencedJournal)
@@ -557,7 +560,9 @@ internal sealed partial class PostgresRootAdmission
             var schema = reader.GetFieldValue<uint>(2);
             if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct) ||
                 reader.GetFieldValue<uint>(0) != marker || reader.GetFieldValue<uint>(1) != schema || !reader.GetBoolean(2))
-                throw new StoreFormatException(childLedger
+                throw new StoreFormatException(db.UsesRootScheduleLineage
+                    ? "The PostgreSQL schedule lineage source or its definitions are incomplete."
+                    : childLedger
                     ? "The child profile requires its source tables in the marker schema."
                     : "Park requires the source tables in the marker schema.");
             if (pinSequencedJournal && !reader.GetBoolean(3))

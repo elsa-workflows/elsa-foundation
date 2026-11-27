@@ -10,7 +10,8 @@ using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRun
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access) : IRuntimeKernelScheduleControlReader
+internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access) :
+    IRuntimeKernelScheduleControlReader, IRuntimeKernelScheduleControlScanStore
 {
     public async ValueTask<RuntimeKernelScheduleControl?> FindAsync(TriggerScope scope, string scheduleKey, CancellationToken cancellationToken = default)
     {
@@ -24,26 +25,56 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
         return control;
     }
 
-    public async ValueTask<RuntimeKernelScheduleControlPage> ListAsync(TriggerScope scope, string? after, int limit, CancellationToken cancellationToken = default)
+    public async ValueTask<string?> ReadTailAsync(TriggerScope scope, CancellationToken cancellationToken = default) =>
+        await ScopedControls(scope).OrderByDescending(row => row.Id).Select(row => row.Id).FirstOrDefaultAsync(cancellationToken);
+
+    public ValueTask<RuntimeKernelScheduleControlPage> ListAsync(TriggerScope scope, string? after, int limit, CancellationToken cancellationToken = default) =>
+        ReadPageAsync(scope, after, null, limit, cancellationToken);
+
+    public ValueTask<RuntimeKernelScheduleControlPage> ListAsync(TriggerScope scope, string? after, string through, int limit,
+        CancellationToken cancellationToken = default)
     {
-        Bind(scope);
+        ArgumentNullException.ThrowIfNull(through);
+        return ReadPageAsync(scope, after, through, limit, cancellationToken);
+    }
+
+    private async ValueTask<RuntimeKernelScheduleControlPage> ReadPageAsync(TriggerScope scope, string? after, string? through,
+        int limit, CancellationToken cancellationToken)
+    {
+        var query = ScopedControls(scope);
         RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
-        var scopeHash = Hash(scope.Persistence.Value);
-        var tenantHash = TenantHash(scope);
-        var query = context.KernelScheduleControls.AsNoTracking().Where(row => row.ScopeKeyHash == scopeHash && row.TenantKeyHash == tenantHash);
         if (after is not null)
         {
-            if (after.Length != 64 || after.AsSpan().IndexOfAnyExcept("0123456789ABCDEF") >= 0)
-                throw new ArgumentException("Invalid schedule control cursor.", nameof(after));
+            RequireCursor(after, nameof(after));
             query = query.Where(row => string.Compare(row.Id, after) > 0);
+        }
+        if (through is not null)
+        {
+            RequireCursor(through, nameof(through));
+            query = query.Where(row => string.Compare(row.Id, through) <= 0);
         }
         var page = await query.OrderBy(row => row.Id).Take(limit + 1).ToArrayAsync(cancellationToken);
         return new(page.Take(limit).Select(row => ReadScoped(row, scope)).ToArray(), page.Length > limit ? page[limit - 1].Id : null);
     }
 
+    private IQueryable<RuntimeKernelScheduleControlEntity> ScopedControls(TriggerScope scope)
+    {
+        Bind(scope);
+        var scopeHash = Hash(scope.Persistence.Value);
+        var tenantHash = TenantHash(scope);
+        return context.KernelScheduleControls.AsNoTracking().Where(row => row.ScopeKeyHash == scopeHash && row.TenantKeyHash == tenantHash);
+    }
+
+    private static void RequireCursor(string cursor, string parameter)
+    {
+        if (cursor.Length != 64 || cursor.AsSpan().IndexOfAnyExcept("0123456789ABCDEF") >= 0)
+            throw new ArgumentException("Invalid schedule control cursor.", parameter);
+    }
+
     // Only the activation switch stages these rows, after staging the exact reservation in the same Serializable transaction.
     internal async ValueTask StageAsync(PersistenceScope persistence, string slotId, IReadOnlyList<RuntimeKernelScheduleControl> desired,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool adoptSchedules = false,
+        Func<CancellationToken, ValueTask<DateTimeOffset>>? readCutover = null)
     {
         if (context.Database.CurrentTransaction is null || access.Current.RequireScope() != persistence)
             throw new InvalidOperationException("Schedule controls require the owning publication transaction.");
@@ -51,6 +82,7 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
         var ids = pending.Keys.ToArray();
         var scopeHash = Hash(persistence.Value);
         var slotHash = Hash(slotId);
+        DateTimeOffset? cutover = null;
         var rows = await context.KernelScheduleControls.Where(row => row.ScopeKeyHash == scopeHash &&
             (row.OwnerSlotHash == slotHash || ids.Contains(row.Id))).OrderBy(row => row.Id).ToArrayAsync(cancellationToken);
         foreach (var row in rows)
@@ -63,22 +95,55 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
                 if (CanonicalScope(current.Scope) != CanonicalScope(replacement.Scope) || current.ScheduleKey != replacement.ScheduleKey ||
                     current.DefinitionId != replacement.DefinitionId || current.TriggerNode != replacement.TriggerNode)
                     throw InvalidControl();
+                if (current.Owner is { Continuity: { } priorContinuity } former &&
+                    replacement.Owner is { Continuity: { } nextContinuity } successor &&
+                    priorContinuity.Stimulus == nextContinuity.Stimulus)
+                {
+                    if (former.PublicationRevision == successor.PublicationRevision)
+                        replacement = replacement with { Owner = successor with { Continuity = priorContinuity } };
+                    else
+                    {
+                        replacement = await StampAsync(replacement with
+                        {
+                            Owner = successor with { Continuity = nextContinuity with { Stamp = priorContinuity.Stamp } }
+                        });
+                        // Freeze the first cutover for an older actor, even if it skips subsequent controls.
+                        context.KernelScheduleCutovers.Add(new()
+                        {
+                            Id = CutoverId(persistence, slotId, former.PublicationRevision, priorContinuity.Stamp),
+                            ActivatedAtUtcTicks = cutover!.Value.UtcTicks,
+                            SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleControlEfModule.SchemaFamily,
+                                RuntimeKernelScheduleControlEfModule.SchemaVersion)
+                        });
+                    }
+                }
+                else replacement = await StampAsync(replacement);
+
                 if (current.Owner != replacement.Owner || current.Scope != replacement.Scope)
                 {
+                    if (adoptSchedules && current.Owner is not null) throw InvalidControl();
                     if (current.Owner is { } prior && prior.PublicationRevision >= replacement.Owner!.PublicationRevision)
                         throw InvalidControl();
                     Write(row, replacement with { Revision = checked(current.Revision + 1) });
                 }
             }
-            else if (current.Owner is not null)
+            else if (!adoptSchedules && current.Owner is not null)
                 Write(row, current with { Owner = null, Revision = checked(current.Revision + 1) });
             else throw InvalidControl();
         }
         foreach (var (id, control) in pending.OrderBy(item => item.Key, StringComparer.Ordinal))
         {
             var row = new RuntimeKernelScheduleControlEntity { Id = id, ScopeKeyHash = scopeHash, TenantKeyHash = TenantHash(control.Scope) };
-            Write(row, control with { Revision = 1 });
+            Write(row, await StampAsync(control with { Revision = 1 }));
             context.KernelScheduleControls.Add(row);
+        }
+
+        async ValueTask<RuntimeKernelScheduleControl> StampAsync(RuntimeKernelScheduleControl control)
+        {
+            if (control.Owner is not { Continuity: { } continuity } owner) return control;
+            if (readCutover is null) throw new InvalidOperationException("A managed schedule needs the Actor Foundation publication clock.");
+            cutover ??= await readCutover(cancellationToken);
+            return control with { Owner = owner with { Continuity = continuity with { FoundationActivatedAt = cutover.Value } } };
         }
     }
 
@@ -108,6 +173,15 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
                 source.ArtifactVersion, binding.ArtifactHash);
             var owner = new RuntimeKernelScheduleControlOwner(slot.SlotId, slot.SlotName, source.ActivationId!, slot.Revision,
                 source.SourceReferenceId, executable);
+            if (binding.Metadata.TryGetValue(ScheduleStimulusMetadata, out var stimulus))
+            {
+                if (!IsDigest(stimulus)) throw InvalidControl();
+                owner = owner with
+                {
+                    Continuity = new(CompositeId(scope.Persistence.Value, "kernel-schedule-continuity-v1", slot.SlotId, key,
+                        source.ActivationId!, slot.Revision.ToString(System.Globalization.CultureInfo.InvariantCulture)), stimulus, default)
+                };
+            }
             controls.Add(new(scope, key, source.DefinitionId, node, 0, owner));
         }
         if (controls.Select(control => control.ScheduleKey).Distinct(StringComparer.Ordinal).Count() != controls.Count)
@@ -129,7 +203,8 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
         row.OwnerSlotHash = control.Owner is { } owner ? Hash(owner.SlotId) : null;
         row.Revision = control.Revision;
         row.SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleControlEfModule.SchemaFamily,
-            RuntimeKernelScheduleControlEfModule.SchemaVersion, row.SchemaVersion);
+            control.Owner?.Continuity is null ? RuntimeKernelScheduleControlEfModule.InitialSchemaVersion
+                : RuntimeKernelScheduleControlEfModule.SchemaVersion, row.SchemaVersion);
     }
 
     private static RuntimeKernelScheduleControl ReadScoped(RuntimeKernelScheduleControlEntity row, TriggerScope scope)
@@ -147,7 +222,10 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
             string.IsNullOrWhiteSpace(control.DefinitionId) || string.IsNullOrWhiteSpace(control.TriggerNode) ||
             control.ScheduleKey != LogicalKey(control.DefinitionId, control.TriggerNode) || row.Id != Identity(control.Scope, control.ScheduleKey) ||
             row.ScopeKeyHash != Hash(physicalScope.Value) || row.TenantKeyHash != TenantHash(control.Scope) ||
-            (control.Owner is { } owner ? !MatchesOwner(row, control.DefinitionId, owner) : row.OwnerSlotHash is not null))
+            (control.Owner is { } owner ? !MatchesOwner(row, control.DefinitionId, owner) : row.OwnerSlotHash is not null) ||
+            control.Owner?.Continuity is { } continuity &&
+            (row.SchemaVersion == RuntimeKernelScheduleControlEfModule.InitialSchemaVersion || !IsDigest(continuity.Stamp) ||
+             !IsDigest(continuity.Stimulus) || continuity.FoundationActivatedAt <= DateTimeOffset.UnixEpoch))
             throw InvalidControl();
         return control;
     }
@@ -164,6 +242,12 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
 
     private static string Identity(TriggerScope scope, string key) =>
         CompositeId(scope.Persistence.Value, "kernel-schedule-control-v1", JsonSerializer.Serialize(CanonicalScope(scope).TenantId), key);
+
+    internal static string CutoverId(PersistenceScope persistence, string slotId, long revision, string continuity) =>
+        CompositeId(persistence.Value, "kernel-schedule-cutover-v1", slotId,
+            revision.ToString(System.Globalization.CultureInfo.InvariantCulture), continuity);
+
+    private static bool IsDigest(string? value) => value is { Length: 64 } && value.AsSpan().IndexOfAnyExcept("0123456789ABCDEF") < 0;
 
     private static InvalidDataException InvalidControl() => new("A schedule control differs from its physical identity or authority.");
 }
