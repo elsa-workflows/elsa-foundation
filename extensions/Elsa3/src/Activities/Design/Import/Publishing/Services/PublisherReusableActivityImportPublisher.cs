@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Diagnostics;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Services;
@@ -59,15 +60,56 @@ internal sealed class PublisherReusableActivityImportPublisher(
             var diagnostics = rejection.Findings.Select(finding => FromFinding(finding, rejection.ProviderKey, request)).ToArray();
             return ReusableActivityImportPublishOutcome.Refused(FirstErrorCode(diagnostics), diagnostics);
         }
+        catch (Exception exception) when (Find<SchemaWriteRefusedException>(exception) is { } refusal)
+        {
+            // The store refused a write that needs a later schema version than this host may write, or the operation needs
+            // a dormant one (#5972). Studio's publish endpoint answers it with its code, family and both versions; so does
+            // the import, not with "failed unexpectedly".
+            return ReusableActivityImportPublishOutcome.Refused(refusal.Code, [FromSchemaRefusal(refusal, request)]);
+        }
     }
 
-    /// <summary>The rejection itself, or the one a compiler wrapped it in, as the publish endpoint finds it.</summary>
-    private static ActivityDataSelectionRejectedException? DataSelectionRejection(Exception exception)
+    /// <summary>The exception itself, or the one a compiler or store wrapped it in, as the publish endpoint finds it.</summary>
+    private static T? Find<T>(Exception exception) where T : Exception
     {
         for (Exception? current = exception; current is not null; current = current.InnerException)
-            if (current is ActivityDataSelectionRejectedException rejection)
-                return rejection;
+            if (current is T match)
+                return match;
         return null;
+    }
+
+    private static ActivityDataSelectionRejectedException? DataSelectionRejection(Exception exception) =>
+        Find<ActivityDataSelectionRejectedException>(exception);
+
+    /// <summary>
+    /// The refusal as one diagnostic carrying what <c>SchemaWriteRefusalProblem</c> gives every API: the code, the family and
+    /// both versions, and for a dormancy refusal its feature and reason. Its message already names the family and versions.
+    /// </summary>
+    private static ActivityDiagnostic FromSchemaRefusal(SchemaWriteRefusedException refusal, ReusableActivityImportPublishRequest request)
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["family"] = refusal.Family,
+            ["writeVersion"] = refusal.WriteVersion,
+            ["requiredVersion"] = refusal.RequiredVersion
+        };
+        if (refusal is SchemaDormancyRefusedException dormancy)
+        {
+            if (dormancy.FeatureId is { } feature)
+                metadata["feature"] = feature;
+            metadata["reason"] = dormancy.Reason;
+        }
+
+        return new(
+            refusal.Code,
+            ActivityDiagnosticSeverity.Error,
+            refusal.Message,
+            new("ActivityDraft", request.DraftId, null, Revision: request.DraftRevision),
+            Remediation: $"Nothing was published for this version; the imported rows are kept. Publishing it needs schema version " +
+                         $"'{refusal.RequiredVersion}' of schema family '{refusal.Family}', and this host may write only " +
+                         $"'{refusal.WriteVersion}' so far. Once that version is finalized for this host, upload the same export " +
+                         "again and apply it under a new idempotency key; only the versions that are not yet published publish.",
+            Metadata: metadata);
     }
 
     private static ActivityDiagnostic FromFinding(ValidationError finding, string? providerKey, ReusableActivityImportPublishRequest request)
