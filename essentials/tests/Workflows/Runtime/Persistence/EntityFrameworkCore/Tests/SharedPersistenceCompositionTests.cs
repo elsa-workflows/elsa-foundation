@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CShells.DependencyInjection;
 using CShells.Lifecycle;
 using Elsa.Locking.Core;
@@ -7,6 +8,7 @@ using Elsa.Tasks;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Resumption;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -76,13 +78,59 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Artifact_and_test_scope_features_own_the_durable_state_without_the_resumption_runner()
+    {
+        const string artifacts = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
+        const string testScopes = "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence";
+        await using var host = CreateHost(new Dictionary<string, string?>
+        {
+            [$"CShells:Shells:{ShellName}:Features:{artifacts}"] = null,
+            [$"CShells:Shells:{ShellName}:Features:{artifacts}:RecoveryContinuationSigningKey"] = RecoverySigningKey,
+            [$"CShells:Shells:{ShellName}:Features:{testScopes}"] = null,
+            [$"CShells:Shells:{ShellName}:Features:{testScopes}:RecoveryContinuationSigningKey"] = RecoverySigningKey
+        });
+        var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        await using var scope = shell.ServiceProvider.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+
+        Assert.Null(services.GetService<IRuntimeResumptionService>());
+        Assert.Null(services.GetService<IWorkflowSchedulerDrainer>());
+        Assert.Null(services.GetService<IWorkflowExecutionStateStore>());
+        var database = services.GetRequiredService<RuntimeDbContext>();
+        Assert.Equal(databasePath, database.Database.GetDbConnection().DataSource);
+        Assert.NotEmpty(await database.Database.GetAppliedMigrationsAsync());
+        Assert.Empty(await database.Database.GetPendingMigrationsAsync());
+
+        var now = DateTimeOffset.UtcNow;
+        var tenant = new PersistenceScope(PersistenceScope.DefaultValue);
+        var test = new WorkflowTestScope("isolated-test", now.AddMinutes(5), tenant.Value, new(WorkflowExecutionPartition.DefaultValue));
+        var lifecycle = Assert.IsType<EfWorkflowTestScopeStore>(services.GetRequiredService<IWorkflowTestScopeStore>());
+        var admission = services.GetRequiredService<IWorkflowTestScopeAdmissionStore>();
+        Assert.Same(lifecycle, admission);
+        Assert.IsType<EfWorkflowTestScopeCleanupStore>(services.GetRequiredService<IWorkflowTestScopeCleanupStore>());
+        await lifecycle.CreateAsync(test, now);
+        await admission.AssertOpenAsync(test, now);
+
+        var root = new ExecutableNode("root", "root", "test", "1", "consumer", JsonSerializer.SerializeToElement(new { }),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
+        var executable = new WorkflowExecutable(new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"),
+            root, new Dictionary<string, WorkflowExecutableResumeTarget>(), now, new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
+        var materials = Assert.IsType<EfWorkflowExecutableStore>(services.GetRequiredService<IWorkflowExecutableStore>());
+        await materials.SaveAsync(executable);
+        var pins = services.GetRequiredService<IRuntimeKernelExecutablePinStore>();
+        Assert.True(await pins.TryPinAsync([new(tenant, tenant.Value, "actor", executable.Identity, "issuance")]));
+        Assert.Contains(executable.Identity.ArtifactId, await pins.ListPinnedExecutableArtifactIdsAsync());
+    }
+
     public void Dispose()
     {
         foreach (var path in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             File.Delete(path);
     }
 
-    private ServiceProvider CreateHost()
+    private ServiceProvider CreateHost(IReadOnlyDictionary<string, string?>? features = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -90,7 +138,10 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
                 ["Elsa:Persistence:DefaultResource"] = "primary",
                 ["Elsa:Persistence:Resources:primary:Provider"] = "Sqlite",
                 ["Elsa:Persistence:Resources:primary:ConnectionName"] = "Shared",
-                ["ConnectionStrings:Shared"] = ConnectionString,
+                ["ConnectionStrings:Shared"] = ConnectionString
+            })
+            .AddInMemoryCollection(features ?? new Dictionary<string, string?>
+            {
                 [$"CShells:Shells:{ShellName}:Features:{FeatureName}"] = null,
                 [$"CShells:Shells:{ShellName}:Features:{FeatureName}:RecoveryContinuationSigningKey"] = RecoverySigningKey,
                 [$"CShells:Shells:{ShellName}:Features:{FeatureName}:HierarchyCursorSigningKey"] = HierarchySigningKey,
