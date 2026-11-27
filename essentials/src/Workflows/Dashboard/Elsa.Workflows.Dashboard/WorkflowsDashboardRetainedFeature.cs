@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Dashboard;
 [ManifestFeatureCategory("Dashboard")]
 [ShellFeature(
     name: FeatureName,
-    DisplayName: "Workflow Dashboard for retained workflows",
+    DisplayName = "Workflow Dashboard for retained workflows",
     Description = "Serves the workflow portfolio without the legacy runner. Actor run health reports unavailable until exact statistics can be read.",
     DependsOn = new object[] { "WorkflowsDesignApi", "WorkflowDesignValidations", typeof(ApiCapabilitiesFeature) })]
 public sealed class WorkflowsDashboardRetainedFeature : IWebShellFeature, IPostConfigureShellServices

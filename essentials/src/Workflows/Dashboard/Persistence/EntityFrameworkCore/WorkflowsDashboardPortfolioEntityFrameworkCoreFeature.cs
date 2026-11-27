@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore;
 [ManifestFeatureCategory("Persistence")]
 [ShellFeature(
     name: FeatureName,
-    DisplayName: "Workflow Portfolio EF Core",
+    DisplayName = "Workflow Portfolio EF Core",
     Description = "Queries workflow definitions, drafts, and publication references for the workflow portfolio.",
     DependsOn = new object[] { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "WorkflowsDesignEntityFrameworkCore" })]
 [UsesEfModule("Workflows.Design")]
