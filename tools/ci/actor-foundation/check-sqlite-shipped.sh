@@ -7,6 +7,7 @@ dotnet "$runner" sqlite-root-ingress
 dotnet "$runner" shipped-child-workflows sqlite in-batch
 for fence in checked in-batch; do
   dotnet "$runner" shipped-delay-recovery sqlite "$fence"
+  dotnet "$runner" kernel-http-waits sqlite "$fence" shipped
   dotnet "$runner" sqlite-host-lifetime "$fence" shipped
   for check in sqlite-root-timed-jobs sqlite-root-held-replies sqlite-root-terminate sqlite-root-retirement \
       sqlite-root-held-operators sqlite-root-park-opening sqlite-root-park-arrivals sqlite-root-park-inspection sqlite-root-parked-operators \
