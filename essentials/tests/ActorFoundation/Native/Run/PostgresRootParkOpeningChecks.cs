@@ -662,6 +662,16 @@ internal static class PostgresRootParkOpeningChecks
             var selection = parked?.Selection ?? throw new InvalidOperationException("The parked view has no Park selection.");
             Check(parked.Park?.At == opened!.At && (await reads.GetAsync(tenant, sibling, stop))?.Selection is null,
                 "the public view of the parked root carries a Park selection and the running sibling none");
+            var parkReads = (Contract.IActorParkInboxReads)await Store(OpenMixed).OpenPreviewRootReadsAsync(1, stop);
+            var firstPage = await parkReads.ReadParkInboxAsync(tenant, actor, selection, cancellationToken: stop);
+            Check(firstPage is { Items: [{ Kind: "ordinary", State: Contract.DeliveryState.Arrived }], Next: not null },
+                "the exact Park inbox starts with the oldest kept arrival");
+            var secondPage = await parkReads.ReadParkInboxAsync(tenant, actor, selection, firstPage!.Next, stop);
+            Check(secondPage is { Items: [{ Kind: "fail", State: Contract.DeliveryState.Consumed }], Next: not null } &&
+                secondPage.Items[0].Handle != firstPage.Items[0].Handle, "the next Park inbox page carries the consumed delivery's own handle");
+            var thirdPage = await parkReads.ReadParkInboxAsync(tenant, actor, selection, secondPage!.Next, stop);
+            Check(thirdPage is { Items: [{ Kind: "ordinary", State: Contract.DeliveryState.Arrived }], Next: null },
+                "the exact Park inbox stops after the last kept input");
             ValueTask<Contract.Admission> Send(Contract.ActorRef target, string id, Contract.OperatorCommand command) =>
                 ingress.SendAsync(tenant, new Contract.Target.Ref(target), id, Contract.Kinds.Recover, JsonSerializer.Serialize(command),
                     cancellationToken: stop);
@@ -769,6 +779,9 @@ internal static class PostgresRootParkOpeningChecks
             }
             var secondSelection = (await reads.GetAsync(tenant, actor, stop))?.Selection
                 ?? throw new InvalidOperationException("The re-parked view has no Park selection.");
+            Check(await parkReads.ReadParkInboxAsync(tenant, actor, secondSelection, firstPage.Next, stop) is null &&
+                await parkReads.ReadParkInboxAsync(tenant, actor, selection, cancellationToken: stop) is null,
+                "a page from the first Park cannot read evidence in the replacement Park");
             Check(secondSelection != selection && await Send(actor, "recover-old", new(selection)) is
                     { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
                 "ingress refuses the generation-1 selection on the re-parked root");

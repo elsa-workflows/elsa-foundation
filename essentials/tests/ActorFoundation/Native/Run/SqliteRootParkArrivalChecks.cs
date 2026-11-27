@@ -602,9 +602,23 @@ internal static partial class SqliteHostLifetimeChecks
                     { Outcome: Contract.AdmissionOutcome.Accepted }, "the first Park admits two arrivals in release order");
                 await DriveAsync(owner, root, row => row is { Revision: 4, Status: InstanceStatus.Faulted });
                 var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                var parkReads = new GeneratedRootReads(store, cursor, pageSize: 1, provider: "sqlite");
+                var first = await parkReads.ReadParkInboxAsync(scope, root, selection, cancellationToken: token);
+                Require(first is { Items: [{ Kind: "fail", State: Contract.DeliveryState.Consumed }], Next: not null },
+                    "the exact Park inbox starts with the consumed delivery");
+                var second = await parkReads.ReadParkInboxAsync(scope, root, selection, first!.Next, token);
+                Require(second is { Items: [{ Kind: "repark-fault", State: Contract.DeliveryState.Arrived }], Next: not null } &&
+                    second.Items[0].Handle != first.Items[0].Handle, "the next Park inbox page carries the first arrival's own handle");
+                var third = await parkReads.ReadParkInboxAsync(scope, root, selection, second!.Next, token);
+                Require(third is { Items: [{ Kind: "later-release", State: Contract.DeliveryState.Arrived }], Next: null },
+                    "the exact Park inbox stops after the last kept input");
                 Require(await admission.OperateAsync(scope.Tenant, root, "repark-recover", Kinds.Recover, selection, null, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted }, "the first Park admits a Recover");
                 var repark = await DriveAsync(owner, root, row => row is { Revision: 6, Status: InstanceStatus.Faulted });
+                var replacement = (await reads.GetAsync(scope, root, token))!.Selection!;
+                Require(await parkReads.ReadParkInboxAsync(scope, root, replacement, first.Next, token) is null &&
+                    await parkReads.ReadParkInboxAsync(scope, root, selection, cancellationToken: token) is null,
+                    "a page from the first Park cannot read evidence in the replacement Park");
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {repark.Actor.Id} AND "Kind" = 'older-future' AND NOT "Done"
                     """, token);

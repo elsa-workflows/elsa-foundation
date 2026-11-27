@@ -8,10 +8,65 @@ namespace Kernel.EntityFramework;
 
 internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, int pageSize, string provider)
     : IActorReads, IActorTerminalOutputReads, IActorSequencedJournalReads, IActorPlaybackReads,
-      IActorRetentionReads
+      IActorRetentionReads, IActorParkInboxReads
 {
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
+    private const int MaxParkInboxCursorBytes = 128 * 1024;
+
+    private sealed record ParkInboxBookmark(FoundationParkMark Mark, ParkPageCursor After);
+
+    public bool SupportsParkInbox => store.SupportsParkInbox();
+
+    public async ValueTask<Page<ParkInboxEntry>?> ReadParkInboxAsync(BoundScope scope, ActorRef actor, string selection,
+        PageToken? from = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!PostgresRootAdmission.IsIssuedReferenceShape(actor.Id) ||
+            PostgresRootSelection.OpenPark(cursor, selection, scope.Tenant, actor.Id) is not { Revision: > 0, At: > 0 } mark)
+            return null;
+
+        var context = Encoding.UTF8.GetBytes(DurableKeyJson.Write(new { Read = $"{provider}-root-park-inbox/1", scope.Tenant, Actor = actor.Id }));
+        var after = default(ParkPageCursor);
+        if (from is { } continuation)
+        {
+            var bookmark = OpenParkInboxBookmark(context, continuation.Value);
+            if (bookmark.Mark != mark) return null;
+            after = bookmark.After;
+        }
+
+        var snapshot = await store.ReadRootParkInboxAsync(scope.Tenant, actor.Id, mark, after, _pageSize + 1, cancellationToken);
+        if (snapshot is null) return null;
+        var rows = snapshot.Rows;
+        var page = rows.Take(_pageSize).Select(row => new ParkInboxEntry(
+            cursor.InboxHandle(DurableKeyJson.Write(new { scope.Tenant, Actor = actor.Id, mark, row.Sequence, row.Id, row.Scope })),
+            row.Kind, row.Reason == ParkKeepReason.Consumed ? DeliveryState.Consumed : DeliveryState.Arrived,
+            row.Due > 0 ? row.Due : null, row.Attempts)).ToArray();
+
+        PageToken? next = null;
+        if (rows.Count > _pageSize)
+        {
+            var last = rows[_pageSize - 1];
+            var bookmark = new ParkInboxBookmark(mark, new(last.Sequence, new(last.Id, last.Scope)));
+            next = new(cursor.Seal(context, Encoding.UTF8.GetBytes(DurableKeyJson.Write(bookmark))));
+        }
+        return new(page, next, snapshot.AsOf);
+    }
+
+    private ParkInboxBookmark OpenParkInboxBookmark(ReadOnlySpan<byte> context, string? token)
+    {
+        if (string.IsNullOrEmpty(token)) throw InvalidParkInboxCursor();
+        var padding = token.EndsWith("==", StringComparison.Ordinal) ? 2 : token.EndsWith('=') ? 1 : 0;
+        var length = token.Length / 4 * 3 - padding - FoundationReadCursor.Overhead;
+        if (token.Length % 4 != 0 || length is <= 0 or > MaxParkInboxCursorBytes)
+            throw InvalidParkInboxCursor();
+        Span<byte> plain = length <= 4_096 ? stackalloc byte[length] : new byte[length];
+        if (!cursor.TryOpen(context, token, plain)) throw InvalidParkInboxCursor();
+        return DurableKeyJson.Read<ParkInboxBookmark>(Encoding.UTF8.GetString(plain));
+    }
+
+    private static ArgumentException InvalidParkInboxCursor() => new("The continuation does not match this actor Park inbox.", "from");
 
     internal ValueTask<ActorRetentionPolicy> ReadRetentionPolicyAsync(BoundScope scope, string actorType, CancellationToken token) =>
         new(store.ReadRootRetentionPolicyAsync(scope, actorType, token));
