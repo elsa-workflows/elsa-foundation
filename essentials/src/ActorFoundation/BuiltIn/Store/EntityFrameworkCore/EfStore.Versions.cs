@@ -58,11 +58,14 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat PostgresRootChildrenQualification => Current with { MessageProtocol = 111 };
     internal static StoreFormat RootDueBacklogQualification => Current with { MessageProtocol = 110 };
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
+    internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
+    internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
+    internal static StoreFormat RootTimerRearmQualification => Current with { MessageProtocol = 91 };
 
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 26 };
+    internal static StoreFormat RootShipped => Current with { MessageProtocol = 27 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -96,6 +99,7 @@ internal enum RootCapabilities
     ParkArrivals = 1 << 19,
     ParkRecovery = 1 << 20,
     DueBacklog = 1 << 21,
+    TimerRearm = 1 << 22,
     Children = 1 << 23
 }
 
@@ -117,12 +121,20 @@ internal static class RootProfiles
     internal const RootCapabilities ParkCompositionBase = Retention | RootCapabilities.OperatorReplies | TimedJobSettlement |
         RootCapabilities.TimedJobPreview | RootCapabilities.ReplyProtocol | ParkInspection;
 
+    // Park is qualified separately before the self and timed envelope union can ship.
+    internal const RootCapabilities SelfTimedQualification = StableBody | TimedJobSettlement | RootCapabilities.TimedJobPreview |
+        RootCapabilities.SelfProtocol | RootCapabilities.Timers;
+
     /// <summary>
-    /// The shared shipped format includes ordinary Park arrivals and one-page Resume alongside the operator chain.
+    /// The shared shipped format adds actor-owned self-sends and durable timers to one-page Park Resume.
     /// The growth rule: each widening of this set takes a new protocol number, and a database installed with an older set
     /// is refused. Before GA a preview database is recreated; after GA a widening migrates, with a rollback floor (K12).
     /// </summary>
-    internal const RootCapabilities Shipped = ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
+    internal const RootCapabilities Shipped = TimerRearmQualification;
+
+    internal const RootCapabilities ParkRecoveryComposition = ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
+    internal const RootCapabilities SelfTimedParkQualification = ParkRecoveryComposition | RootCapabilities.SelfProtocol | RootCapabilities.Timers;
+    internal const RootCapabilities TimerRearmQualification = SelfTimedParkQualification | RootCapabilities.TimerRearm;
 
     // Each format and the closed capability set its profile carries.
     internal static IReadOnlyDictionary<StoreFormat, RootCapabilities> Formats { get; } = new Dictionary<StoreFormat, RootCapabilities>
@@ -175,7 +187,8 @@ internal static class RootProfiles
         [RootCapabilities.TimedJobPreview] = RootCapabilities.TimedJobSettlement,
         [RootCapabilities.ParkInspection] = RootCapabilities.ParkOpening,
         [RootCapabilities.ParkArrivals] = RootCapabilities.ParkInspection,
-        [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol
+        [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol,
+        [RootCapabilities.TimerRearm] = ParkCompositionBase | RootCapabilities.Timers | RootCapabilities.ParkRecovery
     };
 
     // The prerequisites of the set's members that the set lacks. None means the set is closed.
@@ -358,25 +371,32 @@ internal static class StoreDefinitionsRevision
     private const int PostgreSql = 1;
     private const int Sqlite = 2;
     private const int LegacyPostgreSqlRevision = 1;
-    private const int PostgreSqlRevision = 5;
-    private const int PostgreSqlChildrenRevision = 6;
-    private const int SqliteRevision = 9;
+    private const int PostgreSqlRevision = 6;
+    private const int PostgreSqlChildrenRevision = 7;
+    private const int SqliteRevision = 10;
     private const int SqliteParkRecoverRevision = 5;
+    private const int PostgreSqlDueBacklogRevision = 5;
     private const int SqliteDueBacklogRevision = 10;
 
     internal static StoreVersionEntity? Seed(KernelDb db)
     {
         var sqliteQualification = db.UsesSqliteShippedInstall &&
-            (db.RequiredFormat == StoreFormat.SqliteParkArrivalsQualification || db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification);
+            (db.RequiredFormat == StoreFormat.SqliteParkArrivalsQualification || db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification ||
+                db.RequiredFormat == StoreFormat.RootSelfTimedQualification || db.RequiredFormat == StoreFormat.RootSelfTimedParkQualification ||
+                db.RequiredFormat == StoreFormat.RootTimerRearmQualification);
         if (db.RequiredFormat != StoreFormat.RootShipped && !sqliteQualification && !db.UsesRootDueBacklog && !db.UsesRootChildren) return null;
         var sqlite = db.Database.IsSqlite();
         return new StoreVersionEntity
         {
             Id = MarkerId,
             StoreSchema = sqlite ? Sqlite : PostgreSql,
-            MessageProtocol = sqliteQualification
-                ? db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification ? SqliteParkRecoverRevision : 1
-                : sqlite ? db.UsesRootDueBacklog ? SqliteDueBacklogRevision : SqliteRevision : db.UsesRootChildren ? PostgreSqlChildrenRevision : PostgreSqlRevision,
+            MessageProtocol = db.RequiredFormat switch
+            {
+                _ when sqliteQualification => db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification ? SqliteParkRecoverRevision : 1,
+                _ when db.RequiredFormat == StoreFormat.RootDueBacklogQualification => sqlite ? SqliteDueBacklogRevision : PostgreSqlDueBacklogRevision,
+                _ when db.RequiredFormat == StoreFormat.PostgresRootChildrenQualification => PostgreSqlChildrenRevision,
+                _ => sqlite ? SqliteRevision : PostgreSqlRevision
+            },
             JournalCodec = 0
         };
     }

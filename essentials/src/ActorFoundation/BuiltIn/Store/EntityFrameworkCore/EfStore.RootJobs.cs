@@ -77,6 +77,21 @@ public sealed partial class EfStore
         return row.Id == StoredJobId(key) && RootJobTicket.Read(message, row.Target, ticket.Model, timed) is not null ? message : throw RootShape();
     }
 
+    private Message[] EncodeRootSends(WorkerRoot root, InstanceRow row, IReadOnlyList<Message> sends)
+    {
+        if (!RootTimedJobs)
+            return sends.Select((message, index) => RootJobsEnabled && message.Kind == Kinds.Job
+                ? EncodeRootJob(message, root, row.Model)
+                : EncodeRootSelf(root.Actor, row.Revision, FoundationSelfSend.AuthoredOrdinal(message) ?? index, message)).ToArray();
+        if (RootSelfIssuer is null) return EncodeRootTimedSends(sends);
+
+        var timed = EncodeRootTimedSends(sends.Where(RootJobTicket.IsTimedSend).ToArray());
+        var nextTimed = 0;
+        return sends.Select(message => RootJobTicket.IsTimedSend(message)
+            ? timed[nextTimed++]
+            : EncodeRootSelf(root.Actor, row.Revision, FoundationSelfSend.AuthoredOrdinal(message) ?? throw RootShape(), message)).ToArray();
+    }
+
     private Message[] EncodeRootTimedSends(IReadOnlyList<Message> sends) =>
         RootTimedJobPreviewEnabled && sends is [var deadline, var ticket] && deadline.Kind == Kinds.JobDeadline && ticket.Kind == Kinds.Job
             ? [EncodeRootTimedJob(deadline, ticket.JobGeneration), EncodeRootTimedJob(ticket, ticket.JobGeneration)]

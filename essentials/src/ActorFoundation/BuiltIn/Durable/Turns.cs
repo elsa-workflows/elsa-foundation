@@ -248,11 +248,14 @@ public sealed class TurnOutcome(string instance)
     internal bool FoundationWithholds;
     internal FoundationHeaderChange? FoundationHeader;
     internal bool OpensPark;
+    internal bool ClearsPrivateTimersOnEnd;
     internal ParkKeepReason? FoundationKeep;
     internal ParkPageClear? FoundationParkClear;
     internal ParkRecoveryPage? FoundationRecoveryPage;
     internal ParkRetryOpen? FoundationRetry;
     internal ParkTimerOpen? FoundationRecoveryTimers;
+    internal ParkTimerRecipe[]? FoundationRootTimerRearms;
+    internal Func<CancellationToken, ValueTask<TurnOutcome>>? PrepareCommand;
     internal ParkJobOpen? FoundationRecoveryJobs;
     internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions;
     internal InboxKey? FoundationCatchUpStep;
@@ -449,11 +452,14 @@ public sealed class DurableTurn
         return Send(id, target, kind, payload, new SendOptions(TargetCreation: targetCreation, DueAt: dueAt), actorAuthored: true);
     }
 
-    internal string SendToSelf(Func<string, string> issue, string kind, string? payload, long? dueAt)
+    internal string SendToSelf(Func<string, string> issue, string kind, string? payload, long? dueAt, bool recordOrdinal = false)
     {
         Kinds.RequireApplicationSend(kind);
-        var id = FoundationSelfSend.Issue(issue, Origin, Revision, _ordinal++, dueAt);
-        _sent.Add(FoundationSelfSend.Create(Id, _input.Creation, id, kind, payload, dueAt));
+        var ordinal = _ordinal++;
+        var id = FoundationSelfSend.Issue(issue, Origin, Revision, ordinal, dueAt);
+        var message = FoundationSelfSend.Create(Id, _input.Creation, id, kind, payload, dueAt);
+        if (recordOrdinal) FoundationSelfSend.RememberOrdinal(message, ordinal);
+        _sent.Add(message);
         return id;
     }
 
@@ -550,13 +556,7 @@ public sealed class DurableTurn
         Services.Cancelling(key);
     }
 
-    internal void RecallPersistedSelfInput(string id)
-    {
-        var key = InboxKey.Issued(Origin + "#" + id);
-        if (_sent.Any(message => message.InboxKey == key))
-            throw new NotSupportedException("The scoped root writer supports recall of an already persisted self input.");
-        Recall(key.Id);
-    }
+    internal void RecallSelfInput(string id) => Recall(Origin + "#" + id);
 
     internal void RecallFromActor(InMemoryStore store, string id)
     {

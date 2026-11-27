@@ -49,17 +49,18 @@ public sealed partial class EfStore
         return row.Id == StoredJobId(message.InboxKey) && row.Payload == message.Payload ? message : throw RootShape();
     }
 
-    private static void RequireRootTimedIssuance(TurnCommit turn, InstanceRow row)
+    private void RequireRootTimedIssuance(TurnCommit turn, InstanceRow row)
     {
         // A root that ends Faulted issues no job; one that runs issues only a timed pair.
-        if (turn.Sent.Count != 0 && (row.Status == InstanceStatus.Faulted || !RootJobTicket.StartsTimedPair(turn.Sent, row.Id, row.Model)))
+        var sent = RootSelfIssuer is null ? turn.Sent : turn.Sent.Where(RootJobTicket.IsTimedSend).ToArray();
+        if (sent.Count != 0 && (row.Status == InstanceStatus.Faulted || !RootJobTicket.StartsTimedPair(sent, row.Id, row.Model)))
             throw RootShape();
     }
 
     private async Task<PreparedRoot?> PrepareRootTimedTurnAsync(WorkerRoot root, TurnCommit turn, InstanceRow row, string? state,
         RootImage current, PartitionFence fence, Message[] wires, CancellationToken token)
     {
-        if (turn.Done.Count != 0 || turn.FoundationSelfRecalls is not null || turn.FoundationRootOperator is not null ||
+        if (turn.Done.Count != 0 || turn.FoundationRootOperator is not null ||
             row.Suspended || current.Suspended || turn.Consumed.Count is < 1 or > 2 ||
             turn.Consumed.Distinct().Count() != turn.Consumed.Count ||
             JobRegistry.Read(current.Jobs) is not [var job]) throw RootShape();
@@ -92,6 +93,7 @@ public sealed partial class EfStore
                 original.JobGeneration != job.Generation || ticket.Key != job.Key || deadline != RootJobTicket.Deadline(row.Id, ticket) ||
                 row.Status != InstanceStatus.Running || state != current.State || row.StateVersion != current.StateVersion ||
                 row.Jobs != current.Jobs || row.NextJobGeneration != current.NextJobGeneration || turn.FoundationHeader is not null || turn.Journal is not null ||
+                turn.FoundationSelfRecalls is not null ||
                 turn.Sent is not [var emitted]) throw RootShape();
             var payload = Json.Write(new JobFinished(ticket.Key, null, "timeout"));
             if (completion is not null)
@@ -106,7 +108,8 @@ public sealed partial class EfStore
 
         var header = row.FoundationDispatchHeader!.Header;
         var prepared = PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state, row.StateVersion,
-            header.TypeData, header.Labels, turn.Journal, jobState: new(row.Jobs, row.NextJobGeneration), jobCompletion: completion, timedJob: true);
+            header.TypeData, header.Labels, turn.Journal, recalls: turn.FoundationSelfRecalls?.Select(key => key.Id).ToArray(),
+            jobState: new(row.Jobs, row.NextJobGeneration), jobCompletion: completion, timedJob: true);
         return prepared with { JournalTurn = prepared.JournalTurn! with { Sent = wires } };
     }
 
