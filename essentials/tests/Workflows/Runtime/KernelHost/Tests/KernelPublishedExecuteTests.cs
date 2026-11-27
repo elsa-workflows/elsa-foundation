@@ -15,6 +15,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -270,6 +271,25 @@ public sealed class KernelPublishedExecuteTests
                     $"Recovery status {status}; workflow HTTP {(int)first.StatusCode}: {await first.Content.ReadAsStringAsync(token)}");
                 var selected = Assert.IsType<string>(status.GetProperty("token").GetString());
                 Assert.NotEmpty(selected);
+                using var missingGrant = await InspectParkAsync(inspect: false);
+                Assert.Equal(HttpStatusCode.NotFound, missingGrant.StatusCode);
+                using var foreignEvidence = await InspectParkAsync(tenant: "another-tenant");
+                Assert.Equal(HttpStatusCode.NotFound, foreignEvidence.StatusCode);
+                using var metadataOnly = await InspectParkAsync();
+                Assert.Equal(HttpStatusCode.OK, metadataOnly.StatusCode);
+                Assert.Equal("no-store", metadataOnly.Headers.CacheControl?.ToString());
+                var evidence = await metadataOnly.Content.ReadFromJsonAsync<JsonElement>(token);
+                Assert.Equal(status.GetProperty("parkedAt").GetDateTimeOffset(), evidence.GetProperty("parkedAt").GetDateTimeOffset());
+                Assert.Equal("The workflow stopped before its turn committed.", evidence.GetProperty("faultSummary").GetString());
+                Assert.False(evidence.TryGetProperty("token", out _));
+                foreach (var delivery in evidence.GetProperty("deliveries").EnumerateArray())
+                    Assert.False(delivery.TryGetProperty("payload", out _));
+                using var sensitiveEvidence = await InspectParkAsync(values: true);
+                Assert.Equal(HttpStatusCode.OK, sensitiveEvidence.StatusCode);
+                var sensitive = await sensitiveEvidence.Content.ReadFromJsonAsync<JsonElement>(token);
+                Assert.Contains("fixture evaluator is unavailable", sensitive.GetProperty("faultSummary").GetString(), StringComparison.OrdinalIgnoreCase);
+                using var malformedCursor = await InspectParkAsync(cursor: "invalid");
+                Assert.Equal(HttpStatusCode.BadRequest, malformedCursor.StatusCode);
                 using var denied = await RecoveryAsync(HttpMethod.Post, selection: selected, subject: "deny-park-recover");
                 Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
                 using var stale = await RecoveryAsync(HttpMethod.Post, selection: otherSelection ?? "stale");
@@ -299,6 +319,8 @@ public sealed class KernelPublishedExecuteTests
                 while (await reads.GetAsync(bound, actor, token) is not { Park: null }) await Task.Delay(40, token);
                 using var noPark = await RecoveryAsync(HttpMethod.Get);
                 Assert.Equal("NotParked", (await noPark.Content.ReadFromJsonAsync<JsonElement>(token)).GetProperty("status").GetString());
+                using var noEvidence = await InspectParkAsync();
+                Assert.Equal(HttpStatusCode.NotFound, noEvidence.StatusCode);
                 using var retiredSelection = await RecoveryAsync(HttpMethod.Post, selection: selected);
                 Assert.Equal(HttpStatusCode.Conflict, retiredSelection.StatusCode);
 
@@ -326,6 +348,20 @@ public sealed class KernelPublishedExecuteTests
                 using var values = JsonDocument.Parse(Assert.IsType<byte[]>(output?.Values));
                 Assert.Equal("recovered", values.RootElement.GetProperty("result").GetString());
                 return selected;
+
+                async Task<HttpResponseMessage> InspectParkAsync(bool inspect = true, bool values = false, string? tenant = null,
+                    string? cursor = null)
+                {
+                    var url = $"/runtime/workflows/instances/{actor.Id}/park";
+                    if (cursor is not null) url += "?cursor=" + Uri.EscapeDataString(cursor);
+                    using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                    request.Headers.Add("X-Fixture-Subject", "park-reader");
+                    request.Headers.Add("X-Fixture-Read", "yes");
+                    if (inspect) request.Headers.Add("X-Fixture-Inspect", "yes");
+                    if (values) request.Headers.Add("X-Fixture-Inspect-Values", "yes");
+                    request.Headers.Add("X-Fixture-Tenant", tenant ?? Scope.Value);
+                    return await http.SendAsync(request, token);
+                }
 
                 async Task<HttpResponseMessage> RecoveryAsync(HttpMethod method, bool manage = true, string? tenant = null, string? selection = null,
                     string subject = "accepted")
@@ -465,6 +501,11 @@ public sealed class KernelPublishedExecuteTests
                 new(IdentityClaimTypes.Normalized, "v1")
             };
             if (Request.Headers.ContainsKey("X-Fixture-Manage")) claims.Add(new(IdentityClaimTypes.Permission, "workflows/runtime:manage"));
+            if (Request.Headers.ContainsKey("X-Fixture-Read")) claims.Add(new(IdentityClaimTypes.Permission, "workflows/runtime:read"));
+            if (Request.Headers.ContainsKey("X-Fixture-Inspect"))
+                claims.Add(new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission));
+            if (Request.Headers.ContainsKey("X-Fixture-Inspect-Values"))
+                claims.Add(new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.SensitiveValuesPermission));
             if (Request.Headers.TryGetValue("X-Fixture-Tenant", out var tenant)) claims.Add(new(IdentityClaimTypes.TenantId, tenant.ToString()));
             if (Request.Headers.TryGetValue("X-Fixture-Tenant-Alias", out var alias)) claims.Add(new("tenant_id", alias.ToString()));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name)), Scheme.Name)));

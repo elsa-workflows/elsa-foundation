@@ -34,6 +34,7 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
     {
         KernelHistoryStream.Map(endpoints);
         KernelParkRecovery.Map(endpoints);
+        KernelParkInspection.Map(endpoints);
     }
 
     public virtual void PostConfigureServices(IServiceCollection services)
@@ -46,6 +47,7 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
         services.AddScoped<KernelHistoryCursor>();
         services.AddScoped<KernelPlaybackCursor>();
         services.AddApiCapabilitySource<KernelHistoryCapabilitySource>();
+        services.AddApiCapabilitySource<KernelParkInspectionCapabilitySource>();
         services.TryAddScoped<ActivityExecutionBrowseSource>();
         ReplaceService(typeof(IWorkflowInstanceListService), typeof(WorkflowInstanceListService), typeof(KernelWorkflowInstanceListService));
         ReplaceService(typeof(IWorkflowInstanceDetailsService), typeof(WorkflowInstanceDetailsService), typeof(KernelWorkflowInstanceDetailsService));
