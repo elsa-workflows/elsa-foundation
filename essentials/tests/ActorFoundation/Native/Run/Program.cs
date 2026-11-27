@@ -18,6 +18,13 @@ if (args is ["workbench-shipped-history", var historyProvider and ("sqlite" or "
     await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedHistoryAsync(historyWorkbench, historyProvider == "postgres");
     return 0;
 }
+if (args is ["workbench-http-waits", var waitsProvider and ("sqlite" or "postgres"), var waitsWorkbench, .. var waitsMode] &&
+    waitsMode is ([] or ["gated"]))
+{
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunHttpWaitsAsync(waitsWorkbench, waitsProvider == "postgres",
+        gated: waitsMode is ["gated"]);
+    return 0;
+}
 if (args is ["workbench-shipped-children", var childrenProvider and ("sqlite" or "postgres"), var childrenWorkbench])
 {
     await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedChildrenAsync(childrenWorkbench, childrenProvider == "postgres");
@@ -47,6 +54,7 @@ if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile, 
     return await PostgresCorePreviewReadSeed.RunAsync(originalRoot, seedFile, timed: readsProfile.Length != 0);
 if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
 if (args is ["pg-live-remote-http"]) return await PostgresLiveRemoteHttpChecks.RunAsync();
+if (args is ["kernel-http-waits"]) return await KernelHttpWaitChecks.RunAsync();
 if (args is ["root-due-backlog", var backlogProvider and ("postgres" or "sqlite"), var backlogFence and ("checked" or "in-batch")])
     return await RootDueBacklogChecks.RunAsync(backlogProvider == "postgres", backlogFence == "in-batch");
 if (args is ["root-admission-pressure", var pressureProvider and ("postgres" or "sqlite"), var pressureFence and ("checked" or "in-batch")])

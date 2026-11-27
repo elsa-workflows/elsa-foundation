@@ -145,7 +145,19 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
         }
 
         var message = new NativeHttpRequest(request.Method, request.Path, body) { Query = query, Headers = headers };
-        if (KernelHttpEdge.Start(serving, route, message) is not { } start) return KernelHttpEdge.NotFound;
+        Contract.Target target;
+        string kind;
+        string? payload;
+        bool respondBeforeCommit;
+        try
+        {
+            if (KernelHttpEdge.Start(serving, route, message) is { } start)
+                (target, kind, payload, respondBeforeCommit) = (new Contract.Target.Start(start.Spec), Contract.Kinds.Start, null, start.RespondBeforeCommit);
+            else if (KernelHttpEdge.Wait(serving, route, message) is { } wait)
+                (target, kind, payload, respondBeforeCommit) = (new Contract.Target.Event(wait.Key), Contract.Kinds.Event, wait.Payload, wait.RespondBeforeCommit);
+            else return KernelHttpEdge.NotFound;
+        }
+        catch (HttpFieldsException refused) { return Plain(refused.OverBound ? 414 : 400, refused.Message); }
 
         var ingress = await openIngress(token);
         var now = await readClock(token);
@@ -153,9 +165,9 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
         if (remaining <= TimeSpan.Zero) throw new RequestDeadlineElapsed();
         var milliseconds = matchedAt is null ? remaining.TotalMilliseconds : Math.Ceiling(remaining.TotalMilliseconds);
         var deadline = now + (long)milliseconds;
-        // Each request is its own operation: an HTTP edge picks a fresh id, so a retried request is a new start.
-        var reply = await ingress.RequestAsync(tenant, new Contract.Target.Start(start.Spec), Guid.NewGuid().ToString("N"),
-            Contract.Kinds.Start, null, null, new Contract.RequestOptions(null, deadline, start.RespondBeforeCommit), token);
+        // Each HTTP request is its own operation. Its id carries no caller data or route values.
+        var reply = await ingress.RequestAsync(tenant, target, Guid.NewGuid().ToString("N"), kind, payload, null,
+            new Contract.RequestOptions(null, deadline, respondBeforeCommit), token);
         if (matchedAt is not null && reply.Error == "timeout") throw new RequestDeadlineElapsed();
         return KernelHttpEdge.Answer(reply);
     }

@@ -13,6 +13,7 @@ namespace Elsa.Activities.Http.Activities;
 /// Workflow data is hydrated into plain properties and each attempt returns one closed transition.
 /// </summary>
 [RefusesSecretBinding(nameof(Path), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(RouteValues), SecretBindingRefusalReason.PersistedByActivity)]
 [RefusesSecretBinding(nameof(SupportedMethods), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(CanStartWorkflow), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(Authorize), SecretBindingRefusalReason.FixedAtPublish)]
@@ -41,6 +42,12 @@ public sealed class HttpEndpoint :
     [ActivityInput(Key = nameof(Path), Category = "Simple", Order = 10, Tier = InputTier.Essential)]
     [Required]
     public string Path { get; set; } = string.Empty;
+
+    /// <summary>Values from the running workflow that resolve the parameters of a mid-flow route on the Actor Foundation runtime.</summary>
+    [ActivityInput(Key = nameof(RouteValues), DisplayName = "Route values",
+        Description = "Set the parameters of a mid-flow route from workflow data. Requires the Actor Foundation workflow runtime.",
+        Category = "Advanced", Order = 90, Tier = InputTier.Optional)]
+    public IReadOnlyDictionary<string, string>? RouteValues { get; set; }
 
     /// <summary>The accepted HTTP methods; defaults to GET.</summary>
     [ActivityInput(
@@ -91,6 +98,10 @@ public sealed class HttpEndpoint :
                 : BuildAuthoredRouteModel(Path);
             return ValueTask.FromResult(Complete(BuildResult(request)));
         }
+
+        if (RouteValues is not null)
+            return ValueTask.FromResult(Fault(new ActivityFault("http.route-values.unsupported",
+                "A mid-flow HTTP Endpoint with Route values requires the Actor Foundation workflow runtime.")));
 
         var registrations = HttpEndpointStimulus
             .Describe(Path, EffectiveMethods(), ReadOptions())

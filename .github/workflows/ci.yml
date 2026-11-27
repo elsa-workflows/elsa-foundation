@@ -1513,6 +1513,8 @@ jobs:
           dotnet build "$runner" -c Debug --no-restore
           dotnet "$runner/bin/Debug/net10.0/Kernel.Native.Run.dll" sqlite-workbench-core-preview \
             "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host"
+          dotnet "$runner/bin/Debug/net10.0/Kernel.Native.Run.dll" workbench-http-waits sqlite \
+            "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host" gated
 
       - name: Run the focused WriteLine bound-input test
         shell: bash
@@ -2088,6 +2090,7 @@ jobs:
           NAT="dotnet ../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
           $NAT smoke
           $NAT profile-capabilities
+          $NAT kernel-http-waits
           $NAT cost sqlite
           $NAT sqlite-host-lifetime checked
           $NAT sqlite-host-lifetime in-batch
