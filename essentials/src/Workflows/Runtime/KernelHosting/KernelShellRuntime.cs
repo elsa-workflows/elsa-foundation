@@ -7,11 +7,13 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Foundation.Contracts;
+using Kernel.Foundation.Hosting;
 using Kernel.Native;
 using Kernel.WorkflowActor;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Admission = Kernel.Foundation.Contracts.Admission;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
@@ -24,6 +26,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     private IAsyncDisposable? _lifetime;
     private HttpClient? _client;
     private KernelShellFoundation? _foundation;
+    private IProtectedRootStarts? _publishedStarts;
     private readonly CancellationTokenSource _maintenanceStop = new();
     private Task? _maintenance;
 
@@ -59,6 +62,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window, auxiliary,
             protectChildExecutables ? protection!.ProtectAsync : null);
         await _owner.StartAsync(token);
+        if (storage.TakesPreparedStarts) Volatile.Write(ref _publishedStarts, storage.BindPublishedStarts(tenant));
         var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
         var worker = new KernelRetentionWorker(pass, tenant,
             token => retention.InitializeAsync(Foundation.RetentionPolicies, token),
@@ -73,6 +77,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async Task StopAsync(CancellationToken token)
     {
+        Volatile.Write(ref _publishedStarts, null);
         using var maintenanceDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         maintenanceDeadline.CancelAfter(MaintenanceStopBudget);
         try { await StopMaintenanceAsync(maintenanceDeadline.Token); }
@@ -99,6 +104,14 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     }
 
     public ValueTask<IIngress> IngressAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Ingress);
+
+    public ValueTask<Admission> StartPublishedAsync(string operationId, StartSpec start, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        return Volatile.Read(ref _publishedStarts) is { } starts
+            ? starts.StartAsync(operationId, start, token)
+            : ValueTask.FromResult(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.NodeBusy, RetryAfter: TimeSpan.FromSeconds(1)));
+    }
 
     public ValueTask<IActorReads> ReadAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Reads);
 
@@ -147,6 +160,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async ValueTask DisposeAsync()
     {
+        Volatile.Write(ref _publishedStarts, null);
         using var stop = new CancellationTokenSource(MaintenanceStopBudget);
         try
         {

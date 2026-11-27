@@ -15,6 +15,20 @@ public sealed class WorkflowExecutableStartSourceResolver(
         WorkflowExecutableSourceSelection? selection, WorkflowExecutableProvenanceRequirement provenanceRequirement,
         WorkflowExecutableReferenceScope requiredScope, CancellationToken cancellationToken)
     {
+        var reference = await ResolveReferenceAsync(artifactId, selection, provenanceRequirement, requiredScope, null, cancellationToken);
+        return reference is null ? null : WorkflowExecutableSourceProvenance.From(reference);
+    }
+
+    internal async ValueTask<WorkflowExecutableSourceReference> ResolvePublishedAsync(string artifactId,
+        WorkflowExecutableSourceSelection? selection, PersistenceScope scope, CancellationToken cancellationToken) =>
+        await ResolveReferenceAsync(artifactId, selection, WorkflowExecutableProvenanceRequirement.RequireLiveReference,
+            WorkflowExecutableReferenceScope.Published, scope, cancellationToken)
+        ?? throw new InvalidOperationException("A published start requires a source reference.");
+
+    private async ValueTask<WorkflowExecutableSourceReference?> ResolveReferenceAsync(string artifactId,
+        WorkflowExecutableSourceSelection? selection, WorkflowExecutableProvenanceRequirement provenanceRequirement,
+        WorkflowExecutableReferenceScope requiredScope, PersistenceScope? shellScope, CancellationToken cancellationToken)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         cancellationToken.ThrowIfCancellationRequested();
         IReadOnlyCollection<WorkflowExecutableSourceReference> references;
@@ -22,10 +36,13 @@ public sealed class WorkflowExecutableStartSourceResolver(
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (WorkflowExecutableSourceReadException) { throw; }
         catch (Exception exception) { throw new WorkflowExecutableSourceReadException(artifactId, requiredScope, exception); }
+        if (shellScope is not null)
+            references = references.Where(reference => (reference.TenantId ?? PersistenceScope.DefaultValue) == shellScope.Value &&
+                (reference.PublicationScope is null || reference.PublicationScope == shellScope)).ToArray();
         return ResolveKnown(references, artifactId, selection, provenanceRequirement, requiredScope, timeProvider.GetUtcNow(), null);
     }
 
-    private static WorkflowExecutableSourceProvenance? ResolveKnown(IReadOnlyCollection<WorkflowExecutableSourceReference> references,
+    private static WorkflowExecutableSourceReference? ResolveKnown(IReadOnlyCollection<WorkflowExecutableSourceReference> references,
         string artifactId, WorkflowExecutableSourceSelection? selection, WorkflowExecutableProvenanceRequirement provenanceRequirement,
         WorkflowExecutableReferenceScope requiredScope, DateTimeOffset now, PersistenceScope? accessScope,
         bool explicitTenant = false, string? tenantId = null)
@@ -54,7 +71,7 @@ public sealed class WorkflowExecutableStartSourceResolver(
             .ToArray();
 
         if (liveReferences.Length == 1)
-            return WorkflowExecutableSourceProvenance.From(liveReferences[0]);
+            return liveReferences[0];
 
         if (liveReferences.Length > 1)
             throw new WorkflowExecutableReferenceRejectedException(
@@ -127,7 +144,7 @@ public sealed class WorkflowExecutableStartSourceResolver(
             new WorkflowExecutableSourceSelection(activationId: binding.ActivationId, slotId: binding.SlotId);
         var source = ResolveKnown(references, binding.ArtifactId, selection, WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy,
             WorkflowExecutableReferenceScope.Published, now, accessScope, explicitTenant, tenantId);
-        return new(binding, executable, source);
+        return new(binding, executable, source is null ? null : WorkflowExecutableSourceProvenance.From(source));
     }
 
     /// <summary>Validate every supplied capture against the same ordinary current publication selector before retention acceptance.</summary>

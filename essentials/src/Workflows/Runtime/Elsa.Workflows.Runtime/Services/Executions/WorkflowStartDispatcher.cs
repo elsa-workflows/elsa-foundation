@@ -240,8 +240,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             }
         }
 
-        var inputs = ApplyInputContract(executable, request.Inputs);
-        await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
+        var inputs = ApplyInputContract(executable, request.Inputs, _inputValidator);
+        await EnforceStartPolicyAsync(request, resolved.Identity, partition, _startPolicy, cancellationToken);
         if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
         return await DispatchCoreAsync(
             request,
@@ -476,10 +476,11 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         return mismatches.Count == 0 ? "none (multiple candidates)" : string.Join(", ", mismatches);
     }
 
-    private async ValueTask EnforceStartPolicyAsync(
+    internal static async ValueTask EnforceStartPolicyAsync(
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableIdentity executable,
         WorkflowExecutionPartition partition,
+        IWorkflowExecutableStartPolicy startPolicy,
         CancellationToken cancellationToken)
     {
         var context = new WorkflowExecutableStartPolicyContext(
@@ -491,7 +492,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             request.TenantId,
             partition,
             request.DispatchNestingDepth);
-        var decision = await _startPolicy.EvaluateAsync(context, cancellationToken)
+        var decision = await startPolicy.EvaluateAsync(context, cancellationToken)
             ?? throw new InvalidOperationException($"{nameof(IWorkflowExecutableStartPolicy)} returned no decision.");
         if (!decision.IsAllowed)
         {
@@ -514,13 +515,14 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     // Every start applies its executable's input contract before the command is enqueued (#3728): declared defaults fill
     // omitted inputs, and a blank, unknown, duplicate or mistyped input or a missing required one refuses the start. A
     // legacy artifact without a contract, or a dispatcher composed without a validator, keeps the supplied inputs.
-    private IReadOnlyDictionary<string, JsonElement> ApplyInputContract(WorkflowExecutable executable, IReadOnlyDictionary<string, object?> inputs)
+    internal static IReadOnlyDictionary<string, JsonElement> ApplyInputContract(WorkflowExecutable executable,
+        IReadOnlyDictionary<string, object?> inputs, IWorkflowExecutableInputValidator? inputValidator)
     {
         var supplied = WorkflowExecutionStartCommandPayload.ToJsonValues(inputs);
-        if (executable.InputContract is not { } contract || _inputValidator is null)
+        if (executable.InputContract is not { } contract || inputValidator is null)
             return supplied;
 
-        var validation = _inputValidator.Validate(contract, supplied);
+        var validation = inputValidator.Validate(contract, supplied);
         if (!validation.IsValid)
         {
             throw new WorkflowExecutableStartRejectedException(

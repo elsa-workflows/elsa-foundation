@@ -13,7 +13,8 @@ using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRun
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access,
-    IWorkflowExecutableStore executables, IWorkflowExecutableRootWriteLeaseManager leases, TimeProvider clock)
+    IWorkflowExecutableStore executables, IWorkflowExecutableRootWriteLeaseManager leases, TimeProvider clock,
+    IWorkflowExecutableSourceReferenceStore? sourceReferences = null)
     : IRuntimeKernelExecutablePinStore, IRuntimeKernelExecutablePinScanStore, IRuntimeMaterialRetentionRootSource
 {
     private static readonly UTF8Encoding PinEncoding = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
@@ -21,7 +22,29 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
         EfRelationalExceptionClassifier.IsTransientWriteConflict(error) ||
         EfRelationalExceptionClassifier.IsSaveConflict(error, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey));
 
-    public async ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken cancellationToken = default)
+    public ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken cancellationToken = default) =>
+        TryPinAsync(pins, null, cancellationToken);
+
+    public ValueTask<bool> TryPinPublishedAsync(RuntimeKernelExecutablePin pin, WorkflowActivationSlot slot,
+        WorkflowExecutableSourceReference source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(pin);
+        ArgumentNullException.ThrowIfNull(slot);
+        ArgumentNullException.ThrowIfNull(source);
+        if (source.ActivationId is not { } activation || slot.ActiveActivationId != activation || slot.SlotId != source.SlotId ||
+            source.SourceReferenceId != WorkflowActivationReferenceIdentity.Create(activation) || slot.WorkflowDefinitionId != source.DefinitionId ||
+            source.Scope != WorkflowExecutableReferenceScope.Published || source.ArtifactId != pin.Executable.ArtifactId ||
+            (source.TenantId ?? PersistenceScope.DefaultValue) != pin.Tenant || source.PublicationScope is { } scope && scope != pin.Scope)
+            throw new ArgumentException("The selected source and slot must belong to this published executable pin.", nameof(source));
+        if (sourceReferences is not EfWorkflowExecutableSourceReferenceStore physical || !ReferenceEquals(physical.Context, context))
+            throw new NotSupportedException("Published executable pins require the physical Runtime source reference store.");
+        return TryPinAsync([pin], new(slot, source, physical), cancellationToken);
+    }
+
+    private sealed record PublishedPin(WorkflowActivationSlot Slot, WorkflowExecutableSourceReference Source, EfWorkflowExecutableSourceReferenceStore Physical);
+
+    private async ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, PublishedPin? published,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(pins);
         RuntimeStorePageRequest.ValidateLimit(pins.Count, nameof(pins));
@@ -70,6 +93,10 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
                             }
                             var roots = current.Missing.Select(pin => pin.Executable).Distinct().ToArray();
                             var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token, expectedRoots: roots);
+                            if (published is { } authority && (!await EfAdmissionTargetFence.LockSlotAsync(context, scope.Value,
+                                authority.Slot.WorkflowDefinitionId, authority.Slot.SlotName, authority.Slot, token) ||
+                                !await EfAdmissionTargetFence.LockSourceAsync(authority.Physical, scope.Value, authority.Source, token) ||
+                                !authority.Source.IsLive(clock.GetUtcNow()))) return;
                             var pending = current.Missing.Select(Create).OrderBy(row => row.Id, StringComparer.Ordinal).ToArray();
                             await AssignOrdinalsAsync(scope, pending, token);
                             context.KernelExecutablePins.AddRange(pending);
@@ -77,6 +104,7 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
                             foreach (var (grant, expires) in deadlines)
                                 if (clock.GetUtcNow() >= expires)
                                     throw new WorkflowExecutableRootWriteLeaseLostException(grant.ArtifactId, grant.LeaseId);
+                            if (published is not null && !published.Source.IsLive(clock.GetUtcNow())) return;
                             await transaction.CommitAsync(token);
                             accepted = true;
                         }
