@@ -228,14 +228,14 @@ internal static class KernelExecutablePinContract
                 {
                     Assert.Contains("\"InsertionOrdinal\" = 0", prefix);
                     Assert.Contains("\"Id\" >", prefix);
-                    Assert.Matches("""ORDER BY \w+\."ReleasedAtUtcTicks",""", prefix);
+                    Assert.Matches("""ORDER BY "?\w+"?\."ReleasedAtUtcTicks",""", prefix);
                     Assert.DoesNotContain("CASE", prefix);
                     Assert.DoesNotContain(" OR ", prefix);
                 },
                 positive =>
                 {
                     Assert.Contains("\"InsertionOrdinal\" >", positive);
-                    Assert.Matches("""ORDER BY \w+\."ReleasedAtUtcTicks",""", positive);
+                    Assert.Matches("""ORDER BY "?\w+"?\."ReleasedAtUtcTicks",""", positive);
                     Assert.DoesNotContain(" OR ", positive);
                 });
             Assert.Equal(new[] { legacy.Single(pin => pin != failed), newer[0] }, crossing.Items);
