@@ -217,11 +217,58 @@ internal static partial class RootEventStarts
         return rows;
     }
 
+    internal sealed record MatchPosition(string Slot, string Node);
+    internal sealed record MatchPage(MatchPosition? Through, bool Complete);
+
     internal static async Task<(int Count, long Bytes)> CaptureAsync(KernelDb db, EventRow publication, long publicationUntil, int available, long availableBytes,
         Func<FormattableString, FormattableString>? bind, CancellationToken token)
     {
+        var matches = await FindMatchesAsync(db, publication.FoundationTenant!, publication.Key, null, available + 1, bind, token);
+        if (matches.Count == 0) return default;
+        var packedPayload = PackPayload(publication.Payload);
+        var payloadBytes = packedPayload is null ? 0 : Encoding.UTF8.GetByteCount(packedPayload);
+        var bytes = matches.Sum(match => match.Bytes!.Value + payloadBytes);
+        if (matches.Count > available || bytes > availableBytes)
+            throw new StoreException(Failure.Definite, "The authored event's start targets exceed the atomic delivery limit.");
+        await InsertMatchesAsync(db, publication, publicationUntil, matches, packedPayload, bind, token);
+        return (matches.Count, bytes);
+    }
+
+    internal static async Task<bool> HasMatchesAsync(KernelDb db, string tenant, string key,
+        Func<FormattableString, FormattableString>? bind, CancellationToken token) =>
+        (await FindMatchesAsync(db, tenant, key, null, 1, bind, token)).Count != 0;
+
+    internal static async Task<MatchPage> CapturePageAsync(KernelDb db, RootPublicEventDispatch.Publication publication,
+        Func<FormattableString, FormattableString>? bind, CancellationToken token)
+    {
+        var after = publication.Position.ProtectedThrough;
+        var rows = await FindMatchesAsync(db, publication.Tenant, publication.Key, after, InMemoryStore.ParkPageLimit, bind, token);
+        if (rows.Count == 0) return new(after, Complete: true);
+        var body = RootAdmissionWire.DecodePayload(publication.Payload.Text, publication.Payload.Escaped);
+        var packedPayload = PackPayload(body);
+        var payloadBytes = packedPayload is null ? 0 : Encoding.UTF8.GetByteCount(packedPayload);
+        var bytes = 0L;
+        var matches = new List<MatchRow>(rows.Count);
+        foreach (var row in rows)
+        {
+            var size = row.Bytes!.Value + payloadBytes + 256;
+            if (matches.Count > 0 && bytes + size > ParkRecoveryCredit.LimitBytes) break;
+            matches.Add(row);
+            bytes += size;
+        }
+        var material = new EventRow(publication.Key, publication.EventId, body, publication.KeepUntil)
+            { FoundationTenant = publication.Tenant };
+        await InsertMatchesAsync(db, material, publication.KeepUntil, matches, packedPayload, bind, token);
+        var last = matches[^1];
+        return new(new(last.Slot!, last.Node!), matches.Count == rows.Count && rows.Count < InMemoryStore.ParkPageLimit);
+    }
+
+    private static string? PackPayload(string? payload) => payload is null ? null : DurableKeyJson.Write(payload);
+
+    private static async Task<List<MatchRow>> FindMatchesAsync(KernelDb db, string tenant, string key, MatchPosition? after, int limit,
+        Func<FormattableString, FormattableString>? bind, CancellationToken token)
+    {
         RequireTransaction(db, bind);
-        var tenant = publication.FoundationTenant!;
         var length = bind is not null ? """octet_length(r."Authority")::bigint""" : """length(CAST(r."Authority" AS BLOB))""";
         var quote = Bind($"""
             WITH source AS MATERIALIZED (/*event-start-source*/)
@@ -229,8 +276,9 @@ internal static partial class RootEventStarts
                 SELECT r."Slot", r."Node", slots."Revision", /*authority-bytes*/ AS "Bytes"
                 FROM "FoundationEventStartRegistrations" r
                 JOIN "FoundationEventStartSlots" slots ON slots."Tenant" = r."Tenant" AND slots."Slot" = r."Slot"
-                WHERE r."Tenant" = {tenant} AND r."Key" = {publication.Key} AND (SELECT "SourceReady" FROM source)
-                ORDER BY r."Slot", r."Node" LIMIT {available + 1}
+                WHERE r."Tenant" = {tenant} AND r."Key" = {key} AND (SELECT "SourceReady" FROM source)
+                    AND (r."Slot", r."Node") > ({after?.Slot ?? ""}, {after?.Node ?? ""})
+                ORDER BY r."Slot", r."Node" LIMIT {limit}
             )
             SELECT source."SourceReady", matches.* FROM source LEFT JOIN matches ON true
             ORDER BY matches."Slot", matches."Node"
@@ -238,13 +286,14 @@ internal static partial class RootEventStarts
         quote = FormattableStringFactory.Create(quote.Format.Replace("/*authority-bytes*/", length, StringComparison.Ordinal), quote.GetArguments());
         var matches = await db.Database.SqlQuery<MatchRow>(quote).ToListAsync(token);
         if (!matches[0].SourceReady) throw SourceChanged();
-        if (matches is [{ Slot: null }]) return default;
-        var packedPayload = publication.Payload is { } body ? DurableKeyJson.Write(body) : null;
-        var payloadBytes = packedPayload is null ? 0 : Encoding.UTF8.GetByteCount(packedPayload);
-        var bytes = matches.Sum(match => match.Bytes!.Value + payloadBytes);
-        if (matches.Count > available || bytes > availableBytes)
-            throw new StoreException(Failure.Definite, "The authored event's start targets exceed the atomic delivery limit.");
+        return matches is [{ Slot: null }] ? [] : matches;
 
+    }
+
+    private static async Task InsertMatchesAsync(KernelDb db, EventRow publication, long publicationUntil,
+        List<MatchRow> matches, string? packedPayload, Func<FormattableString, FormattableString>? bind, CancellationToken token)
+    {
+        var tenant = publication.FoundationTenant!;
         // The key lock (or SQLite writer) keeps the bounded quote current. Only matched rows load the registered authority.
         var identities = JsonSerializer.Serialize(matches.Select(match => new
         {
@@ -273,7 +322,6 @@ internal static partial class RootEventStarts
                 ? [identities, tenant, publication.Key, publication.Id, packedPayload!, publicationUntil]
                 : [identities, tenant, publication.Key, publication.Id, packedPayload!]);
         if (await db.Database.ExecuteSqlInterpolatedAsync(Bind(insert, bind), token) != matches.Count) throw SourceChanged();
-        return (matches.Count, bytes);
     }
 
     // The cursor belongs to one scan. A new sweep must restart from null so a later publication behind it is found.

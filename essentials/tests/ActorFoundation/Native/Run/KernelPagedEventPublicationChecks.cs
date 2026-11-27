@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;
@@ -9,7 +10,7 @@ namespace Kernel.Native.Run;
 
 internal static partial class KernelAuthoredEventChecks
 {
-    internal static async Task<int> RunPagedEventPublicationAsync(string provider, bool inBatch, bool physicalPages = false)
+    internal static async Task<int> RunPagedEventPublicationAsync(string provider, bool inBatch, bool physicalPages = false, bool authored = false, bool parkPublication = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         var token = timeout.Token;
@@ -18,8 +19,9 @@ internal static partial class KernelAuthoredEventChecks
         var directory = Directory.CreateTempSubdirectory("paged-event-publication");
         try
         {
-            var (open, ingress, reads, owner, _, restart) = await OpenAsync(model, provider,
-                Path.Combine(directory.FullName, "store.db"), inBatch, token, publicStarts: true, pagedPublicEvents: !physicalPages);
+            var (open, ingress, reads, owner, events, restart) = await OpenAsync(model, provider,
+                Path.Combine(directory.FullName, "store.db"), inBatch, token, eventStarts: authored, publicStarts: true, pagedPublicEvents: !physicalPages,
+                authorizeOperator: parkPublication ? (_, _, _) => true : null);
             await using var initialOwner = owner;
             var actors = new List<Contract.ActorRef>();
             for (var index = 0; index < 3; index++)
@@ -36,21 +38,118 @@ internal static partial class KernelAuthoredEventChecks
                 await using var db = open();
                 return await db.Subscriptions.CountAsync(row => row.Key == scope.Tenant + "_" + PagedEventActor.Key, token) == actors.Count;
             });
-            if (!physicalPages)
+            if (!physicalPages && !parkPublication)
             {
                 foreach (var wait in new[] { "registered-one", "registered-two" })
                     await ingress.SetStartAsync(scope, PagedEventActor.Key, wait, new(model.Type, "registered", wait), token);
             }
+            if (events is not null)
+            {
+                for (var index = 0; index < 2; index++)
+                {
+                    var id = $"protected-{index}";
+                    var registration = new EventStartRegistration("start", PagedEventActor.Key, id, "source-" + id,
+                        "artifact-" + id, "exact-selection-" + id, new(model.Type, id));
+                    Check(await events.Apply(scope, id, 1, [registration], token) == EventRegistrationResult.Applied,
+                        "the exact authored start authority was registered before publishing");
+                }
+            }
+            Contract.ActorRef? parkedAuthor = null;
+            if (parkPublication)
+            {
+                var acceptedAuthor = await ingress.SendAsync(scope, new Contract.Target.Start(new(model.Type, "park-author")),
+                    "park-author", Contract.Kinds.Start, cancellationToken: token);
+                parkedAuthor = acceptedAuthor.Actor ?? throw new InvalidOperationException("The Park author was refused.");
+                await UntilAsync(async () => (await reads.GetAsync(scope, parkedAuthor.Value, token))?.Header.Status == Contract.ActorStatus.Running);
+            }
             await initialOwner.DisposeAsync();
 
             var target = new Contract.Target.Event(PagedEventActor.Key);
-            const string publicationId = "large-publication";
+            var publicationId = "large-publication";
             if (physicalPages)
             {
                 await VerifyPhysicalEventPagesAsync(open, scope.Tenant, publicationId, token);
                 await using var restarted = await restart(token);
                 await UntilAsync(DeliveredAsync);
                 Check(true, "the fresh hosted owner consumed exactly the physical page deliveries");
+                return 0;
+            }
+
+            if (parkedAuthor is { } author)
+            {
+                (publicationId, var cursor) = await SeedExhaustedPublicationAsync(open, scope.Tenant, author, token);
+                await using var successor = await restart(token);
+                Contract.ActorView? parked = null;
+                await UntilAsync(async () =>
+                {
+                    if (successor is SqliteEmbeddedHostedService { LastError: { } fault })
+                        throw new InvalidOperationException("The SQLite publication owner reported a fault.", fault);
+                    parked = await reads.GetAsync(scope, author, token);
+                    return parked?.Park is not null;
+                });
+                await using (var db = open())
+                {
+                    var kept = await db.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (SELECT 1 FROM "FoundationPublicEventDispatch" d
+                            JOIN "FoundationPublicEventPublications" p ON p."Occurrence" = d."Occurrence"
+                            JOIN "Messages" m ON m."Id" = d."Ticket" AND m."Target" = d."Target"
+                            WHERE p."Tenant" = {scope.Tenant} AND p."EventId" = {DurableKeyJson.Write(publicationId)}
+                                AND d."Status" = 0 AND d."LiveThroughInstance" = {cursor.Instance} AND d."LiveThroughWait" = {cursor.Wait}
+                                AND m."Done" AND m."FoundationKeptBy" = {(short)ParkKeepReason.Consumed}) AS "Value"
+                        """).SingleAsync(token);
+                    Check(kept, "the exhausted owner parks its author and keeps the original pending ticket and cursor");
+                }
+                var recover = JsonSerializer.Serialize(new Contract.OperatorCommand(parked!.Selection, ExpectedTarget: author));
+                var received = await ingress.SendAsync(scope, new Contract.Target.Ref(author), "recover-publication",
+                    Contract.Kinds.Recover, recover, cancellationToken: token);
+                Check(received.Outcome == Contract.AdmissionOutcome.Accepted, "the author accepts its exact Park selection");
+                await UntilAsync(DeliveredAsync);
+                await using var completed = open();
+                var deliveryCount = await completed.Database.SqlQuery<int>($"""
+                    SELECT CAST(count(*) AS integer) AS "Value" FROM "FoundationPublicEventLiveReceipts" r
+                    JOIN "FoundationPublicEventPublications" p ON p."Occurrence" = r."Occurrence"
+                    JOIN "FoundationPublicEventDispatch" d ON d."Occurrence" = p."Occurrence"
+                    WHERE p."Tenant" = {scope.Tenant} AND p."EventId" = {DurableKeyJson.Write(publicationId)} AND d."Status" = 1
+                    """).SingleAsync(token);
+                Check(deliveryCount == actors.Count && (await reads.GetAsync(scope, author, token))?.Park is null,
+                    "Recover resumes the saved publication after the committed page and settles every wait once");
+                return 0;
+            }
+
+            if (authored)
+            {
+                var queued = await ingress.SendAsync(scope, new Contract.Target.Start(new(model.Type, "publisher")),
+                    "publisher", Contract.Kinds.Start, cancellationToken: token);
+                if (queued is not { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } publisher })
+                    throw new InvalidOperationException("The authored publisher was refused.");
+                await using var restarted = await restart(token);
+                await UntilAsync(async () =>
+                {
+                    if (restarted is SqliteEmbeddedHostedService { LastError: { } fault })
+                        throw new InvalidOperationException("The SQLite publication owner reported a fault.", fault);
+                    var view = await reads.GetAsync(scope, publisher, token);
+                    if (view?.Park is not null) throw new InvalidOperationException(view.Header.Fault);
+                    if (view?.Header.Status != Contract.ActorStatus.Finished) return false;
+                    publicationId = view.Header.TypeData;
+                    return true;
+                });
+                Check(publicationId.StartsWith('~'), "the committed actor turn issued its own reserved Event identity");
+                await UntilAsync(DeliveredAsync);
+                await UntilAsync(async () =>
+                {
+                    await using var db = open();
+                    return await db.Database.SqlQuery<int>($"""
+                        SELECT d."Status" AS "Value" FROM "FoundationPublicEventDispatch" d
+                        JOIN "FoundationPublicEventPublications" p ON p."Occurrence" = d."Occurrence"
+                        WHERE p."Tenant" = {scope.Tenant} AND p."EventId" = {DurableKeyJson.Write(publicationId)} AND p."ReceiptUntil" IS NULL
+                        """).SingleAsync(token) == (int)Contract.PublicationStatus.Matched;
+                });
+                var protectedStarts = (await events!.List(scope, null, token)).ToList();
+                if (protectedStarts is [var firstTarget]) protectedStarts.AddRange(await events.List(scope, firstTarget.Id, token));
+                Check(protectedStarts.Count == 2 && protectedStarts.All(hit => hit.EventId == publicationId &&
+                    hit.Registration.ActivationId == hit.Slot && hit.Registration.SourceReferenceId == "source-" + hit.Slot &&
+                    hit.Payload == PagedEventActor.Payload),
+                    "the authored pager reached live waits and generic starts and captured both exact protected starts");
                 return 0;
             }
 
@@ -84,10 +183,10 @@ internal static partial class KernelAuthoredEventChecks
                     if (view?.Header.Status != Contract.ActorStatus.Finished) return false;
                     if (view.Header.TypeData != publicationId) throw new InvalidOperationException("The recipient saw a different publication.");
                 }
-                if (physicalPages) return true;
+                if (physicalPages || parkPublication) return true;
                 var finished = await reads.ListAsync(scope, new Contract.ActorQuery(Type: model.Type, Status: Contract.ActorStatus.Finished),
                     cancellationToken: token);
-                return finished.Items.Count == actors.Count + 2 && finished.Items.All(item => item.Header.TypeData == publicationId);
+                return finished.Items.Count == actors.Count + 2 + (authored ? 1 : 0) && finished.Items.All(item => item.Header.TypeData == publicationId);
             }
         }
         finally { directory.Delete(recursive: true); }
@@ -212,9 +311,53 @@ internal static partial class KernelAuthoredEventChecks
         }
     }
 
+    private static async Task<(string EventId, SubscriptionPosition Cursor)> SeedExhaustedPublicationAsync(
+        Func<KernelDb> open, string tenant, Contract.ActorRef author, CancellationToken token)
+    {
+        // Seed one already committed page and an exhausted next trial. The actual hosted owner must Park and Recover this state.
+        await using var db = open();
+        var address = await db.Database.SqlQuery<string>($"""
+            SELECT "Actor" AS "Value" FROM "FoundationRootBirths" WHERE "Tenant" = {tenant} AND "Reference" = {author.Id} AND "Creation" = 1
+            """).SingleAsync(token);
+        var target = new Kernel.Runtime.InstanceRef(address);
+        var key = tenant + "_" + PagedEventActor.Key;
+        var issued = "fixture-publication-" + Guid.NewGuid().ToString("N");
+        var material = new EventRow(key, "~" + issued, PagedEventActor.Payload, (long)TimeSpan.FromMinutes(5).TotalMilliseconds)
+            { FoundationTenant = tenant };
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var until = now + material.KeepUntil;
+        var ticket = RootPublicEventTicket.Authored(material, new(issued, target, Kinds.Publish), now)
+            with { Initial = false, Payload = default };
+        await using var tx = await db.Database.BeginTransactionAsync(token);
+        Func<FormattableString, FormattableString>? bind = null;
+        if (db.Database.IsNpgsql())
+        {
+            var marker = await PostgresRootAdmission.PinRootCommitNamespaceAsync(db, writesJournal: false, token);
+            bind = await PostgresRootAdmission.PinAuthoredEventSourceAsync(db, marker, token);
+            await RootEventAdmission.LockPostgresKeysAsync(db, [key], token);
+        }
+        await RootPublicEventPublications.InsertAsync(db, tenant, key, material.Id, ticket.Occurrence, ticket.Incarnation, ticket.Occurrence,
+            material.Payload, now, receiveThrough: null, until, sql => RootPublicEventStarts.Bind(sql, bind), token);
+        await RootPublicEventDispatch.AddAsync(db, ticket.Occurrence, ticket.Id, address, target.Partition, bind, token);
+        await ticket.EnqueueAsync(db, bind, token);
+        var dispatch = await RootPublicEventDispatch.ReadPendingAsync(db, ticket.Occurrence, ticket.Id, address, target.Partition, bind, token)
+            ?? throw new InvalidOperationException("Fixture could not read the pending publication.");
+        var page = await RootEventAdmission.MatchLivePageAsync(db, tenant, key, material.Id, ticket.Occurrence,
+            dispatch.Payload, until, after: null, bind, token);
+        if (page is not { Through: { } cursor, Complete: false } ||
+            !await RootPublicEventDispatch.ChangeAsync(db, dispatch, dispatch.Position with { LiveThrough = cursor },
+                Contract.PublicationStatus.Pending, bind, token))
+            throw new InvalidOperationException("Fixture could not preserve the first committed page.");
+        if (await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Messages" SET "Attempts" = 3 WHERE "Id" = {ticket.Id} AND "InboxScope" = {RootPublicEventTicket.Scope}
+            """, token) != 1) throw new InvalidOperationException("Fixture could not exhaust the exact next ticket.");
+        await tx.CommitAsync(token);
+        return (material.Id, cursor);
+    }
+
     private sealed class PagedEventActor : Contract.IActorType
     {
-        internal const string Key = "wide";
+        internal const string Key = "event:wide";
         internal static string Payload { get; } = new('"', 9 * 1024 * 1024);
         public string Type => "paged-event-probe";
         public bool Withholds(Contract.ActorHeader header) => false;
@@ -225,7 +368,13 @@ internal static partial class KernelAuthoredEventChecks
             {
                 if (message.Kind == Contract.Kinds.Start)
                 {
-                    if (turn.Header.TypeData == "waiter") turn.Subscribe(Key, "wide-wait");
+                    if (turn.Header.TypeData == "publisher")
+                    {
+                        var eventId = turn.Publish(Key, Payload, TimeSpan.FromMinutes(5));
+                        turn.SetHeader(eventId, turn.Header.Labels);
+                        turn.End(Contract.ActorStatus.Finished);
+                    }
+                    else if (turn.Header.TypeData == "waiter") turn.Subscribe(Key, "wide-wait");
                     else turn.State = message.Payload;
                 }
                 if (message.Event is not { } published) continue;

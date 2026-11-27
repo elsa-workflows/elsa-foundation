@@ -130,6 +130,7 @@ public sealed partial class EfStore
             """, turn.Recovered);
         if (await db.Database.ExecuteSqlInterpolatedAsync(update, token) != 1) return false;
         if (!turn.Recovered) return true;
+        if (!await RequeueParkPublicationsAsync(db, root, token)) return false;
 
         var until = checked(await ReadSqliteParkClockAsync(db, token) + command.Operator.RootParkWindow!.Value);
         foreach (var scope in arrived.GroupBy(row => row.Scope))

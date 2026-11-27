@@ -82,13 +82,13 @@ public sealed partial class EfStore
         if (postgres && db.UsesRootLiveEventWaits && (waits.Count != 0 || publications is { Count: > 0 }))
         {
             var keys = waits.Keys.Select(wait => wait.Key);
-            if (publications is { Count: > 0 }) keys = keys.Concat(publications.Select(publication => publication.Key));
+            if (publications is { Count: > 0 }) keys = keys.Concat(publications.Select(publication => publication.Event.Key));
             await RootEventAdmission.LockPostgresKeysAsync(db, keys.Distinct(StringComparer.Ordinal).ToArray(), cancellationToken);
         }
         IReadOnlyList<SubscriptionRow> newKeeping = keeping.Length == 0 ? [] :
             await RootPublicEventLiveWaits.NewAsync(db, keeping, bindEventSource, cancellationToken);
-        if (root is RootPublicationCheckpoint publication)
-            await publication.PrepareAsync(db, marker, cancellationToken);
+        if (root is RootPublicationCheckpoint eventCheckpoint)
+            await eventCheckpoint.PrepareAsync(db, marker, cancellationToken);
         var commands = new List<OwnedCommand>();
         var c = new OwnedCommand(dialect) { HasFence = checkedMarkTime is null };
         if (formatFunction is not null) c.Statement(SqliteOwnedFormat.Check(formatFunction), Expect.Skip);
@@ -233,7 +233,16 @@ public sealed partial class EfStore
         if (newKeeping.Count != 0)
             await RootPublicEventLiveWaits.CaptureAsync(db, newKeeping, now, bindEventSource, cancellationToken);
         if (publications is { Count: > 0 })
-            await RootEventAdmission.PublishAuthoredAsync(db, publications, now, bindEventSource, cancellationToken);
+        {
+            if (db.UsesRootPagedPublicEvents)
+            {
+                foreach (var publication in publications)
+                    await RootPublicEventTicket.Authored(publication.Event, publication.Ticket, now).EnqueueAsync(db, bindEventSource, cancellationToken);
+            }
+            else
+                await RootEventAdmission.PublishAuthoredAsync(db, publications.Select(publication => publication.Event).ToArray(),
+                    now, bindEventSource, cancellationToken);
+        }
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
         return new Committed(true, now, seqs)

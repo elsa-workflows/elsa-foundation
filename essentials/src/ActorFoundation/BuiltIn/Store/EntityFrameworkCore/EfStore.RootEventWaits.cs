@@ -2,6 +2,8 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
+    private sealed record AuthoredRootPublication(EventRow Event, Message Ticket);
+
     private static class RootEventWaits
     {
         internal static TurnCommit Lower(WorkerRoot root, TurnCommit submitted, TurnCommit journal, bool keepsEvents)
@@ -25,7 +27,7 @@ public sealed partial class EfStore
         }
 
         internal static void CollectPublications(WorkerRoot root, TurnCommit turn, IReadOnlyList<Message> tickets,
-            FoundationSelfIssuer issuer, List<EventRow> publications)
+            FoundationSelfIssuer issuer, List<AuthoredRootPublication> publications)
         {
             if (turn.Row is not { Retired: false, Creation: 1 } row || turn.FoundationRootOperator is not null ||
                 turn.OpensPark || tickets.Count is 0 or > FoundationMetadataLimits.MaxTurnSends) throw RootShape();
@@ -48,7 +50,7 @@ public sealed partial class EfStore
                     publication.FoundationTenant != root.Tenant ||
                     !FoundationMetadataLimits.FitsContent(publication.Payload, FoundationMetadataLimits.EventContentBytes))
                     throw RootShape();
-                publications.Add(publication);
+                publications.Add(new(publication, ticket));
                 previousOrdinal = ordinal;
             }
         }

@@ -110,6 +110,10 @@ if (args is ["kernel-protected-event-observer"])
     return await KernelAuthoredEventChecks.RunPublicEventHostAsync("postgres", inBatch: true, protectedStarts: true, observeReplies: true);
 if (args is ["kernel-paged-event-publication", var pagedEventProvider and ("postgres" or "sqlite"), var pagedEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedEventProvider, pagedEventFence == "in-batch");
+if (args is ["kernel-paged-authored-event", var pagedAuthoredProvider and ("postgres" or "sqlite"), var pagedAuthoredFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedAuthoredProvider, pagedAuthoredFence == "in-batch", authored: true);
+if (args is ["kernel-paged-authored-park", var pagedParkProvider and ("postgres" or "sqlite"), var pagedParkFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedParkProvider, pagedParkFence == "in-batch", parkPublication: true);
 if (args is ["kernel-physical-event-pages", var eventPageProvider and ("postgres" or "sqlite"), var eventPageFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(eventPageProvider, eventPageFence == "in-batch", physicalPages: true);
 if (args is ["kernel-authored-events", var authoredEventProvider and ("postgres" or "sqlite"), var authoredEventFence and ("checked" or "in-batch")])

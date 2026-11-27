@@ -736,7 +736,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
-        if (batch.PublicationReservation is not null || batch.Turns.Any(turn => turn.FoundationPublicationSequence is not null))
+        if (batch.PublicationReservation is not null || batch.Turns.Any(turn => turn.FoundationPublicationSequence is not null && !turn.OpensPark))
             return CommitRootPublicationAsync(batch, sentAt, cancellationToken);
         return _ordinaryRoots is { } roots ? CommitWorkerRootAsync(roots, batch, sentAt, cancellationToken)
             : CommitAsync(batch, null, sentAt, cancellationToken);

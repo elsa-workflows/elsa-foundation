@@ -48,6 +48,7 @@ public sealed partial class EfStore
             if (!await KeepSqliteParkInputsAsync(db, root.Actor, root.Partition, group.Key, ids, park.Reason, token)) return false;
         }
         if (pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1) return false;
+        if (park.Publication is { } publication && !await publication.KeepAsync(db, root, token)) return false;
 
         if (park.Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync(WithSqliteOperatorPredicate(db, $"""
             UPDATE "Messages" SET "Seen" = 0

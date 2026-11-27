@@ -15,6 +15,24 @@ public sealed partial class EfStore
         CancellationToken cancellationToken)
     {
         var opening = turn.OpensPark;
+        RootPublicationPark? publication = null;
+        if (turn.FoundationPublicationSequence is { } sequence)
+        {
+            if (!opening || _ordinaryRoots?.PagesPublicEvents != true || turn.Row is not { } author ||
+                turn.FoundationCatchUpFailed is not { } failure || failure.Limit <= 0 || failure.Attempts < failure.Limit || sequence <= 0 ||
+                turn.FoundationRootParkInputs is not [var expectedInput] || expectedInput.FoundationPublish is not { Authored: { } work } issued ||
+                work.Tenant != root.Tenant || !issued.Owns(author, expectedInput) || expectedInput.InboxKey != failure.Key ||
+                failure.Key.Scope != RootPublicEventTicket.Scope || turn.Done is not [var done] || done != failure.Key ||
+                turn.FoundationKept is not { Count: 1 } retained || !retained.TryGetValue(failure.Key, out var keptReason) ||
+                keptReason != ParkKeepReason.Consumed)
+                throw RootShape();
+            publication = new(expectedInput, sequence, failure.Attempts);
+            turn = turn with
+            {
+                Done = [], FoundationKept = new Dictionary<InboxKey, ParkKeepReason>(), FoundationRootParkInputs = [],
+                FoundationPublicationSequence = null, FoundationCatchUpFailed = null
+            };
+        }
         var retry = _ordinaryRoots?.RecoversInlineInitialRoots == true && RootSelfIssuer is { } inlineIssuer &&
             turn.Row is { } initial && turn.FoundationRootParkInputs is [var retryInput] && FoundationInlineRetry.Matches(inlineIssuer, initial, retryInput);
         var reason = turn.Journal is null || retry ? ParkKeepReason.Arrived : ParkKeepReason.Consumed;
@@ -31,7 +49,7 @@ public sealed partial class EfStore
         // A Park keeps the row's Suspended flag, as the in-memory reference does. Only a composed set with operators can
         // suspend a root, so only there can a Park open or continue on a suspended one.
         if (turn.Row is not { Status: InstanceStatus.Faulted, Fault: { } fault } row || row.Suspended && !parkedOperators ||
-            turn.Expected is not > 0 || opening && !retry && reason != ParkKeepReason.Consumed || turn.Done.Count == 0 && !split ||
+            turn.Expected is not > 0 || opening && !retry && reason != ParkKeepReason.Consumed || turn.Done.Count == 0 && !split && publication is null ||
             turn.FoundationKept is not { } kept || kept.Count != turn.Done.Count ||
             turn.FoundationRootParkInputs is not { } envelopes || !SameInputs(envelopes, turn.Done) ||
             (!recorded && envelopes.Any(input => input.InboxKey.Scope != InboxKey.FoundationOccurrenceScope &&
@@ -69,7 +87,7 @@ public sealed partial class EfStore
         var journal = turn.Journal is null ? null : new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal);
         return new(journal, new RootParkOpening(root, current.Revision, opening, reason, DurableKeyJson.Write(fault), envelopes, returned,
             row.Suspended, current.Jobs, current.NextJobGeneration, row.Model, RootSelfIssuer)
-            { ChildEffects = childEffects, RetriesInitialTurn = retry });
+            { ChildEffects = childEffects, RetriesInitialTurn = retry, Publication = publication });
     }
 
     private static TurnCommit WithoutOperators(TurnCommit turn)
@@ -103,6 +121,7 @@ public sealed partial class EfStore
     {
         internal RootChildEffects? ChildEffects { get; init; }
         internal bool RetriesInitialTurn { get; init; }
+        internal RootPublicationPark? Publication { get; init; }
 
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -168,6 +187,7 @@ public sealed partial class EfStore
                 keptInputs.Add((group.Key, ids, pending));
             }
             if (pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, cancellationToken) != 1) return false;
+            if (Publication is { } publication && !await publication.KeepAsync(db, Root, cancellationToken)) return false;
             if (Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Seen" = 0
                 WHERE "Id" = ANY({Returned}) AND "Id" LIKE 'operator/%' AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}

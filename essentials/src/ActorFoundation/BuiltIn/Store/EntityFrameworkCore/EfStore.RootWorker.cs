@@ -418,7 +418,7 @@ public sealed partial class EfStore
         bool SqliteRuntime)
         : QualifiedRootCheckpoint(0)
     {
-        internal IReadOnlyList<EventRow> Publications { get; init; } = [];
+        internal IReadOnlyList<AuthoredRootPublication> Publications { get; init; } = [];
         internal override long RevisionFor(string actor) => Revisions[actor];
 
         internal RootCheckpoints BindRefusalSource(uint? marker) => Commands.Any(command => command is RefusedRootInput)
@@ -529,7 +529,7 @@ public sealed partial class EfStore
         var commands = PrepareWorkerMarks(roots, batch, byPartition);
         var turns = new List<TurnCommit>();
         var revisions = new Dictionary<string, long>(StringComparer.Ordinal);
-        List<EventRow>? publications = null;
+        List<AuthoredRootPublication>? publications = null;
         var positions = batch.Fenced.ToDictionary(fence => fence.Partition, fence => fence.Position);
         var deferred = new HashSet<string>(StringComparer.Ordinal);
         Dictionary<string, InlineRootResult>? inlineRefusals = null;

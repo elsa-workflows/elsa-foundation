@@ -41,7 +41,8 @@ public sealed partial class EfStore
                 return new(fence, failure.Key, sequence, failure.Attempts, turn.Instance, null, exhausted);
             }
             if (turn.FoundationCatchUpStep is not { } key || turn.FoundationCatchUpBefore is not { } deadline ||
-                turn.FoundationCatchUpExpected is not { } attempts || turn.Consumed.Count != 0 || turn.Done is not [var done] || done != key)
+                turn.FoundationCatchUpExpected is not { } attempts ||
+                turn.Consumed.Concat(turn.Done).ToArray() is not [var consumed] || consumed != key)
                 throw PublicationShape();
             return new(fence, key, sequence, attempts, turn.Instance, deadline, null);
         }
@@ -68,6 +69,24 @@ public sealed partial class EfStore
             if (Exhausted == false)
                 return await ChangeTicketAsync(RootPublicEventTicket.Change.RecordFailure, Fence.Epoch);
 
+            if (ticket.Initial)
+            {
+                if (Exhausted == true)
+                    return await ChangeTicketAsync(RootPublicEventTicket.Change.Settle, epoch: null);
+                await RequireWindowAsync();
+                var author = ticket.Author!;
+                var accepted = author.AcceptedAt!.Value;
+                var until = checked(accepted + author.KeepFor);
+                var payload = RootAdmissionWire.DecodePayload(ticket.Payload.Text, ticket.Payload.Escaped);
+                await RootPublicEventPublications.InsertAsync(db, author.Tenant, ticket.QualifiedKey, ticket.EventId,
+                    ticket.Occurrence, ticket.Incarnation, ticket.Occurrence, payload, accepted, receiveThrough: null, until,
+                    sql => RootPublicEventStarts.Bind(sql, _bind), token);
+                await RootPublicEventDispatch.AddAsync(db, ticket.Occurrence, ticket.Id, ticket.Target.Id, Fence.Partition, _bind, token);
+                if (!await ChangeTicketAsync(RootPublicEventTicket.Change.Materialize, Fence.Epoch)) return false;
+                await RequireWindowAsync();
+                return true;
+            }
+
             var item = await RootPublicEventDispatch.ReadPendingAsync(db, ticket.Occurrence, ticket.Id, ticket.Target.Id,
                 Fence.Partition, _bind, token);
             if (item is null || item.Key != ticket.QualifiedKey || item.EventId != ticket.EventId)
@@ -88,17 +107,28 @@ public sealed partial class EfStore
             async Task<(RootPublicEventDispatch.Cursor Next, bool Complete)> MatchAsync(RootPublicEventDispatch.Publication publication)
             {
                 var position = publication.Position;
+                if (position.StartsComplete)
+                {
+                    if (ticket.Author is null) throw PublicationShape();
+                    var targets = await RootEventStarts.CapturePageAsync(db, publication, _bind, token);
+                    return (position with { ProtectedThrough = targets.Through }, targets.Complete);
+                }
                 if (position.LiveComplete)
                 {
                     var starts = await RootPublicEventStarts.MatchPageAsync(db, publication, _bind, token);
-                    return (position with { StartThrough = starts.Through }, starts.Complete);
+                    return (position with { StartThrough = starts.Through, StartsComplete = starts.Complete },
+                        starts.Complete && !await HasProtectedStartsAsync());
                 }
 
                 var live = await RootEventAdmission.MatchLivePageAsync(db, publication.Tenant, publication.Key, publication.EventId,
                     publication.Occurrence, publication.Payload, publication.KeepUntil, position.LiveThrough, _bind, token);
                 var next = position with { LiveThrough = live.Through, LiveComplete = live.Complete };
-                var complete = live.Complete && !await RootPublicEventStarts.HasMatchesAsync(db, publication.Tenant, publication.Key, _bind, token);
-                return (next, complete);
+                if (!live.Complete || await RootPublicEventStarts.HasMatchesAsync(db, publication.Tenant, publication.Key, _bind, token))
+                    return (next, false);
+                return (next with { StartsComplete = true }, !await HasProtectedStartsAsync());
+
+                async Task<bool> HasProtectedStartsAsync() => ticket.Author is not null &&
+                    await RootEventStarts.HasMatchesAsync(db, publication.Tenant, publication.Key, _bind, token);
             }
 
             Task<bool> ChangeTicketAsync(RootPublicEventTicket.Change change, long? epoch) =>

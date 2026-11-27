@@ -589,7 +589,8 @@ public sealed partial class EfStore
                 !await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [persistedCommand], SelfIssuer,
                     suspended: !db.UsesRootParkArrivals || prior.ClearingKind is not null, token, includePrivateInputs: false, parked: true)) return false;
             var window = Command.Operator!.RootParkWindow!.Value;
-            if (!await ClearPostgresParkRowsAsync(db, Root, page, window, token)) return false;
+            if (!await ClearPostgresParkRowsAsync(db, Root, page, window, token) ||
+                Ends && !await AbandonParkPublicationsAsync(db, Root, token)) return false;
             var total = checked(Cleared + page.Length);
             // S5b-3b: a protected Delete's end keeps the row Faulted and its Suspended flag.
             var discards = Ends && Command.Kind == Kinds.Delete;
