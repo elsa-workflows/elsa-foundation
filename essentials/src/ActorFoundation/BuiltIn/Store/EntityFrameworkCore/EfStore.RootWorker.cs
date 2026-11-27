@@ -390,6 +390,14 @@ public sealed partial class EfStore
         : QualifiedRootCheckpoint(0)
     {
         internal override long RevisionFor(string actor) => Revisions[actor];
+
+        internal RootCheckpoints BindRefusalSource(uint? marker) => Commands.Any(command => command is RefusedRootInput)
+            ? this with
+            {
+                Commands = Commands.Select(command => command is RefusedRootInput refusal
+                    ? refusal with { PostgresMarker = marker } : command).ToArray()
+            }
+            : this;
         internal override bool WritesJournal(string actor) => DeferredJournal.Contains(actor);
         internal override async ValueTask CheckBeforeWriteAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -567,6 +575,8 @@ public sealed partial class EfStore
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence,
         CancellationToken cancellationToken, KernelDb? firstRootScope = null, PostgresCreatorWitness? observedCreator = null)
     {
+        if (turn.FoundationRootRefusedInput is { } refusal)
+            return PrepareRootRefusal(root, turn, refusal);
         if (turn.FoundationRootTimerRearms is not null && turn.FoundationRootOperator?.Kind != Kinds.Recover)
             throw RootShape();
         if (turn.FoundationTerminalOutput is not null &&

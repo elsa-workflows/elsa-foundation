@@ -276,6 +276,7 @@ public sealed class TurnOutcome(string instance)
     public long Revision;
     public List<(string Channel, object? Item)> Emitted = [];
     internal bool CreationRefused;
+    internal Message? FoundationRootRefusedInput;
     internal CommitWindow? Window;
     public List<RequestReply> Replied = [];
 
