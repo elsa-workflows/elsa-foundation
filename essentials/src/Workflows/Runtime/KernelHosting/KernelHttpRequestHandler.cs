@@ -3,14 +3,10 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Elsa.Http.Core;
-using Elsa.Http.Core.Contracts;
-using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Native;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
-using Microsoft.Extensions.DependencyInjection;
 using Contract = Kernel.Foundation.Contracts;
 using NativeHttpRequest = Kernel.Native.HttpRequest;
 
@@ -20,7 +16,8 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 public sealed class KernelHttpRequestHandler(KernelServing serving,
     Func<CancellationToken, ValueTask<Contract.IIngress>> openIngress,
     Func<CancellationToken, ValueTask<long>> readClock,
-    Contract.BoundScope tenant, string basePath, TimeSpan timeout, long maxRequestBodyBytes, bool enforceRequestTimeout = false)
+    Contract.BoundScope tenant, string basePath, TimeSpan timeout, long maxRequestBodyBytes, bool enforceRequestTimeout = false,
+    Func<HttpContext, Exception, CancellationToken, ValueTask>? handleTimeoutAsync = null)
 {
     /// <summary>Serves a published workflow HTTP endpoint with the actor foundation's held reply.</summary>
     public async Task HandleAsync(HttpContext context)
@@ -83,7 +80,7 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
         await response.WriteAsync(answer.Body, token);
     }
 
-    private static async Task FinishTimeoutAsync(HttpContext context, CancellationToken clientAborted, Exception cause)
+    private async Task FinishTimeoutAsync(HttpContext context, CancellationToken clientAborted, Exception cause)
     {
         if (clientAborted.IsCancellationRequested) return;
 
@@ -96,14 +93,13 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
 
         context.Response.Clear();
         var fault = new TimeoutException("The HTTP endpoint request timeout elapsed before the response completed.", cause);
-        var handler = context.RequestServices?.GetService<IHttpEndpointFaultHandler>();
-        if (handler is null)
+        if (handleTimeoutAsync is null)
         {
-            context.Response.StatusCode = HttpEndpointFaultMapping.ToStatusCode(fault);
+            context.Response.StatusCode = StatusCodes.Status408RequestTimeout;
             return;
         }
 
-        try { await handler.HandleAsync(new HttpEndpointFaultContext(context, [fault], clientAborted)); }
+        try { await handleTimeoutAsync(context, fault, clientAborted); }
         catch (OperationCanceledException) when (clientAborted.IsCancellationRequested) { }
     }
 

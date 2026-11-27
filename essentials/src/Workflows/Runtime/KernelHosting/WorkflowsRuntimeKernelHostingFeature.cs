@@ -85,13 +85,13 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(sp =>
         {
             var runtime = sp.GetRequiredService<KernelShellRuntime>();
-            var http = sp.GetRequiredService<WorkflowHttpEndpointSettings>();
+            var http = RequireHttpSettings(sp);
             var shellPath = sp.GetRequiredService<ShellSettings>().GetConfigurationRoot()["WebRouting:Path"]?.Trim().Trim('/');
             var basePath = HttpBasePath(http);
             var requestBasePath = string.IsNullOrEmpty(shellPath) ? basePath : "/" + shellPath + basePath;
             return new KernelHttpRequestHandler(sp.GetRequiredService<KernelServing>(), runtime.IngressAsync,
                 storage.ReadClockAsync, tenant, requestBasePath, http.SyncRequestTimeout, http.MaxRequestBodyBytes,
-                enforceRequestTimeout: true);
+                enforceRequestTimeout: true, handleTimeoutAsync: http.HandleTimeoutAsync);
         });
         KernelToolbox.Register(services);
 
@@ -136,13 +136,17 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             .RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeManage)
             .WithName("GetKernelWorkflowRetention");
 
-        var http = endpoints.ServiceProvider.GetRequiredService<WorkflowHttpEndpointSettings>();
+        var http = RequireHttpSettings(endpoints.ServiceProvider);
         endpoints.Map(HttpBasePath(http) + "/{**path}", static (HttpContext context) =>
                 context.RequestServices.GetRequiredService<KernelHttpRequestHandler>().HandleAsync(context))
             .WithOwner(FeatureName)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .AllowPublic("kernel workflow HTTP endpoints", "Starts or resumes a published workflow on its configured HTTP route and returns its response.");
     }
+
+    internal static WorkflowHttpEndpointSettings RequireHttpSettings(IServiceProvider services) =>
+        services.GetService<WorkflowHttpEndpointSettings>() ?? throw new InvalidOperationException(
+            "Kernel workflow HTTP endpoints require an Elsa.Activities.Http package that provides the shell's workflow HTTP settings.");
 
     internal static string HttpBasePath(WorkflowHttpEndpointSettings options)
     {

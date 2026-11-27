@@ -8,12 +8,15 @@ using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.Services;
 using Elsa.Activities.Http.StandaloneTriggers;
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
+using Elsa.Http.Core;
+using Elsa.Http.Core.Contracts;
+using Elsa.Http.Core.Models;
 using Elsa.Http.Core.Options;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
-using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -78,7 +81,15 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
         services.TryAddSingleton(provider =>
         {
             var options = provider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value;
-            return new WorkflowHttpEndpointSettings(options.BasePath, options.SyncRequestTimeout, options.MaxRequestBodyBytes);
+            return new WorkflowHttpEndpointSettings(options.BasePath, options.SyncRequestTimeout, options.MaxRequestBodyBytes,
+                static (context, fault, token) =>
+                {
+                    if (context.RequestServices?.GetService<IHttpEndpointFaultHandler>() is { } handler)
+                        return handler.HandleAsync(new HttpEndpointFaultContext(context, [fault], token));
+
+                    context.Response.StatusCode = HttpEndpointFaultMapping.ToStatusCode(fault);
+                    return ValueTask.CompletedTask;
+                });
         });
 
         services.AddHttpClient(HttpActivityConstants.HttpClientName)
