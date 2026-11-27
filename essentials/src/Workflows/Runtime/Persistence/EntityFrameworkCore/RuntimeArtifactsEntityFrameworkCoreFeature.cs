@@ -1,9 +1,14 @@
 using Elsa.Persistence.EntityFramework;
 using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Configuration;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
@@ -15,7 +20,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
     name: "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence",
     DisplayName = "Workflows Runtime EF Core Executable Artifact Persistence",
     Description = "Opt-in EF Core persistence for runtime executable artifacts, templates and source references. It applies or validates the shared Runtime migrations on shell activation;",
-    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+    DependsOn = new object[] { "Tasks" })]
 [UsesEfModule("Workflows.Runtime")]
 [EfPersistenceResourceParticipant]
 public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
@@ -60,6 +65,10 @@ public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.AddPersistenceCore();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddOptions<WorkflowExecutableGarbageCollectionOptions>();
+        services.TryAddScoped<IWorkflowExecutableRootWriteLeaseManager, WorkflowExecutableRootWriteLeaseManager>();
         services.Configure<RuntimeRecoveryContinuationOptions>(options =>
         {
             if (!string.IsNullOrWhiteSpace(RecoveryContinuationSigningKey))
