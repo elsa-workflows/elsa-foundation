@@ -76,7 +76,7 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
   is raised: the publisher returns it as an outcome, and the phase records one from its own draft write or from a
   publisher that throws it, wrapped or not, as a refused state with the refusal's code, family and both versions
   (`ReusableActivityImportRefusals`, #5972). The engine-start folder import skips the version with its first error's
-  message, so the family and versions reach the log. The publisher must resolve the import's tenant.
+  message, so the family and versions reach the log, and leaves out the upload remediation: the next start retries. The publisher must resolve the import's tenant.
 - **Absence:** without an implementation, an apply that selects a reusable workflow is refused before anything is
   written with `ELS3-REUSABLE-PUBLISHING-UNAVAILABLE`.
 - **Publish phase:** after the commit, `ReusableActivityImportPublishPhase` publishes the mutation's reusable versions

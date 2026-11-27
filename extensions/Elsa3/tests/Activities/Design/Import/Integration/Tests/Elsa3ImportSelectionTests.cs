@@ -101,29 +101,38 @@ public sealed class Elsa3ImportSelectionTests
     [Fact]
     public void A_refused_reusable_is_skipped_with_what_its_first_error_says()
     {
-        // #5972: a schema refusal names its family and versions only in its diagnostic; the skip must keep them.
+        // #5972: a schema refusal names its family and versions only in its diagnostic; the skip must keep them. The
+        // remediation speaks to an upload and an idempotency key, which an engine start has neither of, so it is left out.
         var state = new ReusableActivityPublicationState("v1", "a", ReusableActivityPublicationStatus.Refused, "schema-write-refused",
         [
             new("activity.note", ActivityDiagnosticSeverity.Warning, "A warning first.", Subject()),
             new("schema-write-refused", ActivityDiagnosticSeverity.Error,
                 "Schema family 'activity-drafts' requires version 3; this host writes 2.", Subject(),
-                Remediation: "Upload the same export again.")
+                Remediation: "Upload the same export again and apply it under a new idempotency key.")
         ]);
 
         var (code, cause) = Elsa3FolderImportTask.NotPublished(state);
 
         Assert.Equal("schema-write-refused", code);
-        Assert.Equal("The reusable activity was not published (Refused): Schema family 'activity-drafts' requires version 3; this host writes 2. Upload the same export again.", cause);
+        Assert.Equal("The reusable activity was not published (Refused): Schema family 'activity-drafts' requires version 3; this host writes 2. The next start tries again.", cause);
     }
 
     [Fact]
-    public void A_reusable_blocked_by_a_dependency_without_diagnostics_names_the_status_and_the_dependency()
+    public void A_reusable_blocked_by_a_dependency_names_the_status_and_the_dependency_only()
     {
-        var state = new ReusableActivityPublicationState("v2", "b", ReusableActivityPublicationStatus.NotPublishedDependency, BlockedBy: "v1");
+        // The phase attaches a diagnostic that repeats the dependency with upload advice; the dependency's own skip says why.
+        var state = new ReusableActivityPublicationState("v2", "b", ReusableActivityPublicationStatus.NotPublishedDependency,
+            "ELS3-REUSABLE-DEPENDENCY-NOT-PUBLISHED",
+            [
+                new("ELS3-REUSABLE-DEPENDENCY-NOT-PUBLISHED", ActivityDiagnosticSeverity.Error,
+                    "Version 'v2' was not published because the version it uses, 'v1', was not published.", Subject(),
+                    Remediation: "Resolve why 'v1' was not published, then upload the same export again.")
+            ],
+            BlockedBy: "v1");
 
         var (code, cause) = Elsa3FolderImportTask.NotPublished(state);
 
-        Assert.Equal(nameof(ReusableActivityPublicationStatus.NotPublishedDependency), code);
+        Assert.Equal("ELS3-REUSABLE-DEPENDENCY-NOT-PUBLISHED", code);
         Assert.Equal("The reusable activity was not published (NotPublishedDependency, blocked by 'v1').", cause);
     }
 

@@ -75,6 +75,22 @@ public sealed class ReusableActivityImportPublishGuidanceTests
     }
 
     [Fact]
+    public async Task A_publisher_that_throws_a_schema_refusal_is_reported_as_the_refusal()
+    {
+        // #5972: a publisher may throw the refusal instead of returning it; the phase says why all the same.
+        var refusal = new StoreRefusal("activity-publications", "1", "2");
+        var phase = Phase(new ThrowingPublisher(new AggregateException(new TimeoutException("slow"), refusal)));
+
+        var state = Assert.Single(await phase.PublishAsync([Activity("inner")], "receipt-1"));
+
+        Assert.Equal(ReusableActivityPublicationStatus.Refused, state.Status);
+        Assert.Equal("schema-write-refused", state.ErrorCode);
+        var diagnostic = Assert.Single(state.Diagnostics!);
+        Assert.Equal(refusal.Message, diagnostic.Message);
+        Assert.Equal("activity-publications", diagnostic.Metadata["family"]);
+    }
+
+    [Fact]
     public async Task A_version_below_the_minimum_gets_import_advice_instead_of_choosing_a_version()
     {
         var bump = new ActivityDiagnostic(
@@ -110,10 +126,14 @@ public sealed class ReusableActivityImportPublishGuidanceTests
             ValueTask.FromResult(ReusableActivityImportPublishOutcome.Refused(code, diagnostics));
     }
 
-    private sealed class ThrowingPublisher(string message) : IReusableActivityImportPublisher
+    private sealed class ThrowingPublisher(Exception exception) : IReusableActivityImportPublisher
     {
+        public ThrowingPublisher(string message) : this(new InvalidOperationException(message))
+        {
+        }
+
         public ValueTask<ReusableActivityImportPublishOutcome> PublishAsync(ReusableActivityImportPublishRequest request, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException(message);
+            throw exception;
     }
 
     private sealed class CountingPublisher : IReusableActivityImportPublisher

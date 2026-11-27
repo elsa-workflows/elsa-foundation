@@ -172,21 +172,25 @@ internal sealed class Elsa3FolderImportTask(
     }
 
     /// <summary>
-    /// The selected item each error diagnostic names, by its <c>SourceVersionId</c> metadata or else its source-version
-    /// path segment; empty when any error names no selected item, because then the refusal cannot be attributed.
-    /// </summary>
-    /// <summary>
-    /// Why a reusable was not published, for its skip: its status and, when it has one, what its first error says, which
-    /// is where a schema refusal names its family and versions (#5972).
+    /// Why a reusable was not published, for its skip: its status and what its first error says, which is where a schema
+    /// refusal names its family and versions (#5972). The remediation is left out: it speaks to an upload applied under a
+    /// new idempotency key, while an engine start tries again by itself. A version blocked by a dependency names only that
+    /// dependency, whose own skip says why.
     /// </summary>
     internal static (string Code, string Cause) NotPublished(ReusableActivityPublicationState state)
     {
         var status = $"The reusable activity was not published ({state.Status}{(state.BlockedBy is null ? "" : $", blocked by '{state.BlockedBy}'")})";
-        var error = state.Diagnostics?.FirstOrDefault(diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error);
+        var error = state.BlockedBy is null
+            ? state.Diagnostics?.FirstOrDefault(diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error)
+            : null;
         return (state.ErrorCode ?? state.Status.ToString(),
-            error is null ? $"{status}." : $"{status}: {Elsa3ImportSelection.Cause(error.Message, error.Remediation)}");
+            error is null ? $"{status}." : $"{status}: {error.Message} The next start tries again.");
     }
 
+    /// <summary>
+    /// The selected item each error diagnostic names, by its <c>SourceVersionId</c> metadata or else its source-version
+    /// path segment; empty when any error names no selected item, because then the refusal cannot be attributed.
+    /// </summary>
     internal static Dictionary<string, (string Code, string Cause)> Locate(ReusableActivityImportValidationException exception, IReadOnlyList<string> selected)
     {
         var selectedIds = selected.ToHashSet(StringComparer.Ordinal);
