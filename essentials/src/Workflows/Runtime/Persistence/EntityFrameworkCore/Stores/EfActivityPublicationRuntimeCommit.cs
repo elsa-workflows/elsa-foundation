@@ -58,24 +58,44 @@ public sealed class EfActivityPublicationRuntimeCommit
     /// The template id or hash is bound to different content, or the source reference id is bound to different
     /// material.
     /// </exception>
-    public async ValueTask<bool> CommitAsync(
+    public ValueTask<bool> CommitAsync(
         ExecutableActivityTemplate template,
         WorkflowExecutableSourceReference reference,
+        CancellationToken cancellationToken = default) =>
+        CommitWithDependenciesAsync(template, reference, [], cancellationToken);
+
+    /// <summary>Commits a publication with immutable leaf dependencies admitted by its catalog owner.</summary>
+    public async ValueTask<bool> CommitWithDependenciesAsync(ExecutableActivityTemplate template,
+        WorkflowExecutableSourceReference reference, IReadOnlyList<ExecutableActivityTemplate> admittedLeaves,
         CancellationToken cancellationToken = default)
     {
-        var result = await CommitCoreAsync(template, reference, templates.PublicationClock, cancellationToken);
+        ArgumentNullException.ThrowIfNull(template);
+        ArgumentNullException.ThrowIfNull(admittedLeaves);
+        if (admittedLeaves.Count > 0)
+        {
+            var dependencies = template.DirectDependencies.Select(x => (x.TemplateId, x.TemplateHash)).ToHashSet();
+            foreach (var leaf in admittedLeaves)
+            {
+                if (leaf.DirectDependencies.Count != 0 || leaf.ClosedTemplates.Count != 0 ||
+                    !dependencies.Remove((leaf.TemplateId, leaf.TemplateHash)))
+                    throw new ArgumentException("An imported leaf must match one exact direct template dependency.", nameof(admittedLeaves));
+            }
+        }
+
+        var result = await CommitCoreAsync(template, reference, templates.PublicationClock, admittedLeaves, cancellationToken);
         return result.Created;
     }
 
     internal async ValueTask<WorkflowExecutableSourceReference> CommitLiveReferenceAsync(ExecutableActivityTemplate template,
         WorkflowExecutableSourceReference reference, TimeProvider clock, CancellationToken cancellationToken)
     {
-        var result = await CommitCoreAsync(template, reference, clock, cancellationToken);
+        var result = await CommitCoreAsync(template, reference, clock, [], cancellationToken);
         return result.Reference;
     }
 
     private async ValueTask<(bool Created, WorkflowExecutableSourceReference Reference)> CommitCoreAsync(
-        ExecutableActivityTemplate template, WorkflowExecutableSourceReference reference, TimeProvider? liveClock, CancellationToken cancellationToken)
+        ExecutableActivityTemplate template, WorkflowExecutableSourceReference reference, TimeProvider? liveClock,
+        IReadOnlyList<ExecutableActivityTemplate> admittedLeaves, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(template);
         ArgumentNullException.ThrowIfNull(reference);
@@ -96,6 +116,9 @@ public sealed class EfActivityPublicationRuntimeCommit
             {
                 await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
                     context, "publishing", template.TemplateId, () => context.Database.BeginTransactionAsync(cancellationToken));
+                // The imported leaf and the dependency fence become visible in the same transaction.
+                foreach (var leaf in admittedLeaves)
+                    await capturedTemplates.StageCreateAsync(leaf, cancellationToken);
                 var createsTemplate = await capturedTemplates.StageCreateAsync(template, cancellationToken);
                 var source = await capturedReferences.StageCreateOrAdoptAsync(reference, cancellationToken, liveClock);
                 // Adoption must advance native material authority too: a stale collector must lose its

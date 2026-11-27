@@ -37,8 +37,26 @@ public sealed class ActivityTemplateCompiler(
     IEnumerable<IActivityDataSelectionDocumentProjector> dataProjectors,
     IActivityDataSelectionAnalyzer dataAnalyzer,
     IActivityStructureService? activityStructures = null,
-    RuntimeInputBindingCompiler? inputBindingCompiler = null) : IActivityTemplateCompiler
+    RuntimeInputBindingCompiler? inputBindingCompiler = null,
+    IGlobalClrActivityMaterialReader? globalClrMaterials = null) : IActivityTemplateCompiler
 {
+    public ActivityTemplateCompiler(
+        IActivityTemplateProviderCompilerRegistry providers,
+        IActivityTemplateDependencyDiscovererRegistry dependencyDiscoverers,
+        IActivityDefinitionVersionPublicationStore publications,
+        IActivityDefinitionVersionStore activityVersions,
+        IExecutableActivityTemplateReader templates,
+        IActivityTemplateAdmissionPolicy admissionPolicy,
+        TimeProvider timeProvider,
+        IEnumerable<IActivityDataSelectionDocumentProjector> dataProjectors,
+        IActivityDataSelectionAnalyzer dataAnalyzer,
+        IActivityStructureService? activityStructures,
+        RuntimeInputBindingCompiler? inputBindingCompiler)
+        : this(providers, dependencyDiscoverers, publications, activityVersions, templates, admissionPolicy,
+            timeProvider, dataProjectors, dataAnalyzer, activityStructures, inputBindingCompiler, null)
+    {
+    }
+
     // Retain the source-analysis constructor while the owning structure projection is added.
     public ActivityTemplateCompiler(
         IActivityTemplateProviderCompilerRegistry providers,
@@ -170,6 +188,8 @@ public sealed class ActivityTemplateCompiler(
             }
 
             var template = await templates.FindAsync(publication.TemplateId, cancellationToken);
+            if (template is null && globalClrMaterials is not null)
+                template = (await globalClrMaterials.FindAsync(publication, cancellationToken))?.Template;
             if (template is null || !StringComparer.Ordinal.Equals(template.TemplateHash, publication.TemplateHash))
             {
                 diagnostics.Add(Error(

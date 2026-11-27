@@ -1,7 +1,9 @@
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Primitives.Versioning;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
@@ -41,6 +43,8 @@ public sealed class EfActivityPublicationCommand : ICommitActivityPublicationCom
     private readonly EfActivityPublicationReceiptStore receipts;
     private readonly EfActivityPublicationRuntimeCommit runtime;
     private readonly EfActivityPublicationDesignCommit design;
+    private readonly IGlobalClrActivityMaterialReader? globalClrMaterials;
+    private readonly IActivityDefinitionVersionPublicationStore publications;
 
     public EfActivityPublicationCommand(
         EfActivityPublicationReceiptStore receipts,
@@ -48,9 +52,22 @@ public sealed class EfActivityPublicationCommand : ICommitActivityPublicationCom
         IWorkflowExecutableSourceReferenceStore sourceReferences,
         IActivityDefinitionVersionPublicationStore publications,
         IPersistenceAccessContextAccessor accessContextAccessor)
+        : this(receipts, templates, sourceReferences, publications, accessContextAccessor, null)
+    {
+    }
+
+    public EfActivityPublicationCommand(
+        EfActivityPublicationReceiptStore receipts,
+        IExecutableActivityTemplateStore templates,
+        IWorkflowExecutableSourceReferenceStore sourceReferences,
+        IActivityDefinitionVersionPublicationStore publications,
+        IPersistenceAccessContextAccessor accessContextAccessor,
+        IGlobalClrActivityMaterialReader? globalClrMaterials)
     {
         ArgumentNullException.ThrowIfNull(receipts);
         this.receipts = receipts;
+        this.globalClrMaterials = globalClrMaterials;
+        this.publications = publications;
         runtime = new EfActivityPublicationRuntimeCommit(templates, sourceReferences);
         design = new EfActivityPublicationDesignCommit(publications, accessContextAccessor);
     }
@@ -77,7 +94,8 @@ public sealed class EfActivityPublicationCommand : ICommitActivityPublicationCom
         {
             // Refuse what cannot commit before writing Runtime material that would then be stranded.
             await design.EnsureDraftPublicationAdmissibleAsync(commit.Design, cancellationToken);
-            await runtime.CommitAsync(commit.ExecutableTemplate, commit.SourceReference, cancellationToken);
+            var importedLeaves = await ResolveGlobalClrDependenciesAsync(commit.ExecutableTemplate, cancellationToken);
+            await runtime.CommitWithDependenciesAsync(commit.ExecutableTemplate, commit.SourceReference, importedLeaves, cancellationToken);
             await design.CommitDraftPublicationAsync(commit.Design, cancellationToken);
         }
         catch (InvalidOperationException) when (!cancellationToken.IsCancellationRequested)
@@ -91,6 +109,28 @@ public sealed class EfActivityPublicationCommand : ICommitActivityPublicationCom
         }
 
         return await WriteReceiptAsync(commit, cancellationToken);
+    }
+
+    private async ValueTask<IReadOnlyList<ExecutableActivityTemplate>> ResolveGlobalClrDependenciesAsync(
+        ExecutableActivityTemplate template, CancellationToken cancellationToken)
+    {
+        if (globalClrMaterials is null)
+            return [];
+
+        var imported = new Dictionary<string, ExecutableActivityTemplate>(StringComparer.Ordinal);
+        foreach (var dependency in template.DirectDependencies.DistinctBy(x => (x.DefinitionVersionId, x.TemplateId, x.TemplateHash)))
+        {
+            var publication = await publications.FindAsync(dependency.DefinitionVersionId, cancellationToken);
+            if (publication is not { Lifecycle: ActivityDefinitionVersionLifecycle.Active } ||
+                publication.DefinitionId != dependency.DefinitionId || publication.Version != dependency.Version ||
+                publication.TemplateId != dependency.TemplateId || publication.TemplateHash != dependency.TemplateHash)
+                continue;
+
+            if (await globalClrMaterials.FindAsync(publication, cancellationToken) is { } global)
+                imported.TryAdd(global.Template.TemplateId, global.Template);
+        }
+
+        return imported.Values.ToArray();
     }
 
     private async Task<bool> IsCommittedAfterFailureAsync(ActivityPublicationDesignMutation mutation, CancellationToken cancellationToken)

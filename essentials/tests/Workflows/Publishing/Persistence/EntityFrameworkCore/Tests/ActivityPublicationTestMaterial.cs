@@ -185,8 +185,10 @@ internal static class ActivityPublicationTestMaterial
             receipt);
     }
 
-    internal static SourceActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference> SourceCommit(DateTimeOffset now)
+    internal static SourceActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference> SourceCommit(DateTimeOffset now, bool clr = false)
     {
+        var providerKey = clr ? "elsa.clr-activity" : "test.provider";
+        var sourceKind = clr ? "CLR" : "test.source";
         const string definitionId = "source-definition-1";
         const string versionId = "source-version-1";
         var hash = "sha256:" + new string('e', 64);
@@ -201,7 +203,7 @@ internal static class ActivityPublicationTestMaterial
             {
                 Id = "source-authority-1",
                 DefinitionId = definitionId,
-                ContentAuthority = new(ActivityContentAuthorityKind.ProviderSource, "test.provider", "source-1"),
+                ContentAuthority = new(ActivityContentAuthorityKind.ProviderSource, providerKey, "source-1"),
                 HeadVersionId = versionId,
                 RecommendedVersionId = versionId,
                 CreatedAt = now,
@@ -210,12 +212,12 @@ internal static class ActivityPublicationTestMaterial
             new ActivityDefinitionVersion("1.0.0", definitionId)
             {
                 Id = versionId,
-                ProviderKey = "test.provider",
+                ProviderKey = providerKey,
                 ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
                 ConsumerKey = "test.consumer",
                 ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
                 DescriptorPayload = root.Descriptor.Payload,
-                SourceKind = "test.source",
+                SourceKind = sourceKind,
                 SourceId = "source-1",
                 Hash = hash,
                 CreatedAt = now,
@@ -230,7 +232,7 @@ internal static class ActivityPublicationTestMaterial
                 ActivityTypeKey = "test.source",
                 ResolutionKind = ActivityDefinitionVersionResolutionKind.AuthorableActivity,
                 Contract = Contract(),
-                Provider = Provider(),
+                Provider = new(providerKey, "1", Json("{}")),
                 TemplateId = templateId,
                 TemplateHash = hash,
                 SourceReferenceId = "source-owned-ref-1",
@@ -246,7 +248,7 @@ internal static class ActivityPublicationTestMaterial
             new ActivityDefinitionVersionLayout { Id = versionId, DefinitionVersionId = versionId, Records = [], CreatedAt = now, LastModifiedAt = now },
             template,
             new WorkflowExecutableSourceReference(
-                "source-owned-ref-1", templateId, "test.source", "source-1", "1.0.0", definitionId, versionId, "1.0.0",
+                "source-owned-ref-1", templateId, sourceKind, "source-1", "1.0.0", definitionId, versionId, "1.0.0",
                 now, now, WorkflowExecutableReferenceScope.Published));
     }
 }
