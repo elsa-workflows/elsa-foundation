@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -480,7 +481,7 @@ public sealed partial class EfWorkflowExecutableStore(
     }
 
     internal async ValueTask<IReadOnlyList<(WorkflowExecutableRootWriteLease Grant, DateTimeOffset ExpiresAt)>> FenceRootWriteLeasesAsync(IReadOnlyList<WorkflowExecutableRootWriteLease> leases,
-        TimeProvider clock, CancellationToken cancellationToken)
+        TimeProvider clock, CancellationToken cancellationToken, IReadOnlyCollection<WorkflowExecutableIdentity>? expectedRoots = null)
     {
         ArgumentNullException.ThrowIfNull(leases); ArgumentNullException.ThrowIfNull(clock);
         if (context.Database.CurrentTransaction is null)
@@ -489,6 +490,7 @@ public sealed partial class EfWorkflowExecutableStore(
             throw new ArgumentException("An atomic executable fence requires distinct actual grants.", nameof(leases));
         var scope = RequireScope();
         var deadlines = new List<(WorkflowExecutableRootWriteLease Grant, DateTimeOffset ExpiresAt)>();
+        var materials = expectedRoots is null ? null : new Dictionary<string, RuntimeExecutionMaterial>(StringComparer.Ordinal);
         foreach (var lease in leases.OrderBy(lease => lease.ArtifactId, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -521,8 +523,20 @@ public sealed partial class EfWorkflowExecutableStore(
                 current.ExpiresAtUtcTicks <= clock.GetUtcNow().UtcTicks) throw Lost();
 
             deadlines.Add((lease, new DateTimeOffset(current.ExpiresAtUtcTicks, TimeSpan.Zero)));
+            materials?.Add(lease.ArtifactId, pair.Value.Material);
 
             Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableRootWriteLeaseLostException Lost() => new(lease.ArtifactId, lease.LeaseId);
+        }
+        // Each material belongs to the physical incarnation whose coordination and lease rows this transaction
+        // locked. Resolve only those grants, so replacement or a newly missing closure member cannot pass.
+        if (expectedRoots is not null && materials is not null)
+        {
+            foreach (var root in expectedRoots)
+                if (!materials.TryGetValue(root.ArtifactId, out var current) ||
+                    !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(current.Identity, root))
+                    throw new WorkflowExecutableDependencyGraphException(WorkflowExecutableDependencyGraphFailureKind.ConflictingIdentity,
+                        "Fenced executable material differs from the requested root pin.");
+            _ = WorkflowExecutableDependencyGraph.ResolveMaterialClosure(expectedRoots, materials.Values);
         }
         return deadlines.AsReadOnly();
     }
@@ -790,7 +804,7 @@ public sealed partial class EfWorkflowExecutableStore(
     /// <summary>
     /// Reads and validates the executable pair without tracking: its incarnation and coordination state, or null when absent.
     /// </summary>
-    private static async Task<(string IncarnationId, CoordinationState State, long Revision, string SchemaVersion)?> ReadPairAsync(
+    private static async Task<(string IncarnationId, CoordinationState State, long Revision, string SchemaVersion, RuntimeExecutionMaterial Material)?> ReadPairAsync(
         RuntimeDbContext db,
         string scope,
         string artifactId,
@@ -810,8 +824,7 @@ public sealed partial class EfWorkflowExecutableStore(
                         x => x.Id == id && x.ScopeKeyHash == scopeHash && x.ScopeKey == encodedScope &&
                              x.ArtifactIdHash == artifactIdHash && x.ArtifactId == encodedArtifactId,
                         cancellationToken));
-            if (executable is not null)
-                _ = ReadMaterial(executable, scope, artifactId, id, sourceLimits);
+            var material = executable is null ? null : ReadMaterial(executable, scope, artifactId, id, sourceLimits);
             var artifact = executable?.IncarnationId;
             var coordination = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
                 db, "reading", artifactId, () => db.WorkflowExecutableCoordinations
@@ -823,8 +836,8 @@ public sealed partial class EfWorkflowExecutableStore(
             if (artifact is null && coordination is null)
                 return null;
             var state = coordination is null ? null : ReadCoordination(coordination, scope, artifactId, id, sourceLimits);
-            if (artifact is not null && state is not null && StringComparer.Ordinal.Equals(artifact, coordination!.IncarnationId))
-                return (artifact, state, coordination.Revision, coordination.SchemaVersion);
+            if (artifact is not null && material is not null && state is not null && StringComparer.Ordinal.Equals(artifact, coordination!.IncarnationId))
+                return (artifact, state, coordination.Revision, coordination.SchemaVersion, material);
             // A delete or create committed between the two reads; observe the pair once more before calling it corrupt.
             if (attempt > 0)
                 throw new InvalidDataException($"Workflow executable '{id}' has incomplete persisted state.");

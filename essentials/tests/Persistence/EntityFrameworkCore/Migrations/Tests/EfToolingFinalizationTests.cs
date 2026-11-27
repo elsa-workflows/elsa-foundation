@@ -137,10 +137,13 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
 
         Assert.Equal(EfToolingExitCode.Success, status.ExitCode);
         var families = status.Response.GetProperty("finalization").GetProperty("families").EnumerateArray().ToArray();
-        Assert.Equal(21, families.Length);
+        Assert.Equal(22, families.Length);
         var history = families.Single(family => family.GetProperty("family").GetString() == "RuntimeHistory");
         Assert.Equal(["1.0.0"], history.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
         Assert.Equal(JsonValueKind.Null, history.GetProperty("finalizedVersion").ValueKind);
+        var executablePins = families.Single(family => family.GetProperty("family").GetString() == "RuntimeKernelExecutablePin");
+        Assert.Equal(["1.0.0"], executablePins.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
+        Assert.Equal(JsonValueKind.Null, executablePins.GetProperty("finalizedVersion").ValueKind);
         var scheduleControl = families.Single(family => family.GetProperty("family").GetString() == "RuntimeKernelScheduleControl");
         Assert.Equal(["1.0.0"], scheduleControl.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
         Assert.Equal(JsonValueKind.Null, scheduleControl.GetProperty("finalizedVersion").ValueKind);
