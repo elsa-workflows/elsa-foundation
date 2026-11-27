@@ -11,7 +11,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Native.Run" />
-    <ProjectReference Include="../../../Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="../../../ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
     <ProjectReference Include="../../../ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj" />
     <ProjectReference Include="../../../ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
@@ -20,7 +19,6 @@
     <ProjectReference Include="../../../Modularity/Core/Elsa.Modularity.Core.csproj" />
     <ProjectReference Include="../KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj" />
     <ProjectReference Include="../KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
-    <ProjectReference Include="../../../../../extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="/" />

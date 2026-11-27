@@ -3,9 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Elsa.Http.Core;
-using Elsa.Http.Core.Contracts;
-using Elsa.Http.Core.Models;
+using Elsa.Api.AspNetCore;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Native;
 using Microsoft.AspNetCore.Http;
@@ -96,14 +94,14 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
 
         context.Response.Clear();
         var fault = new TimeoutException("The HTTP endpoint request timeout elapsed before the response completed.", cause);
-        var handler = context.RequestServices?.GetService<IHttpEndpointFaultHandler>();
-        if (handler is null)
+        var handleTimeoutAsync = context.RequestServices?.GetService<WorkflowHttpEndpointSettings>()?.HandleTimeoutAsync;
+        if (handleTimeoutAsync is null)
         {
-            context.Response.StatusCode = HttpEndpointFaultMapping.ToStatusCode(fault);
+            context.Response.StatusCode = StatusCodes.Status408RequestTimeout;
             return;
         }
 
-        try { await handler.HandleAsync(new HttpEndpointFaultContext(context, [fault], clientAborted)); }
+        try { await handleTimeoutAsync(context, fault, clientAborted); }
         catch (OperationCanceledException) when (clientAborted.IsCancellationRequested) { }
     }
 
