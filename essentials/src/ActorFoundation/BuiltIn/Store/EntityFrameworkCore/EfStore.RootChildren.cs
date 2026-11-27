@@ -34,14 +34,19 @@ public sealed partial class EfStore
 
     private sealed record RootChildStart(string Reference, Message Creator);
 
-    private sealed record RootChildEffects(string? Children, RootChildStart[] Starts, Message[] Inputs, Message? Notice)
+    private sealed record RootChildEffects(string ParentReference, string? Children, RootChildStart[] Starts, Message[] Inputs, Message? Notice)
     {
         internal RootChildCascade? Cascade { get; init; }
 
         internal async Task<bool> BindAsync(KernelDb db, string tenant, CancellationToken token)
         {
             if (!db.UsesRootChildren) return false;
-            if (Starts.Length != 0 && !await BindRootChildStartsAsync(db, tenant, Starts, token)) return false;
+            if (Starts.Length != 0)
+            {
+                if (!await BindRootChildStartsAsync(db, tenant, Starts, token)) return false;
+                if (db.UsesRootScheduleLineage && !await RootScheduleLineage.BindChildrenAsync(db, tenant, ParentReference,
+                    Starts.Select(start => start.Reference).ToArray(), token)) return false;
+            }
             await BindRootChildInputsAsync(db, tenant, Inputs, token);
             if (Cascade is { } cascade && !await OpenRootChildCascadeAsync(db, cascade, token)) return false;
             if (Notice is not { } notice) return true;
@@ -192,7 +197,7 @@ public sealed partial class EfStore
             }
             else throw RootShape();
         }
-        return new(row.Children, starts.ToArray(), inputs.ToArray(), notice);
+        return new(root.Reference, row.Children, starts.ToArray(), inputs.ToArray(), notice);
     }
 
     private static PreparedRoot WithRootChildEffects(PreparedRoot prepared, RootChildEffects? children, string? parent)

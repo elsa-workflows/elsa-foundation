@@ -35,4 +35,11 @@ public interface IRuntimeKernelScheduleControlReader
     /// because rows and revisions can change behind a page already read.</remarks>
     ValueTask<RuntimeKernelScheduleControlPage> ListAsync(TriggerScope scope, string? after, int limit,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Reads the inclusive end of a new pass, or null when this scope has no controls.</summary>
+    ValueTask<string?> ReadTailAsync(TriggerScope scope, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    /// <summary>Reads a bounded page through the end captured at the start of this pass.</summary>
+    ValueTask<RuntimeKernelScheduleControlPage> ListAsync(TriggerScope scope, string? after, string through, int limit,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
 }
