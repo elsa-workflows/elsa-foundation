@@ -539,6 +539,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             RuntimeInputBindingSource.WorkflowRequest,
             workflowRequest: new RuntimeWorkflowRequestReference(workflowInputName));
 
+    private static readonly IPayloadSerializer DescriptorSerializer = SerializationServices.PayloadSerializer();
+
     private static ExecutableNode NewNode(
         string executableNodeId,
         Type activityType,
@@ -555,7 +557,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             descriptor: new RuntimeActivityDescriptor(
                 WellKnownRuntimeActivityConsumers.ClrActivity,
                 RuntimeActivityDescriptor.InitialSchemaVersion,
-                JsonSerializer.SerializeToElement(
+                // The activator reads the descriptor through the payload serializer, so write it with the same one.
+                DescriptorSerializer.SerializeToElement(
                     new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)))),
             inputBindings: CompleteInputBindings(contract, inputBindings),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
@@ -610,7 +613,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             activityType.FullName!,
             "1.0.0",
             descriptorType,
-            JsonSerializer.SerializeToElement(new ClrActivityDescriptor(alias)),
+            DescriptorSerializer.SerializeToElement(new ClrActivityDescriptor(alias)),
             inputs,
             new ActivityResultContract(
                 ValueType(resultType),
