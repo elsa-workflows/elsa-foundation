@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Kernel.Durable;
 using Kernel.Runtime;
 using Contract = Kernel.Foundation.Contracts;
@@ -142,6 +143,11 @@ internal static class QualifiedInlineRootCoreChecks
             var pressure = RootAdmissionPressure.CreateDefault();
             var leftName = ForPartition("left", 0);
             var rightName = ForPartition("right", 1);
+            var approved = Creator(pure).Start! with { Creation = null };
+            Check(bounded.TryPlaceQualifiedInlineStart("changed-input", approved, model.CaptureInlineMaterial(pure), null,
+                    pressure, target => Creator(pure, input: "{}", address: target)) is null &&
+                bounded.QueuedInlineRootCount == 0,
+                "placement cannot swap the input after the exact creator spec is validated");
             var left = Place(leftName, pure);
             var right = Place(rightName, pure);
             Check(left.Creator.Target.Partition == 0 && right.Creator.Target.Partition == 1 &&
@@ -178,16 +184,31 @@ internal static class QualifiedInlineRootCoreChecks
                 await SettleAsync(bounded, Queue(bounded, Creator(pure, input: MaximumInput()), pure)) ==
                     new InlineRootResult(InlineRootDisposition.WriteFree, InstanceStatus.Finished),
                 "reset clears all capture reservations before reacquisition");
+
+            var dormant = QueueDormantRoot();
+            Check(await SettleAsync(bounded, dormant.Receipt) == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Running) &&
+                store.Subscriptions.Any(subscription => subscription.Instance == dormant.Actor) && bounded.InboxCountOf(dormant.Actor) == 0,
+                "the promoted actor is dormant with its committed wait still active");
+            GC.Collect();
+            Check(!dormant.Input.TryGetTarget(out _), "the dormant actor does not retain its original creator body after promotion");
             return 0;
 
             static string ForPartition(string name, int partition) => InstanceRef.Spread(name, 2) == partition ? name : name + "1";
 
+            [MethodImpl(MethodImplOptions.NoInlining)]
+            (string Actor, Task<InlineRootResult> Receipt, WeakReference<string> Input) QueueDormantRoot()
+            {
+                var input = Creator(waiting).Payload!.PadRight(FoundationMetadataLimits.StartContentBytes);
+                var creator = Creator(waiting, input: input);
+                return (creator.Target.Id, Queue(bounded, creator, waiting), new WeakReference<string>(input));
+            }
+
             (Message Creator, Task<InlineRootResult> Receipt) Place(string name, Workflow selected, string? input = null)
             {
                 var material = model.CaptureInlineMaterial(selected);
-                var spec = Creator(selected, input: input).Start!;
+                var spec = Creator(selected, input: input).Start! with { Creation = null };
                 return bounded.TryPlaceQualifiedInlineStart(name, spec, material, null, pressure,
-                    target => Creator(selected, input: input, address: target)) ??
+                    target => Creator(selected, input: spec.Input, address: target)) ??
                     throw new InvalidOperationException("The owner could not place a qualified creator.");
             }
         }

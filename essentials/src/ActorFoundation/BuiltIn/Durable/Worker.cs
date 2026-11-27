@@ -1613,8 +1613,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (RootAdmissionPressure.PlaceInlineStart(name, eligible, pressure) is not { } partition) return null;
             var target = InstanceRef.In(partition, name);
             var creator = bind(target);
-            return creator.Target == target && QueueQualifiedInlineStart(creator, material, issuer) is { } receipt
-                ? (creator, receipt) : null;
+            // Binding adds the creation proof. It cannot substitute the prevalidated spec or its input.
+            if (creator.Target != target || creator.Start is not { } bound || !ReferenceEquals(bound.Input, start.Input) ||
+                (bound with { Creation = null }) != start)
+                return null;
+            return QueueQualifiedInlineStart(creator, material, issuer) is { } receipt ? (creator, receipt) : null;
         }
     }
 
@@ -1678,7 +1681,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (!_pendingInlineRoots.TryGetValue(actor, out var pending) || exactReceipt is not null && pending.Receipt != exactReceipt) return;
             _pendingInlineRoots.Remove(actor);
             _pendingInlineRootBytes -= pending.Bytes;
-            if (appliedSlot is not null) appliedSlot.Ambient = null;
+            if (appliedSlot is not null) (appliedSlot.Ambient, appliedSlot.Starting) = (null, null);
             pending.Receipt.TrySetResult(result);
         }
     }
