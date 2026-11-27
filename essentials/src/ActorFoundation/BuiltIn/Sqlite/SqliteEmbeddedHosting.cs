@@ -68,21 +68,23 @@ public static partial class SqliteEmbeddedHosting
     internal static Task<RuntimeNode> StartFoundationAsync(string databasePath, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
         CancellationToken cancellationToken = default, Action<Exception>? onFault = null, SqliteDirectRequests? requests = null,
-        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null)
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         RequireFoundationActorType(actor.Type);
+        if (auxiliaryActor is not null) ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
         return StartCoreAsync(databasePath, node, (store, terminalOutputLimit) => new ActorAdapter(
-                store.WorkerHeaders(store.BindSqliteWorkerNode(actor.Withholds)), actor, store.RootSelfIssuer,
+                store.WorkerHeaders(store.BindSqliteWorkerNode(ActorAdapter.RootWithholding(actor, auxiliaryActor))), actor, store.RootSelfIssuer,
                 rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true,
                 retentionWindow: retentionWindow,
-                rootTerminalOutputLimit: terminalOutputLimit),
-            actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests);
+                rootTerminalOutputLimit: terminalOutputLimit, auxiliaryActor: auxiliaryActor),
+            actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests,
+            hostsAuxiliaryActor: auxiliaryActor is not null);
     }
 
     private static async Task<RuntimeNode> StartCoreAsync(string databasePath, string node, Func<EfStore, int, IActorType> createActor,
         string? rootType, Action<string> endProcess, LoopOptions? options, bool fenceInBatch, CancellationToken cancellationToken,
-        Action<Exception>? onFault, SqliteDirectRequests? requests)
+        Action<Exception>? onFault, SqliteDirectRequests? requests, bool hostsAuxiliaryActor = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -109,6 +111,8 @@ public static partial class SqliteEmbeddedHosting
             await using (var db = Open())
             {
                 selfSends = db.UsesRootSelfProtocol;
+                if (hostsAuxiliaryActor && (!db.UsesRootScheduleInventory || !db.UsesRootTimedJobSettlement))
+                    throw new NotSupportedException("This SQLite root profile does not host an auxiliary actor.");
                 terminalOutputLimit = db.UsesRootTerminalOutput ? EfStore.RootContentBytes : 0;
                 if (shipped)
                 {

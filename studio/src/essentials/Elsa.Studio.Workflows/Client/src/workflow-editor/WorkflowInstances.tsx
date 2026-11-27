@@ -1953,7 +1953,11 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     if (execution) return labelForExecution(execution);
     if (event.executableNodeId && data?.executableGraph) {
       const facts = [...data.executableGraph.factsByNodeId.values()].find(item => item.executableNodeId === event.executableNodeId);
-      return facts?.presentation?.displayName ?? null;
+      if (facts) {
+        const pinnedCatalogItem = data.activityCatalog.find(item => item.activityVersionId === facts.catalogActivityVersionId);
+        return resolveActivityLabel(facts.presentation, pinnedCatalogItem ??
+          data.activityCatalog.find(item => item.activityTypeKey === facts.activityType), facts.activityType);
+      }
     }
     return null;
   };
@@ -2412,7 +2416,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
                   selectedEventId={historyLocation.selection?.kind === "event" ? historyLocation.selection.id : null}
                   selectedEvent={preparedHistoryEvent?.contextIdentity === runtimeValueContextId(context) && preparedHistoryEvent.workflowExecutionId === workflowExecutionId
                     ? preparedHistoryEvent.value.event : undefined}
-                  onSelectEvent={openHistoryEvent} labelForEvent={labelForHistoryEvent} enabled={runHistoryEnabled && timelineMode === "events"} />
+                  onSelectEvent={openHistoryEvent} labelForEvent={labelForHistoryEvent} onCommittedAdvance={refreshObservation}
+                  enabled={runHistoryEnabled && timelineMode === "events"} />
               </Suspense>
             )}
           </div>

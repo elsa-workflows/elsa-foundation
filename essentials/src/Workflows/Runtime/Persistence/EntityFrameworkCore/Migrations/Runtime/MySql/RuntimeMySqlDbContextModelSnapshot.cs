@@ -2105,6 +2105,120 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.ToTable("elsa_runtime_ingress_reservations", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeKernelScheduleControlEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("OwnerSlotHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("TenantKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "OwnerSlotHash")
+                        .HasDatabaseName("IX_KernelScheduleControl_Owner");
+
+                    b.HasIndex("ScopeKeyHash", "TenantKeyHash", "Id")
+                        .HasDatabaseName("IX_KernelScheduleControl_Tenant");
+
+                    b.ToTable("elsa_runtime_kernel_schedule_control", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeKernelScheduleOccurrenceEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<long>("AcceptedAtUtcTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ActorReference")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("ArtifactId")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("varchar(512)");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<long?>("RetiredAtUtcTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("TenantKey")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("TenantKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "RetiredAtUtcTicks", "ArtifactId")
+                        .HasDatabaseName("IX_KernelScheduleOccurrence_ArtifactPin");
+
+                    b.HasIndex("ScopeKeyHash", "TenantKeyHash", "ActorReference", "AcceptedAtUtcTicks", "Id")
+                        .HasDatabaseName("IX_KernelScheduleOccurrence_Pending");
+
+                    b.HasIndex("ScopeKeyHash", "TenantKeyHash", "RetiredAtUtcTicks", "AcceptedAtUtcTicks", "Id")
+                        .HasDatabaseName("IX_KernelScheduleOccurrence_Open");
+
+                    b.ToTable("elsa_runtime_kernel_schedule_occurrence", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeModelExecutionEntity", b =>
                 {
                     b.Property<string>("Id")

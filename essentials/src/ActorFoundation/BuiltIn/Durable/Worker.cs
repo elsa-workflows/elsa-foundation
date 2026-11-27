@@ -3500,6 +3500,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 (command.RootHeldReply || unit.Row?.FoundationDispatchHeader is not null ||
                     unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null })
                     ? qualified.Message : null,
+            FoundationRootRefusedInput = unit.FoundationRootRefusedInput,
             FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
                 unit.Consumed is [{ IsWorkerJobCompletion: true, Original: { } original } completed] &&
                 (completed.JobDeadline is null || _type.RootTimedJobPublicationClock is not null)

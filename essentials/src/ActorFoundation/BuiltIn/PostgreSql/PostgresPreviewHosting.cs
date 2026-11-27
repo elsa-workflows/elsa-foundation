@@ -282,7 +282,7 @@ public static class PostgresPreviewHosting
     internal static async Task<RuntimeNode> StartAsync(Func<KernelDb> create, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options, CancellationToken cancellationToken,
         Action<Exception>? onFault, IReplyTransport? replies, bool? fenceInBatch = null,
-        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null)
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, Contract.IActorType? auxiliaryActor = null)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -291,6 +291,7 @@ public static class PostgresPreviewHosting
         if (node.Contains('\0') || !FoundationMetadataLimits.FitsName(node))
             throw new ArgumentException("Invalid PostgreSQL node name.", nameof(node));
         PostgresRootAdmission.RequireActorType(actor.Type);
+        if (auxiliaryActor is not null) ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
 
         options ??= new LoopOptions();
         var millisecond = TimeSpan.FromMilliseconds(1);
@@ -307,6 +308,8 @@ public static class PostgresPreviewHosting
             nativeJobs = db.UsesRootJobProtocol;
             liveReplyRelay = db.RequiredFormat == StoreFormat.RootShipped || db.UsesRootPlaybackDescendants;
             selfSends = db.UsesRootSelfProtocol;
+            if (auxiliaryActor is not null && (!db.UsesRootScheduleInventory || !db.UsesRootTimedJobSettlement))
+                throw new NotSupportedException("This PostgreSQL root profile does not host an auxiliary actor.");
             terminalOutputLimit = db.UsesRootTerminalOutput ? EfStore.RootContentBytes : 0;
             if (!db.Database.IsNpgsql() || !(db.SupportsCorePreview || db.UsesRootReplyProtocol))
                 throw new NotSupportedException("Hosting requires a PostgreSQL Core Preview format.");
@@ -325,13 +328,13 @@ public static class PostgresPreviewHosting
         if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
         if (nativeJobs) await store.EnableRootJobsAsync(cancellationToken);
         await store.EnableRootChildrenAsync(cancellationToken);
-        var scope = store.BindWorkerNode(actor.Withholds);
+        var scope = store.BindWorkerNode(ActorAdapter.RootWithholding(actor, auxiliaryActor));
         await store.PrimeAdmissionPressureAsync(cancellationToken);
         var watchdog = new Watchdog(Defaults.Lease, endProcess);
         var watched = watchdog.Watch(store);
         var adapter = new ActorAdapter(store.WorkerHeaders(scope), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
             rootTimedJobClock: store.RootTimedJobSettlementEnabled ? store.ReadRootTimedJobPublicationTimeAsync : null,
-            rootHeldReplies: replies is not null, retentionWindow: retentionWindow, rootTerminalOutputLimit: terminalOutputLimit);
+            rootHeldReplies: replies is not null, retentionWindow: retentionWindow, rootTerminalOutputLimit: terminalOutputLimit, auxiliaryActor: auxiliaryActor);
         // A store error a drain retried is reported as a loop error of the node made below: counted, and reported once per
         // distinct error per window, so a drain the deadline kills shows why it made no progress.
         RuntimeNode? reporter = null;

@@ -18,6 +18,7 @@ public sealed partial class EfWorkflowActivationSwitch
         var store = new EfIngressReservationStore(_context, _accessContextAccessor);
         TriggerScope scope;
         IReadOnlyList<RuntimeIngressReservation> claims;
+        RuntimeKernelScheduleControl[] desired = [];
         if (slot.ActiveActivationId is { } activation)
         {
             var source = await _references.FindAsync(WorkflowActivationReferenceIdentity.Create(activation), ct)
@@ -31,6 +32,7 @@ public sealed partial class EfWorkflowActivationSwitch
                 .GroupBy(binding => (binding.StimulusType, binding.StimulusHash)).Select(group =>
                     new RuntimeIngressReservationDescriptor(group.Key.StimulusType, group.Key.StimulusHash, group.First().Metadata)).ToArray();
             claims = RuntimeIngressReservationRules.Prepare(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId, slot.Revision, slot.Revision, descriptors);
+            desired = EfRuntimeKernelScheduleControlStore.Describe(scope, slot, source, bindings);
             // Upgraded publication writers always compare semantics, including before standalone activation is finalized.
             foreach (var claim in claims)
                 if ((await RuntimeIngressReservationRules.ConflictingBindingsAsync(_bindings, claim, _reservationPolicies, ct, binding => binding.SlotId == slot.SlotId)).Any(binding => binding.SlotId != slot.SlotId))
@@ -45,6 +47,8 @@ public sealed partial class EfWorkflowActivationSwitch
             if (tenants.Length > 1) throw new InvalidDataException("A logical slot has conflicting reservation tenants.");
             scope = new(persistence, tenants.SingleOrDefault()); claims = [];
         }
-        await store.StageOwnerAsync(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId, claims, ct, _reservationPolicies);
+        var previous = await store.StageOwnerAsync(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId, claims, ct, _reservationPolicies);
+        if (desired.Length != 0 || previous.Any(claim => claim.StimulusType == RuntimeKernelScheduleOccurrence.ReservationType))
+            await new EfRuntimeKernelScheduleControlStore(_context, _accessContextAccessor).StageAsync(persistence, slot.SlotId, desired, ct);
     }
 }

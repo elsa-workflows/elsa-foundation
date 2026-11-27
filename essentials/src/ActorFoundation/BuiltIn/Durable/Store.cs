@@ -184,6 +184,7 @@ public sealed record TurnCommit(
     internal RootCreatorWitness? RootCreator { get; init; }
     // The qualified writer compares the exact envelope the owner dispatched with the locked occurrence.
     internal Message? FoundationRootOperator { get; init; }
+    internal Message? FoundationRootRefusedInput { get; init; }
     internal RootJobCompletion? FoundationRootJobCompletion { get; init; }
     internal IReadOnlyList<Message>? FoundationRootParkInputs { get; init; }
     internal IReadOnlySet<InboxKey>? FoundationSelfRecalls { get; init; }

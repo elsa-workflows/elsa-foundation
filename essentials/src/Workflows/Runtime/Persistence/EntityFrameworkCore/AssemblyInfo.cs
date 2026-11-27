@@ -97,6 +97,15 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(TriggerMutationEntity), nameof(TriggerMutationEntity.ContentJson))]
 [assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(RuntimeIngressReservationEntity), nameof(RuntimeIngressReservationEntity.ContentJson))]
 
+[assembly: EfSchemaFamily(RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion,
+    Entities = [typeof(RuntimeKernelScheduleOccurrenceEntity)], Upcasters = [typeof(RuntimeKernelScheduleOccurrenceV1Upcaster)])]
+[assembly: EfSchemaContent(RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily, typeof(RuntimeKernelScheduleOccurrenceEntity),
+    nameof(RuntimeKernelScheduleOccurrenceEntity.ContentJson))]
+[assembly: EfSchemaFamily(RuntimeKernelScheduleControlEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelScheduleControlEfModule.SchemaVersion,
+    Entities = [typeof(RuntimeKernelScheduleControlEntity)])]
+[assembly: EfSchemaContent(RuntimeKernelScheduleControlEfModule.SchemaFamily, typeof(RuntimeKernelScheduleControlEntity),
+    nameof(RuntimeKernelScheduleControlEntity.ContentJson))]
+
 [assembly: EfSchemaFamily(RuntimeHistoryEfModule.SchemaFamily, "Workflows.Runtime", RuntimeHistoryEfModule.SchemaVersion,
     Entities = [typeof(RuntimeHistoryHeadEntity), typeof(RuntimeHistoryEventEntity), typeof(RuntimeHistoryBookmarkEntity),
         typeof(RuntimeHistoryBookmarkCountEntity), typeof(RuntimeHistoryActivityEntity), typeof(RuntimeHistoryOccurrenceEntity),

@@ -44,7 +44,7 @@ public sealed partial class RuntimeModelMigrationTests
             }
             var after = await LegacyRows(connection);
             foreach (var (table, digest) in before) Assert.Equal(digest, after[table]);
-            Assert.Equal(before.Count + 16, after.Count);
+            Assert.Equal(before.Count + 18, after.Count);
             Assert.Contains("UserTasks", after.Keys); Assert.Contains("UserTaskForms", after.Keys);
             Assert.Contains(RuntimeModelStateEfModule.StateTable, after.Keys);
             Assert.Contains(RuntimeModelStateEfModule.InputTable, after.Keys);
@@ -52,8 +52,8 @@ public sealed partial class RuntimeModelMigrationTests
                 Assert.Contains(table, after.Keys);
             var upgradedHistory = await History(connection);
             Assert.Equal(history, upgradedHistory.Take(history.Length));
-            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "OutboxClaimDeliveredAt", "StandaloneTriggers", "RunHistoryTimeline", "TimerHistoryOwnership"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
-            Assert.Equal(history.Length + 7, upgradedHistory.Length);
+            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "OutboxClaimDeliveredAt", "StandaloneTriggers", "RunHistoryTimeline", "TimerHistoryOwnership",
+                "KernelScheduleOccurrences", "KernelScheduleControls", "KernelScheduleOccurrenceRetirement"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
             await using (var absentTimerHistory = connection.CreateCommand())
             {
                 absentTimerHistory.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeOperationalStateEfModule.DurableTimerTableName}\" WHERE HistoryRevision != 0 OR HistoryPending != 0 OR HistoryRetired != 0";
@@ -65,7 +65,8 @@ public sealed partial class RuntimeModelMigrationTests
             foreach (var table in new[] { RuntimeHistoryProjectionSchema.HeadTable, RuntimeHistoryProjectionSchema.EventTable,
                 RuntimeHistoryProjectionSchema.BookmarkTable, RuntimeHistoryProjectionSchema.BookmarkCountTable, RuntimeHistoryProjectionSchema.ActivityTable,
                 RuntimeHistoryOccurrenceEntityConfiguration.OccurrenceTable, RuntimeHistoryOccurrenceEntityConfiguration.MembershipTable,
-                RuntimeHistoryOccurrenceEntityConfiguration.CounterTable })
+                RuntimeHistoryOccurrenceEntityConfiguration.CounterTable, RuntimeKernelScheduleOccurrenceEfModule.TableName,
+                RuntimeKernelScheduleControlEfModule.TableName })
             {
                 Assert.Contains(table, after.Keys);
                 await using var historyRows = connection.CreateCommand(); historyRows.CommandText = $"SELECT COUNT(*) FROM \"{table}\"";
