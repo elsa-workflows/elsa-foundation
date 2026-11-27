@@ -96,7 +96,7 @@ internal enum RootCapabilities
     ParkArrivals = 1 << 19,
     ParkRecovery = 1 << 20,
     DueBacklog = 1 << 21,
-    Children = 1 << 22
+    Children = 1 << 23
 }
 
 internal static class RootProfiles

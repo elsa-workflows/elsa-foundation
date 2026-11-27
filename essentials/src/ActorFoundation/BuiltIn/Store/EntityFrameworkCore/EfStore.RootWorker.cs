@@ -48,7 +48,8 @@ public sealed partial class EfStore
         }
     }
 
-    internal sealed class RootHeaders(WorkerRoots roots, Func<string, CreationAddress, string>? childReference = null) : IRootDispatchHeaders
+    internal sealed class RootHeaders(WorkerRoots roots, Func<string, CreationAddress, string>? childReference = null,
+        Func<string, string>? childMessageHandle = null) : IRootDispatchHeaders
     {
         public (string Tenant, string Reference) Creator(Message creator)
         {
@@ -64,6 +65,7 @@ public sealed partial class EfStore
         }
 
         public bool SupportsChildren => childReference is not null;
+        public Func<string, string>? ChildMessageHandle => childMessageHandle;
         public string? ChildReference(string tenant, CreationAddress address) => childReference?.Invoke(tenant, address);
 
         public bool RequiresCommittedTerminal => roots.RequiresCommittedTerminal;
@@ -106,7 +108,7 @@ public sealed partial class EfStore
         return InstallWorkerScope(new(null, [], discover: true) { AuthoredWithholds = withholds, SettlesEndedMailbox = withholds is not null });
     }
 
-    internal RootHeaders WorkerHeaders(WorkerRoots roots) => new(roots, _rootChildReference);
+    internal RootHeaders WorkerHeaders(WorkerRoots roots) => new(roots, _rootChildReference, _rootChildMessageHandle);
 
     private bool AuthoredWithholding(WorkerRoot root, RootImage current) =>
         AuthoredWithholding(new(new(root.Reference), current.Model, root.Tenant, (Contract.ActorStatus)current.Status,
@@ -263,8 +265,9 @@ public sealed partial class EfStore
             if (terminal.Count != 1) return false;
             if (SettledJobs.Length > 0 && await db.Messages.AnyAsync(m => m.Target == Root.Actor && m.Partition == Root.Partition &&
                     m.InboxScope == RootTimedJobScope && SettledJobs.Contains(m.Id) && !m.Done, cancellationToken)) return false;
-            return await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys,
-                HeldOperator is null ? null : [HeldOperator], Issue, false, cancellationToken);
+            return (!db.UsesRootChildren || await CloseEndedChildRegistryAsync(db, Root, Keys, cancellationToken)) &&
+                await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys,
+                    HeldOperator is null ? null : [HeldOperator], Issue, false, cancellationToken);
         }
     }
 
@@ -405,7 +408,7 @@ public sealed partial class EfStore
     private static bool InputsMatch(WorkerRoot root, TurnCommit turn, bool jobs = false) =>
         turn.Done.All(k => k.Scope == InboxKey.FoundationOccurrenceScope && root.Owns(k)) &&
         turn.Consumed.All(k => (k.Scope == -1 || jobs && k.Scope > 0 ||
-            k.Scope == InboxKey.FoundationOccurrenceScope && k.Id.StartsWith(root.Reference + "/child/", StringComparison.Ordinal)) && root.Owns(k));
+            IsChildOccurrence(root, k)) && root.Owns(k));
 
     private static bool SameInputs(IEnumerable<Message> inputs, IEnumerable<InboxKey> expected)
     {
@@ -480,7 +483,8 @@ public sealed partial class EfStore
             turn.Consumed.Any(recalls.Contains) || turn.Sent.Any(m => recalls.Contains(m.InboxKey)))) throw RootShape();
         // A family that ends Faulted roots (timed-job settlement) commits a Faulted end from any turn, the first included.
         var timedFault = RootTimedJobSettlementEnabled && row.Status == InstanceStatus.Faulted;
-        var terminated = turn.FoundationRootOperator is { Kind: Kinds.Terminate } && row.Status == InstanceStatus.Cancelled;
+        var terminated = row.Status == InstanceStatus.Cancelled && (turn.FoundationRootOperator is { Kind: Kinds.Terminate } ||
+            _rootChildReference is not null && turn.Consumed is [var childInput] && IsChildOccurrence(root, childInput));
         if (row.Id != root.Actor ||
             row.Creation != 1 || !RootJobsEnabled && row.NextJobGeneration is not (null or 0) || row.StartIntent != root.Fingerprint || row.Revision != checked((turn.Expected ?? 0) + 1) ||
             row.Status is not (InstanceStatus.Running or InstanceStatus.Finished) && !timedFault && !terminated ||

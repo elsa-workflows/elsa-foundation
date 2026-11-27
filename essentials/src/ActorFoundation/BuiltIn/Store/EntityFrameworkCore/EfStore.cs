@@ -1033,7 +1033,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             }
             if (key.Match is null &&
                 (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) ||
-                    PostgresRootAdmission.IsStoredOperator(r.Start) || IsStoredRootChildNotice(r.Start) || key.Scope is RootSelfScope or RootJobScope or RootTimedJobScope))
+                    PostgresRootAdmission.IsStoredOperator(r.Start) || IsStoredRootChildNotice(r.Start) || IsStoredRootChildInput(r.Start) || key.Scope is RootSelfScope or RootJobScope or RootTimedJobScope))
                 throw new StoreException(Failure.Definite, "PostgreSQL public inputs require a qualified foundation owner.");
             return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo) { JobGeneration = r.JobGeneration!.Value }.WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);

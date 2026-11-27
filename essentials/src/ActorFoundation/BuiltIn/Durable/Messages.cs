@@ -115,6 +115,7 @@ public sealed record Message(
     internal (string Actor, string Tenant, string Reference)? FoundationRootBinding { get; init; }
     internal bool BindFoundationChild { get; init; }
     internal bool FoundationRootChildNotice { get; init; }
+    internal bool FoundationRootChildInput { get; init; }
     internal bool StoreStartInputOnce { get; init; }
     internal Message? StoredEnvelope { get; init; }
     internal EventMatch? ProjectedEvent { get; init; }

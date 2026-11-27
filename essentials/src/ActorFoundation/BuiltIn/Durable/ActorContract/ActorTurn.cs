@@ -104,14 +104,25 @@ internal sealed partial class ActorAdapter
             HeaderLimits.RequireKind(kind, nameof(kind));
             HeaderLimits.RequireContent(payload, nameof(payload));
             var address = target == Header.Ref ? new Durable.CreationAddress(_row.Id, _row.Creation)
-                : _stagedChildren.GetValueOrDefault(target) ?? Store.FoundationTarget(Header.Tenant, target.Id) ??
+                : _stagedChildren.GetValueOrDefault(target) ?? KnownTarget(target) ??
                   throw new ArgumentException("The actor reference was not found.", nameof(target));
             if (kind is Contract.Kinds.Start or Contract.Kinds.Event or Contract.Kinds.ChildFinished or Contract.Kinds.JobFinished)
                 throw new ArgumentException("The foundation issues this message kind.", nameof(kind));
             if (_issueSelf is not null && _issueSelf.Allows(dueAt) && target == Header.Ref)
                 return _turn.SendToSelf(_issueSelf.Handle, kind, payload, dueAt);
+            if (target != Header.Ref && _roots?.ChildMessageHandle is { } issue)
+            {
+                if (!_children.Contains(address) || dueAt is not null || !Durable.FoundationMetadataLimits.IsOrdinaryKind(kind))
+                    throw new NotSupportedException("This profile sends only immediate ordinary inputs to an attached child.");
+                return _turn.SendFromActor(issue, new(address.Id), address.Creation, kind, payload, dueAt, rootChild: true);
+            }
             return _turn.SendFromActor(Store, new(address.Id), address.Creation, kind, payload, dueAt);
         }
+
+        private Durable.CreationAddress? KnownTarget(Contract.ActorRef target) =>
+            _roots?.SupportsChildren == true
+                ? _children.FirstOrDefault(child => _roots.ChildReference(Header.Tenant, child) == target.Id)
+                : Store.FoundationTarget(Header.Tenant, target.Id);
 
         public void Recall(string id)
         {

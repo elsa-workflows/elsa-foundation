@@ -46,8 +46,8 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
 
     private ActorView View(BoundScope scope, EfStore.RootListItem row, long asOf)
     {
-        var header = new ActorHeader(new(row.Reference), row.Type, scope.Tenant, (ActorStatus)row.Status, row.ParkFault, null,
-            row.EndedAt, row.TypeData, row.Labels);
+        var header = new ActorHeader(new(row.Reference), row.Type, scope.Tenant, (ActorStatus)row.Status, row.ParkFault,
+            row.ParentReference is { } parent ? new ActorRef(parent) : null, row.EndedAt, row.TypeData, row.Labels);
         var selection = row switch
         {
             { SupportsSelection: true, Status: InstanceStatus.Running } =>

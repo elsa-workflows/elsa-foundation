@@ -44,6 +44,7 @@ public sealed partial class EfStore
                               ADD COLUMN IF NOT EXISTS "FoundationTerminalAt" bigint;
         CREATE OR REPLACE FUNCTION kernel_require_root_checkpoint_writer() RETURNS trigger LANGUAGE plpgsql AS $fn$
         BEGIN
+            /*terminal-child-registry*/
             /*lock-live-job-before-park*/
             IF TG_OP = 'UPDATE' AND /*checkpoint-write-allowed*/
             THEN RETURN NEW; END IF;
@@ -72,6 +73,15 @@ public sealed partial class EfStore
                     AND m."JobGeneration" = NEW."NextJobGeneration" - 1 AND {IsLiveRootJob("m.")}
                 ORDER BY m."Seq", m."Id" LIMIT 3 FOR UPDATE OF m;
             END IF;
+            """ + "\n" : "", StringComparison.Ordinal)
+        .Replace("    /*terminal-child-registry*/\n", db.UsesRootChildren ? """
+            IF TG_OP = 'UPDATE' AND COALESCE(OLD."FoundationTerminalRevision" = OLD."Revision", false)
+                AND NOT OLD."Retired" AND OLD."Children" IS NOT NULL AND
+                (to_jsonb(NEW) - 'Children') = (to_jsonb(OLD) - 'Children')
+                AND coalesce(NEW."Children"::jsonb, '[]'::jsonb) <@ OLD."Children"::jsonb
+                AND jsonb_array_length(coalesce(NEW."Children"::jsonb, '[]'::jsonb)) <
+                    jsonb_array_length(OLD."Children"::jsonb)
+            THEN RETURN NEW; END IF;
             """ + "\n" : "", StringComparison.Ordinal)
         .Replace("/*checkpoint-write-allowed*/", RootCheckpointWriteAllowed, StringComparison.Ordinal)
         .Replace("/*journal-write-refused*/", RootJournalWriteRefused, StringComparison.Ordinal)

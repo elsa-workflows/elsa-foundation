@@ -136,7 +136,7 @@ public sealed partial class EfStore
             DELETE FROM "Messages" WHERE "InboxScope" = {RootSelfScope} AND "Id" = ANY({consumed})
                  AND "Target" = {actor.Id} AND "Partition" = {home} AND NOT "Done" AND "EventMatch" IS NULL AND "KeepUntil" IS NULL
             """, cancellationToken) != consumed.Length) return false;
-        var notices = messages.Where(message => message.FoundationRootChildNotice).Select(message => message.InboxKey.Id).ToArray();
+        var notices = messages.Where(message => message.FoundationRootChildNotice || message.FoundationRootChildInput).Select(message => message.InboxKey.Id).ToArray();
         if (notices.Length > 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({notices})
                 AND "Target" = {actor.Id} AND "Partition" = {home} AND NOT "Done" AND "EventMatch" IS NULL AND "KeepUntil" IS NULL
@@ -159,6 +159,8 @@ public sealed partial class EfStore
             RootSelfScope => DecodeRootSelf(row, issue),
             InboxKey.FoundationOccurrenceScope when db.UsesRootChildren && IsStoredRootChildNotice(row.Start) =>
                 DecodeRootChildNotice(row, reference),
+            InboxKey.FoundationOccurrenceScope when db.UsesRootChildren && IsStoredRootChildInput(row.Start) =>
+                DecodeRootChildInput(row, reference),
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
                 ? db.UsesSqliteRootRuntime
                     ? PostgresRootAdmission.DecodeOperator(row, reference, terminations: true, retirements: true,
@@ -184,7 +186,9 @@ public sealed partial class EfStore
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
             new InstanceRef(current.Actor.Id).Partition != fence.Partition ||
             status is not (InstanceStatus.Running or InstanceStatus.Finished) &&
-                !((timedJob || RootTimedJobSettlementEnabled) && status == InstanceStatus.Faulted) && !(operatorTermination && status == InstanceStatus.Cancelled))
+                !((timedJob || RootTimedJobSettlementEnabled) && status == InstanceStatus.Faulted) &&
+                !(status == InstanceStatus.Cancelled && (operatorTermination ||
+                    _rootChildReference is not null && inputs is [{ FoundationRootChildInput: true }])))
             throw new ArgumentException("Invalid running root or target disposition.", nameof(current));
         if (status != InstanceStatus.Running && journal is null)
             throw new ArgumentException("A terminal public root requires its journal entry.", nameof(journal));

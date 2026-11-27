@@ -534,7 +534,12 @@ internal sealed partial class ActorAdapter : Durable.IActorType
                 result.Sent.Add(Durable.ParkDrainEnvelope.For(next, mark).Issue(next, checked(recovery.Serial + 1), expiryAt: expiry.At));
             return result;
         }
-        if (running && next.Parent is not null) result.Sent.Add(Notice(next, null, final: false));
+        if (running && next.Parent is not null)
+        {
+            var notice = Notice(next, null, final: false);
+            if (roots?.SupportsChildren == true) result.FoundationRootChildSends = [notice];
+            else result.Sent.Add(notice);
+        }
         return result;
     }
 

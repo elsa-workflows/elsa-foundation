@@ -34,7 +34,8 @@ public sealed partial class EfStore
             turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
             turn != new TurnCommit(root.Actor, row, turn.Expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed,
                 turn.Unsubscribed, turn.Journal, Unsubscribe: opening || repark, Held: turn.Held)
-                { OpensPark = opening, FoundationKept = kept, FoundationRootParkInputs = envelopes } ||
+                { OpensPark = opening, FoundationKept = kept, FoundationRootParkInputs = envelopes,
+                    FoundationRootChildSends = turn.FoundationRootChildSends } ||
             row.FoundationDispatchHeader is not { } header)
             throw RootShape();
 
@@ -51,9 +52,13 @@ public sealed partial class EfStore
             current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))
             throw RootShape();
 
+        var childEffects = turn.FoundationRootChildSends is null ? null :
+            PrepareRootChildEffects(root, row, turn.FoundationRootChildSends);
+        if (turn.FoundationRootChildSends is not null &&
+            (!opening || childEffects is not { Starts.Length: 0, Inputs.Length: 0, Notice: not null })) throw RootShape();
         var journal = turn.Journal is null ? null : new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal);
         return new(journal, new RootParkOpening(root, current.Revision, opening, reason, DurableKeyJson.Write(fault), envelopes, returned,
-            row.Suspended, current.Jobs, current.NextJobGeneration, row.Model));
+            row.Suspended, current.Jobs, current.NextJobGeneration, row.Model) { ChildEffects = childEffects });
     }
 
     private static TurnCommit WithoutOperators(TurnCommit turn)
@@ -84,6 +89,8 @@ public sealed partial class EfStore
         IReadOnlyList<Message> Inputs, string[] Returned, bool Suspended, string? Jobs, long? NextJobGeneration, string Model)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
+        internal RootChildEffects? ChildEffects { get; init; }
+
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             if (!db.UsesRootParkOpening || !Opening && !db.UsesRootParkArrivals) return false;
@@ -208,7 +215,8 @@ public sealed partial class EfStore
                 SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "Revision" = {JournalRevision} AND "FoundationParkRevision" = {openRevision}) AS "Value"
                 """).SingleAsync(cancellationToken)) return false;
-            return stored && (!db.UsesRootParkInspection || await db.Database.SqlQuery<bool>($"""
+            return stored && (ChildEffects is null || await ChildEffects.BindAsync(db, Root.Tenant, cancellationToken)) &&
+                (!db.UsesRootParkInspection || await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "FoundationActorList"
                     WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference}
                         AND "Status" = {(int)InstanceStatus.Faulted} AND "ParkAt" = {parkAt} AND "ParkFault" = {EncodedFault})

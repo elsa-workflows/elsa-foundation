@@ -5,8 +5,11 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     private Func<string, CreationAddress, string>? _rootChildReference;
+    private Func<string, string>? _rootChildMessageHandle;
     private const string RootChildNoticePrefix = "!kernel-child-notice/1:";
+    private const string RootChildInputPrefix = "!kernel-child-input/1:";
     private sealed record StoredChildNotice(string Id, string Payload);
+    private sealed record StoredChildInput(string Id, string Kind, string? Payload);
 
     internal async Task EnableRootChildrenAsync(CancellationToken token)
     {
@@ -16,11 +19,12 @@ public sealed partial class EfStore
         await RequireStoreVersionsAsync(db, token);
         var key = await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token);
         _rootChildReference = (tenant, address) => FoundationRootCreator.ReferenceFor(key, tenant, address);
+        _rootChildMessageHandle = seed => FoundationSelfSend.Handle(key, "child-" + seed);
     }
 
     private sealed record RootChildStart(string Reference, Message Creator);
 
-    private sealed record RootChildEffects(string? Children, RootChildStart[] Starts, Message? Notice)
+    private sealed record RootChildEffects(string? Children, RootChildStart[] Starts, Message[] Inputs, Message? Notice)
     {
         internal async Task<bool> BindAsync(KernelDb db, string tenant, CancellationToken token)
         {
@@ -41,12 +45,32 @@ public sealed partial class EfStore
                     SELECT "Creator", 0, "Actor", "Partition", {Kinds.Start}, 0, {payload}, {header}, {creator.Sender}, false, 0, 0, 0, 0 FROM birth
                     """, token) != 1) return false;
             }
+            foreach (var input in Inputs)
+            {
+                var storedInput = RootChildInputPrefix + DurableKeyJson.Write(new StoredChildInput(input.Id, input.Kind, input.Payload));
+                if (!RootAdmissionWire.FitsEnvelope(storedInput, null))
+                    throw new StoreException(Failure.Definite, "The child input exceeds its storage budget.");
+                // The child may still be a creator. A terminal or retired child no longer needs the input.
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Start","Sender","Done","Seen","Attempts","Trial","JobGeneration")
+                    SELECT {input.InboxKey.Id}, {InboxKey.FoundationOccurrenceScope}, b."Actor", b."Partition", {input.Kind}, 0,
+                        {storedInput}, {input.Sender}, false, 0, 0, 0, 0
+                    FROM "FoundationRootBirths" b
+                    LEFT JOIN "Instances" i ON i."Id" = b."Actor" AND i."Partition" = b."Partition" AND i."FoundationReference" = b."Reference"
+                    WHERE b."Tenant" = {tenant} AND b."Actor" = {input.Target.Id} AND b."Partition" = {input.Target.Partition}
+                        AND b."Creation" = {input.TargetCreation}
+                        AND (i."Parent" = {input.Sender} AND i."FoundationTerminalRevision" IS NULL AND NOT i."Retired"
+                            OR i."Id" IS NULL AND EXISTS (SELECT 1 FROM "Messages" creator
+                                WHERE creator."Id" = b."Creator" AND creator."Target" = b."Actor" AND creator."Partition" = b."Partition"
+                                    AND creator."Sender" = {input.Sender} AND creator."InboxScope" = 0 AND NOT creator."Done"))
+                    """, token);
+            }
             if (Notice is not { } notice) return true;
             var stored = RootChildNoticePrefix + DurableKeyJson.Write(new StoredChildNotice(notice.Id, notice.Payload!));
             if (!RootAdmissionWire.FitsEnvelope(stored, null))
                 throw new StoreException(Failure.Definite, "The child result exceeds its storage budget.");
             var target = notice.Target;
-            // A finalized parent has no model continuation to receive. A running or parked parent gets the exact notice.
+            // A finalized parent's registry still needs its final notice, even though the model has ended.
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Start","Sender","Done","Seen","Attempts","Trial","JobGeneration")
                 SELECT {notice.InboxKey.Id}, {InboxKey.FoundationOccurrenceScope}, b."Actor", b."Partition", {Kinds.ChildFinished}, 0,
@@ -54,7 +78,9 @@ public sealed partial class EfStore
                 FROM "FoundationRootBirths" b
                 JOIN "Instances" i ON i."Partition" = b."Partition" AND i."Id" = b."Actor" AND i."FoundationReference" = b."Reference"
                 WHERE b."Tenant" = {tenant} AND b."Actor" = {target.Id} AND b."Partition" = {target.Partition}
-                    AND b."Creation" = {notice.TargetCreation} AND i."FoundationTerminalRevision" IS NULL AND NOT i."Retired"
+                    AND b."Creation" = {notice.TargetCreation} AND NOT i."Retired"
+                    AND (i."FoundationTerminalRevision" IS NULL OR i."Children" IS NOT NULL
+                        AND {DurableKeyJson.Read<FoundationChildNotice>(notice.Payload!).Final})
                 """, token);
             return true;
         }
@@ -64,6 +90,7 @@ public sealed partial class EfStore
     {
         if (_rootChildReference is not { } reference) return null;
         var starts = new List<RootChildStart>();
+        var inputs = new List<Message>();
         Message? notice = null;
         foreach (var message in sends)
         {
@@ -78,17 +105,26 @@ public sealed partial class EfStore
                 starts.Add(new(reference(root.Tenant, child), (message with { StorageId = "root:" + child.Id, Payload = start.Input })
                     .WithInboxScope(0)));
             }
+            else if (message.FoundationRootChildInput)
+            {
+                if (!message.ActorAuthored || !FoundationSelfSend.IsHandle(message.Id) || !FoundationMetadataLimits.IsOrdinaryKind(message.Kind) ||
+                    message.Due is not null || message.TargetCreation != 1 || message.Sender != root.Actor || message.SenderCreation != 1 ||
+                    message.InboxKey != InboxKey.Issued(CreationProtocol.Origin(root.Actor, 1) + "#" + message.Id))
+                    throw RootShape();
+                var child = new CreationAddress(message.Target.Id, 1);
+                inputs.Add(message with { StorageId = ChildOccurrence(reference(root.Tenant, child), message.Id) });
+            }
             else if (message.Kind == Kinds.ChildFinished)
             {
                 if (notice is not null || row.Parent is null || row.Parent != message.Target.Id ||
                     message.TargetCreation != row.ParentCreation || message.Sender != row.Id || message.SenderCreation != row.Creation ||
                     message.Id != CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision) || message.Payload is null)
                     throw RootShape();
-                notice = message with { StorageId = ChildNoticeOccurrence(reference(root.Tenant, new(row.Parent, row.ParentCreation)), message.Id) };
+                notice = message with { StorageId = ChildOccurrence(reference(root.Tenant, new(row.Parent, row.ParentCreation)), message.Id) };
             }
             else throw RootShape();
         }
-        return new(row.Children, starts.ToArray(), notice);
+        return new(row.Children, starts.ToArray(), inputs.ToArray(), notice);
     }
 
     private static PreparedRoot WithRootChildEffects(PreparedRoot prepared, RootChildEffects? children, string? parent)
@@ -106,11 +142,62 @@ public sealed partial class EfStore
         };
     }
 
-    private static string ChildNoticeOccurrence(string parentReference, string notice) =>
-        parentReference + "/child/" + FoundationRootCreator.OperationDigest(notice);
+    private static async Task<bool> CloseEndedChildRegistryAsync(KernelDb db, WorkerRoot root, IReadOnlyList<InboxKey> keys,
+        CancellationToken token)
+    {
+        var ids = keys.Where(key => IsChildOccurrence(root, key)).Select(key => key.Id).ToArray();
+        if (ids.Length == 0) return true;
+        var actor = await db.Instances.FromSqlInterpolated($"""
+            SELECT i.* FROM "Instances" i
+            WHERE i."Id" = {root.Actor} AND i."Partition" = {root.Partition}
+                AND i."FoundationTenant" = {root.Tenant} AND i."FoundationReference" = {root.Reference}
+                AND NOT i."Retired" AND i."FoundationTerminalRevision" = i."Revision" FOR UPDATE
+            """).AsNoTracking().SingleOrDefaultAsync(token);
+        if (actor is null) return false;
+        if (actor.Children is null) return true;
+        var pending = await db.Messages.AsNoTracking().Where(row => row.Target == root.Actor && row.Partition == root.Partition &&
+            row.Kind == Kinds.ChildFinished && row.InboxScope == InboxKey.FoundationOccurrenceScope &&
+            !row.Done && row.EventMatch == null && ids.Contains(row.Id)).ToArrayAsync(token);
+        var registry = ChildRegistry.Read(actor.Children);
+        var prior = registry.Count;
+        foreach (var row in pending)
+        {
+            if (!IsStoredRootChildNotice(row.Start)) return false;
+            var envelope = DecodeRootChildNotice(row, root.Reference);
+            if (envelope.Read<FoundationChildNotice>().Final)
+                registry.Remove(new(envelope.Sender!, envelope.SenderCreation));
+        }
+        return registry.Count == prior || await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Instances" SET "Children" = {ChildRegistry.Write(registry)}
+            WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" = {actor.Revision}
+                AND "FoundationTenant" = {root.Tenant} AND "FoundationReference" = {root.Reference}
+                AND "Children" IS NOT DISTINCT FROM {actor.Children} AND NOT "Retired" AND "FoundationTerminalRevision" = "Revision"
+            """, token) == 1;
+    }
+
+    private static bool IsChildOccurrence(WorkerRoot root, InboxKey key) => key.Scope == InboxKey.FoundationOccurrenceScope &&
+        key.Id.StartsWith(root.Reference + "/child/", StringComparison.Ordinal);
+
+    private static string ChildOccurrence(string reference, string id) =>
+        reference + "/child/" + FoundationRootCreator.OperationDigest(id);
 
     private static string RootChildNoticePredicate(string alias) =>
-        $"""({alias}."Kind" = 'child-finished' AND COALESCE({alias}."Start", '') LIKE '{RootChildNoticePrefix}%')""";
+        $"""(COALESCE({alias}."Start", '') LIKE '{RootChildNoticePrefix}%' OR COALESCE({alias}."Start", '') LIKE '{RootChildInputPrefix}%')""";
+
+    private static bool IsStoredRootChildInput(string? header) =>
+        header?.StartsWith(RootChildInputPrefix, StringComparison.Ordinal) == true;
+
+    private static Message DecodeRootChildInput(MessageEntity row, string reference)
+    {
+        var stored = DurableKeyJson.Read<StoredChildInput>(row.Start![RootChildInputPrefix.Length..]);
+        if (row.InboxScope != InboxKey.FoundationOccurrenceScope || row.Kind != stored.Kind ||
+            !FoundationMetadataLimits.IsOrdinaryKind(stored.Kind) || !FoundationSelfSend.IsHandle(stored.Id) ||
+            row.Sender is null || row.JobGeneration != 0 || row.Due != 0 || row.KeepUntil is not null ||
+            row.ReplyTo is not null || row.Payload is not null || row.Id != ChildOccurrence(reference, stored.Id))
+            throw new StoreException(Failure.Definite, "Invalid PostgreSQL child input.");
+        return (new Message(stored.Id, new(row.Target), stored.Kind, stored.Payload, row.Sender, TargetCreation: 1, SenderCreation: 1)
+            { ActorAuthored = true, FoundationRootChildInput = true, StorageId = row.Id }).WithInboxScope(InboxKey.FoundationOccurrenceScope);
+    }
 
     private static bool IsStoredRootChildNotice(string? header) =>
         header?.StartsWith(RootChildNoticePrefix, StringComparison.Ordinal) == true;
@@ -123,7 +210,7 @@ public sealed partial class EfStore
             row.JobGeneration != 0 || row.Due != 0 || row.KeepUntil is not null || row.ReplyTo is not null || row.Payload is not null ||
             notice.Creation != 1 || notice.Status is not (InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled) ||
             !notice.Final && notice.Status != InstanceStatus.Faulted || !CreationProtocol.IsTerminalHandle(stored.Id, CreationProtocol.Origin(notice.Child, 1)) ||
-            row.Id != ChildNoticeOccurrence(reference, stored.Id))
+            row.Id != ChildOccurrence(reference, stored.Id))
             throw new StoreException(Failure.Definite, "Invalid PostgreSQL child notice.");
         return (new Message(stored.Id, new(row.Target), Kinds.ChildFinished, stored.Payload,
             row.Sender, TargetCreation: 1, SenderCreation: 1) { FoundationRootChildNotice = true, StorageId = row.Id })

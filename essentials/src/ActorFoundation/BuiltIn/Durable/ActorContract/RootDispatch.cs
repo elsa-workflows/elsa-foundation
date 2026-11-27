@@ -10,6 +10,7 @@ internal interface IRootDispatchHeaders
     (string Tenant, string Reference) Creator(Durable.Message creator);
     Durable.FoundationDispatchHeader Checkpoint(Durable.InstanceRow row);
     bool SupportsChildren => false;
+    Func<string, string>? ChildMessageHandle => null;
     string? ChildReference(string tenant, Durable.CreationAddress address) => null;
     bool RequiresCommittedTerminal { get; }
     bool KeepsParkInputs { get; }
@@ -309,6 +310,13 @@ internal sealed partial class ActorAdapter
                 if (ChildNoticeError(input.Row, message) is { } error) return error;
                 continue;
             }
+            if (roots?.SupportsChildren == true && message.FoundationRootChildInput && delivery.Durable)
+            {
+                if (input.Row is not { Parent: not null } child || message.Target.Id != child.Id ||
+                    message.TargetCreation != child.Creation || message.Sender != child.Parent ||
+                    message.SenderCreation != child.ParentCreation) return "WrongParent";
+                continue;
+            }
             var childStart = roots?.SupportsChildren == true && message.BindFoundationChild && message.Start is not null;
             if (!delivery.Durable || message.Target.Id != input.Actor || message.TargetCreation != 1 ||
                 message.Sender is not null && !childStart || message.EventMatch is not null ||
@@ -350,8 +358,9 @@ internal sealed partial class ActorAdapter
             outcome.Consumed is [{ Durable: true, Message: var result }] &&
             Durable.RootJobTicket.IsRecordedResult(result, previous) &&
             result.Read<Durable.JobFinished>() is { Error: "timeout", Result: null };
-        var terminated = input.Kind == Durable.Kinds.Terminate && IsRootControl(input) && previous is not null &&
-            outcome.Row is { Status: Durable.InstanceStatus.Cancelled };
+        var terminated = previous is not null && outcome.Row is { Status: Durable.InstanceStatus.Cancelled } &&
+            (input.Kind == Durable.Kinds.Terminate && IsRootControl(input) ||
+                roots?.SupportsChildren == true && input.FoundationRootChildInput);
         // A profile whose state family ends Faulted roots (timed-job settlement) commits a model's Faulted end, as the
         // in-memory reference does: its held callers are answered with that end (Worker.Release).
         var faulted = rootTimedJobSettlement && !outcome.OpensPark && outcome.Row is { Status: Durable.InstanceStatus.Faulted };
@@ -381,7 +390,7 @@ internal sealed partial class ActorAdapter
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
 
         static bool IsChildEffect(Durable.Message message) =>
-            message.BindFoundationChild || message.Kind == Durable.Kinds.ChildFinished;
+            message.BindFoundationChild || message.FoundationRootChildInput || message.Kind == Durable.Kinds.ChildFinished;
 
         bool SupportedSend(Durable.Message message, Durable.InstanceRow row) =>
             rootJobHandle is not null && message.HasIssuedTicket && Durable.RootJobTicket.Read(message, row.Id, row.Model) is not null ||
