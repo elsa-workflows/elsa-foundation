@@ -45,7 +45,6 @@ internal static class ShippedScheduleOwnerModeChecks
         else
         {
             options.UseSqlite(new SqliteConnectionStringBuilder { DataSource = path!, ForeignKeys = true, Pooling = false }.ToString());
-            await SqliteEmbeddedHosting.InstallShippedAsync(path!, token);
         }
 
         var workflow = Wf.Workflow("ordinary-root", Wf.WriteLine("step", "ordinary root finished"));
@@ -53,6 +52,7 @@ internal static class ShippedScheduleOwnerModeChecks
         var schedule = new ScheduleActor(null, new AcceptsOffers());
         var start = WorkflowActorType.Start(NativeExecutionModel.Start(workflow));
         var sqlite = path is null ? null : new SqliteEmbeddedFoundation(path, node, primary.Type);
+        if (sqlite is not null) await sqlite.InstallShippedAsync(token);
         var requests = postgres ? PostgresPreviewHosting.CreateRequests(Open, node, primary.Type) : null;
         var pg = postgres ? await PostgresPreviewHosting.OpenFoundationAsync(Open, primary.Type, requests, cancellationToken: token) : null;
         Contract.IIngress ingress = pg is null ? await sqlite!.OpenIngressAsync(token) : pg;
