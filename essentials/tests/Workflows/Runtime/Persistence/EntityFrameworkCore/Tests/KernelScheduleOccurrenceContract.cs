@@ -1,0 +1,116 @@
+using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Configuration;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Executables;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
+using Xunit;
+
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
+
+internal static class KernelScheduleOccurrenceContract
+{
+    private static readonly DateTimeOffset Now = new(2026, 10, 26, 1, 0, 0, TimeSpan.Zero);
+
+    internal static async Task RunAsync(Func<RuntimeDbContext> open)
+    {
+        const string slotName = "Blue";
+        const string scheduleKey = "schedule:material-producer:node";
+        const string node = "node";
+        await using var context = open();
+        var tenant = $"schedule-{Guid.NewGuid():N}";
+        var scope = new TriggerScope(new PersistenceScope(tenant), tenant);
+        var clock = new FakeTimeProvider(Now);
+        var access = new Accessor(scope.Persistence);
+        var artifacts = new EfWorkflowExecutableStore(context, access);
+        var references = new EfWorkflowExecutableSourceReferenceStore(context, access, new Codec(), clock);
+        var bindings = new EfWorkflowTriggerBindingStore(context, access);
+        var authority = new EfWorkflowActivationAuthority(context, access);
+        var activationSwitch = new EfWorkflowActivationSwitch(authority, bindings, references, access, clock);
+        var store = Store(context, access, clock);
+        var first = new WorkflowExecutableIdentity("first-material", "material-producer", "material-v1", "1", "first-hash");
+        var second = first with { ArtifactId = "replacement-material", DefinitionVersionId = "material-v2", ArtifactHash = "replacement-hash" };
+        foreach (var identity in new[] { first, second })
+            await artifacts.SaveAsync(new(identity,
+                new ExecutableNode(node, "authored", "test/activity", "1.0.0",
+                    new RuntimeActivityDescriptor("test", "1.0.0", JsonSerializer.SerializeToElement(new { })),
+                    new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
+                new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(),
+                incidentStrategy: IncidentStrategyBuiltIns.FaultReference));
+
+        async Task PublishAsync(WorkflowExecutableIdentity identity, string activation, long expectedRevision)
+        {
+            var slot = WorkflowActivationSlotIdentity.Create(identity.DefinitionId, slotName);
+            var key = RuntimeKernelScheduleOccurrence.ReservationKey(scheduleKey);
+            await references.SaveAsync(new(WorkflowActivationReferenceIdentity.Create(activation), identity.ArtifactId,
+                "definition", identity.DefinitionId, identity.ArtifactVersion, identity.DefinitionId, identity.DefinitionVersionId,
+                identity.ArtifactVersion, Now, Now, WorkflowExecutableReferenceScope.Published,
+                ActivationId: activation, SlotId: slot, TenantId: scope.TenantId));
+            await bindings.PrepareActivationAsync(activation,
+                [new(WorkflowTriggerBinding.BuildId(activation, identity.ArtifactId, node, key), identity.ArtifactId,
+                    identity.DefinitionId, identity.ArtifactVersion, identity.ArtifactHash, node,
+                    RuntimeKernelScheduleOccurrence.ReservationType, key, null, new Dictionary<string, string>(), Now,
+                    activation, slot, TriggerCardinality.ReservationOnly, false)]);
+            Assert.True((await activationSwitch.TryActivateAsync(new(identity.DefinitionId, slotName, activation,
+                WorkflowActivationSource.Publishing, expectedRevision, Now))).Succeeded);
+        }
+
+        var original = new RuntimeKernelScheduleOccurrence(scope, scheduleKey, new string('A', 64), slotName,
+            "schedule-a", 1, 1, "timer-a", Now, Now.AddMinutes(1), first, node, "{\"version\":1}");
+        await PublishAsync(first, original.ActivationId, 0);
+        Assert.False(await store.TryAcceptAsync(original with { Due = Now.AddSeconds(1) }));
+        Assert.True(await store.TryAcceptAsync(original));
+        await PublishAsync(second, "schedule-b", 1);
+        Assert.False(await store.TryAcceptAsync(original with { ArmGeneration = 2, TimerDeliveryId = "stale-timer" }));
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.TryAcceptAsync(original with { PinnedStart = "{\"version\":2}" }).AsTask());
+
+        var replacement = original with { ActivationId = "schedule-b", PublicationRevision = 2, ArmGeneration = 2,
+            TimerDeliveryId = "timer-b", Executable = second, PinnedStart = "{\"version\":2}" };
+        Assert.True(await store.TryAcceptAsync(replacement));
+        Assert.True((await activationSwitch.TryDeactivateAsync(new(first.DefinitionId, slotName,
+            WorkflowActivationSource.Publishing, 2, Now), [])).Succeeded);
+        clock.Advance(TimeSpan.FromMinutes(2));
+        Assert.True(await store.TryAcceptAsync(original));
+        Assert.False(await store.TryAcceptAsync(replacement with { ArmGeneration = 3, TimerDeliveryId = "expired-timer" }));
+        await using var restarted = open();
+        var relay = Store(restarted, access, clock);
+        var pageOne = Assert.Single(await relay.ListPendingAsync(scope, null, 1));
+        var pageTwo = Assert.Single(await relay.ListPendingAsync(scope, pageOne.Cursor, 1));
+        Assert.Empty(await relay.ListPendingAsync(scope, pageTwo.Cursor, 1));
+        Assert.Contains(original, new[] { pageOne.Occurrence, pageTwo.Occurrence });
+        Assert.Contains(replacement, new[] { pageOne.Occurrence, pageTwo.Occurrence });
+        var actorReference = new string('B', 64);
+        await relay.MarkMaterializedAsync(original, actorReference);
+        await relay.MarkMaterializedAsync(original, actorReference);
+        await Assert.ThrowsAsync<InvalidDataException>(() => relay.MarkMaterializedAsync(original, new string('C', 64)).AsTask());
+        Assert.Equal(replacement, Assert.Single(await relay.ListPendingAsync(scope, null, 2)).Occurrence);
+        Assert.True(await store.TryAcceptAsync(original));
+        Assert.Equal(new[] { first.ArtifactId, second.ArtifactId }, (await relay.ListPinnedExecutableArtifactIdsAsync()).Order(StringComparer.Ordinal));
+        Assert.Equal(2, await context.KernelScheduleOccurrences.CountAsync());
+    }
+
+    private static EfRuntimeKernelScheduleOccurrenceStore Store(RuntimeDbContext context, Accessor access, TimeProvider clock)
+    {
+        var artifacts = new EfWorkflowExecutableStore(context, access);
+        var leases = new WorkflowExecutableRootWriteLeaseManager(artifacts,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions()), clock);
+        return new(context, access, artifacts, new EfWorkflowExecutableSourceReferenceStore(context, access, new Codec(), clock),
+            new EfWorkflowTriggerBindingStore(context, access), leases, clock);
+    }
+
+    private sealed class Accessor(PersistenceScope scope) : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(scope);
+    }
+
+    private sealed class Codec : IRuntimeRecoveryContinuationCodec
+    {
+        public string Encode(string purpose, ReadOnlySpan<byte> payload) => Convert.ToBase64String(payload);
+        public byte[] Decode(string purpose, string token) => Convert.FromBase64String(token);
+    }
+}

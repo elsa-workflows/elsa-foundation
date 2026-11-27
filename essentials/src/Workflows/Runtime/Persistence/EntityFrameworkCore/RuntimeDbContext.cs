@@ -19,6 +19,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
     internal DbSet<TriggerSubscriptionEntity> TriggerSubscriptions => Set<TriggerSubscriptionEntity>();
     internal DbSet<TriggerMutationEntity> TriggerMutations => Set<TriggerMutationEntity>();
     internal DbSet<RuntimeIngressReservationEntity> IngressReservations => Set<RuntimeIngressReservationEntity>();
+    internal DbSet<RuntimeKernelScheduleOccurrenceEntity> KernelScheduleOccurrences => Set<RuntimeKernelScheduleOccurrenceEntity>();
 
     public DbSet<BookmarkStateEntity> Bookmarks => Set<BookmarkStateEntity>();
     public DbSet<WorkflowExecutableEntity> WorkflowExecutables => Set<WorkflowExecutableEntity>();
@@ -63,6 +64,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new TriggerSubscriptionConfiguration());
         modelBuilder.ApplyConfiguration(new TriggerMutationConfiguration());
         modelBuilder.ApplyConfiguration(new RuntimeIngressReservationConfiguration());
+        modelBuilder.ApplyConfiguration(new RuntimeKernelScheduleOccurrenceEntityConfiguration());
         modelBuilder.ApplyConfiguration(new BookmarkStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableCoordinationEntityConfiguration());
