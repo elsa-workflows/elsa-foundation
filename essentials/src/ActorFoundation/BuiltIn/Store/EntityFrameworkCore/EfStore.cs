@@ -192,6 +192,10 @@ public class KernelDb : DbContext
     internal bool UsesRootScheduleLineage => Has(RootCapabilities.ScheduleLineage);
     internal bool UsesRootPreparedStarts => Has(RootCapabilities.PreparedStarts);
     internal bool UsesRootDirectTestRuns => Has(RootCapabilities.DirectTestRuns);
+    internal bool UsesRootEphemeralTestRuns => RequiredFormat.SupportsIsolatedInlineQualification || UsesRootHeldEphemeralHttpTestRuns;
+    internal bool UsesRootAttachedTestRuns => RequiredFormat.SupportsAttachedTestRunQualification || UsesRootHeldEphemeralHttpTestRuns;
+    internal bool UsesRootHeldEphemeralHttpTestRuns => RequiredFormat == StoreFormat.RootHeldEphemeralHttpQualification ||
+        Has(RootCapabilities.HeldEphemeralHttpTestRuns);
     internal bool UsesRootInlinePromotion => Has(RootCapabilities.InlinePromotion);
     internal uint? ScheduleLineageCommitMarker { get; set; }
     internal bool SeparateRootFormatLock =>

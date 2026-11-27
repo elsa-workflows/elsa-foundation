@@ -220,6 +220,14 @@ public static partial class PostgresPreviewHosting
         return db.UsesRootInlinePromotion;
     }
 
+    /// <summary>Whether the selected profile takes held Ephemeral HTTP for an isolated Test Run.</summary>
+    public static bool TakesHeldEphemeralHttpTestRuns(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootHeldEphemeralHttpTestRuns;
+    }
+
     /// <summary>Whether the selected format takes durable actor-owned timers, as used by the Native Delay activity.</summary>
     public static bool TakesTimers(Func<KernelDb> create)
     {

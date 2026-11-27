@@ -158,7 +158,9 @@ internal abstract class KernelShellStorage
         internal override bool TakesDirectTestRuns => profile == Profile.DirectTestRuns || TakesEphemeralTestRuns;
         internal override bool TakesEphemeralTestRuns => profile == Profile.EphemeralTestRuns || TakesAttachedTestRuns;
         internal override bool TakesAttachedTestRuns => profile == Profile.AttachedTestRuns || TakesHeldEphemeralHttp;
-        internal override bool TakesHeldEphemeralHttp => profile == Profile.HeldEphemeralHttp;
+        internal override bool TakesHeldEphemeralHttp => profile == Profile.Shipped
+            ? SqliteEmbeddedHosting.TakesHeldEphemeralHttpTestRuns
+            : profile == Profile.HeldEphemeralHttp;
         internal override bool TakesEventStarts => profile == Profile.Shipped
             ? SqliteEmbeddedHosting.TakesEventStarts
             : profile == Profile.EventStarts || RetainsEventStartReceipts;
@@ -265,7 +267,7 @@ internal abstract class KernelShellStorage
         internal override bool TakesDirectTestRuns => _profile == Profile.DirectTestRuns || TakesEphemeralTestRuns;
         internal override bool TakesEphemeralTestRuns => _profile == Profile.EphemeralTestRuns || TakesAttachedTestRuns;
         internal override bool TakesAttachedTestRuns => _profile == Profile.AttachedTestRuns || TakesHeldEphemeralHttp;
-        internal override bool TakesHeldEphemeralHttp => _profile == Profile.HeldEphemeralHttp;
+        internal override bool TakesHeldEphemeralHttp => PostgresPreviewHosting.TakesHeldEphemeralHttpTestRuns(OpenDatabase);
         internal override bool TakesEventStarts => PostgresPreviewHosting.TakesEventStarts(OpenDatabase);
         internal override bool RetainsEventStartReceipts => PostgresPreviewHosting.RetainsEventStartReceipts(OpenDatabase);
         internal override bool TakesOrderedEventScan => PostgresPreviewHosting.TakesOrderedEventScan(OpenDatabase);

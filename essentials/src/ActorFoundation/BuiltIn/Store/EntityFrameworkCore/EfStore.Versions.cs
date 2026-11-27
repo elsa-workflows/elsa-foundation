@@ -149,6 +149,7 @@ internal enum RootCapabilities : long
     EventStartScan = 1L << 39,
     PublicEventStarts = 1L << 40,
     DirectTestRuns = 1L << 41,
+    HeldEphemeralHttpTestRuns = 1L << 46,
     KeyedStarts = 1L << 43,
     PublicEventHost = 1L << 44
 }
@@ -281,6 +282,8 @@ internal static class RootProfiles
         [RootCapabilities.PublicEventStarts] = RootCapabilities.EventStartScan,
         [RootCapabilities.PublicEventHost] = RootCapabilities.PublicEventStarts,
         [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
+        [RootCapabilities.HeldEphemeralHttpTestRuns] = RootCapabilities.DirectTestRuns | RootCapabilities.InlinePromotion |
+            RootCapabilities.ReplyProtocol | RootCapabilities.Children,
         [RootCapabilities.KeyedStarts] = RootCapabilities.PreparedStarts | RootCapabilities.Retirement | RootCapabilities.Children,
         [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
         [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,

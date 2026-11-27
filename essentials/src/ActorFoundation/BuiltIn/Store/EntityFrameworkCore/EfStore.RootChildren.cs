@@ -9,7 +9,7 @@ public sealed partial class EfStore
 {
     internal ProtectChildBirthsAsync? ProtectChildBirths { get; init; }
     private byte[]? _rootChildIssuanceKey;
-    private bool _qualifiesAttachedTestRuns;
+    private bool _takesAttachedTestRuns;
     private Func<string, CreationAddress, string>? _rootChildReference;
     private Func<string, string>? _rootChildMessageHandle;
     private const string RootChildNoticePrefix = "!kernel-child-notice/1:";
@@ -39,7 +39,7 @@ public sealed partial class EfStore
             key = await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token);
         }
         if (ProtectChildBirths is not null) _rootChildIssuanceKey = key;
-        _qualifiesAttachedTestRuns = db.RequiredFormat.SupportsAttachedTestRunQualification;
+        _takesAttachedTestRuns = db.UsesRootAttachedTestRuns;
         _rootChildReference = (tenant, address) => FoundationRootCreator.ReferenceFor(key, tenant, address);
         _rootChildMessageHandle = seed => FoundationSelfSend.Handle(key, "child-" + seed);
     }
@@ -230,7 +230,7 @@ public sealed partial class EfStore
             return new PendingChildBirth(parent.Tenant, new Contract.ActorRef(child.Reference), spec.Model, spec.Definition,
                 FoundationChildIssuance.Issue(key, birth, fence))
             {
-                Parent = _qualifiesAttachedTestRuns && spec.Parent is not null && row.FoundationDispatchHeader is { } header
+                Parent = _takesAttachedTestRuns && spec.Parent is not null && row.FoundationDispatchHeader is { } header
                     ? new(new(parent.Reference), row.Model, header.Header.TypeData, IsRoot: row.Parent is null)
                     : null
             };

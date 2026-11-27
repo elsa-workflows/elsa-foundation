@@ -37,6 +37,9 @@ public static partial class SqliteEmbeddedHosting
     /// <summary>Whether the shipped Embedded profile supports inline promotion.</summary>
     public static bool TakesInlineStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.InlinePromotion);
 
+    /// <summary>Whether the shipped format takes held Ephemeral HTTP for an isolated Test Run.</summary>
+    public static bool TakesHeldEphemeralHttpTestRuns => RootProfiles.Shipped.HasFlag(RootCapabilities.HeldEphemeralHttpTestRuns);
+
     /// <summary>Whether the shipped Embedded profile supports Event-triggered starts.</summary>
     public static bool TakesEventStarts => RootProfiles.Shipped.HasFlag(RootCapabilities.EventStarts);
 
