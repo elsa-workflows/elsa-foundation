@@ -34,7 +34,8 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore
         var scopeKey = Encode(scope.Value);
         var pins = OpenPins(context, scope).Where(row => row.ScopeKey == scopeKey);
         var state = await ScanState(scope).AsNoTracking().SingleOrDefaultAsync(cancellationToken);
-        var position = state?.Through is not null ? Position(state, scope) : await OpenScanAsync(scope, pins, cancellationToken);
+        if (state is not null) RequireScanScope(state, scope);
+        var position = state?.Through is not null ? Position(state) : await OpenScanAsync(scope, pins, cancellationToken);
         if (position is null) return null;
 
         var eligible = pins.Where(row => row.InsertionOrdinal <= position.Through);
@@ -76,13 +77,13 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore
         {
             await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
             var state = await ScanState(scope).SingleOrDefaultAsync(token);
+            if (state is not null) RequireScanScope(state, scope);
             if (state?.Through is not null)
             {
-                var current = Position(state, scope);
+                var current = Position(state);
                 await context.RollbackAndClearAsync(transaction);
                 return current;
             }
-            if (state is not null) RequireScanScope(state, scope);
 
             if (!await pins.AnyAsync(token))
             {
@@ -99,7 +100,7 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore
             state.Pass = Guid.NewGuid();
             state.Through = state.LastOrdinal;
             state.SchemaVersion = WriteScanVersion(state.SchemaVersion);
-            var position = Position(state, scope);
+            var position = Position(state);
             return await context.TryCommitAndClearAsync(transaction, Writes, operation, token) is { } conflict
                 ? EfWriteAttempt<ScanPosition?>.Retry(conflict) : position;
         }, error => throw new InvalidOperationException("The executable pin scan changed concurrently.", error), token);
@@ -118,17 +119,16 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore
 
     private static void RequireScanScope(RuntimeKernelExecutablePinScanEntity state, PersistenceScope scope)
     {
-        if (state.ScopeKeyHash != Hash(scope.Value) || state.ScopeKey != Encode(scope.Value) || state.LastOrdinal < 0 ||
-            EfSchemaVersion.NotReadable(RuntimeKernelExecutablePinEfModule.Chain, state.SchemaVersion))
+        EfSchemaVersion.EnsureReadable(RuntimeKernelExecutablePinEfModule.Chain, state.SchemaVersion);
+        if (state.ScopeKeyHash != Hash(scope.Value) || state.ScopeKey != Encode(scope.Value) || state.LastOrdinal < 0)
             throw InvalidScan();
     }
 
     private string WriteScanVersion(string current) => RuntimeSchemaWriteVersion.For(context, RuntimeKernelExecutablePinEfModule.SchemaFamily,
         RuntimeKernelExecutablePinEfModule.SchemaVersion, current);
 
-    private static ScanPosition Position(RuntimeKernelExecutablePinScanEntity state, PersistenceScope scope)
+    private static ScanPosition Position(RuntimeKernelExecutablePinScanEntity state)
     {
-        RequireScanScope(state, scope);
         if (state.Pass == Guid.Empty || state.Through is not { } through || through < 0 || through > state.LastOrdinal ||
             state.AfterOrdinal < 0 || state.AfterOrdinal > through || state.AfterId is null && state.AfterOrdinal != 0 ||
             state.AfterId is { } after && (after.Length != 64 || after.AsSpan().IndexOfAnyExcept("0123456789ABCDEF") >= 0))
