@@ -212,8 +212,9 @@ public static partial class SqliteEmbeddedHosting
         return OperatingSystem.IsWindows() ? ResolveWindowsPath(path) : ResolveUnixPath(path);
     }
 
-    private static FileLease AcquireFile(string databasePath, SqliteDirectRequests? requests = null) =>
-        AcquireResolvedFile(ResolveFilePath(databasePath), forRuntime: false, requests, out _)!;
+    private static FileLease AcquireFile(string databasePath, SqliteDirectRequests? requests = null,
+        CancellationToken cancellationToken = default) =>
+        AcquireResolvedFile(ResolveFilePath(databasePath), forRuntime: false, requests, cancellationToken, out _)!;
 
     private static async Task<FileLease> AcquireRuntimeFileAsync(string databasePath, SqliteDirectRequests? requests,
         CancellationToken cancellationToken)
@@ -222,17 +223,20 @@ public static partial class SqliteEmbeddedHosting
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var lease = AcquireResolvedFile(path, forRuntime: true, requests, out var retiredReplies);
+            var lease = AcquireResolvedFile(path, forRuntime: true, requests, cancellationToken, out var retiredReplies);
             if (lease is not null) return lease;
             await retiredReplies!.WaitAsync(cancellationToken);
         }
     }
 
-    private static FileLease? AcquireResolvedFile(string path, bool forRuntime, SqliteDirectRequests? requests, out Task? retiredReplies)
+    private static FileLease? AcquireResolvedFile(string path, bool forRuntime, SqliteDirectRequests? requests,
+        CancellationToken cancellationToken, out Task? retiredReplies)
     {
         retiredReplies = null;
         lock (FileGate)
         {
+            // A canceled write that has yet to take a lease must not recreate a retired reply edge.
+            cancellationToken.ThrowIfCancellationRequested();
             if (!ActiveFiles.TryGetValue(path, out var file))
             {
                 var identity = ReadLinuxIdentity(path);

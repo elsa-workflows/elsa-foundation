@@ -157,6 +157,11 @@ internal static partial class SqliteHostLifetimeChecks
         Require(!interrupted.IsCompleted, "installation waits for a reply lease left by the stopped owner");
         cancelInstall.Cancel();
         await RequireCancellationAsync(interrupted, cancelInstall.Token, token);
+        await ExpectFoundationFailureAsync<OperationCanceledException>(() =>
+        {
+            using var canceledReply = oldRequests.AcquireReplyLease(cancelInstall.Token);
+            return Task.CompletedTask;
+        }, "a canceled request cannot prolong the retired reply edge");
 
         var install = SqliteEmbeddedHosting.InstallShippedAsync(path, token);
         var nextRequests = SqliteEmbeddedHosting.CreateRequests(path, "reply-successor", FoundationKind);
