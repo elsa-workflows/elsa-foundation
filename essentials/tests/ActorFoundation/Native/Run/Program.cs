@@ -43,6 +43,8 @@ if (args is ["root-admission-pressure", var pressureProvider and ("postgres" or 
     return await RootAdmissionPressureChecks.RunAsync(pressureProvider == "postgres", pressureFence == "in-batch");
 if (args is ["shipped-delay-recovery", var delayProvider and ("postgres" or "sqlite"), var delayFence and ("checked" or "in-batch")])
     return await ShippedDelayRecoveryChecks.RunAsync(delayProvider == "postgres", delayFence == "in-batch");
+if (args is ["root-sequenced-journal", var journalProvider and ("postgres" or "sqlite"), var journalFence and ("checked" or "in-batch")])
+    return await ShippedDelayRecoveryChecks.RunAsync(journalProvider == "postgres", journalFence == "in-batch", sequencedJournal: true);
 if (args is ["pg-root-operators", "admit"])
     return await PostgresRootOperatorChecks.RunAsync(null);
 if (args is ["pg-root-operators", var defaultOperatorPhase and ("read" or "resume"), var operatorA, var operatorB, var operatorC])

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using Elsa.ActorFoundation.TestSupport;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
@@ -21,11 +22,12 @@ internal static class ShippedDelayRecoveryChecks
     private const string TerminalDefinition = "authored-far-future-delay";
     private const string Fault = "park-delay-probe";
     private const string Immediate = "pending-metadata";
+    private const string Oversized = "record-large-journal-entry";
     private const int NativeDelay = 10_000;
     private const int FlowDelay = 4_000;
     private const int FarFutureDelay = 120_000;
 
-    internal static async Task<int> RunAsync(bool postgres, bool inBatch)
+    internal static async Task<int> RunAsync(bool postgres, bool inBatch, bool sequencedJournal = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var token = timeout.Token;
@@ -39,8 +41,10 @@ internal static class ShippedDelayRecoveryChecks
                     throw new InvalidOperationException("Use an empty dedicated PostgreSQL database."));
             else options.UseSqlite(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true }.ConnectionString);
             var definitions = new SqliteAdmissionDefinitions();
-            KernelDb Open() => postgres ? PostgresPreviewHosting.CreateShippedContext(options.Options)
-                : KernelDb.ForSqliteRootRuntime(options.Options, definitions);
+            StoreFormat? qualification = sequencedJournal ? StoreFormat.RootSequencedJournalQualification : null;
+            KernelDb Open() => postgres ? sequencedJournal ? KernelDb.ForPostgresRootSequencedJournalQualification(options.Options)
+                    : PostgresPreviewHosting.CreateShippedContext(options.Options)
+                : KernelDb.ForSqliteRootRuntime(options.Options, definitions, qualification);
 
             var cold = new EfStore(Open, postgres);
             if (postgres)
@@ -50,7 +54,7 @@ internal static class ShippedDelayRecoveryChecks
                 await cold.CreateAsync(1);
                 await cold.InstallPreviewRootSchemaAsync(token);
             }
-            else await SqliteEmbeddedHosting.InstallShippedAsync(path, token);
+            else await SqliteEmbeddedHosting.InstallShippedFileAsync(path, token, qualification);
 
             var scope = EmbeddedTenant.Bind("shipped-delay");
             bool Authorize(Contract.BoundScope caller, Contract.ActorRef _, string kind) =>
@@ -66,8 +70,9 @@ internal static class ShippedDelayRecoveryChecks
             else
             {
                 ingress = await SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(path, PublicActor.ActorType,
-                    Authorize, cancellationToken: token);
-                reads = SqliteEmbeddedHosting.CreateFoundationReads(path);
+                    Authorize, SqliteEmbeddedHosting.CreateRequests(path, "delay-caller", PublicActor.ActorType,
+                        qualificationFormat: qualification), token);
+                reads = SqliteEmbeddedHosting.CreateFoundationReads(path, qualificationFormat: qualification);
             }
 
             var capabilities = new KernelHostCapabilities(Schedules: false,
@@ -96,6 +101,7 @@ internal static class ShippedDelayRecoveryChecks
                 "the shipped capabilities serve Native and mapped Flowchart Delay with no schedule-actor dependency");
 
             var runtime = new WorkflowRuntime(ingress, reads);
+            var runs = new KernelRuns(scope, _ => ValueTask.FromResult(reads));
             var timers = new ConcurrentQueue<(Contract.ActorRef Actor, string Id, long Now)>();
             var failures = new ConcurrentQueue<string>();
             var loop = new LoopOptions
@@ -105,7 +111,10 @@ internal static class ShippedDelayRecoveryChecks
             };
             await using var db = Open();
             var marker = await db.StoreVersions.AsNoTracking().SingleAsync(row => row.Id == StoreVersionEntity.MarkerId, token);
-            Check(marker.Format == StoreFormat.RootShipped, "the journey runs on the widened shipped marker");
+            Check(marker.Format == (qualification ?? StoreFormat.RootShipped), "the journey verifies its exact store marker");
+            Check(await runs.SupportsSequencedJournalAsync(token) == sequencedJournal,
+                "the optional reader is available only on the sequenced journal profile");
+            var sequencedPrefixes = new Dictionary<Contract.ActorRef, Contract.ActorSequencedJournalPage>();
             Contract.ActorRef nativeRoot, flowRoot;
             Contract.Page<Contract.JournalEntry> nativePrefix, flowPrefix;
             DelayWait nativeWait, flowWait;
@@ -127,6 +136,11 @@ internal static class ShippedDelayRecoveryChecks
                     Check(prefix.Items.Count > 0 && prefix.Items.GroupBy(entry => entry.Revision).All(commit =>
                         commit.Select(entry => entry.CommitOrdinal).SequenceEqual(Enumerable.Range(0, commit.Count()).Select(ordinal => (int?)ordinal))),
                         "the journal exposes stable per-commit entry ordinals for the authored workflow");
+                }
+                if (sequencedJournal)
+                {
+                    await CheckSequencedStartAsync(nativeRoot, nativePrefix);
+                    await CheckSequencedStartAsync(flowRoot, flowPrefix);
                 }
                 var idle = await reads.TailAsync(scope, nativeRoot, nativePrefix.JournalCatchUpToken, token);
                 Check(idle is { Items.Count: 0, Next: null, JournalCatchUpToken: not null } &&
@@ -181,12 +195,57 @@ internal static class ShippedDelayRecoveryChecks
                     caughtUp.Items.All(entry => entry.Revision > prefix.JournalHeadRevision) &&
                     caughtUp.Items.Any(entry => entry.Revision == result.Revision),
                     "the earlier bookmark reads only newer committed entries across owner replacement");
+                if (sequencedJournal)
+                {
+                    var initial = sequencedPrefixes[actor];
+                    var pinned = await runs.ReadSequencedJournalAsync(actor, 1, initial.UpperSequence, 500, token);
+                    Check(pinned is not null && pinned.UpperSequence == initial.UpperSequence &&
+                        pinned.LastRecordedAt == initial.LastRecordedAt &&
+                        pinned.Items.Select(item => item.Entry).SequenceEqual(prefix.Items.Skip(1).Select(item => item.Entry)),
+                        "appending Park and completion keeps the earlier window pinned through the within-commit split");
+                    var fresh = await runs.ReadSequencedJournalAsync(actor, initial.UpperSequence, null, 500, token);
+                    Check(fresh is not null && fresh.ScannedThroughSequence == fresh.UpperSequence &&
+                        fresh.Items.Select(item => (item.Revision, item.Entry)).SequenceEqual(caughtUp.Items.Select(item => (item.Revision, (string?)item.Entry))) &&
+                        fresh.Items.Select(item => item.Sequence).SequenceEqual(Enumerable.Range(1, fresh.Items.Count)
+                            .Select(index => initial.UpperSequence + index)),
+                        "an earlier upper bound catches up with dense run-local sequences after ownership replacement");
+                }
             }
             await CheckTerminationAsync();
+            if (sequencedJournal) await CheckOversizedAsync();
             var retaining = await AdmitAsync(TerminalDefinition, "retain-immediate-at-end");
             var retainingTimer = await WaitingAsync(retaining, FarFutureDelay);
             await successor.StopAsync(token);
+            if (sequencedJournal)
+            {
+                // Model an existing retained journal prefix when the new projector starts tracking commits.
+                Check(await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    DELETE FROM "FoundationSequencedJournal" WHERE "Actor" = {retainingTimer.Actor}
+                    """, token) == 1, "the old-prefix witness retains a real earlier commit without its segment");
+                var old = await runs.ReadSequencedJournalAsync(retaining, 0, null, 1, token);
+                Check(old is { Items.Count: 0, UpperSequence: 0, RetainedFromSequence: 0, CapturedFromStart: false, LastRecordedAt: null } &&
+                    (await reads.TailAsync(scope, retaining, cancellationToken: token)).Items.Count > 0,
+                    "an unsequenced old prefix remains in the raw journal but cannot masquerade as standard coverage");
+            }
             await CheckRetainsImmediateAsync(retaining, retainingTimer);
+            if (sequencedJournal)
+            {
+                var newer = await runs.ReadSequencedJournalAsync(retaining, 0, null, 1, token);
+                Check(newer is { Items: [{ Sequence: 1, Revision: > 1 }], CapturedFromStart: false, LastRecordedAt: > 0 },
+                    "a newly sequenced suffix starts a stable range with partial coverage");
+                var refused = false;
+                try
+                {
+                    if (postgres)
+                    {
+                        var ordinary = new EfStore(() => PostgresPreviewHosting.CreateShippedContext(options.Options), postgres: true);
+                        await ordinary.InstallPreviewRootSchemaAsync(token);
+                    }
+                    else await SqliteEmbeddedHosting.InstallShippedAsync(path, token);
+                }
+                catch (StoreFormatException) { refused = true; }
+                Check(refused, "the ordinary shipped install refuses the private sequenced journal store");
+            }
             Check(failures.IsEmpty, "the retained provider owners stop cleanly");
             return 0;
 
@@ -199,7 +258,35 @@ internal static class ShippedDelayRecoveryChecks
                     ? await PostgresPreviewHosting.StartAsync(Open, node, actor, failures.Enqueue, loop, token, Faulted,
                         (IReplyTransport)PostgresPreviewHosting.CreateRequests(Open, node, PublicActor.ActorType), fenceInBatch: inBatch)
                     : await SqliteEmbeddedHosting.StartFoundationAsync(path, node, actor, failures.Enqueue, loop, inBatch,
-                        token, Faulted, SqliteEmbeddedHosting.CreateRequests(path, node, PublicActor.ActorType));
+                        token, Faulted, SqliteEmbeddedHosting.CreateRequests(path, node, PublicActor.ActorType,
+                            qualificationFormat: qualification));
+            }
+
+            async Task CheckSequencedStartAsync(Contract.ActorRef actor, Contract.Page<Contract.JournalEntry> raw)
+            {
+                var page = await runs.ReadSequencedJournalAsync(actor, 0, null, 1, token);
+                Check(page is { CapturedFromStart: true, RetainedFromSequence: 1, ScannedThroughSequence: 1,
+                        LastRecordedAt: > 0, Items: [{ Sequence: 1, CommitOrdinal: 0, RecordedAt: > 0 }] } &&
+                    page.UpperSequence == raw.Items.Count && page.Items[0].Entry == raw.Items[0].Entry,
+                    "each authored run starts its own stable sequence and a one-entry page keeps the same-snapshot head");
+                sequencedPrefixes.Add(actor, page!);
+                Check(await ((Contract.IActorSequencedJournalReads)reads).ReadSequencedJournalAsync(
+                    ContractScopes.Bind("other-tenant"), actor, 0, null, 1, token) is null,
+                    "the sequenced journal is scoped to the exact tenant");
+            }
+
+            async Task CheckOversizedAsync()
+            {
+                var actor = await AdmitAsync(TerminalDefinition, "oversized-journal");
+                await WaitingAsync(actor, FarFutureDelay);
+                var first = (await runs.ReadSequencedJournalAsync(actor, 0, null, 1, token))!;
+                Check(await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "large-entry", Oversized, cancellationToken: token)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted }, "the fixture admits an oversized journal body");
+                var after = await UntilAsync(async () =>
+                    await runs.ReadSequencedJournalAsync(actor, first.UpperSequence, null, 1, token) is { Items.Count: 1 } page ? page : null);
+                Check(after.Items is [{ Entry: null, CommitOrdinal: 0 }] && after.UpperSequence == first.UpperSequence + 1 &&
+                    after.ScannedThroughSequence == after.UpperSequence,
+                    "the bounded source advances through the oversized commit without loading its body");
             }
 
             async Task<Contract.ActorRef> AdmitAsync(string definition, string? operation = null)
@@ -240,6 +327,11 @@ internal static class ShippedDelayRecoveryChecks
                 var retiredTail = await reads.TailAsync(scope, plain, endBookmark, token);
                 Check(retiredTail is { Items.Count: 0, JournalHeadRevision: null, JournalCatchUpToken: null },
                     "a bookmark cannot make a retired run's journal appear live");
+                if (sequencedJournal)
+                    Check(await runs.ReadSequencedJournalAsync(plain, 1, 1, 1, token) is null &&
+                        !await db.Database.SqlQuery<bool>($"""
+                            SELECT EXISTS(SELECT 1 FROM "FoundationSequencedJournal" WHERE "Actor" = {ended.Actor.Id}) AS "Value"
+                            """).SingleAsync(token), "retirement removes the actor's sequenced ranges atomically");
 
                 var runningCompound = (await reads.GetAsync(scope, compound, token))!;
                 Check(await runtime.TerminateThenDeleteAsync(scope, "terminate-and-delete-delay", runningCompound, token)
@@ -387,6 +479,11 @@ internal static class ShippedDelayRecoveryChecks
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken token)
         {
             if (turn.Inbox.Any(input => input.Kind == Fault)) throw new InvalidOperationException(Fault);
+            if (turn.Inbox.Any(input => input.Kind == Oversized))
+            {
+                turn.Record(new string('x', 300 * 1024));
+                return ValueTask.CompletedTask;
+            }
             foreach (var timer in turn.Inbox.Where(input => input.Kind == NativeKinds.Timer && input.Sender == turn.Header.Ref))
                 timers.Enqueue((turn.Header.Ref, timer.Id, turn.Now));
             return actor.TurnAsync(turn, token);
