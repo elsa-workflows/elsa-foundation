@@ -253,8 +253,10 @@ the user:
   workflows answer under `/workflows/http/`. The host's README (`apps/Elsa.Migration.Host/README.md` in the clone)
   has more, including signing in and connecting Studio.
 - **Changing a migrated workflow** on the host: change the Elsa 3 definition and run the assessment again, so the
-  migrated files and the report stay in step. The converted workflow keeps its version number, so delete the host's
-  `data/` folder before restarting it, or the host keeps the version it loaded first.
+  migrated files and the report stay in step. The converted definition keeps its version number, so delete the host's
+  `data/` folder before restarting it. Otherwise a changed workflow keeps the version the host loaded first, and a
+  changed reusable workflow (exported as an activity) makes the host refuse to start: the same activity version now
+  has different content.
 - This local setup is a temporary development setup, not the production go-live. The go-live comes with an Elsa 3
   migration app profile once Elsa 4's distribution channels are decided, and this guide will be updated then.
 - Moving the clone to another commit means running the assessment again before trying the result.
