@@ -13,10 +13,11 @@ namespace Kernel.Native.Run;
 internal static partial class KernelAuthoredEventChecks
 {
     private const string ReplyTopic = "reply-topic";
+    private const string SharedRecipientTopic = "shared-recipient-topic";
     private const string LocalReplyNode = "event-local";
     private const string RemoteReplyNode = "event-remote";
 
-    private sealed record EventTurn(Contract.ActorRef Actor, object? Ambient, int Inputs);
+    private sealed record EventTurn(Contract.ActorRef Actor, object? Ambient, int Inputs, string? Wait);
 
     private sealed class EventTurns
     {
@@ -24,6 +25,8 @@ internal static partial class KernelAuthoredEventChecks
         internal readonly TaskCompletionSource EarlyTurnEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource ReleaseEarlyTurn = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource LocalFanoutEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly TaskCompletionSource SecondWaitEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly TaskCompletionSource ReleaseSecondWait = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     internal static async Task<int> RunPublicEventRepliesAsync(string provider, bool inBatch)
@@ -42,7 +45,7 @@ internal static partial class KernelAuthoredEventChecks
             var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(model.Type, "live", "arm")),
                 "arm", Contract.Kinds.Start, null, cancellationToken: token);
             var live = started.Actor ?? throw new InvalidOperationException("The live Event waiter was refused.");
-            await WaitForReplySubscriptionsAsync(open, scope, 1, token);
+            await WaitForReplySubscriptionsAsync(open, scope, ReplyTopic, 1, token);
 
             var firstObject = new object();
             var secondObject = new object();
@@ -103,6 +106,30 @@ internal static partial class KernelAuthoredEventChecks
             await UntilReplyAsync(() => Task.FromResult(turns.Observed.ContainsKey(("event", "creators-event", LocalReplyNode))), token);
             Check(creatorReply is { Channel: "creator", Error: null } && HasAmbient("start", "creator", creatorAmbient) &&
                 HasAmbient("event", "creators-event", null), "a captured Event's creator can answer the admitted request itself");
+
+            var armedShared = await ingress.SendAsync(scope, new Contract.Target.Ref(live), "arm-shared", "arm-shared", null,
+                cancellationToken: token);
+            Check(armedShared.Outcome == Contract.AdmissionOutcome.Accepted, "the same exact actor arms two named waits");
+            await WaitForReplySubscriptionsAsync(open, scope, SharedRecipientTopic, 2, token);
+            var sharedAmbient = new object();
+            var shared = RequestAsync(SharedRecipientTopic, "shared-recipient", "shared", sharedAmbient);
+            string? winningWait;
+            try
+            {
+                await turns.SecondWaitEntered.Task.WaitAsync(token);
+                var firstWait = turns.Observed[("first-wait", "shared-recipient", LocalReplyNode)];
+                var secondWait = turns.Observed[("second-wait", "shared-recipient", LocalReplyNode)];
+                Check(!shared.IsCompleted && firstWait.Actor == live && secondWait.Actor == live &&
+                    firstWait.Wait is "left" or "right" && secondWait.Wait is "left" or "right" && firstWait.Wait != secondWait.Wait &&
+                    firstWait.Inputs == 1 && secondWait.Inputs == 1 &&
+                    ReferenceEquals(firstWait.Ambient, sharedAmbient) && secondWait.Ambient is null,
+                    "two waits on the same actor consume Ambient only on its first turn while the request is still open");
+                winningWait = secondWait.Wait;
+            }
+            finally { turns.ReleaseSecondWait.TrySetResult(); }
+            var sharedReply = await shared;
+            Check(sharedReply is { Channel: "shared", Error: null } && sharedReply.Item?.ToString() == winningWait,
+                "the later wait can still answer the held Event");
 
             var absent = await RequestAsync("no-waiter", "unmatched-id", null, new object());
             Check(absent is { Channel: null, Error: "no waiter" }, "Ambient leaves a no-waiter request without a publication");
@@ -181,7 +208,7 @@ internal static partial class KernelAuthoredEventChecks
             var armed = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "arm", "arm", null, cancellationToken: token);
             Check(armed.Outcome == Contract.AdmissionOutcome.Accepted, "the selected owner's actor is armed");
         }
-        await WaitForReplySubscriptionsAsync(Open, scope, 2, token);
+        await WaitForReplySubscriptionsAsync(Open, scope, ReplyTopic, 2, token);
         var ambient = new object();
         var reply = await ingress.RequestAsync(scope, new Contract.Target.Event(ReplyTopic), "remote-wins", "ignored", "remote",
             null, new(ambient, await localEdge.ReadClockAsync(token) + 12_000), token);
@@ -205,12 +232,12 @@ internal static partial class KernelAuthoredEventChecks
             await RootEventAdmission.ReadPostgresClockAsync(db, token);
     }
 
-    private static Task WaitForReplySubscriptionsAsync(Func<KernelDb> open, Contract.BoundScope scope, int count,
-        CancellationToken token) =>
+    private static Task WaitForReplySubscriptionsAsync(Func<KernelDb> open, Contract.BoundScope scope, string topic,
+        int count, CancellationToken token) =>
         UntilReplyAsync(async () =>
         {
             await using var db = open();
-            return await db.Subscriptions.CountAsync(wait => wait.Key == scope.Tenant + "_" + ReplyTopic, token) == count;
+            return await db.Subscriptions.CountAsync(wait => wait.Key == scope.Tenant + "_" + topic, token) == count;
         }, token);
 
     private static async Task UntilReplyAsync(Func<Task<bool>> condition, CancellationToken token)
@@ -235,6 +262,11 @@ internal static partial class KernelAuthoredEventChecks
                     if (message.Payload == "creator") turn.Reply(message, "creator", "started");
                 }
                 if (message.Kind == "arm") turn.Subscribe(ReplyTopic, "live");
+                if (message.Kind == "arm-shared")
+                {
+                    turn.Subscribe(SharedRecipientTopic, "left");
+                    turn.Subscribe(SharedRecipientTopic, "right");
+                }
                 if (message.Event is not { } received) continue;
                 Observe("event", received.Id);
                 turn.SetHeader(received.Id, turn.Header.Labels);
@@ -257,6 +289,15 @@ internal static partial class KernelAuthoredEventChecks
                         turn.Reply(message, "reply", received.Id);
                         turn.End(Contract.ActorStatus.Finished);
                         break;
+                    case "shared" when turn.Header.TypeData != received.Id:
+                        Observe("first-wait", received.Id, received.Wait);
+                        break;
+                    case "shared":
+                        Observe("second-wait", received.Id, received.Wait);
+                        turns.SecondWaitEntered.TrySetResult();
+                        await turns.ReleaseSecondWait.Task.WaitAsync(TimeSpan.FromSeconds(8));
+                        turn.Reply(message, "shared", received.Wait);
+                        break;
                     case "remote" when node == LocalReplyNode:
                         turns.LocalFanoutEntered.TrySetResult();
                         break;
@@ -267,8 +308,8 @@ internal static partial class KernelAuthoredEventChecks
                 }
             }
 
-            void Observe(string kind, string id) =>
-                turns.Observed.TryAdd((kind, id, node), new(turn.Header.Ref, turn.Ambient, turn.Inbox.Count));
+            void Observe(string kind, string id, string? wait = null) =>
+                turns.Observed.TryAdd((kind, id, node), new(turn.Header.Ref, turn.Ambient, turn.Inbox.Count, wait));
         }
 
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();

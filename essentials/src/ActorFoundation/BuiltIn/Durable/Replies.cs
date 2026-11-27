@@ -77,20 +77,22 @@ public sealed class Request(string id, long deadline)
     internal bool AnyOutput { get; init; }
     internal string? Tenant { get; init; }
     internal object? Ambient { get; init; }
-    internal HashSet<InboxKey> AmbientGiven { get; } = [];
+    private readonly HashSet<InboxKey> _ambientDeliveries = [];
+    private HashSet<int>? _ambientEventRecipients;
     private TaskCompletionSource<Reply>? _completion;
-    private sealed record EventRecipients(int Live, int Total);
-
-    private EventRecipients? _eventRecipients;
+    private int _eventRecipientCount;
     private HashSet<int>? _endedEventRecipients;
     private Reply? _firstEventEnd;
 
-    internal int EventRecipientCount => Volatile.Read(ref _eventRecipients)?.Total ?? 0;
-    internal bool StartsEventRecipient(int recipient) => Volatile.Read(ref _eventRecipients) is { } recipients &&
-        recipient >= recipients.Live && recipient < recipients.Total;
+    internal int EventRecipientCount => Volatile.Read(ref _eventRecipientCount);
 
-    // Event admission binds the exact recipients before its transaction makes any of the aliases deliverable.
-    internal void ExpectEventRecipients(int live, int starts) => Volatile.Write(ref _eventRecipients, new(live, live + starts));
+    // Event admission binds the exact count before its transaction makes any of the aliases deliverable.
+    internal void ExpectEventRecipients(int count) => Volatile.Write(ref _eventRecipientCount, count);
+
+    // All of an Event recipient's turns share one local Ambient claim.
+    internal bool ClaimAmbient(InboxKey delivery, int? eventRecipient) => eventRecipient is { } index
+        ? (_ambientEventRecipients ??= []).Add(index)
+        : _ambientDeliveries.Add(delivery);
 
     internal string EventRegistration(int recipient) =>
         FormattableString.Invariant($"{Registration}{EventRecipientSeparator}{recipient}");
@@ -197,10 +199,7 @@ public sealed class Requests
             if (FindReplyRecipient(route.Request, out var recipient) is not { Done: false, Ambient: { } ambient } request ||
                 request.Tenant != tenant || request.Deadline != route.Deadline)
                 return null;
-            // A start subscription's creator and its companion Event share one first turn for Ambient.
-            if (recipient is { } index && request.StartsEventRecipient(index))
-                delivery = new(route.Request, InboxKey.EventCreatorScope);
-            return request.AmbientGiven.Add(delivery) ? ambient : null;
+            return request.ClaimAmbient(delivery, recipient) ? ambient : null;
         }
     }
 

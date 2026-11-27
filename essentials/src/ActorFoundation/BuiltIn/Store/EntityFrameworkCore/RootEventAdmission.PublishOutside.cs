@@ -100,7 +100,7 @@ internal static partial class RootEventAdmission
         {
             var committedAt = bind is null ? await SqliteRootAdmission.ReadClockAsync(db, token) : await ReadPostgresClockAsync(db, token);
             if (!caller.IsOpen || caller.Caller.Deadline <= committedAt) throw new HeldPublicEventExpired();
-            caller.Caller.ExpectEventRecipients(liveRecipients, startCount);
+            caller.Caller.ExpectEventRecipients(liveRecipients + startCount);
         }
         return (HeldRootAdmission.Accepted, new(key, id, incarnation, Contract.PublicationStatus.Matched));
 
