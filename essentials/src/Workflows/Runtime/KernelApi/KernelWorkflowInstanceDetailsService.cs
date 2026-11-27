@@ -1,10 +1,12 @@
 using System.Collections.Frozen;
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Inspection.Core;
+using Kernel.Foundation.Contracts;
 
 namespace Elsa.Workflows.Runtime.KernelApi;
 
@@ -29,11 +31,30 @@ internal sealed class KernelWorkflowInstanceDetailsService(
             WorkflowInstanceSummaryView.From(state, canInspectSensitiveValues: canInspectSensitive),
             [],
             [],
-            Outputs,
+            ProjectOutputs(await runs.ReadTerminalOutputAsync(run, canInspectSensitive, cancellationToken), canInspectSensitive),
             Mode.PersistenceMode,
             Mode.InspectionGranularity,
             // The runtime's existing operator endpoints still address legacy executions.
             Permissions: new WorkflowInstancePermissionsView(CanManage: false, CanInspectValues: canInspectSensitive))
             { ActivitiesDeferred = KernelActivityTimeline.Supports(run.Header) };
+    }
+
+    private static IReadOnlyDictionary<string, WorkflowOutputView> ProjectOutputs(ActorTerminalOutput? output, bool canInspectSensitive)
+    {
+        if (output is null) return Outputs;
+        var at = DateTimeOffset.FromUnixTimeMilliseconds(output.CapturedAt);
+        if (canInspectSensitive && output.Values is { } bytes)
+        {
+            using var values = JsonDocument.Parse(bytes);
+            return values.RootElement.EnumerateObject().ToDictionary(value => value.Name,
+                value => new WorkflowOutputView(value.Value.Clone(), false, null, at) { CaptureMode = nameof(RuntimePayloadCaptureMode.Payload) },
+                StringComparer.Ordinal);
+        }
+
+        var names = JsonSerializer.Deserialize<string[]>(output.Names) ?? [];
+        var placeholder = canInspectSensitive && output.Omitted
+            ? new WorkflowOutputView(null, true, "The retained workflow output is unavailable.", at)
+            : WorkflowOutputView.Redacted(at);
+        return names.ToDictionary(name => name, _ => placeholder, StringComparer.Ordinal);
     }
 }

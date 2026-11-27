@@ -31,7 +31,11 @@ public sealed partial class EfStore
             SELECT "Version" AS "Value" FROM "FoundationWorkflowHistoryFormat" WHERE "Singleton"
             """).ToListAsync(token);
         var installed = versions.Count == 1;
-        if (installed) RequireHistoryVersion(versions[0]);
+        if (installed)
+        {
+            RequireHistoryVersion(versions[0]);
+            if (db.UsesRootTerminalOutput) await RequirePostgresRootTerminalOutputSchemaAsync(db, token);
+        }
         // History reads the actor's own list row, so it requires the projector of this profile and not the Park metadata.
         var projection = ActorListProjection.Of(db);
         var required = installed ? projection.WorkflowHistoryTriggers : projection.SourceTriggers;
@@ -92,6 +96,8 @@ public sealed partial class EfStore
                 EXECUTE FUNCTION kernel_project_root_workflow_history_v1();
                 INSERT INTO "FoundationWorkflowHistoryFormat" ("Singleton", "Version") VALUES (true, 1);
                 """, token);
+            if (db.UsesRootTerminalOutput)
+                await db.Database.ExecuteSqlRawAsync(PostgresRootTerminalOutputDefinition, token);
         }
         await transaction.CommitAsync(token);
     }

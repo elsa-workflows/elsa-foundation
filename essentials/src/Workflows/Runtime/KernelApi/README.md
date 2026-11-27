@@ -42,5 +42,15 @@ query that pages in the store replaces it later. Activity browse replays the req
 revision captured by its first read and fixes that revision across cursors. Point inspection keeps only the requested frame
 and can stop when that frame reaches a terminal status. Both confirm the exact run still exists before returning.
 
-The kernel run summary includes empty activity, incident and output collections. Workflow outputs need a committed
-capture projection before the runtime API can serve them.
+The kernel run summary defers activities and leaves incidents empty. Workbench retains named JSON results at the terminal
+workflow history checkpoint, up to the checkpoint byte and JSON depth limits. Final results are available even when
+optional diagnostic history capture is off. The run details authorize inspection before reading values. Structure-only
+callers see redacted output names. Retirement removes the result with its history. Actor headers and journal reads carry
+no output values.
+
+The shipped store uses [`StoreFormat.RootShipped`](../../../ActorFoundation/BuiltIn/Store/EntityFrameworkCore/EfStore.Versions.cs)
+with the provider's shipped definitions. The separate Workbench qualification setting
+`Elsa:CorePreview:TerminalOutputQualification` selects protocol 112, with PostgreSQL definitions revision 6 and SQLite
+revision 10. Setting it to `s6` selects protocol 113 with PostgreSQL revision 7 and SQLite revision 11.
+Both private formats enable capture for their dedicated qualification databases. Activity and variable value history,
+playback, and store migration are separate work.

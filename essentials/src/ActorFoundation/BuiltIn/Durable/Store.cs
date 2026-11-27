@@ -190,7 +190,10 @@ public sealed record TurnCommit(
     internal long? FoundationPublicationSequence { get; init; }
     internal CascadeCommit? FoundationCascade { get; init; }
     internal IReadOnlyList<FoundationValue>? FoundationValues { get; init; }
+    internal TerminalOutput? FoundationTerminalOutput { get; init; }
 }
+
+internal sealed record TerminalOutput(string Names, byte[]? Value);
 
 internal sealed record FoundationDispatchHeader(string Tenant, string Reference, FoundationHeaderChange Header, long TerminalGrowth = 0)
 {

@@ -65,7 +65,7 @@ internal static class ProfileCapabilityChecks
                 RootCapabilities.OperatorProtocol | RootCapabilities.Termination | RootCapabilities.StableBody | RootCapabilities.TerminalSelection | RootCapabilities.Retirement | RootCapabilities.TerminateThenDelete | RootCapabilities.Retention | RootCapabilities.OperatorReplies |
                 RootCapabilities.JobProtocol | RootCapabilities.TimedJobSettlement | RootCapabilities.TimedJobPreview | RootCapabilities.ReplyProtocol |
                 RootCapabilities.ParkOpening | RootCapabilities.ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery |
-                RootCapabilities.SelfProtocol | RootCapabilities.Timers | RootCapabilities.TimerRearm | RootCapabilities.DueBacklog)
+                RootCapabilities.SelfProtocol | RootCapabilities.Timers | RootCapabilities.TimerRearm | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput)
         ];
         // The true accessors of each profile, taken from the pre-refactor subclass chains (UsesRootTimers is new),
         // so that a property bound to the wrong capability fails even when the capability set is right.
@@ -95,7 +95,7 @@ internal static class ProfileCapabilityChecks
             ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory", "UsesRootComposedParkRecovery", "UsesRootDueBacklog", "UsesRootJobProtocol",
                 "UsesRootOperatorProtocol", "UsesRootOperatorReplies", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening",
                 "UsesRootParkRecovery", "UsesRootParkedOperators", "UsesRootPrivateParkInputs", "UsesRootReplyProtocol", "UsesRootRetention",
-                "UsesRootRetirement", "UsesRootSelfProtocol", "UsesRootStableBody", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination",
+                "UsesRootRetirement", "UsesRootSelfProtocol", "UsesRootStableBody", "UsesRootTerminalOutput", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination",
                 "UsesRootTimedJobPreview", "UsesRootTimedJobSettlement", "UsesRootTimerRearm", "UsesRootTimers"],
         };
         // S3: each profile's root state family, the prefix bytes written before S3 and the statuses besides Finished that end it.
@@ -180,7 +180,39 @@ internal static class ProfileCapabilityChecks
         Check(StoreDefinitionsRevision.Seed(backlog) is { StoreSchema: 1, MessageProtocol: 5, JournalCodec: 0 } &&
               StoreDefinitionsRevision.Seed(sqliteBacklog) is { StoreSchema: 2, MessageProtocol: 10, JournalCodec: 0 },
             "the due-backlog qualification retains its installed PostgreSQL and SQLite definitions");
-        mapped |= backlog.Capabilities;
+        using var terminalOutput = KernelDb.ForRootTerminalOutputQualification(options);
+        Check(terminalOutput.RequiredFormat == new StoreFormat(3, 112, 1) && terminalOutput.UsesRootTerminalOutput &&
+            terminalOutput.Capabilities == (RootCapabilities.OperatorProtocol | RootCapabilities.Termination | RootCapabilities.StableBody |
+                RootCapabilities.TerminalSelection | RootCapabilities.Retirement | RootCapabilities.TerminateThenDelete | RootCapabilities.Retention |
+                RootCapabilities.OperatorReplies | RootCapabilities.JobProtocol | RootCapabilities.TimedJobSettlement | RootCapabilities.TimedJobPreview |
+                RootCapabilities.ReplyProtocol | RootCapabilities.ParkOpening | RootCapabilities.ParkInspection | RootCapabilities.ParkArrivals |
+                RootCapabilities.ParkRecovery | RootCapabilities.TerminalOutput) &&
+            RootProfiles.MissingPrerequisites(terminalOutput.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(terminalOutput.RequiredFormat),
+            "protocol 112 retains its original private terminal-output capabilities");
+        using var sqliteTerminalOutput = KernelDb.ForRootTerminalOutputQualification(sqliteOptions, sqliteShippedInstall: true);
+        Check(StoreDefinitionsRevision.Seed(terminalOutput) is { StoreSchema: 1, MessageProtocol: 6, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(sqliteTerminalOutput) is { StoreSchema: 2, MessageProtocol: 10, JournalCodec: 0 },
+            "protocol 112 retains its original PostgreSQL and SQLite definition stamps");
+        using var s6TerminalOutput = KernelDb.ForRootTerminalOutputQualification(options, format: StoreFormat.RootS6TerminalOutputQualification);
+        using var sqliteS6TerminalOutput = KernelDb.ForRootTerminalOutputQualification(sqliteOptions, sqliteShippedInstall: true,
+            format: StoreFormat.RootS6TerminalOutputQualification);
+        Check(s6TerminalOutput.RequiredFormat == new StoreFormat(3, 113, 1) &&
+            s6TerminalOutput.Capabilities == (terminalOutput.Capabilities | RootCapabilities.Timers | RootCapabilities.SelfProtocol | RootCapabilities.TimerRearm) &&
+            RootProfiles.MissingPrerequisites(s6TerminalOutput.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(s6TerminalOutput.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(s6TerminalOutput) is { StoreSchema: 1, MessageProtocol: 7, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(sqliteS6TerminalOutput) is { StoreSchema: 2, MessageProtocol: 11, JournalCodec: 0 },
+            "protocol 113 qualifies terminal output alongside the S6 timers with separate definition stamps");
+        using var sharedPostgres = KernelDb.ForPostgresRootShipped(options);
+        using var sharedSqlite = KernelDb.ForSqliteRootShipped(sqliteOptions);
+        Check(sharedPostgres.RequiredFormat == StoreFormat.RootShipped && sharedSqlite.RequiredFormat == StoreFormat.RootShipped &&
+            sharedPostgres.Capabilities == (s6TerminalOutput.Capabilities | RootCapabilities.DueBacklog) &&
+            sharedSqlite.Capabilities == sharedPostgres.Capabilities &&
+            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, JournalCodec: 0 },
+            "the shipped format composes admission pressure and terminal output under distinct provider definitions");
+        mapped |= backlog.Capabilities | terminalOutput.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -210,7 +242,8 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.ParkInspection] = RootCapabilities.ParkOpening,
             [RootCapabilities.ParkArrivals] = RootCapabilities.ParkInspection,
             [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol,
-            [RootCapabilities.TimerRearm] = RootProfiles.ParkCompositionBase | RootCapabilities.Timers | RootCapabilities.ParkRecovery
+            [RootCapabilities.TimerRearm] = RootProfiles.ParkCompositionBase | RootCapabilities.Timers | RootCapabilities.ParkRecovery,
+            [RootCapabilities.TerminalOutput] = RootCapabilities.TerminalSelection | RootCapabilities.Retention
         };
         Check(RootProfiles.Prerequisites.Count == expectedEdges.Count &&
             expectedEdges.All(edge => RootProfiles.Prerequisites.TryGetValue(edge.Key, out var needs) && needs == edge.Value),

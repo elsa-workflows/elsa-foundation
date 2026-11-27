@@ -18,6 +18,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     private readonly Func<string, string>? rootJobHandle;
     private readonly bool rootTimedJobIssuance;
     private readonly bool rootHeldReplies;
+    private readonly int rootTerminalOutputLimit;
     private readonly Func<CancellationToken, ValueTask<long>>? rootTimedJobClock;
     private bool rootTimedJobSettlement => rootTimedJobClock is not null;
     private Durable.InMemoryStore store => inMemory ?? throw new NotSupportedException("This provider does not implement this foundation operation.");
@@ -34,9 +35,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Durable.FoundationSelfIssuer? issueSelf = null,
         Func<string, string>? rootJobHandle = null, bool rootTimedJobIssuance = false,
         Func<CancellationToken, ValueTask<long>>? rootTimedJobClock = null, bool rootHeldReplies = false,
-        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null) =>
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null, int rootTerminalOutputLimit = 0) =>
         (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance, this.rootTimedJobClock, this.rootHeldReplies,
-            this.retentionWindow) = (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootTimedJobClock, rootHeldReplies, retentionWindow);
+            this.retentionWindow, this.rootTerminalOutputLimit) =
+            (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootTimedJobClock, rootHeldReplies, retentionWindow, rootTerminalOutputLimit);
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, RootValueReader rootValueReader)
         : this(roots, actor) => this.rootValueReader = rootValueReader;
@@ -378,7 +380,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             ? host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message))
             : null;
         var turn = new ActorTurn(inMemory, input, header, ambient, issueSelf, rootJobHandle,
-            rootTimedJobIssuance || rootTimedJobSettlement, rootValueReader);
+            rootTimedJobIssuance || rootTimedJobSettlement, rootValueReader, rootTerminalOutputLimit);
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray(), turn.Now);
         await actor.TurnAsync(turn, CancellationToken.None);
         var thenDelete = delivery.Message.Operator?.DeleteTarget is not null;
