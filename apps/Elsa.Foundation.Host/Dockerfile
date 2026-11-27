@@ -41,7 +41,7 @@ COPY *.props *.targets .editorconfig NuGet.config ./
 # Restore inputs: the host, its shared endpoint-metadata project, Line A, its cluster membership, the EF closure that membership's
 # durable provider carries (Elsa.Persistence.EntityFramework plus the EF Core packages, #2151), its Data Protection key store,
 # which carries the same closure (#2191), and the computed-production-settings
-# swap Elsa.Foundation.Host.csproj imports from apps/ (shared with Elsa.Workbench.csproj, #2126) -- MSBuild
+# swap Elsa.Foundation.Host.csproj imports from apps/ (shared with Elsa.Workbench.Host.csproj, #2126) -- MSBuild
 # treats a missing <Import> as an error, not a no-op the way it does for the root files above, so this one has
 # to be copied before restore too, or restore fails outright with MSB4019 rather than silently.
 # Each project comes with its committed NuGet lock file, and both restores below are locked (#2122): they

@@ -17,9 +17,10 @@ evidence lives in [WRITES.md](../../prototypes/kernel-model/WRITES.md) (measurem
 **The answer in short.** Snapshot plus journal stays the default. At small states a commit costs about 0.7 to 2.3 kB of
 WAL; in the measured windows bloat stayed small and autovacuum cleared it. Large states are the cost: an incompressible
 4 kB state adds about 4.5 to 4.8 kB of WAL to every commit and doubles its TOAST table. Values by reference
-(decision 10) is the fix and a release 1 priority. Its values live in the same database, and it counts as delivered
-after the `pad=` PostgreSQL run (decisions 1 and 2); that run is still to do. Fill factor is a deployment note, the partitioned inbox stays out
-of release 1, and the lazy snapshot remains a sketch.
+(decision 10) is a release 1 priority. The [same-database PostgreSQL `pad=` comparison](../../prototypes/kernel-model/POSTGRES.md#same-database-value-comparison)
+measured the largest saving when the actor reused the same value. Qualification of the release schema and actor
+erasure remain open. Fill factor is a deployment note, the partitioned inbox stays out of release 1, and the lazy
+snapshot remains a sketch.
 
 ## What was measured
 
@@ -84,7 +85,7 @@ question 2 (data lifecycle) owns their retention.
 | Faster per-table autovacuum (13 Nov) | as above | Dead peaks 605 / 5,200; no measurable effect | The server's nap bounds it; a shorter `autovacuum_naptime` is the likely lever, unmeasured |
 | History State or Minimal | Full | About 130 B (State) or 415 B (Minimal) less per commit in the cost run | The author's per-workflow choice, already in the design |
 | Partitioned inbox | Probed only: range or list by partition needs `Partition` in the message key, which narrows ordinary-id deduplication from store-wide to per partition; hash on `Id` keeps the key, and every poll then touches every partition | Not measured under load | No WAL saving in principle; out of release 1 ([fit report](../../prototypes/kernel-model/POSTGRES.md#partitioned-inbox-fit-report)) |
-| Values by reference (decision 10) | A 4 kB value rewritten each commit: about 4.5 to 4.8 kB of extra WAL per commit, plus TOAST churn | Not measured on PostgreSQL. The witness ([VALUES.md](../../prototypes/kernel-model/models/Values/VALUES.md), SQLite) shrinks ten revisions of a 4 KiB value from 59,351 to 1,351 state bytes, and raises engine calls from 5 to 13 to the first value-bearing commit and from 12 to 20 for a fresh owner | The fix for large values that do not change every turn; the WAL saving is inferred |
+| Values by reference (decision 10) | Inline 4 KiB pad, reused or changing, used about 8.2 kB of WAL per turn in the isolated qualification | Reference used about 1.6 kB reused and 6.5 kB changing. Cold load went from three to five wire trips. [Measurements and TOAST totals](../../prototypes/kernel-model/POSTGRES.md#same-database-value-comparison) | The main savings come from reusing a value. New digests still need their own value rows |
 
 ## Conclusions
 
@@ -92,8 +93,8 @@ question 2 (data lifecycle) owns their retention.
    log-only store. Those stay off the default; the Log profile stays a later plan.
 2. **Decision 10 is release 1's write-volume priority.** The whole state is one value, and PostgreSQL rewrites a large
    value whole through TOAST at every commit. Values by reference is the one mitigation that removes that cost for
-   values that do not change every turn. Its values live in the same database (decision 1), and the `pad=` run accepts
-   it (decision 2). If a
+   values that do not change every turn. Its values live in the same database (decision 1). The qualification
+   `pad=` run provides the PostgreSQL measurements for decision 2. If a
    payload codec encrypts states ([data lifecycle](data-lifecycle.md#encryption-of-state-at-rest), later), it must compress before it encrypts, or every encrypted state above
    about 2 kB pays the incompressible cost measured here.
 3. **Fill factor and vacuum settings are deployment notes**, written in POSTGRES.md's
@@ -138,7 +139,7 @@ first, as the sketch requires.
 - Steady state: the runs are minutes long at about 70 instance commits a second; a sustained 1,000 commits a second
   (about 2.1 MB/s of WAL at small states, 6.9 MB/s at 4 kB) is an extrapolation.
 - Real JSON, which compresses: the incompressible pad is the upper end.
-- The WAL saving of values by reference, and the reference's own write, read and lifetime costs.
+- Values by reference on the final release schema, including erasure cost and long-running retention.
 - Latency, checkpoint stalls, replication lag and a pinned transaction horizon.
 
 ## Decisions (owner, 16–17 November 2026)

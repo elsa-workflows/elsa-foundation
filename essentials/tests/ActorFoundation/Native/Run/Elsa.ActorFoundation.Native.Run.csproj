@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Kernel.Native.Run</RootNamespace>
+    <AssemblyName>Kernel.Native.Run</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);EF1002</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+    <Using Include="Elsa.ActorFoundation.Hosting" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Compile Include="../../../../../prototypes/kernel-model/ef/Kernel.Ef.Run/Wire.cs" Link="Wire.cs" />
+    <Compile Include="../../Simulation/Models.cs" Link="Models.cs" />
+    <Compile Include="../../Store/EntityFramework/RelationalTimedJobChecks.cs" Link="RelationalTimedJobChecks.cs" />
+    <ProjectReference Include="../../../Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj" />
+    <ProjectReference Include="../../../Workflows/Runtime/Native/Migration/SqliteFixture/Elsa.Workflows.Runtime.Native.Migration.SqliteFixture.csproj" />
+    <ProjectReference Include="../../../Workflows/Runtime/Native/Migration/SelectionFixture/Elsa.Workflows.Runtime.Native.Migration.SelectionFixture.csproj" />
+    <ProjectReference Include="../../../Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
+    <ProjectReference Include="../../../Workflows/Runtime/Native/RetentionFixture/Elsa.Workflows.Runtime.Native.RetentionFixture.csproj" />
+    <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
+    <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
+    <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Sqlite/Elsa.ActorFoundation.BuiltIn.Sqlite.csproj" />
+    <ProjectReference Include="../../Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
+    <ProjectReference Include="../../TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
+    <ProjectReference Include="../../../../src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
+    <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../../../../tools/ci/actor-foundation/WorkbenchPostgresPreview.cs" Link="WorkbenchPostgresPreview.cs" />
+    <Compile Include="../../../../../apps/Elsa.Workbench.Host/CorePreview/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
+  </ItemGroup>
+</Project>

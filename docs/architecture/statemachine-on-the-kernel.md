@@ -29,7 +29,7 @@ Each answer is an owner card.
    - OD37: the turn that ends or cancels the machine records each held event as not processed, with the reason.
 
    Rejected: (B) a layer 3 cap on held events per machine; (C) the prototype's invocation inbox with receipts in
-   workflow state (`models/Native/InvocationInbox.cs`, which the
+   workflow state ([InvocationInbox.cs](../../essentials/src/Workflows/Runtime/Native/Model/InvocationInbox.cs), which the
    [fairness page](fairness-and-backpressure.md) calls M0 research); (D) widening the foundation contract with a
    bound per target, a content digest, `RefusalReason.Ended` and an order across senders.
 2. **What a machine event targets: kernel events (option A).** Each machine invocation subscribes once per trigger key
@@ -66,7 +66,7 @@ Each answer is an owner card.
 
 These invariants widen the sketch's S1 to S4
 ([plan step 3](../reports/clean-slate-kernel/design-sketch-draft-5.md#plan)), which the prototype's witness already
-checks ([Statecharts.Run](../../prototypes/kernel-model/models/Statecharts.Run/README.md)). K7 runs them in the
+checks ([Statecharts.Run](../../essentials/tests/Workflows/Runtime/Statecharts/Run/README.md)). K7 runs them in the
 simulation under its faults, in Embedded and Cluster, at `Full` history. Each mutation must be caught.
 
 | Invariant | Rule | Mutations |

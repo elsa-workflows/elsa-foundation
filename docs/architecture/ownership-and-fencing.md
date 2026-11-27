@@ -257,9 +257,10 @@ refused, and the replacement owner, the redelivery or the replayed burst sends i
 attempt before it runs; no mode closes it, and the kernel makes no exactly-once claim for anything outside its store.
 
 What the kernel gives instead is a **stable effect key** per activity attempt, derived from committed facts only, in
-the shape the owner decided on 16 November: `{instance origin}/{node}/{iteration path}/{attempt}` (`EffectKey.For` in
-the prototype's `src/Kernel.Workflows`). The instance origin is the instance's id, fixed at creation, with its creation;
-the key never reads partitions or positions. The node is the activity's stable id in the definition. The iteration path
+the shape the owner decided on 16 November: `{instance origin}/{node}/{iteration path}/{attempt}`. The
+[legacy EffectKey.For](../../essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs) uses the instance's id and
+creation for its origin. The key is independent of partitions and positions. The node is the activity's stable id in
+the definition. The iteration path
 is the iteration numbers of the repeating scopes that enclose the activation (a loop index, a loop pass, a flowchart
 round, the merge and source a flowchart token passed, a flowchart join's firing ordinal in its round, a statechart
 visit serial, a retry generation), root first, each taken from the enclosing activity's committed state. The attempt is

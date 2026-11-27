@@ -248,7 +248,7 @@ export function useActivityPlayback(options: PlaybackOptions) {
     pause,
     invalidate: (message: string) => unavailable(message, null, true),
     selectOccurrence: (activityExecutionId: string, historyEventId?: string) => navigate({ activityExecutionId, historyEventId }, "manual"),
-    inspectOccurrence: (activityExecutionId: string, includeSelfScope = false) => navigate({ activityExecutionId, inspectActivity: true, includeSelfScope }, "manual"),
+    inspectOccurrence: (activityExecutionId: string, includeSelfScope = false, skipCanvasFocus = false) => navigate({ activityExecutionId, inspectActivity: true, includeSelfScope, ...(skipCanvasFocus ? { skipCanvasFocus: true } : {}) }, "manual"),
     seek: (position: string) => navigate({ position }, "manual"),
     previous: () => value.cursor?.previousActivityExecutionId ? navigate({ position: String(playbackOrdinal(value.cursor.position) - 1n) }, "manual") : Promise.resolve(),
     next: () => value.cursor?.nextActivityExecutionId ? navigate({ position: String(playbackOrdinal(value.cursor.position) + 1n) }, "manual") : Promise.resolve(),

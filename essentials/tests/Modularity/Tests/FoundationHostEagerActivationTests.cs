@@ -7,8 +7,6 @@ using CShells.DependencyInjection;
 using CShells.Hosting;
 using CShells.Lifecycle;
 using Elsa.Attention.Core;
-using Elsa.Foundation.Host.Health;
-using Elsa.Foundation.Host.Shells;
 using Elsa.Foundation.Hosting;
 using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Tests;
@@ -947,7 +945,7 @@ public sealed class FoundationHostEagerActivationTests : IAsyncDisposable
         builder.Services.AddSingleton(registry ?? _registry);
         builder.Services.AddSingleton(_tracker);
         _app = builder.Build();
-        _app.MapHostHealth();
+        _app.MapFoundationHealth("Elsa.Foundation.Host");
         await _app.StartAsync();
         return _app.GetTestClient();
     }

@@ -1,6 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup><InternalsVisibleTo Include="Kernel.Statecharts.Run" /><InternalsVisibleTo Include="Kernel.Statecharts.Native" /></ItemGroup>
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Kernel.Model.Contracts/Kernel.Model.Contracts.csproj" />
+    <InternalsVisibleTo Include="Kernel.Statecharts.Run" />
+    <InternalsVisibleTo Include="Kernel.Statecharts.Native" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Statecharts.OrderFixture" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
   </ItemGroup>
 </Project>

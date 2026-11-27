@@ -5,7 +5,6 @@ using System.Reflection.Emit;
 using System.Text.Json;
 using CShells.Features;
 using CShells.Lifecycle;
-using Elsa.Foundation.Host.ModuleManagement;
 using Elsa.Persistence.Schema;
 using Elsa.Testing;
 using Microsoft.AspNetCore.Builder;
@@ -13,6 +12,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Nuplane.Admin;
+using Elsa.Foundation.Hosting;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
@@ -38,7 +38,7 @@ public sealed class FoundationHostReloadEndpointTests : IAsyncLifetime
         builder.Services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog());
         builder.Services.AddSingleton<INuplaneAdminOperations>(new FakeNuplaneAdminOperations());
         _app = builder.Build();
-        _app.MapModuleManagementApi(new ModuleManagementOptions { Enabled = true, ApiKey = ApiKey });
+        _app.MapModuleManagementApi(new ModuleManagementOptions { Enabled = true, ApiKey = ApiKey }, "Elsa.Foundation.Host");
         await _app.StartAsync();
         _client = _app.GetTestClient();
         _client.DefaultRequestHeaders.Add(ModuleManagementOptions.ApiKeyHeader, ApiKey);

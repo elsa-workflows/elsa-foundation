@@ -12,6 +12,7 @@ using Nuplane.Admin;
 using Nuplane.Loading;
 using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Reconciliation;
+using Nuplane.Sources.Directory.Builder;
 
 namespace Elsa.Studio.Tests.Administration;
 
@@ -177,6 +178,31 @@ public sealed class PackageAssetTests
     }
 
     [Fact]
+    public async Task Changed_package_asset_ignores_the_previous_install_date_during_revalidation()
+    {
+        await using var host = await AdministrationHost.StartAsync(nuplane =>
+            nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); }));
+        var archiveTimestamp = DateTimeOffset.UtcNow.AddDays(-1);
+        Pack(host, "1.0.0", "first", assetTimestamp: archiveTimestamp);
+        await Reconcile(host);
+        var path = $"/_content/{PackageId}/probe.txt";
+        using var first = await host.Client.GetAsync(path);
+        first.EnsureSuccessStatusCode();
+
+        Pack(host, "2.0.0", "second", assetTimestamp: archiveTimestamp);
+        await Reconcile(host);
+        using var condition = new HttpRequestMessage(HttpMethod.Get, path);
+        // An existing client may send the Last-Modified date of the previously served extracted copy.
+        condition.Headers.IfModifiedSince = DateTimeOffset.UtcNow;
+        using var latest = await host.Client.SendAsync(condition);
+
+        Assert.Equal(HttpStatusCode.OK, latest.StatusCode);
+        Assert.Equal("second", await latest.Content.ReadAsStringAsync());
+        Assert.Null(latest.Content.Headers.LastModified);
+        Assert.NotEqual(first.Headers.ETag, latest.Headers.ETag);
+    }
+
+    [Fact]
     public async Task Oversized_published_asset_is_refused_by_preflight()
     {
         await using var host = await AdministrationHost.StartAsync(nativeStore: true);
@@ -203,19 +229,25 @@ public sealed class PackageAssetTests
         Assert.DoesNotContain("outside-sentinel", await response.Content.ReadAsStringAsync());
     }
 
-    internal static void Pack(AdministrationHost host, string version, string? payload, bool oversized = false, string? manifest = null, string manifestPath = "elsa-package.json", string? assembly = null, string packageId = PackageId)
+    internal static void Pack(AdministrationHost host, string version, string? payload, bool oversized = false, string? manifest = null, string manifestPath = "elsa-package.json", string? assembly = null, string packageId = PackageId, bool oversizedNuspec = false, DateTimeOffset? assetTimestamp = null)
     {
         var feed = Directory.CreateDirectory(Path.Combine(host.Root, "feed")).FullName;
         using var archive = ZipFile.Open(Path.Combine(feed, packageId + "." + version + ".nupkg"), ZipArchiveMode.Create);
         using (var writer = new StreamWriter(archive.CreateEntry(packageId + ".nuspec").Open()))
+        {
             writer.Write($"<package><metadata><id>{packageId}</id><version>{version}</version><authors>Studio qualification</authors><description>Owned fixture</description></metadata></package>");
+            if (oversizedNuspec) writer.Write(new string(' ', 1024 * 1024));
+        }
         if (manifest is not null)
         {
             using var writer = new StreamWriter(archive.CreateEntry(manifestPath).Open());
             writer.Write(manifest);
         }
         if (assembly is not null) archive.CreateEntryFromFile(Path.Combine(AppContext.BaseDirectory, assembly + ".dll"), "lib/net10.0/" + assembly + ".dll");
-        using var stream = archive.CreateEntry("staticwebassets/probe.txt").Open();
+        var entry = archive.CreateEntry("staticwebassets/probe.txt");
+        if (assetTimestamp is { } timestamp)
+            entry.LastWriteTime = timestamp;
+        using var stream = entry.Open();
         if (oversized)
         {
             var chunk = new byte[1024 * 1024];

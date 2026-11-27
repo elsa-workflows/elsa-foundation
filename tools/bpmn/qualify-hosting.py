@@ -438,7 +438,7 @@ def verify_upgrade(path: Path) -> dict:
             process["baselineSourceRevision"] != manifest.get("baselineSourceRevision") or
             process.get("baselineAssets") != manifest.get("baselineAssets")):
         raise ValueError("The recovered source observations do not match the declared baseline.")
-    if not process.get("binaries") or not any(binary["file"] == "Elsa.Workbench.dll" and
+    if not process.get("binaries") or not any(binary["file"] == "Elsa.Workbench.Host.dll" and
             binary["productVersion"].endswith("+" + source) for binary in process["binaries"]):
         raise ValueError("The upgrade has no source-bound production Workbench.")
     observations = process["observations"]
@@ -529,7 +529,7 @@ def resume_upgrade(args) -> dict:
     env = os.environ.copy()
     env.update(ELSA_BPMN_LEGACY_CAPTURE_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output),
         ELSA_BPMN_HOST_SOURCE_REVISION=source)
-    project = REPO / "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"
+    project = REPO / "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"
     command = ["dotnet", "test", str(project), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "--filter",
         "FullyQualifiedName~LegacyPartialForkUpgradeTests", "--logger", "trx;LogFileName=legacy-partial-fork-upgrade.trx"]
     if args.artifacts_path is not None:
@@ -626,7 +626,7 @@ def verify_native_parent_upgrade(path: Path) -> dict:
                 process.get("sourceRevision") != source or process.get("testOnlyRecoveryProbePresent") is not False or
                 process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or
                 process.get("referenceReceiptSha256") != manifest["baselineAssets"].get("native-parents/api.json") or
-                not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source)
+                not any(binary["file"] == "Elsa.Workbench.Host.dll" and binary["productVersion"].endswith("+" + source)
                     for binary in process.get("binaries", process.get("observations", [{}])[0].get("binaries", [])))):
             raise ValueError("The native upgrade lacks its standard-host source or baseline binding.")
     observations = pending["observations"]
@@ -719,7 +719,7 @@ def resume_native_parent_upgrade(args) -> dict:
         raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
     env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
-    command = ["dotnet", "test", str(REPO / "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"),
+    command = ["dotnet", "test", str(REPO / "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"),
         "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyNativeParentUpgradeTests",
         "--logger", "trx;LogFileName=legacy-native-parent-upgrade.trx"]
     if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
@@ -783,7 +783,7 @@ def verify_called_ack_upgrade(path: Path) -> dict:
                 case["inputGzipSha256"] != manifest["baselineAssets"].get("called-ack/" + cut + "-held.sqlite.gz") or
                 case["baselineApiSha256"] != manifest["baselineAssets"].get("called-ack/" + cut + "-held-api.json") or
                 case["markerSha256"] != manifest["baselineAssets"].get("called-ack/" + cut + "-marker.json") or
-                not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source) for binary in case["binaries"]) or
+                not any(binary["file"] == "Elsa.Workbench.Host.dll" and binary["productVersion"].endswith("+" + source) for binary in case["binaries"]) or
                 len({case["firstProcessId"], case["secondProcessId"], case["thirdProcessId"]}) != 3):
             raise ValueError("The actual called cut lost its baseline, host or three-process identity.")
         if (marker["phase"] != "called-control-before-acknowledgment" or
@@ -861,7 +861,7 @@ def resume_called_ack_upgrade(args) -> dict:
         raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
     env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
-    command = ["dotnet", "test", str(REPO / "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"),
+    command = ["dotnet", "test", str(REPO / "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"),
         "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyCalledAcknowledgmentUpgradeTests",
         "--logger", "trx;LogFileName=legacy-called-ack-upgrade.trx"]
     if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
@@ -914,7 +914,7 @@ def verify_broadcast_upgrade(path: Path) -> dict:
         if (not re.fullmatch(r"[0-9a-f]{40}", case.get("baselineSourceRevision", "")) or case["baselineSourceRevision"] == source_revision or
                 case["baselineApiSha256"] != manifest["baselineAssets"].get("broadcast/" + cut + ".json") or
                 case["inputGzipSha256"] != manifest["baselineAssets"].get("broadcast/" + cut + ".sqlite.gz") or
-                not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source_revision) for binary in case["binaries"]) or
+                not any(binary["file"] == "Elsa.Workbench.Host.dll" and binary["productVersion"].endswith("+" + source_revision) for binary in case["binaries"]) or
                 len({case["firstProcessId"], case["secondProcessId"], case["thirdProcessId"]}) != 3):
             raise ValueError("The broadcast cut lacks its actual baseline or three-process host identity.")
         recovered = case["recoveredProof"]; current = recovered["source"]; before = original["source"]
@@ -1008,7 +1008,7 @@ def resume_broadcast_upgrade(args) -> dict:
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True, timeout=5).strip(): raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
     env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
-    command = ["dotnet", "test", str(REPO / "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyBroadcastUpgradeTests", "--logger", "trx;LogFileName=legacy-broadcast-upgrade.trx"]
+    command = ["dotnet", "test", str(REPO / "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyBroadcastUpgradeTests", "--logger", "trx;LogFileName=legacy-broadcast-upgrade.trx"]
     if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
     with (output / "run.log").open("w") as log: subprocess.run(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
     if inputs != verify_broadcast_inputs(baseline): raise ValueError("Broadcast upgrade changed an original input.")
@@ -1074,7 +1074,7 @@ def verify_controls_upgrade(path: Path) -> dict:
             not re.fullmatch(r"[0-9a-f]{40}", process.get("baselineSourceRevision", "")) or source == process["baselineSourceRevision"] or
             process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or process.get("baselineAssets") != manifest.get("baselineAssets") or
             process.get("testOnlyRecoveryProbePresent") is not False or len(process.get("processIds", [])) != 4 or len(set(process["processIds"])) != 4 or
-            not process.get("reader", {}).get("productVersion", "").endswith("+" + source) or not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source) for binary in process.get("binaries", []))):
+            not process.get("reader", {}).get("productVersion", "").endswith("+" + source) or not any(binary["file"] == "Elsa.Workbench.Host.dll" and binary["productVersion"].endswith("+" + source) for binary in process.get("binaries", []))):
         raise ValueError("The actual control upgrade lacks its distinct baseline/standard host/reader/process identity.")
     if tuple(stage["name"] for stage in process["stages"]) != stages: raise ValueError("The original compensation/sibling continuation stages are incomplete or reordered.")
     key = lambda value: base64.b64encode(value.encode("utf-16-le", errors="surrogatepass")).decode()
@@ -1173,7 +1173,7 @@ def resume_controls_upgrade(args) -> dict:
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True, timeout=5).strip(): raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
     env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
-    command = ["dotnet", "test", str(REPO / "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyControlsUpgradeTests", "--logger", "trx;LogFileName=legacy-controls-upgrade.trx"]
+    command = ["dotnet", "test", str(REPO / "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyControlsUpgradeTests", "--logger", "trx;LogFileName=legacy-controls-upgrade.trx"]
     if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
     with (output / "run.log").open("w") as log: subprocess.run(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
     if inputs != verify_controls_inputs(baseline): raise ValueError("Control upgrade changed an original input.")
@@ -1216,7 +1216,7 @@ def verify_multi_instance_upgrade(path: Path) -> dict:
             not re.fullmatch(r"[0-9a-f]{40}", process.get("baselineSourceRevision", "")) or source == process["baselineSourceRevision"] or process.get("baselineAssets") != manifest.get("baselineAssets") or
             process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or process.get("testOnlyRecoveryProbePresent") is not False or
             len(process.get("processIds", [])) != 4 or len(set(process["processIds"])) != 4 or not process.get("reader", {}).get("productVersion", "").endswith("+" + source) or
-            not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source) for binary in process.get("binaries", []))):
+            not any(binary["file"] == "Elsa.Workbench.Host.dll" and binary["productVersion"].endswith("+" + source) for binary in process.get("binaries", []))):
         raise ValueError("The actual MI upgrade lacks its standard host, checked reader or original source identity.")
     if tuple(stage["name"] for stage in process["stages"]) != stages or [stage["completedCount"] for stage in process["stages"]] != [1, 2, 2, 3]:
         raise ValueError("The actual MI progress/restart stages are incomplete or reordered.")
@@ -1307,7 +1307,7 @@ def resume_multi_instance_upgrade(args) -> dict:
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True, timeout=5).strip(): raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
     env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
-    command = ["dotnet", "test", str(REPO / "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyMultiInstanceUpgradeTests", "--logger", "trx;LogFileName=legacy-multi-instance-upgrade.trx"]
+    command = ["dotnet", "test", str(REPO / "extensions/Bpmn/tests/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyMultiInstanceUpgradeTests", "--logger", "trx;LogFileName=legacy-multi-instance-upgrade.trx"]
     if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
     with (output / "run.log").open("w") as log: subprocess.run(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
     if inputs != verify_multi_instance_inputs(baseline): raise ValueError("MI recovery changed an original input.")

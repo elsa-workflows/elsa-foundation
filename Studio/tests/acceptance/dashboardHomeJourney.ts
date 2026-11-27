@@ -6,8 +6,8 @@ type Layout = { source: string; revision?: string; schemaVersion: number; value:
 const canonicalAuthenticatedHome = ["home.get-started", "home.quick-actions", "home.recent-workflows", "home.recent-runs", "home.needs-attention", "home.tasks"];
 const homeOwners = {
   authenticatedDefault: "essentials/src/Studio/Preferences/Core/StudioHomeLayout.cs",
-  page: "Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/HomePage.tsx",
-  anonymousFallback: "Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/homeLayout.ts",
+  page: "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/home/HomePage.tsx",
+  anonymousFallback: "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/home/homeLayout.ts",
   moduleRegistration: "extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client/src/module.tsx"
 };
 
@@ -41,7 +41,7 @@ export async function dashboardHomeJourney(page: Page, info: TestInfo, capture: 
     const expectedBuiltIn = canonicalAuthenticatedHome.map((id, index) => ({ id, size: index === 0 ? "full" : "medium", visible: true }));
     expect(original.value.widgets.map(({ id, size, visible }) => ({ id, size, visible }))).toEqual(expectedBuiltIn);
     expect(previousDefault.value.widgets.map(({ id, size, visible }) => ({ id, size, visible }))).toEqual(expectedBuiltIn);
-    await attachDashboardJson(info, "home-default-baseline.json", { source: process.env.UX_SOURCE_SHA ?? "unknown", owners: homeOwners, documentation: "Studio/src/essentials/Elsa.Studio.Dashboard/README.md#widgets", authenticatedDefault: original.value, anonymousFallback: "The client fallback is a separate source and is not exercised by this authenticated server-default journey. Main-source comparison belongs to the review evidence, not this runtime result." });
+    await attachDashboardJson(info, "home-default-baseline.json", { source: process.env.UX_SOURCE_SHA ?? "unknown", owners: homeOwners, documentation: "Studio/src/essentials/Elsa.Studio.Hosting/README.md#home", authenticatedDefault: original.value, anonymousFallback: "The client fallback is a separate source and is not exercised by this authenticated server-default journey. Main-source comparison belongs to the review evidence, not this runtime result." });
     await capture(page, info, "home-widgets");
     await page.getByRole("combobox", { name: "Refresh", exact: true }).selectOption("0");
     await page.getByRole("button", { name: "Edit home", exact: true }).press("Enter");

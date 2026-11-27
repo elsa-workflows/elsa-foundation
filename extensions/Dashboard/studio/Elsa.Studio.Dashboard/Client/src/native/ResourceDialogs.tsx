@@ -1,0 +1,385 @@
+import { formatStudioDate, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import React, { useCallback, useEffect, useState } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
+import type { StudioDashboardRecordLinkContribution } from "@elsa-workflows/studio-sdk";
+import { TechnicalDetails } from "@elsa-workflows/studio-ui";
+import { StudioField, StudioMultiSelectField, StatusChip, StudioButton, StudioDialog, StudioDialogFooter, StudioVersionHistory } from "@elsa-workflows/studio-ui";
+import type { DashboardApi } from "./api";
+import { ResultView } from "./ResultView";
+import type { AudienceCandidate, AudienceGrant, DashboardResource, DashboardTile, DefinitionRevision, QueryResult, QueryValue, Visualization } from "./types";
+import { errorMessage, accessLost } from "./types";
+import { useRequestLifetime } from "./useRequestLifetime";
+import { DashboardDependencyReview } from "./DashboardDependencyReview";
+export { DashboardDependencyReview } from "./DashboardDependencyReview";
+
+export function NativeDialog({ title, description, className, onClose, footer, children }: { title: string; description?: React.ReactNode; className?: string; onClose(): void; footer?: React.ReactNode; children: React.ReactNode }) {
+  return <StudioDialog open title={title} description={description} closeLabel={`Close ${title}`} className={className ? `named-dialog ${className}` : "named-dialog"} onClose={onClose} dismissOnOutsideClick={false} footer={footer}>
+    {children}
+  </StudioDialog>;
+}
+
+export function ShareDialog({ api, resource, onClose, onSaved }: { api: DashboardApi; resource: DashboardResource; onClose(): void; onSaved(resource: DashboardResource): void }) {
+  const lifetime = useRequestLifetime();
+  const [searched, setSearched] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [candidateCursor, setCandidateCursor] = useState<string | null>();
+  const [appliedCandidateSearch, setAppliedCandidateSearch] = useState({ query: "", kind: "user" });
+  const [grants, setGrants] = useState<AudienceGrant[]>([]);
+  const [candidates, setCandidates] = useState<AudienceCandidate[]>([]);
+  const [search, setSearch] = useState("");
+  const [audienceKind, setAudienceKind] = useState("user");
+  const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(true);
+  const [audienceLoaded, setAudienceLoaded] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [dependenciesReady, setDependenciesReady] = useState(resource.kind !== "dashboard");
+  useEffect(() => { const request = lifetime.begin("load"); setLoading(true); setAudienceLoaded(false); setError(undefined); void api.audience(resource, request.signal).then(value => { if (request.current()) { setGrants(value.items); setAudienceLoaded(true); } }).catch(cause => { if (request.current()) setError(errorMessage(cause)); }).finally(() => { if (request.current()) setLoading(false); request.finish(); }); return () => lifetime.cancel("load"); }, [api, resource, lifetime, loadAttempt]);
+  const searchAudience = async (query: string, kind: string, cursor?: string | null) => {
+    const request = lifetime.begin("search"); setError(undefined); setSearching(true); setSearched(false);
+    if (!cursor) { setCandidates([]); setCandidateCursor(null); }
+    try {
+      const page = await api.candidates(query, kind, request.signal, cursor);
+      if (!request.current()) return;
+      setCandidates(current => [...(cursor ? current : []), ...page.items].filter((item, index, all) => all.findIndex(candidate => candidate.id === item.id && candidate.kind === item.kind) === index));
+      setCandidateCursor(page.continuationToken); setAppliedCandidateSearch({ query, kind }); setSearched(true);
+    } catch (cause) { if (request.current()) { setError(errorMessage(cause)); if (accessLost(cause)) { setCandidates([]); setCandidateCursor(null); } } }
+    finally { if (request.current()) setSearching(false); request.finish(); }
+  };
+  async function save() {
+    if (saving || !audienceLoaded || !dependenciesReady) return;
+    const request = lifetime.begin("save");
+    setSaving(true);
+    setError(undefined);
+    try {
+      const updated = await api.share(resource, grants, request.signal);
+      if (request.current()) onSaved(updated);
+    } catch (cause) {
+      if (request.current()) {
+        setError(errorMessage(cause));
+        if (accessLost(cause)) {
+          setGrants([]);
+          setCandidates([]);
+        }
+      }
+    } finally {
+      if (request.current()) setSaving(false);
+      request.finish();
+    }
+  }
+  return <NativeDialog title={`Share ${resource.name}`} onClose={onClose}
+    footer={<StudioDialogFooter confirmType="button" onCancel={onClose} confirmLabel={saving ? "Saving audience…" : "Save audience"}
+      confirmDisabled={saving || loading || !audienceLoaded || !dependenciesReady} onConfirm={save} />}><p>Viewers see data using their own access. Sharing a dashboard does not share its questions automatically.</p>
+    {resource.kind === "dashboard" ? <DashboardDependencyReview api={api} resource={resource} mode="share" onReadyChange={setDependenciesReady} /> : null}
+    {error ? <p role="alert">{error}</p> : null}{loading ? <p role="status">Loading current audience…</p> : !audienceLoaded ? <><p role="status">The current audience is unknown. Load it successfully before changing sharing.</p><StudioButton onClick={() => setLoadAttempt(value => value + 1)}>Retry current audience</StudioButton></> : <>
+      <form onSubmit={event => { event.preventDefault(); void searchAudience(search, audienceKind); }}><StudioField label="Audience kind"><select value={audienceKind} onChange={event => { lifetime.cancel("search"); setAudienceKind(event.target.value); setCandidates([]); setCandidateCursor(null); setSearched(false); setSearching(false); }}><option value="user">Users</option><option value="role">Roles</option></select></StudioField><StudioField label="Find authorized users or roles"><input value={search} onChange={event => setSearch(event.target.value)} /></StudioField><StudioButton type="submit" disabled={searching || saving}>{searching ? "Searching…" : "Search audience"}</StudioButton></form>
+      {searched && !candidates.length && !candidateCursor ? <p role="status">No authorized audience entries matched this search.</p> : null}
+      {candidates.length ? <ul className="named-picker-list">{candidates.map(candidate => <li key={`${candidate.kind}:${candidate.id}`}><span>{candidate.displayName || candidate.name || candidate.id} ({candidate.kind})</span><StudioButton type="button" disabled={grants.some(grant => grant.id === candidate.id && grant.kind === candidate.kind)} onClick={() => setGrants(current => [...current, { kind: candidate.kind, id: candidate.id, access: "viewer" }])}>Add audience</StudioButton></li>)}</ul> : null}
+      {candidateCursor ? <StudioButton type="button" disabled={searching || saving} onClick={() => void searchAudience(appliedCandidateSearch.query, appliedCandidateSearch.kind, candidateCursor)}>More audience entries</StudioButton> : null}
+      <h4>Current audience</h4>{grants.length ? <ul className="named-picker-list">{grants.map((grant, index) => <li key={`${grant.kind}:${grant.id}`}><span>{grant.id} ({grant.kind})</span><StudioField label={<>Access for {grant.id}</>}><select value={grant.access} onChange={event => setGrants(current => current.map((item, at) => at === index ? { ...item, access: event.target.value as AudienceGrant["access"] } : item))}><option value="viewer">Can view</option><option value="editor">Can edit content</option></select></StudioField><StudioButton type="button" onClick={() => setGrants(current => current.filter((_, at) => at !== index))}>Remove {grant.id}</StudioButton></li>)}</ul> : <p>Personal. No audience grants.</p>}
+      <p className="named-help">Only the owner manages sharing and deletion. Editors cannot change the audience.</p>
+    </>}
+  </NativeDialog>;
+}
+
+export function HistoryDialog({ api, resource, onClose, onRestored, onAccessLost, hasUnsavedChanges = false }: { api: DashboardApi; resource: DashboardResource; onClose(): void; onRestored(resource: DashboardResource): void; onAccessLost(message: string): void; hasUnsavedChanges?: boolean }) {
+  useStudioTimeZone();
+  const lifetime = useRequestLifetime();
+  const [items, setItems] = useState<DefinitionRevision[]>();
+  const [error, setError] = useState<string>();
+  const [selected, setSelected] = useState<DashboardResource>();
+  const [selectedRevision, setSelectedRevision] = useState<string | null>(null);
+  const [confirmingRevision, setConfirmingRevision] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [historyAccessLost, setHistoryAccessLost] = useState(false);
+  const failed = useCallback((cause: unknown) => {
+    setError(errorMessage(cause));
+    if (accessLost(cause)) {
+      lifetime.invalidate(); setHistoryAccessLost(true); setItems([]); setSelected(undefined); setSelectedRevision(null); setConfirmingRevision(undefined); setBusy(false);
+      onAccessLost(errorMessage(cause));
+    }
+  }, [lifetime, onAccessLost]);
+  useEffect(() => {
+    const request = lifetime.begin("load"); setItems(undefined); setSelected(undefined); setSelectedRevision(null); setConfirmingRevision(undefined); setHistoryAccessLost(false); setError(undefined);
+    void api.history(resource, request.signal).then(value => {
+      if (request.current()) {
+        setItems(value.items);
+        if (value.items.length) { setSelected(resource); setSelectedRevision(resource.revision); }
+      }
+    })
+      .catch(cause => { if (request.current()) failed(cause); }).finally(request.finish);
+    return () => lifetime.cancel("load");
+  }, [api, resource, lifetime, failed, loadAttempt]);
+  const inspect = (revision: string) => {
+    setSelectedRevision(revision); setConfirmingRevision(undefined); setError(undefined);
+    if (revision === resource.revision) { lifetime.cancel("inspect"); setSelected(resource); return; }
+    const request = lifetime.begin("inspect"); setSelected(undefined);
+    void api.revision(resource, revision, request.signal).then(value => { if (request.current()) setSelected(value); })
+      .catch(cause => { if (request.current()) failed(cause); }).finally(request.finish);
+  };
+  const restore = (revision: string) => {
+    if (busy || revision === resource.revision) return;
+    const request = lifetime.begin("restore"); setBusy(true); setError(undefined); setConfirmingRevision(undefined);
+    void api.restore(resource, revision, request.signal).then(value => { if (request.current()) onRestored(value); })
+      .catch(cause => { if (request.current()) failed(cause); })
+      .finally(() => { if (request.current()) setBusy(false); request.finish(); });
+  };
+  const historyItems = items?.length && !historyAccessLost ? (items.some(item => item.revision === resource.revision) ? items : [
+    { revision: resource.revision, name: "", description: "", actorId: "", updatedAt: resource.updatedAt }, ...items
+  ]) : [];
+  const selectedIsWithheld = selected?.definitionState === "withheld";
+  const selectedDefinition = selected?.kind === "question" ? selected.definition : selected?.tiles;
+  const detail = selected ? selectedIsWithheld ? <>
+    <StatusChip tone="warning">Definition withheld</StatusChip>
+    <p>Definition details are withheld under your current access.</p>
+  </> : <div className="named-history-detail">
+    <div><StatusChip tone={selected.revision === resource.revision ? "accent" : "neutral"}>{selected.revision === resource.revision ? "Current" : "Saved revision"}</StatusChip></div>
+    <h4>{selected.name}</h4>
+    <p>Revision {selected.revision} · <time dateTime={selected.updatedAt}>{formatStudioDate(selected.updatedAt)}</time></p>
+    {selected.description ? <p>{selected.description}</p> : null}
+    {selected.kind === "question" && selected.definition ? <dl className="named-history-summary">
+      <div><dt>Dataset</dt><dd>{selected.definition.query.dataset.id || "Not selected"}</dd></div>
+      <div><dt>Query</dt><dd>{selected.definition.query.form === "records" ? "Records" : "Grouped metrics"}</dd></div>
+      <div><dt>Grouping</dt><dd>{selected.definition.query.groupBy.length ? selected.definition.query.groupBy.join(", ") : "None"}</dd></div>
+      <div><dt>Metrics</dt><dd>{selected.definition.query.metrics.length ? selected.definition.query.metrics.map(item => item.alias).join(", ") : "None"}</dd></div>
+      <div><dt>Visualization</dt><dd>{selected.definition.visualization.kind}</dd></div>
+    </dl> : selected.kind === "dashboard" ? <>
+      <h5>Dashboard layout</h5>
+      {selected.tiles?.length ? <ul>{selected.tiles.map((tile, index) => <li key={tile.id}>Question {index + 1} · {tile.size}</li>)}</ul> : <p>No questions on this dashboard.</p>}
+    </> : <p>No definition details are available for this revision.</p>}
+    {selectedDefinition ? <div className="named-history-technical"><TechnicalDetails label="View technical definition"><pre className="named-definition-inspection">{JSON.stringify(selectedDefinition, null, 2)}</pre></TechnicalDetails></div> : null}
+    {selected.revision !== resource.revision && resource.capabilities.canEdit ? <div className="named-history-restore">
+      {confirmingRevision === selected.revision ? <div className="named-history-confirmation" role="alert">
+        <p>Restoring revision {selected.revision} creates a new revision and preserves the current audience.{hasUnsavedChanges ? " Unsaved changes will be replaced." : ""}</p>
+        <div className="named-actions"><StudioButton type="button" disabled={busy} onClick={() => setConfirmingRevision(undefined)}>Cancel restore</StudioButton><StudioButton type="button" variant="primary" disabled={busy} onClick={() => restore(selected.revision)}>Confirm restore {selected.revision}</StudioButton></div>
+      </div> : <StudioButton type="button" disabled={busy} onClick={() => setConfirmingRevision(selected.revision)} aria-label={`Restore revision ${selected.revision}`}>Restore this revision</StudioButton>}
+    </div> : null}
+  </div> : selectedRevision ? <p role="status">Loading revision snapshot…</p> : <p role="status">Choose a revision to inspect.</p>;
+  return <NativeDialog title="Definition history" onClose={onClose}>
+    <p>History stores definitions, not historical query results. Choose a revision to inspect; restoring creates a new validated revision and preserves the current audience.</p>
+    {error ? <p role="alert">{error}</p> : null}
+    {!items ? <div><p role="status">{error ? "History could not be loaded." : "Loading history…"}</p>{error ? <StudioButton type="button" onClick={() => setLoadAttempt(value => value + 1)}>Retry history</StudioButton> : null}</div> : <StudioVersionHistory
+      label="Definition history"
+      items={historyItems.map(item => ({
+        id: item.revision,
+        ariaLabel: `Inspect revision ${item.revision}`,
+        title: `Revision ${item.revision}`,
+        subtitle: <time dateTime={item.updatedAt}>{formatStudioDate(item.updatedAt)}</time>,
+        status: item.revision === resource.revision ? <StatusChip tone="accent">Current</StatusChip> : undefined
+      }))}
+      selectedId={selectedRevision}
+      onSelect={inspect}
+      emptyState="No saved revisions yet."
+      detail={detail}
+    />}
+  </NativeDialog>;
+}
+
+export function TileOptionsDialog({ api, tile, onClose, onApply }: { api: DashboardApi; tile: DashboardTile; onClose(): void; onApply(tile: DashboardTile): void }) {
+  const lifetime = useRequestLifetime();
+  const [question, setQuestion] = useState<DashboardResource>();
+  const [presentation, setPresentation] = useState<Visualization>(tile.presentation ?? { kind: "table", y: [] });
+  const [parameters, setParameters] = useState<Record<string, QueryValue>>(tile.parameters ?? {});
+  const [error, setError] = useState<string>();
+  useEffect(() => { const request = lifetime.begin("load"); void api.get("question", tile.questionId!, request.signal).then(resource => { if (!request.current()) return; setQuestion(resource); if (!tile.presentation && resource.definition) setPresentation(resource.definition.visualization); }).catch(cause => { if (request.current()) setError(errorMessage(cause)); }).finally(request.finish); return () => lifetime.cancel("load"); }, [api, tile, lifetime]);
+  const definition = question?.definition;
+  const columns = definition ? [...definition.query.fields, ...definition.query.groupBy, ...definition.query.metrics.flatMap(metric => [metric.alias, `current.${metric.alias}`, ...(definition.query.comparison ? [`baseline.${metric.alias}`, `delta.${metric.alias}`] : [])])] : [];
+  return <NativeDialog title="Tile presentation and parameters" onClose={onClose}
+    footer={<StudioDialogFooter confirmType="button" onCancel={onClose} confirmLabel="Use tile settings" confirmDisabled={Boolean(error) || !definition}
+      onConfirm={() => onApply({ ...tile, presentation, parameters })} />}><p>These settings affect this tile only. The saved question stays unchanged. Save the dashboard layout to persist them.</p>{error ? <p role="alert">{error}</p> : !question ? <p role="status">Loading current question…</p> : !definition ? <p role="status">Question settings are unavailable under your current access. The existing overrides remain preserved.</p> : <>
+    <StudioField label="Tile visualization"><select value={presentation.kind} onChange={event => setPresentation({ ...presentation, kind: event.target.value as Visualization["kind"] })}>{["table", "bar", "line", "list", "metric"].map(item => <option key={item}>{item}</option>)}</select></StudioField>
+    <StudioField label="Tile label"><input value={presentation.label ?? ""} onChange={event => setPresentation({ ...presentation, label: event.target.value })} /></StudioField>
+    <StudioField label="Horizontal axis"><select value={presentation.x ?? ""} onChange={event => setPresentation({ ...presentation, x: event.target.value || undefined })}><option value="">None</option>{columns.map(item => <option key={item}>{item}</option>)}</select></StudioField>
+    <StudioMultiSelectField label="Value columns" value={presentation.y} onChange={y => setPresentation({ ...presentation, y })}>
+      {columns.map(item => <option key={item}>{item}</option>)}
+    </StudioMultiSelectField>
+    {definition.query.parameters.map(parameter => <fieldset key={parameter.name}><legend>{parameter.name} ({parameter.type})</legend><label><input type="checkbox" checked={Object.hasOwn(parameters, parameter.name)} onChange={event => setParameters(current => { const next = { ...current }; if (!event.target.checked) delete next[parameter.name]; else next[parameter.name] = parameter.default ?? { type: parameter.type, literal: "" }; return next; })} />Override the saved default</label>{Object.hasOwn(parameters, parameter.name) ? <><StudioField label="Value kind"><select value={parameters[parameter.name].type === "null" ? "null" : "value"} onChange={event => setParameters(current => ({ ...current, [parameter.name]: event.target.value === "null" ? { type: "null" } : { type: parameter.type, literal: "" } }))}><option value="value">Typed value</option>{parameter.nullable ? <option value="null">Null</option> : null}</select></StudioField>{parameters[parameter.name].type !== "null" ? <StudioField label={<>Override value for {parameter.name}</>}><input value={parameters[parameter.name].literal ?? ""} onChange={event => setParameters(current => ({ ...current, [parameter.name]: { type: parameter.type, literal: event.target.value } }))} /></StudioField> : null}</> : <p>Uses the saved question default.</p>}</fieldset>)}
+  </>}</NativeDialog>;
+}
+
+export function QuestionPickerDialog({ api, canCreate = true, onClose, onPick, onCreate }: { api: DashboardApi; canCreate?: boolean; onClose(): void; onPick(question: DashboardResource): void; onCreate(): void }) {
+  const lifetime = useRequestLifetime();
+  const [items, setItems] = useState<DashboardResource[]>([]);
+  const [cursors, setCursors] = useState<{ mine?: string | null; shared?: string | null }>({});
+  const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>();
+  const load = React.useCallback(async (query: string, next?: { mine?: string | null; shared?: string | null }) => {
+    const request = lifetime.begin("questions"); setLoading(true); setError(undefined);
+    if (!next) { setItems([]); setCursors({}); }
+    try {
+      const pages = await Promise.all((["mine", "shared"] as const).map(async ownership => !next || next[ownership]
+        ? { ownership, page: await api.list("question", ownership, query, next?.[ownership], request.signal) }
+        : { ownership, page: undefined }));
+      if (!request.current()) return;
+      const additions = pages.flatMap(item => item.page?.items ?? []);
+      setItems(current => [...(next ? current : []), ...additions].filter((item, index, all) => all.findIndex(candidate => candidate.id === item.id) === index));
+      setCursors(Object.fromEntries(pages.map(item => [item.ownership, item.page?.continuationToken ?? null])));
+      setAppliedSearch(query);
+    } catch (cause) {
+      if (request.current()) { setError(errorMessage(cause)); if (accessLost(cause)) { setItems([]); setCursors({}); } }
+    } finally { if (request.current()) setLoading(false); request.finish(); }
+  }, [api, lifetime]);
+  useEffect(() => { void load(""); return () => lifetime.cancel("questions"); }, [load, lifetime]);
+  return <NativeDialog title="Add saved question" onClose={onClose}><p>Adding a reference does not share the question or copy another person's results. You can add the same question more than once.</p>
+    <form onSubmit={event => { event.preventDefault(); void load(search); }}><StudioField label="Search accessible questions"><input value={search} onChange={event => setSearch(event.target.value)} /></StudioField><StudioButton type="submit" disabled={loading}>Search questions</StudioButton></form>
+    {error ? <p role="alert">{error}</p> : null}{loading ? <p role="status">Loading accessible questions…</p> : !items.length ? <p role="status">{appliedSearch ? "No accessible questions match this search." : canCreate ? "No accessible saved questions. Create a question first or check your access." : "No accessible saved questions under your current access."}</p> : null}
+    {items.length ? <ul className="named-picker-list">{items.map(question => <li key={question.id}><span>{question.name}</span><StudioButton onClick={() => onPick(question)}>Add {question.name}</StudioButton></li>)}</ul> : null}
+    {cursors.mine || cursors.shared ? <StudioButton disabled={loading} onClick={() => void load(appliedSearch, cursors)}>Load more questions</StudioButton> : null}
+    {items.length ? <p>{items.length} accessible questions loaded.</p> : null}{canCreate ? <StudioButton onClick={onCreate}>Create a question</StudioButton> : null}
+  </NativeDialog>;
+}
+
+export function AddToDashboardDialog({ api, question, dirty = false, canCreateDashboard = true, onClose, onAdded, onOpenDashboard, onCreateDashboard }: {
+  api: DashboardApi;
+  question: DashboardResource;
+  dirty?: boolean;
+  canCreateDashboard?: boolean;
+  onClose(): void;
+  onAdded(dashboard: DashboardResource): void;
+  onOpenDashboard(dashboardId: string): void;
+  onCreateDashboard(): void;
+}) {
+  const lifetime = useRequestLifetime();
+  const [items, setItems] = useState<DashboardResource[]>([]);
+  const [cursors, setCursors] = useState<{ mine?: string | null; shared?: string | null }>({});
+  const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [addingId, setAddingId] = useState<string>();
+  const [added, setAdded] = useState<{ id: string; name: string }>();
+  const [error, setError] = useState<string>();
+  const load = useCallback(async (query: string, next?: { mine?: string | null; shared?: string | null }) => {
+    const request = lifetime.begin("dashboards"); setLoading(true); setError(undefined);
+    if (!next) { setItems([]); setCursors({}); }
+    try {
+      const pages = await Promise.all((["mine", "shared"] as const).map(async ownership => !next || next[ownership]
+        ? { ownership, page: await api.list("dashboard", ownership, query, next?.[ownership], request.signal) }
+        : { ownership, page: undefined }));
+      if (!request.current()) return;
+      const additions = pages.flatMap(item => item.page?.items ?? []).filter(item => item.capabilities.canEdit);
+      setItems(current => [...(next ? current : []), ...additions].filter((item, index, all) => all.findIndex(candidate => candidate.id === item.id) === index));
+      setCursors(Object.fromEntries(pages.map(item => [item.ownership, item.page?.continuationToken ?? null])));
+      setAppliedSearch(query);
+    } catch (cause) {
+      if (request.current()) { setError(errorMessage(cause)); if (accessLost(cause)) { setItems([]); setCursors({}); } }
+    } finally { if (request.current()) setLoading(false); request.finish(); }
+  }, [api, lifetime]);
+  useEffect(() => { void load(""); return () => lifetime.cancel("dashboards"); }, [load, lifetime]);
+  const addToDashboard = async (target: DashboardResource) => {
+    if (addingId) return;
+    const request = lifetime.begin("add-tile");
+    setAddingId(target.id); setError(undefined);
+    try {
+      const current = await api.get("dashboard", target.id, request.signal);
+      if (!request.current()) return;
+      if (!current.capabilities.canEdit) {
+        setItems(existing => existing.filter(item => item.id !== target.id));
+        setError(`You no longer have edit access to "${current.name}".`);
+        return;
+      }
+      if ((current.tiles?.length ?? 0) >= 50) {
+        setError(`"${current.name}" already has the maximum of 50 tiles.`);
+        return;
+      }
+      const tile: DashboardTile = { id: crypto.randomUUID(), questionId: question.id, size: "medium", referenceState: "available" };
+      const updated = await api.save({ ...current, tiles: [...(current.tiles ?? []), tile] }, crypto.randomUUID(), request.signal);
+      if (!request.current()) return;
+      setAdded({ id: updated.id, name: updated.name });
+      onAdded(updated);
+    } catch (cause) {
+      if (request.current()) {
+        setError(errorMessage(cause));
+        if (accessLost(cause)) setItems(existing => existing.filter(item => item.id !== target.id));
+      }
+    } finally { if (request.current()) setAddingId(undefined); request.finish(); }
+  };
+  return <NativeDialog title="Add to dashboard" onClose={onClose}>
+    <p>Adds a reference to "{question.name}" as a new tile. Viewers still need access to this question and its underlying data.</p>
+    {dirty ? <p role="status">Your unsaved edits are not included yet. Save this question first to reflect them on dashboards.</p> : null}
+    {added ? <div className="named-added-confirmation" role="status"><p>Added to "{added.name}".</p><StudioButton type="button" onClick={() => onOpenDashboard(added.id)}>Open {added.name}</StudioButton></div> : null}
+    <form onSubmit={event => { event.preventDefault(); void load(search); }}><StudioField label="Search editable dashboards"><input value={search} onChange={event => setSearch(event.target.value)} /></StudioField><StudioButton type="submit" disabled={loading || addingId !== undefined}>Search dashboards</StudioButton></form>
+    {error ? <p role="alert">{error}</p> : null}
+    {loading ? <p role="status">Loading editable dashboards…</p> : !items.length ? <p role="status">{appliedSearch ? "No editable dashboards match this search." : canCreateDashboard ? "No editable dashboards yet. Create a new dashboard with this question." : "No editable dashboards are available under your current access."}</p> : null}
+    {items.length ? <ul className="named-picker-list">{items.map(dashboard => <li key={dashboard.id}><span>{dashboard.name}</span><StudioButton type="button" disabled={addingId !== undefined} onClick={() => void addToDashboard(dashboard)}>{addingId === dashboard.id ? "Adding…" : `Add to ${dashboard.name}`}</StudioButton></li>)}</ul> : null}
+    {cursors.mine || cursors.shared ? <StudioButton type="button" disabled={loading || addingId !== undefined} onClick={() => void load(appliedSearch, cursors)}>Load more dashboards</StudioButton> : null}
+    {items.length ? <p>{items.length} editable {items.length === 1 ? "dashboard" : "dashboards"} loaded.</p> : null}
+    {canCreateDashboard ? <StudioButton type="button" disabled={addingId !== undefined} onClick={onCreateDashboard}>New dashboard with this question</StudioButton> : null}
+  </NativeDialog>;
+}
+
+export function DrillRecordsDialog({
+  questionName,
+  rowSummary,
+  datasetId,
+  recordLinks,
+  navigate,
+  result,
+  loading,
+  loadingMore = false,
+  error,
+  onLoadMore,
+  onClose
+}: {
+  questionName?: string;
+  rowSummary?: string;
+  datasetId?: string;
+  recordLinks?: readonly StudioDashboardRecordLinkContribution[];
+  navigate?(path: string): void;
+  result?: QueryResult;
+  loading: boolean;
+  loadingMore?: boolean;
+  error?: string;
+  onLoadMore?(): void;
+  onClose(): void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const contextParts = [questionName?.trim(), result && !error ? rowSummary?.trim() : undefined].filter(Boolean);
+  const description = contextParts.length ? contextParts.join(" — ") : undefined;
+  const exportFilename = questionName?.trim() ? `${questionName.trim()}-matching-records` : "matching-source-records";
+  const footer = <div className="named-drill-footer">
+    <div className="named-drill-footer-start">
+      {result?.nextCursor && onLoadMore ? <StudioButton type="button" disabled={loading || loadingMore} onClick={onLoadMore}>
+        {loadingMore ? "Loading more…" : "Load more records"}
+      </StudioButton> : null}
+    </div>
+    <div className="named-drill-footer-end">
+      <StudioButton
+        type="button"
+        variant="ghost"
+        aria-pressed={expanded}
+        onClick={() => setExpanded(current => !current)}
+      >
+        {expanded ? <Minimize2 size={14} aria-hidden="true" /> : <Maximize2 size={14} aria-hidden="true" />}
+        {expanded ? "Restore size" : "Expand"}
+      </StudioButton>
+      <StudioButton type="button" onClick={onClose}>Close</StudioButton>
+    </div>
+  </div>;
+
+  return <NativeDialog
+    title="Matching source records"
+    description={description}
+    className={expanded ? "named-dialog--wide named-dialog--expanded" : "named-dialog--wide"}
+    onClose={onClose}
+    footer={footer}
+  >
+    {loading && !result ? <p role="status">Loading authorized source records…</p> : null}
+    {error ? <p role="alert">{error}</p> : null}
+    {result ? <ResultView
+      result={result}
+      visualization={{ kind: "table", y: [] }}
+      datasetId={datasetId}
+      recordLinks={recordLinks}
+      navigate={navigate}
+      onNavigateRecord={onClose}
+      enableFilter
+      enableSort
+      enableRowCopy
+      stickyHeader
+      exportFilename={exportFilename}
+    /> : null}
+  </NativeDialog>;
+}

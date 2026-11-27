@@ -336,23 +336,33 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
     internal static JsonElement BuildGraphManifest(Elsa3ConvertedDefinition converted)
     {
         var state = converted.State;
-        var variables = state.Variables.Select(variable => new
+        // A variable without a value has no initial value: the manifest's initialValue is optional and an explicit null is
+        // refused as a malformed expression (#5850), so that shape leaves the property out. Both shapes serialize in the
+        // one pass below, so a default's JSON passes through the baseline's raw converter unchanged (ADR 0091).
+        var variables = state.Variables.Select(variable =>
         {
-            referenceKey = variable.ReferenceKey,
-            name = variable.Name,
-            type = new
+            var type = new
             {
                 alias = variable.Type.Alias,
                 // The graph manifest reads the exact CollectionKind name (Single, Array, ...).
                 collectionKind = variable.Type.CollectionKind.ToString()
-            },
-            storageDriverKey = variable.StorageDriverType ?? "elsa.json",
-            initialValue = variable.Default is null ? null : new
-            {
-                syntax = variable.Default.ExpressionType ?? "Literal",
-                value = variable.Default.Value
-            }
-        });
+            };
+            var storageDriverKey = variable.StorageDriverType ?? "elsa.json";
+            return variable.Default is null
+                ? (object)new { referenceKey = variable.ReferenceKey, name = variable.Name, type, storageDriverKey }
+                : new
+                {
+                    referenceKey = variable.ReferenceKey,
+                    name = variable.Name,
+                    type,
+                    storageDriverKey,
+                    initialValue = new
+                    {
+                        syntax = variable.Default.ExpressionType ?? "Literal",
+                        value = variable.Default.Value
+                    }
+                };
+        }).ToArray();
         return JsonSerializer.SerializeToElement(new
         {
             rootActivity = state.RootActivity,

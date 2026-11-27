@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Kernel.Foundation.Sqlite</RootNamespace>
+    <AssemblyName>Kernel.Foundation.Sqlite</AssemblyName>
+    <PackageId>Elsa.ActorFoundation.BuiltIn.Sqlite</PackageId>
+    <Description>Opt-in Embedded SQLite node composition for the Built-in Actor Foundation.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kernel.Native.Run" />
+    <None Update="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>
