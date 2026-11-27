@@ -28,11 +28,7 @@ public sealed class WorkflowsDashboardFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddElsaEndpoints();
-        services.AddApiCapability(new ApiCapabilityDeclaration(
-            "elsa.api.workflow-dashboard", 1,
-            [new("workflow-portfolio", "_elsa/workflows/dashboard/definitions"), new("workflow-run-health", "_elsa/workflows/dashboard/runs")],
-            "WorkflowsDashboard"));
+        services.TryAddSingleton(new LegacyWorkflowDashboardSelected());
         services.TryAddScoped<IWorkflowRunHealthDataSource>(provider =>
         {
             var executions = provider.GetRequiredService<IWorkflowExecutionStateStore>();
@@ -42,6 +38,16 @@ public sealed class WorkflowsDashboardFeature : IWebShellFeature
                 ? new InMemoryWorkflowRunHealthDataSource(inMemoryExecutions, inMemoryIncidents)
                 : new UnavailableWorkflowRunHealthDataSource();
         });
+        ConfigureDashboardServices(services, "WorkflowsDashboard");
+    }
+
+    internal static void ConfigureDashboardServices(IServiceCollection services, string featureName)
+    {
+        services.AddElsaEndpoints();
+        services.AddApiCapability(new ApiCapabilityDeclaration(
+            "elsa.api.workflow-dashboard", 1,
+            [new("workflow-portfolio", "_elsa/workflows/dashboard/definitions"), new("workflow-run-health", "_elsa/workflows/dashboard/runs")],
+            featureName));
         services.TryAddScoped<IWorkflowRunHealthService, WorkflowRunHealthService>();
         services.TryAddScoped<IWorkflowPortfolioDataSource, UnavailableWorkflowPortfolioDataSource>();
         services.TryAddScoped<IWorkflowPortfolioService>(provider => new WorkflowPortfolioService(
@@ -55,3 +61,5 @@ public sealed class WorkflowsDashboardFeature : IWebShellFeature
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
         WorkflowsDashboardApi.MapWorkflowsDashboardApi(endpoints);
 }
+
+internal sealed class LegacyWorkflowDashboardSelected;

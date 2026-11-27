@@ -22,6 +22,7 @@ public sealed class WorkflowsRuntimeAttentionFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.TryAddSingleton(new LegacyWorkflowRuntimeAttentionSelected());
         services.TryAddSingleton<IWorkflowRuntimeAttentionQuery>(provider =>
         {
             var executionStore = provider.GetRequiredService<IWorkflowExecutionStateStore>();
@@ -31,6 +32,11 @@ public sealed class WorkflowsRuntimeAttentionFeature : IShellFeature
                 ? new InMemoryWorkflowRuntimeAttentionQuery(inMemoryExecutions, inMemoryIncidents, provider.GetService<TimeProvider>())
                 : new UnavailableWorkflowRuntimeAttentionQuery();
         });
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAttentionContributor, WorkflowRuntimeAttentionContributor>());
+        AddContributor(services);
     }
+
+    internal static void AddContributor(IServiceCollection services) =>
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAttentionContributor, WorkflowRuntimeAttentionContributor>());
 }
+
+internal sealed class LegacyWorkflowRuntimeAttentionSelected;
