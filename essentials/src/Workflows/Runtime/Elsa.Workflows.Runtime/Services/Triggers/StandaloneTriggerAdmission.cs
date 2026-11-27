@@ -28,8 +28,8 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
             submittedIntent, context.Actor);
         // Saved acceptance wins before today's enabled state, targets, mappings, policy and publication are consulted.
         if (await delivery.FindAcceptedAsync(context.Scope, sourceId, requestFingerprint, ct) is { } prior) return prior;
-        if (preparedAdmission is not null && (prepared is null || context.WaitCandidate is not null))
-            throw new NotSupportedException("Prepared standalone admission requires the selected Foundation handoff and does not accept ordinary waits.");
+        if (preparedAdmission is not null && prepared is null)
+            throw new NotSupportedException("Prepared standalone admission requires the selected Foundation handoff.");
         if (!TriggerSourcePipeline.Supports(processor, dispatcher, RuntimeDeliverySourceKind.StandaloneIngress,
                 RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind))
             throw new NotSupportedException("The selected Runtime processing pipeline cannot drain standalone trigger work.");
@@ -64,6 +64,9 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
         var source = new RuntimeStandaloneIngressSource(1, sourceId, sourceId, now, context.Scope.Persistence,
             context.Scope.TenantId, context.Partition, trigger.Id, trigger.Revision, trigger.AssociationRevision,
             producer.SourceFamily, signal.SourceKey, requestFingerprint, signal.PayloadSchema, envelope, policy, context.Actor);
+        if (preparedAdmission is not null && context.WaitCandidate is not null &&
+            !PreparedStandaloneHttp.HasEmptyWaitObservation(source, context.WaitCandidate))
+            throw new NotSupportedException("Prepared standalone admission requires an empty HTTP wait cohort.");
         var accepted = new List<RuntimeSubscriptionRecipient>();
         var refused = new List<RuntimeSubscriptionRefusal>();
         var observations = new List<RuntimeIngressTargetObservation>();

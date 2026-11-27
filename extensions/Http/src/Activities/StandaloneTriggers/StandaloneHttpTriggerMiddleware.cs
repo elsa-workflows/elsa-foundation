@@ -62,7 +62,9 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
             { await ProblemAsync(context, 401, "SourceUnauthorized", "Sign in to invoke this HTTP trigger."); return; }
             owner = standalone[0];
             sourceContext.Bind(owner);
-            var waits = await ObserveWaitsAsync(owner.Scope, hash, context.RequestAborted);
+            var waits = deliveryStore?.RequiresEmptyHttpWaitCohort == true
+                ? Array.Empty<BookmarkStateObservation>()
+                : await ObserveWaitsAsync(owner.Scope, hash, context.RequestAborted);
             var waitOptions = HttpEndpointStimulusOptions.MergeForResume(waits.Select(item => (IReadOnlyDictionary<string, string>?)item.State.Metadata));
             if (waitOptions.Authorize && (authorization is null ||
                 !await HttpEndpointRequestAuthorization.AuthorizeAsync(authorization, context, waitOptions.Policies)))

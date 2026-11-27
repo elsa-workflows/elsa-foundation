@@ -13185,3 +13185,4 @@ Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Pending
 Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Missing = 2 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
 Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.TooLarge = 3 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
 Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Ready = 4 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeIngressDeliveryStore.RequiresEmptyHttpWaitCohort.get -> bool

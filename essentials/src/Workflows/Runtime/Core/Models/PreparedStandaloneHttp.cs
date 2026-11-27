@@ -17,9 +17,12 @@ internal static class PreparedStandaloneHttp
         TryObject(trigger, "configuration", out var configuration) && TryObject(configuration, "http", out var http) &&
         http.TryGetProperty("mode", out var mode) && mode.ValueKind == JsonValueKind.String && mode.ValueEquals(expected);
 
+    internal static bool HasEmptyWaitObservation(RuntimeStandaloneIngressSource source, RuntimeIngressWaitCandidate? candidate) =>
+        (IsAsyncFanOut(source) || IsWorkflowResponse(source)) && candidate?.ObservedWaits is { Count: 0 };
+
     internal static bool HasVerifiedEmptyWaits(RuntimePostCommitOutboxItem item) =>
-        item.StandaloneIngress is { } source && (IsAsyncFanOut(source) || IsWorkflowResponse(source)) &&
-        item.SubscriptionDelivery?.WaitDelivery is { Recipients.Count: 0, Candidate.ObservedWaits.Count: 0 };
+        item.StandaloneIngress is { } source && item.SubscriptionDelivery?.WaitDelivery is { Recipients.Count: 0 } cohort &&
+        HasEmptyWaitObservation(source, cohort.Candidate);
 
     internal static (string Method, string Path)? AcceptedRoute(RuntimePostCommitOutboxItem item)
     {

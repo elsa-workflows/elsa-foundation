@@ -24,7 +24,8 @@ internal sealed class PreparedStandaloneAdmission
     internal static void RequireSource(RuntimePostCommitOutboxItem item)
     {
         if (item.StandaloneIngress is not { } source || !IsMarked(source) ||
-            item.SubscriptionDelivery is not { } selection || selection.WaitDelivery is not null ||
+            item.SubscriptionDelivery is not { } selection ||
+            selection.WaitDelivery is not null && !PreparedStandaloneHttp.HasVerifiedEmptyWaits(item) ||
             selection.Recipients.Any(recipient => recipient.ModelKey != "native" || recipient.ModelProtocol is not null) ||
             selection.Progress.Any(progress => progress.Seal is { } seal && seal.Version != RuntimeDispatchSeal.PreparedStartQualificationVersion))
             throw new NotSupportedException("This Runtime owner requires standalone sources accepted for prepared Actor Foundation delivery.");

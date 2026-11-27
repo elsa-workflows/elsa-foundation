@@ -8,6 +8,8 @@ public interface IRuntimeIngressDeliveryStore
 {
     /// <summary>True only for one coherent selected resource, publication, material, retention and outbox provider boundary.</summary>
     bool SupportsAdmission => false;
+    /// <summary>HTTP admission proves an empty ordinary bookmark range in its physical source commit.</summary>
+    bool RequiresEmptyHttpWaitCohort => false;
     bool SupportsInspection => false;
     bool SupportsControls => false;
     bool SupportsWorkflowCohort(string intentKind) => false;

@@ -44,6 +44,8 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         CancellationToken cancellationToken = default) =>
         EfTriggerBoundary.RunAsync(() => CancelPendingAsyncCore(request, cancellationToken), request?.Scope?.Persistence.Value, request?.SourceOutboxItemId);
 
+    public bool RequiresEmptyHttpWaitCohort => PreparedStandaloneOnly;
+
     public bool SupportsAdmission
     {
         get
@@ -93,7 +95,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         if (PreparedStandaloneOnly)
         {
             PreparedStandaloneAdmission.RequireSource(request.Candidate);
-            if (request.WaitCandidate is not null ||
+            if (request.WaitCandidate is not null && !PreparedStandaloneHttp.HasEmptyWaitObservation(source, request.WaitCandidate) ||
                 request.Candidate.SubscriptionDelivery!.Recipients.Any(recipient => !preparedTarget!.Selects(source, recipient)))
                 throw new NotSupportedException("This Runtime owner admits only prepared Actor Foundation starts.");
         }
