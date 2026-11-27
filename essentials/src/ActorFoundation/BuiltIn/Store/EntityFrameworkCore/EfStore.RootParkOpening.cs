@@ -176,6 +176,12 @@ public sealed partial class EfStore
                     WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
                         AND "EventMatch" IS NULL AND NOT "Done" AND "Id" LIKE 'operator/%' AND "Start" LIKE {ParkSelectedOperator}
                     """, cancellationToken);
+            if (db.UsesRootChildren)
+                await db.Database.ExecuteSqlRawAsync($"""
+                    UPDATE "Messages" m SET "Seen" = 0, "Trial" = 0
+                    WHERE m."Target" = {"{0}"} AND m."Partition" = {"{1}"} AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        AND m."EventMatch" IS NULL AND NOT m."Done" AND {RootChildNoticePredicate("m")}
+                    """, [Root.Actor, Root.Partition], cancellationToken);
             if (Reason == ParkKeepReason.Consumed)
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     DELETE FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition}

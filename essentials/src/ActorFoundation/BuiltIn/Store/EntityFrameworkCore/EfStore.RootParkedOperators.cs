@@ -200,16 +200,20 @@ public sealed partial class EfStore
             effects = PrepareRootChildEffects(root, row, sends!) ?? throw RootShape();
         }
         else if (sends is not null) throw RootShape();
-        if (endsAttached && current.Children is not null)
+        if (endsAttached && (current.Children is not null || current.Jobs is not null))
         {
-            if (turn.FoundationCascade is not { Input: null, Entries.Jobs.IsEmpty: true } cascade) throw RootShape();
-            effects = WithPendingChildCascade(root, row, current, cascade, effects);
+            if (turn.FoundationCascade is not { Input: null } cascade ||
+                !JobRegistry.Read(current.Jobs).SequenceEqual(cascade.Entries.Jobs)) throw RootShape();
+            if (!cascade.Entries.Children.IsEmpty)
+                effects = WithPendingChildCascade(root, row, current, cascade, effects);
+            else if (current.Children is not null) throw RootShape();
         }
         else if (turn.FoundationCascade is not null) throw RootShape();
         if (row != WorkerRow(root, current) with
             {
                 Status = row.Status, Suspended = ends && !discards ? false : current.Suspended, Revision = checked(expected + 1), Fault = row.Fault,
-                FoundationDispatchHeader = header, Children = endsAttached ? null : current.Children
+                FoundationDispatchHeader = header, Children = endsAttached ? null : current.Children,
+                Jobs = endsAttached ? null : current.Jobs
             } || header.Tenant != root.Tenant || header.Reference != root.Reference || header.Header.TypeData != current.TypeData ||
             header.Header.Labels.Count != current.Labels.Count ||
             current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))
@@ -220,6 +224,7 @@ public sealed partial class EfStore
             {
                 ChildEffects = effects,
                 Children = attached ? current.Children : null,
+                Jobs = attached ? current.Jobs : null,
                 SelfIssuer = _rootChildReference is null ? null : RootSelfIssuer
             });
     }
@@ -236,11 +241,12 @@ public sealed partial class EfStore
             ROW(_."State", _."StateVersion", _."FoundationHeader", _."Fault", _."History", _."Jobs", _."Children", _."Parent",
                 _."Model", _."Definition", _."NextJobGeneration", _."CustomHandles" /*wire*/)
             """;
-        string Row(string side, bool clearsAttachedChildren = false) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
-            .Replace("OLD.\"Children\"",
-                clearsAttachedChildren ? """(CASE WHEN OLD."Parent" IS NOT NULL THEN NULL ELSE OLD."Children" END)""" : "OLD.\"Children\"",
-                StringComparison.Ordinal)
+        string Row(string side, bool endsAttached = false) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
+            .Replace("OLD.\"Children\"", ParkedRegistry("Children", endsAttached), StringComparison.Ordinal)
+            .Replace("OLD.\"Jobs\"", ParkedRegistry("Jobs", endsAttached), StringComparison.Ordinal)
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal);
+        static string ParkedRegistry(string column, bool endsAttached) => endsAttached
+            ? $"""(CASE WHEN OLD."Parent" IS NOT NULL THEN NULL ELSE OLD."{column}" END)""" : $"OLD.\"{column}\"";
         var keptScope = db.UsesSqliteShippedInstall ? "" : """k."InboxScope" = -4 AND """;
         const string pageKind = """ AND NEW."FoundationParkClearingKind" = OLD."FoundationParkClearingKind" """;
         string End(string ended, string kind, string entries) => $$$"""
@@ -417,6 +423,19 @@ public sealed partial class EfStore
                     AND (NEW."Entries" NOT LIKE '{{"Outcome":"clearing",%' OR i."FoundationParkClearing" IS NOT NULL)
         """;
 
+    private static string ClearAttachedParkJobPin(KernelDb db, string column) => db.UsesRootChildren ? $"""
+         OR (OLD."Status" = 2 AND NEW."Status" = 3 AND OLD."Parent" IS NOT NULL
+            AND NEW."FoundationParkAt" IS NULL AND NEW."{column}" IS NULL AND NEW."Jobs" IS NULL)
+        """ : "";
+
+    private static readonly string SettledParkedChildJob = $$$"""
+         AND (NEW."Entries" NOT LIKE '{{"Outcome":"terminated",%' OR i."Parent" IS NULL OR
+            (i."FoundationParkJobResult" IS NULL AND i."FoundationParkLiveJob" IS NULL
+                AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
+                    AND m."InboxScope" = {{{RootTimedJobScope}}})
+                AND NOT EXISTS (SELECT 1 FROM "FoundationProtectedTimedJobs" p WHERE p."Actor" = i."Id")))
+        """;
+
     private const string StoppedParkOutcomeCheckpoint = """
         AND (NEW."Entries" NOT LIKE '{{"Outcome":"clearing-stopped",%' OR
             i."Status" = 2 AND NOT i."Retired" AND i."FoundationParkAt" IS NOT NULL
@@ -438,6 +457,7 @@ public sealed partial class EfStore
             """, token);
 
     private sealed record LockedParkedRoot(long At, string Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion, string? ClearingKind);
+    private sealed record ParkedJobPins(string? Result, string? Live);
 
     private sealed record RootParkedRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended, long? ProtectionRefusals,
         FoundationSelfIssuer? Issue)
@@ -519,6 +539,7 @@ public sealed partial class EfStore
     {
         internal RootChildEffects? ChildEffects { get; init; }
         internal string? Children { get; init; }
+        internal string? Jobs { get; init; }
         internal FoundationSelfIssuer? SelfIssuer { get; init; }
 
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
@@ -536,7 +557,8 @@ public sealed partial class EfStore
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND i."Suspended" = {Suspended}
                     AND i."Status" = {(int)InstanceStatus.Faulted} AND i."Revision" = {Expected} AND i."FoundationParkAt" = {Mark.At}
                     AND i."FoundationParkRevision" = {Mark.Revision} AND i."Fault" IS NOT NULL AND i."FoundationTerminalRevision" IS NULL
-                    AND i."Jobs" IS NULL AND i."Children" IS NOT DISTINCT FROM {Children}::text AND i."CustomHandles" IS NULL
+                    AND i."Jobs" IS NOT DISTINCT FROM {Jobs}::text AND i."Children" IS NOT DISTINCT FROM {Children}::text
+                    AND i."CustomHandles" IS NULL
                     AND (NOT {parentTerminate} OR i."Parent" = {Command.Sender})
                     AND i."FoundationParkClearing" IS NOT DISTINCT FROM {Clearing}::text
                     AND ({Clearing}::text IS NULL OR i."FoundationParkClearingKind" = {Command.Kind})
@@ -545,6 +567,16 @@ public sealed partial class EfStore
                 FOR UPDATE OF i
                 """).ToListAsync(token);
             if (locked is not [var prior]) return false;
+            RecoverableRootJob? job = null;
+            if (Ends && Jobs is not null)
+            {
+                var pins = await db.Database.SqlQuery<ParkedJobPins>($"""
+                    SELECT "FoundationParkJobResult" AS "Result", "FoundationParkLiveJob" AS "Live"
+                    FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
+                    """).SingleAsync(token);
+                job = await ReadRecoverableRootJobAsync(db, Root.Actor, Root.Partition, Jobs, pins.Result, pins.Live, token);
+                if (job is null) return false;
+            }
             // Nothing is kept while a clearing is open, so a page reads and locks only its rows and one more; Open reads them all.
             var kept = await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token, Clearing is null ? int.MaxValue : InMemoryStore.ParkPageLimit + 1);
             var page = kept.Take(PageLength(kept)).ToArray();
@@ -565,8 +597,8 @@ public sealed partial class EfStore
                 Expected, SelfIssuer, includeImmediate: false, token)) return false;
             FormattableString end = $"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
-                    "Status" = {(int)status}, "Suspended" = {discards} AND "Suspended", "Children" = NULL,
-                    "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL,
+                    "Status" = {(int)status}, "Suspended" = {discards} AND "Suspended", "Children" = NULL, "Jobs" = NULL,
+                    "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL /*park-job-result*/,
                     "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL,
                     "FoundationTerminalRevision" = {JournalRevision},
                     "FoundationTerminalAt" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint
@@ -578,7 +610,11 @@ public sealed partial class EfStore
                     "FoundationParkClearing" = {Command.Id}, "FoundationParkClearingKind" = {Command.Kind}, "FoundationParkCleared" = {total}
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                 """;
-            if (await db.Database.ExecuteSqlInterpolatedAsync(Ends ? end : advance, token) != 1) return false;
+            if (await db.Database.ExecuteSqlInterpolatedAsync(Ends ? ClearParkJobPins(db, end, job is not null) : advance, token) != 1)
+                return false;
+            if (job is { } pinnedJob && (pinnedJob.Live is { } live
+                ? !await DeleteRootTimedRowsAsync(db, new(Root.Actor, 1), live.Ids, token)
+                : !await ClearConsumedRootJobAsync(db, Root.Actor, Root.Partition, pinnedJob.ConsumedId, token))) return false;
             // An Open withholds the root's inputs until the end: one the owner read ahead is marked unseen, and the owner forgets
             // its copy by the same predicate (Worker), so the next poll reads it again under the clearing's filter.
             if (Clearing is null && !Ends && ClearsParkInPages(db))

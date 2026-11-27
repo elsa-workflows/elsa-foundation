@@ -177,7 +177,7 @@ internal sealed partial class ActorAdapter
             };
             if (roots.SupportsChildren && ended.Parent is not null)
             {
-                if (row.Children is not null)
+                if (row.Children is not null || row.Jobs is not null)
                     Durable.CascadeProtocol.Open(terminated, Durable.CascadeRegistry.From(row));
                 terminated.Sent.Add(Durable.FoundationChildNotice.Create(ended, null, final: true));
                 RequireRootOutcome(terminated, row, control);

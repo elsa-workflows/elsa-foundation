@@ -37,8 +37,13 @@ internal static class PostgresChildWorkflowChecks
             .Add(Wf.Workflow("cascade-parent", Wf.Parallel("cascade", null,
                 Wf.Dispatch("left", "child", wait: true), Wf.Dispatch("right", "child", wait: true))))
             .Add(Wf.Workflow("nested-parent", Wf.Dispatch("dispatch", "parent", wait: true)))
+            .Add(Wf.Workflow("job-parent", Wf.Dispatch("dispatch", "job-child", wait: true)))
+            .Add(Wf.Workflow("job-child", Wf.Http("fetch", "https://partner.example/stuck", timeout: TimeSpan.FromMinutes(2))))
             .Add(Wf.Workflow("bulk-parent", Wf.Node<ReleaseChild>("wait")));
-        var actor = new ChildFixtureActor(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases)]));
+        var partner = new BlockingPartner();
+        using var http = new HttpClient(partner);
+        var actor = new ChildFixtureActor(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases,
+            new NativeExecutionOptions { Http = new NativeHttpOptions { Client = http } })]));
         var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, actor.Type,
             PostgresPreviewHosting.CreateRequests(Open, node, actor.Type), cancellationToken: token);
         await using var service = StartService(node, foundation.Requests);
@@ -187,7 +192,7 @@ internal static class PostgresChildWorkflowChecks
         async Task CheckParkedAttachedTerminationAsync(string lane, bool fromParent)
         {
             var added = await nextFoundation.SendAsync(scope, new Contract.Target.Start(
-                WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start(fromParent ? "nested-parent" : "parent"))),
+                WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start(fromParent ? "nested-parent" : "job-parent"))),
                 lane + "-parent", Contract.Kinds.Start, cancellationToken: token);
             var parent = added.Actor!.Value;
             var waitingParent = await WaitForAsync(parent, image => image.Children is not null, successor);
@@ -195,10 +200,11 @@ internal static class PostgresChildWorkflowChecks
             var childId = await ReferenceAsync(childLife);
             var attached = new Contract.ActorRef(childId);
             var runningChild = await WaitForAsync(attached, image => image.Status == InstanceStatus.Running &&
-                (!fromParent || image.Children is not null), successor);
+                (fromParent ? image.Children is not null : image.Jobs is not null), successor);
             var descendant = fromParent ? await ReferenceAsync(ChildRegistry.Read(runningChild.Children).Single()) : null;
             if (descendant is not null)
                 await WaitForAsync(new(descendant), image => image.Status == InstanceStatus.Running, successor);
+            else await partner.Entered.Task.WaitAsync(token);
             Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(attached), lane + "-park", ChildFixtureActor.Fault,
                 cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, $"the {lane} child fault is admitted");
             var parkedChild = await WaitForAsync(attached, image => image.ParkAt is not null, successor);
@@ -228,13 +234,19 @@ internal static class PostgresChildWorkflowChecks
                 Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(attached), lane + "-terminate", Contract.Kinds.Terminate,
                     Json.Write(new Contract.OperatorCommand(view.Selection)), cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
                     "the selected Terminate admits an exact parked attached child");
-            await WaitForAsync(attached, image => image is { Status: InstanceStatus.Cancelled, ParkAt: null }, successor);
+            await WaitForAsync(attached, image => image is { Status: InstanceStatus.Cancelled, ParkAt: null, Jobs: null }, successor);
             await WaitForAsync(parent, image => image.Children is null, successor);
             Check(true, $"the {lane} Terminate closes Park and the committed final notice removes the child from its parent");
             if (descendant is not null)
             {
                 await WaitForAsync(new(descendant), image => image.Status == InstanceStatus.Cancelled, successor);
                 Check(true, "terminating the parked middle child also cancels its exact live descendant");
+            }
+            else
+            {
+                await partner.Cancelled.Task.WaitAsync(token);
+                Check(!await db.Messages.AnyAsync(row => row.Target == parkedChild.Actor.Id && row.InboxScope == EfStore.RootTimedJobScope, token),
+                    "terminating the parked attached child releases its pinned timed job and cancels its entered callback");
             }
         }
 
@@ -283,6 +295,20 @@ internal static class PostgresChildWorkflowChecks
             for (var i = 0; i <= CascadeProtocol.PageLimit; i++)
                 turn.Start(WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("child")));
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class BlockingPartner : HttpMessageHandler
+    {
+        internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Cancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Entered.TrySetResult();
+            try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken); }
+            finally { if (cancellationToken.IsCancellationRequested) Cancelled.TrySetResult(); }
+            throw new InvalidOperationException("The parked child fixture's request should leave only by cancellation.");
         }
     }
 

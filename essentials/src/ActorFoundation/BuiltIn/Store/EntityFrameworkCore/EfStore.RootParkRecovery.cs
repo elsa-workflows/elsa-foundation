@@ -72,7 +72,8 @@ public sealed partial class EfStore
                     WHERE {CohortWaitingWork};
                 """ : "", StringComparison.Ordinal)
             .Replace("/*parked-operator-outcomes*/",
-                db.UsesRootComposedParkRecovery ? "AND " + RootParkedOutcomeCheckpoint + StoppedParkOutcomeCheckpoint : "",
+                db.UsesRootComposedParkRecovery ? "AND " + RootParkedOutcomeCheckpoint + StoppedParkOutcomeCheckpoint +
+                    (db.UsesRootChildren ? SettledParkedChildJob : "") : "",
                 StringComparison.Ordinal), token);
 
     // Operator outcome entries, the only journal entries that are JSON objects. The checkpoint trigger reads them
@@ -333,7 +334,8 @@ public sealed partial class EfStore
                 ? await ReadSqliteParkMarkAsync(db, message.Target.Id, message.Target.Partition, token)
                 : await db.Database.SqlQueryRaw<ParkMarkRow>($"""
                 SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision",
-                    "Jobs" IS NOT NULL OR "Children" IS NOT NULL AND NOT ({"{2}"} AND "Parent" IS NOT NULL)
+                    ("Jobs" IS NOT NULL OR "Children" IS NOT NULL) AND NOT ({"{2}"} AND "Parent" IS NOT NULL
+                        AND ("Jobs" IS NULL OR {jobPin} IS NOT NULL OR {livePin} IS NOT NULL))
                         OR "CustomHandles" IS NOT NULL
                         OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding",
                     EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = "Instances"."Id" AND m."Partition" = "Instances"."Partition"

@@ -231,7 +231,8 @@ public sealed partial class EfStore
     private static string RootChildParkInputs(string input, string target) => $"""
         ({target}."FoundationParkAt" IS NULL OR NOT {RootChildNoticePredicate(input)} OR
             {RootChildTerminatePredicate(input, target)} AND {target}."FoundationParkClearing" IS NULL
-            AND {target}."Jobs" IS NULL AND {target}."CustomHandles" IS NULL
+            AND ({target}."Jobs" IS NULL OR {target}."FoundationParkJobResult" IS NOT NULL OR {target}."FoundationParkLiveJob" IS NOT NULL)
+            AND {target}."CustomHandles" IS NULL
             AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = {target}."Id"))
         """;
 
