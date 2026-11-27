@@ -258,10 +258,18 @@ class Stub:
             return list(self.requests)
 
 
-def overlay(backend, studio_url):
+def overlay(backend, studio_url, history_authority=False):
     """Local origin routing only, in the owned private copy: the kernel's switches come from the environment."""
     settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
     settings['Cors']['AllowedOrigins'] = [studio_url]
+    if history_authority:
+        retained = ['api-capabilities:read', 'workflows/activity-executions:inspect']
+        grants = [*retained, 'workflows/runtime:read']
+        settings['Qualification'] = {
+            'Principals': [{'subject': 'core-history-reader', 'tenant': TENANT, 'username': 'core-history-reader',
+                            'password': 'Password123!', 'exactDirectPermissions': grants}],
+            'GrantProfiles': {'history-no-route': retained},
+        }
     (backend / 'appsettings.json').write_text(json.dumps(settings))
     shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))
     shells['CShells']['Shells']['default']['Features']['FoundationIdentityAspNetCoreIdentity']['AllowedReturnUrlOrigins'] = [studio_url]
@@ -303,7 +311,7 @@ def verdict(report, artifacts, journeys=None):
     return len(rows)
 
 
-def run(output, journey=None, provider='postgres'):
+def run(output, journey=None, provider='postgres', history_authority=False):
     output.mkdir(parents=True, exist_ok=False)
     sha, dirty = source_state(ROOT)
     selected = [journey] if journey else None
@@ -312,7 +320,8 @@ def run(output, journey=None, provider='postgres'):
               'suite': SUITE, 'project': PROJECT, 'journeys': sorted(title for _, title in inventory(selected)),
               'sharedHostHelperSha256': hashlib.sha256((ROOT / 'tools/ux-acceptance/run.py').read_bytes()).hexdigest(),
               'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'status': 'failed', 'stage': 'build',
-              'composition': {'corePreview': {'publications': True, 'tenant': TENANT, 'format': f'the shipped {provider_name} format'}},
+              'composition': {'corePreview': {'publications': True, 'tenant': TENANT, 'format': f'the shipped {provider_name} format',
+                                              'historyAuthorityControl': history_authority}},
               'visualApproval': 'requires independent review', 'ownedPids': {}}
     processes = {}
     try:
@@ -321,7 +330,8 @@ def run(output, journey=None, provider='postgres'):
         backend_project = ROOT / 'server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
         studio_project = ROOT / 'studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
         build = ['-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '-p:BuildInParallel=false', '/nr:false']
-        command(['dotnet', 'build', str(backend_project), *build], output / 'backend-build.log')
+        qualification = f'-p:ElsaDashboardQualification={str(history_authority).lower()}'
+        command(['dotnet', 'build', str(backend_project), *build, qualification], output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'studio')
         command(['dotnet', 'build', str(studio_project), *build], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-core-preview-') as temporary:
@@ -331,7 +341,7 @@ def run(output, journey=None, provider='postgres'):
             prepare_host(backend_project, backend)
             prepare_host(studio_project, studio)
             backend_url, studio_url = f'http://localhost:{free_port()}', f'http://localhost:{free_port()}'
-            overlay(backend, studio_url)
+            overlay(backend, studio_url, history_authority)
             (data / 'home').mkdir()
             env = dict(clean_environment(), DOTNET_PROCESSOR_COUNT='2', HOME=str(data / 'home'), DOTNET_CLI_HOME=str(data / 'home'),
                        **{'Logging__LogLevel__Microsoft.Hosting.Lifetime': 'Information'})
@@ -352,7 +362,8 @@ def run(output, journey=None, provider='postgres'):
                     kernel = kernel_environment(sqlite_path=sqlite_path)
                 report.update(stage='host-start', backendUrl=backend_url, studioUrl=studio_url, stubUrl=stub.url)
                 backend_log = output / 'backend.log'
-                with host(backend, 'Elsa.Workbench.Host.dll', backend_url, '/health/ready', backend_log,
+                readiness = '/__qualification/ready' if history_authority else '/health/ready'
+                with host(backend, 'Elsa.Workbench.Host.dll', backend_url, readiness, backend_log,
                           dict(env, **kernel)) as backend_process:
                     processes['backend'] = backend_process
                     report['ownedPids']['backend'] = backend_process.pid
@@ -364,7 +375,8 @@ def run(output, journey=None, provider='postgres'):
                         report['stage'] = 'journeys'
                         browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', UX_ACCEPTANCE_SUITE=SUITE, ELSA_STUDIO_URL=studio_url,
                                            ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url, UX_HTTP_STUB_URL=stub.url,
-                                           UX_CORE_PREVIEW_TENANT=TENANT, UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha)
+                                           UX_CORE_PREVIEW_TENANT=TENANT, UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha,
+                                           UX_CORE_PREVIEW_HISTORY_AUTHORITY=str(int(history_authority)))
                         browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
                         if journey:
                             browser_command.extend(['--grep', r'(?:^|\s)' + re.escape(journey) + '$'])
@@ -404,10 +416,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
     parser.add_argument('--provider', choices=['postgres', 'sqlite'], default='postgres', help='Owned kernel store (default: postgres)')
+    parser.add_argument('--history-authority', action='store_true', help='Enable private IAM grant changes for the live history journey')
     parser.add_argument('--journey', choices=sorted(JOURNEYS), help='Run one journey; the report certifies only that journey')
     args = parser.parse_args()
 
     def terminate(_signum, _frame):
         raise InterruptedError('Acceptance interrupted; owned resources will be stopped')
     signal.signal(signal.SIGTERM, terminate)
-    run(args.output.resolve(), args.journey, args.provider)
+    run(args.output.resolve(), args.journey, args.provider, args.history_authority)

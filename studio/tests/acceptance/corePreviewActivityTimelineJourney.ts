@@ -1,4 +1,5 @@
 import { expect, request as browserRequest, type Page, type Response, type TestInfo } from "@playwright/test";
+import { verifyLiveHistoryRevocation } from "./corePreviewHistoryAuthority";
 import type { Capture, CorePreviewStack, Receipt } from "./corePreviewSmokeJourney";
 import type { RuntimeHistoryPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/runtimeHistoryTypes";
 
@@ -164,6 +165,8 @@ export async function corePreviewActivityTimelineJourney(page: Page, info: TestI
   await expect.poll(shownIds).toEqual(committedIds);
   await capture(page, info, "history-committed");
 
+  const revocation = process.env.UX_CORE_PREVIEW_HISTORY_AUTHORITY === "1"
+    ? await verifyLiveHistoryRevocation(page, stack.backend, route, resumeRoute) : undefined;
   await receipt(info, "activity-timeline.json", { runId, publication: workflow.version.id, timeline: evidence,
-    history: { prefix: first, resumedCursor: streamCursor(reconnected), tail, committedIds } });
+    history: { prefix: first, resumedCursor: streamCursor(reconnected), tail, committedIds, revocation } });
 }

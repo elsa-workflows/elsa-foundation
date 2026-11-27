@@ -13,7 +13,7 @@ export async function supportsWorkflowHistoryStream(context: StudioEndpointConte
   return !!context.http.requestResponse && await hasCapabilityLink(context, capabilityIds.runtime, "workflow-history-live");
 }
 
-class RuntimeHistoryStreamError extends Error {
+export class RuntimeHistoryStreamError extends Error {
   constructor(readonly status: number) { super(`The committed history stream returned ${status}.`); }
 }
 
@@ -41,23 +41,32 @@ export async function getWorkflowHistoryPage(context: StudioEndpointContext, wor
 
 export async function* getWorkflowHistoryStream(context: StudioEndpointContext, workflowExecutionId: string,
   request: RuntimeHistoryRequest, signal: AbortSignal): AsyncGenerator<RuntimeHistoryPage> {
-  const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-history-live", { workflowExecutionId });
-  const response = await context.http.requestResponse!(`${path}?${queryString(request)}`, {
-    headers: { Accept: "application/x-ndjson" }, cache: "no-store", signal
-  });
-  if (!response.ok) throw new RuntimeHistoryStreamError(response.status);
-  if (response.headers.get("content-type")?.split(";")[0] !== "application/x-ndjson" || !response.body)
-    throw new RuntimeHistoryIdentityError("The committed history stream has an unexpected response type.");
-
-  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-  let buffer = "";
+  // The host releases each stream after 30 seconds. Bound the entire body too, including a broken proxy after headers.
+  const controller = new AbortController();
+  const forwardAbort = () => controller.abort(signal.reason);
+  signal.addEventListener("abort", forwardAbort, { once: true });
+  if (signal.aborted) forwardAbort();
+  const timeout = globalThis.setTimeout(() => controller.abort(new DOMException("The committed history stream timed out.", "TimeoutError")), 35_000);
+  const streamSignal = controller.signal;
+  let reader: ReadableStreamDefaultReader<string> | undefined;
   try {
+    const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-history-live", { workflowExecutionId });
+    streamSignal.throwIfAborted();
+    const response = await context.http.requestResponse!(`${path}?${queryString(request)}`, {
+      headers: { Accept: "application/x-ndjson" }, cache: "no-store", signal: streamSignal
+    });
+    if (!response.ok) throw new RuntimeHistoryStreamError(response.status);
+    if (response.headers.get("content-type")?.split(";")[0] !== "application/x-ndjson" || !response.body)
+      throw new RuntimeHistoryIdentityError("The committed history stream has an unexpected response type.");
+
+    reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
     while (true) {
       const chunk = await reader.read();
       if (chunk.done) break;
       buffer += chunk.value;
       for (let newline = buffer.indexOf("\n"); newline >= 0; newline = buffer.indexOf("\n")) {
-        signal.throwIfAborted();
+        streamSignal.throwIfAborted();
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + 1);
         let frame: { page?: RuntimeHistoryPage; status?: number };
@@ -70,8 +79,12 @@ export async function* getWorkflowHistoryStream(context: StudioEndpointContext, 
     }
     if (buffer.length) throw new Error("The committed history stream ended partway through a page.");
   } finally {
-    await reader.cancel().catch(() => undefined);
-    reader.releaseLock();
+    globalThis.clearTimeout(timeout);
+    signal.removeEventListener("abort", forwardAbort);
+    if (reader) {
+      void reader.cancel().catch(() => undefined);
+      reader.releaseLock();
+    }
   }
 }
 

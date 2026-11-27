@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "../../api/capabilities";
-import { getWorkflowHistoryPage, getWorkflowHistoryStream, RuntimeHistoryIdentityError, supportsWorkflowHistory,
+import { getWorkflowHistoryPage, getWorkflowHistoryStream, RuntimeHistoryIdentityError, RuntimeHistoryStreamError, supportsWorkflowHistory,
   supportsWorkflowHistoryStream } from "../../api/runtimeHistory";
 import type { RuntimeHistoryEvent, RuntimeHistoryPage, RuntimeHistoryRequest } from "../../runtimeHistoryTypes";
 import { runtimeValueContextId } from "../RuntimeValueEvidence";
@@ -64,6 +64,7 @@ export function useRunHistory(context: StudioEndpointContext, workflowExecutionI
   const currentState = useRef(state); currentState.current = state;
   const pendingIntent = useRef<ReadIntent>("initial");
   const active = useRef<AbortController | null>(null);
+  const unavailableStream = useRef<string | null>(null);
   const publish = useCallback((value: HistoryState) => {
     currentState.current = value;
     setState(value);
@@ -138,15 +139,26 @@ export function useRunHistory(context: StudioEndpointContext, workflowExecutionI
       try {
         if (!previous && !await supportsWorkflowHistory(context)) throw new ApiCapabilityUnavailableError("elsa.api.runtime", "workflow-history-page");
         const query = { ...requestRef.current, limit: requestRef.current.limit ?? 100, continuationToken: cursor };
-        if (kind === "poll" && previous?.page.coverage.policyId === "kernel-activity-journal-v1" && await supportsWorkflowHistoryStream(context)) {
+        let useStream = kind === "poll" && previous?.page.coverage.policyId === "kernel-activity-journal-v1"
+          && unavailableStream.current !== key && await supportsWorkflowHistoryStream(context);
+        if (useStream && previous) {
           let window = previous;
-          for await (const page of getWorkflowHistoryStream(context, workflowExecutionId, query, controller.signal)) {
+          try {
+            for await (const page of getWorkflowHistoryStream(context, workflowExecutionId, query, controller.signal)) {
+              if (!current()) return;
+              window = receive(page, window, window.liveNext ?? window.catchUp);
+              failures = 0;
+              if (window.pending.length + query.limit > 500) return;
+            }
+          } catch (error) {
+            // An identity provider without a current-subject authority can use the normal authorized page.
+            if (!(error instanceof RuntimeHistoryStreamError && error.status === 501) || window !== previous) throw error;
             if (!current()) return;
-            window = receive(page, window, window.liveNext ?? window.catchUp);
-            failures = 0;
-            if (window.pending.length + query.limit > 500) return;
+            unavailableStream.current = key;
+            useStream = false;
           }
-        } else {
+        }
+        if (!useStream) {
           const page = await getWorkflowHistoryPage(context, workflowExecutionId, query, controller.signal);
           if (!current()) return;
           receive(page, previous, cursor);

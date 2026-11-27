@@ -2,15 +2,18 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.KernelApi;
 
@@ -28,16 +31,31 @@ internal static class KernelHistoryStream
         .WithName("WatchCommittedWorkflowHistory");
 
     private static async Task FollowAsync([AsParameters] GetRuntimeHistory request, HttpContext context,
-        IRuntimeHistoryPageReader history, TimeProvider time)
+        IRuntimeHistoryPageReader history, NormalizedPrincipalValidator validator, TimeProvider time)
     {
         using var lifetime = new CancellationTokenSource(Lifetime, time);
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, lifetime.Token);
         var token = cancel.Token;
         var response = context.Response;
         response.Headers.CacheControl = "no-store";
+        if (!validator.TryGetNormalizedPrincipal(context.User, out var principal))
+        {
+            response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+        var tenants = principal.FindAll(IdentityClaimTypes.TenantId).Select(claim => claim.Value).Take(2).ToArray();
+        var subjects = principal.FindAll(IdentityClaimTypes.UserId).Select(claim => claim.Value).Take(2).ToArray();
+        if (tenants is not [var tenant] || subjects is not [var subject] || principal.HasClaim(claim => claim.Type == IdentityClaimTypes.SubjectProvider) ||
+            string.IsNullOrWhiteSpace(tenant) || string.IsNullOrWhiteSpace(subject))
+        {
+            response.StatusCode = StatusCodes.Status501NotImplemented;
+            return;
+        }
+
         try
         {
-            var first = await ReadAsync(history, request, token);
+            var first = await ReadAuthorizedAsync(request);
+            if (first.Page is not null && await CurrentStatusAsync() is { } initialRefusal) first = new(null, initialRefusal);
             if (first.Status is { } status)
             {
                 response.StatusCode = status;
@@ -59,14 +77,21 @@ internal static class KernelHistoryStream
 
                 // Each page opens its own bounded committed read and checks the current access binding.
                 // Advance through scanned-but-filtered entries too. Idle probes do not send a new bookmark.
-                var next = await ReadAsync(history, request with { Cursor = cursor }, token);
+                var next = await ReadAuthorizedAsync(request with { Cursor = cursor });
                 if (next.Page is not { } current)
                 {
                     await WriteAsync(next);
                     return;
                 }
                 if (current.ScannedThroughSequence != page.ScannedThroughSequence || current.Items.Count != 0)
+                {
+                    if (await CurrentStatusAsync() is { } revoked)
+                    {
+                        await WriteAsync(new(null, revoked));
+                        return;
+                    }
                     await WriteAsync(next);
+                }
                 page = current;
             }
         }
@@ -79,6 +104,22 @@ internal static class KernelHistoryStream
             }
         }
 
+        async Task<KernelHistoryStreamFrame> ReadAuthorizedAsync(GetRuntimeHistory requested) =>
+            await CurrentStatusAsync() is { } denied ? new(null, denied) : await ReadAsync(history, requested, token);
+
+        async Task<int?> CurrentStatusAsync()
+        {
+            // The incoming authenticated principal is the request ceiling. After headers begin its
+            // granted claims are stale, so resolve persisted permission again before reading and releasing data.
+            await using var scope = context.RequestServices.CreateAsyncScope();
+            var current = scope.ServiceProvider.GetRequiredService<ICurrentSubjectPermissionAuthorizer>();
+            var routeGrant = await current.AuthorizeAsync(new(tenant, subject, WorkflowRuntimePermissions.WorkflowRuntimeRead, context), token);
+            if (routeGrant.Status != CurrentSubjectPermissionStatus.Granted) return Refusal(routeGrant.Status);
+            var structureGrant = await current.AuthorizeAsync(new(tenant, subject,
+                HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission), token);
+            return structureGrant.Status == CurrentSubjectPermissionStatus.Granted ? null : Refusal(structureGrant.Status);
+        }
+
         async Task WriteAsync(KernelHistoryStreamFrame frame)
         {
             await JsonSerializer.SerializeAsync(response.Body, frame, KernelHistoryStreamJson.Default.KernelHistoryStreamFrame, token);
@@ -86,6 +127,9 @@ internal static class KernelHistoryStream
             await response.Body.FlushAsync(token);
         }
     }
+
+    private static int Refusal(CurrentSubjectPermissionStatus status) => status == CurrentSubjectPermissionStatus.Unsupported
+        ? StatusCodes.Status501NotImplemented : StatusCodes.Status403Forbidden;
 
     private static async Task<KernelHistoryStreamFrame> ReadAsync(IRuntimeHistoryPageReader history,
         GetRuntimeHistory request, CancellationToken token)
