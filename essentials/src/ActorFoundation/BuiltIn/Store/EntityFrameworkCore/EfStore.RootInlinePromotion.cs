@@ -83,17 +83,25 @@ public sealed partial class EfStore
             throw RootShape();
         var ended = row.Status is InstanceStatus.Finished or InstanceStatus.Faulted;
         await using (var profile = create())
-            if (!profile.UsesRootInlinePromotion && (row.Revision != 1 || ended || turn.Sent.Count != 0)) throw RootShape();
+            if (!profile.UsesRootInlinePromotion &&
+                (row.Revision != 1 || ended || turn.Sent.Count != 0 || turn.FoundationRootChildSends is not null)) throw RootShape();
 
         var fingerprint = CreationProtocol.Fingerprint(spec, creator.Kind, creator.Payload)!;
+        var root = new WorkerRoot(binding.Tenant, binding.Reference, binding.Actor, fence.Partition, fingerprint);
+        var children = turn.FoundationRootChildSends is { } childSends
+            ? PrepareRootChildEffects(root, row, childSends, fence) ?? throw RootShape()
+            : null;
+        var attached = children?.Starts.Where(child => child.Creator.Start!.Parent is not null)
+            .Select(child => new CreationAddress(child.Creator.Target.Id, 1)) ?? [];
         var supported = new TurnCommit(row.Id, row, null, turn.Consumed, turn.Done, turn.Sent,
             turn.Subscribed, turn.Unsubscribed, turn.Journal, Unsubscribe: ended, Held: turn.Held)
         {
             FoundationHeader = header,
+            FoundationRootChildSends = turn.FoundationRootChildSends,
             FoundationTerminalOutput = row.Status == InstanceStatus.Finished ? turn.FoundationTerminalOutput : null
         };
         var expected = new InstanceRow(binding.Actor, spec.Model, spec.Definition, row.Status,
-            row.State, row.Revision, Parent: null, Jobs: RootJobsEnabled ? row.Jobs : null, History: spec.History,
+            row.State, row.Revision, Parent: null, Jobs: RootJobsEnabled ? row.Jobs : null, History: spec.History, Children: children?.Children,
             StateVersion: row.StateVersion, Creation: 1, StartIntent: fingerprint)
         {
             FoundationInlineBirth = birth, FoundationInlineHeader = row.FoundationInlineHeader,
@@ -101,6 +109,7 @@ public sealed partial class EfStore
             NextJobGeneration = row.NextJobGeneration
         };
         if (turn != supported || row != expected || row.Status != InstanceStatus.Running && !ended ||
+            children is { Notice: not null } || !ChildRegistry.Read(row.Children).SequenceEqual(attached) ||
             row.Status == InstanceStatus.Faulted && !RootTimedJobSettlementEnabled ||
             !RootJobsEnabled && row.NextJobGeneration is not (null or 0) ||
             ended && (turn.Sent.Count != 0 || turn.Subscribed.Count != 0 || row.Jobs is not null) ||
@@ -110,13 +119,13 @@ public sealed partial class EfStore
             dispatch.Header.Labels.Count != header.Labels.Count ||
             dispatch.Header.Labels.Any(label => header.Labels.GetValueOrDefault(label.Key) != label.Value))
             throw RootShape();
+        if (children is { Starts.Length: > 0, PendingBirths: null }) return null;
 
-        var root = new WorkerRoot(binding.Tenant, binding.Reference, binding.Actor, fence.Partition, fingerprint);
         var sends = EncodeRootFirstSends(root, row, turn, promotingInline: true);
-        var first = PrepareFirstRoot(binding.Tenant, binding.Reference, creator, fence,
+        var first = WithRootChildEffects(PrepareFirstRoot(binding.Tenant, binding.Reference, creator, fence,
             row.FoundationNullState ? null : row.State, row.StateVersion, header.TypeData, header.Labels, turn.Journal,
             jobState: row.NextJobGeneration is null ? null : new RootJobState(row.Jobs, row.NextJobGeneration),
-            status: row.Status, terminalGrowth: dispatch.TerminalGrowth, revision: row.Revision);
+            status: row.Status, terminalGrowth: dispatch.TerminalGrowth, revision: row.Revision), children, null);
         var journal = RootEventWaits.Lower(root, turn, first.JournalTurn! with { Sent = sends });
         PreparedRootStart stage;
         PendingRootStart offer;
@@ -135,7 +144,9 @@ public sealed partial class EfStore
             var timeLeft = (providerWindow < remaining ? providerWindow : remaining) - elapsed;
             if (timeLeft <= TimeSpan.Zero) return null;
             budget.CancelAfter(timeLeft);
-            if (!await RootPreparedStarts.ProtectAsync(protect, offer, budget.Token))
+            if (!await RootPreparedStarts.ProtectAsync(protect, offer, budget.Token) ||
+                children is { PendingBirths: not null } &&
+                !await RootPreparedStarts.ProtectAsync((_, ct) => ProtectChildrenAsync(children, ct), offer, budget.Token))
             {
                 await DisarmAsync(stage, offer.Issuance, source, budget.Token);
                 return null;
@@ -152,6 +163,12 @@ public sealed partial class EfStore
             source, (long)receiptWindow.TotalMilliseconds, 0, turn.Journal, fence.Epoch, witness?.LeaseRemaining,
             turn.FoundationTerminalOutput is { } output ? new RootTerminalOutputCheckpoint(root, row.Revision, output) : null);
         return new(journal, checkpoint);
+
+        async ValueTask<bool> ProtectChildrenAsync(RootChildEffects effects, CancellationToken ct)
+        {
+            try { return await ProtectRootChildEffectsAsync([effects], ct); }
+            catch (StoreException error) when (error.Failure == Failure.Definite) { return false; }
+        }
 
         async Task<(PreparedRootStart, PendingRootStart, (uint Marker, uint Namespace, long Table)?, TimeSpan)?> PrepareAsync(CancellationToken ct)
         {
@@ -234,6 +251,7 @@ public sealed partial class EfStore
                     AND (SELECT "SourceReady" FROM source)
                 """, origin.Bind), token);
             return updated == 1 && (Output is null || await Output.BindCheckpointAsync(db, token)) &&
+                (First.ChildEffects is null || await First.ChildEffects.BindAsync(db, Stage.Tenant, token)) &&
                 await ReadInlineClockAsync(db, token) < Math.Min(Stage.Deadline, currentLease) &&
                 !(LeaseRemaining?.Invoke() <= TimeSpan.Zero);
         }

@@ -168,11 +168,16 @@ internal static class InlineRootPromotionChecks
                 var terminal = new Workflow("inline-terminal", Wf.Sequence("run", Wf.Delay("short", 50),
                     Wf.Node<FinishAcrossCutoff>("finish-across-cutoff"),
                     Wf.SetOutput("set-output", "result", "committed terminal"))) { ExecutableSelection = "private-125-terminal" };
-                var registry = new WorkflowRegistry().Add(workflow).Add(shortWait).Add(pure).Add(longTimer).Add(earlyTimers).Add(timedJob).Add(terminal);
+                var selectedChild = new Workflow("inline-selected-child", Wf.SetOutput("child", "value", "selected inline child"))
+                    { ExecutableSelection = "private-125-child" };
+                var parent = new Workflow("inline-parent", Wf.Sequence("run", Wf.Delay("short", 60),
+                    Wf.Dispatch("dispatch", selectedChild.Id, wait: true), Wf.SetOutput("parent", "result", Binding.Result("dispatch", "Output.value"))))
+                    { ExecutableSelection = "private-125-parent" };
+                var registry = new WorkflowRegistry().Add(workflow).Add(shortWait).Add(pure).Add(longTimer).Add(earlyTimers).Add(timedJob).Add(terminal)
+                    .Add(parent).Add(selectedChild);
                 var model = new NativeExecutionModel(registry, new NativeExecutionOptions { UseStructuralJournal = true });
                 var actor = new WorkflowActorType([model]);
                 var spec = WorkflowActorType.Start(NativeExecutionModel.Start(workflow, Modes.Ephemeral));
-                var physical = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
                 long unwrittenRevision = 0;
                 TurnCommit? checkpoint = null;
                 Message? firstCreator = null;
@@ -184,6 +189,9 @@ internal static class InlineRootPromotionChecks
                 var protectorCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 var preparedBatchActors = new HashSet<string>(StringComparer.Ordinal);
                 var firstRevisions = new Dictionary<string, long>(StringComparer.Ordinal);
+                var childOffers = new Dictionary<string, (PendingChildBirth Offer, string RootIssuance, string Child, int Attempts)>(StringComparer.Ordinal);
+                string? refusedParent = null;
+                var physical = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned, ProtectChildBirths = ProtectChildrenAsync };
                 await physical.EnableInlinePromotionAsync(scope, (requested, material) =>
                     WorkflowActorType.DescribeStart(requested.Model, requested.Definition) is { } selected &&
                     model.MatchesInlineMaterial(material, selected.Workflow, selected.Definition, selected.ExecutableSelection),
@@ -341,11 +349,27 @@ internal static class InlineRootPromotionChecks
                         await physical.ReadRootTerminalOutputAsync(scope.Tenant, runningJob.Reference.Id, jobEnd.TerminalAt!.Value, true, token) is { Values: not null } jobOutput &&
                         System.Text.Encoding.UTF8.GetString(jobOutput.Values).Contains("answer of inline-service", StringComparison.Ordinal),
                         "the normal owner records and delivers the job result and stores the terminal output exactly once");
+                    var refusedChild = QueueExpected("refused-child", parent, 2);
+                    refusedParent = refusedChild.Reference.Id;
+                    await WaitForAsync(refusedChild.Outcome);
+                    Check(await refusedChild.Outcome is { Disposition: InlineRootDisposition.Refused } &&
+                        await physical.ReadFirstRootAsync(scope.Tenant, refusedParent, token) is null &&
+                        !await HasChildBirthAsync(childOffers[refusedParent].Offer.Actor, token),
+                        "definitive host refusal prevents the parent checkpoint and child birth together");
+
                     var early = await QualifyEarlierTimerAsync();
+                    var parentRun = QueueExpected("accepted-child", parent, 2);
+                    await WaitForAsync(parentRun.Outcome);
+                    var protectedChild = childOffers[parentRun.Reference.Id];
+                    Check(await parentRun.Outcome == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Running) &&
+                        await physical.ReadFirstRootAsync(scope.Tenant, parentRun.Reference.Id, token) is { Revision: 2, Children: { } children } &&
+                        ChildRegistry.Read(children) is [var member] && member.Id == protectedChild.Child && protectedChild.Attempts == 2 &&
+                        await HasChildBirthAsync(protectedChild.Offer.Actor, token),
+                        "the protected first parent checkpoint and exact child creator land atomically after an identical retry");
                     await owner.ReleaseAsync(token);
 
                     var cold = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
-                    var coldModel = new NativeExecutionModel(new WorkflowRegistry().Add(workflow).Add(longTimer).Add(earlyTimers),
+                    var coldModel = new NativeExecutionModel(new WorkflowRegistry().Add(workflow).Add(longTimer).Add(earlyTimers).Add(parent).Add(selectedChild),
                         new NativeExecutionOptions { UseStructuralJournal = true });
                     var coldActor = new WorkflowActorType([coldModel]);
                     await cold.EnableRootSelfSendsAsync(token);
@@ -354,7 +378,7 @@ internal static class InlineRootPromotionChecks
                     var roots = postgres ? cold.BindWorkerNode(ActorAdapter.RootWithholding(coldActor, null))
                         : cold.BindSqliteWorkerNode(ActorAdapter.RootWithholding(coldActor, null));
                     var adapter = new ActorAdapter(cold.WorkerHeaders(roots), coldActor, cold.RootSelfIssuer, cold.RootJobHandle,
-                        rootTimedJobClock: cold.ReadRootTimedJobPublicationTimeAsync);
+                        rootTimedJobClock: cold.ReadRootTimedJobPublicationTimeAsync, rootTerminalOutputLimit: 1_024);
                     var observed = 0;
                     var turns = 0;
                     await using var coldOwner = Worker.ForNode("inline-cold-owner", cold, adapter, new WorkerOptions
@@ -391,6 +415,12 @@ internal static class InlineRootPromotionChecks
                         await cold.ReadFirstRootAsync(scope.Tenant, delayed.Reference.Id, token) is { Revision: 2, Status: InstanceStatus.Finished } &&
                         trace.ToString().Split("durable timer finished", StringSplitOptions.None).Length == 2,
                         "the cold owner authenticates both timer origins and settles each without replaying the creator");
+                    await WaitForFinishAsync(coldOwner, cold, parentRun.Reference.Id);
+                    Check(await cold.ReadFirstRootAsync(scope.Tenant, parentRun.Reference.Id, token) is
+                        { Revision: 3, TerminalAt: { } parentEnd, Status: InstanceStatus.Finished, Children: null } &&
+                        await cold.ReadRootTerminalOutputAsync(scope.Tenant, parentRun.Reference.Id, parentEnd, true, token) is { Values: not null } childOutput &&
+                        System.Text.Encoding.UTF8.GetString(childOutput.Values).Contains("selected inline child", StringComparison.Ordinal),
+                        "a fresh owner resolves the exact selected child and resumes the parent without replaying its creator");
                     await coldOwner.ReleaseAsync(token);
 
                     var shortLease = TimeSpan.FromMilliseconds(1_200);
@@ -467,6 +497,49 @@ internal static class InlineRootPromotionChecks
                         await selected.RunAsync(token);
                         await Task.Delay(5, token);
                     }
+                }
+
+                async ValueTask<ChildBirthProtectionOutcome> ProtectChildrenAsync(IReadOnlyList<PendingChildBirth> births, CancellationToken ct)
+                {
+                    if (births is not [var child] || FoundationChildIssuance.Verify(key, scope.Tenant, child.Actor, child.Issuance) is not
+                        { ParentRevision: 2 } issue)
+                        throw new InvalidOperationException("The inline owner issued an unexpected child.");
+                    var parentReference = FoundationRootCreator.ReferenceFor(key, scope.Tenant, new(issue.Parent, 1));
+                    if (offered is not { } offer || offer.Actor.Id != parentReference ||
+                        WorkflowActorType.DescribeStart(child.Type, child.TypeData) is not { ExecutableSelection: "private-125-child" })
+                        throw new InvalidOperationException("The child material did not follow its exact parent protection.");
+                    await using var db = Open();
+                    db.Database.SetCommandTimeout(1);
+                    await using var write = await db.Database.BeginTransactionAsync(ct);
+                    if (postgres) await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '1s'", ct);
+                    Check(await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "Partitions" SET "Position" = "Position" WHERE "Id" = {issue.Fence().Partition}
+                        """, ct) == 1 && !await HasChildBirthAsync(child.Actor, ct) &&
+                        await db.Database.SqlQuery<bool>($"""
+                            SELECT EXISTS (SELECT 1 FROM "FoundationPreparedRootStarts"
+                                WHERE "Reference" = {parentReference} AND "FirstRevision" = 2)
+                                AND NOT EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Reference" = {parentReference}) AS "Value"
+                            """).SingleAsync(ct),
+                        "the child protector can lock the owner partition and sees only the exact parent preparation");
+                    await write.RollbackAsync(ct);
+                    if (childOffers.TryGetValue(parentReference, out var prior))
+                    {
+                        Check(prior.Offer == child && prior.RootIssuance == offer.Issuance,
+                            "a transient child protection retry keeps the same parent and child issuances");
+                        childOffers[parentReference] = prior with { Attempts = prior.Attempts + 1 };
+                        return ChildBirthProtectionOutcome.Protected;
+                    }
+                    childOffers.Add(parentReference, (child, offer.Issuance, issue.Child, 1));
+                    return parentReference == refusedParent ? ChildBirthProtectionOutcome.Refused : ChildBirthProtectionOutcome.Retry;
+                }
+
+                async Task<bool> HasChildBirthAsync(Contract.ActorRef child, CancellationToken ct)
+                {
+                    await using var db = Open();
+                    return await db.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Tenant" = {scope.Tenant}
+                            AND "Reference" = {child.Id}) AS "Value"
+                        """).SingleAsync(ct);
                 }
 
                 async Task WaitForAsync(Task receipt)
