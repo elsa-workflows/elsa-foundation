@@ -122,7 +122,8 @@ public sealed class ActivitiesHttpFeatureTests
         var feature = new KernelActivitiesHttpFeature { BasePath = "/custom", SyncRequestTimeout = TimeSpan.FromSeconds(12) };
 
         feature.ConfigureServices(services);
-        Assert.Throws<InvalidOperationException>(() => feature.PostConfigureServices(services));
+        feature.PostConfigureServices(services);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(HttpTestRunIngressMiddleware));
         services.AddSingleton<ITestRunTargetStore, UnusedTestRunTargetStore>();
         services.AddSingleton<IWorkflowTestScopeStore, UnusedTestScopeStore>();
         services.AddSingleton<ITestRunTargetDispatcher, UnusedTestRunTargetDispatcher>();

@@ -13188,3 +13188,5 @@ Elsa.Workflows.Runtime.Core.Extensions.WorkflowPublicationTriggerServiceCollecti
 static Elsa.Workflows.Runtime.Core.Extensions.WorkflowPublicationTriggerServiceCollectionExtensions.AddWorkflowPublicationTriggers(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 Elsa.Workflows.Runtime.Core.Contracts.KernelWorkflowHttpActivities
 Elsa.Workflows.Runtime.Core.Contracts.KernelWorkflowHttpActivities.KernelWorkflowHttpActivities() -> void
+Elsa.Workflows.Runtime.Core.Contracts.StandaloneWorkflowHttpRouteProjection
+Elsa.Workflows.Runtime.Core.Contracts.StandaloneWorkflowHttpRouteProjection.StandaloneWorkflowHttpRouteProjection() -> void

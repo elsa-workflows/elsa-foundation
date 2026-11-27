@@ -7,19 +7,21 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Activities.Http.Capabilities;
 
 /// <summary>Advertises the workflow HTTP endpoint base path configured for the active shell.</summary>
-internal sealed class HttpWorkflowEndpointsCapabilitySource : IApiCapabilitySource
+internal class HttpWorkflowEndpointsCapabilitySource : IApiCapabilitySource
 {
     private const string CapabilityId = "elsa.http.workflow-endpoints";
-    private const string SourceFeatureId = "ActivitiesHttp";
+    private readonly string _sourceFeatureId;
     private readonly IOptions<HttpEndpointOptions> _options;
     private readonly ILogger<HttpWorkflowEndpointsCapabilitySource> _logger;
 
     public HttpWorkflowEndpointsCapabilitySource(
         IOptions<HttpEndpointOptions> options,
-        ILogger<HttpWorkflowEndpointsCapabilitySource> logger)
+        ILogger<HttpWorkflowEndpointsCapabilitySource> logger,
+        string sourceFeatureId = "ActivitiesHttp")
     {
         _options = options;
         _logger = logger;
+        _sourceFeatureId = sourceFeatureId;
     }
 
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(
@@ -38,7 +40,7 @@ internal sealed class HttpWorkflowEndpointsCapabilitySource : IApiCapabilitySour
                 CapabilityId,
                 1,
                 [new ApiCapabilityLink("workflow-http-base", href)],
-                SourceFeatureId)];
+                _sourceFeatureId)];
 
         return ValueTask.FromResult(declarations);
     }
@@ -86,3 +88,9 @@ internal sealed class HttpWorkflowEndpointsCapabilitySource : IApiCapabilitySour
         return !Uri.TryCreate(href, UriKind.Absolute, out _);
     }
 }
+
+
+internal sealed class KernelHttpWorkflowEndpointsCapabilitySource(
+    IOptions<HttpEndpointOptions> options,
+    ILogger<HttpWorkflowEndpointsCapabilitySource> logger)
+    : HttpWorkflowEndpointsCapabilitySource(options, logger, KernelActivitiesHttpFeature.FeatureName);
