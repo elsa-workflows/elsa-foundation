@@ -77,15 +77,29 @@ public sealed partial class EfStore
                     await ChangeTicketAsync(RootPublicEventTicket.Change.Settle, epoch: null);
 
             await RequireWindowAsync();
-            var page = await RootEventAdmission.MatchLivePageAsync(db, item.Tenant, item.Key, item.EventId, item.Occurrence,
-                item.Payload, item.KeepUntil, item.Position.LiveThrough, _bind, token);
-            if (item.Position.LiveComplete || item.Position.StartThrough is not null) throw PublicationShape();
-            if (!await RootPublicEventDispatch.ChangeAsync(db, item, new(page.Through, page.Complete, null),
-                page.Complete ? Contract.PublicationStatus.Matched : Contract.PublicationStatus.Pending, _bind, token) ||
-                !await ChangeTicketAsync(page.Complete ? RootPublicEventTicket.Change.Settle : RootPublicEventTicket.Change.Advance, Fence.Epoch))
+            var (next, complete) = await MatchAsync(item);
+            if (!await RootPublicEventDispatch.ChangeAsync(db, item, next,
+                complete ? Contract.PublicationStatus.Matched : Contract.PublicationStatus.Pending, _bind, token) ||
+                !await ChangeTicketAsync(complete ? RootPublicEventTicket.Change.Settle : RootPublicEventTicket.Change.Advance, Fence.Epoch))
                 return false;
             await RequireWindowAsync();
             return true;
+
+            async Task<(RootPublicEventDispatch.Cursor Next, bool Complete)> MatchAsync(RootPublicEventDispatch.Publication publication)
+            {
+                var position = publication.Position;
+                if (position.LiveComplete)
+                {
+                    var starts = await RootPublicEventStarts.MatchPageAsync(db, publication, _bind, token);
+                    return (position with { StartThrough = starts.Through }, starts.Complete);
+                }
+
+                var live = await RootEventAdmission.MatchLivePageAsync(db, publication.Tenant, publication.Key, publication.EventId,
+                    publication.Occurrence, publication.Payload, publication.KeepUntil, position.LiveThrough, _bind, token);
+                var next = position with { LiveThrough = live.Through, LiveComplete = live.Complete };
+                var complete = live.Complete && !await RootPublicEventStarts.HasMatchesAsync(db, publication.Tenant, publication.Key, _bind, token);
+                return (next, complete);
+            }
 
             Task<bool> ChangeTicketAsync(RootPublicEventTicket.Change change, long? epoch) =>
                 ticket.ChangeAsync(db, Sequence, Attempts, epoch, change, _bind, token);

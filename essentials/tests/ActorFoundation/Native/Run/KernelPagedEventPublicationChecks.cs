@@ -36,6 +36,11 @@ internal static partial class KernelAuthoredEventChecks
                 await using var db = open();
                 return await db.Subscriptions.CountAsync(row => row.Key == scope.Tenant + "_" + PagedEventActor.Key, token) == actors.Count;
             });
+            if (!physicalPages)
+            {
+                foreach (var wait in new[] { "registered-one", "registered-two" })
+                    await ingress.SetStartAsync(scope, PagedEventActor.Key, wait, new(model.Type, "registered", wait), token);
+            }
             await initialOwner.DisposeAsync();
 
             var target = new Contract.Target.Event(PagedEventActor.Key);
@@ -79,7 +84,10 @@ internal static partial class KernelAuthoredEventChecks
                     if (view?.Header.Status != Contract.ActorStatus.Finished) return false;
                     if (view.Header.TypeData != publicationId) throw new InvalidOperationException("The recipient saw a different publication.");
                 }
-                return true;
+                if (physicalPages) return true;
+                var finished = await reads.ListAsync(scope, new Contract.ActorQuery(Type: model.Type, Status: Contract.ActorStatus.Finished),
+                    cancellationToken: token);
+                return finished.Items.Count == actors.Count + 2 && finished.Items.All(item => item.Header.TypeData == publicationId);
             }
         }
         finally { directory.Delete(recursive: true); }
@@ -215,9 +223,13 @@ internal static partial class KernelAuthoredEventChecks
         {
             foreach (var message in turn.Inbox)
             {
-                if (message.Kind == Contract.Kinds.Start) turn.Subscribe(Key, "wide-wait");
+                if (message.Kind == Contract.Kinds.Start)
+                {
+                    if (turn.Header.TypeData == "waiter") turn.Subscribe(Key, "wide-wait");
+                    else turn.State = message.Payload;
+                }
                 if (message.Event is not { } published) continue;
-                if (published.Key != Key || published.Wait != "wide-wait" || message.Payload != Payload)
+                if (published.Key != Key || published.Wait != (turn.State ?? "wide-wait") || message.Payload != Payload)
                     throw new InvalidOperationException("The event did not preserve the registered wait and payload.");
                 turn.SetHeader(published.Id, turn.Header.Labels);
                 turn.End(Contract.ActorStatus.Finished);
