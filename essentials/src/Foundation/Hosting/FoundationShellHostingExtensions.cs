@@ -61,7 +61,7 @@ public static class FoundationShellHostingExtensions
             shells.WithConfigurationProvider(builder.Configuration);
         });
 
-        services.AddSingleton<IShellSettingsPreparer, RestartRequiredShellSettingsPreparer>();
+        RestartRequiredShellSettingsPreparer.Register(services);
         services.AddShellActivationRunner();
         var tracker = new ShellActivationTracker();
         services.AddSingleton(tracker);
