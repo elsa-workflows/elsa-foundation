@@ -93,6 +93,29 @@ public sealed class Elsa3ExportUploadTests
         Assert.Equal(0, (await harness.Database.CountAsync()).Collections);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Zip64_directory_count_obeys_the_entry_budget(int limit)
+    {
+        await using var harness = await SqliteImportHarness.CreateAsync();
+        var service = harness.Database.Service(MutableAccess.Tenant("tenant-a"),
+            options: new() { MaximumArchiveEntries = limit });
+        var uploader = Assert.IsAssignableFrom<IReusableActivityExportFileUpload>(service);
+        var content = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "two-zip64.zip"));
+        using var batch = new MultipartFormDataContent(Boundary) { { new ByteArrayContent(content), "files", "two.zip" } };
+        var stream = await batch.ReadAsStreamAsync();
+        if (limit == 1)
+        {
+            var error = await Assert.ThrowsAsync<ReusableActivityImportPayloadException>(async () =>
+                await uploader.UploadExportFilesAsync(stream, Boundary, null, Scope));
+            Assert.Contains("two.zip", error.Message);
+            Assert.Equal(0, (await harness.Database.CountAsync()).Collections);
+        }
+        else
+            Assert.Equal(2, (await uploader.UploadExportFilesAsync(stream, Boundary, null, Scope)).SourceVersionCount);
+    }
+
     private static byte[] Zip(params (string Name, byte[] Content)[] members)
     {
         using var bytes = new MemoryStream();

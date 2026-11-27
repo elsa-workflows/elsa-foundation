@@ -102,6 +102,12 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
   `elsa3-import:manage` and `workflows/publishing:manage`, because it publishes the imported reusable activities.
 - `GET .../imports/{idempotencyKey}` — durable lost-response reconciliation.
 
+The default `ReusableActivityImportOperationService` implements `IReusableActivityExportFileUpload`.
+Hosts that replace `IReusableActivityImportOperationService` can implement that optional interface on
+the same instance to accept multipart uploads. A raw-only service returns HTTP 415 with
+`elsa3.import.raw-collection-only` before reading the files. Studio can then submit a single JSON
+file to that service using its original JSON-array contract.
+
 A selection allows 16 MiB of uploaded file data, 32 MiB of expanded JSON, 2,000 ZIP entries
 and 20,000 source versions by default. Collections expire after 24 hours and analysis pages contain at most 500 rows. Hosts may lower or raise these finite bounds through `ReusableActivityImportOptions`.
 Apply never falls back to `ExecuteWorkflow`; recursive reusable composition remains a blocking

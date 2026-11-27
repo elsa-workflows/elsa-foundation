@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   analyzeElsa3ReusableCollection,
   applyElsa3ReusableImport,
@@ -21,6 +21,21 @@ describe("Elsa 3 reusable import API contract", () => {
     );
     const body = vi.mocked(context.http.postForm).mock.calls[0][1];
     expect(body.getAll("files").map(file => (file as File).name)).toEqual(files.map(file => file.name));
+  });
+
+  it("preserves single JSON uploads for a service that explicitly accepts only raw arrays", async () => {
+    const context = endpoint();
+    const file = new File(['[{"id":"v1"}]'], "legacy.json");
+    const refusal = new StudioHttpError(415, "Raw JSON only", null, { errorCode: "elsa3.import.raw-collection-only" });
+    vi.mocked(context.http.postForm).mockRejectedValue(refusal);
+    await uploadElsa3ReusableCollection(context, [file]);
+    expect(context.http.requestJson).toHaveBeenCalledWith("migration/elsa3/reusable-activities/collections", {
+      method: "POST", body: file, headers: { "Content-Type": "application/json" }, signal: undefined
+    });
+    await expect(uploadElsa3ReusableCollection(context, [file, file])).rejects.toBe(refusal);
+    vi.mocked(context.http.postForm).mockRejectedValue(new StudioHttpError(503, "Unavailable"));
+    await expect(uploadElsa3ReusableCollection(context, [file])).rejects.toThrow("Unavailable");
+    expect(context.http.requestJson).toHaveBeenCalledTimes(1);
   });
 
   it("uses escaped handles, bounded analysis pages, exact closure, apply, and receipt identities", async () => {

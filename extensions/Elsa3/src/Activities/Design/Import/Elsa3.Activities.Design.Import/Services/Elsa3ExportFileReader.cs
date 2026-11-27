@@ -115,7 +115,7 @@ internal sealed class Elsa3ExportFileReader(ReusableActivityImportOptions option
 
         const int locatorSize = 20;
         if (offset < locatorSize || !bytes[(offset - locatorSize)..].StartsWith("PK\x06\x07"u8))
-            throw new InvalidDataException("Missing ZIP64 directory locator.");
+            return count; // A classic archive can contain exactly 65,535 entries.
         var position = BinaryPrimitives.ReadUInt64LittleEndian(bytes[(offset - locatorSize + 8)..]);
         if (position > (ulong)(offset - locatorSize) || offset - locatorSize - (long)position < 56)
             throw new InvalidDataException("Invalid ZIP64 directory footer offset.");

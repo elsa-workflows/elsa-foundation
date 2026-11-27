@@ -29,7 +29,7 @@ public sealed class Endpoint(IReusableActivityImportOperationService service) : 
         if (type?.MediaType.Equals("multipart/form-data", StringComparison.OrdinalIgnoreCase) == true)
         {
             if (service is not IReusableActivityExportFileUpload upload)
-                throw new ReusableActivityImportPayloadException("This import service accepts raw JSON arrays only.");
+                throw new RawCollectionOnlyException();
             var boundary = HeaderUtilities.RemoveQuotes(type.Boundary).Value ?? "";
             result = await upload.UploadExportFilesAsync(request.Body, boundary, request.ContentLength, scope, cancellationToken);
         }

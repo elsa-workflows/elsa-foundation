@@ -51,6 +51,8 @@ internal static class Elsa3ImportPermissions
     public const string PublishingManage = "workflows/publishing:manage";
 }
 
+internal sealed class RawCollectionOnlyException() : Exception("This import service accepts raw JSON arrays only.");
+
 public static class ReusableActivityImportHttp
 {
     private const string ElsaTenantClaim = "elsa.identity.tenant_id";
@@ -77,6 +79,7 @@ public static class ReusableActivityImportHttp
             ReusableActivityImportIdempotencyConflictException => (409, "elsa3.import.idempotency-conflict", "Idempotency key conflict"),
             ReusableActivityImportCollisionException => (409, "elsa3.import.identity-collision", "Import identity collision"),
             ReusableActivityImportValidationException => (422, "elsa3.import.validation-failed", "Elsa 3 import validation failed"),
+            RawCollectionOnlyException => (415, "elsa3.import.raw-collection-only", "Native export upload unavailable"),
             ReusableActivityImportPayloadException => (400, "elsa3.import.payload-invalid", "Elsa 3 import payload invalid"),
             // The refusal's own stable code, and a detail naming the family and both versions.
             SchemaWriteRefusedException refusal => (SchemaWriteRefusalProblem.StatusCode, refusal.Code, "Schema write refused"),
