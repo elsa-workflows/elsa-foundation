@@ -77,7 +77,7 @@ public interface IActorParkInboxReads
 {
     bool SupportsParkInbox { get; }
 
-    /// <summary>Returns null if the selected mark is no longer current. Continuations belong to that same mark.</summary>
+    /// <summary>Returns null if the selected mark changed or the Park advanced since the preceding page.</summary>
     ValueTask<Page<ParkInboxEntry>?> ReadParkInboxAsync(BoundScope scope, ActorRef actor, string selection,
         PageToken? from = null, CancellationToken cancellationToken = default);
 }

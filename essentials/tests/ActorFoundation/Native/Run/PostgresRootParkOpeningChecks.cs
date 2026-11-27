@@ -731,6 +731,9 @@ internal static class PostgresRootParkOpeningChecks
                 (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop)) is { Status: InstanceStatus.Faulted, Fault: fault, State: original } &&
                 await ReadParkMark(before.Actor.Id) == opened && (await reads.GetAsync(tenant, actor, stop))?.Park == parked.Park,
                 "the owner records a page refusal at the next revision and keeps the Park mark and fault");
+            Check(await parkReads.ReadParkInboxAsync(tenant, actor, selection, firstPage.Next, stop) is null &&
+                await parkReads.ReadParkInboxAsync(tenant, actor, selection, cancellationToken: stop) is { Next: not null },
+                "a committed checkpoint change invalidates an earlier page without replacing the Park");
             await using (var db = Open())
                 await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" LIKE 'page-filler-%' OR "Id" LIKE 'page-pending-%'""", stop);
 

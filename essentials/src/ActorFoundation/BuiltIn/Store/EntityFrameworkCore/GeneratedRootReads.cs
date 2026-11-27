@@ -14,7 +14,7 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
     private const int MaxParkInboxCursorBytes = 128 * 1024;
 
-    private sealed record ParkInboxBookmark(FoundationParkMark Mark, ParkPageCursor After);
+    private sealed record ParkInboxBookmark(FoundationParkMark Mark, long Revision, ParkPageCursor After);
 
     public bool SupportsParkInbox => store.SupportsParkInbox();
 
@@ -29,14 +29,16 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
 
         var context = Encoding.UTF8.GetBytes(DurableKeyJson.Write(new { Read = $"{provider}-root-park-inbox/1", scope.Tenant, Actor = actor.Id }));
         var after = default(ParkPageCursor);
+        var revision = 0L;
         if (from is { } continuation)
         {
             var bookmark = OpenParkInboxBookmark(context, continuation.Value);
             if (bookmark.Mark != mark) return null;
+            revision = bookmark.Revision;
             after = bookmark.After;
         }
 
-        var snapshot = await store.ReadRootParkInboxAsync(scope.Tenant, actor.Id, mark, after, _pageSize + 1, cancellationToken);
+        var snapshot = await store.ReadRootParkInboxAsync(scope.Tenant, actor.Id, mark, revision, after, _pageSize + 1, cancellationToken);
         if (snapshot is null) return null;
         var rows = snapshot.Rows;
         var page = rows.Take(_pageSize).Select(row => new ParkInboxEntry(
@@ -48,7 +50,7 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
         if (rows.Count > _pageSize)
         {
             var last = rows[_pageSize - 1];
-            var bookmark = new ParkInboxBookmark(mark, new(last.Sequence, new(last.Id, last.Scope)));
+            var bookmark = new ParkInboxBookmark(mark, snapshot.Revision, new(last.Sequence, new(last.Id, last.Scope)));
             next = new(cursor.Seal(context, Encoding.UTF8.GetBytes(DurableKeyJson.Write(bookmark))));
         }
         return new(page, next, snapshot.AsOf);

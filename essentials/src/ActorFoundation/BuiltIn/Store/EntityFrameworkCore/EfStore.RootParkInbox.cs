@@ -7,9 +7,9 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     internal sealed record ParkInboxRow(long Sequence, string Id, long Scope, string Kind, long? Due, int Attempts, ParkKeepReason Reason);
-    internal sealed record ParkInboxSnapshot(IReadOnlyList<ParkInboxRow> Rows, long AsOf);
+    internal sealed record ParkInboxSnapshot(IReadOnlyList<ParkInboxRow> Rows, long Revision, long AsOf);
 
-    private sealed record ParkInboxProjection(bool SourceReady, bool ParkMatches, long AsOf, int? StoreSchema,
+    private sealed record ParkInboxProjection(bool SourceReady, long? ParkCheckpoint, long AsOf, int? StoreSchema,
         int? MessageProtocol, int? JournalCodec, string? DefinitionStamp, long? Sequence, string? Id, long? Scope,
         string? Kind, long? Due, int? Attempts, short? Reason, string? Header, bool? HasReply);
 
@@ -20,7 +20,7 @@ public sealed partial class EfStore
     }
 
     internal async Task<ParkInboxSnapshot?> ReadRootParkInboxAsync(string tenant, string reference, FoundationParkMark mark,
-        ParkPageCursor after, int limit, CancellationToken token)
+        long afterRevision, ParkPageCursor after, int limit, CancellationToken token)
     {
         await using var db = create();
         if (Engine is not null || !db.UsesRootParkRecovery || (postgres ? !db.Database.IsNpgsql() : !db.UsesSqliteRootRuntime))
@@ -30,43 +30,46 @@ public sealed partial class EfStore
         FormattableString query = $"""
             WITH marker AS (
                 SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec" /*marker-namespace*/
-                FROM "KernelStoreVersions" v /*marker-join*/ WHERE v."Id" = {StoreVersionEntity.MarkerId}
+                FROM /*physical-relation*/ "KernelStoreVersions" v /*marker-join*/ WHERE v."Id" = {StoreVersionEntity.MarkerId}
             ), source AS (SELECT /*source-ready*/ AS "Ready"), boundary AS (
                 SELECT {after.Seq} AS "Sequence", {after.Key.Id ?? ""} AS "Id", {after.Key.Scope} AS "Scope", {limit} AS "Limit"
             ), parked AS (
-                SELECT b."Actor", b."Partition" /*parked-pins*/
-                FROM "FoundationRootBirths" b JOIN "Instances" i
+                SELECT b."Actor", b."Partition", i."Revision" /*parked-pins*/
+                FROM /*physical-relation*/ "FoundationRootBirths" b JOIN /*physical-relation*/ "Instances" i
                     ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
                     AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
                 WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
                     AND i."Status" = {(int)InstanceStatus.Faulted}
                     AND i."FoundationParkAt" = {mark.At} AND i."FoundationParkRevision" = {mark.Revision}
+                    AND ({afterRevision} = 0 OR i."Revision" = {afterRevision})
                     AND (SELECT "Ready" FROM source) AND EXISTS (SELECT 1 FROM marker
                         WHERE "StoreSchema" = {expected.StoreSchema} AND "MessageProtocol" = {expected.MessageProtocol}
                             AND "JournalCodec" = {expected.JournalCodec})
             ), page AS (
                 /*page*/
             )
-            SELECT (SELECT "Ready" FROM source) AS "SourceReady", EXISTS (SELECT 1 FROM parked) AS "ParkMatches",
+            SELECT (SELECT "Ready" FROM source) AS "SourceReady", (SELECT "Revision" FROM parked) AS "ParkCheckpoint",
                 /*read-clock*/ AS "AsOf", marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec",
                 /*definitions-stamp*/ AS "DefinitionStamp", page.*
             FROM (SELECT 1) stamp LEFT JOIN marker ON true LEFT JOIN page ON true
             ORDER BY page."Sequence", page."Id" /*sort-collation*/, page."Scope"
             """;
         var sql = query.Format
+            .Replace("/*physical-relation*/", postgres ? "ONLY" : "", StringComparison.Ordinal)
             .Replace("/*marker-namespace*/", postgres ? ", c.relnamespace" : "", StringComparison.Ordinal)
-            .Replace("/*marker-join*/", postgres ? "JOIN pg_catalog.pg_class c ON c.oid = v.tableoid" : "", StringComparison.Ordinal)
+            .Replace("/*marker-join*/", postgres
+                ? "JOIN pg_catalog.pg_class c ON c.oid = v.tableoid AND c.relkind = 'r' AND c.relpersistence = 'p'" : "", StringComparison.Ordinal)
             .Replace("/*source-ready*/", postgres ? """
                 EXISTS (SELECT 1 FROM marker m WHERE 3 = (SELECT count(*) FROM pg_catalog.pg_class c
                     WHERE c.oid IN (to_regclass('"FoundationRootBirths"'), to_regclass('"Instances"'), to_regclass('"Messages"'))
-                        AND c.relnamespace = m.relnamespace AND c.relkind = 'r'))
+                        AND c.relnamespace = m.relnamespace AND c.relkind = 'r' AND c.relpersistence = 'p'))
                 """ : "true", StringComparison.Ordinal)
             .Replace("/*parked-pins*/", postgres && RecordsConsumedRootJob(db) ? """, i."FoundationParkJobResult" AS "JobResult" """ : "", StringComparison.Ordinal)
             .Replace("/*page*/", postgres ? PostgresParkInboxPage(db) : SqliteParkInboxPage, StringComparison.Ordinal)
             .Replace("/*header-length*/", postgres ? """octet_length(m."Start")""" : """length(CAST(m."Start" AS BLOB))""", StringComparison.Ordinal)
             .Replace("/*sort-collation*/", postgres ? "COLLATE \"C\"" : "COLLATE BINARY", StringComparison.Ordinal)
             .Replace("/*read-clock*/", postgres ? "floor(extract(epoch from statement_timestamp()) * 1000)::bigint" : "0", StringComparison.Ordinal);
-        sql = postgres ? StoreDefinitionsRevision.AddPostgresStampSql(sql)
+        sql = postgres ? StoreDefinitionsRevision.AddPostgresStampSql(sql, only: true)
             : sql.Replace("/*definitions-stamp*/", "NULL", StringComparison.Ordinal);
         var statement = FormattableStringFactory.Create(sql, query.GetArguments());
         if (!postgres)
@@ -84,8 +87,8 @@ public sealed partial class EfStore
 
         Task<List<ParkInboxProjection>> SampleAsync() => db.Database.SqlQuery<ParkInboxProjection>(statement).ToListAsync(token);
 
-        ParkInboxSnapshot? Build(List<ParkInboxProjection> rows, long at) => rows[0].ParkMatches
-            ? new(rows.Where(row => row.Sequence.HasValue).Select(Project).ToArray(), at) : null;
+        ParkInboxSnapshot? Build(List<ParkInboxProjection> rows, long at) => rows[0].ParkCheckpoint is { } revision
+            ? new(rows.Where(row => row.Sequence.HasValue).Select(Project).ToArray(), revision, at) : null;
 
         ParkInboxRow Project(ParkInboxProjection row)
         {
@@ -97,7 +100,13 @@ public sealed partial class EfStore
                 : PostgresRootAdmission.IsStoredOperator(row.Header)
                     ? PostgresRootAdmission.InspectOperatorHeader(db, row.Header!, reference, id, kind, due, hasReply)
                     : (Id: id, Kind: kind, Due: due == 0 ? null : (long?)due);
-            return new(row.Sequence.Value, id, scope, metadata.Kind, metadata.Due, row.Attempts.Value, (ParkKeepReason)reason);
+            var publicKind = (scope, metadata.Kind) switch
+            {
+                (RootSelfScope, RootSelfTimerWire) => "Timer",
+                (RootSelfScope, RootSelfWire) => "Self message",
+                _ => metadata.Kind
+            };
+            return new(row.Sequence.Value, id, scope, publicKind, metadata.Due, row.Attempts.Value, (ParkKeepReason)reason);
         }
     }
 
@@ -117,7 +126,7 @@ public sealed partial class EfStore
         SELECT {ParkInboxProjectionSql}
         FROM parked p JOIN "Messages" m ON m."Partition" = p."Partition" AND m."Target" = p."Actor"
         CROSS JOIN boundary b
-        WHERE m."Done" AND m."FoundationKeptBy" IS NOT NULL AND m."FoundationKeptBy" IN (0, 1)
+        WHERE m."EventMatch" IS NULL AND m."Done" AND m."FoundationKeptBy" IS NOT NULL AND m."FoundationKeptBy" IN (0, 1)
             AND {ParkInboxAfter}
         ORDER BY m."Seq", m."Id" /*sort-collation*/, m."InboxScope" LIMIT (SELECT "Limit" FROM boundary)
         """;
@@ -133,7 +142,7 @@ public sealed partial class EfStore
             CROSS JOIN (VALUES (0::smallint), (1::smallint)) reason("Value")
             CROSS JOIN LATERAL (
                 SELECT {ParkInboxProjectionSql}
-                FROM "Messages" m
+                FROM ONLY "Messages" m
                 WHERE m."Partition" = p."Partition" AND m."Target" COLLATE "C" = p."Actor"
                     AND {scope} AND m."EventMatch" IS NULL AND m."Done" AND m."FoundationKeptBy" IN (0, 1)
                     AND m."FoundationKeptBy" = reason."Value" AND {ParkInboxAfter}
@@ -152,7 +161,7 @@ public sealed partial class EfStore
                 SELECT {ParkInboxProjectionSql}
                 FROM parked p CROSS JOIN boundary b
                 CROSS JOIN LATERAL (VALUES {string.Join(", ", pins)}) pin("Id", "Scope", "Kind")
-                JOIN "Messages" m ON m."Id" = pin."Id" AND m."InboxScope" = pin."Scope" AND m."Kind" = pin."Kind"
+                JOIN ONLY "Messages" m ON m."Id" = pin."Id" AND m."InboxScope" = pin."Scope" AND m."Kind" = pin."Kind"
                     AND m."Partition" = p."Partition" AND m."Target" = p."Actor"
                 WHERE m."EventMatch" IS NULL AND m."Done" AND m."FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
                     AND {ParkInboxAfter}
