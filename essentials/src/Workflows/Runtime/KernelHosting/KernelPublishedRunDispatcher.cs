@@ -1,0 +1,109 @@
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.KernelHost;
+using Elsa.Workflows.Runtime.Services.Executions;
+using Kernel.Foundation.Contracts;
+using Kernel.Native;
+using Kernel.WorkflowActor;
+using Microsoft.Extensions.DependencyInjection;
+using Admission = Kernel.Foundation.Contracts.Admission;
+
+namespace Elsa.Workflows.Runtime.KernelHosting;
+
+internal delegate ValueTask<Admission> StartPublishedKernelRun(string operationId, StartSpec start, CancellationToken token);
+
+/// <summary>Admits ordinary published Execute requests through the installed actor foundation.</summary>
+internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, KernelServing serving, PersistenceScope persistence,
+    StartPublishedKernelRun start) : IWorkflowStartDispatcher
+{
+    public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request,
+        WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (requiredScope != WorkflowExecutableReferenceScope.Published || request.RunKind != WorkflowRunKind.PublishedRun ||
+            (request.TenantId ?? PersistenceScope.DefaultValue) != persistence.Value)
+            throw new InvalidOperationException("The kernel execute dispatcher requires a published request bound to this shell.");
+
+        await using var scope = await scopes.CreateAsyncScopeAsync(persistence);
+        var services = scope.ServiceProvider;
+        var clock = services.GetRequiredService<TimeProvider>();
+        var executable = await services.GetRequiredService<IWorkflowExecutableStore>().FindAsync(request.ArtifactId, cancellationToken)
+            ?? throw new WorkflowExecutableNotFoundException(request.ArtifactId);
+        var sources = new WorkflowExecutableStartSourceResolver(services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(), clock);
+        var authority = services.GetRequiredService<IWorkflowActivationAuthority>();
+        var source = await sources.ResolvePublishedAsync(request.ArtifactId, request.SourceSelection, persistence, cancellationToken);
+        var published = await ReadServedAsync(source);
+
+        var inputs = WorkflowStartDispatcher.ApplyInputContract(executable, request.Inputs,
+            services.GetRequiredService<IWorkflowExecutableInputValidator>());
+        var policies = services.GetServices<IWorkflowExecutableStartPolicy>().ToArray();
+        if (policies is not [var policy])
+            throw new InvalidOperationException($"Runtime composition requires exactly one {nameof(IWorkflowExecutableStartPolicy)} registration, but found {policies.Length}.");
+        await WorkflowStartDispatcher.EnforceStartPolicyAsync(request, executable.Identity, new(persistence.Value), policy, cancellationToken);
+
+        var input = new JsonObject();
+        foreach (var (name, value) in inputs) input.Add(name, JsonNode.Parse(value.GetRawText()));
+        var mode = services.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(executable);
+        var spec = WorkflowActor.Start(NativeExecutionModel.Start(published.Workflow, mode.ToString(), input));
+
+        // Recheck after policy and input work, using the physical publication ledger as well as the served slot.
+        var selected = await sources.ResolvePublishedAsync(request.ArtifactId, request.SourceSelection, persistence, cancellationToken);
+        if (!WorkflowExecutableSourceReferenceComparer.SameSnapshot(source, selected) || await ReadServedAsync(selected) != published)
+            throw Rejected();
+
+        var operationId = Guid.NewGuid().ToString("N");
+        var receipt = await start(operationId, spec, cancellationToken);
+        return Result(operationId, executable.Identity, WorkflowExecutableSourceProvenance.From(source), receipt, clock.GetUtcNow());
+
+        async ValueTask<KernelServedSlot> ReadServedAsync(WorkflowExecutableSourceReference reference)
+        {
+            if (reference is not { SlotId: { } slotId, ActivationId: { } activation } ||
+                reference.SourceReferenceId != WorkflowActivationReferenceIdentity.Create(activation) ||
+                serving.Find(slotId) is not { } served || served.DefinitionId != reference.DefinitionId ||
+                served.Workflow.Definition != reference.DefinitionId || served.ActivationId != activation ||
+                served.Workflow.Id != executable.Identity.ArtifactId ||
+                NativeExecutableMapper.ReadMaterialSelection(served.Workflow.ExecutableSelection, request.ArtifactId) != executable.Identity)
+                throw Rejected();
+
+            var current = await authority.FindAsync(reference.DefinitionId, served.SlotName, cancellationToken);
+            if (current is null || current.SlotId != slotId || current.ActiveActivationId != activation ||
+                current.Revision != served.Revision || serving.Find(slotId) != served)
+                throw Rejected();
+            return served;
+        }
+
+        WorkflowExecutableReferenceRejectedException Rejected() => new(request.ArtifactId, requiredScope,
+            WorkflowExecutableReferenceRejectionReason.NoLiveReference);
+    }
+
+    private static WorkflowExecutionStartDispatchResult Result(string operationId, WorkflowExecutableIdentity material,
+        WorkflowExecutableSourceProvenance source, Admission admission, DateTimeOffset recordedAt)
+    {
+        var pressure = admission is { Outcome: AdmissionOutcome.Refused,
+            Reason: RefusalReason.RateLimited or RefusalReason.NodeBusy or RefusalReason.InboxFull };
+        var (status, id) = admission switch
+        {
+            { Outcome: AdmissionOutcome.Accepted, Actor: { } actor } => (WorkflowExecutionCommandDispatchStatus.Accepted, actor.Id),
+            { Outcome: AdmissionOutcome.Duplicate, Actor: { } actor } => (WorkflowExecutionCommandDispatchStatus.Duplicate, actor.Id),
+            { Outcome: AdmissionOutcome.Refused } => (pressure ? WorkflowExecutionCommandDispatchStatus.Deferred :
+                WorkflowExecutionCommandDispatchStatus.Rejected, operationId),
+            _ => throw new InvalidOperationException("The Actor Foundation returned an invalid start receipt.")
+        };
+        var reason = admission.Outcome == AdmissionOutcome.Refused ? admission.Reason?.ToString() ?? "StartRefused" : null;
+        var metadata = pressure ? new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.DispatchShed] = "true",
+            [RuntimeMetadataKeys.DispatchRetryAfterSeconds] = Math.Ceiling(Math.Clamp(admission.RetryAfter?.TotalSeconds ?? 1, 1, int.MaxValue))
+                .ToString(CultureInfo.InvariantCulture)
+        } : null;
+        return new(id, material, new(operationId, id, status, recordedAt, reason, metadata),
+            new(id, id, "actor-foundation", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, recordedAt), source);
+    }
+}

@@ -24,6 +24,7 @@ internal abstract class KernelShellStorage
     public abstract bool TakesManagedSchedules { get; }
     public abstract ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token);
     public abstract bool TakesPreparedStarts { get; }
+    public abstract IProtectedRootStarts BindPublishedStarts(BoundScope scope);
     public abstract Task InstallAsync(CancellationToken token, ProtectRootStartAsync? protectRootStart = null);
     public abstract Task<RootStartProof> ConfirmPreparedStartAsync(BoundScope scope, ActorRef actor, string issuance,
         CancellationToken token);
@@ -109,6 +110,7 @@ internal abstract class KernelShellStorage
         public override bool TakesHttpWaits => SqliteEmbeddedHosting.TakesHttpWaits;
         public override bool TakesManagedSchedules => TakesPreparedStarts || Foundation.TakesManagedSchedules;
         public override bool TakesPreparedStarts => profile == Profile.PreparedStarts;
+        public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Foundation.BindProtectedRootStarts(scope);
 
         public override ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token) =>
             ValueTask.FromResult(BindSchedules(scope, Foundation.BindScheduleControls(ScheduleActor.ActorType),
@@ -172,6 +174,7 @@ internal abstract class KernelShellStorage
         public override bool TakesHttpWaits => PostgresPreviewHosting.TakesHttpWaits(OpenDatabase);
         public override bool TakesManagedSchedules => PostgresPreviewHosting.TakesManagedSchedules(OpenDatabase);
         public override bool TakesPreparedStarts => _profile == Profile.PreparedStarts;
+        public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Requests.BindProtectedRootStarts(scope);
         private PostgresDirectRequests Requests => _requests ??
             throw new InvalidOperationException("Install the PostgreSQL prepared-start store before opening it.");
 
