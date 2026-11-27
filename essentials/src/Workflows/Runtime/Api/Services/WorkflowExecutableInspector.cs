@@ -8,16 +8,30 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Api.Services;
 
 /// <summary>Runtime-owned, Design-independent inspection of immutable executable artifacts and their roots.</summary>
-public sealed class WorkflowExecutableInspector(
-    IWorkflowExecutableStore executableStore,
-    IWorkflowExecutableSourceReferenceStore referenceStore,
-    IWorkflowExecutionStateStore executionStore,
-    TimeProvider? timeProvider = null) : IWorkflowExecutableInspector
+public sealed class WorkflowExecutableInspector : IWorkflowExecutableInspector
 {
     private const int PreviewLength = 80;
     private const string BpmnStructureKind = "elsa.bpmn.structure";
     private const string BpmnStructureSchemaVersion = "1.0.0";
-    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    private readonly IWorkflowExecutableStore _executableStore;
+    private readonly IWorkflowExecutableSourceReferenceStore _referenceStore;
+    private readonly IWorkflowExecutableRetentionReader _retention;
+    private readonly TimeProvider _timeProvider;
+
+    public WorkflowExecutableInspector(IWorkflowExecutableStore executableStore, IWorkflowExecutableSourceReferenceStore referenceStore,
+        IWorkflowExecutionStateStore executionStore, TimeProvider? timeProvider = null)
+        : this(executableStore, referenceStore, new LegacyWorkflowExecutableRetentionReader(executionStore), timeProvider)
+    {
+    }
+
+    internal WorkflowExecutableInspector(IWorkflowExecutableStore executableStore, IWorkflowExecutableSourceReferenceStore referenceStore,
+        IWorkflowExecutableRetentionReader retention, TimeProvider? timeProvider)
+    {
+        _executableStore = executableStore;
+        _referenceStore = referenceStore;
+        _retention = retention;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     Task<WorkflowExecutablesListView> IWorkflowExecutableInspector.ListAsync(ListWorkflowExecutables request, CancellationToken cancellationToken) =>
         ListAsync(request.Scope, request.IncludeRetired, cancellationToken).AsTask();
@@ -40,18 +54,19 @@ public sealed class WorkflowExecutableInspector(
         CancellationToken cancellationToken = default)
     {
         var now = _timeProvider.GetUtcNow();
-        var retainedCounts = await RetainedCountsAsync(cancellationToken);
-        var referencesByArtifact = (await referenceStore.ListAllAsync(cancellationToken: cancellationToken))
+        var retention = await _retention.ReadAsync(default, cancellationToken);
+        var referencesByArtifact = (await _referenceStore.ListAllAsync(cancellationToken: cancellationToken))
             .GroupBy(reference => reference.ArtifactId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var items = new List<WorkflowExecutableSummaryView>();
-        foreach (var executable in await executableStore.ListAllAsync(cancellationToken))
+        foreach (var executable in await _executableStore.ListAllAsync(cancellationToken))
         {
             var references = referencesByArtifact.GetValueOrDefault(executable.Identity.ArtifactId) ?? [];
             var matching = references.Where(reference => MatchesScope(reference, scope)).ToArray();
+            var retainedCount = retention.CountFor(executable.Identity.ArtifactId);
             if (!includeRetired && matching.All(reference => !reference.IsLive(now)))
                 continue;
-            if (matching.Length == 0 && !retainedCounts.ContainsKey(executable.Identity.ArtifactId))
+            if (matching.Length == 0 && retainedCount == 0)
                 continue;
             var ordered = OrderReferences(references).ToArray();
             var chosen = ordered.FirstOrDefault(reference => MatchesScope(reference, scope) && reference.IsLive(now))
@@ -62,7 +77,7 @@ public sealed class WorkflowExecutableInspector(
                 ordered,
                 now,
                 references.Count(reference => reference.IsLive(now)),
-                retainedCounts.GetValueOrDefault(executable.Identity.ArtifactId)));
+                retainedCount));
         }
 
         return new WorkflowExecutablesListView(items
@@ -77,22 +92,19 @@ public sealed class WorkflowExecutableInspector(
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
-        var executable = await executableStore.FindAsync(artifactId, cancellationToken);
+        var executable = await _executableStore.FindAsync(artifactId, cancellationToken);
         if (executable is null)
             return null;
         var now = _timeProvider.GetUtcNow();
-        var references = await referenceStore.ListAllByArtifactAsync(artifactId, cancellationToken);
+        var references = await _referenceStore.ListAllByArtifactAsync(artifactId, cancellationToken);
         var ordered = OrderReferences(references).ToArray();
-        var executions = await executionStore.ListAsync(cancellationToken);
-        var retained = executions.Count(execution =>
-            StringComparer.Ordinal.Equals(execution.PinnedExecutable.ArtifactId, artifactId));
         var requested = sourceReferenceId is null
             ? null
             : ordered.FirstOrDefault(reference => StringComparer.Ordinal.Equals(reference.SourceReferenceId, sourceReferenceId));
-        var requestedReferencePinnedByExecution = requested is not null &&
-            IsPinnedByExecution(requested, artifactId, executions);
+        var retention = await _retention.ReadAsync(RetentionQuery(executable, references, requested is not null && !requested.IsLive(now)
+            ? requested : null), cancellationToken);
         if (sourceReferenceId is not null &&
-            (requested is null || !IsInspectableReference(requested, now, requestedReferencePinnedByExecution)))
+            (requested is null || !IsInspectableReference(requested, now, retention.IsSourcePinned)))
             throw EntityNotFoundException.ForEntity(typeof(WorkflowExecutableSourceReference), sourceReferenceId);
         var chosen = requested
             ?? ordered.FirstOrDefault(reference => reference.Scope == WorkflowExecutableReferenceScope.Published && reference.IsLive(now))
@@ -107,7 +119,7 @@ public sealed class WorkflowExecutableInspector(
             executable.Nodes.Count,
             executable.ResumeTargets.Count,
             references.Count(reference => reference.IsLive(now)),
-            retained,
+            retention.CountFor(artifactId),
             Node(executable.RootActivity, includeSourceDetails: false),
             executable.CompatibilityMetadata,
             chosen is null
@@ -141,8 +153,8 @@ public sealed class WorkflowExecutableInspector(
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
 
-        var executable = await executableStore.FindAsync(artifactId, cancellationToken);
-        var reference = await referenceStore.FindAsync(sourceReferenceId, cancellationToken);
+        var executable = await _executableStore.FindAsync(artifactId, cancellationToken);
+        var reference = await _referenceStore.FindAsync(sourceReferenceId, cancellationToken);
         if (executable is null || reference is null || !StringComparer.Ordinal.Equals(reference.ArtifactId, artifactId))
             return null;
 
@@ -150,8 +162,8 @@ public sealed class WorkflowExecutableInspector(
         var pinnedByExecution = false;
         if (!reference.IsLive(now))
         {
-            var executions = await executionStore.ListAsync(cancellationToken);
-            pinnedByExecution = IsPinnedByExecution(reference, artifactId, executions);
+            var retention = await _retention.ReadAsync(new(artifactId, [reference.DefinitionId], reference), cancellationToken);
+            pinnedByExecution = retention.IsSourcePinned;
         }
 
         if (!IsInspectableReference(reference, now, pinnedByExecution))
@@ -183,14 +195,6 @@ public sealed class WorkflowExecutableInspector(
             compiledInputs);
     }
 
-    private static bool IsPinnedByExecution(
-        WorkflowExecutableSourceReference reference,
-        string artifactId,
-        IEnumerable<WorkflowExecutionState> executions) =>
-        executions.Any(execution =>
-            StringComparer.Ordinal.Equals(execution.PinnedExecutable.ArtifactId, artifactId) &&
-            StringComparer.Ordinal.Equals(execution.PinnedSource?.SourceReferenceId, reference.SourceReferenceId));
-
     private static bool IsInspectableReference(
         WorkflowExecutableSourceReference reference,
         DateTimeOffset now,
@@ -209,20 +213,25 @@ public sealed class WorkflowExecutableInspector(
     public async ValueTask<ExecutableProvenanceView?> GetProvenanceAsync(string artifactId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
-        if (await executableStore.FindAsync(artifactId, cancellationToken) is null)
-            return null;
+        var executable = await _executableStore.FindAsync(artifactId, cancellationToken);
+        if (executable is null) return null;
         var now = _timeProvider.GetUtcNow();
-        var references = (await referenceStore.ListAllByArtifactAsync(artifactId, cancellationToken))
+        var references = (await _referenceStore.ListAllByArtifactAsync(artifactId, cancellationToken))
             .OrderByDescending(reference => reference.CreatedAt)
             .ThenBy(reference => reference.SourceReferenceId, StringComparer.Ordinal)
             .ToArray();
-        var retained = (await RetainedCountsAsync(cancellationToken)).GetValueOrDefault(artifactId);
+        var retained = (await _retention.ReadAsync(RetentionQuery(executable, references, null), cancellationToken)).CountFor(artifactId);
         return new ExecutableProvenanceView(
             artifactId,
             references.Select(reference => ExecutableSourceReferenceView.From(reference, now)).ToArray(),
             retained,
             retained > 0 || references.Any(reference => reference.IsLive(now)));
     }
+
+    private static WorkflowExecutableRetentionQuery RetentionQuery(WorkflowExecutable executable,
+        IEnumerable<WorkflowExecutableSourceReference> references, WorkflowExecutableSourceReference? selected) =>
+        new(executable.Identity.ArtifactId, references.Select(reference => reference.DefinitionId).Append(executable.Identity.DefinitionId)
+            .Distinct(StringComparer.Ordinal).ToArray(), selected);
 
     /// <summary>
     /// An authored input's own sensitivity flag is only the author's choice: an activity's input declaration reaches the
@@ -259,11 +268,6 @@ public sealed class WorkflowExecutableInspector(
         if (node.ActivityContract?.Inputs.GetValueOrDefault(inputKey) is { } contract)
             yield return contract.Policy.HidesValue();
     }
-
-    private async ValueTask<IReadOnlyDictionary<string, int>> RetainedCountsAsync(CancellationToken cancellationToken) =>
-        (await executionStore.ListAsync(cancellationToken))
-        .GroupBy(state => state.PinnedExecutable.ArtifactId, StringComparer.Ordinal)
-        .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
 
     private static bool MatchesScope(WorkflowExecutableSourceReference reference, WorkflowExecutableListScope scope) => scope switch
     {
