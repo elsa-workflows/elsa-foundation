@@ -30,7 +30,7 @@ public sealed class KernelServing
     private readonly Func<string, string?>? _cronError;
     private readonly Lock _lock = new();
     private readonly SemaphoreSlim _turn = new(1, 1);
-    private ServingState _state;
+    private volatile ServingState _state;
 
     /// <param name="cronError">The host's check of a cron expression (<see cref="NativeSchedules"/>): null when it reads.</param>
     /// <param name="capabilities">
@@ -58,6 +58,14 @@ public sealed class KernelServing
     public IReadOnlyCollection<KernelServedSlot> Slots => [.. _state.Slots.Values];
 
     public KernelServedSlot? Find(string slotId) => _state.Slots.GetValueOrDefault(slotId);
+
+    internal (HttpRoute Route, Workflow Workflow)? HttpStart(HttpRoute matched)
+    {
+        var snapshot = _state;
+        return snapshot.HttpStarts.TryGetValue((matched.Method, matched.Template.Text), out var start) &&
+            start.Route.Workflow == matched.Workflow && start.Route.Node == matched.Node &&
+            start.Route.RespondBeforeCommit == matched.RespondBeforeCommit ? start : null;
+    }
 
     /// <summary>
     /// What serves a definition now, for a Dispatch that names it (<see cref="NativeExecutionOptions.ServedWorkflow"/>): its
@@ -147,11 +155,15 @@ public sealed class KernelServing
     {
         var registry = new WorkflowRegistry();
         foreach (var slot in slots.Values.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)) registry.Add(slot.Workflow);
-        return new(slots, new HttpRoutes(registry), new NativeSchedules(registry, _cronError));
+        var routes = new HttpRoutes(registry);
+        var starts = routes.Routes.Where(route => route.Start).ToDictionary(route => (route.Method, route.Template.Text),
+            route => (route, registry.Get(route.Workflow)));
+        return new(slots, routes, new NativeSchedules(registry, _cronError), starts);
     }
 }
 
-internal sealed record ServingState(IReadOnlyDictionary<string, KernelServedSlot> Slots, HttpRoutes Routes, NativeSchedules Schedules);
+internal sealed record ServingState(IReadOnlyDictionary<string, KernelServedSlot> Slots, HttpRoutes Routes, NativeSchedules Schedules,
+    IReadOnlyDictionary<(string Method, string Template), (HttpRoute Route, Workflow Workflow)> HttpStarts);
 
 /// <summary>A change to the serving set, checked: the slot, what it served before, what it serves after, and the state that results.</summary>
 internal sealed record KernelServingPlan(string SlotId, KernelServedSlot? Previous, KernelServedSlot? Served, ServingState State);
