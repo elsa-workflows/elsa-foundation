@@ -65,7 +65,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         };
     }
 
-    private bool Authorizes(Contract.BoundScope scope, Contract.ActorRef actor, string kind) =>
+    internal bool Authorizes(Contract.BoundScope scope, Contract.ActorRef actor, string kind) =>
         PostgresRootAdmission.IsIssuedReferenceShape(actor.Id) && (kind switch
         {
             Contract.Kinds.Terminate => authorizeTerminate,
@@ -107,6 +107,14 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
             { Duplicate: false } => new(Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(receipt.Reference)),
             _ => new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection)
         };
+    }
+
+    internal async Task<Contract.Admission?> AdmitHeldOperatorAsync(Contract.BoundScope scope, Contract.ActorRef actor, string id,
+        string kind, string? payload, Contract.AddOptions? add, HeldRootRequest caller, CancellationToken token)
+    {
+        var route = new PostgresRootAdmission.OperatorReply(caller.Address, caller.Caller.Deadline);
+        try { return await OperateAsync(scope, actor, id, kind, payload, add, token, route); }
+        catch (PostgresRootAdmission.OperatorReplyExpired) { return null; }
     }
 
     public async ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,

@@ -255,8 +255,8 @@ public static partial class PostgresPreviewHosting
         OpenFoundationCoreAsync(create, actorType, requests, deduplicationWindow, pageSize, cancellationToken, null);
 
     /// <summary>
-    /// Opens ingress and reads with one-way operator commands. The host authorizes each command against its bound scope
-    /// and exact actor reference. The installed store determines which commands it accepts.
+    /// Opens ingress and reads with selected operator commands. The host authorizes each command against its bound scope
+    /// and exact actor reference. Held commands require the matching reply edge and a store that supports operator replies.
     /// </summary>
     public static Task<PostgresPreviewFoundation> OpenFoundationWithOperatorsAsync(Func<KernelDb> create, string actorType,
         Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorizeOperator, PostgresDirectRequests? requests = null,
@@ -273,6 +273,7 @@ public static partial class PostgresPreviewHosting
         ArgumentNullException.ThrowIfNull(create);
         PostgresRootAdmission.RequireActorType(actorType);
         requests?.RequireRootStartProtectionBinding(create, actorType);
+        if (authorizeOperator is not null) requests?.RequireOperatorBinding(create, actorType);
         if (requests is not null && deduplicationWindow is { } asked && asked != requests.DeduplicationWindow)
             throw new ArgumentException("Held requests carry their own deduplication window.", nameof(deduplicationWindow));
         var window = requests?.DeduplicationWindow ?? deduplicationWindow ?? TimeSpan.FromHours(1);

@@ -30,6 +30,7 @@ internal abstract class KernelShellStorage
         CancellationToken token);
     public abstract Task<int> PrunePreparedStartsAsync(BoundScope scope, CancellationToken token);
     public abstract ValueTask<KernelShellFoundation> OpenAsync(CancellationToken token);
+    public abstract Task<IIngress> OpenOperatorsAsync(Func<BoundScope, ActorRef, string, bool> authorize, CancellationToken token);
     public abstract ValueTask<long> ReadClockAsync(CancellationToken token);
     public abstract ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(BoundScope scope, ActorRef actor, string issuance,
         CancellationToken token);
@@ -136,6 +137,9 @@ internal abstract class KernelShellStorage
             Foundation.PrunePreparedStartsAsync(scope, token);
         public override ValueTask<long> ReadClockAsync(CancellationToken token) => Foundation.ReadClockAsync(token);
 
+        public override Task<IIngress> OpenOperatorsAsync(Func<BoundScope, ActorRef, string, bool> authorize, CancellationToken token) =>
+            Foundation.OpenIngressWithOperatorsAsync(authorize, token);
+
         public override async ValueTask<KernelShellFoundation> OpenAsync(CancellationToken token) =>
             new(await Foundation.OpenIngressAsync(token), Foundation.CreateReads(), Foundation, Foundation.AdmitRetentionDeleteAsync);
 
@@ -219,6 +223,10 @@ internal abstract class KernelShellStorage
             return BindSchedules(scope, PostgresPreviewHosting.BindScheduleControls(OpenDatabase, ScheduleActor.ActorType), occurrences);
         }
         public override ValueTask<long> ReadClockAsync(CancellationToken token) => Requests.ReadClockAsync(token);
+
+        public override async Task<IIngress> OpenOperatorsAsync(Func<BoundScope, ActorRef, string, bool> authorize, CancellationToken token) =>
+            await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenDatabase, WorkflowActor.ActorType, authorize, Requests,
+                cancellationToken: token);
 
         public override async ValueTask<KernelShellFoundation> OpenAsync(CancellationToken token)
         {

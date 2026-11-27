@@ -106,10 +106,26 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
         reads.TailAsync(scope, actor, from, cancellationToken);
 
     public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
-        string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default) =>
-        directRequests is not null && target is Contract.Target.Ref or Contract.Target.Start or Contract.Target.Event
-            ? directRequests.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken)
-            : throw new NotSupportedException("This preview holds requests only with a reply-capable store and its direct requests.");
+        string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default)
+    {
+        if (directRequests is null || target is not (Contract.Target.Ref or Contract.Target.Start or Contract.Target.Event))
+            throw new NotSupportedException("This preview holds requests only with a reply-capable store and its direct requests.");
+        if (authorizeExactOperator is null || !Contract.Kinds.IsCommand(kind))
+            return directRequests.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken);
+
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (request.Inline || request.ReleaseBeforeCommit || request.Ambient is not null)
+            return ValueTask.FromResult(new Contract.Reply(null, null, Error: "invalid operator request"));
+        if (add?.DueAt is not null)
+            return ValueTask.FromResult(new Contract.Reply(null, null, Error: "requests cannot set a due time"));
+        if (kind == Contract.Kinds.Recover || target is not Contract.Target.Ref exact || !ingress.Authorizes(scope, exact.Actor, kind))
+            return ValueTask.FromResult(new Contract.Reply(null, null, Error: "missing"));
+
+        return directRequests.RequestOperatorAsync(scope, exact.Actor, id, add, request,
+            (caller, token) => ingress.AdmitHeldOperatorAsync(scope, exact.Actor, id, kind, payload, add, caller, token), cancellationToken);
+    }
 
     public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
         CancellationToken cancellationToken = default) =>
