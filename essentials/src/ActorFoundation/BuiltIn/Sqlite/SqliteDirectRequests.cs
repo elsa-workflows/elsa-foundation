@@ -33,6 +33,7 @@ public static partial class SqliteEmbeddedHosting
         private readonly string actorType;
         private readonly Admission admission;
         private readonly HeldRootRequests edge;
+        private readonly ProtectRootStartAsync? protectRootStart;
 
         internal SqliteDirectRequests(string path, string node, string actorType, TimeSpan window,
             RootAdmissionPressure? pressure = null, StoreFormat? qualificationFormat = null,
@@ -41,6 +42,7 @@ public static partial class SqliteEmbeddedHosting
             (this.path, this.node, this.actorType, DeduplicationWindow) = (path, node, actorType, window);
             Pressure = pressure;
             QualificationFormat = qualificationFormat;
+            this.protectRootStart = protectRootStart;
             admission = new(this, path, window, protectRootStart);
             edge = new(admission, node, actorType);
         }
@@ -57,6 +59,15 @@ public static partial class SqliteEmbeddedHosting
         }
 
         internal ValueTask<long> ReadClockAsync(CancellationToken token = default) => admission.ReadClockAsync(token);
+
+        internal IProtectedRootStarts BindProtectedRootStarts(Contract.BoundScope scope)
+        {
+            ArgumentNullException.ThrowIfNull(scope);
+            if (protectRootStart is not { } protect)
+                throw new InvalidOperationException("Configure SQLite root start protection before binding one-way starts.");
+            return new BoundProtectedRootStarts(actorType,
+                (operation, spec, token, _) => admission.StartProtectedOneWayAsync(scope, operation, spec, protect, token));
+        }
 
         internal Task<RootStartProof> ConfirmHeldStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
             CancellationToken token) => admission.ConfirmHeldStartAsync(scope, actor, issuance, token);
@@ -131,30 +142,44 @@ public static partial class SqliteEmbeddedHosting
                 return await ForFile(file).ReadReplyTimeAsync(token);
             }
 
-            public Task<string?> StartAsync(HeldRootRequest request, StartSpec spec, CancellationToken token) =>
-                protectRootStart is null
-                    ? WriteAsync(request.Tenant, RootAdmissionKind.Start, (admission, attempt, ct) =>
-                        admission.StartRequestAsync(request, spec, ct, attempt), token)
-                    : OnWriteWorkerAsync(() => StartProtectedAsync(request, spec, protectRootStart, token), token);
-
-            private async Task<string?> StartProtectedAsync(HeldRootRequest request, StartSpec spec,
-                ProtectRootStartAsync protect, CancellationToken token)
+            public async Task<string?> StartAsync(HeldRootRequest request, StartSpec spec, CancellationToken token)
             {
-                using var attempt = owner.Pressure?.Begin(request.Tenant, RootAdmissionKind.Start);
+                if (protectRootStart is null)
+                    return await WriteAsync(request.Tenant, RootAdmissionKind.Start, (admission, attempt, ct) =>
+                        admission.StartRequestAsync(request, spec, ct, attempt), token);
+                var result = await OnWriteWorkerAsync(
+                    () => StartProtectedAsync(request.Tenant, request.Caller.Id, spec, request, protectRootStart, token), token);
+                return result?.Actor?.Id;
+            }
+
+            internal Task<Contract.Admission?> StartProtectedOneWayAsync(Contract.BoundScope scope, string operation, StartSpec spec,
+                ProtectRootStartAsync protect, CancellationToken token) =>
+                // SQLite's bounded synchronous commands may keep running briefly after cancellation. Await
+                // the worker so the linked token stays registered and a landed COMMIT can still be reported.
+                Task.Run(() => StartProtectedAsync(scope.Tenant, operation, spec, null, protect, token), token);
+
+            private async Task<Contract.Admission?> StartProtectedAsync(string tenant, string operation, StartSpec spec,
+                HeldRootRequest? request, ProtectRootStartAsync protect, CancellationToken token)
+            {
+                using var attempt = owner.Pressure?.Begin(tenant, RootAdmissionKind.Start);
                 var prepared = await WriteWithFileAsync(RootAdmissionKind.Start, attempt,
-                    (admission, ct) => admission.PrepareHeldStartAsync(request, spec, attempt, ct), token);
+                    (admission, ct) => admission.PrepareProtectedStartAsync(tenant, operation, spec, request, attempt, ct), token);
                 if (prepared.Stage is not { } stage || prepared.Offer is not { } offer)
-                    return prepared.Existing;
-                if (!await RootPreparedStarts.ProtectAsync(protect, offer, token))
+                    return Duplicate(prepared.Existing);
+                var protectedStart = await RootPreparedStarts.ProtectAsync(protect, offer, token);
+                if (!protectedStart)
                 {
                     var (expired, duplicate) = await WriteWithFileAsync(RootAdmissionKind.Start, attempt,
                         (admission, ct) => admission.DisarmHeldStartAsync(stage, ct), token);
-                    if (expired || duplicate is not null) return expired ? null : duplicate;
+                    if (expired || duplicate is not null) return expired ? null : Duplicate(duplicate);
                     throw new RootAdmissionRefused(Contract.RefusalReason.TargetMismatch, TimeSpan.Zero);
                 }
                 token.ThrowIfCancellationRequested();
                 return await WriteWithFileAsync(RootAdmissionKind.Start, attempt,
-                    (admission, ct) => admission.StartRequestAsync(request, spec, ct, attempt, stage), token);
+                    (admission, ct) => admission.StartProtectedAsync(tenant, operation, spec, request, ct, attempt, stage), token);
+
+                static Contract.Admission? Duplicate(string? existing) => existing is null ? null :
+                    new(Contract.AdmissionOutcome.Duplicate, new Contract.ActorRef(existing));
             }
 
             internal Task<RootStartProof> ConfirmHeldStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
