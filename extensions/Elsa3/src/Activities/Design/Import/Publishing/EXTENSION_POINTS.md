@@ -15,7 +15,7 @@ The adapter between the Elsa 3 import and Workflows Publishing (spec 246). It ex
   (`RequestedVersionId`) and the phase's idempotency key. A preflight that is not publishable, a rejection or a
   non-applied receipt becomes a refused outcome with the publisher's code and diagnostics. An
   `ActivityDataSelectionRejectedException` from either call, wrapped or not, becomes a refused outcome with one located
-  diagnostic per finding (a JSON pointer, or an authored node and reference key) and the first finding's code (#5850).
+  diagnostic per finding (a JSON pointer, or an authored node and reference key) and the first error finding's code, or `activity.publication.invalid` when none is an error (#5850).
 
 ## Registered services
 
