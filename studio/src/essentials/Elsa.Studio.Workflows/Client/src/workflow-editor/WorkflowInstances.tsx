@@ -68,6 +68,8 @@ import { CompensationScopeDesigner, type CompensationOperatorControls } from "..
 import { compensationStepsSlotId } from "../compensationScope";
 import { deriveCompensationRuntime, type CompensationJournalSource, type CompensationScopeRuntime } from "../compensationRuntime";
 import { useCompensationJournals, useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "./useOperatorActions";
+import { RunParkRecovery } from "./RunParkRecovery";
+import { RunParkEvidence } from "./RunParkEvidence";
 import { canReviewDefinition, IncidentNextStep, useDefinitionReviewAccess, type DefinitionAccessObservation } from "./IncidentNextStep";
 import { writeRunSelection } from "./runSelectionUrl";
 import { readRunHistoryLocation as readTimelineLocation, writeRunHistoryLocation, type RunHistoryLocation as RunTimelineLocation } from "./run-history/historyLocation";
@@ -1135,6 +1137,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       data.activityCatalog.find(item => item.activityVersionId === node.activityVersionId),
       node.activityVersionId);
   }, [data]);
+  const [runRefreshVersion, setRunRefreshVersion] = useState(0);
   const operator = useOperatorActions({
     context,
     workflowExecutionId,
@@ -2119,6 +2122,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   }, [associationActivities, data, focusNodePath, initialActivityExecutionId, restoreExecutionContext]);
 
   const refreshWorkspace = () => {
+    setRunRefreshVersion(version => version + 1);
     playback.pause(); historyTargetRequest.current?.abort();
     confirmedSingletons.current.clear();
     loadGeneration.current++;
@@ -2272,8 +2276,14 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
           }]} /> : null}
         </div>
         {operator.status}
+        <RunParkRecovery key={workflowExecutionId} context={context} workflowExecutionId={workflowExecutionId}
+          inspect={observation.canInteract && currentData?.details.instance.status === "Faulted"}
+          refreshVersion={runRefreshVersion} refreshRun={refreshRun} />
       </div>
       {operator.dialog}
+      {observation.canInteract && currentData?.details.instance.status === "Faulted"
+        ? <RunParkEvidence key={`${workflowExecutionId}:${runRefreshVersion}`} context={context} workflowExecutionId={workflowExecutionId} />
+        : null}
       {state === "ready" && data && !timelineDocked ? <div className="wf-canvas-tabs wf-run-primary-views">
         <StudioTabs tabs={runViewTabs} activeTab={historyLocation.view} ariaLabel="Run workspace views" compact onSelect={selectRunView} />
       </div> : null}
@@ -2395,6 +2405,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
                 workflowExecutionId={workflowExecutionId}
                 activities={associationActivities}
                 activitiesDeferred={currentData.details.activitiesDeferred}
+                refreshKey={`${runRefreshVersion}:${currentData.details.instance.status}`}
                 hasMoreFromSummary={Boolean(currentData.details.activityNextContinuationToken)}
                 selectedActivityExecutionId={!historyLocation.selection ? selectedActivity?.activityExecutionId ?? null : null}
                 labelForActivity={labelForExecution}

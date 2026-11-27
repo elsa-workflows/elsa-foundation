@@ -21,7 +21,8 @@ public static partial class SqliteEmbeddedHosting
         ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
         ArgumentOutOfRangeException.ThrowIfEqual(pageSize, int.MaxValue);
         using var file = AcquireFile(databasePath);
-        return new SqliteEmbeddedReads(file.Path, pageSize, qualificationFormat);
+        using var db = KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
+        return new SqliteEmbeddedReads(file.Path, pageSize, qualificationFormat, db.UsesRootParkRecovery);
     }
 
     internal static async ValueTask<T> RunRetentionPolicyAsync<T>(string path, StoreFormat? qualificationFormat,
@@ -41,10 +42,17 @@ public static partial class SqliteEmbeddedHosting
         }
     }
 
-    private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat)
+    private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat, bool supportsParkInbox)
         : Contract.IActorReads, Contract.IActorTerminalOutputReads, Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads,
-          Contract.IActorRetentionReads
+          Contract.IActorRetentionReads, Contract.IActorParkInboxReads
     {
+        public bool SupportsParkInbox => supportsParkInbox;
+
+        public ValueTask<Contract.Page<Contract.ParkInboxEntry>?> ReadParkInboxAsync(Contract.BoundScope scope,
+            Contract.ActorRef actor, string selection, Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
+            ReadAsync(reads => reads.ReadParkInboxAsync(scope, actor, selection, from, cancellationToken),
+                cancellationToken, normalizeLockTimeout: true);
+
         public bool SupportsSequencedJournal => qualificationFormat is null
             ? TakesSequencedJournal
             : qualificationFormat is { } format &&

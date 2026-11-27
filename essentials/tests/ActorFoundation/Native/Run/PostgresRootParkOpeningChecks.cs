@@ -18,29 +18,43 @@ internal static class PostgresRootParkOpeningChecks
     private sealed class RecoveryQuoteObservation : DbCommandInterceptor
     {
         internal bool ObserveNext { get; set; }
+        internal bool ObserveParkInbox { get; set; }
         internal int Quoted { get; private set; }
         internal bool SkippedKeptScan { get; private set; }
         internal bool ArrivalsUseKeptIndex { get; private set; }
+        internal bool ParkInboxUsesKeptIndex { get; private set; }
 
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
             CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            if (!ObserveNext || !command.CommandText.Contains("WITH arrivals AS MATERIALIZED", StringComparison.Ordinal))
+            var inbox = ObserveParkInbox && command.CommandText.Contains("CROSS JOIN (VALUES (0::smallint), (1::smallint))", StringComparison.Ordinal);
+            var quote = ObserveNext && command.CommandText.Contains("WITH arrivals AS MATERIALIZED", StringComparison.Ordinal);
+            if (!inbox && !quote)
                 return result;
-            ObserveNext = false;
             await using var explain = ((NpgsqlCommand)command).Clone();
             explain.CommandText = "EXPLAIN (ANALYZE, FORMAT JSON) " + command.CommandText;
             using var plan = JsonDocument.Parse((string)(await explain.ExecuteScalarAsync(cancellationToken))!);
             var nodes = Plans(plan.RootElement[0].GetProperty("Plan")).ToArray();
+            if (inbox)
+            {
+                ObserveParkInbox = false;
+                ParkInboxUsesKeptIndex = nodes.Any(node => UsesKeptIndex(node) &&
+                    node.GetProperty("Index Cond").GetString()!.Contains("Seq", StringComparison.Ordinal) &&
+                    node.GetProperty("Actual Loops").GetInt32() == 2);
+                return result;
+            }
+            ObserveNext = false;
             var arrivals = nodes.Single(node => node.TryGetProperty("Subplan Name", out var name) && name.GetString() == "CTE arrivals");
             Quoted = arrivals.GetProperty("Actual Rows").GetInt32();
-            ArrivalsUseKeptIndex = Plans(arrivals).Any(node =>
-                node.TryGetProperty("Index Name", out var index) && index.GetString() == "IX_FoundationRootInbox_RecoveryKept" &&
-                node.TryGetProperty("Index Cond", out var condition) && condition.GetString() is { } indexCondition &&
-                indexCondition.Contains("Target", StringComparison.Ordinal) && indexCondition.Contains("FoundationKeptBy", StringComparison.Ordinal));
+            ArrivalsUseKeptIndex = Plans(arrivals).Any(UsesKeptIndex);
             SkippedKeptScan = nodes.Any(node => node.TryGetProperty("Relation Name", out var relation) && relation.GetString() == "Messages" &&
                 node.GetProperty("Actual Loops").GetInt32() == 0);
             return result;
+
+            static bool UsesKeptIndex(JsonElement node) =>
+                node.TryGetProperty("Index Name", out var index) && index.GetString() == "IX_FoundationRootInbox_RecoveryKept" &&
+                node.TryGetProperty("Index Cond", out var condition) && condition.GetString() is { } indexCondition &&
+                indexCondition.Contains("Target", StringComparison.Ordinal) && indexCondition.Contains("FoundationKeptBy", StringComparison.Ordinal);
 
             static IEnumerable<JsonElement> Plans(JsonElement node)
             {
@@ -662,6 +676,16 @@ internal static class PostgresRootParkOpeningChecks
             var selection = parked?.Selection ?? throw new InvalidOperationException("The parked view has no Park selection.");
             Check(parked.Park?.At == opened!.At && (await reads.GetAsync(tenant, sibling, stop))?.Selection is null,
                 "the public view of the parked root carries a Park selection and the running sibling none");
+            var parkReads = (Contract.IActorParkInboxReads)await Store(OpenMixed).OpenPreviewRootReadsAsync(1, stop);
+            var firstPage = await parkReads.ReadParkInboxAsync(tenant, actor, selection, cancellationToken: stop);
+            Check(firstPage is { Items: [{ Kind: "ordinary", State: Contract.DeliveryState.Arrived }], Next: not null },
+                "the exact Park inbox starts with the oldest kept arrival");
+            var secondPage = await parkReads.ReadParkInboxAsync(tenant, actor, selection, firstPage!.Next, stop);
+            Check(secondPage is { Items: [{ Kind: "fail", State: Contract.DeliveryState.Consumed }], Next: not null } &&
+                secondPage.Items[0].Handle != firstPage.Items[0].Handle, "the next Park inbox page carries the consumed delivery's own handle");
+            var thirdPage = await parkReads.ReadParkInboxAsync(tenant, actor, selection, secondPage!.Next, stop);
+            Check(thirdPage is { Items: [{ Kind: "ordinary", State: Contract.DeliveryState.Arrived }], Next: null },
+                "the exact Park inbox stops after the last kept input");
             ValueTask<Contract.Admission> Send(Contract.ActorRef target, string id, Contract.OperatorCommand command) =>
                 ingress.SendAsync(tenant, new Contract.Target.Ref(target), id, Contract.Kinds.Recover, JsonSerializer.Serialize(command),
                     cancellationToken: stop);
@@ -692,6 +716,10 @@ internal static class PostgresRootParkOpeningChecks
                     FROM generate_series(1, 8192) n;
                     ANALYZE "Messages";
                     """, stop);
+            recoveryQuote.ObserveParkInbox = true;
+            var skewedPage = await parkReads.ReadParkInboxAsync(tenant, actor, selection, firstPage.Next, stop);
+            Check(skewedPage?.Items.Count == 1 && recoveryQuote.ParkInboxUsesKeptIndex,
+                "the exact PostgreSQL page seeks both kept reasons by actor and sequence with 8192 earlier pending rows");
             Check(await Send(actor, "recover-page", new(selection)) is { Outcome: Contract.AdmissionOutcome.Accepted }, "ingress admits a recover of the oversized Park");
             recoveryQuote.ObserveNext = true;
             await using (var pager = await Own("recover-page"))
@@ -703,6 +731,9 @@ internal static class PostgresRootParkOpeningChecks
                 (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop)) is { Status: InstanceStatus.Faulted, Fault: fault, State: original } &&
                 await ReadParkMark(before.Actor.Id) == opened && (await reads.GetAsync(tenant, actor, stop))?.Park == parked.Park,
                 "the owner records a page refusal at the next revision and keeps the Park mark and fault");
+            Check(await parkReads.ReadParkInboxAsync(tenant, actor, selection, firstPage.Next, stop) is null &&
+                await parkReads.ReadParkInboxAsync(tenant, actor, selection, cancellationToken: stop) is { Next: not null },
+                "a committed checkpoint change invalidates an earlier page without replacing the Park");
             await using (var db = Open())
                 await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" LIKE 'page-filler-%' OR "Id" LIKE 'page-pending-%'""", stop);
 
@@ -769,6 +800,9 @@ internal static class PostgresRootParkOpeningChecks
             }
             var secondSelection = (await reads.GetAsync(tenant, actor, stop))?.Selection
                 ?? throw new InvalidOperationException("The re-parked view has no Park selection.");
+            Check(await parkReads.ReadParkInboxAsync(tenant, actor, secondSelection, firstPage.Next, stop) is null &&
+                await parkReads.ReadParkInboxAsync(tenant, actor, selection, cancellationToken: stop) is null,
+                "a page from the first Park cannot read evidence in the replacement Park");
             Check(secondSelection != selection && await Send(actor, "recover-old", new(selection)) is
                     { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
                 "ingress refuses the generation-1 selection on the re-parked root");
