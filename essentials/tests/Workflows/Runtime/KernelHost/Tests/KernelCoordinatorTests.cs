@@ -109,6 +109,27 @@ public sealed class KernelCoordinatorTests
             inner.TryRepairAsync(slot, alsoServing, cancellationToken);
     }
 
+    private sealed class AdoptingScheduleSwitch(InMemoryWorkflowTriggerBindingStore bindings) : IWorkflowActivationSwitch, IWorkflowScheduleAdoption
+    {
+        public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<bool> TryRevertAsync(WorkflowActivationRevert revert, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(WorkflowDeactivationSlotRequest request, IReadOnlyCollection<string> alsoServing, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<bool> TryDiscardAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<bool> TryRepairAsync(WorkflowActivationSlot slot, IReadOnlyCollection<string> alsoServing, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public async ValueTask<bool> TryAdoptSchedulesAsync(WorkflowActivationSlot slot, WorkflowExecutableSourceReference source,
+            IReadOnlyCollection<WorkflowTriggerBinding> claims, IReadOnlyCollection<string> alsoServing, CancellationToken cancellationToken = default)
+        {
+            var claim = Assert.Single(claims);
+            Assert.Equal((slot.ActiveActivationId, slot.SlotId, source.ArtifactId, "tick"),
+                (claim.ActivationId, claim.SlotId, claim.ArtifactId, claim.ExecutableNodeId));
+            await bindings.DeleteByActivationAsync(slot.ActiveActivationId!, cancellationToken);
+            await bindings.PrepareActivationAsync(slot.ActiveActivationId!, claims, cancellationToken);
+            await bindings.ActivateAsync(slot.ActiveActivationId!, null, cancellationToken);
+            return true;
+        }
+    }
+
     /// <summary>One host's stores, and a coordinator over them; <see cref="Restart"/> keeps the stores and starts a new host.</summary>
     private sealed class Host
     {
@@ -382,6 +403,25 @@ public sealed class KernelCoordinatorTests
         host.Schedules.Calls.Clear();
         Assert.Equal(WorkflowActivationOutcome.AlreadyActive, (await host.Coordinator.EnsureServingAsync("ticks", KernelServing.DefaultSlotName)).Outcome);
         Assert.Empty(host.Schedules.Calls);
+    }
+
+    [Fact]
+    public async Task Startup_adopts_a_published_schedule_before_serving_its_existing_slot()
+    {
+        var host = new Host();
+        host.Schedules.RequiresPublicationClaims = false;
+        var previous = await host.ActivateAsync(Ticks("ticks@1"), "legacy-ticks");
+        Assert.True(previous.Succeeded);
+        Assert.Empty(await host.Bindings.ListAllByActivationAsync("legacy-ticks"));
+
+        host.Restart();
+        var coordinator = host.NewCoordinator(new AdoptingScheduleSwitch(host.Bindings));
+        var restored = Assert.Single(await coordinator.ServeActiveSlotsAsync());
+
+        Assert.True(restored.Succeeded);
+        Assert.Equal(previous.Slot, restored.Slot);
+        Assert.Equal("ticks@1", Assert.Single(host.Serving.Schedules.All).Workflow);
+        Assert.Equal(["register schedule-start:ticks:tick ticks@1", "set schedule:ticks:tick 1 interval:PT1M"], host.Schedules.Calls);
     }
 
     [Fact]

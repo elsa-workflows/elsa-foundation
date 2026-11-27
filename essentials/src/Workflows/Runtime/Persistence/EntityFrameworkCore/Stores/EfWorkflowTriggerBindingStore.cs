@@ -4,6 +4,7 @@ using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -228,6 +229,32 @@ public sealed class EfWorkflowTriggerBindingStore(
             replaced.SchemaVersion = RuntimeSchemaWriteVersion.TriggerBinding(context, replaced.SchemaVersion);
         }
         return ProjectionStaging.Staged;
+    }
+
+    internal async ValueTask StageScheduleAdoptionAsync(string scope, string activationId,
+        IReadOnlyCollection<WorkflowTriggerBinding> claims, CancellationToken token)
+    {
+        ValidateActivation(activationId, claims);
+        var state = await context.WorkflowTriggerBindingProjectionStates.SingleAsync(x => x.Id == ProjectionId(scope, activationId), token);
+        var rows = await RowsForActivation(scope, activationId, token);
+        EnsureProjection(state, rows, scope, activationId);
+        if (!state.IsActive) throw ProjectionMismatch(activationId);
+
+        var current = rows.Select(row => Read(row, scope)).ToArray();
+        var missing = claims.ToDictionary(binding => binding.TriggerBindingId, StringComparer.Ordinal);
+        foreach (var existing in current.Where(binding => binding.StimulusType == RuntimeKernelScheduleOccurrence.ReservationType))
+            if (!missing.Remove(existing.TriggerBindingId, out var expected) ||
+                RuntimeArtifactJson.Serialize(existing) != RuntimeArtifactJson.Serialize(expected with { IsActive = true }))
+                throw new InvalidDataException("The existing Kernel schedule bindings differ from the selected publication.");
+
+        if (missing.Count == 0) return;
+        foreach (var claim in missing.Values)
+            context.WorkflowTriggerBindings.Add(ToEntity(claim with { IsActive = true }, scope, Id(scope, claim.TriggerBindingId), 1));
+        state.BindingCount = checked(current.Length + missing.Count);
+        state.ProjectionFingerprint = Fingerprint(current.Concat(missing.Values));
+        state.ContentJson = state.ProjectionFingerprint;
+        state.SchemaVersion = RuntimeSchemaWriteVersion.TriggerBinding(context, state.SchemaVersion);
+        state.Revision = checked(state.Revision + 1);
     }
 
     /// <summary>

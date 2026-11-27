@@ -29,7 +29,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <c>AddRuntimeEntityFrameworkCore</c> registers together, and refuses any other: nothing else could commit with them.
 /// </para>
 /// </remarks>
-public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
+public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwitch, IWorkflowScheduleAdoption
 {
     private static readonly EfWriteRetry Commits = new(
         MaximumAttempts,
@@ -181,18 +181,23 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                         await _authority.StageFindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken),
                         await StageStatesAsync(scope, plan.ActivationId, cancellationToken)))
                     return Step.Discard(false);
-                if (await StageSwitchAsync(scope, plan.ActivationId, null, deleteReplaced: false, cancellationToken))
-                    return Step.Moved<bool>();
-                foreach (var other in plan.ServingInItsPlace)
-                    if (await StageDeletionAsync(scope, other, unlessServing: false, cancellationToken) == ProjectionStaging.Moved)
-                        return Step.Moved<bool>();
-                await _references.StageMoveAsync(plan.ReferenceId, plan.ResumeOwn, cancellationToken);
-                foreach (var (referenceId, retire) in plan.Retirements(_timeProvider.GetUtcNow()))
-                    await _references.StageMoveAsync(referenceId, retire, cancellationToken);
+                if (await StageRepairAsync(scope, plan, cancellationToken)) return Step.Moved<bool>();
                 await StageReservationsAsync(slot, cancellationToken);
                 return Step.Commit(true);
             },
             cancellationToken);
+    }
+
+    private async ValueTask<bool> StageRepairAsync(string scope, WorkflowActivationRepairPlan plan, CancellationToken token)
+    {
+        if (await StageSwitchAsync(scope, plan.ActivationId, null, deleteReplaced: false, token)) return true;
+        foreach (var other in plan.ServingInItsPlace)
+            if (await StageDeletionAsync(scope, other, unlessServing: false, token) == ProjectionStaging.Moved)
+                return true;
+        await _references.StageMoveAsync(plan.ReferenceId, plan.ResumeOwn, token);
+        foreach (var (referenceId, retire) in plan.Retirements(_timeProvider.GetUtcNow()))
+            await _references.StageMoveAsync(referenceId, retire, token);
+        return false;
     }
 
     /// <summary>The activation's projection state in each store, read in the transaction.</summary>
@@ -223,7 +228,8 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
     /// Runs <paramref name="stage"/> in one transaction until it settles: a step that commits is saved and committed, one
     /// that discards is rolled back with its value, and one whose state moved, or whose commit lost a race, runs again.
     /// </summary>
-    private ValueTask<T> RunAsync<T>(string operation, Func<string, ValueTask<Step<T>>> stage, CancellationToken cancellationToken) =>
+    private ValueTask<T> RunAsync<T>(string operation, Func<string, ValueTask<Step<T>>> stage, CancellationToken cancellationToken,
+        bool retryStageConflicts = false) =>
         Commits.RunUntilSettledAsync<T>(
             _context,
             async () =>
@@ -236,6 +242,11 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 try
                 {
                     step = await stage(scope);
+                }
+                catch (Exception error) when (retryStageConflicts && EfRelationalExceptionClassifier.IsTransientWriteConflict(error))
+                {
+                    await _context.RollbackAndClearAsync(transaction);
+                    return EfWriteAttempt<T>.Retry(error);
                 }
                 catch
                 {

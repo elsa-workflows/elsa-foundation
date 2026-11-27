@@ -12,10 +12,12 @@ public sealed partial class EfWorkflowActivationSwitch
     internal IReadOnlyDictionary<string, IIngressReservationPolicy> ReservationPolicies => _reservationPolicies;
     internal RuntimeDbContext ReservationContext => _context;
 
-    private async ValueTask StageReservationsAsync(WorkflowActivationSlot slot, CancellationToken ct)
+    private async ValueTask StageReservationsAsync(WorkflowActivationSlot slot, CancellationToken ct,
+        IReadOnlyList<WorkflowTriggerBinding>? adoptedSchedules = null, bool repair = false)
     {
         var persistence = _accessContextAccessor.Current.RequireScope();
         var store = new EfIngressReservationStore(_context, _accessContextAccessor);
+        var onlySchedules = adoptedSchedules is not null && !repair;
         TriggerScope scope;
         IReadOnlyList<RuntimeIngressReservation> claims;
         RuntimeKernelScheduleControl[] desired = [];
@@ -26,7 +28,9 @@ public sealed partial class EfWorkflowActivationSwitch
             if (source.ActivationId != activation || source.SlotId != slot.SlotId)
                 throw new InvalidDataException("The publication reservation does not name the selected logical slot.");
             scope = new(persistence, source.TenantId);
-            var bindings = await _bindings.ListAllByActivationAsync(activation, ct);
+            var bindings = onlySchedules ? adoptedSchedules! : await _bindings.ListAllByActivationAsync(activation, ct);
+            if (repair && adoptedSchedules is not null)
+                bindings = [.. bindings.Where(binding => binding.StimulusType != RuntimeKernelScheduleOccurrence.ReservationType), .. adoptedSchedules];
             var descriptors = bindings.Where(binding => binding.Cardinality is TriggerCardinality.Exclusive or TriggerCardinality.ReservationOnly ||
                 _reservationPolicies.ContainsKey(binding.StimulusType))
                 .GroupBy(binding => (binding.StimulusType, binding.StimulusHash)).Select(group =>
@@ -47,8 +51,10 @@ public sealed partial class EfWorkflowActivationSwitch
             if (tenants.Length > 1) throw new InvalidDataException("A logical slot has conflicting reservation tenants.");
             scope = new(persistence, tenants.SingleOrDefault()); claims = [];
         }
-        var previous = await store.StageOwnerAsync(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId, claims, ct, _reservationPolicies);
+        var previous = await store.StageOwnerAsync(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId,
+            claims, ct, _reservationPolicies, adoptSchedules: onlySchedules);
         if (desired.Length != 0 || previous.Any(claim => claim.StimulusType == RuntimeKernelScheduleOccurrence.ReservationType))
-            await new EfRuntimeKernelScheduleControlStore(_context, _accessContextAccessor).StageAsync(persistence, slot.SlotId, desired, ct);
+            await new EfRuntimeKernelScheduleControlStore(_context, _accessContextAccessor).StageAsync(persistence, slot.SlotId,
+                desired, ct, adoptSchedules: adoptedSchedules is not null);
     }
 }
