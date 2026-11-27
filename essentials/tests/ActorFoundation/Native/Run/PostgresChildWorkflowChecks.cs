@@ -21,7 +21,9 @@ internal static class PostgresChildWorkflowChecks
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(
             Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
             throw new InvalidOperationException("Supply an empty dedicated PostgreSQL fixture.")).Options;
-        KernelDb Open() => shipped ? PostgresPreviewHosting.CreateShippedContext(options) : KernelDb.ForPostgresRootChildrenQualification(options);
+        KernelDb Open() => shipped
+            ? PostgresPreviewHosting.CreateShippedContext(options, WorkflowActor.WorkflowActor.ActorType, protectsStarts: false)
+            : KernelDb.ForPostgresRootChildrenQualification(options);
         await using (var empty = Open())
             Check(await PostgresFixtureDatabase.IsEmptyAsync(empty, token), "the fixture is empty");
 
@@ -56,6 +58,7 @@ internal static class PostgresChildWorkflowChecks
             .Add(Wf.Workflow("bulk-parent", Wf.Node<ReleaseChild>("wait")))
             .Add(Wf.Workflow("detached-parent", Wf.Dispatch("dispatch", "detached-child", wait: false)))
             .Add(Wf.Workflow("detached-child", Wf.Node<ReleaseChild>("wait")));
+        if (shipped) NativeChildOutcomeChecks.AddTo(aliases);
         var partner = new BlockingPartner();
         using var http = new HttpClient(partner);
         var actor = new ChildFixtureActor(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases,
@@ -115,6 +118,7 @@ internal static class PostgresChildWorkflowChecks
         await successor.StartAsync(token);
         try
         {
+            if (shipped) await NativeChildOutcomeChecks.VerifyAsync(Open, scope, nextFoundation, nextFoundation, token);
             Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(childReference), "arm-child-fault", ChildFixtureActor.ArmFault,
                 cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "the successor admitted the child's timer trigger");
             var parkedChild = await WaitForAsync(childReference, image => image.ParkAt is not null, successor);

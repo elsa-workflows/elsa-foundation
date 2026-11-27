@@ -320,6 +320,19 @@ the table adds no obligation beyond issue [#4859](https://github.com/elsa-workfl
 | Native FR-015, the admission-off twin | K11's admission, and the two-tenant stress test with admission on and off before release |
 | Cancel-admission equivalence (unknown on the old core) | FC-9 (commands, for every actor type) and FC-16 (the exemption of the load-shedding commands from `InboxFull`), applied to the native model and StateMachine at K6 and K7 |
 
+The Native model's waited `DispatchWorkflow` resumes the exact child wait on its final `ChildFinished` notice.
+The parent receives the child's terminal status and model output as `DispatchResult.Status` and `DispatchResult.Output`.
+
+| Native child outcome | Status | Parent activity route | Output |
+|---|---|---|---|
+| Success | `Finished` | `Completed` | The child's authored outputs |
+| Business error | `Finished` | `Completed` | The child's authored outcome and code, using the output contract agreed with its parent |
+| Technical fault | `Faulted` | `Faulted` | The child's fault data when present |
+| Cancellation | `Cancelled` | `Cancelled` | No output |
+
+A parent reads the business outcome from the output it agreed with the child. A nonfinal Park notice leaves the parent waiting.
+The Elsa authoring mapper currently refuses reads of the legacy `DispatchWorkflow.Result` shape. The Native model contract uses `DispatchResult`.
+
 Accepted as recorded, with no further work: B3, L-Gb1 and L-Gb2 (BPMN, after release 1); D3 (release 1's only
 alteration is migration); #4126 (parked until after release 1, noted in the K10 row); #4094 (publication rules kept);
 and the cleanup pass (K14's retirement inventory covers it).
