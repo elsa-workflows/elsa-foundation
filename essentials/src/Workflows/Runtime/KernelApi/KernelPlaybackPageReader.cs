@@ -30,20 +30,21 @@ internal sealed class KernelPlaybackPageReader(KernelRunReader runs, KernelRuns 
         }
         var query = new RuntimeHistoryOccurrenceQuery(request.WorkflowExecutionId, request.Limit, request.SequenceToken,
             request.Position, request.AnchorActivityExecutionId, request.ActivityExecutionId, request.IncludeDescendants);
+        var source = run.IsolatedReads ?? host;
 
-        if (!KernelActivityTimeline.Supports(header) || !await ProviderAsync(() => host.SupportsPlaybackAsync(cancellationToken), "playback-capability"))
+        if (!KernelActivityTimeline.Supports(header) || !await ProviderAsync(() => source.SupportsPlaybackAsync(cancellationToken), "playback-capability"))
             return await StillOwnsAsync(header) ? Unavailable("occurrence-facet-unsupported") : null;
 
         var access = await AccessAsync(run.State);
         if (access is null)
             return await StillOwnsAsync(header) ? Unavailable("current-authorization-unsupported") : null;
-        var binding = KernelPlaybackCursor.Bind(host.Tenant.Tenant, header.Workflow, query, access);
+        var binding = KernelPlaybackCursor.Bind(source.Tenant.Tenant, header.Workflow, query, access);
         var window = cursor.Open(query.SequenceToken, binding);
         if (query.IncludeDescendants &&
-            !await ProviderAsync(() => host.SupportsDescendantPlaybackAsync(cancellationToken), "playback-scope-capability"))
+            !await ProviderAsync(() => source.SupportsDescendantPlaybackAsync(cancellationToken), "playback-scope-capability"))
             return await ReauthorizeAsync() ? Unavailable("scope-descendants-unsupported") : null;
 
-        var snapshot = await ProviderAsync(() => host.ReadPlaybackAsync(new ActorRef(query.WorkflowExecutionId),
+        var snapshot = await ProviderAsync(() => source.ReadPlaybackAsync(new ActorRef(query.WorkflowExecutionId),
             new(query.Limit, query.Position, query.AnchorActivityExecutionId, query.ActivityExecutionId,
                 window?.Upper, window?.RetainedAfter) { IncludeDescendants = query.IncludeDescendants }, cancellationToken), "read-playback");
         if (snapshot is null || !await ReauthorizeAsync()) return null;
@@ -88,7 +89,7 @@ internal sealed class KernelPlaybackPageReader(KernelRunReader runs, KernelRuns 
 
     private static bool SameRun(KernelRunReader.Run run, WorkflowRunHeader expected, string? tenant) =>
         run.Header is { } current && current.Workflow == expected.Workflow && current.Model == expected.Model &&
-        current.History == expected.History && run.State.TenantId == tenant;
+        current.History == expected.History && current.TestStart == expected.TestStart && run.State.TenantId == tenant;
 
     private RuntimeHistoryOccurrencePageView Project(RuntimeHistoryOccurrenceQuery query, string binding,
         KernelPlaybackCursor.Window? window, ActorPlaybackPage snapshot)

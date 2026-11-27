@@ -25,6 +25,12 @@ public sealed class WorkflowExecutableStartSourceResolver(
             WorkflowExecutableReferenceScope.Published, scope, cancellationToken)
         ?? throw new InvalidOperationException("A published start requires a source reference.");
 
+    internal async ValueTask<WorkflowExecutableSourceReference> ResolveDirectTestAsync(string artifactId,
+        WorkflowExecutableSourceSelection selection, PersistenceScope scope, CancellationToken cancellationToken) =>
+        await ResolveReferenceAsync(artifactId, selection, WorkflowExecutableProvenanceRequirement.RequireLiveReference,
+            WorkflowExecutableReferenceScope.TestRun, scope, cancellationToken)
+        ?? throw new InvalidOperationException("A Test Run requires a source reference.");
+
     private async ValueTask<WorkflowExecutableSourceReference?> ResolveReferenceAsync(string artifactId,
         WorkflowExecutableSourceSelection? selection, WorkflowExecutableProvenanceRequirement provenanceRequirement,
         WorkflowExecutableReferenceScope requiredScope, PersistenceScope? shellScope, CancellationToken cancellationToken)

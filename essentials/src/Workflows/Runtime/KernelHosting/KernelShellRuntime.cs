@@ -18,7 +18,8 @@ using Admission = Kernel.Foundation.Contracts.Admission;
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
-    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention, TimeProvider clock, bool protectChildExecutables = false) : IAsyncDisposable
+    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention, TimeProvider clock,
+    bool protectChildExecutables = false, BoundScope? testTenant = null) : IAsyncDisposable
 {
     private static readonly TimeSpan MaintenanceStopBudget = TimeSpan.FromSeconds(1);
 
@@ -27,6 +28,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     private HttpClient? _client;
     private KernelShellFoundation? _foundation;
     private IProtectedRootStarts? _publishedStarts;
+    private IProtectedRootStarts? _testStarts;
     private readonly CancellationTokenSource _maintenanceStop = new();
     private Task? _maintenance;
 
@@ -34,7 +36,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     {
         var protection = protectChildExecutables || storage.TakesPreparedStarts
             ? new KernelExecutableProtection(scopes, persistenceScope, tenant, serving, storage, clock,
-                logs.CreateLogger<KernelExecutableProtection>())
+                logs.CreateLogger<KernelExecutableProtection>(), testTenant)
             : null;
         await storage.InstallAsync(token, storage.TakesPreparedStarts ? protection!.ProtectHeldStartAsync : null);
         _foundation = await storage.OpenAsync(token);
@@ -63,6 +65,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             protectChildExecutables ? protection!.ProtectAsync : null);
         await _owner.StartAsync(token);
         if (storage.TakesPreparedStarts) Volatile.Write(ref _publishedStarts, storage.BindPublishedStarts(tenant));
+        if (testTenant is not null) Volatile.Write(ref _testStarts, storage.BindPublishedStarts(testTenant));
         var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
         var worker = new KernelRetentionWorker(pass, tenant,
             token => retention.InitializeAsync(Foundation.RetentionPolicies, token),
@@ -78,6 +81,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     public async Task StopAsync(CancellationToken token)
     {
         Volatile.Write(ref _publishedStarts, null);
+        Volatile.Write(ref _testStarts, null);
         using var maintenanceDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         maintenanceDeadline.CancelAfter(MaintenanceStopBudget);
         try { await StopMaintenanceAsync(maintenanceDeadline.Token); }
@@ -109,6 +113,14 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     {
         token.ThrowIfCancellationRequested();
         return Volatile.Read(ref _publishedStarts) is { } starts
+            ? starts.StartAsync(operationId, start, token)
+            : ValueTask.FromResult(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.NodeBusy, RetryAfter: TimeSpan.FromSeconds(1)));
+    }
+
+    public ValueTask<Admission> StartDirectTestAsync(string operationId, StartSpec start, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        return Volatile.Read(ref _testStarts) is { } starts
             ? starts.StartAsync(operationId, start, token)
             : ValueTask.FromResult(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.NodeBusy, RetryAfter: TimeSpan.FromSeconds(1)));
     }
@@ -161,6 +173,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     public async ValueTask DisposeAsync()
     {
         Volatile.Write(ref _publishedStarts, null);
+        Volatile.Write(ref _testStarts, null);
         using var stop = new CancellationTokenSource(MaintenanceStopBudget);
         try
         {

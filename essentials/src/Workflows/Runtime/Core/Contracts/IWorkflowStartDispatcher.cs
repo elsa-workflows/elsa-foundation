@@ -49,3 +49,6 @@ public interface IWorkflowStartDispatcher
         WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>A host's dispatcher for direct authoring Test Runs in an exact runtime test scope.</summary>
+public interface IWorkflowDirectTestRunDispatcher : IWorkflowStartDispatcher;

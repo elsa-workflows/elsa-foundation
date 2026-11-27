@@ -97,7 +97,7 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
     internal static string SourceDigest(WorkflowExecutableSourceReference source) =>
         Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(source)));
 
-    private static WorkflowExecutionStartDispatchResult Result(string operationId, WorkflowExecutableIdentity material,
+    internal static WorkflowExecutionStartDispatchResult Result(string operationId, WorkflowExecutableIdentity material,
         WorkflowExecutableSourceProvenance source, Admission admission, DateTimeOffset recordedAt, string? refusal = null)
     {
         var pressure = admission is { Outcome: AdmissionOutcome.Refused,

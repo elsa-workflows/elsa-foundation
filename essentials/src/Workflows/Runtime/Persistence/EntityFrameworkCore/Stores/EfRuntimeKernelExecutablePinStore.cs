@@ -23,7 +23,7 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
         EfRelationalExceptionClassifier.IsSaveConflict(error, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey));
 
     public ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken cancellationToken = default) =>
-        TryPinAsync(pins, null, cancellationToken);
+        TryPinAsync(pins, null, null, cancellationToken);
 
     public ValueTask<bool> TryPinPublishedAsync(RuntimeKernelExecutablePin pin, WorkflowActivationSlot slot,
         WorkflowExecutableSourceReference source, CancellationToken cancellationToken = default)
@@ -38,12 +38,29 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
             throw new ArgumentException("The selected source and slot must belong to this published executable pin.", nameof(source));
         if (sourceReferences is not EfWorkflowExecutableSourceReferenceStore physical || !ReferenceEquals(physical.Context, context))
             throw new NotSupportedException("Published executable pins require the physical Runtime source reference store.");
-        return TryPinAsync([pin], new(slot, source, physical), cancellationToken);
+        return TryPinAsync([pin], new(slot, source, physical), null, cancellationToken);
+    }
+
+    public ValueTask<bool> TryPinTestRunAsync(RuntimeKernelExecutablePin pin, WorkflowTestScope scope,
+        WorkflowExecutableSourceReference source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(pin);
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(source);
+        if (pin.IsolatedTenant is null || pin.IsolatedTenant == pin.Tenant || source.SourceReferenceId != scope.ScopeId ||
+            source.Scope != WorkflowExecutableReferenceScope.TestRun || source.ArtifactId != pin.Executable.ArtifactId ||
+            source.TenantId != scope.TenantId || (scope.TenantId ?? PersistenceScope.DefaultValue) != pin.Tenant ||
+            source.ExpiresAt != scope.ExpiresAt)
+            throw new ArgumentException("The selected source and scope must belong to this isolated Test Run executable pin.", nameof(source));
+        if (sourceReferences is not EfWorkflowExecutableSourceReferenceStore physical || !ReferenceEquals(physical.Context, context))
+            throw new NotSupportedException("Test Run executable pins require the physical Runtime source reference store.");
+        return TryPinAsync([pin], null, new(scope, source, physical), cancellationToken);
     }
 
     private sealed record PublishedPin(WorkflowActivationSlot Slot, WorkflowExecutableSourceReference Source, EfWorkflowExecutableSourceReferenceStore Physical);
+    private sealed record TestPin(WorkflowTestScope Scope, WorkflowExecutableSourceReference Source, EfWorkflowExecutableSourceReferenceStore Physical);
 
-    private async ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, PublishedPin? published,
+    private async ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, PublishedPin? published, TestPin? test,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(pins);
@@ -53,6 +70,8 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
         foreach (var pin in pins)
         {
             Validate(pin, scope);
+            if (test is null && pin.IsolatedTenant is not null)
+                throw new ArgumentException("An isolated executable pin requires an exact Test Run authority.", nameof(pins));
             if (!desired.TryAdd(Identity(pin), pin)) throw new ArgumentException("An actor birth can be pinned only once in a batch.", nameof(pins));
         }
 
@@ -72,13 +91,13 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
             cancellationToken.ThrowIfCancellationRequested();
             var initial = await ReadBatchAsync(desired, cancellationToken);
             if (initial.Released) return false;
-            if (initial.Missing.Count == 0) return true;
+            if (initial.Missing.Count == 0 && test is null) return true;
             var accepted = false;
             try
             {
                 // Acquire all immutable material dependencies before starting the Runtime transaction. Foundation
                 // can commit the actor birth only after this transaction makes the pins visible to Runtime GC.
-                await leases.ExecuteFencedAsync(initial.Missing.Select(pin => pin.Executable).Distinct().ToArray(),
+                await leases.ExecuteFencedAsync(Roots(initial.Missing),
                     $"kernel-executable-pin:{Guid.NewGuid():N}", async (grants, token) =>
                     {
                         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
@@ -86,25 +105,30 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
                         {
                             var current = await ReadBatchAsync(desired, token);
                             if (current.Released) return;
-                            if (current.Missing.Count == 0)
+                            if (current.Missing.Count == 0 && test is null)
                             {
                                 accepted = true;
                                 return;
                             }
-                            var roots = current.Missing.Select(pin => pin.Executable).Distinct().ToArray();
+                            var roots = Roots(current.Missing);
                             var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token, expectedRoots: roots);
                             if (published is { } authority && (!await EfAdmissionTargetFence.LockSlotAsync(context, scope.Value,
                                 authority.Slot.WorkflowDefinitionId, authority.Slot.SlotName, authority.Slot, token) ||
                                 !await EfAdmissionTargetFence.LockSourceAsync(authority.Physical, scope.Value, authority.Source, token) ||
                                 !authority.Source.IsLive(clock.GetUtcNow()))) return;
+                            if (test is { } selected && (!await EfAdmissionTargetFence.LockSourceAsync(selected.Physical, scope.Value,
+                                selected.Source, token) || !await StageTestScopeAsync(selected.Scope, scope.Value, token))) return;
                             var pending = current.Missing.Select(Create).OrderBy(row => row.Id, StringComparer.Ordinal).ToArray();
-                            await AssignOrdinalsAsync(scope, pending, token);
-                            context.KernelExecutablePins.AddRange(pending);
+                            if (pending.Length > 0)
+                            {
+                                await AssignOrdinalsAsync(scope, pending, token);
+                                context.KernelExecutablePins.AddRange(pending);
+                            }
                             await context.SaveChangesAsync(token);
                             foreach (var (grant, expires) in deadlines)
                                 if (clock.GetUtcNow() >= expires)
                                     throw new WorkflowExecutableRootWriteLeaseLostException(grant.ArtifactId, grant.LeaseId);
-                            if (published is not null && !published.Source.IsLive(clock.GetUtcNow())) return;
+                            if ((published?.Source ?? test?.Source) is { } source && !source.IsLive(clock.GetUtcNow())) return;
                             await transaction.CommitAsync(token);
                             accepted = true;
                         }
@@ -117,10 +141,27 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
                 // Reconcile an identical concurrent insert or a commit whose acknowledgement was lost.
                 var current = await ReadBatchAsync(desired, cancellationToken);
                 if (current.Released) return false;
-                if (current.Missing.Count != 0) throw;
+                if (test is not null || current.Missing.Count != 0) throw;
                 return true;
             }
             return accepted;
+        }
+
+        WorkflowExecutableIdentity[] Roots(IEnumerable<RuntimeKernelExecutablePin> missing) =>
+            (test is null ? missing : desired.Values).Select(pin => pin.Executable).Distinct().ToArray();
+    }
+
+    private async ValueTask<bool> StageTestScopeAsync(WorkflowTestScope expected, string scope, CancellationToken token)
+    {
+        try
+        {
+            await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(context, expected, clock.GetUtcNow(),
+                scope, [], token);
+            return true;
+        }
+        catch (TestScopeAdmissionException)
+        {
+            return false;
         }
     }
 
@@ -274,6 +315,7 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
         if (pin.Scope != scope || pin.Tenant != scope.Value)
             throw new InvalidOperationException("The actor tenant differs from the selected Runtime persistence scope.");
         Text(pin.Tenant, 4_096, nameof(pin.Tenant));
+        if (pin.IsolatedTenant is { } isolated) Text(isolated, 64, nameof(pin.IsolatedTenant));
         Text(pin.ActorReference, 256, nameof(pin.ActorReference));
         Text(pin.Issuance, 4_096, nameof(pin.Issuance));
         foreach (var identity in new[] { pin.Executable.ArtifactId, pin.Executable.ArtifactHash, pin.Executable.ArtifactVersion,

@@ -4,6 +4,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHosting" />
     <ProjectReference Include="../Contracts/Elsa.ActorFoundation.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>

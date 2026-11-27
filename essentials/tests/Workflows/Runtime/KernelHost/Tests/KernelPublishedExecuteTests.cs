@@ -48,6 +48,9 @@ public sealed class KernelPublishedExecuteTests
     [Fact]
     public Task Sqlite_standard_execute_admits_published_native_and_flowchart() => RunAsync(false);
 
+    [Fact]
+    public Task Sqlite_direct_test_runs_use_an_isolated_prepared_root() => RunAsync(false, directTests: true);
+
     [SkippableFact]
     public Task PostgreSql_standard_execute_admits_published_native_and_flowchart()
     {
@@ -56,7 +59,15 @@ public sealed class KernelPublishedExecuteTests
         return RunAsync(true);
     }
 
-    private static async Task RunAsync(bool postgres)
+    [SkippableFact]
+    public Task PostgreSql_direct_test_runs_use_an_isolated_prepared_root()
+    {
+        Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)), "Requires two dedicated PostgreSQL databases.");
+        return RunAsync(true, directTests: true);
+    }
+
+    private static async Task RunAsync(bool postgres, bool directTests = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var directory = postgres ? null : Directory.CreateTempSubdirectory("kernel-published-execute-");
@@ -69,12 +80,12 @@ public sealed class KernelPublishedExecuteTests
             }.ToString();
             if (postgres) Assert.NotEqual(new Npgsql.NpgsqlConnectionStringBuilder(foundation).Database,
                 new Npgsql.NpgsqlConnectionStringBuilder(runtime).Database);
-            await RunAsync(postgres ? "PostgreSql" : "Sqlite", directory?.FullName, foundation, runtime, deadline.Token);
+            await RunAsync(postgres ? "PostgreSql" : "Sqlite", directory?.FullName, foundation, runtime, directTests, deadline.Token);
         }
         finally { directory?.Delete(recursive: true); }
     }
 
-    private static async Task RunAsync(string provider, string? directory, string? foundation, string runtime, CancellationToken token)
+    private static async Task RunAsync(string provider, string? directory, string? foundation, string runtime, bool directTests, CancellationToken token)
     {
         var canonical = ExecutableOf("execute-native", "canonical-publication", Sequence("sequence",
             SetOutput("input", "message", Request("input", "message")), SetOutput("variable", "seed", VariableRead("input", "seed-key"))),
@@ -115,7 +126,7 @@ public sealed class KernelPublishedExecuteTests
         builder.Services.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal)
             { "KernelExecuteFixture" });
         builder.Services.AddAuthorization();
-        builder.Services.AddSingleton<IWorkflowExecutableStartPolicy, FixturePolicy>();
+        builder.Services.AddSingleton<IWorkflowExecutableStartPolicy>(new FixturePolicy(directTests ? WorkflowRunKind.TestRun : WorkflowRunKind.PublishedRun));
         builder.Services.AddSingleton<IPermissionResourceHandler, FixtureRunPolicy>();
         builder.Services.AddSingleton<IWellKnownTypeRegistry, FixtureTypes>();
         builder.Services.AddSingleton(new ShellSettings(new ShellId("default")));
@@ -142,7 +153,11 @@ public sealed class KernelPublishedExecuteTests
             SqlitePath = directory is null ? null : Path.Combine(directory, "foundation.db"),
             PostgresConnectionString = foundation
         };
-        kernelHosting.ConfigureServices(builder.Services);
+        if (directTests)
+            kernelHosting.ConfigureServices(builder.Services, KernelShellStorage.Create(provider, kernelHosting.SqlitePath, foundation),
+                protectChildExecutables: true, directTestRunQualification: true);
+        else
+            kernelHosting.ConfigureServices(builder.Services);
         new WorkflowsRuntimeKernelFeature().PostConfigureServices(builder.Services);
         api.PostConfigureServices(builder.Services);
         var kernelApi = new WorkflowsRuntimeKernelApiFeature();
@@ -177,6 +192,13 @@ public sealed class KernelPublishedExecuteTests
             await app.StartAsync(token);
             var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
             using var http = new HttpClient { BaseAddress = new(address) };
+            if (directTests)
+            {
+                await VerifyDirectTestAsync(canonical, "workflow-draft-snapshot", "draft:witness", closeBeforePin: false);
+                await VerifyDirectTestAsync(flowchart, "workflow-definition-version", "saved-witness", closeBeforePin: false);
+                await VerifyDirectTestAsync(waiting, "workflow-definition-version", "closed-witness", closeBeforePin: true);
+                return;
+            }
             var target = WorkflowActivationReferenceIdentity.Create("publish-native-blue");
             using var ambiguous = await ExecuteAsync(canonical.Identity.ArtifactId, new { });
             Assert.Equal(HttpStatusCode.Conflict, ambiguous.StatusCode);
@@ -414,6 +436,85 @@ public sealed class KernelPublishedExecuteTests
                 if (seed is not null) Assert.Equal(seed, document.RootElement.GetProperty("seed").GetString());
                 return actor.Id;
             }
+
+            async Task VerifyDirectTestAsync(WorkflowExecutable executable, string sourceKind, string version, bool closeBeforePin)
+            {
+                var privateRuns = app.Services.GetRequiredService<KernelTestRuns>().Reads;
+                Assert.Throws<ArgumentException>(() => EmbeddedTenant.Bind(privateRuns.Tenant.Tenant));
+                var real = app.Services.GetRequiredService<KernelRuns>();
+                Assert.NotEqual(real.Tenant.Tenant, privateRuns.Tenant.Tenant);
+
+                await using var authoring = await scopes.CreateAsyncScopeAsync(Scope);
+                var author = authoring.ServiceProvider;
+                var now = DateTimeOffset.UtcNow;
+                var test = new WorkflowTestScope(Guid.NewGuid().ToString("N"), now.AddMinutes(30), Scope.Value, new(Scope.Value));
+                var scopeStore = author.GetRequiredService<IWorkflowTestScopeStore>();
+                await scopeStore.CreateAsync(test, now, token);
+                var id = executable.Identity;
+                var source = new WorkflowExecutableSourceReference(test.ScopeId, id.ArtifactId, sourceKind, version, id.ArtifactVersion,
+                    id.DefinitionId, version, id.ArtifactVersion, now, null, WorkflowExecutableReferenceScope.TestRun,
+                    ExpiresAt: test.ExpiresAt, TenantId: test.TenantId);
+                await author.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(source, token);
+                pinBoundary.BeforeTestAdmission = closeBeforePin ? async (_, cancellation) =>
+                {
+                    await using var competing = await scopes.CreateAsyncScopeAsync(Scope);
+                    await competing.ServiceProvider.GetRequiredService<IWorkflowTestScopeStore>().CloseAsync(
+                        new(test.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, DateTimeOffset.UtcNow), cancellation);
+                } : null;
+
+                var start = new WorkflowExecutionStartDispatchRequest(id.ArtifactId, "workflow-designer-test-run",
+                    workflowExecutionId: null, idempotencyKey: null, metadata: null, variables: null,
+                    inputs: new Dictionary<string, object?> { ["message"] = "direct-authoring-result" },
+                    stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.TestRun,
+                    sourceSelection: new(sourceReferenceId: source.SourceReferenceId),
+                    provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
+                    parentWorkflowExecutionId: null, correlationId: null, tenantId: Scope.Value, partition: test.Partition,
+                    authority: WorkflowExecutionAuthoritySnapshot.CreateRoot("workflow-designer-test-run",
+                        new Dictionary<string, string> { ["elsa.identity.subject-id"] = "accepted", ["elsa.identity.subject-kind"] = "persisted-user" }),
+                    startAuthority: null, dispatchNestingDepth: 0, testScope: test);
+                var result = await author.GetRequiredService<IWorkflowDirectTestRunDispatcher>().DispatchAsync(start,
+                    WorkflowExecutableReferenceScope.TestRun, cancellationToken: token);
+                if (closeBeforePin)
+                {
+                    Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, result.CommandDispatch.Status);
+                    return;
+                }
+                Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
+                Assert.Equal(source.SourceReferenceId, result.PinnedSource?.SourceReferenceId);
+                var actor = new Contract.ActorRef(result.WorkflowExecutionId);
+                Contract.ActorView? view;
+                do
+                {
+                    await Task.Delay(50, token);
+                    view = (await privateRuns.GetAsync(actor, token)).Run?.View;
+                } while (view is null || view.Header.Status == Contract.ActorStatus.Running);
+                Assert.Equal(Contract.ActorStatus.Finished, view.Header.Status);
+                Assert.True((await real.GetAsync(actor, token)).Missing);
+                Assert.Null(await author.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(actor.Id, token));
+                using var inspect = new HttpRequestMessage(HttpMethod.Get, $"/runtime/workflows/instances/{actor.Id}");
+                inspect.Headers.Add("X-Fixture-Subject", "accepted");
+                inspect.Headers.Add("X-Fixture-Tenant", Scope.Value);
+                inspect.Headers.Add("X-Fixture-Inspect", "yes");
+                using var response = await http.SendAsync(inspect, token);
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                using var details = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+                Assert.Equal(nameof(WorkflowRunKind.TestRun), details.RootElement.GetProperty("instance").GetProperty("runKind").GetString());
+                Assert.Equal("direct-authoring-result", details.RootElement.GetProperty("outputs").GetProperty("message").GetProperty("value").GetString());
+                using var foreign = new HttpRequestMessage(HttpMethod.Get, $"/runtime/workflows/instances/{actor.Id}");
+                foreign.Headers.Add("X-Fixture-Subject", "accepted");
+                foreign.Headers.Add("X-Fixture-Tenant", "another-tenant");
+                foreign.Headers.Add("X-Fixture-Inspect", "yes");
+                using var hidden = await http.SendAsync(foreign, token);
+                Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
+                using var production = new HttpRequestMessage(HttpMethod.Get, "/runtime/workflows/instances/page");
+                production.Headers.Add("X-Fixture-Subject", "accepted");
+                production.Headers.Add("X-Fixture-Tenant", Scope.Value);
+                production.Headers.Add("X-Fixture-Inspect", "yes");
+                using var listed = await http.SendAsync(production, token);
+                Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
+                using var list = JsonDocument.Parse(await listed.Content.ReadAsStringAsync(token));
+                Assert.Empty(list.RootElement.GetProperty("items").EnumerateArray());
+            }
         }
         finally { await shell.StopAsync(CancellationToken.None); }
 
@@ -465,6 +566,12 @@ public sealed class KernelPublishedExecuteTests
                 new(IdentityClaimTypes.Normalized, "v1")
             };
             if (Request.Headers.ContainsKey("X-Fixture-Manage")) claims.Add(new(IdentityClaimTypes.Permission, "workflows/runtime:manage"));
+            if (Request.Headers.ContainsKey("X-Fixture-Inspect"))
+            {
+                claims.Add(new(IdentityClaimTypes.Permission, "workflows/runtime:read"));
+                claims.Add(new(IdentityClaimTypes.Permission, "workflows/activity-executions:inspect"));
+                claims.Add(new(IdentityClaimTypes.Permission, "workflows/activity-executions:inspect-values"));
+            }
             if (Request.Headers.TryGetValue("X-Fixture-Tenant", out var tenant)) claims.Add(new(IdentityClaimTypes.TenantId, tenant.ToString()));
             if (Request.Headers.TryGetValue("X-Fixture-Tenant-Alias", out var alias)) claims.Add(new("tenant_id", alias.ToString()));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name)), Scheme.Name)));
@@ -482,11 +589,11 @@ public sealed class KernelPublishedExecuteTests
         }
     }
 
-    private sealed class FixturePolicy : IWorkflowExecutableStartPolicy
+    private sealed class FixturePolicy(WorkflowRunKind expected) : IWorkflowExecutableStartPolicy
     {
         public ValueTask<WorkflowExecutableStartDecision> EvaluateAsync(WorkflowExecutableStartPolicyContext context, CancellationToken cancellationToken)
         {
-            Assert.Equal(WorkflowRunKind.PublishedRun, context.RunKind);
+            Assert.Equal(expected, context.RunKind);
             Assert.Equal(WorkflowExecutableStartAuthorityKind.LiveReference, context.AuthorityKind);
             Assert.Equal(Scope.Value, context.Partition?.Value);
             var subject = context.Authority.Metadata["elsa.identity.subject-id"];
@@ -498,6 +605,7 @@ public sealed class KernelPublishedExecuteTests
     private sealed class PinBoundary
     {
         public Func<WorkflowExecutableSourceReference, CancellationToken, ValueTask>? BeforeAdmission { get; set; }
+        public Func<WorkflowExecutableSourceReference, CancellationToken, ValueTask>? BeforeTestAdmission { get; set; }
         public bool Retracted { get; set; }
     }
 
@@ -511,6 +619,12 @@ public sealed class KernelPublishedExecuteTests
         }
 
         public ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken token) => inner.TryPinAsync(pins, token);
+        public async ValueTask<bool> TryPinTestRunAsync(RuntimeKernelExecutablePin pin, WorkflowTestScope scope,
+            WorkflowExecutableSourceReference source, CancellationToken token)
+        {
+            if (boundary.BeforeTestAdmission is { } before) await before(source, token);
+            return await inner.TryPinTestRunAsync(pin, scope, source, token);
+        }
         public ValueTask<string?> ReadOpenTailAsync(PersistenceScope scope, CancellationToken token) => inner.ReadOpenTailAsync(scope, token);
         public ValueTask<RuntimeKernelExecutablePinPage> ListOpenAsync(PersistenceScope scope, string? after, string through, int limit,
             CancellationToken token) => inner.ListOpenAsync(scope, after, through, limit, token);

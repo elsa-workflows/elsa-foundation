@@ -81,7 +81,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IRuntimeExecutionIdGenerator? executionIdGenerator = null,
     IServiceProvider? ambientServices = null,
     ITestRunRootCanceller? rootCanceller = null,
-    IWorkflowExecutionStateStore? executionStateStore = null)
+    IWorkflowExecutionStateStore? executionStateStore = null,
+    IWorkflowDirectTestRunDispatcher? directTestRunDispatcher = null)
     : IWorkflowTestRunStarter
 {
     public const string RequestedBy = "workflow-designer-test-run";
@@ -755,7 +756,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
         await executableStore.SaveAsync(executable, cancellationToken);
 
         // Append the expiring TestRun Source Reference the dispatch gates on. Scope/expiry are reference facts now.
-        var reference = await BuildTestRunReferenceAsync(executable, compileRequest.Source, now, expiresAt, draftLayout, cancellationToken);
+        var directScopeId = directTestRunDispatcher is not null && triggerResolution.Trigger is null ? testRunId : null;
+        var reference = await BuildTestRunReferenceAsync(executable, compileRequest.Source, now, expiresAt, draftLayout,
+            directScopeId, cancellationToken);
         await rootWriteLeaseManager.ExecuteAsync(
             executable.Identity,
             $"test-run:{testRunId}",
@@ -806,7 +809,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         WorkflowExecutionStartDispatchResult dispatch;
         try
         {
-            dispatch = await startDispatcher.DispatchAsync(
+            dispatch = await (directTestRunDispatcher ?? startDispatcher).DispatchAsync(
                 new WorkflowExecutionStartDispatchRequest(
                     artifactId: executable.Identity.ArtifactId,
                     requestedBy: RequestedBy,
@@ -1131,6 +1134,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         DateTimeOffset now,
         DateTimeOffset expiresAt,
         IReadOnlyCollection<WorkflowExecutableLayoutRecord>? draftLayout,
+        string? directScopeId,
         CancellationToken cancellationToken)
     {
         var identity = executable.Identity;
@@ -1146,7 +1150,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             : layout?.ActivityPresentation ?? [];
 
         return new WorkflowExecutableSourceReference(
-            SourceReferenceId: ShortIdentityGenerator.Generate(now),
+            SourceReferenceId: directScopeId ?? ShortIdentityGenerator.Generate(now),
             ArtifactId: identity.ArtifactId,
             SourceKind: source?.SourceKind ?? WorkflowExecutableSourceKinds.WorkflowDefinitionVersion,
             SourceId: source?.SourceId ?? identity.DefinitionVersionId,
