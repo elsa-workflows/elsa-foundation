@@ -13,6 +13,13 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
 
+    internal ValueTask<ActorRetentionPolicy> ReadRetentionPolicyAsync(BoundScope scope, string actorType, CancellationToken token) =>
+        new(store.ReadRootRetentionPolicyAsync(scope, actorType, token));
+
+    internal ValueTask<ActorRetentionPolicyChange> TryApplyRetentionPolicyAsync(BoundScope scope, string actorType, long expectedRevision,
+        ActorRetentionWindows proposed, long maximumReviewedNewlyEligible, CancellationToken token) =>
+        new(store.TryApplyRootRetentionPolicyAsync(scope, actorType, expectedRevision, proposed, maximumReviewedNewlyEligible, token));
+
     public ValueTask<ActorRetentionQuote> ReadRetentionQuoteAsync(BoundScope scope, string actorType,
         ActorRetentionWindows previous, ActorRetentionWindows proposed, KeyValuePair<string, string>? definitionLabel = null,
         long? asOf = null, CancellationToken cancellationToken = default)

@@ -330,6 +330,25 @@ internal sealed partial class PostgresRootAdmission
     internal static Task PinRootNamespaceAsync(KernelDb db, CancellationToken token, bool writesJournal = false) =>
         PinRootNamespaceAsync(db, false, token, writesJournal);
 
+    internal static Task<uint> PinRetentionPolicySourceAsync(KernelDb db, CancellationToken token)
+    {
+        var pin = new NpgsqlBatchCommand("""
+            SELECT v.tableoid,
+                pg_catalog.set_config('search_path', 'pg_catalog,' || pg_catalog.quote_ident(ns.nspname) || ',pg_temp', true)
+            FROM "KernelStoreVersions" v
+            JOIN pg_catalog.pg_class marker ON marker.oid = v.tableoid
+            JOIN pg_catalog.pg_namespace ns ON ns.oid = marker.relnamespace
+            WHERE v."Id" = $1
+            """);
+        pin.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
+        return ReadGuardedAdmissionAsync<uint>(db, [pin], async (reader, marker, ct) =>
+        {
+            if (!await reader.ReadAsync(ct) || reader.GetFieldValue<uint>(0) != marker)
+                throw new StoreFormatException("The retention policy's physical store changed.");
+            return marker;
+        }, token);
+    }
+
     internal static async Task<uint> PinPlaybackReadSourcesAsync(KernelDb db, CancellationToken token) =>
         (await PinRootNamespaceAsync(db, false, token, writesJournal: true))?.Marker
             ?? throw new StoreFormatException("Playback requires a qualified physical root source.");

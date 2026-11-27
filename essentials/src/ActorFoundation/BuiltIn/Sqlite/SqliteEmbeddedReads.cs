@@ -15,6 +15,23 @@ public static partial class SqliteEmbeddedHosting
         return new SqliteEmbeddedReads(file.Path, pageSize, qualificationFormat);
     }
 
+    internal static async ValueTask<T> RunRetentionPolicyAsync<T>(string path, StoreFormat? qualificationFormat,
+        Func<EfStore, Task<T>> operation, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        try
+        {
+            using var file = AcquireFile(path);
+            KernelDb Open() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
+            return await operation(new EfStore(Open, postgres: false, fenceInBatch: true));
+        }
+        catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
+        {
+            token.ThrowIfCancellationRequested();
+            throw new TimeoutException("The SQLite retention policy could not acquire a store lock.", error);
+        }
+    }
+
     private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat)
         : Contract.IActorReads, Contract.IActorTerminalOutputReads, Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads, Contract.IActorRetentionConfirmation,
           Contract.IActorRetentionReads

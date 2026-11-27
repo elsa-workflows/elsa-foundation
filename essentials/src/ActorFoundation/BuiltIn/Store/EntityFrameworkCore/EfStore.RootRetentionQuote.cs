@@ -56,27 +56,31 @@ public sealed partial class EfStore
 
     private static Task<ActorRetentionQuote> ReadSqliteRetentionQuoteAsync(KernelDb db, string tenant, string type, string? label,
         RetentionMillis before, RetentionMillis after, long? asOf, CancellationToken token) =>
-        ReadSqliteRootSnapshotAsync(db, async providerNow =>
-        {
-            var at = CheckQuoteClock(asOf, providerNow);
-            var count = await db.Database.SqlQuery<long>($"""
-                WITH windows("Status", "Previous", "Proposed") AS (VALUES
-                    ({(int)InstanceStatus.Finished}, {before.Finished}, {after.Finished}),
-                    ({(int)InstanceStatus.Cancelled}, {before.Cancelled}, {after.Cancelled}),
-                    ({(int)InstanceStatus.Faulted}, {before.Faulted}, {after.Faulted}))
-                SELECT count(*) AS "Value"
-                FROM "FoundationActorList" l JOIN windows w ON w."Status" = l."Status"
-                WHERE l."Tenant" = {tenant} AND l."Type" COLLATE BINARY = {type}
-                    AND l."ParkAt" IS NULL AND l."TerminalRevision" > 0 AND l."EndedAt" > 0
-                    AND l."EndedAt" <= {at} - w."Proposed"
-                    AND (w."Previous" IS NULL OR l."EndedAt" > {at} - w."Previous")
-                    AND ({label} IS NULL OR EXISTS (SELECT 1 FROM json_each(l."Labels") entry WHERE entry.value COLLATE BINARY = {label}))
-                """).SingleAsync(token);
-            return new ActorRetentionQuote(count, at);
-        }, token);
+        ReadSqliteRootSnapshotAsync(db,
+            providerNow => ReadSqliteRetentionQuoteAtAsync(db, tenant, type, label, before, after, CheckQuoteClock(asOf, providerNow), token),
+            token);
+
+    private static async Task<ActorRetentionQuote> ReadSqliteRetentionQuoteAtAsync(KernelDb db, string tenant, string type,
+        string? label, RetentionMillis before, RetentionMillis after, long at, CancellationToken token)
+    {
+        var count = await db.Database.SqlQuery<long>($"""
+            WITH windows("Status", "Previous", "Proposed") AS (VALUES
+                ({(int)InstanceStatus.Finished}, {before.Finished}, {after.Finished}),
+                ({(int)InstanceStatus.Cancelled}, {before.Cancelled}, {after.Cancelled}),
+                ({(int)InstanceStatus.Faulted}, {before.Faulted}, {after.Faulted}))
+            SELECT count(*) AS "Value"
+            FROM "FoundationActorList" l JOIN windows w ON w."Status" = l."Status"
+            WHERE l."Tenant" = {tenant} AND l."Type" COLLATE BINARY = {type}
+                AND l."ParkAt" IS NULL AND l."TerminalRevision" > 0 AND l."EndedAt" > 0
+                AND l."EndedAt" <= {at} - w."Proposed"
+                AND (w."Previous" IS NULL OR l."EndedAt" > {at} - w."Previous")
+                AND ({label} IS NULL OR EXISTS (SELECT 1 FROM json_each(l."Labels") entry WHERE entry.value COLLATE BINARY = {label}))
+            """).SingleAsync(token);
+        return new ActorRetentionQuote(count, at);
+    }
 
     private static async Task<ActorRetentionQuote> ReadPostgresRetentionQuoteAsync(KernelDb db, string tenant, string type,
-        string? label, RetentionMillis before, RetentionMillis after, long? asOf, CancellationToken token)
+        string? label, RetentionMillis before, RetentionMillis after, long? asOf, CancellationToken token, long? physicalMarker = null)
     {
         var expected = db.RequiredFormat;
         PostgresRetentionQuote row;
@@ -85,7 +89,9 @@ public sealed partial class EfStore
             row = await db.Database.SqlQuery<PostgresRetentionQuote>(ActorListQuery(db, ActorListProjection.Of(db), $"""
                 WITH clock AS (SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "ProviderNow"),
                 quote AS (SELECT "ProviderNow", coalesce({asOf}::bigint, "ProviderNow") AS "AsOf" FROM clock),
-                readiness AS (SELECT /*actor-list-ready*/ AS "SourceReady"),
+                readiness AS (SELECT /*actor-list-ready*/ AND
+                    ({physicalMarker}::bigint IS NULL OR pg_catalog.to_regclass('"KernelStoreVersions"')::oid::bigint = {physicalMarker})
+                    AS "SourceReady"),
                 windows("Status", "Previous", "Proposed") AS (VALUES
                     ({(int)InstanceStatus.Finished}, {before.Finished}::bigint, {after.Finished}::bigint),
                     ({(int)InstanceStatus.Cancelled}, {before.Cancelled}::bigint, {after.Cancelled}::bigint),
@@ -113,6 +119,8 @@ public sealed partial class EfStore
         catch (PostgresException error) when (error.SqlState.StartsWith("42", StringComparison.Ordinal) &&
             error.SqlState != PostgresErrorCodes.InsufficientPrivilege)
         {
+            if (physicalMarker is not null)
+                throw new StoreFormatException("The pinned retention projection has an unreadable schema.", error);
             await RequireStoreVersionsAsync(db, token);
             throw;
         }

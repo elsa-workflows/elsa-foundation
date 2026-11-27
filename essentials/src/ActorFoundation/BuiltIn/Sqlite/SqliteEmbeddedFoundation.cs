@@ -7,7 +7,7 @@ namespace Kernel.Foundation.Sqlite;
 
 /// <summary>Composes one shipped Embedded owner and its caller interface over a dedicated SQLite file.</summary>
 /// <remarks>Install the file with <see cref="InstallShippedAsync"/> on this instance before starting the owner or using the interfaces.</remarks>
-public sealed class SqliteEmbeddedFoundation
+public sealed class SqliteEmbeddedFoundation : Contract.IActorRetentionPolicies
 {
     private readonly string path;
     private readonly string node;
@@ -92,6 +92,18 @@ public sealed class SqliteEmbeddedFoundation
             cancellationToken, qualificationFormat);
 
     /// <summary>Creates a paged reader of committed roots, inboxes and journals.</summary>
+    ValueTask<Contract.ActorRetentionPolicy> Contract.IActorRetentionPolicies.ReadRetentionPolicyAsync(
+        Contract.BoundScope scope, CancellationToken cancellationToken) =>
+        SqliteEmbeddedHosting.RunRetentionPolicyAsync(InstalledPath, qualificationFormat,
+            store => store.ReadRootRetentionPolicyAsync(scope, actorType, cancellationToken), cancellationToken);
+
+    ValueTask<Contract.ActorRetentionPolicyChange> Contract.IActorRetentionPolicies.TryApplyRetentionPolicyAsync(
+        Contract.BoundScope scope, long expectedRevision, Contract.ActorRetentionWindows proposed, long maximumReviewedNewlyEligible,
+        CancellationToken cancellationToken) =>
+        SqliteEmbeddedHosting.RunRetentionPolicyAsync(InstalledPath, qualificationFormat,
+            store => store.TryApplyRootRetentionPolicyAsync(scope, actorType, expectedRevision, proposed, maximumReviewedNewlyEligible, cancellationToken),
+            cancellationToken);
+
     public Contract.IActorReads CreateReads(int pageSize = 100) => SqliteEmbeddedHosting.CreateFoundationReads(InstalledPath, pageSize, qualificationFormat);
 
     /// <summary>Reads the store clock used to set held-request deadlines.</summary>

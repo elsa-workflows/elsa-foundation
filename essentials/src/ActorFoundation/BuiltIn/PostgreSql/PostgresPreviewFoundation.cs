@@ -11,7 +11,7 @@ namespace Kernel.Foundation.Postgres;
 /// </summary>
 public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IActorReads, Contract.IActorTerminalOutputReads,
     Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads, Contract.IActorRetentionConfirmation,
-      Contract.IActorRetentionReads
+    Contract.IActorRetentionReads, Contract.IActorRetentionPolicies
 {
     private readonly PostgresRootAdmission admission;
     private readonly PostgresRootReads reads;
@@ -19,6 +19,7 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
     private readonly Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeExactOperator;
     private readonly PostgresDirectRequests? directRequests;
     private readonly PostgresRootIngress ingress;
+    private readonly string actorType;
 
     /// <summary>The held requests of this Foundation, and the transport its owner answers through: null without held replies.</summary>
     public PostgresDirectRequests? Requests => directRequests;
@@ -29,6 +30,7 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
     {
         (this.admission, this.reads, this.authorizeOperator, this.directRequests) = (admission, reads, authorizeOperator, directRequests);
         this.authorizeExactOperator = authorizeExactOperator;
+        this.actorType = actorType;
         ingress = new(admission, actorType,
             (scope, actor) => authorizeExactOperator?.Invoke(scope, actor, Contract.Kinds.Terminate) == true,
             (scope, actor) => authorizeExactOperator?.Invoke(scope, actor, Contract.Kinds.Delete) == true,
@@ -65,6 +67,15 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
         }
         return await ingress.SendAsync(scope, target, id, kind, payload, options, cancellationToken);
     }
+
+    ValueTask<Contract.ActorRetentionPolicy> Contract.IActorRetentionPolicies.ReadRetentionPolicyAsync(
+        Contract.BoundScope scope, CancellationToken cancellationToken) =>
+        reads.ReadRetentionPolicyAsync(scope, actorType, cancellationToken);
+
+    ValueTask<Contract.ActorRetentionPolicyChange> Contract.IActorRetentionPolicies.TryApplyRetentionPolicyAsync(
+        Contract.BoundScope scope, long expectedRevision, Contract.ActorRetentionWindows proposed, long maximumReviewedNewlyEligible,
+        CancellationToken cancellationToken) =>
+        reads.TryApplyRetentionPolicyAsync(scope, actorType, expectedRevision, proposed, maximumReviewedNewlyEligible, cancellationToken);
 
     ValueTask<Contract.ActorRetentionQuote> Contract.IActorRetentionReads.ReadRetentionQuoteAsync(Contract.BoundScope scope,
         string actorType, Contract.ActorRetentionWindows previous, Contract.ActorRetentionWindows proposed,

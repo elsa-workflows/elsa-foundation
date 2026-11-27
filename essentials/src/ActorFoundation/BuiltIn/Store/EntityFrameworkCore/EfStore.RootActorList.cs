@@ -27,7 +27,8 @@ public sealed partial class EfStore
             SELECT to_regclass('"Instances"') IS NOT NULL AND to_regclass('"Messages"') IS NOT NULL AND NOT EXISTS (
                 SELECT 1 FROM (VALUES ('"Instances"'), ('"Messages"'), ('"Journal"'), ('"Partitions"'), ('"KernelStoreVersions"'),
                     ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'), ('"FoundationRootReceipts"'),
-                    ('"FoundationActorList"'), ('"FoundationWorkflowHistory"'), ('"FoundationWorkflowHistoryFormat"')) expected(name)
+                    ('"FoundationActorList"'), ('"FoundationWorkflowHistory"'), ('"FoundationWorkflowHistoryFormat"'),
+                    ('"FoundationRetentionPolicies"')) expected(name)
                 JOIN pg_catalog.pg_class relation ON relation.oid = to_regclass(expected.name)
                 JOIN pg_catalog.pg_namespace ns ON ns.oid = relation.relnamespace
                 WHERE ns.nspname IS DISTINCT FROM pg_catalog.current_schema()
