@@ -14,6 +14,7 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
     private readonly PostgresRootAdmission admission;
     private readonly PostgresRootReads reads;
     private readonly Func<Contract.BoundScope, string, bool>? authorizeOperator;
+    private readonly Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeExactOperator;
     private readonly PostgresDirectRequests? directRequests;
     private readonly PostgresRootIngress ingress;
 
@@ -21,10 +22,15 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
     public PostgresDirectRequests? Requests => directRequests;
 
     internal PostgresPreviewFoundation(PostgresRootAdmission admission, PostgresRootReads reads, string actorType,
-        Func<Contract.BoundScope, string, bool>? authorizeOperator = null, PostgresDirectRequests? directRequests = null)
+        Func<Contract.BoundScope, string, bool>? authorizeOperator = null, PostgresDirectRequests? directRequests = null,
+        Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeExactOperator = null)
     {
         (this.admission, this.reads, this.authorizeOperator, this.directRequests) = (admission, reads, authorizeOperator, directRequests);
-        ingress = new(admission, actorType);
+        this.authorizeExactOperator = authorizeExactOperator;
+        ingress = new(admission, actorType,
+            (scope, actor) => authorizeExactOperator?.Invoke(scope, actor, Contract.Kinds.Terminate) == true,
+            (scope, actor) => authorizeExactOperator?.Invoke(scope, actor, Contract.Kinds.Delete) == true,
+            authorizeRecover: (scope, actor) => authorizeExactOperator?.Invoke(scope, actor, Contract.Kinds.Recover) == true);
     }
 
     public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
@@ -34,12 +40,13 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(kind);
-        if (kind is Contract.Kinds.Suspend or Contract.Kinds.Resume or Contract.Kinds.Terminate)
+        if (kind is Contract.Kinds.Suspend or Contract.Kinds.Resume || kind == Contract.Kinds.Terminate && payload is null)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (target is not Contract.Target.Ref exact || authorizeOperator?.Invoke(scope, kind) != true ||
-                payload is not null || !FoundationMetadataLimits.IsOutsideMessageId(id) ||
-                !PostgresRootAdmission.IsIssuedReferenceShape(exact.Actor.Id)) return new(Contract.AdmissionOutcome.Refused);
+            if (target is not Contract.Target.Ref exact || payload is not null || !FoundationMetadataLimits.IsOutsideMessageId(id) ||
+                !PostgresRootAdmission.IsIssuedReferenceShape(exact.Actor.Id) ||
+                (authorizeExactOperator?.Invoke(scope, exact.Actor, kind) ?? authorizeOperator?.Invoke(scope, kind)) != true)
+                return new(Contract.AdmissionOutcome.Refused);
             var control = await admission.AdmitRootOperatorAsync(scope.Tenant, exact.Actor.Id, id, kind, options?.DueAt, options?.KeepFor, cancellationToken);
             return control is null ? new(Contract.AdmissionOutcome.Refused) :
                 new(control.Duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(control.Reference));

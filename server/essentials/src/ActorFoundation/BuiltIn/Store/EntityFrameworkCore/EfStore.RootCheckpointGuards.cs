@@ -157,7 +157,7 @@ public sealed partial class EfStore
             """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
             .Replace("/*park-recover-footprint*/", RootRecoverFootprint(db, "OLD", journaling: false), StringComparison.Ordinal)
             .Replace("/*recovered-jobs*/", RecordsConsumedRootJob(db) ? "" : """AND NEW."Jobs" IS NULL""", StringComparison.Ordinal)
-            .Replace("/*sqlite-recover-footprint*/", db.UsesSqliteRootRuntime ? """
+            .Replace("/*sqlite-recover-footprint*/", db.UsesSqliteShippedInstall ? """
 
                 AND NEW."FoundationStateWire" IS NOT DISTINCT FROM OLD."FoundationStateWire"
                 AND NEW."FoundationTerminalRevision" IS NULL AND NEW."FoundationTerminalAt" IS NULL
@@ -174,7 +174,7 @@ public sealed partial class EfStore
                     AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0 /*park-recover-footprint*/))
             THEN RAISE EXCEPTION 'A recovered journal entry requires the parked checkpoint it resolves' USING ERRCODE = '23514'; END IF;
             """.Replace("/*park-recover-footprint*/", RootRecoverFootprint(db, "i", journaling: true), StringComparison.Ordinal) : "", StringComparison.Ordinal)
-        .Replace(" /*invalid-recovered-journal*/", db.UsesSqliteRootRuntime && db.UsesRootParkRecovery ? """
+        .Replace(" /*invalid-recovered-journal*/", db.UsesSqliteShippedInstall && db.UsesRootParkRecovery ? """
             OR (NEW."Entries" LIKE '{{"Outcome":"recovered",%' AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance"
                 AND i."FoundationReference" IS NOT NULL AND NOT ((i."Status" = 2 AND NOT i."Retired" AND NOT i."Suspended"
                     AND i."Partition" = NEW."Partition" AND NEW."Revision" = i."Revision" + 1

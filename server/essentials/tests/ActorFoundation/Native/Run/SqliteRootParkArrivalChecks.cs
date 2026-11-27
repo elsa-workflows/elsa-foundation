@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Reflection;
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Sqlite;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -11,7 +12,7 @@ namespace Kernel.Native.Run;
 
 internal static partial class SqliteHostLifetimeChecks
 {
-    internal static async Task<int> RunParkArrivalsAsync(bool fenceInBatch, bool recovery = false, bool authored = false)
+    internal static async Task<int> RunParkArrivalsAsync(bool fenceInBatch, bool recovery = false, bool authored = false, bool shipped = false)
     {
         const string fixture = "sqlite-park-arrivals";
         const string payload = """{"input":"retained"}""";
@@ -33,16 +34,18 @@ internal static partial class SqliteHostLifetimeChecks
             if (authored) builder.AddInterceptors(cohortPlan);
             var options = builder.Options;
             var definitions = new SqliteAdmissionDefinitions();
-            KernelDb Open() => recovery ? KernelDb.ForSqliteParkRecoveryQualification(options, definitions)
+            KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(options, definitions)
+                : recovery ? KernelDb.ForSqliteParkRecoveryQualification(options, definitions)
                 : KernelDb.ForSqliteParkArrivalsQualification(options, definitions);
             await using var db = Open();
             var partitions = recovery ? 2 : 1;
             await EfStore.InstallSqliteShippedAsync(db, partitions, token);
-            await using (var shipped = KernelDb.ForSqliteRootShipped(options))
+            if (!shipped)
             {
+                await using var publicProfile = KernelDb.ForSqliteRootShipped(options);
                 try
                 {
-                    await EfStore.InstallSqliteShippedAsync(shipped, partitions, token);
+                    await EfStore.InstallSqliteShippedAsync(publicProfile, partitions, token);
                     throw new InvalidOperationException("The shipped context attached to the Park arrivals qualification file.");
                 }
                 catch (StoreFormatException) { Console.WriteLine("ok the shipped context refuses the qualification format"); }
@@ -130,8 +133,23 @@ internal static partial class SqliteHostLifetimeChecks
             {
                 Require(successor.ClaimedPartitions().Order().SequenceEqual(new[] { 0, 1 }),
                     "SQLite Recover polls with an owned set of two partitions");
-                Require(await admission.OperateAsync(scope.Tenant, actor, "recover", Kinds.Recover, view.Selection!, null, null, token) is
-                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the SQLite recovery candidate admits an immediate selected Recover");
+                if (shipped)
+                {
+                    var path = Path.Combine(directory.FullName, "park.db");
+                    var ordinaryIngress = await SqliteEmbeddedHosting.OpenFoundationAsync(path, fixture, cancellationToken: token);
+                    var operatorIngress = await SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(path, fixture,
+                        (caller, target, kind) => ReferenceEquals(caller, scope) && target == actor && kind == Contract.Kinds.Recover,
+                        cancellationToken: token);
+                    var commandWire = Json.Write(new Contract.OperatorCommand(view.Selection!, ExpectedTarget: actor));
+                    Require(await ordinaryIngress.SendAsync(scope, new Contract.Target.Ref(actor), "recover", Contract.Kinds.Recover, commandWire,
+                            cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Refused } &&
+                        await operatorIngress.SendAsync(scope, new Contract.Target.Ref(actor), "recover", Contract.Kinds.Recover, commandWire,
+                            cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                        "the shipped SQLite ingress requires host authorization for selected Recover");
+                }
+                else
+                    Require(await admission.OperateAsync(scope.Tenant, actor, "recover", Kinds.Recover, view.Selection!, null, null, token) is
+                        { Outcome: Contract.AdmissionOutcome.Accepted }, "the SQLite recovery candidate admits an immediate selected Recover");
                 rollback.Armed = true;
                 while (!rollback.Observed && successor.Owns)
                 {
@@ -207,10 +225,12 @@ internal static partial class SqliteHostLifetimeChecks
                 await CheckRecordedJobRecoverAsync(recoveryOwner, large);
                 await CheckLiveJobRecoverAsync(recoveryOwner, publishFirst: false);
                 await CheckLiveJobRecoverAsync(recoveryOwner, publishFirst: true);
+                if (shipped) await CheckLiveJobRecoverAsync(recoveryOwner, publishFirst: false, terminate: true);
                 await CheckReparkFifoAsync(recoveryOwner);
                 var guardFile = new SqliteConnectionStringBuilder(connection) { DataSource = Path.Combine(directory.FullName, "guard.db") };
                 var guardOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(guardFile.ConnectionString).Options;
-                await using var guards = KernelDb.ForSqliteParkRecoveryQualification(guardOptions);
+                await using var guards = shipped ? KernelDb.ForSqliteRootShipped(guardOptions)
+                    : KernelDb.ForSqliteParkRecoveryQualification(guardOptions);
                 await EfStore.InstallSqliteShippedAsync(guards, 1, token);
                 await SqliteShippedInstallChecks.CheckGuardsAsync(guards, token);
                 return 0;
@@ -291,13 +311,14 @@ internal static partial class SqliteHostLifetimeChecks
                     "SQLite Recover clears the consumed result and registration without replay or generation reuse");
             }
 
-            async Task CheckLiveJobRecoverAsync(Worker owner, bool publishFirst)
+            async Task CheckLiveJobRecoverAsync(Worker owner, bool publishFirst, bool terminate = false)
             {
                 executor.LiveJobEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 executor.ReleaseLiveJob = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                executor.LiveJobCancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 var previousInvocations = executor.LiveInvocations;
                 var previousResults = executor.LiveResults;
-                var operation = publishFirst ? "pending-result-recover" : "live-job-recover";
+                var operation = terminate ? "live-job-recover-terminate" : publishFirst ? "pending-result-recover" : "live-job-recover";
                 var root = (await admission.StartAsync(scope.Tenant, operation, new(fixture, SqliteArrivalActor.LiveJobPlan),
                     null, null, token)).Actor!.Value;
                 await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running });
@@ -358,6 +379,25 @@ internal static partial class SqliteHostLifetimeChecks
                     Require(final.NextJobGeneration == 1 && (await ReadTimedRowsAsync()).Count == 0 &&
                         executor.LiveResults == previousResults + 1 && executor.LiveInvocations == previousInvocations + 1,
                         "the second Recover discards the consumed result without another callback or application");
+                    return;
+                }
+
+                if (terminate)
+                {
+                    var runningSelection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                    Require(!executor.LiveJobCancelled.Task.IsCompleted && executor.LiveInvocations == previousInvocations + 1 &&
+                        await admission.OperateAsync(scope.Tenant, root, "terminate-recovered", Kinds.Terminate, runningSelection,
+                            null, null, token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                        "the shipped profile admits Terminate while the recovered callback remains entered");
+                    var cancelled = await DriveAsync(owner, root, row => row is { Status: InstanceStatus.Cancelled });
+                    await executor.LiveJobCancelled.Task.WaitAsync(token);
+                    Require(cancelled is { Jobs: null, NextJobGeneration: 1, ParkAt: null } && cancelled.TerminalRevision == cancelled.Revision &&
+                        executor.LiveInvocations == previousInvocations + 1 && executor.LiveResults == previousResults &&
+                        (await ReadTimedRowsAsync()).Count == 0 &&
+                        !await db.Database.SqlQuery<bool>($"""
+                            SELECT EXISTS (SELECT 1 FROM "FoundationProtectedTimedJobs" WHERE "Actor" = {cancelled.Actor.Id}) AS "Value"
+                            """).SingleAsync(token),
+                        "Terminate cancels the entered callback and removes its exact timed rows and protected references");
                     return;
                 }
 
@@ -630,6 +670,7 @@ internal static partial class SqliteHostLifetimeChecks
         internal const string LiveJob = "live-recover";
         internal TaskCompletionSource LiveJobEntered { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource ReleaseLiveJob { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource LiveJobCancelled { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _liveInvocations;
         internal int LiveInvocations => Volatile.Read(ref _liveInvocations);
         internal int LiveResults { get; private set; }
@@ -657,8 +698,16 @@ internal static partial class SqliteHostLifetimeChecks
             {
                 Interlocked.Increment(ref _liveInvocations);
                 LiveJobEntered.TrySetResult();
-                await ReleaseLiveJob.Task.WaitAsync(cancellationToken);
-                return "after-recover";
+                try
+                {
+                    await ReleaseLiveJob.Task.WaitAsync(cancellationToken);
+                    return "after-recover";
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    LiveJobCancelled.TrySetResult();
+                    throw;
+                }
             }
             if (job.Key != RecordedJob) throw new InvalidOperationException("The Park Recover fixture received an unexpected job.");
             RecordedJobs++;
@@ -667,6 +716,8 @@ internal static partial class SqliteHostLifetimeChecks
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
+            if (turn.Header.TypeData == LiveJobPlan && turn.Inbox is [{ Kind: Contract.Kinds.Terminate }])
+                turn.End(Contract.ActorStatus.Cancelled);
             if (turn.Inbox is [{ Kind: "issue-recorded" }])
                 turn.StartJob(RecordedJob, timeout: TimeSpan.FromMinutes(1));
             if (turn.Inbox is [{ Kind: "issue-live-job" }])

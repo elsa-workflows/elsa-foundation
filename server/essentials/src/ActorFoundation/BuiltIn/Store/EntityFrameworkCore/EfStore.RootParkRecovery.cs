@@ -82,7 +82,11 @@ public sealed partial class EfStore
                 AND EXISTS (SELECT 1 FROM unnest({4}::text[], {5}::bigint[]) AS withheld("Actor", "Revision")
                     WHERE withheld."Actor" = i."Id" AND withheld."Revision" = i."Revision"))
             """ : "";
-        return $"""AND (i."FoundationParkAt" IS NOT NULL {withheld} OR {NoEarlierReleasedCohort})""";
+        return $"""
+            AND (i."FoundationParkAt" IS NOT NULL
+                OR (i."Suspended" AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" LIKE 'operator/%')
+                {withheld} OR {NoEarlierReleasedCohort})
+            """;
     }
 
     private sealed record CohortSample(long Epoch, long Through = -1, long ReadyThrough = 0, long Seen = 0,
@@ -314,7 +318,7 @@ public sealed partial class EfStore
             throw RootShape();
 
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
-        if (current?.Revision != expected || current.Suspended ||
+        if (current?.Revision != expected || recovered && current.Suspended ||
             current.Status != (recovered ? InstanceStatus.Faulted : row.Status)) return null;
         var next = WorkerRow(root, current) with
         {
@@ -327,7 +331,7 @@ public sealed partial class EfStore
             throw RootShape();
         return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
             new RootParkRecover(root, expected, command, recovered, current.Status,
-                current.Status == InstanceStatus.Running && AuthoredWithholding(root, current)));
+                current.Status == InstanceStatus.Running && (current.Suspended || AuthoredWithholding(root, current))));
     }
 
     private sealed record LockedRecover(long? At, long? Revision, long Generation, string? Fault, byte[] StateDigest, byte[] HeaderDigest,
@@ -352,8 +356,8 @@ public sealed partial class EfStore
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
-                WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND NOT i."Suspended"
-                    AND i."Status" = {(int)Prior} AND i."Revision" = {Expected}
+                WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired"
+                    AND (NOT {Recovered} OR NOT i."Suspended") AND i."Status" = {(int)Prior} AND i."Revision" = {Expected}
                     AND (NOT {Recovered} OR i."Jobs" IS NOT DISTINCT FROM {facts.RecoverableJobRegistry}::text /*clearing*/)
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i

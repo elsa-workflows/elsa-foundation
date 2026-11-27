@@ -18,7 +18,8 @@ public static class PostgresPreviewHosting
 
     /// <summary>
     /// Selects the shipped PostgreSQL format for a dedicated database: operators (terminate, delete, retention, held operator
-    /// replies), Native jobs with timed settlement, direct held replies, Park opening and inspection, and workflow history.
+    /// replies), Native jobs with timed settlement, direct held replies, Park opening, inspection, arrivals and Recover,
+    /// and workflow history.
     /// A node on it answers held callers (<see cref="StartAsync"/>, its <c>requests</c>).
     /// </summary>
     public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootShipped(options);
@@ -120,8 +121,25 @@ public static class PostgresPreviewHosting
     /// its requests start a root or send to one and hold the caller; the node that owns the roots answers those callers when
     /// it is given the same requests. The deduplication window is the requests' when they are given.
     /// </summary>
-    public static async Task<PostgresPreviewFoundation> OpenFoundationAsync(Func<KernelDb> create, string actorType,
-        PostgresDirectRequests? requests = null, TimeSpan? deduplicationWindow = null, int pageSize = 64, CancellationToken cancellationToken = default)
+    public static Task<PostgresPreviewFoundation> OpenFoundationAsync(Func<KernelDb> create, string actorType,
+        PostgresDirectRequests? requests = null, TimeSpan? deduplicationWindow = null, int pageSize = 64, CancellationToken cancellationToken = default) =>
+        OpenFoundationCoreAsync(create, actorType, requests, deduplicationWindow, pageSize, cancellationToken, null);
+
+    /// <summary>
+    /// Opens ingress and reads with one-way operator commands. The host authorizes each command against its bound scope
+    /// and exact actor reference. The installed store determines which commands it accepts.
+    /// </summary>
+    public static Task<PostgresPreviewFoundation> OpenFoundationWithOperatorsAsync(Func<KernelDb> create, string actorType,
+        Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorizeOperator, PostgresDirectRequests? requests = null,
+        TimeSpan? deduplicationWindow = null, int pageSize = 64, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(authorizeOperator);
+        return OpenFoundationCoreAsync(create, actorType, requests, deduplicationWindow, pageSize, cancellationToken, authorizeOperator);
+    }
+
+    private static async Task<PostgresPreviewFoundation> OpenFoundationCoreAsync(Func<KernelDb> create, string actorType,
+        PostgresDirectRequests? requests, TimeSpan? deduplicationWindow, int pageSize, CancellationToken cancellationToken,
+        Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator)
     {
         ArgumentNullException.ThrowIfNull(create);
         PostgresRootAdmission.RequireActorType(actorType);
@@ -141,7 +159,7 @@ public static class PostgresPreviewHosting
         var admission = new PostgresRootAdmission(create, window, lockOrdinaryWrites: true);
         var store = new EfStore(create, postgres: true);
         return new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(cancellationToken), pageSize),
-            actorType, directRequests: requests);
+            actorType, directRequests: requests, authorizeExactOperator: authorizeOperator);
     }
 
     /// <summary>
