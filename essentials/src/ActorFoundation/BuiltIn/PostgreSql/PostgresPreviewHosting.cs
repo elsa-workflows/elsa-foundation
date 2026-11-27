@@ -378,8 +378,8 @@ public static partial class PostgresPreviewHosting
         if (node.Contains('\0') || !FoundationMetadataLimits.FitsName(node))
             throw new ArgumentException("Invalid PostgreSQL node name.", nameof(node));
         PostgresRootAdmission.RequireActorType(actor.Type);
-        (replies as PostgresDirectRequests)?.RequireRootStartProtectionBinding(create, actor.Type);
         var requestEdge = replies as PostgresDirectRequests ?? localRequests;
+        requestEdge?.RequireRootStartProtectionBinding(create, actor.Type);
         requestEdge?.RequirePublicEventBinding(create, actor.Type);
         if (requestEdge is not null && requestEdge.Node != node)
             throw new ArgumentException("The local reply registry must belong to the owner node.", nameof(replies));
@@ -412,7 +412,7 @@ public static partial class PostgresPreviewHosting
                     : "Only a store with held replies answers held callers.");
             (replies as PostgresDirectRequests)?.RequireKeyBinding(create, actor.Type, db.UsesRootKeyedStarts);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
-            await PostgresRootAdmission.RequirePublicEventHostAsync(db, new(actor.Type, (replies as PostgresDirectRequests)?.ProtectsRootStarts == true),
+            await PostgresRootAdmission.RequirePublicEventHostAsync(db, new(actor.Type, requestEdge?.ProtectsRootStarts == true),
                 cancellationToken);
             if (db.UsesRootSequencedJournal) await EfStore.RequirePostgresSequencedJournalAsync(db, cancellationToken);
             if (db.UsesRootPlaybackDescendants) await EfStore.RequirePostgresPlaybackAsync(db, cancellationToken);
