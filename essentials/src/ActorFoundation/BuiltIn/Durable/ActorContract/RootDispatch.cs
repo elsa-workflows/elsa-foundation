@@ -416,6 +416,14 @@ internal sealed partial class ActorAdapter
                 if (!MatchesRootChildInput(input.Row, message)) return "WrongParent";
                 continue;
             }
+            if (message.FoundationScheduleControl is { } trusted)
+            {
+                if (!auxiliary || !delivery.Durable || input.Row is not { FoundationDispatchHeader: { } dispatch } controlled ||
+                    controlled.Model != trusted.ActorType || dispatch.Tenant != trusted.Tenant ||
+                    message.Target.Id != controlled.Id || message.TargetCreation != controlled.Creation)
+                    return "RootDispatchUnavailable";
+                continue;
+            }
             var childStart = !auxiliary && roots?.SupportsChildren == true && message.BindFoundationChild && message.Start is not null;
             if (auxiliary && (message.Start is null || message.BindFoundationChild || message.ReplyTo is not null ||
                 message.FoundationRootBinding is null))

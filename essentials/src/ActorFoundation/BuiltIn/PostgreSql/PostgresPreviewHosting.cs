@@ -32,6 +32,36 @@ public static class PostgresPreviewHosting
     public static KernelDb CreatePlaybackDescendantsQualificationContext(DbContextOptions<KernelDb> options) =>
         KernelDb.ForPostgresRootPlaybackDescendantsQualification(options);
 
+    /// <summary>Selects the dedicated preview format for qualifying trusted schedule controls.</summary>
+    public static KernelDb CreateScheduleControlsQualificationContext(DbContextOptions<KernelDb> options) =>
+        KernelDb.ForPostgresRootScheduleControlsQualification(options);
+
+    /// <summary>Installs or verifies a dedicated schedule-control qualification database.</summary>
+    public static Task InstallScheduleControlsQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return InstallPreviewFormatAsync(() => CreateScheduleControlsQualificationContext(options), cancellationToken);
+    }
+
+    /// <summary>Binds the trusted control transport to the host's chosen auxiliary schedule actor.</summary>
+    public static Contract.IScheduleRootControls BindScheduleControls(Func<KernelDb> create, string scheduleActorType)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        RootScheduleInventory.RequireActorType(scheduleActorType);
+        return new ScheduleControls(new PostgresRootAdmission(create, TimeSpan.Zero, scheduleActorType: scheduleActorType));
+    }
+
+    private sealed class ScheduleControls(PostgresRootAdmission admission) : Contract.IScheduleRootControls
+    {
+        public async ValueTask<Contract.ScheduleControlResult> ApplyScheduleControlAsync(Contract.BoundScope scope,
+            string definition, string scheduleKey, long revision, Contract.ScheduleControlKind kind, string? setHeader,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(scope);
+            return await admission.ApplyScheduleControlAsync(scope.Tenant, new(new(definition, scheduleKey), revision, kind, setHeader), cancellationToken);
+        }
+    }
+
     /// <summary>Installs or verifies a dedicated descendant playback qualification database.</summary>
     public static Task InstallPlaybackDescendantsQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
     {
@@ -310,6 +340,8 @@ public static class PostgresPreviewHosting
             selfSends = db.UsesRootSelfProtocol;
             if (auxiliaryActor is not null && (!db.UsesRootScheduleInventory || !db.UsesRootTimedJobSettlement))
                 throw new NotSupportedException("This PostgreSQL root profile does not host an auxiliary actor.");
+            if (db.UsesRootScheduleControls && auxiliaryActor is null)
+                throw new NotSupportedException("This PostgreSQL root profile requires a schedule owner.");
             terminalOutputLimit = db.UsesRootTerminalOutput ? EfStore.RootContentBytes : 0;
             if (!db.Database.IsNpgsql() || !(db.SupportsCorePreview || db.UsesRootReplyProtocol))
                 throw new NotSupportedException("Hosting requires a PostgreSQL Core Preview format.");
@@ -320,6 +352,7 @@ public static class PostgresPreviewHosting
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             if (db.UsesRootSequencedJournal) await EfStore.RequirePostgresSequencedJournalAsync(db, cancellationToken);
             if (db.UsesRootPlaybackDescendants) await EfStore.RequirePostgresPlaybackAsync(db, cancellationToken);
+            if (db.UsesRootScheduleControls) await RootScheduleControls.RequirePostgresDefinitionsAsync(db, cancellationToken);
             partitions = await PostgresRootAdmission.ReadInstalledPartitionCountAsync(db, cancellationToken);
         }
 

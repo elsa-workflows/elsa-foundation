@@ -43,6 +43,10 @@ public sealed class SqliteEmbeddedFoundation : Contract.IActorRetentionPolicies
     internal static SqliteEmbeddedFoundation ForScheduleQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootScheduleSettlementQualification);
 
+    /// <summary>Composes the dedicated preview format for qualifying trusted schedule controls.</summary>
+    public static SqliteEmbeddedFoundation ForScheduleControlsQualification(string databasePath, string node, string actorType) =>
+        new(databasePath, node, actorType, StoreFormat.RootScheduleControlsQualification);
+
     private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? qualificationFormat)
     {
         path = Path.GetFullPath(databasePath);
@@ -105,6 +109,27 @@ public sealed class SqliteEmbeddedFoundation : Contract.IActorRetentionPolicies
     internal Task<Contract.IIngress> OpenIngressWithOperatorsAsync(Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorize,
         CancellationToken cancellationToken) =>
         SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(InstalledPath, actorType, authorize, requests.Value, cancellationToken);
+
+    /// <summary>Binds the trusted control transport to the host's chosen auxiliary schedule actor.</summary>
+    public Contract.IScheduleRootControls BindScheduleControls(string scheduleActorType)
+    {
+        RootScheduleInventory.RequireActorType(scheduleActorType);
+        if (scheduleActorType == actorType)
+            throw new ArgumentException("The schedule actor must be distinct from the primary actor.", nameof(scheduleActorType));
+        return new ScheduleControls(this, scheduleActorType);
+    }
+
+    private sealed class ScheduleControls(SqliteEmbeddedFoundation foundation, string scheduleActorType) : Contract.IScheduleRootControls
+    {
+        public ValueTask<Contract.ScheduleControlResult> ApplyScheduleControlAsync(Contract.BoundScope scope,
+            string definition, string scheduleKey, long revision, Contract.ScheduleControlKind kind, string? setHeader,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(scope);
+            return SqliteEmbeddedHosting.ApplyScheduleControlAsync(foundation.InstalledPath, foundation.qualificationFormat,
+                scope.Tenant, scheduleActorType, new(new(definition, scheduleKey), revision, kind, setHeader), cancellationToken);
+        }
+    }
 
     /// <summary>Submits a projected terminal selection from the trusted host retention worker.</summary>
     public ValueTask<Contract.Admission> AdmitRetentionDeleteAsync(Contract.BoundScope scope, Contract.ActorRef actor,
