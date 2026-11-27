@@ -44,6 +44,14 @@ internal static partial class KernelAuthoredEventChecks
             await using (var db = open())
                 Check(!await db.Subscriptions.AnyAsync(wait => wait.Key == qualified, token), "Park removes both waits");
 
+            // A page with no eligible publication still advances. Zero-window publications expire before Recover.
+            for (var index = 0; index <= InMemoryStore.ParkPageLimit; index++)
+            {
+                var expired = await ingress.SendAsync(scope, topic, "expired-" + index, "ignored", null, cancellationToken: token);
+                if (expired.Outcome != Contract.AdmissionOutcome.Accepted)
+                    throw new InvalidOperationException($"Zero-window event {index} was refused: {expired}");
+            }
+
             const int retainedCount = 2 * InMemoryStore.ParkPageLimit + 1;
             var retain = new Contract.AddOptions(KeepFor: TimeSpan.FromMinutes(5));
             for (var index = 0; index < retainedCount; index++)
@@ -135,7 +143,8 @@ internal static partial class KernelAuthoredEventChecks
                 if (message.Kind == "fault") throw new InvalidOperationException("deliberate fixture fault");
                 if (message.Event is not { } received) continue;
 
-                if (received.Wait != Keeping && (received.Wait != Ordinary || received.Id != "after-open"))
+                if (received.Id.StartsWith("expired-", StringComparison.Ordinal) ||
+                    received.Wait != Keeping && (received.Wait != Ordinary || received.Id != "after-open"))
                     throw new InvalidOperationException($"Delivery {received.Id} reached ineligible wait {received.Wait}.");
                 var seen = JsonSerializer.Deserialize<HashSet<string>>(turn.State!)!;
                 if (!seen.Add(received.Wait + "/" + received.Id))
