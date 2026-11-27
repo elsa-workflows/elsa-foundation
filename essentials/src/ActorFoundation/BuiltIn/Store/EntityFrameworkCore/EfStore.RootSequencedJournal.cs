@@ -31,6 +31,7 @@ public sealed partial class EfStore
 
     private const string SequencedJournalName = "FoundationSequencedJournal";
     private const string SequencedJournalTrigger = "kernel_project_root_sequenced_journal";
+    private const string SequencedJournalGuard = "kernel_require_root_sequenced_journal";
 
     private static string SequencedJournalInsert(string count, string clock) => $"""
         INSERT INTO "{SequencedJournalName}" (
@@ -68,6 +69,21 @@ public sealed partial class EfStore
         $fn$;
         CREATE TRIGGER {SequencedJournalTrigger} AFTER INSERT ON "Journal"
         FOR EACH ROW EXECUTE FUNCTION {SequencedJournalTrigger}();
+        CREATE FUNCTION {SequencedJournalGuard}() RETURNS trigger LANGUAGE plpgsql AS $fn$
+        BEGIN
+            IF {QualifiedSequencedJournal} AND NOT EXISTS (
+                SELECT 1 FROM "{SequencedJournalName}" s
+                WHERE s."Partition" = NEW."Partition" AND s."Position" = NEW."Position"
+                    AND s."Actor" = NEW."Instance" AND s."Revision" = NEW."Revision")
+            THEN RAISE EXCEPTION 'A qualified journal row requires its sequence range'
+                USING ERRCODE = '23514', CONSTRAINT = '{SequencedJournalGuard}'; END IF;
+            RETURN NULL;
+        END
+        $fn$;
+        -- PostgreSQL runs equally timed triggers in name order. Assert the preceding projector's
+        -- exact row in the same fenced write even if the projector is disabled after startup.
+        CREATE TRIGGER {SequencedJournalGuard} AFTER INSERT ON "Journal"
+        FOR EACH ROW EXECUTE FUNCTION {SequencedJournalGuard}();
         """;
 
     private static IEnumerable<SqliteDefinition> SqliteSequencedJournalDefinitions()
@@ -86,22 +102,28 @@ public sealed partial class EfStore
             """);
     }
 
-    private static readonly string PostgresSequencedJournalReady = $"""
-        EXISTS (SELECT 1 FROM pg_catalog.pg_trigger stamp
-            JOIN pg_catalog.pg_proc projector ON projector.oid = stamp.tgfoid
-            JOIN pg_catalog.pg_class source ON source.oid = stamp.tgrelid
-            JOIN pg_catalog.pg_class target ON target.relnamespace = source.relnamespace
-            WHERE stamp.tgrelid = to_regclass('"Journal"') AND stamp.tgname = '{SequencedJournalTrigger}'
-                AND stamp.tgenabled IN ('O', 'A') AND stamp.tgtype = 5 AND NOT stamp.tgisinternal
-                AND projector.proname = stamp.tgname AND projector.pronamespace = source.relnamespace
-                AND target.relname = '{SequencedJournalName}' AND target.relkind = 'r'
-                AND target.oid = to_regclass('"FoundationSequencedJournal"'))
+    private static string PostgresSequencedJournalReady(string physicalMarker) => $"""
+        EXISTS (SELECT 1 FROM pg_catalog.pg_class selected
+            WHERE selected.oid = {physicalMarker} AND selected.relkind = 'r'
+                AND (SELECT count(*) FROM (VALUES ('"Journal"'), ('"FoundationSequencedJournal"'),
+                    ('"Instances"'), ('"FoundationRootBirths"')) named(relation)
+                    JOIN pg_catalog.pg_class source ON source.oid = pg_catalog.to_regclass(named.relation)
+                        AND source.relnamespace = selected.relnamespace AND source.relkind = 'r') = 4
+                AND (SELECT count(*) FROM pg_catalog.pg_trigger stamp
+                    JOIN pg_catalog.pg_proc implementation ON implementation.oid = stamp.tgfoid
+                    WHERE stamp.tgrelid = pg_catalog.to_regclass('"Journal"')
+                        AND stamp.tgname IN ('{SequencedJournalTrigger}', '{SequencedJournalGuard}')
+                        AND stamp.tgenabled IN ('O', 'A') AND stamp.tgtype = 5 AND NOT stamp.tgisinternal
+                        AND implementation.proname = stamp.tgname AND implementation.pronamespace = selected.relnamespace) = 2)
         """;
 
     internal static async Task RequirePostgresSequencedJournalAsync(KernelDb db, CancellationToken token)
     {
-        var check = "SELECT " + PostgresSequencedJournalReady + """ AS "Value" """;
-        if (!await db.Database.SqlQueryRaw<bool>(check).SingleAsync(token))
+        var check = FormattableStringFactory.Create($$"""
+            SELECT {{PostgresSequencedJournalReady("v.tableoid")}} AS "Value"
+            FROM "KernelStoreVersions" v WHERE v."Id" = {0}
+            """, StoreVersionEntity.MarkerId);
+        if (!await db.Database.SqlQuery<bool>(check).SingleOrDefaultAsync(token))
             throw new StoreFormatException("The installed sequenced journal projection is incomplete.");
     }
 
@@ -141,7 +163,7 @@ public sealed partial class EfStore
         FormattableString query = $"""
             /* root-sequenced-journal */
             WITH marker AS (
-                SELECT "StoreSchema", "MessageProtocol", "JournalCodec"
+                SELECT "StoreSchema", "MessageProtocol", "JournalCodec" /* marker-identity */
                 FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
             ), root AS (
                 SELECT b."Actor", b."Partition", i."Revision", i."History"
@@ -206,7 +228,8 @@ public sealed partial class EfStore
         var sql = query.Format
             .Replace("/* journal-clock */", sqlite ? SqliteCommitDialect.MillisecondClock :
                 "floor(extract(epoch from statement_timestamp()) * 1000)::bigint", StringComparison.Ordinal)
-            .Replace("/* journal-ready */", sqlite ? "true" : PostgresSequencedJournalReady, StringComparison.Ordinal);
+            .Replace("/* marker-identity */", sqlite ? "" : """, tableoid AS "PhysicalMarker" """, StringComparison.Ordinal)
+            .Replace("/* journal-ready */", sqlite ? "true" : PostgresSequencedJournalReady("""marker."PhysicalMarker" """), StringComparison.Ordinal);
         if (sqlite)
         {
             // The admission policy, install stamp, actor head and page are pinned to one read snapshot.

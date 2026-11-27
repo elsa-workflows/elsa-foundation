@@ -11,6 +11,7 @@ using Kernel.WorkflowActor;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 using PublicActor = Kernel.WorkflowActor.WorkflowActor;
 using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
@@ -216,10 +217,11 @@ internal static class ShippedDelayRecoveryChecks
                 }
             }
             await CheckTerminationAsync();
+            Contract.ActorRef? oversizedActor = null;
             if (sequencedJournal)
             {
                 await CheckIndexedWindowAsync();
-                await CheckOversizedAsync();
+                oversizedActor = await CheckOversizedAsync();
             }
             var retaining = await AdmitAsync(TerminalDefinition, "retain-immediate-at-end");
             var retainingTimer = await WaitingAsync(retaining, FarFutureDelay);
@@ -253,7 +255,11 @@ internal static class ShippedDelayRecoveryChecks
                 }
                 catch (StoreFormatException) { refused = true; }
                 Check(refused, "the ordinary shipped install refuses the private sequenced journal store");
-                if (postgres) await CheckProjectorRefusalAsync(retaining);
+                if (postgres)
+                {
+                    await CheckSourceNamespaceAsync(retaining);
+                    await CheckProjectorRefusalAsync(oversizedActor!.Value);
+                }
             }
             Check(failures.IsEmpty, "the retained provider owners stop cleanly");
             return 0;
@@ -284,7 +290,7 @@ internal static class ShippedDelayRecoveryChecks
                     "the sequenced journal is scoped to the exact tenant");
             }
 
-            async Task CheckOversizedAsync()
+            async Task<Contract.ActorRef> CheckOversizedAsync()
             {
                 var actor = await AdmitAsync(TerminalDefinition, "oversized-journal");
                 await WaitingAsync(actor, FarFutureDelay);
@@ -296,6 +302,7 @@ internal static class ShippedDelayRecoveryChecks
                 Check(after.Items is [{ Entry: null, CommitOrdinal: 0 }] && after.UpperSequence == first.UpperSequence + 1 &&
                     after.ScannedThroughSequence == after.UpperSequence,
                     "the bounded source advances through the oversized commit without loading its body");
+                return actor;
             }
 
             async Task CheckIndexedWindowAsync()
@@ -312,8 +319,68 @@ internal static class ShippedDelayRecoveryChecks
                     "the installed plan bounds both ends of the actor's sequenced segment index");
             }
 
+            async Task CheckSourceNamespaceAsync(Contract.ActorRef actor)
+            {
+                var settings = new NpgsqlConnectionStringBuilder(db.Database.GetConnectionString())
+                {
+                    SearchPath = "sequenced_shadow,public"
+                };
+                var mixed = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings.ConnectionString);
+                var reader = new EfStore(() => OpenWith(mixed.Options), postgres: true);
+                await db.Database.ExecuteSqlRawAsync("""
+                    CREATE SCHEMA sequenced_shadow;
+                    CREATE TABLE sequenced_shadow."FoundationRootBirths" (LIKE public."FoundationRootBirths" INCLUDING ALL);
+                    """, token);
+                try
+                {
+                    var birthRefused = await RefusesMixedReadAsync();
+                    await db.Database.ExecuteSqlRawAsync("""
+                        DROP TABLE sequenced_shadow."FoundationRootBirths";
+                        CREATE TABLE sequenced_shadow."Instances" (LIKE public."Instances" INCLUDING ALL);
+                        """, token);
+                    Check(birthRefused && await RefusesMixedReadAsync(),
+                        "the sequenced read refuses birth or instance relations outside the physical format marker schema");
+                }
+                finally
+                {
+                    await db.Database.ExecuteSqlRawAsync("DROP SCHEMA sequenced_shadow CASCADE", token);
+                }
+
+                async Task<bool> RefusesMixedReadAsync()
+                {
+                    try { await reader.ReadRootSequencedJournalAsync(scope.Tenant, actor.Id, 0, null, 1, token); }
+                    catch (StoreFormatException) { return true; }
+                    return false;
+                }
+            }
+
             async Task CheckProjectorRefusalAsync(Contract.ActorRef actor)
             {
+                var prior = await reads.TailAsync(scope, actor, cancellationToken: token);
+                var writer = new EfStore(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
+                await writer.EnableRootSelfSendsAsync(token);
+                await writer.EnableRootJobsAsync(token);
+                var model = new ParkProbe(new PublicActor([new NativeExecutionModel(serving.Registry)]), timers);
+                var roots = writer.BindWorkerNode(model.Withholds);
+                var adapter = new ActorAdapter(writer.WorkerHeaders(roots), model, writer.RootSelfIssuer,
+                    rootJobHandle: writer.RootJobHandle, rootTimedJobClock: writer.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true);
+                var observed = System.Reflection.DispatchProxy.Create<IKernelStore, PostgresRootParkOpeningChecks.ObservedCommit>();
+                var proxy = (PostgresRootParkOpeningChecks.ObservedCommit)observed;
+                proxy.Store = writer;
+                var refusedUnsequencedWrite = false;
+                proxy.Write = async (batch, writeToken) =>
+                {
+                    try { return await writer.CommitAsync(batch, writeToken); }
+                    catch (StoreException error) when (error.InnerException is PostgresException
+                        { ConstraintName: "kernel_require_root_sequenced_journal" })
+                    {
+                        refusedUnsequencedWrite = true;
+                        return new Committed(false, 0, []);
+                    }
+                };
+                await using var live = new Worker("before-projector-disabled", 0, observed, adapter, new WorkerOptions { PassTurnBudget = 1 });
+                Check(await new DurableHost([live]).ActivateAsync(0, token) == live,
+                    "the worker owns the partition while the sequenced projector is still enabled");
                 await db.Database.ExecuteSqlRawAsync("""
                     ALTER TABLE "Journal" DISABLE TRIGGER kernel_project_root_sequenced_journal
                     """, token);
@@ -327,6 +394,18 @@ internal static class ShippedDelayRecoveryChecks
                     catch (StoreFormatException) { ownerRefused = true; }
                     Check(readRefused && ownerRefused,
                         "a disabled journal projector fails both an exact history read and a replacement owner start");
+                    Check(await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "journal-without-projector", Oversized,
+                        cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                        "the fixture admits an input while the existing owner is running and the projector is disabled");
+                    while (!refusedUnsequencedWrite)
+                    {
+                        await live.WokenAsync(null, token);
+                        await live.RunAsync(token);
+                        if (!refusedUnsequencedWrite) await Task.Delay(25, token);
+                    }
+                    var rejectedTail = await reads.TailAsync(scope, actor, cancellationToken: token);
+                    Check(rejectedTail.JournalHeadRevision == prior.JournalHeadRevision && rejectedTail.Items.SequenceEqual(prior.Items),
+                        "the already-running owner's fenced commit refuses the unsequenced journal row and preserves its checkpoint");
                 }
                 finally
                 {
@@ -569,4 +648,5 @@ internal static class ShippedDelayRecoveryChecks
             return result;
         }
     }
+
 }
