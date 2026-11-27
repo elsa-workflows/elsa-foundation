@@ -14,6 +14,8 @@ using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api;
 
+internal sealed class LegacyRuntimeApiSelected;
+
 /// <summary>The Runtime HTTP endpoint conventions and request authority shared by workflow execution backends.</summary>
 internal static class WorkflowsRuntimeApiHttpServices
 {
@@ -53,6 +55,24 @@ internal static class WorkflowsRuntimeApiHttpServices
         WorkflowExecutableInspectionStartupTask.Validate(services);
         services.TryAddScoped<IWorkflowExecutableInspection, WorkflowExecutableInspection>();
         AddExecutableInspectionValidator(services);
+    }
+
+    internal static void AddRunInspectionServices(this IServiceCollection services)
+    {
+        // Other domains use the endpoint's run services through the single exact Runtime Core contract.
+        WorkflowRunInspectionStartupTask.Validate(services);
+        services.TryAddScoped<IWorkflowRunInspection, WorkflowRunInspection>();
+
+        if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowRunInspectionStartupTask))
+                ?.ImplementationInstance is not WorkflowRunInspectionStartupTask validator || !validator.Owns(services))
+            validator = new WorkflowRunInspectionStartupTask(services);
+        services.RemoveAll<WorkflowRunInspectionStartupTask>();
+        services.AddSingleton(validator);
+        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
+                     && (item.ImplementationInstance is WorkflowRunInspectionStartupTask
+                         || item.ImplementationType == typeof(WorkflowRunInspectionStartupTask))).ToArray())
+            services.Remove(previous);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
     }
 
     // One validator per configuring collection: a copied child shell rebinds it to its own collection.

@@ -24,20 +24,20 @@ public static class WorkflowsRuntimeApi
         MapGroup(endpoints).MapEndpointsFrom(typeof(WorkflowsRuntimeApi).Assembly);
     }
 
-    internal static void MapRetainedEndpoints(IEndpointRouteBuilder endpoints)
+    internal static void MapRetainedEndpoints(IEndpointRouteBuilder endpoints, bool includeExecute = true, bool includeDelete = true)
     {
         var api = MapGroup(endpoints);
         api.MapEndpoint<Endpoints.Executables.List.Endpoint>();
         api.MapEndpoint<Endpoints.Executables.Get.Endpoint>();
         api.MapEndpoint<Endpoints.Executables.Provenance.Endpoint>();
         api.MapEndpoint<Endpoints.Executables.InputSources.Endpoint>();
-        api.MapEndpoint<Endpoints.Executables.Execute.Endpoint>();
+        if (includeExecute) api.MapEndpoint<Endpoints.Executables.Execute.Endpoint>();
         api.MapEndpoint<Endpoints.ActivationSlots.List.Endpoint>();
         api.MapEndpoint<Endpoints.ActivationSlots.Get.Endpoint>();
         api.MapEndpoint<Endpoints.Instances.List.Endpoint>();
         api.MapEndpoint<Endpoints.Instances.ListPage.Endpoint>();
         api.MapEndpoint<Endpoints.Instances.Get.Endpoint>();
-        api.MapEndpoint<Endpoints.Instances.Delete.Endpoint>();
+        if (includeDelete) api.MapEndpoint<Endpoints.Instances.Delete.Endpoint>();
         api.MapEndpoint<Endpoints.ActivityExecutions.List.Endpoint>();
         api.MapEndpoint<Endpoints.ActivityExecutions.Get.Endpoint>();
         api.MapEndpoint<Endpoints.History.Page.Endpoint>();

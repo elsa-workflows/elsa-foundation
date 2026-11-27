@@ -257,8 +257,9 @@ public sealed partial class KernelPublishedExecuteTests
             (IRuntimeKernelExecutablePinStore)ActivatorUtilities.CreateInstance(services, pinDescriptor.ImplementationType!), pinBoundary));
         var api = new WorkflowsRuntimeApiFeature();
         var mapRetainedRoutes = !directTests && !inline;
+        var retainedApi = new WorkflowsRuntimeKernelRetainedApiFeature();
         if (mapRetainedRoutes)
-            WorkflowsRuntimeKernelApiFeature.ConfigureRetainedServices(builder.Services);
+            retainedApi.ConfigureServices(builder.Services);
         else
             api.ConfigureServices(builder.Services);
         if (recordEphemeralTestCompletion is { } record)
@@ -291,7 +292,10 @@ public sealed partial class KernelPublishedExecuteTests
         new WorkflowsRuntimeKernelFeature().PostConfigureServices(builder.Services);
         api.PostConfigureServices(builder.Services);
         var kernelApi = new WorkflowsRuntimeKernelApiFeature();
-        kernelApi.PostConfigureServices(builder.Services);
+        if (mapRetainedRoutes)
+            retainedApi.PostConfigureServices(builder.Services);
+        else
+            kernelApi.PostConfigureServices(builder.Services);
         if (inline)
         {
             var startDescriptor = builder.Services.Last(item => item.ServiceType == typeof(IWorkflowExecutionStartService));
@@ -325,7 +329,7 @@ public sealed partial class KernelPublishedExecuteTests
         app.UseAuthentication();
         app.UseAuthorization();
         if (mapRetainedRoutes)
-            WorkflowsRuntimeKernelApiFeature.MapRetainedEndpoints(app);
+            retainedApi.MapEndpoints(app, app.Environment);
         else
         {
             WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);

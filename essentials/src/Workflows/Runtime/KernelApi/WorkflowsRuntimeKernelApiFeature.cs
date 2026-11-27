@@ -37,12 +37,13 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
     {
         services.AddWorkflowRuntimeApiHttpServices();
         services.AddExecutableInspectionServices();
+        services.AddRunInspectionServices();
         services.AddDataProtection();
     }
 
-    internal static void MapRetainedEndpoints(IEndpointRouteBuilder endpoints)
+    internal static void MapRetainedEndpoints(IEndpointRouteBuilder endpoints, bool includeExecute = true, bool includeDelete = true)
     {
-        WorkflowsRuntimeApi.MapRetainedEndpoints(endpoints);
+        WorkflowsRuntimeApi.MapRetainedEndpoints(endpoints, includeExecute, includeDelete);
         MapKernelEndpoints(endpoints);
     }
 
@@ -53,11 +54,13 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
         KernelParkInspection.Map(endpoints);
     }
 
-    public virtual void PostConfigureServices(IServiceCollection services)
+    public virtual void PostConfigureServices(IServiceCollection services) => ConfigureKernelServices(services, FeatureName);
+
+    internal static void ConfigureKernelServices(IServiceCollection services, string featureName)
     {
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(KernelRuns) && !descriptor.IsKeyedService))
             throw new InvalidOperationException(
-                $"The {FeatureName} feature needs the host's {nameof(KernelRuns)}, registered by instance on the root container.");
+                $"The {featureName} feature needs the host's {nameof(KernelRuns)} registration.");
         services.AddScoped<KernelRunReader>();
         services.AddScoped<KernelActivityTimeline>();
         services.AddScoped<KernelHistoryCursor>();
@@ -88,8 +91,8 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
                 // The runtime API registers each default by type or through a factory within its own assembly.
                 if (descriptor.ImplementationType != runtimeImplementation && descriptor.ImplementationFactory?.Method.DeclaringType?.Assembly != runtimeImplementation.Assembly)
                     throw new InvalidOperationException(
-                        $"The {FeatureName} feature replaces the shell's {service.Name} with the kernel's, and this shell registers another for it. " +
-                        $"One implementation serves per shell: remove that registration, or leave the {FeatureName} feature out of the shell.");
+                        $"The {featureName} feature replaces the shell's {service.Name} with the kernel's, and this shell registers another for it. " +
+                        $"One implementation serves per shell: remove that registration, or leave the {featureName} feature out of the shell.");
                 services.Remove(descriptor);
             }
             services.AddScoped(service, kernelImplementation);
