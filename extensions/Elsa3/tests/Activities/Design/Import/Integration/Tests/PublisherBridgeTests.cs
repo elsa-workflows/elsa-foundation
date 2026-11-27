@@ -1,6 +1,7 @@
 using System.Net;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Services;
@@ -85,6 +86,35 @@ public sealed class PublisherBridgeTests
     }
 
     [Fact]
+    public async Task A_publish_whose_data_selection_is_rejected_refuses_with_each_finding()
+    {
+        // #5850: the graph provider rejects a malformed manifest with located findings; the import reports them instead
+        // of "failed unexpectedly", however deep the publisher wrapped the rejection.
+        var rejection = new ActivityDataSelectionRejectedException(
+        [
+            new("/variables/0/initialValue", "ActivityDataSelection/activity.graph.variable.initial-value-invalid", "'initialValue' must be an expression object with a syntax and value."),
+            new("write/inputs/text", "Expressions/UnresolvedVariable", "Variable 'missing' is not in scope.")
+        ]);
+        var publisher = new FakeActivityPublisher { PreflightFailure = new InvalidOperationException("Compiling failed.", rejection) };
+
+        var outcome = await new PublisherReusableActivityImportPublisher(publisher, new Tenant("tenant-a")).PublishAsync(Request);
+
+        Assert.False(outcome.Published);
+        Assert.Equal("ActivityDataSelection/activity.graph.variable.initial-value-invalid", outcome.ErrorCode);
+        Assert.Equal(2, outcome.Diagnostics.Count);
+        var variable = outcome.Diagnostics[0];
+        Assert.Equal(("ActivityDataSelection/activity.graph.variable.initial-value-invalid", ActivityDiagnosticSeverity.Error), (variable.Code, variable.Severity));
+        Assert.Equal("'initialValue' must be an expression object with a syntax and value.", variable.Message);
+        Assert.Equal(("ActivityDraft", "draft-1", (long?)3), (variable.Subject.Kind, variable.Subject.Id, variable.Subject.Revision));
+        Assert.Equal("/variables/0/initialValue", variable.Location!.JsonPointer);
+        Assert.Equal("/variables/0/initialValue", variable.Metadata["authoredPath"]);
+        Assert.False(string.IsNullOrWhiteSpace(variable.Remediation));
+        var input = outcome.Diagnostics[1];
+        Assert.Equal(("text", "write"), (input.Location!.ReferenceKey, Assert.Single(input.Location.NodeOrigin!).Id));
+        Assert.Equal(0, publisher.PublishCalls);
+    }
+
+    [Fact]
     public void Imp_publishing_permission_constant_equals_WorkflowPublishingPermissions_Manage()
     {
         // The import duplicates the constant rather than reference Publishing; this pins the copy.
@@ -155,6 +185,7 @@ public sealed class PublisherBridgeTests
     {
         public ActivityPublicationPreflightView? Preflight { get; init; }
         public ActivityPublicationRejectedException? Rejection { get; init; }
+        public Exception? PreflightFailure { get; init; }
         public int PreflightCalls { get; private set; }
         public int PublishCalls { get; private set; }
         public PublishActivityDefinitionRequest? LastPublish { get; private set; }
@@ -162,6 +193,8 @@ public sealed class PublisherBridgeTests
         public Task<ActivityPublicationPreflightView> PreflightAsync(PreflightActivityDefinitionPublicationRequest request, CancellationToken cancellationToken = default)
         {
             PreflightCalls++;
+            if (PreflightFailure is not null)
+                throw PreflightFailure;
             return Task.FromResult(Preflight ?? throw new InvalidOperationException("No preflight was set."));
         }
 
