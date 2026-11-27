@@ -158,11 +158,19 @@ export async function corePreviewActivityTimelineJourney(page: Page, info: TestI
   }
   await expect(showNew).toHaveText(`${tail.items.length} new recorded events · Show`);
   expect(await showNew.textContent()).not.toBe(caughtUp);
+  await history.getByRole("button", { name: "Pause live updates", exact: true }).click();
+  await expect(resumeHistory).toBeVisible();
+  await expect(page.getByRole("group", { name: "Run workspace actions", exact: true })
+    .getByText("Completed", { exact: true })).toBeVisible();
+  expect(await shownIds()).toEqual(prefixIds);
   expect({ regularHistoryReads, liveConnections }).toEqual({ regularHistoryReads: 0, liveConnections: 1 });
   await showNew.click();
   const committedIds = [...prefixIds, ...tail.items.map(item => item.historyEventId)];
   expect(new Set(committedIds).size).toBe(committedIds.length);
   await expect.poll(shownIds).toEqual(committedIds);
+  const finishedEvent = tail.items.find(item => item.executableNodeId === "finish" && item.name === "ActivityCompleted")!;
+  await expect(history.locator(`[data-history-event-id="${finishedEvent.historyEventId}"]`))
+    .toContainText(/write http response/i);
   await capture(page, info, "history-committed");
 
   const revocation = process.env.UX_CORE_PREVIEW_HISTORY_AUTHORITY === "1"

@@ -49,7 +49,7 @@ export function mergeHistoryEvents(existing: readonly RuntimeHistoryEvent[], inc
 
 /** One serial bounded read at a time. A settled prefix is never treated as permanent source closure. */
 export function useRunHistory(context: StudioEndpointContext, workflowExecutionId: string,
-  request: RuntimeHistoryRequest = {}, enabled = true) {
+  request: RuntimeHistoryRequest = {}, enabled = true, onCommittedAdvance?: () => void) {
   const requestKey = JSON.stringify({ ...request, continuationToken: undefined, limit: request.limit ?? 100 });
   const requestRef = useRef(request); requestRef.current = request;
   const [auth, setAuth] = useState({ allowed: true, revision: 0 });
@@ -133,6 +133,8 @@ export function useRunHistory(context: StudioEndpointContext, workflowExecutionI
             liveNext: page.nextContinuationToken ?? null, catchUp: page.catchUpToken ?? previous.catchUp };
         }
         publish({ key, value, loading: false, status: "ready", error: "" });
+        if ((kind === "poll" || kind === "refresh") && previous && page.coverage.policyId === "kernel-activity-journal-v1"
+          && page.upperSequence > previous.page.upperSequence) onCommittedAdvance?.();
         return value;
       };
       try {
@@ -185,7 +187,7 @@ export function useRunHistory(context: StudioEndpointContext, workflowExecutionI
     const intent = pendingIntent.current; pendingIntent.current = "poll";
     void read(intent);
     return () => { disposed = true; active.current?.abort(); if (timer !== undefined) window.clearTimeout(timer); };
-  }, [auth.allowed, context, enabled, following, key, online, publish, revision, visible, workflowExecutionId]);
+  }, [auth.allowed, context, enabled, following, key, onCommittedAdvance, online, publish, revision, visible, workflowExecutionId]);
 
   const current = enabled && auth.allowed && state?.key === key ? state : null;
   const showNew = useCallback(() => {
