@@ -372,7 +372,7 @@ internal static class StoreDefinitionsRevision
     private const int Sqlite = 2;
     private const int LegacyPostgreSqlRevision = 1;
     private const int PostgreSqlRevision = 7;
-    private const int PostgreSqlChildrenRevision = 8;
+    private const int PostgreSqlChildrenRevision = 9;
     private const int SqliteRevision = 11;
     private const int SqliteParkRecoverRevision = 5;
     private const int PostgreSqlDueBacklogRevision = 5;

@@ -3,6 +3,7 @@ using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
@@ -181,6 +182,7 @@ internal static class PostgresChildWorkflowChecks
             Check(!await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "FoundationRootChildCascades" WHERE "Reference" = {bulkParent.Id}) AS "Value"
                 """).SingleAsync(token), "the durable second cascade page reaches its child and clears the ledger");
+            await CheckRegistryGuardAsync();
             Check(service.LastError is null && successor.LastError is null, "both owners stopped and ran without fault");
         }
         finally { await successor.StopAsync(CancellationToken.None); }
@@ -188,6 +190,60 @@ internal static class PostgresChildWorkflowChecks
         PostgresPreviewHostedService StartService(string name, PostgresDirectRequests? requests) =>
             new(Open, name, actor, message => throw new InvalidOperationException(message),
                 new() { PollInterval = TimeSpan.FromMilliseconds(15) }, requests: requests);
+
+        async Task CheckRegistryGuardAsync()
+        {
+            var added = await nextFoundation.SendAsync(scope, new Contract.Target.Start(
+                WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("parent"))),
+                "guard-parent", Contract.Kinds.Start, cancellationToken: token);
+            var address = added.Actor!.Value;
+            var waitingParent = await WaitForAsync(address, image => image.Children is not null, successor);
+            var exactChild = ChildRegistry.Read(waitingParent.Children).Single();
+            var startedChild = await WaitForAsync(new(await ReferenceAsync(exactChild)), image => image.Status == InstanceStatus.Running, successor);
+            Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(address), "guard-finish-parent",
+                ChildFixtureActor.Finish, cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
+                "the guard fixture ends the parent while retaining its live child registry");
+            var endedParent = await WaitForAsync(address, image => image is { Status: InstanceStatus.Finished, Children: not null }, successor);
+            await successor.StopAsync(token);
+
+            // With the owner stopped, construct only the terminal child checkpoint and vary one part of its final notice.
+            await using var witness = await db.Database.BeginTransactionAsync(token);
+            var revision = startedChild.Revision + 1;
+            Check(await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Instances" SET "Status" = {(int)InstanceStatus.Finished}, "Revision" = {revision}, "FoundationWriteRevision" = {revision},
+                    "FoundationTerminalAt" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint,
+                    "FoundationTerminalRevision" = {revision}
+                WHERE "Id" = {exactChild.Id}
+                """, token) == 1, "the guard fixture has the exact child's terminal checkpoint");
+            var handle = CreationProtocol.TerminalNoticeId(exactChild.Id, exactChild.Creation, revision);
+            var key = address.Id + "/child/" + FoundationRootCreator.OperationDigest(handle);
+            var payload = new FoundationChildNotice(exactChild.Id, InstanceStatus.Finished, null, exactChild.Creation, Final: true);
+            foreach (var (id, body) in new[] { (key + "0", payload), (key, payload with { Final = false }) })
+            {
+                await witness.CreateSavepointAsync("notice", token);
+                var wire = "!kernel-child-notice/1:" + DurableKeyJson.Write(new { Id = handle, Payload = DurableKeyJson.Write(body), Final = true });
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Kind", "Due", "Start", "Sender",
+                        "Done", "Seen", "Attempts", "Trial", "JobGeneration")
+                    VALUES ({id}, {InboxKey.FoundationOccurrenceScope}, {endedParent.Actor.Id}, {new InstanceRef(endedParent.Actor.Id).Partition},
+                        {Kinds.ChildFinished}, 0, {wire}, {exactChild.Id}, false, 0, 0, 0, 0)
+                    """, token);
+                var rejected = false;
+                try
+                {
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "Instances" SET "Children" = NULL WHERE "Id" = {endedParent.Actor.Id}
+                        """, token);
+                }
+                catch (PostgresException error) when (error.SqlState == PostgresErrorCodes.CheckViolation &&
+                    error.ConstraintName == "kernel_require_root_checkpoint_writer") { rejected = true; }
+                await witness.RollbackToSavepointAsync("notice", token);
+                await witness.ReleaseSavepointAsync("notice", token);
+                Check(rejected, id == key ? "a canonical occurrence with a non-final nested notice cannot shrink the registry"
+                    : "a final notice stored under a noncanonical occurrence cannot shrink the registry");
+            }
+            await witness.RollbackAsync(token);
+        }
 
         async Task CheckParkedAttachedTerminationAsync(string lane, bool fromParent)
         {
@@ -272,6 +328,7 @@ internal static class PostgresChildWorkflowChecks
         internal const string Fault = "fault-child";
         internal const string Spawn = "bulk-spawn";
         internal const string TerminateChild = "terminate-child";
+        internal const string Finish = "finish-parent";
         public string Type => workflow.Type;
         public bool Withholds(Contract.ActorHeader header) => workflow.Withholds(header);
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => workflow.RestoreWaits(header, state);
@@ -281,6 +338,11 @@ internal static class PostgresChildWorkflowChecks
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken token)
         {
             if (turn.Inbox.Any(message => message.Kind == Fault)) throw new InvalidOperationException(Fault);
+            if (turn.Inbox.Any(message => message.Kind == Finish))
+            {
+                turn.End(Contract.ActorStatus.Finished);
+                return ValueTask.CompletedTask;
+            }
             if (turn.Inbox.Any(message => message.Kind == ArmFault))
             {
                 turn.Send(turn.Header.Ref, Fault, dueAt: turn.Now + 50);

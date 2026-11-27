@@ -178,7 +178,7 @@ internal static class ProfileCapabilityChecks
         using var children = KernelDb.ForPostgresRootChildrenQualification(options);
         Check(children.RequiredFormat == StoreFormat.PostgresRootChildrenQualification &&
             children.RequiredFormat is { StoreSchema: 3, MessageProtocol: 111, JournalCodec: 1 } &&
-            StoreDefinitionsRevision.Seed(children) is { StoreSchema: 1, MessageProtocol: 8, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(children) is { StoreSchema: 1, MessageProtocol: 9, JournalCodec: 0 } &&
             children.UsesRootChildren && !children.UsesRootDueBacklog &&
             children.Capabilities == (RootProfiles.TimerRearmQualification | RootCapabilities.Children) &&
             !RootProfiles.Formats.ContainsKey(children.RequiredFormat) && !mapped.HasFlag(RootCapabilities.Children),

@@ -295,17 +295,27 @@ public sealed partial class EfStore
             AND child."FoundationReference" = b."Reference" AND child."FoundationTenant" = b."Tenant"
         CROSS JOIN LATERAL (SELECT CASE WHEN left(m."Start", {RootChildNoticePrefix.Length}) = '{RootChildNoticePrefix}'
             THEN substring(m."Start" FROM {RootChildNoticePrefix.Length + 1})::jsonb END AS wire) notice
+        CROSS JOIN LATERAL (SELECT (notice.wire->>'Payload')::jsonb AS body) payload
+        CROSS JOIN LATERAL (SELECT 'c' || length(b."Actor") || '_' || b."Actor" || '_' || b."Creation"
+            || '#' || child."FoundationTerminalRevision" || '.end' AS handle) canonical
         WHERE m."Target" = OLD."Id" AND m."Partition" = OLD."Partition" AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
             AND m."Kind" = '{Kinds.ChildFinished}' AND m."Due" = 0 AND m."EventMatch" IS NULL AND NOT m."Done"
             AND m."ReplyTo" IS NULL AND m."KeepUntil" IS NULL AND m."Payload" IS NULL AND m."JobGeneration" = 0
-            AND m."Id" LIKE OLD."FoundationReference" || '/child/%'
-            AND b."Actor" = removed.child->>'Id' AND to_jsonb(b."Creation") = removed.child->'Creation'
+            AND m."Id" = OLD."FoundationReference" || '/child/' || {ChildNoticeDigest("canonical.handle")}
+            AND b."Actor" = removed.child->>'Id' AND b."Creation" = 1 AND to_jsonb(b."Creation") = removed.child->'Creation'
             AND child."FoundationTerminalRevision" > 0 AND child."FoundationTerminalAt" IS NOT NULL
             AND (child."Parent" = OLD."Id" OR child."Retired")
-            AND notice.wire->'Final' = 'true'::jsonb
-            AND notice.wire->>'Id' = 'c' || length(b."Actor") || '_' || b."Actor" || '_' || b."Creation"
-                || '#' || child."FoundationTerminalRevision" || '.end'
+            AND notice.wire->'Final' = 'true'::jsonb AND notice.wire->>'Id' = canonical.handle
+            AND payload.body->>'Child' = b."Actor" AND payload.body->'Creation' = to_jsonb(b."Creation")
+            AND payload.body->'Final' = 'true'::jsonb AND payload.body->'Status' = to_jsonb(child."Status")
+            AND child."Status" IN ({(int)InstanceStatus.Finished}, {(int)InstanceStatus.Faulted}, {(int)InstanceStatus.Cancelled})
         """);
+
+    // Generated child terminal handles are ASCII. Their operation digest hashes big-endian UTF-16 code units.
+    private static string ChildNoticeDigest(string handle) => $"""
+        upper(encode(sha256(decode(regexp_replace(encode(convert_to({handle}, 'UTF8'), 'hex'),
+            '([0-9a-f][0-9a-f])', '00' || chr(92) || '1', 'g'), 'hex')), 'hex'))
+        """;
 
     private static readonly string TerminalChildRegistryWrite = $"""
         IF TG_OP = 'UPDATE' AND COALESCE(OLD."FoundationTerminalRevision" = OLD."Revision", false)
