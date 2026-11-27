@@ -103,8 +103,9 @@ internal static class ProfileCapabilityChecks
             ["root-park-inspection"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootParkInspection", "UsesRootParkOpening"],
             ["root-park-arrivals"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening"],
             ["root-park-recovery"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootOperatorProtocol", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening", "UsesRootParkRecovery"],
-            ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory", "UsesRootAuthoredEvents", "UsesRootChildren", "UsesRootComposedParkRecovery", "UsesRootDueBacklog",
-                "UsesRootEventStartReceipts", "UsesRootEventStartScan", "UsesRootEventStarts", "UsesRootInlinePromotion", "UsesRootJobProtocol", "UsesRootKeyedStarts", "UsesRootLiveEventWaits",
+            ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory", "UsesRootAttachedTestRuns", "UsesRootAuthoredEvents", "UsesRootChildren", "UsesRootComposedParkRecovery",
+                "UsesRootDirectTestRuns", "UsesRootDueBacklog", "UsesRootEphemeralTestRuns", "UsesRootEventStartReceipts", "UsesRootEventStartScan", "UsesRootEventStarts",
+                "UsesRootHeldEphemeralHttpTestRuns", "UsesRootInlinePromotion", "UsesRootJobProtocol", "UsesRootKeyedStarts", "UsesRootLiveEventWaits",
                 "UsesRootOperatorProtocol", "UsesRootOperatorReplies", "UsesRootPagedPublicEvents", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening",
                 "UsesRootParkRecovery", "UsesRootParkedOperators", "UsesRootPlayback", "UsesRootPlaybackDescendants", "UsesRootPreparedStarts",
                 "UsesRootPrivateParkInputs", "UsesRootPublicEventHost", "UsesRootPublicEventStarts", "UsesRootReplyProtocol", "UsesRootRetention", "UsesRootRetentionPolicy", "UsesRootRetirement",
@@ -477,6 +478,9 @@ internal static class ProfileCapabilityChecks
             ephemeralTestPostgres.RequiredFormat != testPostgres.RequiredFormat &&
             ephemeralTestPostgres.Capabilities == (privateActivationPostgres.Capabilities | RootCapabilities.DirectTestRuns) &&
             ephemeralTestSqlite.Capabilities == ephemeralTestPostgres.Capabilities &&
+            ephemeralTestPostgres.UsesRootEphemeralTestRuns && ephemeralTestSqlite.UsesRootEphemeralTestRuns &&
+            !ephemeralTestPostgres.UsesRootAttachedTestRuns && !ephemeralTestSqlite.UsesRootAttachedTestRuns &&
+            !ephemeralTestPostgres.UsesRootHeldEphemeralHttpTestRuns && !ephemeralTestSqlite.UsesRootHeldEphemeralHttpTestRuns &&
             !ephemeralTestPostgres.UsesRootPublicEventStarts && !ephemeralTestSqlite.UsesRootPublicEventStarts &&
             !ephemeralTestPostgres.UsesRootKeyedStarts && !ephemeralTestSqlite.UsesRootKeyedStarts &&
             !keyedPostgres.UsesRootDirectTestRuns && !keyedSqlite.UsesRootDirectTestRuns &&
