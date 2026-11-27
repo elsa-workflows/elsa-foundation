@@ -37,7 +37,7 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `Tooling/Elsa3.Migration.Tooling.csproj`. It references the Elsa 3 models, mapping, import, import
+- [x] T001 Create `Tooling/Elsa3.Migration.Tooling.csproj`. It references the Elsa 3 models, mapping, import, import
   persistence, publishing and reconciliation projects, and the JSON workflow and activity reconciliation projects.
   Create `Cli/Elsa3.Migration.Cli.csproj`, a console project (`IsPackable` `false`, no `RunWorkingDirectory`) that
   references the tooling and `apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj`, and writes the host's project folder
@@ -55,7 +55,7 @@
   reference in `Elsa.Architecture.Tests.csproj`. Confirm that `ArchitectureGuardTests`, `ExtensionBoundaryTests`,
   `Elsa3MigrationBoundaryTests`, `FeatureCompositionTests` and 1236's host closure test stay green without other
   entries.
-- [ ] T002 [P] Build the fixture export in `MTests/Fixtures/export/`, with:
+- [x] T002 [P] Build the fixture export in `MTests/Fixtures/export/`, with:
   - clean definitions;
   - an unmapped custom activity used by three definitions;
   - an undeclared JavaScript function, called in one definition and only passed as a value in another
@@ -84,7 +84,7 @@
   identities that the report may name (FR-019): definition ids and names, including the dispatch target's id, type
   names, function names and member names (input, output, variable and property names, and literal keys that name a
   target member or input).
-- [ ] T003 [P] Build the fixture feature project in `MTests/Fixtures/AcmeFeature/`. Name it (for example `Acme.Elsa3MigrationFixture`) and add it in T001.
+- [x] T003 [P] Build the fixture feature project in `MTests/Fixtures/AcmeFeature/`. Name it (for example `Acme.Elsa3MigrationFixture`) and add it in T001.
   It contributes the custom activity under its Elsa 3 type name through an `IActivityReconciliationSource` its feature
   registers, not as a CLR type the host's build-folder scan finds, so the activity is cataloged only when the feature
   is enabled and `inventory` reports it as unmapped (assert this in T021). It also registers `acme.`-prefixed JavaScript host functions for the undeclared function and for `getConfig`, and a variable type
@@ -103,7 +103,7 @@
   Models, Mapping, Import (`ReusableActivityImportDiagnosticCodes`) and Reconciliation, and fails on any code without
   an entry or without a remedy, whatever its severity. It reflects over the tooling's own code class too. It also greps the Elsa 3 sources for `"ELS3-`, `"VF-IMP-` and `"ELS3-REUSABLE-`
   string literals outside the constant classes, and fails on any (FR-016, FR-019).
-- [ ] T004a Extract `MigrationHost.AddHostConfiguration` and `MigrationHost.AddHostServices` from the migration host's
+- [x] T004a Extract `MigrationHost.AddHostConfiguration` and `MigrationHost.AddHostServices` from the migration host's
   `CreateBuilder` (`apps/Elsa.Migration.Host/`), as spec *Dependencies and boundaries* describes. The host keeps
   calling them, and 1236's host tests stay green unchanged. The shapes are
   `AddHostConfiguration(IConfigurationBuilder, string hostFolder, string environment, Assembly hostAssembly,
@@ -150,7 +150,7 @@
 - [x] T007 [P] Add `IJsonActivityCatalogWriter` and `JsonActivityCatalogWriter` in
   `essentials/src/Activities/Design/Reconciliation/Json/`, with a round-trip test against `JsonActivityCatalogReader`.
   Update the project's README and `EXTENSION_POINTS.md` (R-8).
-- [ ] T008 Add `Tooling/Elsa3MigrationRun.cs`, the pipeline the CLI calls in-process. It takes the command, the export
+- [x] T008 Add `Tooling/Elsa3MigrationRun.cs`, the pipeline the CLI calls in-process. It takes the command, the export
   path, the output path, `--all-versions`, the tool version, and from the CLI
   a `HostWiring` record (the host assembly, the host project folder, the CLI project folder, and the two T004a methods as delegates: `AddConfiguration(IConfigurationBuilder, string hostFolder, string environment, bool includeLocalSources)`, which supplies the host assembly and an empty `args`, and `AddServices(IHostApplicationBuilder)`) (the internal test seam supplies its own), and returns the exit code, the output path and, on
   exit 2, the refusal reason and sentence of [contracts/cli.md](contracts/cli.md). Test the request validation.
@@ -163,7 +163,7 @@
   `essentials/src/Tasks/Core/PublicAPI.Unshipped.txt` and `essentials/src/Tasks/Elsa.Tasks/PublicAPI.Unshipped.txt`
   (RS0016/RS0017 are errors). Test the order, the default, and that with the setting no
   `IBackgroundTask` or recurring task starts (R-5).
-- [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It depends on T013 (the addition list and the
+- [x] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It depends on T013 (the addition list and the
   `Elsa3MigrationImportRun` feature), so do T013 first even though it is listed under US3. It takes the CLI's `HostWiring` (T008) and calls the
   host's methods only through its delegates, because the tooling does not reference the host; builds an empty generic host (`Host.CreateEmptyApplicationBuilder`) that is
   never started, with `ContentRootPath` set to the host folder and `EnvironmentName` set to Development, and uses the
@@ -214,7 +214,7 @@
   - no file appears outside a temporary `--out`, and no `data/` folder appears under the host project folder.
 
   (FR-008 to FR-010, SC-003.)
-- [ ] T011 Add `Cli/Program.cs`, with:
+- [x] T011 Add `Cli/Program.cs`, with:
   - the `workflows inventory` and `workflows assess` commands (System.CommandLine);
   - the argument rules and refusal reasons of [contracts/cli.md](contracts/cli.md);
   - the exit codes (FR-004);
@@ -225,7 +225,7 @@
 
 ## Phase 3: User Story 3 - Same composition as the migration host (P1)
 
-- [ ] T013 [US3] Add `Tooling/Elsa3MigrationImportRunFeature.cs`, the shell feature `Elsa3MigrationImportRun`. It
+- [x] T013 [US3] Add `Tooling/Elsa3MigrationImportRunFeature.cs`, the shell feature `Elsa3MigrationImportRun`. It
   `DependsOn` `WorkflowsPublishingApi`, `WorkflowsPublishing`, `Elsa3ImportActivitiesPublishing` and `Tasks`, as
   `Elsa3JsonReconciliationFeature` does for the same publisher, and its `ConfigureServices`
   calls `Elsa3ImportRunRegistration.Add` (R-5) and registers the T006 and T007 writers, so the JSON reconciliation
@@ -234,7 +234,7 @@
   import's EF ledger, the publishing bridge and `Elsa3MigrationImportRun`. It is read from the CLI project folder only,
   never copied to the output. It only adds feature entries. Test that the feature registers the import run, the
   publishing authorization decoration and both writers in the shell.
-- [ ] T015 [US3] Add the composition parity test (R-5): in both a baseline empty application builder with the same
+- [x] T015 [US3] Add the composition parity test (R-5): in both a baseline empty application builder with the same
   settings and the CLI's builder, snapshot the descriptors before and after the `MigrationHost.AddHostServices` call,
   and compare the descriptors that call added as multisets (the CLI's added set taken after its Data Protection
   replacement), keyed by (ServiceType,
@@ -249,18 +249,18 @@
 
 ## Phase 4: User Story 1 - Inventory an export (P1)
 
-- [ ] T016 [US1] Add `Tooling/ExportInputReader.cs` (FR-011, edge cases). It reads a folder (recursive `*.json`, in
+- [x] T016 [US1] Add `Tooling/ExportInputReader.cs` (FR-011, edge cases). It reads a folder (recursive `*.json`, in
   ordinal order) or a zip, with one definition or an array per file. A file that is not valid JSON becomes an
   `ELS3-MIGRATION-INPUT-UNREADABLE` finding, and valid JSON with no Elsa 3 definition an
   `ELS3-MIGRATION-UNSUPPORTED-INPUT` finding.
   It refuses with `input-missing`, `input-empty` and `input-unreadable`. Test it with the fixture.
-- [ ] T017 [US1] Add `Tooling/VersionSelection.cs` (FR-012). It selects the latest published version plus the versions
+- [x] T017 [US1] Add `Tooling/VersionSelection.cs` (FR-012). It selects the latest published version plus the versions
   that reusable references pin, lists the versions not converted, supports `--all-versions`, and adds the Info finding
   (`ELS3-MIGRATION-NO-PUBLISHED-VERSION`) for a definition with no published version, which the tests and the T021
   golden file assert. It keeps every input that shares
   a selected version id, or a selected definition id and version, so that duplicates still reach the duplicate-input
   refusal. Test each fixture case, the duplicate case included.
-- [ ] T018 [US1] Wire `Elsa3MigrationRun` (its report-level tests, such as the run-refusal case, follow T019 and T023): read and validate the export first, before composition (`ExportInputReader`
+- [x] T018 [US1] Wire `Elsa3MigrationRun` (its report-level tests, such as the run-refusal case, follow T019 and T023): read and validate the export first, before composition (`ExportInputReader`
   needs no shell, so `input-missing`, `input-unreadable` and `input-empty` refuse before `--out` exists; test that an
   `input-empty` refusal leaves a missing `--out` missing), then compose (T009), select, run `Elsa3ImportRun`, and collect every diagnostic with its stage.
   Publish stops at the first error and marks `publishStoppedHere` (FR-013, FR-014). `Elsa3ImportRun` returns a refusal
@@ -284,10 +284,10 @@
   Every skip is an `error` finding. A definition goes smoothly when its only findings are routine. Unit-test the
   bucket rule, the category mapping, the skip severity and the goes-smoothly rule table-driven, and test the component
   inventory: no unused component, correct counts (SC-001).
-- [ ] T020 [US1] Detect dispatched and executed workflow targets missing from the export, from the converted
+- [x] T020 [US1] Detect dispatched and executed workflow targets missing from the export, from the converted
   definitions' dispatch and execute-workflow activities. List them as Take into account (FR-018 item 5), and test with
   the fixture.
-- [ ] T021 [US1] Add a golden-file integration test in `MTests/Tests/`. It depends on T022 and T023, which write
+- [x] T021 [US1] Add a golden-file integration test in `MTests/Tests/`. It depends on T022 and T023, which write
   `migrated/`, `exportedTo` and the output files, so do it after them even though it is listed under US1. The fixture export runs through `inventory`
   in-process: `report.json` must equal the committed golden file after `tool.version` is normalized, it must validate
   against `contracts/report.schema.json`, and the exit code must be 1. A second run must be byte-identical,
@@ -295,7 +295,7 @@
 
 ## Phase 5: User Story 4 - Migrated content (P1)
 
-- [ ] T022 [US4] Add `Tooling/MigratedExporter.cs` (FR-023, FR-024). It resolves the T006 and T007 writers from the
+- [x] T022 [US4] Add `Tooling/MigratedExporter.cs` (FR-023, FR-024). It resolves the T006 and T007 writers from the
   shell, where T013's feature registers them. It reads the published workflow versions and
   reusable activity versions back from the design stores and writes them through the T006 and T007 writers: one file
   per workflow definition, the wrapper workflow of each reusable among them, and one activities file in dependency
@@ -319,7 +319,7 @@
 - [x] T023 [US4] Add the output swap: write to a hidden `.staging-<guid>` folder inside `--out`, rename `report.json`,
   `report.html` and `migrated/` into place last, and touch no other file. A failed run removes the staging folder and
   leaves the previous output intact. Test both paths, and test it again in the T034 smoke run.
-- [ ] T024 [US4] Add the loadability test (SC-004). Compose the migration host's committed composition in-process, with
+- [x] T024 [US4] Add the loadability test (SC-004). Compose the migration host's committed composition in-process, with
   its JSON workflow and activity reconciliation settings pointed at the fixture run's `migrated/`, and assert that every exported reusable and workflow loads,
   including the workflow that pins an older reusable version (T022), and that a run that exported nothing loads too
   (both entries empty). Each reusable goes through `SourceOwnedActivityVersionPublisher`, not only a parse; no version
@@ -328,16 +328,16 @@
 
 ## Phase 6: User Story 2 - Assess with my own features (P1)
 
-- [ ] T025 [US2] Layer the host's local sources for `assess` as R-5 says. Record setting keys only, those under
+- [x] T025 [US2] Layer the host's local sources for `assess` as R-5 says. Record setting keys only, those under
   `CShells:Shells:default` and `ConnectionStrings`, never machine environment variables outside them, and set
   `persistenceOverridden` when a persistence connection setting was replaced (FR-009, FR-018 item 4). Test that no
   setting value reaches the report.
-- [ ] T026 [US2] Do this with T009, whose refusal tests (and T015's) depend on it. Map composition failures to the
+- [x] T026 [US2] Do this with T009, whose refusal tests (and T015's) depend on it. Map composition failures to the
   `composition-failed` refusal, with no partial run: a listed feature
   that the build does not provide (`FeatureNotFoundException`), and a feature that throws while the shell is
   composed. Name the feature or setting key, never a value, and do not copy the exception message. Test with a listed
   feature that no project provides, and with a fixture feature whose configuration throws.
-- [ ] T027 [US2] Add the assess integration test (SC-007). Run the fixture export with the T003 project listed in the
+- [x] T027 [US2] Add the assess integration test (SC-007). Run the fixture export with the T003 project listed in the
   test-only host folder's `shells.Local.json`. Every finding that names the custom activity, the function or the variable type disappears, except that the
   value-only read `items.map(lookupCustomer)` becomes `ELS3-REPLACED-FUNCTION-REFERENCE` (`patch-definition`), and the function is no longer
   listed under `components`. No other finding is added. The other definitions it unblocks publish clean.
@@ -370,7 +370,7 @@
   that path directly: a publish-stage diagnostic with an Elsa 4 code and a sentinel in its message reaches the report
   with the fixed text only. Change each
   message so that it names the cause without quoting input, and add no workaround (FR-026).
-- [ ] T029 [US5] Add the sentinel test (after T031, which renders `report.html`): the fixture run's `report.json` and `report.html` contain no `SENTINEL-1237`,
+- [x] T029 [US5] Add the sentinel test (after T031, which renders `report.html`): the fixture run's `report.json` and `report.html` contain no `SENTINEL-1237`,
   including from the conversion-stage `VF-IMP-012` refusal of the .NET-member call (SC-005).
 - [x] T030 [US5] Add the schema test: every report the tests produce validates against
   [contracts/report.schema.json](contracts/report.schema.json). Copy the schema into `Tooling/` as an embedded resource,
@@ -391,12 +391,12 @@
   `Elsa3MigrationImportRun` for `Elsa3JsonReconciliation` (its `SourceId` set and a `Files` list of the same `*.json`
   files the CLI's `ExportInputReader` reads, because the folder reader is not recursive and reads no zip), and
   compare its published versions with the CLI run's. Record the result in the PR evidence, and check the two-minute goal.
-- [ ] T034 Add the smoke test (SC-003). From a clean build, run
+- [x] T034 Add the smoke test (SC-003). From a clean build, run
   `dotnet run --project extensions/Elsa3/src/Migration/Cli -- workflows inventory` with the fixture export and a
   relative `--out`. Expect exit 1, the printed path and the same `report.json` as the in-process run, after
   `tool.version` is normalized. Nothing may remain outside the output folder, and no `data/` folder appears under
   `apps/Elsa.Migration.Host`.
-- [ ] T035 [P] Write `Tooling/README.md`, covering the commands, how to add a feature project to the migration host for
+- [x] T035 [P] Write `Tooling/README.md`, covering the commands, how to add a feature project to the migration host for
   `assess`, the database rule and redaction. Link it from `extensions/Elsa3/src/Mapping/README.md` and from the
   migration host's README.
 - [ ] T036 Set this specification's status to Implemented in the finishing PR.

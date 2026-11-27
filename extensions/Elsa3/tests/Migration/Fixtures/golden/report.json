@@ -1,0 +1,1492 @@
+{
+  "schemaVersion": 1,
+  "tool": {
+    "name": "elsa3-migration-cli",
+    "version": "normalized"
+  },
+  "command": "inventory",
+  "exitCode": 1,
+  "redacted": true,
+  "options": {
+    "allVersions": false
+  },
+  "summary": {
+    "definitions": 38,
+    "goesSmoothly": 13,
+    "published": 17,
+    "exported": 17,
+    "blockedByDependency": 1,
+    "notConverted": 1,
+    "byCategory": {
+      "mustFix": 29,
+      "reconsider": 2,
+      "takeIntoAccount": 38
+    },
+    "byBucket": {
+      "convertAsIs": 16,
+      "convertWithAdjustments": 21,
+      "incompatible": 1
+    }
+  },
+  "components": [
+    {
+      "kind": "activity",
+      "name": "Acme.NotifyCustomer",
+      "definitions": [
+        "invoice-reminder",
+        "shipment-notice",
+        "welcome-customer"
+      ],
+      "usages": 3
+    },
+    {
+      "kind": "javascript-function",
+      "name": "getConfig",
+      "definitions": [
+        "regional-pricing"
+      ],
+      "usages": 1
+    },
+    {
+      "kind": "javascript-function",
+      "name": "getCustomerData",
+      "definitions": [
+        "customer-profile"
+      ],
+      "usages": 1
+    },
+    {
+      "kind": "javascript-function",
+      "name": "lookupCustomer",
+      "definitions": [
+        "customer-batch",
+        "customer-lookup"
+      ],
+      "usages": 2
+    },
+    {
+      "kind": "storage-driver",
+      "name": "Acme.Storage.BlobStorageDriver, Acme.Storage",
+      "definitions": [
+        "session-cleanup"
+      ],
+      "usages": 1
+    },
+    {
+      "kind": "storage-driver",
+      "name": "Elsa.Workflows.MemoryStorageDriver, Elsa.Workflows.Core",
+      "definitions": [
+        "session-cleanup"
+      ],
+      "usages": 1
+    },
+    {
+      "kind": "variable-type",
+      "name": "Acme.Orders.OrderDto",
+      "definitions": [
+        "order-archive"
+      ],
+      "usages": 1
+    }
+  ],
+  "definitions": [
+    {
+      "definitionId": "audit-entry",
+      "name": "AuditEntry",
+      "version": 1,
+      "sourceVersionId": "audit-entry-v1",
+      "isReusable": true,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/activities/activities.json",
+      "wrapperExportedTo": "migrated/workflows/audit-entry.json",
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "bad-defaults",
+      "name": "Bad defaults",
+      "version": 1,
+      "sourceVersionId": "bad-defaults-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        },
+        {
+          "code": "ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.variables[0]",
+          "message": "Variable \u0027RetryCount\u0027 has a starting value that cannot be converted to its type \u0027Int32\u0027.",
+          "guidance": "In the Elsa 3 workflow, change the starting value to a valid Int32 value, or change the type to Object to keep the value as text."
+        },
+        {
+          "code": "ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.variables[1]",
+          "message": "Variable \u0027Tags\u0027 has a starting value that is not a JSON array.",
+          "guidance": "In the Elsa 3 workflow, write the \u0027String\u0027 starting value as a JSON array, for example [\u0022a\u0022, \u0022b\u0022]. Elsa 4 does not split text on commas."
+        },
+        {
+          "code": "ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.variables[2]",
+          "message": "Variable \u0027Headers\u0027 has a starting value that is not a JSON object.",
+          "guidance": "In the Elsa 3 workflow, write the \u0027ObjectDictionary\u0027 starting value as a JSON object, for example {\u0022key\u0022: \u0022value\u0022}."
+        }
+      ]
+    },
+    {
+      "definitionId": "calculate-discount",
+      "name": "CalculateDiscount",
+      "version": 1,
+      "sourceVersionId": "calculate-discount-v1",
+      "isReusable": true,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/activities/activities.json",
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        },
+        {
+          "code": "ELS3-MIGRATION-SUPERSEDED-VERSION",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "publish",
+          "path": null,
+          "message": "A newer version of this definition was selected, so this version was imported for its findings only and is neither published nor exported.",
+          "guidance": "Nothing to do unless this version is the one to migrate."
+        }
+      ]
+    },
+    {
+      "definitionId": "calculate-discount",
+      "name": "CalculateDiscount",
+      "version": 3,
+      "sourceVersionId": "calculate-discount-v3",
+      "isReusable": true,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/activities/activities.json",
+      "wrapperExportedTo": "migrated/workflows/calculate-discount.json",
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "close-order",
+      "name": "CloseOrder",
+      "version": 1,
+      "sourceVersionId": "close-order-v1",
+      "isReusable": true,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/activities/activities.json",
+      "wrapperExportedTo": "migrated/workflows/close-order.json",
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "credit-check",
+      "name": "CreditCheck",
+      "version": 1,
+      "sourceVersionId": "credit-check-v1",
+      "isReusable": true,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/activities/activities.json",
+      "wrapperExportedTo": "migrated/workflows/credit-check.json",
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "csharp-greeting",
+      "name": "C# greeting",
+      "version": 1,
+      "sourceVersionId": "csharp-greeting-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "VF-IMP-007",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.root.activities[0].text.expression.value",
+          "nodeId": "Workflow1:Greet",
+          "message": "Expression language \u0027CSharp\u0027 has no registered Elsa 3 lowering provider.",
+          "guidance": "Register a syntax-tree based importer lowering provider or replace the expression before import."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "customer-batch",
+      "name": "Customer batch",
+      "version": 1,
+      "sourceVersionId": "customer-batch-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-JS-HOST-FUNCTION-MISSING",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "build-component",
+          "componentKind": "javascript-function",
+          "componentName": "lookupCustomer",
+          "stage": "conversion",
+          "path": "$.root.activities[0].script.expression.value",
+          "nodeId": "Workflow1:LookupAll",
+          "message": "JavaScript uses \u0027lookupCustomer\u0027, which neither the script, Elsa 4 nor a registered host function declares.",
+          "guidance": "A host function registered as \u0027\u003Cprefix\u003E.lookupCustomer\u0027 (for example \u0027acme.lookupCustomer\u0027) replaces only direct calls \u0027lookupCustomer(...)\u0027; the converter does not rewrite \u0027lookupCustomer\u0027 used as an object or a value. In the Elsa 3 workflow, call \u0027lookupCustomer(...)\u0027 directly, or compute the value with JavaScript or an Elsa 4 built-in function, or in an activity, before import."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "customer-lookup",
+      "name": "Customer lookup",
+      "version": 1,
+      "sourceVersionId": "customer-lookup-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-JS-HOST-FUNCTION-MISSING",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "build-component",
+          "componentKind": "javascript-function",
+          "componentName": "lookupCustomer",
+          "stage": "conversion",
+          "path": "$.root.activities[0].script.expression.value",
+          "nodeId": "Workflow1:Lookup",
+          "message": "JavaScript calls unknown or unapproved host function \u0027lookupCustomer\u0027.",
+          "guidance": "If the host rebuilt \u0027lookupCustomer\u0027 for Elsa 4, register a host function named \u0027\u003Cprefix\u003E.lookupCustomer\u0027 (for example \u0027acme.lookupCustomer\u0027) under one namespace only; the converter then rewrites the call. Otherwise compute the value with JavaScript or an Elsa 4 built-in function, or in an activity, in the Elsa 3 workflow before import."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "customer-profile",
+      "name": "Customer profile",
+      "version": 1,
+      "sourceVersionId": "customer-profile-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-JS-HOST-FUNCTION-MISSING",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "build-component",
+          "componentKind": "javascript-function",
+          "componentName": "getCustomerData",
+          "stage": "conversion",
+          "path": "$.root.activities[0].script.expression.value",
+          "nodeId": "Workflow1:LoadProfile",
+          "message": "JavaScript calls unknown or unapproved host function \u0027getCustomerData\u0027.",
+          "guidance": "If the host rebuilt \u0027getCustomerData\u0027 for Elsa 4, register a host function named \u0027\u003Cprefix\u003E.getCustomerData\u0027 (for example \u0027acme.getCustomerData\u0027) under one namespace only; the converter then rewrites the call. Otherwise compute the value with JavaScript or an Elsa 4 built-in function, or in an activity, in the Elsa 3 workflow before import."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "daily-report",
+      "name": "Daily report",
+      "version": 1,
+      "sourceVersionId": "daily-report-v1",
+      "isReusable": false,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/workflows/daily-report.json",
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "dotnet-member",
+      "name": "Dotnet member",
+      "version": 1,
+      "sourceVersionId": "dotnet-member-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "VF-IMP-012",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.root.activities[0].script.expression.value",
+          "nodeId": "Workflow1:Upper",
+          "message": "JavaScript uses a member of a value that was a live .NET object in Elsa 3, a .NET type or a .NET-style member in the script. Elsa 4 values are JSON and have no .NET members.",
+          "guidance": "Rewrite the expression in the Elsa 3 workflow with JavaScript or an Elsa 4 built-in function, before import."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "draft-refund",
+      "name": "Draft refund",
+      "version": 1,
+      "sourceVersionId": "draft-refund-v1",
+      "isReusable": false,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/workflows/draft-refund.json",
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        },
+        {
+          "code": "ELS3-MIGRATION-NO-PUBLISHED-VERSION",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "input",
+          "path": null,
+          "message": "This definition has no published version, so its latest version was converted.",
+          "guidance": "Check that the latest version is the one to migrate."
+        }
+      ]
+    },
+    {
+      "definitionId": "format-address",
+      "name": "FormatAddress",
+      "version": 1,
+      "sourceVersionId": "format-address-v1",
+      "isReusable": true,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/activities/activities.json",
+      "wrapperExportedTo": "migrated/workflows/format-address.json",
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "instance-label",
+      "name": "Instance label",
+      "version": 1,
+      "sourceVersionId": "instance-label-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "VF-IMP-005",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.root.activities[0].script.expression.value",
+          "nodeId": "Workflow1:Label",
+          "message": "JavaScript calls unknown or unapproved host function \u0027moment\u0027.",
+          "guidance": "Compute the value with JavaScript or an Elsa 4 built-in function, or in an activity, in the Elsa 3 workflow before import."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "inventory-sync",
+      "name": "Inventory sync",
+      "version": 1,
+      "sourceVersionId": "inventory-sync-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-RECONCILE-DUPLICATE-INPUT",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "import",
+          "path": null,
+          "message": "Another input carries the same source version id, or the same definition id and version.",
+          "guidance": "Keep one copy of the definition version in the export."
+        }
+      ]
+    },
+    {
+      "definitionId": "inventory-sync",
+      "name": "Inventory sync",
+      "version": 1,
+      "sourceVersionId": "inventory-sync-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-RECONCILE-DUPLICATE-INPUT",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "import",
+          "path": null,
+          "message": "Another input carries the same source version id, or the same definition id and version.",
+          "guidance": "Keep one copy of the definition version in the export."
+        }
+      ]
+    },
+    {
+      "definitionId": "invoice-reminder",
+      "name": "Invoice reminder",
+      "version": 1,
+      "sourceVersionId": "invoice-reminder-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-ACTIVITY-UNMAPPED-TYPE",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "build-component",
+          "componentKind": "activity",
+          "componentName": "Acme.NotifyCustomer",
+          "stage": "conversion",
+          "path": "$.root.activities[0]",
+          "nodeId": "Workflow1:Remind",
+          "message": "Elsa 3 activity type \u0027Acme.NotifyCustomer\u0027 is not mapped to an Elsa 4 activity, not claimed by a replaced-type alias and not an Elsa 4 catalog key.",
+          "guidance": "Rebuild the activity for Elsa 4 and mark it [ReplacesActivityType(\u0022Acme.NotifyCustomer\u0022)], or remove the node before converting."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "invoice-tax",
+      "name": "Invoice tax",
+      "version": 1,
+      "sourceVersionId": "invoice-tax-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [
+        "legacy-tax-lookup-v1"
+      ],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "import",
+          "path": null,
+          "message": "A reusable definition this one uses was refused or not published, so this one was not imported.",
+          "guidance": "Fix the definitions named under blockedBy first, then run the migration again."
+        }
+      ]
+    },
+    {
+      "definitionId": "legacy-octal",
+      "name": "Legacy octal",
+      "version": 1,
+      "sourceVersionId": "legacy-octal-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "VF-IMP-007",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.root.activities[0].script.expression.value",
+          "nodeId": "Workflow1:Octal",
+          "message": "JavaScript only works in Elsa 3\u0027s sloppy mode; Elsa 4 runs it in strict mode, where it does not parse.",
+          "guidance": "Rewrite it in the Elsa 3 workflow without sloppy-mode syntax: no with statement, no legacy octal literal such as 010 (write 0o10 or 8), no duplicate parameter names, no delete of a variable, and no reserved word such as let, static or yield as a name, before import."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "legacy-tax-lookup",
+      "name": "LegacyTaxLookup",
+      "version": 1,
+      "sourceVersionId": "legacy-tax-lookup-v1",
+      "isReusable": true,
+      "bucket": "incompatible",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "none",
+          "stage": "conversion",
+          "path": "$.root.activities[0]",
+          "nodeId": "Workflow1:SetRate",
+          "message": "Reusable workflow node \u0027Workflow1:SetRate\u0027 (Elsa.SetVariable) becomes an Elsa 4 engine intrinsic, which a graph activity cannot hold yet.",
+          "guidance": "Elsa 4 graph activities have no Set Variable yet (tracked in elsa-foundation#3023). A reusable workflow\u0027s variables are its own, so only its body can read them. If nothing in the body reads this variable, remove the Set Variable: nothing else changes. If a value only needs to pass from one activity to the next, capture that activity\u0027s output into the variable instead, or set it from a Run JavaScript activity\u0027s script (setVariable(\u0027name\u0027, value)), which a reusable body supports. Otherwise keep the workflow in Elsa 3 until elsa-foundation#3023 is done, or clear \u0027Usable as activity\u0027 on this workflow in Elsa 3 and re-export: it then imports as a regular workflow, and every workflow that uses it as an activity must call it with Dispatch Workflow or Execute Workflow instead. The import does not carry the called workflow\u0027s outputs over: a captured Execute Workflow result is refused (ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE). A caller that uses an output reads it after import from the Elsa 4 Dispatch Workflow\u0027s Result, which holds the outputs when it waits for completion."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "liquid-letter",
+      "name": "Liquid letter",
+      "version": 1,
+      "sourceVersionId": "liquid-letter-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "VF-IMP-007",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.root.activities[0].text.expression.value",
+          "nodeId": "Workflow1:Letter",
+          "message": "Liquid could not be parsed for safe lowering.",
+          "guidance": "Correct the Liquid template or replace it with a portable expression before import."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "loan-application",
+      "name": "Loan application",
+      "version": 1,
+      "sourceVersionId": "loan-application-v1",
+      "isReusable": false,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/workflows/loan-application.json",
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "nightly-audit",
+      "name": "Nightly audit",
+      "version": 1,
+      "sourceVersionId": "nightly-audit-v1",
+      "isReusable": false,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/workflows/nightly-audit.json",
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "order-archive",
+      "name": "Order archive",
+      "version": 1,
+      "sourceVersionId": "order-archive-v1",
+      "isReusable": false,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/workflows/order-archive.json",
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        },
+        {
+          "code": "ELS3-VARIABLE-TYPE-UNREGISTERED",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "componentKind": "variable-type",
+          "componentName": "Acme.Orders.OrderDto",
+          "stage": "conversion",
+          "path": "$.variables[0]",
+          "message": "Variable \u0027Order\u0027 has the Elsa 3 type \u0027Acme.Orders.OrderDto\u0027, which is not registered in Elsa 4, so its Elsa 4 type is Any. It stays Any until an Elsa 4 feature registers the type and the workflow is converted again.",
+          "guidance": "To keep the type, have an Elsa 4 feature register its CLR type (module types take dotted aliases), then convert the workflow again. The converter looks the Elsa 3 name up in Elsa 4\u0027s type registry, as an alias or as the full name of a registered type, and otherwise loads it as an assembly-qualified CLR name."
+        }
+      ]
+    },
+    {
+      "definitionId": "order-closing",
+      "name": "Order closing",
+      "version": 1,
+      "sourceVersionId": "order-closing-v1",
+      "isReusable": false,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/workflows/order-closing.json",
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "order-intake",
+      "name": "Order intake",
+      "version": 1,
+      "sourceVersionId": "order-intake-v1",
+      "isReusable": false,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/workflows/order-intake.json",
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "parallel-checks",
+      "name": "Parallel checks",
+      "version": 1,
+      "sourceVersionId": "parallel-checks-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-ACTIVITY-UNSUPPORTED-MODE",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.root.activities[0].joinMode",
+          "nodeId": "Workflow1:Checks",
+          "message": "The fork join mode is neither WaitAll nor WaitAny, so it has no Elsa 4 counterpart.",
+          "guidance": "Use WaitAll or WaitAny."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "partner-sync",
+      "name": "Partner sync",
+      "version": 1,
+      "sourceVersionId": "partner-sync-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        },
+        {
+          "code": "ELS3-RECONCILE-PUBLISH-FAILED",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "publish",
+          "path": null,
+          "message": "The imported workflow could not be published. Publishing stopped at its first error, so later publication errors may be hidden until this one is fixed.",
+          "guidance": "Fix the publication finding of this definition and run the migration again.",
+          "publishStoppedHere": true
+        }
+      ]
+    },
+    {
+      "definitionId": "quote-builder",
+      "name": "Quote builder",
+      "version": 1,
+      "sourceVersionId": "quote-builder-v1",
+      "isReusable": false,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/workflows/quote-builder.json",
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "regional-pricing",
+      "name": "Regional pricing",
+      "version": 1,
+      "sourceVersionId": "regional-pricing-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-JS-HOST-FUNCTION-MISSING",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "build-component",
+          "componentKind": "javascript-function",
+          "componentName": "getConfig",
+          "stage": "conversion",
+          "path": "$.root.activities[0].script.expression.value",
+          "nodeId": "Workflow1:ReadRegion",
+          "message": "JavaScript calls \u0027getConfig\u0027, which reads host configuration.",
+          "guidance": "Pass the setting in as a workflow input before import. If the host rebuilt \u0027getConfig\u0027 for Elsa 4, register a host function named \u0027\u003Cprefix\u003E.getConfig\u0027 (for example \u0027acme.getConfig\u0027) under one namespace only; the converter then rewrites the call."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "return-label",
+      "name": "Return label",
+      "version": 1,
+      "sourceVersionId": "return-label-v1",
+      "isReusable": false,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/workflows/return-label.json",
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "session-cleanup",
+      "name": "Session cleanup",
+      "version": 1,
+      "sourceVersionId": "session-cleanup-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/workflows/session-cleanup.json",
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        },
+        {
+          "code": "ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED",
+          "severity": "warning",
+          "category": "reconsider",
+          "componentKind": "storage-driver",
+          "componentName": "Acme.Storage.BlobStorageDriver, Acme.Storage",
+          "stage": "conversion",
+          "path": "$.variables[0]",
+          "message": "Variable \u0027AuditTrail\u0027 used the custom Elsa 3 storage driver \u0027Acme.Storage.BlobStorageDriver, Acme.Storage\u0027, which kept its value outside the workflow instance. The converter does not carry storage drivers over: the variable converts to Elsa 4\u0027s default storage (elsa.json), so its value is now stored with the workflow instance.",
+          "guidance": "Decide whether the value may live in the workflow instance. If it must stay in the driver\u0027s storage (such as a blob store), plan an Elsa 4 solution for that need before the workflow runs in production. docs/migration/elsa3-storage-drivers.md walks through the choices."
+        },
+        {
+          "code": "ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED",
+          "severity": "warning",
+          "category": "reconsider",
+          "componentKind": "storage-driver",
+          "componentName": "Elsa.Workflows.MemoryStorageDriver, Elsa.Workflows.Core",
+          "stage": "conversion",
+          "path": "$.variables[1]",
+          "message": "Variable \u0027SessionToken\u0027 used the Elsa 3 Memory storage driver (\u0027Elsa.Workflows.MemoryStorageDriver, Elsa.Workflows.Core\u0027), which never persisted its value. The variable converts to Elsa 4\u0027s default storage (elsa.json), so its value is now persisted with the workflow instance.",
+          "guidance": "Decide why the Memory driver was chosen. If the value must never be persisted (a secret, a token, a large or short-lived value), change the workflow so the variable does not hold it; otherwise the default storage is fine. docs/migration/elsa3-storage-drivers.md walks through the choices."
+        }
+      ]
+    },
+    {
+      "definitionId": "ship-order",
+      "name": "Ship order",
+      "version": 1,
+      "sourceVersionId": "ship-order-v1",
+      "isReusable": false,
+      "bucket": "convert-as-is",
+      "blockedBy": [],
+      "published": true,
+      "exportedTo": "migrated/workflows/ship-order.json",
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "shipment-notice",
+      "name": "Shipment notice",
+      "version": 1,
+      "sourceVersionId": "shipment-notice-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-ACTIVITY-UNMAPPED-TYPE",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "build-component",
+          "componentKind": "activity",
+          "componentName": "Acme.NotifyCustomer",
+          "stage": "conversion",
+          "path": "$.root.activities[0]",
+          "nodeId": "Workflow1:Notify",
+          "message": "Elsa 3 activity type \u0027Acme.NotifyCustomer\u0027 is not mapped to an Elsa 4 activity, not claimed by a replaced-type alias and not an Elsa 4 catalog key.",
+          "guidance": "Rebuild the activity for Elsa 4 and mark it [ReplacesActivityType(\u0022Acme.NotifyCustomer\u0022)], or remove the node before converting."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "ticket-escalation",
+      "name": "Ticket escalation",
+      "version": 1,
+      "sourceVersionId": "ticket-escalation-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-ACTIVITY-UNSUPPORTED-MODE",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.root.activities[0].mode",
+          "nodeId": "Workflow1:Escalate",
+          "message": "The switch mode is neither MatchFirst nor MatchAny, so it has no Elsa 4 counterpart; Elsa 4 takes the first matching case (MatchFirst) or every matching case (MatchAny).",
+          "guidance": "Set the mode to MatchFirst or MatchAny literally, or split the switch into separate decisions."
+        },
+        {
+          "code": "ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.root.connections[0]",
+          "nodeId": "Workflow1:Escalate",
+          "message": "Connection 0 leaves \u0027Workflow1:Escalate\u0027 on \u0027High\u0027, which its Elsa 4 activity does not emit (it emits \u0027Default\u0027, \u0027Break\u0027).",
+          "guidance": "Connect from an outcome the activity has. When its outcomes come from an input (status codes, possible outcomes), list them literally."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "ticket-router",
+      "name": "Ticket router",
+      "version": 1,
+      "sourceVersionId": "ticket-router-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-ACTIVITY-UNSUPPORTED-MODE",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.root.activities[0].cases[0].condition",
+          "nodeId": "Workflow1:Route",
+          "message": "The condition of switch case \u0027Urgent\u0027 is a literal that is neither true nor false, so it cannot be combined into one Elsa 4 value.",
+          "guidance": "Write the case condition as one JavaScript expression."
+        },
+        {
+          "code": "ELS3-ACTIVITY-UNSUPPORTED-MODE",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.root.activities[0].cases[1].condition",
+          "nodeId": "Workflow1:Route",
+          "message": "The condition of switch case \u0027Normal\u0027 could not be parsed as JavaScript, so it cannot be combined into one Elsa 4 value.",
+          "guidance": "Write the case condition as one JavaScript expression."
+        },
+        {
+          "code": "ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.root.connections[0]",
+          "nodeId": "Workflow1:Route",
+          "message": "Connection 0 leaves \u0027Workflow1:Route\u0027 on \u0027Urgent\u0027, which its Elsa 4 activity does not emit (it emits \u0027Default\u0027, \u0027Break\u0027).",
+          "guidance": "Connect from an outcome the activity has. When its outcomes come from an input (status codes, possible outcomes), list them literally."
+        },
+        {
+          "code": "ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "patch-definition",
+          "stage": "conversion",
+          "path": "$.root.connections[1]",
+          "nodeId": "Workflow1:Route",
+          "message": "Connection 1 leaves \u0027Workflow1:Route\u0027 on \u0027Normal\u0027, which its Elsa 4 activity does not emit (it emits \u0027Default\u0027, \u0027Break\u0027).",
+          "guidance": "Connect from an outcome the activity has. When its outcomes come from an input (status codes, possible outcomes), list them literally."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    },
+    {
+      "definitionId": "welcome-customer",
+      "name": "Welcome customer",
+      "version": 1,
+      "sourceVersionId": "welcome-customer-v1",
+      "isReusable": false,
+      "bucket": "convert-with-adjustments",
+      "blockedBy": [],
+      "published": false,
+      "exportedTo": null,
+      "wrapperExportedTo": null,
+      "findings": [
+        {
+          "code": "ELS3-ACTIVITY-UNMAPPED-TYPE",
+          "severity": "error",
+          "category": "mustFix",
+          "remedy": "build-component",
+          "componentKind": "activity",
+          "componentName": "Acme.NotifyCustomer",
+          "stage": "conversion",
+          "path": "$.root.activities[1]",
+          "nodeId": "Workflow1:Welcome",
+          "message": "Elsa 3 activity type \u0027Acme.NotifyCustomer\u0027 is not mapped to an Elsa 4 activity, not claimed by a replaced-type alias and not an Elsa 4 catalog key.",
+          "guidance": "Rebuild the activity for Elsa 4 and mark it [ReplacesActivityType(\u0022Acme.NotifyCustomer\u0022)], or remove the node before converting."
+        },
+        {
+          "code": "ELS3-NULL-POLICIES",
+          "severity": "info",
+          "category": "takeIntoAccount",
+          "stage": "conversion",
+          "path": "$.strategyOptions.nullHandling",
+          "message": "The converted workflow records DefaultOnNull and UndefinedAsNull.",
+          "guidance": "These policies remain pinned when the workflow is exported and imported without the converter.",
+          "routine": true
+        }
+      ]
+    }
+  ],
+  "notConverted": [
+    {
+      "definitionId": "calculate-discount",
+      "version": 2,
+      "sourceVersionId": "calculate-discount-v2"
+    }
+  ],
+  "missingTargets": [
+    {
+      "definitionId": "partner-onboarding",
+      "referencedBy": [
+        "partner-sync"
+      ]
+    }
+  ],
+  "runFindings": [],
+  "inputFindings": [
+    {
+      "file": "notes/broken-export.json",
+      "finding": {
+        "code": "ELS3-MIGRATION-INPUT-UNREADABLE",
+        "severity": "error",
+        "category": "mustFix",
+        "remedy": "patch-definition",
+        "stage": "input",
+        "path": null,
+        "message": "This input file is not valid JSON.",
+        "guidance": "Export the definition again, or remove the file from the export."
+      }
+    },
+    {
+      "file": "settings/studio-preferences.json",
+      "finding": {
+        "code": "ELS3-MIGRATION-UNSUPPORTED-INPUT",
+        "severity": "error",
+        "category": "mustFix",
+        "remedy": "patch-definition",
+        "stage": "input",
+        "path": null,
+        "message": "This input holds no Elsa 3 workflow definition that the migration can read.",
+        "guidance": "Export authored Elsa 3 workflow definitions (a definition or an array of them per file), or remove the file from the export."
+      }
+    }
+  ],
+  "run": {
+    "features": [
+      "ActivitiesControlFlow",
+      "ActivitiesDesignApi",
+      "ActivitiesDesignEntityFrameworkCore",
+      "ActivitiesDesignReconciliation",
+      "ActivitiesDispatchWorkflowDesign",
+      "ActivitiesDispatchWorkflowRuntime",
+      "ActivitiesFlowchart",
+      "ActivitiesGraphDesign",
+      "ActivitiesGraphRuntime",
+      "ActivitiesHttp",
+      "ActivitiesPrimitives",
+      "ActivitiesRuntime",
+      "ActivitiesScripting",
+      "ActivitiesSequence",
+      "ApiCapabilities",
+      "ClrActivityReconciliation",
+      "Elsa3ImportActivitiesEntityFrameworkCore",
+      "Elsa3ImportActivitiesPublishing",
+      "Elsa3ImportJsonActivities",
+      "Elsa3Mapping",
+      "Elsa3MigrationImportRun",
+      "Events",
+      "Expressions",
+      "ExpressionsApi",
+      "FileSystemDistributedLocking",
+      "FoundationIdentityAbstractions",
+      "FoundationIdentityApi",
+      "FoundationIdentityAspNetCoreIdentity",
+      "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore",
+      "FoundationIdentityOpenIddict",
+      "Http",
+      "HttpJavaScript",
+      "IdentityIamEntityFrameworkCore",
+      "JavaScriptActivities",
+      "JavaScriptExpressions",
+      "JavaScriptJintEngine",
+      "JavaScriptWorkflowsDesign",
+      "JsonActivityReconciliation",
+      "JsonWorkflowReconciliation",
+      "Mediator",
+      "MemoryCache",
+      "Primitives",
+      "Serialization",
+      "Tasks",
+      "WorkflowDesignValidations",
+      "WorkflowsDesignApi",
+      "WorkflowsDesignEntityFrameworkCore",
+      "WorkflowsPublishing",
+      "WorkflowsPublishingApi",
+      "WorkflowsPublishingEntityFrameworkCore",
+      "WorkflowsRuntimeApi",
+      "WorkflowsRuntimeCheckpointPersistence",
+      "WorkflowsRuntimeDistributed",
+      "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence",
+      "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence",
+      "WorkflowsRuntimeEntityFrameworkCore",
+      "WorkflowsRuntimeHistory",
+      "WorkflowsRuntimeHttp",
+      "WorkflowsRuntimeRecurringTriggers",
+      "WorkflowsRuntimeResumption",
+      "WorkflowsRuntimeScheduling",
+      "WorkflowsRuntimeTriggers"
+    ],
+    "settingKeys": [
+      "CShells:Shells:default:Features:FileSystemDistributedLocking:LocksFolderPath",
+      "CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentity:AllowedReturnUrlOrigins:0",
+      "CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentity:AllowedReturnUrlOrigins:1",
+      "CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentity:IsDefault",
+      "CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:IsDevelopmentOrDemo",
+      "CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminEmail",
+      "CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword",
+      "CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminRoleName",
+      "CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminUserName",
+      "CShells:Shells:default:Features:FoundationIdentityOpenIddict:IsDevelopmentOrDemo",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:0:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:10:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:11:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:12:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:13:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:14:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:15:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:16:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:17:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:18:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:19:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:1:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:2:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:3:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:4:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:5:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:6:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:7:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:8:TypeFullName",
+      "CShells:Shells:default:Features:JavaScriptExpressions:TypeDescriptors:9:TypeFullName",
+      "CShells:Shells:default:Features:JsonActivityReconciliation:Options:FilePath",
+      "CShells:Shells:default:Features:JsonActivityReconciliation:Options:SourceId",
+      "CShells:Shells:default:Features:JsonWorkflowReconciliation:Options:FolderPath",
+      "CShells:Shells:default:Features:JsonWorkflowReconciliation:Options:PublishOnReconcile",
+      "CShells:Shells:default:Features:JsonWorkflowReconciliation:Options:SourceId",
+      "CShells:Shells:default:Features:WorkflowsRuntimeApi:WorkflowAlterationPayloadProtectionActiveKeyId",
+      "CShells:Shells:default:Features:WorkflowsRuntimeApi:WorkflowAlterationPayloadProtectionKeys:development-demo-only",
+      "CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:MaxActivitiesPerCommit",
+      "CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:Mode",
+      "CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:CacheWorkflowExecutables",
+      "CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey",
+      "CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey",
+      "CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:WorkflowExecutableCacheCapacity",
+      "CShells:Shells:default:Name",
+      "ConnectionStrings:Elsa"
+    ],
+    "persistenceOverridden": true
+  }
+}
