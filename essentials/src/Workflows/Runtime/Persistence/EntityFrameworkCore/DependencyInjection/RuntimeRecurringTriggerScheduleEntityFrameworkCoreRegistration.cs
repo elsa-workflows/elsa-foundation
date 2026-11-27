@@ -19,7 +19,7 @@ public static class RuntimeRecurringTriggerScheduleEntityFrameworkCoreRegistrati
             .ToArray();
         try
         {
-            RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime recurring-trigger schedule EF persistence");
+            RuntimeEfContractBackendRegistration.EnsurePublicationContext(services, "Runtime recurring-trigger schedule EF persistence");
             var existing = RecurringTriggerScheduleStoreBackend.Find(services);
             if (existing?.Name == RecurringTriggerScheduleStoreBackend.EntityFramework)
             {

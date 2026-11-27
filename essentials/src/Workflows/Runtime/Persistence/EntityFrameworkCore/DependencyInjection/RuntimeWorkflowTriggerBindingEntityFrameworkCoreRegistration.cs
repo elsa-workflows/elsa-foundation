@@ -20,7 +20,7 @@ public static class RuntimeWorkflowTriggerBindingEntityFrameworkCoreRegistration
             .ToArray();
         try
         {
-            RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime workflow trigger-binding EF persistence");
+            RuntimeEfContractBackendRegistration.EnsurePublicationContext(services, "Runtime workflow trigger-binding EF persistence");
             var existing = WorkflowTriggerBindingStoreBackend.Find(services);
             if (existing?.Name == WorkflowTriggerBindingStoreBackend.EntityFramework)
             {

@@ -1,12 +1,9 @@
 using Elsa.Workflows.Runtime.Inspection.Core;
 using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
-using Elsa.Foundation.Identity.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Tasks.Core;
-using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
@@ -24,7 +21,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api;
 
@@ -60,12 +56,11 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
-        services.AddElsaEndpoints();
+        services.AddWorkflowRuntimeApiHttpServices();
         // The runtime execution spine is host-agnostic: it is composed here so the API endpoints can drive it,
         // but a non-HTTP host (worker, test harness, another module) can compose the same runtime via
         // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
         services.AddWorkflowRuntime();
-        services.AddHttpContextAccessor();
         var taskAccess = services.Where(x => x.ServiceType == typeof(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess)).ToArray();
         if (taskAccess.Length != 1) throw new InvalidOperationException("Exactly one user-task eligibility adapter must be selected.");
         if (taskAccess[0].ImplementationType == typeof(Elsa.Workflows.Runtime.UserTasks.UnavailableUserTaskAccess))
@@ -74,17 +69,6 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<UserTasks.UserTaskPeople>();
         services.AddApiCapabilitySource<UserTasks.UserTaskCapabilitySource>();
 
-        services.AddDynamicEndpointApiExplorerRefresh();
-        // The owner's failure services are keyed so hosts composing several modules keep each
-        // module's own error shapes; the endpoint pipeline falls back to unkeyed registrations.
-        services.TryAddKeyedSingleton<IEndpointProblemWriter, Endpoints.WorkflowsRuntimeProblemWriter>(WorkflowsRuntimeApi.OwnerId);
-        services.TryAddKeyedSingleton<IEndpointFaultRenderer, Endpoints.WorkflowsRuntimeFaultRenderer>(WorkflowsRuntimeApi.OwnerId);
-        services.ConfigureHttpJsonOptions(options =>
-        {
-            if (!options.SerializerOptions.TypeInfoResolverChain.Any(resolver => resolver is WorkflowsRuntimeJsonTypeInfoResolver))
-                options.SerializerOptions.TypeInfoResolverChain.Insert(0, new WorkflowsRuntimeJsonTypeInfoResolver());
-        });
-        services.TryAddScoped<HttpContextActivityExecutionInspectionAuthorizationContext>();
         services.Configure<ActivityExecutionHierarchyCursorOptions>(options =>
             options.SigningKey = ActivityExecutionHierarchyCursorSigningKey);
         if (!string.IsNullOrWhiteSpace(WorkflowAlterationPayloadProtectionActiveKeyId))
@@ -160,13 +144,9 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<IActivityExecutionStateViewService>(sp => sp.GetRequiredService<ActivityExecutionStateViewService>());
         services.TryAddSingleton<ActivityStateViewProjectorRegistry>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateActivityStateViewProjectorsStartupTask>());
-        services.TryAddScoped<HttpContextWorkflowRuntimeOperatorAccess>();
-        services.TryAddScoped<IWorkflowRuntimeOperatorAccess>(sp => sp.GetRequiredService<HttpContextWorkflowRuntimeOperatorAccess>());
         services.TryAddScoped<WorkflowAlterationPlanApiService>();
         services.TryAddScoped<IWorkflowAlterationPlanApiService>(sp => sp.GetRequiredService<WorkflowAlterationPlanApiService>());
 
-        services.TryAddScoped<IActivityInspectionContextAsync>(sp => sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
-        services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
         // Resolves the persistence mode for the instance detail view: the mode a run recorded, otherwise the host default
         // from the options the persistence modes register. It reads them only when it reports a default, so the view
         // resolves on a host that has not added them yet.
@@ -187,7 +167,6 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.AddApiCapabilitySource<RuntimeAlterationCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeRunDeletionCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeActivityStateViewCapabilitySource>();
-        services.AddPermissionContributor<WorkflowRuntimePermissionContributor>();
     }
 
     /// <summary>
