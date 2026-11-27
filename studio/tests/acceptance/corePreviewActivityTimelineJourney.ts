@@ -56,6 +56,8 @@ export async function corePreviewActivityTimelineJourney(page: Page, info: TestI
   const evidence = await (await browseResponse).json() as { items: Array<{ execution: { activityExecutionId: string; authoredActivityId: string } }> };
   const rows = timeline.locator(".wf-activity-timeline-row");
   await expect(rows).toHaveCount(3);
+  await expect(timeline.getByRole("button", { name: /^Http Endpoint /i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Http Endpoint\. Node ID: start\./i })).toBeVisible();
   const answerId = evidence.items.find(item => item.execution.authoredActivityId === "answer")?.execution.activityExecutionId;
   expect(answerId).toBeTruthy();
   const activity = timeline.locator(`.wf-activity-timeline-row[data-activity-execution-id="${answerId!}"]`);

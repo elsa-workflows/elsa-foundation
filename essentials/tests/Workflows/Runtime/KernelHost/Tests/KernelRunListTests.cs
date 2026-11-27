@@ -209,11 +209,12 @@ public sealed class KernelRunListTests
             new(2, "\"a:f2:1\""),
             new(3, "\"t:1100\""),
             new(3, "\"b:f2:child:with-colon:f1\""),
-            new(3, "\"b:f3:other:f1\""),
-            new(4, "\"t:1300\""),
-            new(4, "\"f:f2:child:with-colon\""),
-            new(4, "\"x:f3:other\""),
-            new(4, "\"c:f1:root\"")
+            new(4, "\"t:900\""),
+            new(4, "\"b:f3:other:f1\""),
+            new(5, "\"t:1300\""),
+            new(5, "\"f:f2:child:with-colon\""),
+            new(5, "\"x:f3:other\""),
+            new(5, "\"c:f1:root\"")
         };
         var journal = new Dictionary<string, JournalEntry[]> { ["run-1"] = entries, ["minimal"] = entries };
         var reads = new Reads(Run("run-1", ActorStatus.Running, "orders@1", "orders", 1_000),
@@ -230,24 +231,25 @@ public sealed class KernelRunListTests
         // A later turn commits between the first and second physical reads; it must not enter the first browse or its cursor pages.
         reads.ReadTail = () =>
         {
-            journal["run-1"] = [.. entries, new(5, "\"t:1400\""), new(5, "\"b:f4:later:f1\"")];
+            journal["run-1"] = [.. entries, new(6, "\"t:1400\""), new(6, "\"b:f4:later:f1\"")];
             reads.ReadTail = null;
         };
         var first = (await run.BrowseAsync(new("run-1", 1, offset: 0), null, CancellationToken.None))!;
-        Assert.Equal(4, first.JournalHeadRevision);
+        Assert.Equal(5, first.JournalHeadRevision);
         Assert.Equal(3, first.Page.TotalCount);
         Assert.Equal("f1", Assert.Single(first.Page.Items).Execution.ActivityExecutionId);
         var next = (await run.BrowseAsync(new("run-1", 2, offset: 1), first.JournalHeadRevision, CancellationToken.None))!;
         Assert.Equal(3, next.Page.TotalCount);
         Assert.Equal(["f2", "f3"], next.Page.Items.Select(item => item.Execution.ActivityExecutionId));
         var refreshed = (await run.BrowseAsync(new("run-1", 10), null, CancellationToken.None))!;
-        Assert.Equal(5, refreshed.JournalHeadRevision);
+        Assert.Equal(6, refreshed.JournalHeadRevision);
         Assert.Equal(4, refreshed.Page.TotalCount);
 
         var children = (await run.BrowseAsync(new("run-1", 10, ancestorActivityExecutionId: "f1"), first.JournalHeadRevision,
             CancellationToken.None))!.Page;
         Assert.Equal(["f2", "f3"], children.Items.Select(item => item.Execution.ActivityExecutionId));
         Assert.Equal(["Faulted", "Cancelled"], children.Items.Select(item => item.Execution.Status.ToString()));
+        Assert.Equal(900L, children.Items[1].Execution.StartedAt!.Value.ToUnixTimeMilliseconds());
         Assert.All(children.Items, item => Assert.Equal("f1", item.Execution.Provenance.ParentActivityExecutionId));
         Assert.Null(await run.BrowseAsync(new("other-run", 10), null, CancellationToken.None));
 

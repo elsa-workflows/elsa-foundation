@@ -20,7 +20,7 @@ internal sealed class KernelActivityTimeline(KernelRuns runs)
     internal async Task<Snapshot?> OpenAsync(KernelRunReader.Run run, long? upperRevision, string? activity, CancellationToken cancellationToken)
     {
         var actor = new ActorRef(run.State.WorkflowExecutionId);
-        var result = new InMemoryActivityExecutionInspectionStore();
+        var result = new InMemoryActivityExecutionInspectionStore(browseByExecutionSequence: true);
         if (run.Header is not { } header || !Supports(header))
             return upperRevision is null ? new Snapshot(result, null) : null;
 

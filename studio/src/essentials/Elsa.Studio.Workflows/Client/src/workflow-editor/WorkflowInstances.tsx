@@ -1590,10 +1590,16 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     });
   };
 
-  const labelForExecution = useCallback((execution: ActivityExecutionStateSummary) => resolveActivityLabel(
-    findExecutableNodeFacts(data?.executableGraph, execution)?.presentation,
-    data?.activityCatalog.find(item => item.activityTypeKey === execution.activityType), execution.activityType || execution.authoredActivityId),
-    [data?.activityCatalog, data?.executableGraph]);
+  const labelForExecution = useCallback((execution: ActivityExecutionStateSummary) => {
+    const facts = findExecutableNodeFacts(data?.executableGraph, execution);
+    const pinnedCatalogItem = facts?.catalogActivityVersionId
+      ? data?.activityCatalog.find(item => item.activityVersionId === facts.catalogActivityVersionId)
+      : undefined;
+    return resolveActivityLabel(
+      facts?.presentation,
+      pinnedCatalogItem ?? data?.activityCatalog.find(item => item.activityTypeKey === execution.activityType),
+      facts?.activityType || execution.activityType || execution.authoredActivityId);
+  }, [data?.activityCatalog, data?.executableGraph]);
 
   const rememberExecution = useCallback((execution: ActivityExecutionStateSummary) => {
     setBrowserEvidence(current => ({ context: browserContext, items: combineActivityExecutions(
