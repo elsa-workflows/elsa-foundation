@@ -84,7 +84,20 @@ def sqlite_shipped_markers():
         return int(match.group(1))
 
     def constant(name):
-        return number(rf'\bconst int {name}\s*=\s*(\d+)\s*;')
+        visited = set()
+        while name not in visited:
+            visited.add(name)
+            values = re.findall(rf'^[ \t]*(?:(?:private|internal|public|protected)[ \t]+)?'
+                                rf'const int {name}\s*=\s*([^;]+);', source, re.MULTILINE)
+            if len(values) != 1:
+                break
+            value = values[0].strip()
+            if re.fullmatch(r'[0-9]+', value):
+                return int(value)
+            if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', value):
+                break
+            name = value
+        raise ValueError(f'Cannot derive SQLite shipped markers from EfStore.Versions.cs at {name}')
 
     protocol = number(r'\bStoreFormat RootShipped\s*=>\s*Current with\s*\{\s*MessageProtocol\s*=\s*(\d+)\s*\}\s*;')
     return [(1, constant('StoreSchemaVersion'), protocol, constant('JournalCodecVersion')),
