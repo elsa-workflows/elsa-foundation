@@ -72,13 +72,10 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         ConfigureServices(services, storage, protectChildExecutables: storage.TakesPreparedStarts);
     }
 
-    internal void ConfigureServices(IServiceCollection services, KernelShellStorage storage, bool protectChildExecutables = false,
-        bool directTestRunQualification = false)
+    internal void ConfigureServices(IServiceCollection services, KernelShellStorage storage, bool protectChildExecutables = false)
     {
         var tenant = EmbeddedTenant.Bind(Tenant);
-        if (directTestRunQualification && !storage.TakesPreparedStarts)
-            throw new InvalidOperationException("Direct Test Run qualification requires prepared root protection.");
-        var testTenant = directTestRunQualification ? EmbeddedTenant.Isolate(tenant, "workflow-test-run") : null;
+        var testTenant = storage.TakesDirectTestRuns ? EmbeddedTenant.Isolate(tenant, "workflow-test-run") : null;
         var persistenceScope = new PersistenceScope(tenant.Tenant);
         var proposedRetention = new ActorRetentionWindows(RetentionWindow(FinishedRetentionSeconds, nameof(FinishedRetentionSeconds)),
             RetentionWindow(CancelledRetentionSeconds, nameof(CancelledRetentionSeconds)),

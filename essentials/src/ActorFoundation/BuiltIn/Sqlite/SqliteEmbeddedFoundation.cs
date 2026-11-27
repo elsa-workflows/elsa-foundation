@@ -72,6 +72,13 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return new(databasePath, node, actorType, StoreFormat.RootPreparedStartsQualification, protectRootStart);
     }
 
+    internal static SqliteEmbeddedFoundation ForDirectTestRunQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootDirectTestRunQualification, protectRootStart);
+    }
+
     private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? qualificationFormat,
         ProtectRootStartAsync? protectRootStart = null)
     {
@@ -86,6 +93,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     /// <summary>Whether this profile supports managed schedule delivery and irreversible cohort retirement.</summary>
     public bool TakesManagedSchedules => qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
         qualificationFormat == StoreFormat.RootPreparedStartsQualification ||
+        qualificationFormat == StoreFormat.RootDirectTestRunQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
 
     /// <summary>Installs or verifies the file and binds future operations to its resolved path.</summary>

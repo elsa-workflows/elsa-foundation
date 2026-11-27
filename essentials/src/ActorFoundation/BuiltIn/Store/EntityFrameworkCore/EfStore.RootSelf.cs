@@ -55,7 +55,8 @@ public sealed partial class EfStore
         }
         if (!install.Installed)
         {
-            if (db.RequiredFormat == StoreFormat.RootShipped || db.RequiredFormat == StoreFormat.RootAuthoredEventsQualification)
+            if (db.RequiredFormat == StoreFormat.RootShipped || db.RequiredFormat == StoreFormat.RootAuthoredEventsQualification ||
+                db.UsesRootDirectTestRuns)
                 throw new StoreFormatException("The shipped store requires its installed private inbox view and insert trigger.");
             await new PostgresRootAdmission(create, TimeSpan.Zero).InstallAsync(token);
         }
