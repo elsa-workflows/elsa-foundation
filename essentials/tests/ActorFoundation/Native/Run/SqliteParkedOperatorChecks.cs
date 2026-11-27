@@ -116,9 +116,9 @@ internal static partial class SqliteHostLifetimeChecks
                 { Status: InstanceStatus.Faulted, TerminalRevision: null, ParkAt: > 0 }, "a protected Delete preserves the same Park");
             Require(await CallAsync(protectedActor, "protected-compound", Contract.Kinds.Terminate,
                     (await ReadAsync(protectedActor)).Selection!, thenDelete: true) is { Channel: Request.Response, Item: "terminated and kept" } &&
-                await WaitAsync(owner, protectedActor, 4) is { Status: InstanceStatus.Cancelled, TerminalRevision: 4, TerminalAt: > 0 } kept &&
+                await WaitAsync(owner, protectedActor, 4) is { Status: InstanceStatus.Cancelled, TerminalRevision: 4, TerminalAt: > 0 } protectedEnd &&
                 (await reads.TailAsync(scope, protectedActor, cancellationToken: token)) is
-                    { JournalHeadRevision: 4, JournalCancellation: { Revision: 4 } cancelled } && cancelled.At == kept.TerminalAt,
+                    { JournalHeadRevision: 4, JournalCancellation: { Revision: 4 } cancelled } && cancelled.At == protectedEnd.TerminalAt,
                 "the protected SQLite compound settles the Park and the journal exposes the exact retained terminal mark");
             var outstandingReply = await outstanding;
             var parkedJob = await store.ReadFirstRootAsync(scope.Tenant, withJob.Id, token);
