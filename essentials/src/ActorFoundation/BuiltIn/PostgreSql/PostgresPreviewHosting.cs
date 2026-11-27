@@ -381,8 +381,6 @@ public static partial class PostgresPreviewHosting
             selfSends = db.UsesRootSelfProtocol;
             if (auxiliaryActor is not null && (!db.UsesRootScheduleInventory || !db.UsesRootTimedJobSettlement))
                 throw new NotSupportedException("This PostgreSQL root profile does not host an auxiliary actor.");
-            if (db.UsesRootScheduleControls && auxiliaryActor is null)
-                throw new NotSupportedException("This PostgreSQL root profile requires a schedule owner.");
             terminalOutputLimit = db.UsesRootTerminalOutput ? EfStore.RootContentBytes : 0;
             if (!db.Database.IsNpgsql() || !(db.SupportsCorePreview || db.UsesRootReplyProtocol))
                 throw new NotSupportedException("Hosting requires a PostgreSQL Core Preview format.");
@@ -394,6 +392,7 @@ public static partial class PostgresPreviewHosting
             if (db.UsesRootSequencedJournal) await EfStore.RequirePostgresSequencedJournalAsync(db, cancellationToken);
             if (db.UsesRootPlaybackDescendants) await EfStore.RequirePostgresPlaybackAsync(db, cancellationToken);
             if (db.UsesRootScheduleControls) await RootScheduleControls.RequirePostgresDefinitionsAsync(db, cancellationToken);
+            if (auxiliaryActor is null) await RootScheduleControls.RequireOwnerIfScheduledAsync(db, cancellationToken);
             partitions = await PostgresRootAdmission.ReadInstalledPartitionCountAsync(db, cancellationToken);
         }
 

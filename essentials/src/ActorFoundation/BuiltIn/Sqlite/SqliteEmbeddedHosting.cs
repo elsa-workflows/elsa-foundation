@@ -119,8 +119,6 @@ public static partial class SqliteEmbeddedHosting
                 selfSends = db.UsesRootSelfProtocol;
                 if (hostsAuxiliaryActor && (!db.UsesRootScheduleInventory || !db.UsesRootTimedJobSettlement))
                     throw new NotSupportedException("This SQLite root profile does not host an auxiliary actor.");
-                if (db.UsesRootScheduleControls && !hostsAuxiliaryActor)
-                    throw new NotSupportedException("This SQLite root profile requires a schedule owner.");
                 terminalOutputLimit = db.UsesRootTerminalOutput ? EfStore.RootContentBytes : 0;
                 if (shipped)
                 {
@@ -134,6 +132,7 @@ public static partial class SqliteEmbeddedHosting
                     if (partitions == 0)
                         throw new InvalidOperationException("The SQLite kernel database has no installed partitions.");
                 }
+                if (!hostsAuxiliaryActor) await RootScheduleControls.RequireOwnerIfScheduledAsync(db, cancellationToken);
 
                 await UseWalAsync(db, cancellationToken);
             }
