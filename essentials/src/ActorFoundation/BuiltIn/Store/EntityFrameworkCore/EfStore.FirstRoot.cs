@@ -91,6 +91,7 @@ public sealed partial class EfStore
             // A first turn that ends the root marks it terminal: Finished, or a Faulted or Cancelled end of a family that ends it.
             var finished = Row.Status == InstanceStatus.Finished ||
                 Row.Status is InstanceStatus.Faulted or InstanceStatus.Cancelled && db.RootStateFamily.Ends(Row.Status);
+            // Seek the candidate through the Instances primary key's collation, then verify the exact birth join.
             var candidates = await db.Messages.FromSqlInterpolated(AddRootWire(db, $"""
                 WITH consumed AS (
                     DELETE FROM "Messages" m USING "FoundationRootBirths" b
@@ -110,7 +111,8 @@ public sealed partial class EfStore
                     FROM "FoundationRootBirths" b JOIN consumed m ON b."Creator" = m."Id" AND b."Actor" = m."Target"
                     WHERE b."Reference" = {Reference} AND b."Tenant" = {Tenant}
                         AND b."Actor" = {Creator.Target.Id} AND b."Creation" = 1 AND b."Creator" = {Creator.InboxKey.Id}
-                        AND b."Fingerprint" = {fingerprint} AND i."Id" = b."Actor" AND i."Partition" = b."Partition"
+                        AND b."Fingerprint" = {fingerprint} AND i."Id" = {Creator.Target.Id}
+                        AND i."Id" = b."Actor" AND i."Partition" = b."Partition"
                         AND i."Revision" = {JournalRevision} AND i."Status" = {(int)Row.Status} AND i."FoundationReference" IS NULL
                         AND (NOT {finished} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = i."Id"))
                     RETURNING i."Id"
