@@ -98,13 +98,19 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(RuntimeIngressReservationEntity), nameof(RuntimeIngressReservationEntity.ContentJson))]
 
 [assembly: EfSchemaFamily(RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion,
-    Entities = [typeof(RuntimeKernelScheduleOccurrenceEntity)], Upcasters = [typeof(RuntimeKernelScheduleOccurrenceV1Upcaster)])]
+    Entities = [typeof(RuntimeKernelScheduleOccurrenceEntity)],
+    Upcasters = [typeof(RuntimeKernelScheduleOccurrenceV1Upcaster), typeof(RuntimeKernelScheduleOccurrenceRetirementUpcaster), typeof(RuntimeKernelScheduleOccurrenceRenewalUpcaster)])]
 [assembly: EfSchemaContent(RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily, typeof(RuntimeKernelScheduleOccurrenceEntity),
     nameof(RuntimeKernelScheduleOccurrenceEntity.ContentJson))]
 [assembly: EfSchemaFamily(RuntimeKernelScheduleControlEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelScheduleControlEfModule.SchemaVersion,
-    Entities = [typeof(RuntimeKernelScheduleControlEntity)])]
+    Entities = [typeof(RuntimeKernelScheduleControlEntity), typeof(RuntimeKernelScheduleControlScanEntity), typeof(RuntimeKernelScheduleCutoverEntity)],
+    Upcasters = [typeof(RuntimeKernelScheduleControlV1Upcaster)])]
 [assembly: EfSchemaContent(RuntimeKernelScheduleControlEfModule.SchemaFamily, typeof(RuntimeKernelScheduleControlEntity),
     nameof(RuntimeKernelScheduleControlEntity.ContentJson))]
+[assembly: EfSchemaFamily(RuntimeKernelExecutablePinEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelExecutablePinEfModule.SchemaVersion,
+    Entities = [typeof(RuntimeKernelExecutablePinEntity)])]
+[assembly: EfSchemaContent(RuntimeKernelExecutablePinEfModule.SchemaFamily, typeof(RuntimeKernelExecutablePinEntity),
+    nameof(RuntimeKernelExecutablePinEntity.ContentJson))]
 
 [assembly: EfSchemaFamily(RuntimeHistoryEfModule.SchemaFamily, "Workflows.Runtime", RuntimeHistoryEfModule.SchemaVersion,
     Entities = [typeof(RuntimeHistoryHeadEntity), typeof(RuntimeHistoryEventEntity), typeof(RuntimeHistoryBookmarkEntity),

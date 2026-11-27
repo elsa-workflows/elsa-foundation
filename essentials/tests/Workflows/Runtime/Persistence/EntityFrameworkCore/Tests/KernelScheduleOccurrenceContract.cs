@@ -7,17 +7,18 @@ using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-internal static class KernelScheduleOccurrenceContract
+internal static partial class KernelScheduleOccurrenceContract
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 26, 1, 0, 0, TimeSpan.Zero);
 
-    internal static async Task RunAsync(Func<RuntimeDbContext> open)
+    internal static async Task RunAsync(Func<RuntimeDbContext> open, Func<IInterceptor, RuntimeDbContext> intercepted)
     {
         const string slotName = "Blue";
         const string scheduleKey = "schedule:material-producer:node";
@@ -102,6 +103,9 @@ internal static class KernelScheduleOccurrenceContract
         Assert.True(await repairing.TryRepairAsync(secondSlot, []));
         Assert.Equal(secondControl, await controls.FindAsync(scope, scheduleKey));
         Assert.False(await AcceptAsync(original with { ArmGeneration = 2, TimerDeliveryId = "stale-timer" }));
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Refused,
+            await store.TryAcceptAttemptAsync(original with { ArmGeneration = 2, TimerDeliveryId = "stale-timer" },
+                original.AcceptBefore, _ => ValueTask.FromResult(Now)));
         await Assert.ThrowsAsync<InvalidDataException>(() => AcceptAsync(original with { PinnedStart = "{\"version\":2}" }).AsTask());
 
         var replacement = original with { ActivationId = "schedule-b", PublicationRevision = 2, ArmGeneration = 2,
@@ -113,6 +117,8 @@ internal static class KernelScheduleOccurrenceContract
         var pageOne = Assert.Single(await relay.ListPendingAsync(scope, null, 1));
         var pageTwo = Assert.Single(await relay.ListPendingAsync(scope, pageOne.Cursor, 1));
         Assert.Empty(await relay.ListPendingAsync(scope, pageTwo.Cursor, 1));
+        Assert.Equal(pageTwo.Cursor, await relay.ReadPendingTailAsync(scope));
+        Assert.Equal(pageOne, Assert.Single(await relay.ListPendingAsync(scope, null, pageOne.Cursor, 2)));
         Assert.Contains(original, new[] { pageOne.Occurrence, pageTwo.Occurrence });
         Assert.Contains(replacement, new[] { pageOne.Occurrence, pageTwo.Occurrence });
 
@@ -183,9 +189,15 @@ internal static class KernelScheduleOccurrenceContract
         var desiredFirst = await controlReads.ListAsync(scope, null, 1);
         var desiredSecond = await controlReads.ListAsync(scope, Assert.IsType<string>(desiredFirst.Next), 1);
         Assert.Null(desiredSecond.Next);
+        var controlTail = Assert.IsType<string>(await controlReads.ReadTailAsync(scope));
+        Assert.Equal(Assert.Single(desiredSecond.Items), Assert.Single((await controlReads.ListAsync(scope, desiredFirst.Next, controlTail, 2)).Items));
+        var boundedControl = await controlReads.ListAsync(scope, null, desiredFirst.Next!, 2);
+        Assert.Equal(Assert.Single(desiredFirst.Items), Assert.Single(boundedControl.Items));
+        Assert.Null(boundedControl.Next);
         Assert.Contains(reclaimed, desiredFirst.Items.Concat(desiredSecond.Items));
         Assert.Contains(desiredFirst.Items.Concat(desiredSecond.Items), control => control.TriggerNode == "another-node" && control.Revision == 1);
         Assert.Empty((await controlReads.ListAsync(scope with { TenantId = null }, null, 1)).Items);
+        Assert.Null(await controlReads.ReadTailAsync(scope with { TenantId = null }));
         Assert.Null(await controlReads.FindAsync(scope with { TenantId = null }, scheduleKey));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             controlReads.ListAsync(scope with { TenantId = "another-tenant" }, null, 1).AsTask());
@@ -203,6 +215,8 @@ internal static class KernelScheduleOccurrenceContract
         var openFirst = Assert.Single(await relay.ListMaterializedAsync(scope, null, 1));
         var openSecond = Assert.Single(await relay.ListMaterializedAsync(scope, openFirst.Cursor, 1));
         Assert.Empty(await relay.ListMaterializedAsync(scope, openSecond.Cursor, 1));
+        Assert.Equal(openSecond.Cursor, await relay.ReadMaterializedTailAsync(scope));
+        Assert.Equal(openFirst, Assert.Single(await relay.ListMaterializedAsync(scope, null, openFirst.Cursor, 2)));
         Assert.Equal(delayed, openFirst.Occurrence);
         Assert.Equal(original, openSecond.Occurrence);
         static ValueTask<bool> MustNotReadProof(RuntimeKernelScheduleOccurrence _, string __, CancellationToken ___) =>
@@ -225,10 +239,52 @@ internal static class KernelScheduleOccurrenceContract
         Assert.DoesNotContain(first.ArtifactId, retired.ContentJson);
         Assert.True(await relay.TryRetireAsync(original, actorReference, MustNotReadProof));
         Assert.True(await store.TryAcceptAsync(original, _ => throw new InvalidOperationException("Retired replays need no schedule clock.")));
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted, await store.TryAcceptAttemptAsync(original,
+            original.AcceptBefore.AddMinutes(3), _ => throw new InvalidOperationException("Old retirement receipts replay across attempt renewal.")));
         await relay.MarkMaterializedAsync(original, actorReference);
         await Assert.ThrowsAsync<InvalidDataException>(() => AcceptAsync(original with { PinnedStart = "{\"version\":2}" }).AsTask());
         Assert.Equal(3, await context.KernelScheduleOccurrences.CountAsync());
+
+        var owner = reclaimed.Owner!;
+        var outage = original with
+        {
+            SlotName = winningSlot.SlotName, ActivationId = owner.ActivationId, PublicationRevision = owner.PublicationRevision,
+            ArmGeneration = 10, TimerDeliveryId = "outage-timer", Executable = owner.Executable
+        };
+        var recoveredAt = outage.AcceptBefore.AddMinutes(3);
+        var recoveryDeadline = recoveredAt.AddMinutes(1);
+        clock.Advance(recoveredAt - clock.GetUtcNow());
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Retry, await store.TryAcceptAttemptAsync(outage, outage.AcceptBefore,
+            _ => ValueTask.FromResult(recoveredAt)));
+        var renewedReadCount = 0;
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Retry, await store.TryAcceptAttemptAsync(outage, recoveryDeadline,
+            _ => ValueTask.FromResult(++renewedReadCount == 3 ? recoveryDeadline : recoveredAt)));
+        Assert.DoesNotContain(await relay.ListPendingAsync(scope, null, 10), item => item.Occurrence == outage);
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted, await store.TryAcceptAttemptAsync(outage, recoveryDeadline,
+            _ => ValueTask.FromResult(recoveredAt)));
+        var accepted = Assert.Single(await relay.ListPendingAsync(scope, null, 10), item => item.Occurrence == outage);
+        Assert.Equal(recoveredAt.UtcTicks, accepted.Cursor.AcceptedAtUtcTicks);
+        Assert.Equal("1.2.0", (await context.KernelScheduleOccurrences.AsNoTracking().SingleAsync(row => row.Id == accepted.Cursor.Id)).SchemaVersion);
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted, await store.TryAcceptAttemptAsync(outage, recoveryDeadline.AddMinutes(1),
+            _ => throw new InvalidOperationException("A renewed accepted occurrence replays without reading the clock.")));
+        var outageActor = new string('E', 64);
+        await relay.MarkMaterializedAsync(outage, outageActor);
+        Assert.True(await relay.TryRetireAsync(outage, outageActor, (proofOccurrence, proofReference, _) =>
+        {
+            Assert.Equal(outage, proofOccurrence);
+            Assert.Equal(outageActor, proofReference);
+            return ValueTask.FromResult(true);
+        }));
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted, await store.TryAcceptAttemptAsync(outage, recoveryDeadline.AddMinutes(2),
+            _ => throw new InvalidOperationException("A renewed retired occurrence replays without reading the clock.")));
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.TryAcceptAttemptAsync(outage with { Due = outage.Due.AddSeconds(1) },
+            recoveryDeadline, _ => ValueTask.FromResult(recoveredAt)).AsTask());
+        Assert.Equal(4, await context.KernelScheduleOccurrences.CountAsync());
+
         await CheckDefaultAliasHandoffAsync(open);
+        await CheckScheduleAdoptionAsync(open);
+        await CheckControlScanAsync(open, intercepted);
+        await CheckPublicationHandoffAsync(open);
     }
 
     private static async Task CheckDefaultAliasHandoffAsync(Func<RuntimeDbContext> open)
@@ -286,6 +342,160 @@ internal static class KernelScheduleOccurrenceContract
             Assert.Equal(rowId, physicalId);
             Assert.NotNull(await claims.FindAsync(exact, RuntimeKernelScheduleOccurrence.ReservationType, claim));
             Assert.Null(await claims.FindAsync(exact.TenantId is null ? named : unqualified, RuntimeKernelScheduleOccurrence.ReservationType, claim));
+        }
+    }
+
+    private static async Task CheckPublicationHandoffAsync(Func<RuntimeDbContext> open)
+    {
+        const string definition = "repub-timer";
+        const string node = "timer";
+        const string slotName = "Blue";
+        const string key = "schedule:repub-timer:timer";
+        const string firstActivation = "repub-first";
+        const string finalActivation = "repub-final";
+        var unqualified = new TriggerScope(new(PersistenceScope.DefaultValue), null);
+        var named = unqualified with { TenantId = PersistenceScope.DefaultValue };
+        var access = new Accessor(unqualified.Persistence);
+        var clock = new FakeTimeProvider(Now);
+        var first = new WorkflowExecutableIdentity("repub-v1", definition, "v1", "1", "hash-v1");
+        var next = new WorkflowExecutableIdentity("repub-v2", definition, "v2", "2", "hash-v2");
+        var final = new WorkflowExecutableIdentity("repub-v3", definition, "v3", "3", "hash-v3");
+        var slot = WorkflowActivationSlotIdentity.Create(definition, slotName);
+        var claim = RuntimeKernelScheduleOccurrence.ReservationKey(key);
+        var stimulus = new string('A', 64);
+        await using var context = open();
+        var artifacts = new EfWorkflowExecutableStore(context, access);
+        var references = new EfWorkflowExecutableSourceReferenceStore(context, access, new Codec(), clock);
+        var bindings = new EfWorkflowTriggerBindingStore(context, access);
+        var authority = new EfWorkflowActivationAuthority(context, access);
+        string? expectedStagedActivation = null;
+        var failClock = false;
+        var clockReads = 0;
+        var boundClock = new WorkflowScheduleCutoverClock(unqualified.Persistence, async token =>
+        {
+            Assert.NotNull(context.Database.CurrentTransaction);
+            Assert.Equal(expectedStagedActivation, (await authority.FindAsync(definition, slotName, token))?.ActiveActivationId);
+            clockReads++;
+            if (failClock) throw new InvalidOperationException("The Foundation clock is unavailable.");
+            return clock.GetUtcNow().ToUnixTimeMilliseconds();
+        });
+        var activationSwitch = new EfWorkflowActivationSwitch(authority, bindings, references, access, clock, [],
+            recurringScheduleStore: null, scheduleCutoverClock: boundClock);
+        var controls = new EfRuntimeKernelScheduleControlStore(context, access);
+        var store = Store(context, access, clock);
+        foreach (var identity in new[] { first, next, final }) await artifacts.SaveAsync(Executable(identity, node));
+
+        var initial = await Publish(first, firstActivation, 0, unqualified, stimulus);
+        var original = new RuntimeKernelScheduleOccurrence(unqualified, key, new string('F', 64), slotName, firstActivation, 1,
+            1, "won-first", Now, Now.AddMinutes(1), first, node, "{\"version\":1}");
+        var earlyRef = new string('D', 64);
+        Assert.True(await store.TryAcceptAsync(original, ReadClock));
+        await store.MarkMaterializedAsync(original, earlyRef);
+        Assert.True(await store.TryRetireAsync(original, earlyRef, Confirm));
+        var due = original with { ArmGeneration = 2, TimerDeliveryId = "preserved-due", Due = Now.AddSeconds(2) };
+        var future = due with { ArmGeneration = 3, TimerDeliveryId = "future-at-first-cutover", Due = Now.AddSeconds(7) };
+
+        clock.Advance(TimeSpan.FromSeconds(5));
+        failClock = true;
+        var clockRefusal = await Assert.ThrowsAsync<InvalidOperationException>(() => Publish(next, "repub-no-clock", 1, named, stimulus));
+        Assert.Equal("The Foundation clock is unavailable.", clockRefusal.Message);
+        Assert.Equal(firstActivation, (await authority.FindAsync(definition, slotName))?.ActiveActivationId);
+        Assert.Equal(initial, (await controls.FindAsync(unqualified, key))!.Owner!.Continuity);
+        Assert.Empty(await context.KernelScheduleCutovers.AsNoTracking().ToListAsync());
+        failClock = false;
+        var middle = await Publish(next, "repub-middle", 1, named, stimulus);
+        Assert.Equal(initial.Stamp, middle.Stamp);
+        Assert.Equal(Now.AddSeconds(5), middle.FoundationActivatedAt);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        var latest = await Publish(final, finalActivation, 2, named, stimulus);
+        Assert.Equal(initial.Stamp, latest.Stamp);
+        Assert.Equal(Now.AddSeconds(10), latest.FoundationActivatedAt);
+        Assert.Equal(4, clockReads);
+        var originalCutoverId = EfRuntimeKernelScheduleControlStore.CutoverId(unqualified.Persistence, slot, 1, initial.Stamp);
+        var originalCutover = context.KernelScheduleCutovers.Where(row => row.Id == originalCutoverId);
+        var storedCutover = await originalCutover.AsNoTracking().SingleAsync();
+        Assert.Equal("1.1.0", storedCutover.SchemaVersion);
+        Assert.Equal(middle.FoundationActivatedAt.UtcTicks, storedCutover.ActivatedAtUtcTicks);
+        Assert.Equal(1, await originalCutover.ExecuteUpdateAsync(set => set.SetProperty(row => row.SchemaVersion, "1.0.0")));
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            store.TryHandoffAttemptAsync(due, Successor(due), latest.Stamp, due.AcceptBefore, ReadClock).AsTask());
+        Assert.Equal(1, await originalCutover.ExecuteUpdateAsync(set => set.SetProperty(row => row.SchemaVersion, storedCutover.SchemaVersion)));
+
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Refused,
+            await store.TryAcceptAttemptAsync(due, due.AcceptBefore, ReadClock));
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Refused,
+            await store.TryHandoffAttemptAsync(future, Successor(future), latest.Stamp, future.AcceptBefore, ReadClock));
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted,
+            await store.TryHandoffAttemptAsync(original, Successor(original), latest.Stamp, original.AcceptBefore, NoClock));
+        Assert.Empty(await store.ListPendingAsync(named, null, 10));
+
+        clock.Advance(TimeSpan.FromMinutes(2));
+        var renewedDeadline = clock.GetUtcNow().AddMinutes(1);
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted,
+            await store.TryHandoffAttemptAsync(due, Successor(due), latest.Stamp, renewedDeadline, ReadClock));
+        Assert.Empty(await store.ListPendingAsync(unqualified, null, 10));
+        var accepted = Assert.Single(await store.ListPendingAsync(named, null, 10)).Occurrence;
+        Assert.NotNull(accepted.Origin);
+        Assert.Equal(due.Id, accepted.Id);
+        Assert.Equal(named, accepted.Scope);
+        Assert.Equal(final, accepted.Executable);
+        Assert.Equal(due.Due, accepted.Due);
+        Assert.Equal(due.AcceptBefore, accepted.AcceptBefore);
+        Assert.True(await store.TryAcceptAsync(due, NoClock));
+
+        var newRef = new string('F', 64);
+        await store.MarkMaterializedAsync(accepted, newRef);
+        Assert.True(await store.TryRetireAsync(accepted, newRef, Confirm));
+        var retired = await context.KernelScheduleOccurrences.AsNoTracking().SingleAsync(row => row.ActorReference == newRef);
+        Assert.DoesNotContain("PinnedStart", retired.ContentJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(final.ArtifactId, retired.ContentJson);
+        Assert.True(await store.TryAcceptAsync(due, NoClock));
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.TryAcceptAsync(due with { PinnedStart = "{}" }, NoClock).AsTask());
+
+        var changed = await Publish(next, "repub-changed", 3, named, new string('B', 64));
+        Assert.NotEqual(initial.Stamp, changed.Stamp);
+        var changedOffer = Successor(future) with { ActivationId = "repub-changed", PublicationRevision = 4, Executable = next };
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Refused,
+            await store.TryHandoffAttemptAsync(future, changedOffer, changed.Stamp, renewedDeadline, ReadClock));
+        Assert.True((await activationSwitch.TryDeactivateAsync(new(definition, slotName, WorkflowActivationSource.Publishing,
+            4, clock.GetUtcNow()), [])).Succeeded);
+        Assert.Null((await controls.FindAsync(unqualified, key))!.Owner);
+        var reclaimed = await Publish(final, "repub-restored", 5, named, stimulus);
+        Assert.NotEqual(initial.Stamp, reclaimed.Stamp);
+        var restoredOffer = Successor(future) with { ActivationId = "repub-restored", PublicationRevision = 6 };
+        Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Refused,
+            await store.TryHandoffAttemptAsync(future, restoredOffer, reclaimed.Stamp, renewedDeadline, ReadClock));
+        Assert.Empty(await store.ListPendingAsync(named, null, 10));
+        Assert.True(await store.TryAcceptAsync(due, NoClock));
+
+        RuntimeKernelScheduleOccurrence Successor(RuntimeKernelScheduleOccurrence offer) =>
+            offer with { Scope = named, ActivationId = finalActivation, PublicationRevision = 3, Executable = final, PinnedStart = "{\"version\":3}" };
+        ValueTask<DateTimeOffset> ReadClock(CancellationToken _) => ValueTask.FromResult(clock.GetUtcNow());
+        static ValueTask<DateTimeOffset> NoClock(CancellationToken _) => throw new InvalidOperationException("An immutable replay does not need a clock.");
+        static ValueTask<bool> Confirm(RuntimeKernelScheduleOccurrence _, string __, CancellationToken ___) => ValueTask.FromResult(true);
+
+        async Task<RuntimeKernelScheduleContinuity> Publish(WorkflowExecutableIdentity identity, string activation, long expected,
+            TriggerScope scope, string selectedStimulus)
+        {
+            await references.SaveAsync(new(WorkflowActivationReferenceIdentity.Create(activation), identity.ArtifactId,
+                "definition", definition, identity.ArtifactVersion, definition, identity.DefinitionVersionId,
+                identity.ArtifactVersion, clock.GetUtcNow(), clock.GetUtcNow(), WorkflowExecutableReferenceScope.Published,
+                ActivationId: activation, SlotId: slot, TenantId: scope.TenantId));
+            await bindings.PrepareActivationAsync(activation,
+                [new(WorkflowTriggerBinding.BuildId(activation, identity.ArtifactId, node, claim), identity.ArtifactId,
+                    definition, identity.ArtifactVersion, identity.ArtifactHash, node, RuntimeKernelScheduleOccurrence.ReservationType, claim, null,
+                    new Dictionary<string, string>
+                    {
+                        [RuntimeKernelScheduleControl.ScheduleKeyMetadata] = key,
+                        [RuntimeKernelScheduleControl.ScheduleStimulusMetadata] = selectedStimulus
+                    }, clock.GetUtcNow(), activation, slot, TriggerCardinality.ReservationOnly, false)]);
+            expectedStagedActivation = activation;
+            var processTime = clock.GetUtcNow().AddMinutes(-10);
+            var result = await activationSwitch.TryActivateAsync(new(definition, slotName, activation, WorkflowActivationSource.Publishing,
+                expected, processTime));
+            Assert.True(result.Succeeded);
+            Assert.Equal(processTime, result.Slot.UpdatedAt);
+            return Assert.IsType<RuntimeKernelScheduleContinuity>((await controls.FindAsync(scope, key))!.Owner!.Continuity);
         }
     }
 

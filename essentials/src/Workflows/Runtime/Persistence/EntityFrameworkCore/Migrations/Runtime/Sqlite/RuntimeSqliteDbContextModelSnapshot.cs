@@ -2095,6 +2095,54 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.ToTable("elsa_runtime_ingress_reservations", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeKernelExecutablePinEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ArtifactId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ReleasedAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScopeKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("ScopeKeyHash", "ReleasedAtUtcTicks", "Id")
+                        .HasDatabaseName("IX_KernelExecutablePin_Open");
+
+                    b.ToTable("RuntimeKernelExecutablePins", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeKernelScheduleControlEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -2104,6 +2152,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("ContentJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<long>("InsertionOrdinal")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("OwnerSlotHash")
                         .HasMaxLength(64)
@@ -2138,7 +2189,74 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "TenantKeyHash", "Id")
                         .HasDatabaseName("IX_KernelScheduleControl_Tenant");
 
+                    b.HasIndex("ScopeKeyHash", "TenantKeyHash", "InsertionOrdinal", "Id")
+                        .HasDatabaseName("IX_KernelScheduleControl_Scan");
+
                     b.ToTable("elsa_runtime_kernel_schedule_control", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeKernelScheduleControlScanEntity", b =>
+                {
+                    b.Property<string>("ScopeKeyHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantKeyHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AfterId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AfterOrdinal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("LastOrdinal")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Pass")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("1.0.0");
+
+                    b.Property<long?>("Through")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ScopeKeyHash", "TenantKeyHash");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_runtime_kernel_schedule_control_scan", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeKernelScheduleCutoverEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ActivatedAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_runtime_kernel_schedule_cutover", (string)null);
                 });
 
             modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeKernelScheduleOccurrenceEntity", b =>

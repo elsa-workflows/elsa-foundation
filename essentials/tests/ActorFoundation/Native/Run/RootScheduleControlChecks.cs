@@ -16,19 +16,19 @@ namespace Kernel.Native.Run;
 
 internal static class RootScheduleControlChecks
 {
-    internal static async Task<int> RunAsync(bool postgres, bool inBatch)
+    internal static async Task<int> RunAsync(bool postgres, bool inBatch, bool managedProfile = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var directory = postgres ? null : Directory.CreateTempSubdirectory("root-schedule-controls-");
         try
         {
-            await RunCoreAsync(postgres, inBatch, directory?.FullName, timeout.Token);
+            await RunCoreAsync(postgres, inBatch, managedProfile, directory?.FullName, timeout.Token);
             return 0;
         }
         finally { directory?.Delete(recursive: true); }
     }
 
-    private static async Task RunCoreAsync(bool postgres, bool inBatch, string? directory, CancellationToken token)
+    private static async Task RunCoreAsync(bool postgres, bool inBatch, bool managedProfile, string? directory, CancellationToken token)
     {
         const string node = "schedule-controls-owner";
         const string definition = "workflow-with-schedule";
@@ -37,14 +37,19 @@ internal static class RootScheduleControlChecks
         var scope = EmbeddedTenant.Bind("schedule-fixture");
         var path = directory is null ? null : Path.Combine(directory, "actors.db");
         var options = new DbContextOptionsBuilder<KernelDb>();
-        var sqlite = path is null ? null : SqliteEmbeddedFoundation.ForScheduleControlsQualification(path, node, WorkflowActor.WorkflowActor.ActorType);
+        var sqlite = path is null ? null : managedProfile
+            ? SqliteEmbeddedFoundation.ForManagedSchedulesQualification(path, node, WorkflowActor.WorkflowActor.ActorType)
+            : SqliteEmbeddedFoundation.ForScheduleControlsQualification(path, node, WorkflowActor.WorkflowActor.ActorType);
         if (postgres)
         {
             options.UseNpgsql(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
                 ?? throw new InvalidOperationException("Use a dedicated empty PostgreSQL qualification database."));
             await using var db = Open();
             Require(await PostgresFixtureDatabase.IsEmptyAsync(db, token), "the PostgreSQL qualification database is empty");
-            await PostgresPreviewHosting.InstallScheduleControlsQualificationAsync(options.Options, token);
+            if (managedProfile)
+                await PostgresPreviewHosting.InstallManagedSchedulesQualificationAsync(options.Options, token);
+            else
+                await PostgresPreviewHosting.InstallScheduleControlsQualificationAsync(options.Options, token);
         }
         else
         {
@@ -52,7 +57,14 @@ internal static class RootScheduleControlChecks
             await sqlite!.InstallShippedAsync(token);
         }
 
-        var primary = new WorkflowActor.WorkflowActor([]);
+        if (managedProfile)
+        {
+            await using var db = Open();
+            Require(db.RequiredFormat == StoreFormat.RootManagedSchedulesQualification && db.UsesRootPlaybackDescendants &&
+                db.UsesRootScheduleControls && db.UsesRootScheduleLineage, "managed schedules compose all shipped workflow capabilities");
+        }
+
+        Contract.IActorType primary = managedProfile ? new HeldEventActor() : new WorkflowActor.WorkflowActor([]);
         var acceptor = new RecordingAcceptor();
         var schedule = new ScheduleActor(null, acceptor);
         var writes = sqlite?.BindScheduleControls(schedule.Type) ?? PostgresPreviewHosting.BindScheduleControls(Open, schedule.Type);
@@ -60,6 +72,10 @@ internal static class RootScheduleControlChecks
         var pg = postgres ? await PostgresPreviewHosting.OpenFoundationAsync(Open, primary.Type, requests, cancellationToken: token) : null;
         Contract.IIngress ingress = pg is null ? await sqlite!.OpenIngressAsync(token) : pg;
         Contract.IActorReads reads = pg is null ? sqlite!.CreateReads() : pg;
+        if (managedProfile)
+            Require(reads is Contract.IActorSequencedJournalReads { SupportsSequencedJournal: true } &&
+                reads is Contract.IActorPlaybackReads { SupportsPlayback: true, SupportsDescendantPlayback: true },
+                "the managed profile exposes sequenced journal and descendant playback through public reads");
 
         Require(await Apply(3, Control.Stop) is { Outcome: Outcome.Applied, Actor: null }, "Stop before first Set persists without a root");
         Require(await Apply(3, Control.Stop) is { Outcome: Outcome.Duplicate, Actor: null }, "identical Stop retries the unbound receipt");
@@ -102,6 +118,23 @@ internal static class RootScheduleControlChecks
                 };
         await using var lifetime = (IAsyncDisposable)owner;
         await owner.StartAsync(token);
+        if (managedProfile)
+        {
+            var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(primary.Type, "{}")),
+                "managed-profile-held-start", Contract.Kinds.Start, cancellationToken: token);
+            Require(started is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "the managed profile admits the primary actor");
+            await UntilAsync(async () =>
+            {
+                await using var db = Open();
+                return await db.Subscriptions.AnyAsync(subscription => subscription.Wait == HeldEventActor.WaitName, token);
+            });
+            var now = postgres ? await requests!.ReadClockAsync(token) : await sqlite!.ReadClockAsync(token);
+            var reply = await ingress.RequestAsync(scope, new Contract.Target.Event(HeldEventActor.EventKey),
+                "managed-profile-held-event", Contract.Kinds.Event, null, null,
+                new Contract.RequestOptions(null, now + 5000), token);
+            Require(reply is { Channel: Request.Response, Error: null } && reply.Item?.ToString() == "accepted",
+                $"the managed profile replies to a public held event (channel {reply.Channel}, error {reply.Error}, status {reply.Status}, item {reply.Item})");
+        }
         await UntilAsync(() => Task.FromResult(acceptor.Offers.Any(offer => offer.Schedule == reference && offer.Authority == "first")));
         Require(await Apply(5, Control.Set, Header(5, "second")) == new Contract.ScheduleControlResult(Outcome.Applied, reference),
             "authenticated Set enqueues to the exact existing auxiliary root");
@@ -141,13 +174,19 @@ internal static class RootScheduleControlChecks
                 await SqliteEmbeddedFoundation.ForScheduleQualification(path!, "legacy-profile", primary.Type).InstallShippedAsync(token);
             throw new InvalidOperationException("The older schedule profile opened the new control store.");
         }
-        catch (StoreFormatException) { Console.WriteLine("ok frozen protocol 120 refuses the protocol 121 store"); }
+        catch (StoreFormatException) { Console.WriteLine("ok the frozen settlement profile refuses the managed control store"); }
 
         ValueTask<Contract.ScheduleControlResult> Apply(long revision, Control kind, string? header = null, string scheduleKey = key) =>
             writes.ApplyScheduleControlAsync(scope, definition, scheduleKey, revision, kind, header, token);
 
-        KernelDb Open() => postgres ? PostgresPreviewHosting.CreateScheduleControlsQualificationContext(options.Options)
-            : KernelDb.ForSqliteRootRuntime(options.Options, new SqliteAdmissionDefinitions(), StoreFormat.RootScheduleControlsQualification);
+        KernelDb Open()
+        {
+            if (postgres)
+                return managedProfile ? PostgresPreviewHosting.CreateManagedSchedulesQualificationContext(options.Options)
+                    : PostgresPreviewHosting.CreateScheduleControlsQualificationContext(options.Options);
+            var format = managedProfile ? StoreFormat.RootManagedSchedulesQualification : StoreFormat.RootScheduleControlsQualification;
+            return KernelDb.ForSqliteRootRuntime(options.Options, new SqliteAdmissionDefinitions(), format);
+        }
 
         async Task<bool> StoppedAsync()
         {
@@ -179,6 +218,35 @@ internal static class RootScheduleControlChecks
     {
         if (!result) throw new InvalidOperationException(description);
         Console.WriteLine("ok " + description);
+    }
+
+    private sealed class HeldEventActor : Contract.IActorType
+    {
+        internal const string EventKey = "managed-profile-event";
+        internal const string WaitName = "managed-profile-held-wait";
+        public string Type => WorkflowActor.WorkflowActor.ActorType;
+        public bool Withholds(Contract.ActorHeader header) => false;
+
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            foreach (var message in turn.Inbox)
+            {
+                if (message.Kind == Contract.Kinds.Start)
+                {
+                    turn.State = "{}";
+                    turn.Subscribe(EventKey, WaitName);
+                }
+                else if (message.Event is not null)
+                    turn.Emit(Request.Response, "accepted");
+            }
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
+            ValueTask.FromException<object?>(new InvalidOperationException("The primary fixture actor has no background jobs."));
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }
 
     private sealed class RecordingAcceptor : IScheduleOccurrenceAcceptor

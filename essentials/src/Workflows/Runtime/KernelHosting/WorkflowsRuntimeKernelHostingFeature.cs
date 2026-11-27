@@ -10,6 +10,7 @@ using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Modularity.Core.Models;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHost;
@@ -61,9 +62,11 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     [ManifestSetting(DisplayName = "Retention confirmation", Description = "Receipt from the retention policy preview for this tenant and store.", Category = "Retention")]
     public string? RetentionConfirmation { get; set; }
 
-    public void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services) =>
+        ConfigureServices(services, KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString));
+
+    internal void ConfigureServices(IServiceCollection services, KernelShellStorage storage, bool protectChildExecutables = false)
     {
-        var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString);
         var tenant = EmbeddedTenant.Bind(Tenant);
         var persistenceScope = new PersistenceScope(tenant.Tenant);
         var proposedRetention = new ActorRetentionWindows(RetentionWindow(FinishedRetentionSeconds, nameof(FinishedRetentionSeconds)),
@@ -73,14 +76,18 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(storage);
         services.AddSingleton(retention);
         services.AddSingleton(new ShellRestartRequirement(FeatureName));
-        services.AddSingleton(new KernelServing(capabilities: new KernelHostCapabilities(
-            Schedules: false, Timers: storage.TakesTimers, Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends,
-            HttpWaits: storage.TakesHttpWaits),
+        var schedules = storage.TakesManagedSchedules;
+        if (schedules) services.AddSingleton(new WorkflowScheduleCutoverClock(persistenceScope, storage.ReadClockAsync));
+        services.AddSingleton(new KernelServing(cronError: schedules ? CronosCalendar.Error : null,
+            capabilities: new KernelHostCapabilities(Schedules: schedules, Timers: storage.TakesTimers,
+                Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends, HttpWaits: storage.TakesHttpWaits),
             publicationScope: persistenceScope));
-        services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
+        services.AddSingleton<IScheduleActors>(schedules
+            ? new RuntimeManagedScheduleActors()
+            : new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),
             sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILoggerFactory>(),
-            persistenceScope, tenant, retention));
+            persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System, protectChildExecutables));
         services.AddSingleton(sp => new KernelRuns(tenant, sp.GetRequiredService<KernelShellRuntime>().ReadAsync));
         services.AddSingleton(sp =>
         {

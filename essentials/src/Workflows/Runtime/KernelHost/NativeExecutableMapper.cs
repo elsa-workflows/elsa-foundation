@@ -38,7 +38,11 @@ public static class NativeExecutableMapper
     /// a node that needs what the host lacks is refused as one this host does not run, named as every refusal is.
     /// </summary>
     /// <exception cref="NativeMappingRefusedException">The executable holds an activity or a binding this host does not run.</exception>
-    public static Native.Workflow Map(WorkflowExecutable executable, KernelHostCapabilities capabilities)
+    public static Native.Workflow Map(WorkflowExecutable executable, KernelHostCapabilities capabilities) =>
+        Map(executable, capabilities, definition: null);
+
+    /// <summary>Maps canonical material under the logical definition of its selected publication.</summary>
+    internal static Native.Workflow Map(WorkflowExecutable executable, KernelHostCapabilities capabilities, string? definition)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(capabilities);
@@ -50,7 +54,10 @@ public static class NativeExecutableMapper
             Native.Workflow workflow;
             try
             {
-                workflow = new Native.Workflow(executable.Identity.ArtifactId, root, variables, executable.Identity.DefinitionId);
+                workflow = new Native.Workflow(executable.Identity.ArtifactId, root, variables, definition ?? executable.Identity.DefinitionId)
+                {
+                    ExecutableSelection = JsonSerializer.Serialize(executable.Identity)
+                };
             }
             catch (Native.NativeDefinitionException invalid)
             {

@@ -7,13 +7,16 @@ namespace Kernel.EntityFramework;
 internal sealed partial class SqliteRootAdmission
 {
     internal Task<bool> IsScheduledOccurrenceRetiredAsync(string tenant, RootScheduleOccurrence occurrence, StartSpec pinnedWorkflow,
-        string actorReference, CancellationToken token)
+        string actorReference, CancellationToken token, bool requireLineage = false)
     {
         occurrence.Validate();
         RequireCreator(occurrence.CreatorOperation, pinnedWorkflow);
         return InAdmissionTransactionAsync(async (db, ct) =>
         {
             if (!db.UsesRootScheduleSettlement) throw new NotSupportedException("The profile does not confirm scheduled workflow retirement.");
+            if (requireLineage && (!db.UsesRootScheduleLineage || await RootScheduleInventory.FindAsync(db, tenant, occurrence.Schedule,
+                    RootScheduleInventory.RequireActorType(scheduleActorType), ct) != occurrence.ScheduleReference))
+                return false;
             var issuer = await ReadIssuerAsync(db, ct);
             var birth = ScheduledWorkflowBirth.Create(tenant, occurrence, pinnedWorkflow, issuer.Key, issuer.Partitions);
             return birth.Reference == actorReference && await birth.IsRetiredAsync(db, tenant, ct);
@@ -47,6 +50,11 @@ internal sealed partial class SqliteRootAdmission
                 INSERT INTO "FoundationRootBirths" ("Tenant", "Reference", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
                 VALUES ({tenant}, {birth.Reference}, {creator.Target.Id}, {creator.Target.Partition}, 1, {creator.InboxKey.Id}, {birth.Fingerprint})
                 """, ct));
+            if (db.UsesRootScheduleLineage)
+                RequireOne(await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "FoundationScheduleLineage" ("Tenant", "Reference", "RootReference", "Retired")
+                    VALUES ({tenant}, {birth.Reference}, {birth.Reference}, false)
+                    """, ct));
             await EnqueueAsync(db, creator.Target.Id, creator.Target.Partition, creator.InboxKey.Id, 0, creator.Kind, header,
                 payload, due: null, keepUntil: null, replyTo: null, token: ct);
             return new(Contract.AdmissionOutcome.Accepted, reference);

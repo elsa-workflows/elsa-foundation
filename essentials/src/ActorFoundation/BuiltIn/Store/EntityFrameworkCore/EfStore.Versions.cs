@@ -67,6 +67,9 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootScheduleInventoryQualification => new(3, 119, 1);
     internal static StoreFormat RootScheduleSettlementQualification => new(3, 120, 1);
     internal static StoreFormat RootScheduleControlsQualification => new(3, 121, 1);
+    internal static StoreFormat RootScheduleLineageQualification => new(3, 122, 1);
+    internal static StoreFormat RootManagedSchedulesQualification => new(3, 123, 1);
+    internal static StoreFormat RootPreparedStartsQualification => new(3, 124, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -119,7 +122,9 @@ internal enum RootCapabilities : long
     PlaybackDescendants = 1 << 29,
     ScheduleInventory = 1 << 30,
     ScheduleSettlement = 1L << 31,
-    ScheduleControls = 1L << 32
+    ScheduleControls = 1L << 32,
+    ScheduleLineage = 1L << 33,
+    PreparedStarts = 1L << 34
 }
 
 internal static class RootProfiles
@@ -160,6 +165,9 @@ internal static class RootProfiles
         RootCapabilities.RetentionPolicy | RootCapabilities.ScheduleInventory;
     internal const RootCapabilities ScheduleSettlementQualification = ScheduleInventoryQualification | RootCapabilities.ScheduleSettlement;
     internal const RootCapabilities ScheduleControlsQualification = ScheduleSettlementQualification | RootCapabilities.ScheduleControls;
+    internal const RootCapabilities ScheduleLineageQualification = ScheduleSettlementQualification | RootCapabilities.ScheduleLineage;
+    internal const RootCapabilities ManagedSchedulesQualification = Shipped34 | ScheduleControlsQualification | ScheduleLineageQualification;
+    internal const RootCapabilities PreparedStartsQualification = ManagedSchedulesQualification | RootCapabilities.PreparedStarts;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
     internal const RootCapabilities PlaybackDescendantsQualification = Shipped34;
@@ -234,7 +242,8 @@ internal static class RootProfiles
         [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
         [RootCapabilities.ScheduleInventory] = RootCapabilities.Timers | RootCapabilities.ParkOpening,
         [RootCapabilities.ScheduleSettlement] = RootCapabilities.ScheduleInventory | RootCapabilities.JobProtocol,
-        [RootCapabilities.ScheduleControls] = RootCapabilities.ScheduleInventory | RootCapabilities.TimedJobSettlement
+        [RootCapabilities.ScheduleControls] = RootCapabilities.ScheduleInventory | RootCapabilities.TimedJobSettlement,
+        [RootCapabilities.ScheduleLineage] = RootCapabilities.ScheduleSettlement | RootCapabilities.Children | RootCapabilities.Retirement
     };
 
     // The prerequisites of the set's members that the set lacks. None means the set is closed.
@@ -435,6 +444,12 @@ internal static class StoreDefinitionsRevision
     private const int SqliteScheduleInventoryRevision = 18;
     private const int PostgreSqlScheduleControlsRevision = 16;
     private const int SqliteScheduleControlsRevision = 19;
+    private const int PostgreSqlScheduleLineageRevision = 17;
+    private const int SqliteScheduleLineageRevision = 20;
+    private const int PostgreSqlManagedSchedulesRevision = 18;
+    private const int SqliteManagedSchedulesRevision = 21;
+    private const int PostgreSqlPreparedStartsRevision = 19;
+    private const int SqlitePreparedStartsRevision = 22;
     private const int SqliteParkRecoverRevision = 5;
     private const int PostgreSqlDueBacklogRevision = 5;
     private const int SqliteDueBacklogRevision = 10;
@@ -467,6 +482,12 @@ internal static class StoreDefinitionsRevision
                     sqlite ? SqlitePlaybackRevision : PostgreSqlPlaybackRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPlaybackDescendantsQualification =>
                     sqlite ? SqlitePlaybackDescendantsRevision : PostgreSqlPlaybackDescendantsRevision,
+                _ when db.RequiredFormat == StoreFormat.RootPreparedStartsQualification =>
+                    sqlite ? SqlitePreparedStartsRevision : PostgreSqlPreparedStartsRevision,
+                _ when db.RequiredFormat == StoreFormat.RootManagedSchedulesQualification =>
+                    sqlite ? SqliteManagedSchedulesRevision : PostgreSqlManagedSchedulesRevision,
+                _ when db.RequiredFormat == StoreFormat.RootScheduleLineageQualification =>
+                    sqlite ? SqliteScheduleLineageRevision : PostgreSqlScheduleLineageRevision,
                 _ when db.RequiredFormat == StoreFormat.RootScheduleInventoryQualification ||
                     db.RequiredFormat == StoreFormat.RootScheduleSettlementQualification =>
                     sqlite ? SqliteScheduleInventoryRevision : PostgreSqlScheduleInventoryRevision,

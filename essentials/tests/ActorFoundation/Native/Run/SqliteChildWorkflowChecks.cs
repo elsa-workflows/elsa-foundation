@@ -1,3 +1,4 @@
+using Kernel.Foundation.Hosting;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;
@@ -12,7 +13,7 @@ namespace Kernel.Native.Run;
 
 internal static class SqliteChildWorkflowChecks
 {
-    internal static async Task<int> RunAsync(bool fenceInBatch, bool shipped = false)
+    internal static async Task<int> RunAsync(bool fenceInBatch, bool shipped = false, bool protectBirths = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var token = deadline.Token;
@@ -24,6 +25,7 @@ internal static class SqliteChildWorkflowChecks
         KernelDb Open() => KernelDb.ForSqliteRootRuntime(options, definitions, shipped ? null : StoreFormat.SqliteRootChildrenQualification);
         var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch);
         var tenant = EmbeddedTenant.Bind("workflow-children");
+        var protection = protectBirths ? new ChildBirthProtectionChecks(Open, tenant) : null;
         const string creatorFaultChild = "creator-fault-child";
         var aliases = new WorkflowRegistry()
             .Add(Wf.Workflow("child", Wf.Sequence("child-sequence",
@@ -38,7 +40,9 @@ internal static class SqliteChildWorkflowChecks
             .Add(Wf.Workflow(creatorFaultChild, Wf.SetOutput("finish", "child-value", "unused")))
             .Add(Wf.Workflow("job-parent", Wf.Dispatch("dispatch", "job-child", wait: true)))
             .Add(Wf.Workflow("job-child", Wf.Http("fetch", "https://partner.example/stuck", timeout: TimeSpan.FromMinutes(2))))
-            .Add(Wf.Workflow("bulk-parent", Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("wait")));
+            .Add(Wf.Workflow("bulk-parent", Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("wait")))
+            .Add(Wf.Workflow("detached-parent", Wf.Dispatch("dispatch", "detached-child", wait: false)))
+            .Add(Wf.Workflow("detached-child", Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("wait")));
         var partner = new PostgresChildWorkflowChecks.BlockingPartner();
         using var http = new HttpClient(partner);
         var model = new Fixture(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases,
@@ -56,7 +60,7 @@ internal static class SqliteChildWorkflowChecks
             await foundation.InstallShippedAsync(token);
             if (shipped)
                 Check(SqliteEmbeddedHosting.TakesChildren, "the SQLite shipped host advertises owned child starts");
-            await using var service = foundation.CreateHostedService(model, Escalate, loop, fenceInBatch);
+            await using var service = StartService(foundation);
             await service.StartAsync(token);
             var ingress = await foundation.OpenIngressAsync(token);
             var admitted = await ingress.SendAsync(tenant, new Contract.Target.Start(
@@ -84,11 +88,21 @@ internal static class SqliteChildWorkflowChecks
                 "point and paged reads return the exact parent reference");
             Check(await reads.GetAsync(ContractScopes.Bind("other-tenant"), childRef, token) is null,
                 "another tenant cannot see the child");
+            var birth = await ChildBirthProofChecks.ReadBirthAsync(Open, tenant, parentRef, childRef, 1, token);
+            if (protection is not null)
+                Check(await protection.MatchesBirthAsync(childRef, birth, token),
+                    "the protector authenticated the exact child and creator before the parent's first checkpoint");
+            var attemptsBeforePark = protection?.Attempts(childRef);
+            var abandoned = await ChildBirthProofChecks.PlanAbsentAsync(Open, birth, long.MaxValue, long.MaxValue, token);
+            Check(birth.Reference == childRef &&
+                await birth.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved &&
+                await abandoned.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved,
+                "a live child and an absent issuance from a still-eligible parent both retain their pins");
             await service.StopAsync(token);
 
             var replacement = OpenFoundation("replacement-child-owner");
             await replacement.InstallShippedAsync(token);
-            await using var successor = replacement.CreateHostedService(model, Escalate, loop, fenceInBatch);
+            await using var successor = StartService(replacement);
             await successor.StartAsync(token);
             var replacementIngress = await replacement.OpenIngressWithOperatorsAsync(
                 (scope, _, kind) => ReferenceEquals(scope, tenant) &&
@@ -98,6 +112,14 @@ internal static class SqliteChildWorkflowChecks
             var waitingAfterPark = await WaitAsync(parentRef, row => row.Revision > 1);
             Check(parked.Revision == 3 && waitingAfterPark is { Status: InstanceStatus.Running, Revision: 2, Children: not null },
                 "the timer parks the child and delivers a non-final notice without advancing Dispatch");
+            if (protection is not null)
+                Check(protection.Attempts(childRef) == attemptsBeforePark, "Park creates no new protection for the existing child birth");
+            Check(await abandoned.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.IssuanceFencedAbsent &&
+                await birth.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved,
+                "a replacement epoch proves exact absence without releasing a committed parked child");
+            var displaced = await ChildBirthProofChecks.PlanAbsentAsync(Open, birth, 3, long.MaxValue - 1, token, atCurrentEpoch: true);
+            Check(await displaced.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved,
+                "the replacement epoch can still commit its next exact parent revision");
             var childSelection = (await reads.GetAsync(tenant, childRef, token))!.Selection;
             await SendAsync(childRef, "recover-child", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(childSelection)));
             await WaitAsync(childRef, row => row is { Status: InstanceStatus.Running, Revision: 4 });
@@ -114,11 +136,20 @@ internal static class SqliteChildWorkflowChecks
                 !await db.Messages.AnyAsync(message => !message.Done, token),
                 "the child finishes once and creator and notice are settled");
 
+            Check(await ChildBirthProofChecks.ReadEpochAsync(Open, displaced, token) == displaced.Body.Fence().Epoch &&
+                await displaced.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.IssuanceFencedAbsent &&
+                await birth.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved,
+                "the committed parent checkpoint disarms the absent issue in the same epoch; child finish alone does not release");
             var terminalChild = (await reads.GetAsync(tenant, childRef, token))!.Selection;
             await SendAsync(childRef, "delete-child", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(terminalChild)));
             await EventuallyAsync(successor, async () => await reads.GetAsync(tenant, childRef, token), view => view is null);
             Check(await reads.GetAsync(tenant, parentRef, token) is { Header.Status: Contract.ActorStatus.Finished },
                 "retiring the attached terminal child preserves the parent continuation");
+            Check(await birth.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.BirthRetired &&
+                await ChildBirthProofChecks.InvalidFingerprint(birth).ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved &&
+                await ChildBirthProofChecks.InvalidSignature(birth).ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved &&
+                await birth.ConfirmAsync(Open, ContractScopes.Bind("other-tenant"), token) == FoundationChildBirthProof.Unresolved,
+                "only the exact committed and retired birth authorizes release");
 
             var raceParent = await StartAsync("cancel-parent", "race-parent");
             var (raceWait, raceChild) = await ChildAsync(raceParent);
@@ -171,6 +202,12 @@ internal static class SqliteChildWorkflowChecks
                         WHERE "Target" = {earlyChild.Actor.Id} AND "InboxScope" = 0 AND "Done"
                             AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}) AS "Value"
                     """).SingleAsync(token), "a fault in the child's creator turn retains its creator and commits a non-final parent notice");
+            var creatorPark = await ChildBirthProofChecks.ReadBirthAsync(Open, tenant, earlyParent, earlyChildRef, 1, token);
+            if (protection is not null)
+                Check(await protection.MatchesBirthAsync(earlyChildRef, creatorPark, token) && protection.Attempts(earlyChildRef) == 1,
+                    "creator Park keeps the original exact protection and does not request another");
+            Check(await creatorPark.ConfirmAsync(Open, tenant, token) == FoundationChildBirthProof.Unresolved,
+                "a child parked at its first creator checkpoint keeps the existing birth pin");
             await SendAsync(earlyParent, "terminate-faulted-creator", Fixture.TerminateChild, earlyChildRef.Id);
             await WaitAsync(earlyChildRef, row => row is { Status: InstanceStatus.Cancelled, ParkAt: null });
             await WaitAsync(earlyParent, row => row.Children is null);
@@ -193,6 +230,17 @@ internal static class SqliteChildWorkflowChecks
             var guardRunning = await WaitAsync(guardChild, row => row.Status == InstanceStatus.Running);
             await SendAsync(guardParent, "end-with-child", Fixture.Finish);
             var guardEnded = await WaitAsync(guardParent, row => row is { Status: InstanceStatus.Finished, Children: not null });
+            if (protection is not null)
+            {
+                var detachedParent = await StartAsync("detached-parent", "detached-parent");
+                var ended = await WaitAsync(detachedParent, row => row.Status == InstanceStatus.Finished);
+                var detachedRef = protection.ForWorkflow("detached-child");
+                var detachedChild = await WaitAsync(detachedRef, row => row.Status == InstanceStatus.Running);
+                var detachedBirth = await ChildBirthProofChecks.ReadBirthAsync(Open, tenant, detachedParent, detachedRef, ended.Revision, token);
+                Check(ended.Revision == 1 && detachedChild.Parent is null && await protection.MatchesBirthAsync(detachedRef, detachedBirth, token),
+                    "a detached Native child was protected by its issuing parent checkpoint without an attachment");
+                Check(protection.RetriedExactPartial, "a partial pin batch was retried with identical issuance and no Foundation write or birth");
+            }
             await successor.StopAsync(token);
             await CheckRegistryGuardAsync(guardParent, guardRunning, guardEnded);
 
@@ -204,6 +252,10 @@ internal static class SqliteChildWorkflowChecks
             catch (StoreFormatException) { refused = true; }
             Check(refused, "the SQLite installer refuses a child store from a different protocol");
             return 0;
+
+            SqliteEmbeddedHostedService StartService(SqliteEmbeddedFoundation host) => protection is null
+                ? host.CreateHostedService(model, Escalate, loop, fenceInBatch)
+                : host.CreateHostedServiceWithChildBirthProtection(model, protection.ProtectAsync, Escalate, options: loop, fenceInBatch: fenceInBatch);
 
             SqliteEmbeddedFoundation OpenFoundation(string node) => shipped
                 ? new SqliteEmbeddedFoundation(path, node, model.Type)

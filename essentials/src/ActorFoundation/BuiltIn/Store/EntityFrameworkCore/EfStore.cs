@@ -179,6 +179,9 @@ public class KernelDb : DbContext
     internal bool UsesRootScheduleInventory => Has(RootCapabilities.ScheduleInventory);
     internal bool UsesRootScheduleSettlement => Has(RootCapabilities.ScheduleSettlement);
     internal bool UsesRootScheduleControls => Has(RootCapabilities.ScheduleControls);
+    internal bool UsesRootScheduleLineage => Has(RootCapabilities.ScheduleLineage);
+    internal bool UsesRootPreparedStarts => Has(RootCapabilities.PreparedStarts);
+    internal uint? ScheduleLineageCommitMarker { get; set; }
     internal bool SeparateRootFormatLock =>
         RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput || UsesRootChildren;
     internal bool UsesRootComposedParkRecovery =>
@@ -210,6 +213,12 @@ public class KernelDb : DbContext
 
     internal static KernelDb ForPostgresRootScheduleControlsQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootScheduleControlsQualification, RootProfiles.ScheduleControlsQualification);
+    internal static KernelDb ForPostgresRootScheduleLineageQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootScheduleLineageQualification, RootProfiles.ScheduleLineageQualification);
+    internal static KernelDb ForPostgresRootPreparedStartsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootPreparedStartsQualification, RootProfiles.PreparedStartsQualification);
+    internal static KernelDb ForPostgresRootManagedSchedulesQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootManagedSchedulesQualification, RootProfiles.ManagedSchedulesQualification);
     internal static KernelDb ForPostgresRootSelfTimedQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootSelfTimedQualification, RootProfiles.SelfTimedQualification);
     internal static KernelDb ForSqliteRootSelfTimedQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
@@ -254,6 +263,15 @@ public class KernelDb : DbContext
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootScheduleControlsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.ScheduleControlsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootScheduleLineageQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ScheduleLineageQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootPreparedStartsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PreparedStartsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootManagedSchedulesQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ManagedSchedulesQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         return qualificationFormat is { } format
             ? ForRootTerminalOutputQualification(options, sqliteShippedInstall: true, definitions, format)
@@ -920,8 +938,10 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         try
         {
-            return await PostgresRootAdmission.PinRootCommitNamespaceAsync(db,
+            var marker = await PostgresRootAdmission.PinRootCommitNamespaceAsync(db,
                 writesJournal: db.UsesRootSequencedJournal && batch.Turns.Any(turn => turn.Journal is not null), cancellationToken);
+            if (db.UsesRootScheduleLineage) db.ScheduleLineageCommitMarker = marker;
+            return marker;
         }
         catch (Exception error) when (error is not OperationCanceledException &&
             Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)

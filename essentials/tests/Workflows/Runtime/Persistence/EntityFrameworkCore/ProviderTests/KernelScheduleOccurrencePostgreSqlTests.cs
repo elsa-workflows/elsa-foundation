@@ -16,8 +16,9 @@ public sealed class KernelScheduleOccurrencePostgreSqlTests(RuntimeBookmarksPost
         await using var context = new RuntimePostgreSqlDbContext(options);
         try
         {
-            await context.Database.MigrateAsync();
-            await KernelScheduleOccurrenceContract.RunAsync(() => new RuntimePostgreSqlDbContext(options));
+            await KernelScheduleOccurrenceContract.InstallWithLegacyControlsAsync(context);
+            await KernelScheduleOccurrenceContract.RunAsync(() => new RuntimePostgreSqlDbContext(options), interceptor =>
+                new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>(options).AddInterceptors(interceptor).Options));
         }
         finally { await context.Database.EnsureDeletedAsync(); }
     }

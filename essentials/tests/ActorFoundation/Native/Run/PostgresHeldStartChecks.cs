@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Hosting;
 using Kernel.Foundation.Postgres;
 using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -11,25 +13,26 @@ namespace Kernel.Native.Run;
 // K10 7b-2 (#4229): a held root start on a store with held replies. One node runs through PostgresPreviewHostedService with
 // the Foundation's requests as its reply transport, and an edge in the Sim's shape matches a request's route
 // (HttpRouteMatcher) and starts the route's workflow with the request as its trigger, holding the caller for the response.
-// It runs on the direct-reply profile and depends only on its held-reply capability.
+// The protected variant also verifies the prepared-start protocol before admitting the same authored workflows.
 internal static class PostgresHeldStartChecks
 {
     private const string Node = "held-start-node";
     private const long RequestTimeout = 10_000;
 
-    internal static async Task<int> RunAsync()
+    internal static async Task<int> RunAsync(bool protectedStarts = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(120));
         var stop = deadline.Token;
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Supply a fresh PostgreSQL preview database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => KernelDb.ForPostgresRootReplies(options);
+        KernelDb Open() => protectedStarts ? KernelDb.ForPostgresRootPreparedStartsQualification(options) : KernelDb.ForPostgresRootReplies(options);
         await using (var db = Open())
             Require(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "the held-start check uses an empty PostgreSQL database");
         var store = new EfStore(Open, postgres: true);
         await store.CreateAsync(1);
-        await new PostgresRootAdmission(Open, TimeSpan.FromHours(1)).InstallAsync(stop);
+        if (protectedStarts) await store.InstallPreviewRootSchemaAsync(stop);
+        else await new PostgresRootAdmission(Open, TimeSpan.FromHours(1)).InstallAsync(stop);
 
         var registry = new WorkflowRegistry()
             .Add(Wf.Workflow("orders", Wf.Sequence("main",
@@ -49,17 +52,27 @@ internal static class PostgresHeldStartChecks
         await RequireRefusedAsync(() => PostgresPreviewHosting.StartAsync(Open, Node, actor, _ => { }, cancellationToken: stop),
             "a node on a store with held replies needs the reply transport its callers wait on");
 
-        var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, WorkflowActor.WorkflowActor.ActorType,
-            PostgresPreviewHosting.CreateRequests(Open, Node, WorkflowActor.WorkflowActor.ActorType), cancellationToken: stop);
+        var offers = new ConcurrentQueue<PendingRootStart>();
+        var blocked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var unblock = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var behavior = 0;
+        var edge = protectedStarts
+            ? PostgresPreviewHosting.CreateRequestsWithRootStartProtection(Open, Node, actor.Type, ProtectAsync)
+            : PostgresPreviewHosting.CreateRequests(Open, Node, actor.Type);
+        var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, actor.Type, edge, cancellationToken: stop);
         var requests = foundation.Requests ?? throw new InvalidOperationException("A reply node opens held requests.");
         var clock = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
-        var witness = new CommitWitness(Open, requests);
+        var witness = protectedStarts ? null : new CommitWitness(Open, requests);
         var escalated = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         await RequireArgumentRefusedAsync(() => PostgresPreviewHosting.StartAsync(Open, "another-node", actor, _ => { },
                 cancellationToken: stop, requests: requests),
             "a node is refused the held callers of another node");
-        await using var service = new PostgresPreviewHostedService(Open, Node, actor, message => escalated.TrySetResult(message),
-            new() { PollInterval = TimeSpan.FromMilliseconds(20) }, requests: requests) { ObserveReplies = _ => witness };
+        var loop = new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(20) };
+        await using var service = protectedStarts
+            ? PostgresPreviewHostedService.CreateWithAuxiliaryActor(Open, Node, actor, new Kernel.WorkflowActor.ScheduleActor(),
+                message => escalated.TrySetResult(message), loop, requests: requests)
+            : new PostgresPreviewHostedService(Open, Node, actor, message => escalated.TrySetResult(message), loop, requests: requests)
+                { ObserveReplies = _ => witness! };
         await service.StartAsync(stop);
         var scope = EmbeddedTenant.Bind("held-start");
         try
@@ -70,17 +83,23 @@ internal static class PostgresHeldStartChecks
                 Values.To<HttpResponse>((JsonNode)created.Reply.Item!) is { StatusCode: 201 } response &&
                 response.Body?.GetValue<string>() == "Ada",
                 "an HTTP start admitted with a held reply is answered with its workflow's response");
-            Require(witness.Sends.TryGetValue("Ada", out var finishedAtFirst) && finishedAtFirst == 1,
-                "the start's response is released after the commit of the turn that wrote it");
+            if (witness is not null)
+                Require(witness.Sends.TryGetValue("Ada", out var finishedAtFirst) && finishedAtFirst == 1,
+                    "the start's response is released after the commit of the turn that wrote it");
             var order = await ReadRootAsync(store, scope, created.Actor!.Value, stop);
             Require(order is { Status: InstanceStatus.Finished } && created.Reply.Actor == created.Actor,
                 "the reply names the exact committed Finished root");
+            if (protectedStarts)
+                Require(offers.Count == 1 && offers.First().Actor == created.Actor &&
+                    await PreparedCountAsync() == 0,
+                    "the committed root consumed its exact prepared row");
 
             // 2. A repeat of the operation starts nothing and is not answered with the first start's response.
             var births = await BirthsAsync(Open, stop);
             var repeat = await SendAsync(foundation, clock, routes, scope, "POST", "/orders", new JsonObject { ["name"] = "Grace" }, "order-1", 1_500, stop);
             Require(repeat.Reply is { Error: "timeout", Status: Contract.ActorStatus.Finished, Channel: null } && await BirthsAsync(Open, stop) == births,
                 "a repeated held start reaches the root its operation started, starts no other, and ends at its deadline with that root's status");
+            if (protectedStarts) Require(offers.Count == 1, "a live duplicate never asks the host to pin again");
 
             // 3. Past its deadline the caller is answered with a timeout while the workflow keeps running.
             var slow = await SendAsync(foundation, clock, routes, scope, "POST", "/slow", new JsonObject(), "slow-1", 1_500, stop);
@@ -109,24 +128,96 @@ internal static class PostgresHeldStartChecks
                 "a held start of another actor type, or an ephemeral one, is answered missing and admits nothing");
 
             // 4. A route that responds before the commit releases its response when the turn ends, before its root commits.
-            var finishedBefore = witness.Finished(scope.Tenant);
+            var finishedBefore = witness?.Finished(scope.Tenant);
             var early = await SendAsync(foundation, clock, routes, scope, "POST", "/early", new JsonObject(), "early-1", RequestTimeout, stop);
             Require(early.Reply is { Error: null, Channel: "response", Item: JsonNode } &&
                 Values.To<HttpResponse>((JsonNode)early.Reply.Item!) is { StatusCode: 202 },
                 "a start on a respond-before-commit route is answered with its response");
-            Require(witness.Sends.TryGetValue("early", out var finishedAtEarly) && finishedAtEarly == finishedBefore,
-                "a respond-before-commit response is released before the turn's commit");
+            if (witness is not null)
+                Require(witness.Sends.TryGetValue("early", out var finishedAtEarly) && finishedAtEarly == finishedBefore,
+                    "a respond-before-commit response is released before the turn's commit");
             Require(early.Reply.Actor is null, "an early reply supplies no link to an uncommitted run");
             Require(await ReadRootAsync(store, scope, early.Actor!.Value, stop) is { Status: InstanceStatus.Finished },
                 "the respond-before-commit root still commits Finished");
+
+            if (protectedStarts)
+            {
+                var committed = await BirthsAsync(Open, stop);
+                behavior = 1;
+                var refused = await RequestOnlyAsync("refused-held", 4_000);
+                Require(refused.RefusalReason == Contract.RefusalReason.TargetMismatch && await BirthsAsync(Open, stop) == committed &&
+                    await PreparedCountAsync() == 0, "definitive protection refusal consumes the preparation without creating a root");
+                behavior = 2;
+                var waitingProtection = RequestOnlyAsync("timed-held", 1_500);
+                await blocked.Task.WaitAsync(stop);
+                var timed = await waitingProtection;
+                unblock.TrySetResult(true);
+                Require(timed.Error == "timeout" && await BirthsAsync(Open, stop) == committed,
+                    "the caller's budget expires during uncooperative host protection with no root admission");
+                var expiredOffer = offers.Last();
+                while (await PostgresPreviewHosting.PrunePreparedStartsAsync(Open, scope, stop) == 0)
+                    await Task.Delay(20, stop);
+                Require(await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, expiredOffer.Actor,
+                        expiredOffer.Issuance, stop) == RootStartProof.PreparationDisarmed,
+                    "the pruned preparation cannot admit its exact held root");
+                var finishedOffer = offers.First();
+                Require(await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, finishedOffer.Actor,
+                        finishedOffer.Issuance, stop) == RootStartProof.Unresolved,
+                    "the finished held root keeps its protection until retirement");
+                var policies = (Contract.IActorRetentionPolicies)foundation;
+                Require(await policies.TryApplyRetentionPolicyAsync(scope, 0, new(Finished: TimeSpan.Zero),
+                        long.MaxValue, cancellationToken: stop) is { Outcome: Contract.ActorRetentionPolicyChangeOutcome.Applied },
+                    "the host enables terminal retention");
+                var terminal = await foundation.GetAsync(scope, finishedOffer.Actor, stop);
+                Require(terminal?.Selection is not null &&
+                        (await foundation.AdmitRetentionDeleteAsync(scope, finishedOffer.Actor, terminal.Selection, stop)).Outcome ==
+                        Contract.AdmissionOutcome.Accepted, "normal retention accepts the exact held root");
+                while (await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, finishedOffer.Actor,
+                           finishedOffer.Issuance, stop) != RootStartProof.BirthRetired)
+                    await Task.Delay(25, stop);
+                Console.WriteLine("ok protected held root retires with its committed deletion mark");
+            }
+
+            async Task<Contract.Reply> RequestOnlyAsync(string id, long timeout)
+            {
+                var now = await clock.ReadReplyTimeAsync(stop);
+                return await foundation.RequestAsync(scope, new Contract.Target.Start(Start(routes, "POST", "/orders", new() { ["name"] = "Late" })),
+                    id, Contract.Kinds.Start, null, null, new(null, now + timeout, false), stop);
+            }
 
             Require(!escalated.Task.IsCompleted && service.LastError is null, "the node ran the held starts without a fault");
         }
         finally
         {
+            unblock.TrySetResult(false);
             await service.StopAsync(CancellationToken.None);
         }
         return 0;
+
+        async Task<int> PreparedCountAsync()
+        {
+            await using var db = Open();
+            return await db.Database.SqlQueryRaw<int>("""SELECT count(*)::integer AS "Value" FROM "FoundationPreparedRootStarts" """).SingleAsync(stop);
+        }
+
+        async ValueTask<bool> ProtectAsync(PendingRootStart offer, CancellationToken token)
+        {
+            offers.Enqueue(offer);
+            await using var db = Open();
+            await using var transaction = await db.Database.BeginTransactionAsync(token);
+            await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '1s'", token);
+            Require(await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "FoundationPreparedRootStarts" SET "Deadline" = "Deadline"
+                WHERE "Reference" = {offer.Actor.Id} AND "Tenant" = {offer.Tenant}
+                """, token) == 1, "protection sees the committed exact preparation and can obtain its write lock");
+            Require(!await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Reference" = {offer.Actor.Id}) AS "Value"
+                """).SingleAsync(token), "protection runs before birth admission");
+            await transaction.RollbackAsync(token);
+            if (behavior != 2) return behavior == 0;
+            blocked.TrySetResult();
+            return await unblock.Task;
+        }
     }
 
     private static Contract.StartSpec Start(HttpRoutes routes, string method, string path, JsonObject body)
