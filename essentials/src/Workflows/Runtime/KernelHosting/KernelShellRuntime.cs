@@ -131,12 +131,15 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             : ValueTask.FromResult(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.NodeBusy, RetryAfter: TimeSpan.FromSeconds(1)));
     }
 
-    public async ValueTask<Reply> StartHeldTestAsync(string operationId, StartSpec start, CancellationToken token)
+    public async ValueTask<Reply> StartHeldTestAsync(string operationId, StartSpec start, WorkflowTestRunHttpBudget budget, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (testTenant is null || Volatile.Read(ref _testStarts) is null)
             return new(null, null, Error: "lost") { RefusalReason = RefusalReason.NodeBusy, RetryAfter = TimeSpan.FromSeconds(1) };
-        var deadline = checked(await storage.ReadClockAsync(token) + 30_000L);
+        var now = await storage.ReadClockAsync(token);
+        var remaining = budget.Remaining;
+        if (remaining <= TimeSpan.Zero) return new(null, null, Error: "timeout");
+        var deadline = checked(now + (long)Math.Ceiling(remaining.TotalMilliseconds));
         return await Foundation.Ingress.RequestAsync(testTenant, new Target.Start(start), operationId, Kinds.Start, null,
             null, new(null, deadline), token);
     }

@@ -101,7 +101,10 @@ internal sealed class TestRunTargetDispatcher(
             dispatchOptions,
             cancellationToken: cancellationToken);
         var result = new TestRunTargetDispatchResult(dispatched, AlreadyDispatched: false);
-        await targets.CompleteDispatchAsync(testRunId, result, cancellationToken);
+        if (target.SourceReferenceId != target.Scope.ScopeId ||
+            !dispatched.CommandDispatch.IsShed && dispatched is not { CommandDispatch.Status: WorkflowExecutionCommandDispatchStatus.Rejected,
+                TestRunHttpReply.StatusCode: 408 })
+            await targets.CompleteDispatchAsync(testRunId, result, cancellationToken);
         return result;
     }
 

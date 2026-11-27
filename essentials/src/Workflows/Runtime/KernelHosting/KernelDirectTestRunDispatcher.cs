@@ -108,7 +108,9 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         var spec = WorkflowActor.Start(native, null, selection);
         if (http && request.TriggerMetadata.GetValueOrDefault("http:responseMode") == "Sync")
         {
-            var reply = await runtime.StartHeldTestAsync(test.ScopeId, spec, cancellationToken);
+            if (dispatchOptions?.TestRunHttpBudget is not { } budget)
+                return Refused("The selected HTTP Test Run is missing its request timeout.");
+            var reply = await runtime.StartHeldTestAsync(test.ScopeId, spec, budget, cancellationToken);
             if (reply.Error == "duplicate")
             {
                 var existing = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, cancellationToken);
@@ -117,6 +119,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
                         new(AdmissionOutcome.Duplicate, new(selectedActor.ActorReference)), clock.GetUtcNow());
             }
             var response = KernelHttpEdge.Answer(reply);
+            if (reply.Error == "timeout") response = response with { StatusCode = 408 };
             var heldAdmission = reply.Actor is { } actor
                 ? new Admission(AdmissionOutcome.Accepted, actor)
                 : new Admission(AdmissionOutcome.Refused, Reason: reply.RefusalReason, RetryAfter: reply.RetryAfter);

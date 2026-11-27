@@ -18,7 +18,7 @@ internal sealed class TestRunTargetCleaner(
             return;
 
         target = await targets.MarkStoppedAsync(testRunId, cancellationToken) ?? target;
-        if (rootCanceller is not null)
+        if (rootCanceller is not null && target.SourceReferenceId != target.Scope.ScopeId)
             await rootCanceller.RequestCancelAsync(testRunId, target.WorkflowExecutionId, target.Scope.Partition, cancellationToken);
 
         var executable = await executables.FindAsync(target.Executable.ArtifactId, cancellationToken);
