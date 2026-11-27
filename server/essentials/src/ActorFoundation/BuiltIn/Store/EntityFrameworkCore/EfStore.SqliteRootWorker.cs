@@ -197,8 +197,7 @@ public sealed partial class EfStore
             : await SettleSqliteRootInputsAsync(db, turn.Reference, actor,
                 turn.Inputs.Select(input => input.InboxKey).ToArray(), turn.Inputs, turn.Current.Suspended || turn.WithheldInputs, token);
         if (!settled) return false;
-        if (turn.SettledJobs is { Length: > 0 } jobIds &&
-            await SqlitePendingRootTimedInputs(db, actor, jobIds).ExecuteDeleteAsync(token) != jobIds.Length) return false;
+        if (turn.SettledJobs is { Length: > 0 } jobIds && !await DeleteRootTimedRowsAsync(db, actor, jobIds, token)) return false;
 
         var revision = turn.JournalRevision;
         FormattableString update = $"""

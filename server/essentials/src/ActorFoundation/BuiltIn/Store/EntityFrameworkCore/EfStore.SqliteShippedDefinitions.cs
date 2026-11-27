@@ -208,7 +208,11 @@ public sealed partial class EfStore
                 });
                 Check("CK_Instances_FoundationParkGeneration", """ "FoundationParkGeneration" >= 0 """);
             }
-            if (RecordsConsumedRootJob(db)) Add("FoundationParkJobResult", "TEXT");
+            if (RecordsConsumedRootJob(db))
+            {
+                Add("FoundationParkJobResult", "TEXT");
+                Add("FoundationParkLiveJob", "TEXT");
+            }
             Check("CK_FoundationParkClearing", $"""
                 ("FoundationParkClearing" IS NULL) = ("FoundationParkCleared" IS NULL)
                 AND ("FoundationParkClearing" IS NULL) = ("FoundationParkClearingKind" IS NULL)
@@ -321,7 +325,11 @@ public sealed partial class EfStore
             ("Partition", "Target", "Seq", "Id", "InboxScope") WHERE "FoundationKeptBy" IS NOT NULL
             """);
         if (RecordsConsumedRootJob(db))
+        {
             yield return Index("IX_FoundationRootInbox_RecordedJobResult", "Messages", RecordedJobResultIndex);
+            yield return Index("IX_FoundationRootInbox_LiveJob", "Messages", LiveRootJobIndex);
+            foreach (var guard in SqliteParkLiveJobGuards()) yield return guard;
+        }
         if (db.UsesRootParkRecovery)
         {
             yield return Index("IX_FoundationRootInbox_Released", "Messages", $"""

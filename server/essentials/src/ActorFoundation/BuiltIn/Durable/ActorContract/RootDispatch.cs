@@ -73,7 +73,8 @@ internal sealed partial class ActorAdapter
             : facts.Clearing is not null ? "clearing"
             : !CanRecoverRootWaits(row, facts) ? "plan" : !facts.FitsPage ? "page" : null;
         var revision = checked(row.Revision + 1);
-        var next = reason is null ? row with { Status = Durable.InstanceStatus.Running, Fault = null, Jobs = null, Revision = revision }
+        var next = reason is null ? row with
+            { Status = Durable.InstanceStatus.Running, Fault = null, Jobs = facts.KeepsRegisteredJob ? row.Jobs : null, Revision = revision }
             : row with { Revision = revision };
         return new(input.Actor)
         {
@@ -232,7 +233,7 @@ internal sealed partial class ActorAdapter
 
     private bool CanRecoverRootWaits(Durable.InstanceRow row, Durable.FoundationRootParkFacts facts)
     {
-        if (row.Jobs != facts.ConsumedJobRegistry) return false;
+        if (row.Jobs != facts.RecoverableJobRegistry) return false;
         try
         {
             var plan = actor.RestoreWaits(RootHeader(row), row.State);

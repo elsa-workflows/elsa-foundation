@@ -14,19 +14,26 @@ public sealed partial class EfStore
                 [.. update.GetArguments(), consumedId])
             : update;
 
-    private static FormattableString ClearParkJobResult(KernelDb db, FormattableString update, bool recovered) =>
+    private static FormattableString WithLiveParkJob(KernelDb db, FormattableString update, string? proof) =>
+        RecordsConsumedRootJob(db) && proof is not null
+            ? FormattableStringFactory.Create(
+                update.Format.Replace("/*park-live-job*/", $$""", "FoundationParkLiveJob" = {{{update.ArgumentCount}}}""", StringComparison.Ordinal),
+                [.. update.GetArguments(), proof])
+            : update;
+
+    private static FormattableString ClearParkJobPins(KernelDb db, FormattableString update, bool recovered) =>
         RecordsConsumedRootJob(db) && recovered
             ? FormattableStringFactory.Create(
-                update.Format.Replace("/*park-job-result*/", """, "FoundationParkJobResult" = NULL""", StringComparison.Ordinal),
+                update.Format.Replace("/*park-job-result*/", """, "FoundationParkJobResult" = NULL, "FoundationParkLiveJob" = NULL""",
+                    StringComparison.Ordinal),
                 update.GetArguments())
             : update;
 
-    private static FormattableString SelectParkJobResult(KernelDb db, FormattableString query) =>
+    private static FormattableString SelectParkJobPins(KernelDb db, FormattableString query) =>
         FormattableStringFactory.Create(query.Format.Replace("/*park-job-result*/",
-            RecordsConsumedRootJob(db) ? """i."FoundationParkJobResult" """ : "CAST(NULL AS text)", StringComparison.Ordinal), query.GetArguments());
-
-    private static bool IsPinnedParkJobResult(string? id, string? consumedId, string? registry) =>
-        registry is null ? id is null : consumedId is not null && id == consumedId;
+                RecordsConsumedRootJob(db) ? """i."FoundationParkJobResult" """ : "CAST(NULL AS text)", StringComparison.Ordinal)
+            .Replace("/*park-live-job*/", RecordsConsumedRootJob(db) ? """i."FoundationParkLiveJob" """ : "CAST(NULL AS text)",
+                StringComparison.Ordinal), query.GetArguments());
 
     private static async Task<string?> ReadConsumedRootJobAsync(KernelDb db, string actor, int partition, string? registry,
         CancellationToken token)

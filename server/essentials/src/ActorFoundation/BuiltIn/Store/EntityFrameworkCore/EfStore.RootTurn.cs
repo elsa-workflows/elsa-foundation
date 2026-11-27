@@ -75,15 +75,8 @@ public sealed partial class EfStore
                         AND "Kind" = {RootSelfWire} AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
                     """, cancellationToken);
             }
-            if (SettledJobs is { Length: > 0 })
-            {
-                // A Terminate settles the root's outstanding timed jobs: their ticket and deadline rows go in its commit.
-                var removed = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    DELETE FROM "Messages" WHERE "Target" = {Current.Actor.Id} AND "Partition" = {home}
-                        AND "InboxScope" = {RootTimedJobScope} AND "Id" = ANY({SettledJobs}) AND NOT "Done"
-                    """, cancellationToken);
-                if (removed != SettledJobs.Length) return false;
-            }
+            if (SettledJobs is { Length: > 0 } && !await DeleteRootTimedRowsAsync(db, Current.Actor, SettledJobs, cancellationToken))
+                return false;
             var ended = Status is InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled;
             var nextJobGeneration = JobState is null ? Current.NextJobGeneration : JobState.NextGeneration;
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
