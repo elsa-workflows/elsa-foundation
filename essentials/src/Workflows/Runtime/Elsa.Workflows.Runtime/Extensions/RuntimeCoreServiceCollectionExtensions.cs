@@ -331,6 +331,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<MemoryTestRunTargetStore>();
         services.TryAddSingleton<ITestRunTargetStore>(serviceProvider =>
             serviceProvider.GetRequiredService<MemoryTestRunTargetStore>());
+        services.TryAddSingleton<TestRunHeldDispatches>();
         services.TryAddScoped<ITestRunTargetDispatcher, TestRunTargetDispatcher>();
         services.TryAddScoped<ITestRunTargetCleaner, TestRunTargetCleaner>();
         services.TryAddScoped<ITestRunRootCanceller, TestRunRootCanceller>();

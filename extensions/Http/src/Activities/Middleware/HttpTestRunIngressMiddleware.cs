@@ -257,7 +257,8 @@ internal sealed class HttpTestRunIngressMiddleware(
                 await context.Response.WriteAsync(body, cancellationToken);
             return;
         }
-        if (target.SourceReferenceId == target.Scope.ScopeId)
+        var isolated = target.SourceReferenceId == target.Scope.ScopeId;
+        if (isolated)
         {
             var receipt = dispatchResult.Dispatch.CommandDispatch;
             if (receipt.IsShed)
@@ -273,13 +274,24 @@ internal sealed class HttpTestRunIngressMiddleware(
                 return;
             }
         }
-        if (authoredOptions.ResponseMode == ResponseMode.Sync
+        if (!isolated && authoredOptions.ResponseMode == ResponseMode.Sync
             && context.RequestServices.GetService<HttpResponseInstructionDelivery>() is { } delivery
             && await delivery.TryDeliverAsync(context.Response, [dispatchResult.Dispatch.WorkflowExecutionId], cancellationToken))
             return;
 
         context.Response.StatusCode = StatusCodes.Status202Accepted;
         context.Response.ContentType = "application/json";
+        if (isolated && authoredOptions.ResponseMode == ResponseMode.Sync && dispatchResult.AlreadyDispatched)
+        {
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new
+            {
+                testRunId,
+                workflowExecutionId = dispatchResult.Dispatch.WorkflowExecutionId,
+                alreadyDispatched = true,
+                responseReplayAvailable = false
+            }), cancellationToken);
+            return;
+        }
         await context.Response.WriteAsync(JsonSerializer.Serialize(new
         {
             testRunId,

@@ -12,6 +12,7 @@ internal sealed class TestRunTargetDispatcher(
     IWorkflowTestScopeStore scopes,
     IWorkflowStartDispatcher startDispatcher,
     TimeProvider timeProvider,
+    TestRunHeldDispatches heldDispatches,
     IPersistenceAccessContextAccessor? accessContextAccessor = null,
     IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
     IWorkflowDirectTestRunDispatcher? kernel = null) : ITestRunTargetDispatcher
@@ -41,6 +42,26 @@ internal sealed class TestRunTargetDispatcher(
 
         var digest = Digest(stimulusInput);
         var admission = await targets.BeginDispatchAsync(testRunId, digest, cancellationToken);
+        if (admission is not { Disposition: TestRunTargetDisposition.Ready, Target: { } selected } ||
+            selected.SourceReferenceId != selected.Scope.ScopeId || selected.DriverId != "Elsa.HttpEndpoint" ||
+            selected.Binding.Metadata.GetValueOrDefault("http:responseMode") != "Sync")
+            return await DispatchTargetAsync(admission, testRunId, stimulusInput, dispatchOptions, held: false, cancellationToken);
+
+        return await heldDispatches.RunAsync(testRunId, async () =>
+        {
+            // Conflicting data was refused before waiting. Re-read the accepted response and scope after waiting.
+            var currentScope = await scopes.FindAsync(testRunId, cancellationToken);
+            EnsureOpen(currentScope, selected.Scope, timeProvider.GetUtcNow());
+            var current = await targets.BeginDispatchAsync(testRunId, digest, cancellationToken);
+            return await DispatchTargetAsync(current, testRunId, stimulusInput, dispatchOptions, held: true, cancellationToken);
+        }, cancellationToken);
+    }
+
+    private async ValueTask<TestRunTargetDispatchResult> DispatchTargetAsync(TestRunTargetAdmission admission, string testRunId,
+        JsonElement? stimulusInput, WorkflowExecutionCommandDispatchOptions? dispatchOptions, bool held,
+        CancellationToken cancellationToken)
+    {
+        TestRunTarget target;
         switch (admission.Disposition)
         {
             case TestRunTargetDisposition.AlreadyDispatched:
@@ -100,8 +121,16 @@ internal sealed class TestRunTargetDispatcher(
             WorkflowExecutableReferenceScope.TestRun,
             dispatchOptions,
             cancellationToken: cancellationToken);
-        var result = new TestRunTargetDispatchResult(dispatched, AlreadyDispatched: false);
-        if (target.SourceReferenceId != target.Scope.ScopeId ||
+        var result = new TestRunTargetDispatchResult(dispatched,
+            AlreadyDispatched: held && dispatched.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Duplicate);
+        if (held)
+        {
+            // Retain only an answered admission. If this caller disconnects after receiving it from the actor,
+            // complete the cache write before releasing the flight so the next authorized request can replay it.
+            if (dispatched is { CommandDispatch.Status: WorkflowExecutionCommandDispatchStatus.Accepted, TestRunHttpReply: not null })
+                await targets.CompleteDispatchAsync(testRunId, result, CancellationToken.None);
+        }
+        else if (target.SourceReferenceId != target.Scope.ScopeId ||
             !dispatched.CommandDispatch.IsShed && dispatched is not { CommandDispatch.Status: WorkflowExecutionCommandDispatchStatus.Rejected,
                 TestRunHttpReply.StatusCode: 408 })
             await targets.CompleteDispatchAsync(testRunId, result, cancellationToken);

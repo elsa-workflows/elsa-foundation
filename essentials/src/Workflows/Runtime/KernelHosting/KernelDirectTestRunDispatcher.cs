@@ -111,13 +111,12 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         {
             if (dispatchOptions?.TestRunHttpBudget is not { } budget)
                 return Refused("The selected HTTP Test Run is missing its request timeout.");
+            if (await CommittedDuplicateAsync(stored) is { } previous) return previous;
             var reply = await runtime.StartHeldTestAsync(test.ScopeId, spec, budget, cancellationToken);
-            if (reply.Error == "duplicate")
+            if (reply.Error == "duplicate" || reply.RefusalReason == RefusalReason.TargetMismatch)
             {
                 var existing = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, cancellationToken);
-                if (existing?.IsolatedActor is { } selectedActor)
-                    return KernelPublishedRunDispatcher.Result(test.ScopeId, executable.Identity, provenance,
-                        new(AdmissionOutcome.Duplicate, new(selectedActor.ActorReference)), clock.GetUtcNow());
+                if (await CommittedDuplicateAsync(existing) is { } duplicate) return duplicate;
             }
             var response = KernelHttpEdge.Answer(reply);
             if (reply.Error == "timeout") response = response with { StatusCode = 408 };
@@ -126,6 +125,17 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
                 : new Admission(AdmissionOutcome.Refused, Reason: reply.RefusalReason, RetryAfter: reply.RetryAfter);
             return KernelPublishedRunDispatcher.Result(test.ScopeId, executable.Identity, provenance, heldAdmission, clock.GetUtcNow(),
                 reply.Error, new(response.StatusCode, response.ContentType, response.Body, response.Headers));
+
+            async ValueTask<WorkflowExecutionStartDispatchResult?> CommittedDuplicateAsync(WorkflowTestScopeRecord? current)
+            {
+                if (current is not { State: WorkflowTestScopeState.Open, IsolatedActor: { } binding } ||
+                    !WorkflowTestScope.ContextEquals(current.Scope, test) || test.IsExpired(clock.GetUtcNow()) ||
+                    await ObserveAsync(current, source, cancellationToken) is not
+                        (WorkflowDirectTestRunObservation.Started or WorkflowDirectTestRunObservation.Ended))
+                    return null;
+                return KernelPublishedRunDispatcher.Result(test.ScopeId, executable.Identity, provenance,
+                    new(AdmissionOutcome.Duplicate, new(binding.ActorReference)), clock.GetUtcNow());
+            }
         }
         var admission = await runtime.StartDirectTestAsync(test.ScopeId, spec, cancellationToken);
         return KernelPublishedRunDispatcher.Result(test.ScopeId, executable.Identity, provenance, admission, clock.GetUtcNow());
