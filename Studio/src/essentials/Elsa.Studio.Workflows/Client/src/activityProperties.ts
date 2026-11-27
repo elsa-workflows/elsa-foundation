@@ -210,8 +210,9 @@ export function getLiteralEditorValue(activity: ActivityNode, descriptor: Studio
 // genuinely want raw JSON keep it persistently via `isRepeaterOptOut` (uiHint json/code), and Object
 // remains selectable per-session for anything else.
 //
-// The demotion takes effect on the next save: `withLiteralValue` keeps the Literal type and `toWireArgument`
-// sends the list as a typed Literal, which the backend reads as strict JSON into the same collection.
+// The demotion is read-only; it reaches the wire once the author edits the input: `withLiteralValue` keeps the
+// Literal type and `toWireArgument` sends the list as a typed Literal, which the backend reads as strict JSON into
+// the same collection. An untouched input is saved as the Object text it already holds.
 function resolveAuthoredExpression(
   expression: ActivityExpression,
   descriptor: StudioActivityInputDescriptor

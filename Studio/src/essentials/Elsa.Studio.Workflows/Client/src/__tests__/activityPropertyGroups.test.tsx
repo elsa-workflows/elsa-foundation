@@ -1978,7 +1978,7 @@ describe("activity property organization", () => {
     ], {
       editors: [checklistEditor],
       expressionEditors: [createObjectExpressionEditorContribution(() => [checklistEditor])],
-      // Exactly what a save round-trip leaves behind: expressionType "Object", value a JSON string.
+      // What a draft saved before typed structured Literals holds: expressionType "Object", value a JSON string.
       activity: activity({
         supportedMethods: { typeName: "", expression: { type: "Object", value: '["GET"]' } }
       })
