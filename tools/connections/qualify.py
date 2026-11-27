@@ -61,7 +61,10 @@ def main():
         with tarfile.open(archive) as bundle:
             bundle.extractall(producer, filter="data")
         projects = set()
-        source_roots = [producer / "essentials/src", producer / "extensions/Connections/src"]
+        essentials = producer / "essentials/src"
+        if not essentials.is_dir():
+            essentials = producer / "server/essentials/src"
+        source_roots = [essentials, producer / "extensions/Connections/src"]
 
         def visit(project):
             project = project.resolve()

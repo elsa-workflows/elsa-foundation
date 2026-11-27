@@ -18,22 +18,30 @@ mkdir "$scratch/source"
 git -C "$repo" -c core.fsmonitor=false archive "$revision" | tar -xf - -C "$scratch/source"
 cd "$scratch/source"
 echo "Workbench preview source $revision"
-provider_project=essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj
-postgres_host_project=essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj
+essentials_root=essentials
+if [[ ! -d "$essentials_root/src" && -d server/essentials/src ]]; then
+  essentials_root=server/essentials
+fi
+app=server/apps/Elsa.Workbench.Host
+if [[ ! -d "$app" ]]; then
+  app=apps/Elsa.Workbench.Host
+fi
+provider_project=$essentials_root/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj
+postgres_host_project=$essentials_root/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj
 if [[ ! -f "$provider_project" ]]; then
   provider_project=prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj
   postgres_host_project=prototypes/kernel-model/runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj
 fi
 provider_dir=${provider_project%/*}
-python3 - "$provider_project" "$postgres_host_project" <<'PY'
+python3 - "$essentials_root" "$app" "$provider_project" "$postgres_host_project" <<'PY'
 import json
+import os
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
 
-app = Path('server/apps/Elsa.Workbench.Host')
+essentials, app, provider, postgres_host = map(Path, sys.argv[1:])
 locked = json.loads((app / 'packages.lock.json').read_text())['dependencies']['net10.0']
-provider, postgres_host = map(Path, sys.argv[1:])
 workbench_versions = {package: info['resolved'] for package, info in locked.items() if 'resolved' in info}
 provider_packages = {ref.attrib['Include'] for ref in ET.parse(provider).findall('.//PackageReference')}
 provider_packages.update({'Microsoft.EntityFrameworkCore', 'Microsoft.EntityFrameworkCore.Relational',
@@ -53,37 +61,51 @@ project=app/'Elsa.Workbench.Host.csproj'
 text=project.read_text()
 if text.count('</Project>') != 1:
     raise SystemExit('Cannot find the Workbench project insertion point.')
-native_runner = Path('essentials/tests/ActorFoundation/Native/Run')
+native_runner = essentials / 'tests/ActorFoundation/Native/Run'
 if not native_runner.is_dir():
     native_runner = Path('prototypes/kernel-model/models/Native.Run')
 if not (native_runner / 'PostgresFixtureDatabase.cs').is_file():
     raise SystemExit('Cannot find Native workflow fixtures in the selected source revision.')
-native_model = Path('essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj')
+native_model = essentials / 'src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj'
 if not native_model.is_file():
     native_model = Path('prototypes/kernel-model/models/Native/Kernel.Native.csproj')
-workflow_actor = Path('essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj')
+workflow_actor = essentials / 'src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj'
 if not workflow_actor.is_file():
     workflow_actor = Path('prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj')
-approval = ''
+def relative_to_app(path):
+    return os.path.relpath(path, app)
+
+compile_sources = {
+    Path('tools/ci/actor-foundation/WorkbenchPostgresPreview.cs'): 'WorkbenchPostgresPreview.cs',
+    Path('prototypes/kernel-model/ef/Kernel.Ef.Run/Wire.cs'): 'Wire.cs',
+    native_runner / 'PostgresFixtureDatabase.cs': 'PostgresFixtureDatabase.cs',
+}
 if not (app / 'CorePreview/DirectApprovalWorkflow.cs').is_file():
-    approval = f'<Compile Include="../../{native_runner}/DirectApprovalWorkflow.cs" Link="Qualification/DirectApprovalWorkflow.cs" />'
+    compile_sources[native_runner / 'DirectApprovalWorkflow.cs'] = 'DirectApprovalWorkflow.cs'
 project_references = (
-    'essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj',
     postgres_host,
     native_model,
     workflow_actor,
 )
+hosting = essentials / 'src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj'
+if hosting.is_file():
+    project_references += (hosting,)
+existing_references = {
+    (app / reference.attrib['Include'].replace('\\', '/')).resolve()
+    for reference in ET.parse(project).findall('.//ProjectReference')
+}
 references = '\n'.join(
-    f'    <ProjectReference Include="../../{reference}" />'
-    for reference in project_references if f'Include="../../{reference}"' not in text
+    f'    <ProjectReference Include="{relative_to_app(reference)}" />'
+    for reference in project_references if reference.resolve() not in existing_references
+)
+sources = '\n'.join(
+    f'    <Compile Include="{relative_to_app(path)}" Link="Qualification/{name}" />'
+    for path, name in compile_sources.items()
 )
 project.write_text(text.replace('</Project>', f'''
   <ItemGroup>
 {references}
-    <Compile Include="../../tools/ci/actor-foundation/WorkbenchPostgresPreview.cs" Link="Qualification/WorkbenchPostgresPreview.cs" />
-    {approval}
-    <Compile Include="../../prototypes/kernel-model/ef/Kernel.Ef.Run/Wire.cs" Link="Qualification/Wire.cs" />
-    <Compile Include="../../{native_runner}/PostgresFixtureDatabase.cs" Link="Qualification/PostgresFixtureDatabase.cs" />
+{sources}
   </ItemGroup>
 </Project>'''))
 program=app/'Program.cs'
@@ -102,19 +124,19 @@ if (args is ["--qualify-workbench-postgres", .. var previewArguments])
 PY
 # The composition is temporary. Restore the provider's committed closure first.
 dotnet restore "$provider_project" --locked-mode
-dotnet restore server/apps/Elsa.Workbench.Host /p:RestoreLockedMode=false
+dotnet restore "$app" /p:RestoreLockedMode=false
 git -C "$repo" -c core.fsmonitor=false show "$revision:$provider_dir/packages.lock.json" |
   cmp - "$provider_dir/packages.lock.json"
-dotnet build -c Release --no-restore server/apps/Elsa.Workbench.Host
-workbench=server/apps/Elsa.Workbench.Host/bin/Release/net10.0/Elsa.Workbench.Host.dll
+dotnet build -c Release --no-restore "$app"
+workbench=$app/bin/Release/net10.0/Elsa.Workbench.Host.dll
 
-python3 - "$provider_dir" <<'PYDEPS'
+python3 - "$provider_dir" "$workbench" <<'PYDEPS'
 import json
 from pathlib import Path
 import sys
 
 expected = json.loads(Path('expected-workbench-providers.json').read_text())
-manifest = Path('server/apps/Elsa.Workbench.Host/bin/Release/net10.0/Elsa.Workbench.Host.deps.json')
+manifest = Path(sys.argv[2]).with_suffix('.deps.json')
 compile_assets = Path(sys.argv[1]) / 'obj/project.assets.json'
 actual = dict(key.rsplit('/', 1) for key in json.loads(manifest.read_text())['libraries'])
 if 'Kernel.Foundation.InMemory' in actual:

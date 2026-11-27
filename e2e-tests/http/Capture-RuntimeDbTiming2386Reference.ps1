@@ -230,7 +230,7 @@ function Get-ExecutableExportEvidence {
 }
 
 $fusionSource = $null
-foreach ($sourceRoot in @('essentials', 'essentials', 'Essentials')) {
+foreach ($sourceRoot in @('essentials', 'server/essentials', 'Essentials')) {
     $fusionPath = "$sourceRoot/src/Workflows/Runtime/Core/Models/ExecutableNode.cs"
     $candidateSource = (& git -C $RepoRoot show "${CandidateSha}:$fusionPath" 2>$null) -join "`n"
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($candidateSource)) {

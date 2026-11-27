@@ -40,16 +40,19 @@ def _studio_root(root: Path) -> Path:
 
 
 def _source_project_path(path: str, studio: Path) -> str:
-    if studio.name == "studio":
-        return path
-    for prefix, legacy_prefix in (
-        ("studio/", "Studio/"),
-        ("essentials/src/Preferences/", "essentials/src/Studio/Preferences/"),
-        ("essentials/", "essentials/"),
-        ("server/apps/", "apps/"),
-    ):
-        if path.startswith(prefix):
-            return legacy_prefix + path[len(prefix):]
+    if studio.name == "Studio":
+        for prefix, legacy_prefix in (
+            ("studio/", "Studio/"),
+            ("essentials/src/Preferences/", "essentials/src/Studio/Preferences/"),
+            ("server/apps/", "apps/"),
+        ):
+            if path.startswith(prefix):
+                return legacy_prefix + path[len(prefix):]
+
+    checkout = studio.parent
+    if (path.startswith("essentials/") and not (checkout / "essentials/src").is_dir()
+            and (checkout / "server/essentials/src").is_dir()):
+        return "server/" + path
     return path
 
 
