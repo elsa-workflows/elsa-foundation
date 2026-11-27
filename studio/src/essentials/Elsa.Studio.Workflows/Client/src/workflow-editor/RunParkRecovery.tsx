@@ -18,13 +18,14 @@ interface RunParkRecoveryProps {
   context: StudioEndpointContext;
   workflowExecutionId: string;
   inspect: boolean;
+  refreshVersion: number;
   refreshRun: () => Promise<unknown>;
 }
 
 const pollInterval = 500;
 const confirmationBudget = 15_000;
 
-export function RunParkRecovery({ context, workflowExecutionId, inspect, refreshRun }: RunParkRecoveryProps) {
+export function RunParkRecovery({ context, workflowExecutionId, inspect, refreshVersion, refreshRun }: RunParkRecoveryProps) {
   const [state, setState] = useState<RecoveryState | null>(null);
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -40,8 +41,9 @@ export function RunParkRecovery({ context, workflowExecutionId, inspect, refresh
   }, [context, workflowExecutionId]);
 
   useEffect(() => {
-    if (!inspect) return;
+    if (!inspect || action.current) return;
     const read = new AbortController();
+    setState(null);
     void (async () => {
       try {
         const path = await resolveWorkflowParkRecovery(context, workflowExecutionId);
@@ -53,7 +55,7 @@ export function RunParkRecovery({ context, workflowExecutionId, inspect, refresh
       }
     })();
     return () => read.abort();
-  }, [context, workflowExecutionId, inspect]);
+  }, [context, workflowExecutionId, inspect, refreshVersion]);
 
   const current = inspect && state?.context === context ? state : null;
   const selected = current?.park?.status === "Available" ? current.park : null;

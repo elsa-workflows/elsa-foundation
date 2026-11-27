@@ -1136,6 +1136,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       data.activityCatalog.find(item => item.activityVersionId === node.activityVersionId),
       node.activityVersionId);
   }, [data]);
+  const [parkRecoveryRefresh, setParkRecoveryRefresh] = useState(0);
   const operator = useOperatorActions({
     context,
     workflowExecutionId,
@@ -2120,6 +2121,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   }, [associationActivities, data, focusNodePath, initialActivityExecutionId, restoreExecutionContext]);
 
   const refreshWorkspace = () => {
+    setParkRecoveryRefresh(version => version + 1);
     playback.pause(); historyTargetRequest.current?.abort();
     confirmedSingletons.current.clear();
     loadGeneration.current++;
@@ -2274,7 +2276,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
         </div>
         {operator.status}
         <RunParkRecovery key={workflowExecutionId} context={context} workflowExecutionId={workflowExecutionId}
-          inspect={observation.canInteract && currentData?.details.instance.status === "Faulted"} refreshRun={refreshRun} />
+          inspect={observation.canInteract && currentData?.details.instance.status === "Faulted"}
+          refreshVersion={parkRecoveryRefresh} refreshRun={refreshRun} />
       </div>
       {operator.dialog}
       {state === "ready" && data && !timelineDocked ? <div className="wf-canvas-tabs wf-run-primary-views">

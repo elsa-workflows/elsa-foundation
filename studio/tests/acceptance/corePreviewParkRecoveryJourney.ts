@@ -35,7 +35,7 @@ export async function corePreviewParkRecoveryJourney(page: Page, info: TestInfo,
   const recoveryPath = `${runPath}/recovery`;
   const browserPath = `/workflows/instances/${runId}`;
   const continueRun = () => page.request.post(`${stack.backend}/workflows/http/${waitRoute}`, { data: {} });
-  await expect.poll(async () => (await continueRun()).status(), { timeout: 30_000 }).not.toBe(404);
+  await expect.poll(async () => (await continueRun()).status(), { timeout: 30_000 }).toBe(500);
   await expect.poll(async () => (await api<{ status: string }>(recoveryPath)).status).toBe("Available");
 
   await page.goto(browserPath);
@@ -49,14 +49,16 @@ export async function corePreviewParkRecoveryJourney(page: Page, info: TestInfo,
   await page.route(sameRecovery, async route => {
     if (route.request().method() === "GET") {
       denyFirstRead = true;
-      await route.fulfill({ status: 403 });
+      await route.fulfill({ status: 403, headers: {
+        "Access-Control-Allow-Origin": new URL(page.url()).origin, "Access-Control-Allow-Credentials": "true"
+      } });
     } else await route.continue();
   });
   await page.reload();
   await expect.poll(() => denyFirstRead).toBe(true);
   await expect(action).toHaveCount(0);
   await page.unroute(sameRecovery);
-  await page.reload();
+  await page.getByRole("button", { name: "Refresh execution", exact: true }).click();
   await expect(action).toBeVisible();
 
   await page.route(sameRecovery, async route => {
