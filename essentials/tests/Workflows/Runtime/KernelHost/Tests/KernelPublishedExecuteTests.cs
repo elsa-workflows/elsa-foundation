@@ -160,13 +160,14 @@ public sealed class KernelPublishedExecuteTests
             var bound = EmbeddedTenant.Bind(Scope.Value);
             var reads = await shell.ReadAsync(token);
             Assert.Empty((await reads.ListAsync(bound, new(), cancellationToken: token)).Items);
+            await using var pinScope = await scopes.CreateAsyncScopeAsync(Scope);
+            var pins = pinScope.ServiceProvider.GetRequiredService<IRuntimeKernelExecutablePinStore>();
+            Assert.Empty(await pins.ListPinnedExecutableArtifactIdsAsync(token));
 
             using var native = await ExecuteAsync(alias.Identity.ArtifactId, new { sourceReferenceId = target });
             await VerifyAsync(native, alias, canonical.Identity, "blue", "authored-input", "authored-variable");
             using var flow = await ExecuteAsync(flowchart.Identity.ArtifactId, new { inputs = new { message = "flowchart-input" } }, tenant: "default");
             await VerifyAsync(flow, flowchart, flowchart.Identity, "default", "flowchart-input");
-            using var pinScope = await scopes.CreateAsyncScopeAsync(Scope);
-            var pins = pinScope.ServiceProvider.GetRequiredService<IRuntimeKernelExecutablePinStore>();
             Assert.Equal(new[] { canonical.Identity.ArtifactId, flowchart.Identity.ArtifactId }.Order(StringComparer.Ordinal),
                 (await pins.ListPinnedExecutableArtifactIdsAsync(token)).Order(StringComparer.Ordinal));
 
