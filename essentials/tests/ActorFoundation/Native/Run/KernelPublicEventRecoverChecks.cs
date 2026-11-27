@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
@@ -56,7 +57,8 @@ internal static partial class KernelAuthoredEventChecks
             var retain = new Contract.AddOptions(KeepFor: TimeSpan.FromMinutes(5));
             for (var index = 0; index < retainedCount; index++)
             {
-                var admission = await ingress.SendAsync(scope, topic, "parked-" + index, "ignored", null, retain, token);
+                var admission = await ingress.SendAsync(scope, topic, KeepingRecoverActor.RetainedPrefix + index, "ignored",
+                    KeepingRecoverActor.RetainedPayload(index), retain, token);
                 if (admission.Outcome != Contract.AdmissionOutcome.Accepted)
                     throw new InvalidOperationException($"Retained event {index} was refused: {admission}");
             }
@@ -125,6 +127,8 @@ internal static partial class KernelAuthoredEventChecks
     {
         internal const string Topic = "recover-events";
         internal const string Keeping = "keeping";
+        internal const string RetainedPrefix = "parked-";
+        internal static string RetainedPayload(int index) => index % 2 == 0 ? "\"<raw>" : "kept\0\uD800";
         private const string Ordinary = "ordinary";
 
         public string Type => "kept-recover-check";
@@ -146,6 +150,9 @@ internal static partial class KernelAuthoredEventChecks
                 if (received.Id.StartsWith("expired-", StringComparison.Ordinal) ||
                     received.Wait != Keeping && (received.Wait != Ordinary || received.Id != "after-open"))
                     throw new InvalidOperationException($"Delivery {received.Id} reached ineligible wait {received.Wait}.");
+                if (received.Id.StartsWith(RetainedPrefix, StringComparison.Ordinal) &&
+                    message.Payload != RetainedPayload(int.Parse(received.Id.AsSpan(RetainedPrefix.Length), CultureInfo.InvariantCulture)))
+                    throw new InvalidOperationException($"Delivery {received.Id} changed its retained payload.");
                 var seen = JsonSerializer.Deserialize<HashSet<string>>(turn.State!)!;
                 if (!seen.Add(received.Wait + "/" + received.Id))
                     throw new InvalidOperationException($"Duplicate delivery {received.Id} for {received.Wait}.");
