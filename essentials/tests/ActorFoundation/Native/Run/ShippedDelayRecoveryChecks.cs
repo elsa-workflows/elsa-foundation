@@ -20,6 +20,7 @@ internal static class ShippedDelayRecoveryChecks
     private const string FlowDefinition = "authored-flowchart-delay";
     private const string TerminalDefinition = "authored-far-future-delay";
     private const string Fault = "park-delay-probe";
+    private const string Immediate = "pending-metadata";
     private const int NativeDelay = 10_000;
     private const int FlowDelay = 4_000;
     private const int FarFutureDelay = 120_000;
@@ -160,7 +161,10 @@ internal static class ShippedDelayRecoveryChecks
                     "the public actor read shows a finished run with its Park cleared");
             }
             await CheckTerminationAsync();
+            var retaining = await AdmitAsync(TerminalDefinition, "retain-immediate-at-end");
+            var retainingTimer = await WaitingAsync(retaining, FarFutureDelay);
             await successor.StopAsync(token);
+            await CheckRetainsImmediateAsync(retaining, retainingTimer);
             Check(failures.IsEmpty, "the retained provider owners stop cleanly");
             return 0;
 
@@ -215,6 +219,67 @@ internal static class ShippedDelayRecoveryChecks
                     alive.Due == unrelatedTimer.Due && alive.Sequence == unrelatedTimer.Sequence &&
                     timers.All(timer => timer.Actor != plain && timer.Actor != compound && timer.Actor != unrelated),
                     "both deletion paths leave the other actor's far-future timer intact and fire none of them");
+            }
+
+            async Task CheckRetainsImmediateAsync(Contract.ActorRef reference, DelayWait timer)
+            {
+                var image = (await cold.ReadFirstRootAsync(scope.Tenant, reference.Id, token))!;
+                var selected = (await reads.GetAsync(scope, reference, token))!;
+                Check(await runtime.TerminateAsync(scope, "terminate-with-immediate", selected, cancellationToken: token)
+                    is { Outcome: Contract.AdmissionOutcome.Accepted },
+                    "the provider queues the selected Terminate before an immediate self-send");
+
+                var keeper = new EfStore(Open, postgres, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
+                await keeper.EnableRootSelfSendsAsync(token);
+                await keeper.EnableRootJobsAsync(token);
+                var issuer = keeper.RootSelfIssuer!;
+                // Place a legitimately issued immediate send behind the command while no owner is polling.
+                var key = FoundationSelfSend.Issue(issuer.Handle, CreationProtocol.Origin(timer.Actor, 1), image.Revision, 1, null);
+                var wire = keeper.EncodeRootSelf(timer.Actor, image.Revision, 1,
+                    FoundationSelfSend.Create(timer.Actor, 1, key, Immediate, null));
+                if (postgres)
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Sender", "Payload", "Due",
+                            "Done", "Seen", "Attempts", "Trial", "JobGeneration")
+                        VALUES ({wire.Id}, {wire.InboxScope}, 0, {timer.Actor}, {wire.Kind}, {wire.Sender}, {wire.Payload}, 0,
+                            false, 0, 0, 0, 0)
+                        """, token);
+                else
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Sender", "Payload", "Due", "Seq",
+                            "Done", "Seen", "Attempts", "Trial", "JobGeneration")
+                        VALUES ({wire.Id}, {wire.InboxScope}, 0, {timer.Actor}, {wire.Kind}, {wire.Sender}, {wire.Payload}, 0,
+                            (SELECT coalesce(max("Seq"), 0) + 1 FROM "Messages"), 0, 0, 0, 0, 0)
+                        """, token);
+
+                var actor = new PublicActor([new NativeExecutionModel(serving.Registry)]);
+                var roots = postgres ? keeper.BindWorkerNode(actor.Withholds) : keeper.BindSqliteWorkerNode(actor.Withholds);
+                var adapter = new ActorAdapter(new EfStore.RootHeaders(roots), actor, issuer, rootJobHandle: keeper.RootJobHandle,
+                    rootTimedJobClock: keeper.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true);
+                var observed = System.Reflection.DispatchProxy.Create<IKernelStore, PostgresRootParkOpeningChecks.ObservedCommit>();
+                var proxy = (PostgresRootParkOpeningChecks.ObservedCommit)observed;
+                proxy.Store = keeper;
+                var sampled = false;
+                proxy.Write = async (batch, writeToken) =>
+                {
+                    var committed = await keeper.CommitAsync(batch, writeToken);
+                    if (committed.Landed && batch.Turns.Any(turn => turn.Instance == timer.Actor && turn.Row?.Status == InstanceStatus.Cancelled))
+                    {
+                        sampled = await FindTimerAsync(timer.Actor, wire.Id) is { Done: false, Due: 0 } &&
+                            await FindTimerAsync(timer.Actor, timer.PhysicalKey) is null;
+                    }
+                    return committed;
+                };
+                await using var owner = new Worker("retain-immediate", 0, observed, adapter, new WorkerOptions { PassTurnBudget = 1 });
+                Check(await new DurableHost([owner]).ActivateAsync(0, token) == owner, "the witness owner takes the partition");
+                await UntilAsync(async () =>
+                {
+                    await owner.WokenAsync(null, token);
+                    await owner.RunAsync(token);
+                    return await cold.ReadFirstRootAsync(scope.Tenant, reference.Id, token)
+                        is { Status: InstanceStatus.Cancelled } ended ? ended : null;
+                });
+                Check(sampled, "the exact terminal commit keeps the immediate self-send and clears the private timer");
             }
 
             async Task<long> RetiredAsync(Contract.ActorRef reference, DelayWait timer)

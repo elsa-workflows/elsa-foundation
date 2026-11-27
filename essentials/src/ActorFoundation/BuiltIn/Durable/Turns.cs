@@ -248,7 +248,7 @@ public sealed class TurnOutcome(string instance)
     internal bool FoundationWithholds;
     internal FoundationHeaderChange? FoundationHeader;
     internal bool OpensPark;
-    internal bool ClearsPrivateSelfOnEnd;
+    internal bool ClearsPrivateTimersOnEnd;
     internal ParkKeepReason? FoundationKeep;
     internal ParkPageClear? FoundationParkClear;
     internal ParkRecoveryPage? FoundationRecoveryPage;

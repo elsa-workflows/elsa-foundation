@@ -129,7 +129,7 @@ public sealed partial class EfStore
                     token, parked: Park is not null))
                 return false;
 
-            if (clearsPrivate && (!await ClearTerminalRootSelfAsync(db, Current.Actor, Root.Partition, Current.Revision, SelfIssuer, token) ||
+            if (clearsPrivate && (!await ClearTerminalRootSelfAsync(db, Current.Actor, Root.Partition, Current.Revision, SelfIssuer, includeImmediate: true, token) ||
                 await HasRootRetirementInboxResidueAsync(db, Root, token)))
                 return false;
 

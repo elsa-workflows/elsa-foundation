@@ -16,10 +16,10 @@ public sealed partial class EfStore
 
     private sealed record TerminalSelfRow(string Id, string Kind, long Due, string Header);
 
-    // End only this creation's private sends. A Park's kept dispositions and every other scope still belong to their writer.
+    // End removes this creation's timers. Retirement also removes its immediate private sends. Kept rows stay with the Park.
     // Read small pages of the signed headers, without transferring any private content, in the locked terminal checkpoint.
     private static async Task<bool> ClearTerminalRootSelfAsync(KernelDb db, CreationAddress actor, int partition, long revision,
-        FoundationSelfIssuer? issuer, CancellationToken token)
+        FoundationSelfIssuer? issuer, bool includeImmediate, CancellationToken token)
     {
         if (!db.UsesRootPrivateParkInputs) return true;
         if (actor.Creation != 1) return false;
@@ -36,7 +36,7 @@ public sealed partial class EfStore
                 SELECT "Id", "Kind", "Due", substr("Payload", 1, {{RootSelfHeaderBytes + 1}}) AS cut
                 FROM "Messages" WHERE "Target" = {0} AND "Partition" = {1} AND {{UnkeptRootSelf}} AND "Sender" = {0}
                     AND "Start" IS NULL AND "KeepUntil" IS NULL AND "ReplyTo" IS NULL AND "JobGeneration" = 0
-                    AND "Kind" IN ({2}, {3}) AND "Payload" IS NOT NULL
+                    AND ("Kind" = {3} OR {6} AND "Kind" = {2}) AND "Payload" IS NOT NULL
                     AND "Id" COLLATE {{collation}} > {4} AND "Id" COLLATE {{collation}} < {5}
                 ORDER BY "Id" COLLATE {{collation}} LIMIT {{pageSize}} {{rowLock}}
             )
@@ -47,7 +47,7 @@ public sealed partial class EfStore
         while (true)
         {
             var page = await db.Database.SqlQuery<TerminalSelfRow>(FormattableStringFactory.Create(sql,
-                actor.Id, partition, RootSelfWire, RootSelfTimerWire, cursor, origin + "$")).ToListAsync(token);
+                actor.Id, partition, RootSelfWire, RootSelfTimerWire, cursor, origin + "$", includeImmediate)).ToListAsync(token);
             if (page.Count == 0) return true;
             if (issuer is not { DistinguishesTimers: true }) return false;
             var exact = new List<string>(page.Count);

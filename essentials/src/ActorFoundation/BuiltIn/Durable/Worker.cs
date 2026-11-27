@@ -3646,10 +3646,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var item in retired.Inbox.ToArray()) Forget(item);
             if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
         }
-        if (unit.ClearsPrivateSelfOnEnd && !unit.Delete && unit.Row is { } ended && unit.Slot is { } closed)
+        if (unit.ClearsPrivateTimersOnEnd && !unit.Delete && unit.Row is { } ended && unit.Slot is { } closed)
         {
-            // The terminal checkpoint discarded the private sends. Ordinary arrivals still belong to the ended mailbox.
-            foreach (var item in closed.Inbox.Where(item => item.Durable && !item.Taken &&
+            // The terminal checkpoint discarded the timers. Immediate self-sends and ordinary arrivals still belong to the ended mailbox.
+            foreach (var item in closed.Inbox.Where(item => item.Durable && !item.Taken && item.Message.Due is not null &&
                 FoundationSelfSend.IsSelfInput(item.Message, ended.Id, ended.Creation)).ToArray())
                 Forget(item);
             if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(ended.Id);
