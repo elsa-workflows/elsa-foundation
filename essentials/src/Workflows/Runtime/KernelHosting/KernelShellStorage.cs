@@ -15,13 +15,19 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal abstract class KernelShellStorage
 {
+    private enum Profile { Shipped, ManagedSchedules, PreparedStarts }
+
     public abstract bool TakesSelfSends { get; }
     public abstract bool TakesTimers { get; }
     public abstract bool TakesChildren { get; }
     public abstract bool TakesHttpWaits { get; }
     public abstract bool TakesManagedSchedules { get; }
     public abstract ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token);
-    public abstract Task InstallAsync(CancellationToken token);
+    public abstract bool TakesPreparedStarts { get; }
+    public abstract Task InstallAsync(CancellationToken token, ProtectRootStartAsync? protectRootStart = null);
+    public abstract Task<RootStartProof> ConfirmPreparedStartAsync(BoundScope scope, ActorRef actor, string issuance,
+        CancellationToken token);
+    public abstract Task<int> PrunePreparedStartsAsync(BoundScope scope, CancellationToken token);
     public abstract ValueTask<KernelShellFoundation> OpenAsync(CancellationToken token);
     public abstract ValueTask<long> ReadClockAsync(CancellationToken token);
     public abstract ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(BoundScope scope, ActorRef actor, string issuance,
@@ -31,20 +37,23 @@ internal abstract class KernelShellStorage
         ProtectChildBirthsAsync? protectChildBirths = null);
 
     public static KernelShellStorage Create(string provider, string? sqlitePath, string? postgresConnectionString) =>
-        Create(provider, sqlitePath, postgresConnectionString, qualifySchedules: false);
+        Create(provider, sqlitePath, postgresConnectionString, Profile.Shipped);
 
     internal static KernelShellStorage CreateManagedSchedulesQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
-        Create(provider, sqlitePath, postgresConnectionString, qualifySchedules: true);
+        Create(provider, sqlitePath, postgresConnectionString, Profile.ManagedSchedules);
 
-    private static KernelShellStorage Create(string provider, string? sqlitePath, string? postgresConnectionString, bool qualifySchedules)
+    internal static KernelShellStorage CreatePreparedStartsQualification(string provider, string? sqlitePath, string? postgresConnectionString) =>
+        Create(provider, sqlitePath, postgresConnectionString, Profile.PreparedStarts);
+
+    private static KernelShellStorage Create(string provider, string? sqlitePath, string? postgresConnectionString, Profile profile)
     {
         var node = $"foundation-kernel-{Environment.ProcessId}-{Guid.NewGuid():N}";
         return provider?.Trim().ToLowerInvariant() switch
         {
             "sqlite" when sqlitePath is not null && Path.IsPathFullyQualified(sqlitePath) && string.IsNullOrWhiteSpace(postgresConnectionString) =>
-                new Sqlite(node, sqlitePath, qualifySchedules),
+                new Sqlite(node, sqlitePath, profile),
             "postgresql" when !string.IsNullOrWhiteSpace(postgresConnectionString) && string.IsNullOrWhiteSpace(sqlitePath) =>
-                new Postgres(node, postgresConnectionString, qualifySchedules),
+                new Postgres(node, postgresConnectionString, profile),
             "sqlite" => throw new InvalidOperationException("Set SqlitePath to an absolute path to a dedicated database and leave PostgresConnectionString empty."),
             "postgresql" => throw new InvalidOperationException("Set PostgresConnectionString for the dedicated kernel database and leave SqlitePath empty."),
             _ => throw new InvalidOperationException("Use SQLite or PostgreSQL for WorkflowsRuntimeKernelHosting's Provider.")
@@ -82,29 +91,48 @@ internal abstract class KernelShellStorage
         new(occurrence.Executable.DefinitionId, occurrence.ScheduleKey, new(occurrence.ScheduleReference),
             occurrence.ArmGeneration, occurrence.TimerDeliveryId, occurrence.Due.ToUnixTimeMilliseconds());
 
-    private sealed class Sqlite(string node, string path, bool qualifySchedules) : KernelShellStorage
+    private sealed class Sqlite(string node, string path, Profile profile) : KernelShellStorage
     {
-        private readonly SqliteEmbeddedFoundation _foundation = qualifySchedules
-            ? SqliteEmbeddedFoundation.ForManagedSchedulesQualification(path, node, WorkflowActor.ActorType)
-            : new(path, node, WorkflowActor.ActorType);
+        private SqliteEmbeddedFoundation? _foundation = profile switch
+        {
+            Profile.ManagedSchedules => SqliteEmbeddedFoundation.ForManagedSchedulesQualification(path, node, WorkflowActor.ActorType),
+            Profile.PreparedStarts => null,
+            _ => new(path, node, WorkflowActor.ActorType)
+        };
+
+        private SqliteEmbeddedFoundation Foundation => _foundation ??
+            throw new InvalidOperationException("Install the SQLite prepared-start store before opening it.");
 
         public override bool TakesSelfSends => SqliteEmbeddedHosting.TakesSelfSends;
         public override bool TakesTimers => SqliteEmbeddedHosting.TakesTimers;
         public override bool TakesChildren => SqliteEmbeddedHosting.TakesChildren;
         public override bool TakesHttpWaits => SqliteEmbeddedHosting.TakesHttpWaits;
-        public override bool TakesManagedSchedules => _foundation.TakesManagedSchedules;
+        public override bool TakesManagedSchedules => TakesPreparedStarts || Foundation.TakesManagedSchedules;
+        public override bool TakesPreparedStarts => profile == Profile.PreparedStarts;
 
         public override ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token) =>
-            ValueTask.FromResult(BindSchedules(scope, _foundation.BindScheduleControls(ScheduleActor.ActorType),
-                _foundation.BindScheduleOccurrences(scope, ScheduleActor.ActorType)));
-        public override Task InstallAsync(CancellationToken token) => _foundation.InstallShippedAsync(token);
-        public override ValueTask<long> ReadClockAsync(CancellationToken token) => _foundation.ReadClockAsync(token);
+            ValueTask.FromResult(BindSchedules(scope, Foundation.BindScheduleControls(ScheduleActor.ActorType),
+                Foundation.BindScheduleOccurrences(scope, ScheduleActor.ActorType)));
+        public override Task InstallAsync(CancellationToken token, ProtectRootStartAsync? protectRootStart = null)
+        {
+            if (TakesPreparedStarts)
+                _foundation ??= SqliteEmbeddedFoundation.ForPreparedStartsQualification(path, node, WorkflowActor.ActorType,
+                    protectRootStart ?? throw new InvalidOperationException("The SQLite prepared-start profile requires executable protection."));
+            return Foundation.InstallShippedAsync(token);
+        }
+
+        public override Task<RootStartProof> ConfirmPreparedStartAsync(BoundScope scope, ActorRef actor, string issuance,
+            CancellationToken token) => Foundation.ConfirmPreparedStartAsync(scope, actor, issuance, token);
+
+        public override Task<int> PrunePreparedStartsAsync(BoundScope scope, CancellationToken token) =>
+            Foundation.PrunePreparedStartsAsync(scope, token);
+        public override ValueTask<long> ReadClockAsync(CancellationToken token) => Foundation.ReadClockAsync(token);
 
         public override async ValueTask<KernelShellFoundation> OpenAsync(CancellationToken token) =>
-            new(await _foundation.OpenIngressAsync(token), _foundation.CreateReads(), _foundation, _foundation.AdmitRetentionDeleteAsync);
+            new(await Foundation.OpenIngressAsync(token), Foundation.CreateReads(), Foundation, Foundation.AdmitRetentionDeleteAsync);
 
         public override ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(BoundScope scope, ActorRef actor, string issuance,
-            CancellationToken token) => _foundation.ConfirmChildBirthAsync(scope, actor, issuance, token);
+            CancellationToken token) => Foundation.ConfirmChildBirthAsync(scope, actor, issuance, token);
 
         public override (IHostedService, IAsyncDisposable) CreateOwner(IActorType actor, ILoggerFactory logs,
             Func<ActorHeader, TimeSpan?> retentionWindow, IActorType? schedule = null, ProtectChildBirthsAsync? protectChildBirths = null)
@@ -112,13 +140,13 @@ internal abstract class KernelShellStorage
             var logger = logs.CreateLogger<SqliteEmbeddedHostedService>();
             if (protectChildBirths is not null)
             {
-                var protectedOwner = _foundation.CreateHostedServiceWithChildBirthProtection(actor, protectChildBirths,
+                var protectedOwner = Foundation.CreateHostedServiceWithChildBirthProtection(actor, protectChildBirths,
                     Environment.FailFast, retentionWindow, logger: logger, auxiliaryActor: schedule);
                 return (protectedOwner, protectedOwner);
             }
             var owner = schedule is null
-                ? _foundation.CreateHostedServiceWithRetention(actor, Environment.FailFast, retentionWindow, logger: logger)
-                : _foundation.CreateHostedServiceWithAuxiliaryActor(actor, schedule, Environment.FailFast, retentionWindow, logger: logger);
+                ? Foundation.CreateHostedServiceWithRetention(actor, Environment.FailFast, retentionWindow, logger: logger)
+                : Foundation.CreateHostedServiceWithAuxiliaryActor(actor, schedule, Environment.FailFast, retentionWindow, logger: logger);
             return (owner, owner);
         }
     }
@@ -126,16 +154,16 @@ internal abstract class KernelShellStorage
     private sealed class Postgres : KernelShellStorage
     {
         private readonly DbContextOptions<KernelDb> _options;
-        private readonly PostgresDirectRequests _requests;
+        private PostgresDirectRequests? _requests;
         private readonly string _node;
-        private readonly bool _qualifySchedules;
+        private readonly Profile _profile;
 
-        public Postgres(string node, string connectionString, bool qualifySchedules)
+        public Postgres(string node, string connectionString, Profile profile)
         {
             _node = node;
-            _qualifySchedules = qualifySchedules;
+            _profile = profile;
             _options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connectionString).Options;
-            _requests = PostgresPreviewHosting.CreateRequests(OpenDatabase, node, WorkflowActor.ActorType);
+            if (!TakesPreparedStarts) _requests = PostgresPreviewHosting.CreateRequests(OpenDatabase, node, WorkflowActor.ActorType);
         }
 
         public override bool TakesSelfSends => PostgresPreviewHosting.TakesSelfSends(OpenDatabase);
@@ -143,21 +171,46 @@ internal abstract class KernelShellStorage
         public override bool TakesChildren => PostgresPreviewHosting.TakesChildren(OpenDatabase);
         public override bool TakesHttpWaits => PostgresPreviewHosting.TakesHttpWaits(OpenDatabase);
         public override bool TakesManagedSchedules => PostgresPreviewHosting.TakesManagedSchedules(OpenDatabase);
-        public override Task InstallAsync(CancellationToken token) => _qualifySchedules
-            ? PostgresPreviewHosting.InstallManagedSchedulesQualificationAsync(_options, token)
-            : PostgresPreviewHosting.InstallShippedAsync(_options, token);
+        public override bool TakesPreparedStarts => _profile == Profile.PreparedStarts;
+        private PostgresDirectRequests Requests => _requests ??
+            throw new InvalidOperationException("Install the PostgreSQL prepared-start store before opening it.");
+
+        public override async Task InstallAsync(CancellationToken token, ProtectRootStartAsync? protectRootStart = null)
+        {
+            switch (_profile)
+            {
+                case Profile.PreparedStarts:
+                    ArgumentNullException.ThrowIfNull(protectRootStart);
+                    await PostgresPreviewHosting.InstallPreparedStartsQualificationAsync(_options, token);
+                    _requests ??= PostgresPreviewHosting.CreateRequestsWithRootStartProtection(OpenDatabase, _node,
+                        WorkflowActor.ActorType, protectRootStart);
+                    break;
+                case Profile.ManagedSchedules:
+                    await PostgresPreviewHosting.InstallManagedSchedulesQualificationAsync(_options, token);
+                    break;
+                default:
+                    await PostgresPreviewHosting.InstallShippedAsync(_options, token);
+                    break;
+            }
+        }
+
+        public override Task<RootStartProof> ConfirmPreparedStartAsync(BoundScope scope, ActorRef actor, string issuance,
+            CancellationToken token) => PostgresPreviewHosting.ConfirmPreparedStartAsync(OpenDatabase, scope, actor, issuance, token);
+
+        public override Task<int> PrunePreparedStartsAsync(BoundScope scope, CancellationToken token) =>
+            PostgresPreviewHosting.PrunePreparedStartsAsync(OpenDatabase, scope, token);
 
         public override async ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token)
         {
             var occurrences = await PostgresPreviewHosting.OpenScheduleOccurrencesAsync(OpenDatabase, scope, WorkflowActor.ActorType,
-                ScheduleActor.ActorType, _requests, token);
+                ScheduleActor.ActorType, Requests, token);
             return BindSchedules(scope, PostgresPreviewHosting.BindScheduleControls(OpenDatabase, ScheduleActor.ActorType), occurrences);
         }
-        public override ValueTask<long> ReadClockAsync(CancellationToken token) => _requests.ReadClockAsync(token);
+        public override ValueTask<long> ReadClockAsync(CancellationToken token) => Requests.ReadClockAsync(token);
 
         public override async ValueTask<KernelShellFoundation> OpenAsync(CancellationToken token)
         {
-            var foundation = await PostgresPreviewHosting.OpenFoundationAsync(OpenDatabase, WorkflowActor.ActorType, _requests,
+            var foundation = await PostgresPreviewHosting.OpenFoundationAsync(OpenDatabase, WorkflowActor.ActorType, Requests,
                 cancellationToken: token);
             return new(foundation, foundation, foundation, foundation.AdmitRetentionDeleteAsync);
         }
@@ -172,20 +225,23 @@ internal abstract class KernelShellStorage
             if (protectChildBirths is not null)
             {
                 var protectedOwner = PostgresPreviewHostedService.CreateWithChildBirthProtection(OpenDatabase, _node, actor,
-                    protectChildBirths, Environment.FailFast, retentionWindow, logger: logger, requests: _requests, auxiliaryActor: schedule);
+                    protectChildBirths, Environment.FailFast, retentionWindow, logger: logger, requests: Requests, auxiliaryActor: schedule);
                 return (protectedOwner, protectedOwner);
             }
             var owner = schedule is null
-                ? new PostgresPreviewHostedService(OpenDatabase, _node, actor, Environment.FailFast, logger: logger, requests: _requests)
+                ? new PostgresPreviewHostedService(OpenDatabase, _node, actor, Environment.FailFast, logger: logger, requests: Requests)
                     { RetentionWindow = retentionWindow }
                 : PostgresPreviewHostedService.CreateWithAuxiliaryActorAndRetention(OpenDatabase, _node, actor, schedule,
-                    Environment.FailFast, retentionWindow, logger: logger, requests: _requests);
+                    Environment.FailFast, retentionWindow, logger: logger, requests: Requests);
             return (owner, owner);
         }
 
-        private KernelDb OpenDatabase() => _qualifySchedules
-            ? PostgresPreviewHosting.CreateManagedSchedulesQualificationContext(_options)
-            : PostgresPreviewHosting.CreateShippedContext(_options);
+        private KernelDb OpenDatabase() => _profile switch
+        {
+            Profile.ManagedSchedules => PostgresPreviewHosting.CreateManagedSchedulesQualificationContext(_options),
+            Profile.PreparedStarts => PostgresPreviewHosting.CreatePreparedStartsQualificationContext(_options),
+            _ => PostgresPreviewHosting.CreateShippedContext(_options)
+        };
     }
 }
 

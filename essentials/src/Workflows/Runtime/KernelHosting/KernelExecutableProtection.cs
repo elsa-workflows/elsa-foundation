@@ -12,8 +12,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
-internal sealed class KernelChildBirthProtection(IServiceScopeFactory scopes, PersistenceScope scope, BoundScope actors,
-    KernelServing serving, KernelShellStorage foundation, TimeProvider clock, ILogger<KernelChildBirthProtection> logger)
+internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, PersistenceScope scope, BoundScope actors,
+    KernelServing serving, KernelShellStorage foundation, TimeProvider clock, ILogger<KernelExecutableProtection> logger)
 {
     private const int PageSize = 32;
     private static readonly TimeSpan CleanupCadence = TimeSpan.FromSeconds(5);
@@ -42,12 +42,7 @@ internal sealed class KernelChildBirthProtection(IServiceScopeFactory scopes, Pe
         try
         {
             foreach (var batch in pins.Chunk(RuntimeStorePageRequest.MaximumLimit))
-            {
-                using var bounded = Limit(token);
-                await using var runtime = await scopes.CreateAsyncScopeAsync(scope);
-                var store = runtime.ServiceProvider.GetRequiredService<IRuntimeKernelExecutablePinStore>();
-                if (!await store.TryPinAsync(batch, bounded.Token)) return ChildBirthProtectionOutcome.Stale;
-            }
+                if (!await TryPinAsync(batch, token)) return ChildBirthProtectionOutcome.Stale;
             return ChildBirthProtectionOutcome.Protected;
         }
         catch (OperationCanceledException) when (!token.IsCancellationRequested)
@@ -67,6 +62,31 @@ internal sealed class KernelChildBirthProtection(IServiceScopeFactory scopes, Pe
         }
     }
 
+    internal async ValueTask<bool> ProtectHeldStartAsync(PendingRootStart start, CancellationToken token)
+    {
+        if (start.Tenant != actors.Tenant || scope.Value != actors.Tenant ||
+            KernelExecutableSelection.Read(start.Type, start.TypeData)?.Executable is not { } expected)
+            return false;
+
+        try
+        {
+            return await TryPinAsync([new(scope, actors.Tenant, start.Actor.Id, expected, start.Issuance)], token);
+        }
+        catch (Exception error) when (error is WorkflowExecutableDependencyGraphException or InvalidDataException)
+        {
+            logger.LogWarning(error, "Held executable protection refused the selected identity for tenant {Tenant}.", actors.Tenant);
+            return false;
+        }
+    }
+
+    private async ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken token)
+    {
+        using var bounded = Limit(token);
+        await using var runtime = await scopes.CreateAsyncScopeAsync(scope);
+        var store = runtime.ServiceProvider.GetRequiredService<IRuntimeKernelExecutablePinStore>();
+        return await store.TryPinAsync(pins, bounded.Token);
+    }
+
     internal async Task RunAsync(CancellationToken token)
     {
         string? through = null, after = null;
@@ -77,6 +97,11 @@ internal sealed class KernelChildBirthProtection(IServiceScopeFactory scopes, Pe
             {
                 try
                 {
+                    if (foundation.TakesPreparedStarts)
+                    {
+                        using var pruneBudget = Limit(token);
+                        await foundation.PrunePreparedStartsAsync(actors, pruneBudget.Token);
+                    }
                     using var pageBudget = Limit(token);
                     await using var runtime = await scopes.CreateAsyncScopeAsync(scope);
                     var store = runtime.ServiceProvider.GetRequiredService<IRuntimeKernelExecutablePinStore>();
@@ -94,14 +119,14 @@ internal sealed class KernelChildBirthProtection(IServiceScopeFactory scopes, Pe
                 }
                 catch (Exception error) when (!token.IsCancellationRequested)
                 {
-                    logger.LogWarning(error, "Child executable pin cleanup will retry for tenant {Tenant}.", actors.Tenant);
+                    logger.LogWarning(error, "Executable pin cleanup will retry for tenant {Tenant}.", actors.Tenant);
                 }
             } while (await timer.WaitForNextTickAsync(token));
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception error)
         {
-            logger.LogError(error, "Child executable pin cleanup stopped for tenant {Tenant}.", actors.Tenant);
+            logger.LogError(error, "Executable pin cleanup stopped for tenant {Tenant}.", actors.Tenant);
         }
     }
 
@@ -114,12 +139,24 @@ internal sealed class KernelChildBirthProtection(IServiceScopeFactory scopes, Pe
         }
         catch (Exception error) when (!token.IsCancellationRequested)
         {
-            logger.LogWarning(error, "Proof of child birth {Actor} is unavailable for tenant {Tenant}.", pin.ActorReference, actors.Tenant);
+            logger.LogWarning(error, "Proof of actor birth {Actor} is unavailable for tenant {Tenant}.", pin.ActorReference, actors.Tenant);
         }
 
         async ValueTask<RuntimeKernelExecutablePinProof> ConfirmAsync(RuntimeKernelExecutablePin exact, CancellationToken cancellationToken)
         {
             if (exact != pin) return RuntimeKernelExecutablePinProof.Unresolved;
+            if (PendingRootStart.OwnsIssuance(exact.Issuance))
+            {
+                if (!foundation.TakesPreparedStarts) return RuntimeKernelExecutablePinProof.Unresolved;
+                var root = await foundation.ConfirmPreparedStartAsync(actors, new(exact.ActorReference), exact.Issuance, cancellationToken);
+                return root switch
+                {
+                    RootStartProof.BirthRetired => RuntimeKernelExecutablePinProof.BirthRetired,
+                    RootStartProof.PreparationDisarmed => RuntimeKernelExecutablePinProof.IssuanceFencedAbsent,
+                    _ => RuntimeKernelExecutablePinProof.Unresolved
+                };
+            }
+
             var proof = await foundation.ConfirmChildBirthAsync(actors, new(exact.ActorReference), exact.Issuance, cancellationToken);
             return proof switch
             {
