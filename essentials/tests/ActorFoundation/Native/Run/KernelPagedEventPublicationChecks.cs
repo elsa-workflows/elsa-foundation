@@ -10,7 +10,8 @@ namespace Kernel.Native.Run;
 
 internal static partial class KernelAuthoredEventChecks
 {
-    internal static async Task<int> RunPagedEventPublicationAsync(string provider, bool inBatch, bool physicalPages = false, bool authored = false, bool parkPublication = false)
+    internal static async Task<int> RunPagedEventPublicationAsync(string provider, bool inBatch, bool physicalPages = false, bool authored = false, bool parkPublication = false,
+        bool replaceOwner = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         var token = timeout.Token;
@@ -19,8 +20,9 @@ internal static partial class KernelAuthoredEventChecks
         var directory = Directory.CreateTempSubdirectory("paged-event-publication");
         try
         {
+            var path = Path.Combine(directory.FullName, "store.db");
             var (open, ingress, reads, owner, events, restart) = await OpenAsync(model, provider,
-                Path.Combine(directory.FullName, "store.db"), inBatch, token, eventStarts: authored, publicStarts: true, pagedPublicEvents: !physicalPages,
+                path, inBatch, token, eventStarts: authored, publicStarts: true, pagedPublicEvents: !physicalPages,
                 authorizeOperator: parkPublication ? (_, _, _) => true : null);
             await using var initialOwner = owner;
             var actors = new List<Contract.ActorRef>();
@@ -38,7 +40,7 @@ internal static partial class KernelAuthoredEventChecks
                 await using var db = open();
                 return await db.Subscriptions.CountAsync(row => row.Key == scope.Tenant + "_" + PagedEventActor.Key, token) == actors.Count;
             });
-            if (!physicalPages && !parkPublication)
+            if (!physicalPages && !parkPublication && !replaceOwner)
             {
                 foreach (var wait in new[] { "registered-one", "registered-two" })
                     await ingress.SetStartAsync(scope, PagedEventActor.Key, wait, new(model.Type, "registered", wait), token);
@@ -161,6 +163,9 @@ internal static partial class KernelAuthoredEventChecks
             Check(replay.Outcome == Contract.AdmissionOutcome.Duplicate && replay.Publication == accepted.Publication,
                 "a duplicate before matching sees the original pending publication");
 
+            var interrupted = replaceOwner
+                ? await InterruptPagedEventOwnerAsync(provider, inBatch, path, open, scope.Tenant, publicationId, token)
+                : null;
             await using var resumed = await restart(token);
             await UntilAsync(async () =>
             {
@@ -168,6 +173,8 @@ internal static partial class KernelAuthoredEventChecks
                     throw new InvalidOperationException("The SQLite publication owner reported a fault.", fault);
                 return await DeliveredAsync();
             });
+            if (interrupted is not null)
+                await VerifyPagedEventOwnerReplacementAsync(open, scope.Tenant, publicationId, interrupted, actors.Count, token);
             var settled = await ingress.SendAsync(scope, target, publicationId, "ignored", null, options, token);
             Check(settled is { Outcome: Contract.AdmissionOutcome.Duplicate, Publication.Status: Contract.PublicationStatus.Matched } &&
                 settled.Publication.Incarnation == accepted.Publication!.Incarnation,
@@ -183,7 +190,7 @@ internal static partial class KernelAuthoredEventChecks
                     if (view?.Header.Status != Contract.ActorStatus.Finished) return false;
                     if (view.Header.TypeData != publicationId) throw new InvalidOperationException("The recipient saw a different publication.");
                 }
-                if (physicalPages || parkPublication) return true;
+                if (physicalPages || parkPublication || replaceOwner) return true;
                 var finished = await reads.ListAsync(scope, new Contract.ActorQuery(Type: model.Type, Status: Contract.ActorStatus.Finished),
                     cancellationToken: token);
                 return finished.Items.Count == actors.Count + 2 + (authored ? 1 : 0) && finished.Items.All(item => item.Header.TypeData == publicationId);

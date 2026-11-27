@@ -113,6 +113,12 @@ if (args is ["kernel-sb7-broadcast", var sb7Provider and ("postgres" or "sqlite"
     return await KernelAuthoredEventChecks.RunSb7BroadcastAsync(sb7Provider, sb7Fence == "in-batch", sb7Source == "authored");
 if (args is ["kernel-paged-event-publication", var pagedEventProvider and ("postgres" or "sqlite"), var pagedEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedEventProvider, pagedEventFence == "in-batch");
+if (args is ["kernel-paged-event-owner-replacement", var replacementProvider and ("postgres" or "sqlite"),
+    var replacementFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(replacementProvider, replacementFence == "in-batch", replaceOwner: true);
+if (args is ["kernel-paged-event-paused-owner", var pausedProvider and ("postgres" or "sqlite"),
+    var pausedFence and ("checked" or "in-batch"), var pausedPath])
+    return await KernelAuthoredEventChecks.RunPausedPagedEventOwnerAsync(pausedProvider, pausedFence == "in-batch", pausedPath);
 if (args is ["kernel-paged-authored-event", var pagedAuthoredProvider and ("postgres" or "sqlite"), var pagedAuthoredFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedAuthoredProvider, pagedAuthoredFence == "in-batch", authored: true);
 if (args is ["kernel-paged-authored-park", var pagedParkProvider and ("postgres" or "sqlite"), var pagedParkFence and ("checked" or "in-batch")])

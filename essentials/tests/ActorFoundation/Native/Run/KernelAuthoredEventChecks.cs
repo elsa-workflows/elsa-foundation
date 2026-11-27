@@ -184,10 +184,10 @@ internal static partial class KernelAuthoredEventChecks
         OpenAsync(Contract.IActorType model, string provider, string path, bool inBatch, CancellationToken token, bool eventStarts = false,
             bool retainReceipts = false, bool orderedScan = false, bool publicStarts = false,
             Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator = null, RootPublicEventHost? publicEventHost = null,
-            Func<IReplyTransport, IReplyTransport>? observeReplies = null, bool pagedPublicEvents = false)
+            Func<IReplyTransport, IReplyTransport>? observeReplies = null, bool pagedPublicEvents = false,
+            string node = "authored-event-owner", bool attachExisting = false)
     {
         if (eventStarts) authorizeOperator ??= Authorize;
-        const string node = "authored-event-owner";
         var loop = new LoopOptions
         {
             BalanceEvery = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(25),
@@ -241,11 +241,14 @@ internal static partial class KernelAuthoredEventChecks
             retainReceipts ? KernelDb.ForPostgresRootEventStartReceiptsQualification(pg) :
             eventStarts ? KernelDb.ForPostgresRootEventStartsQualification(pg) :
             KernelDb.ForPostgresRootAuthoredEventsQualification(pg);
-        await using var database = OpenPostgres();
-        Check(await PostgresFixtureDatabase.IsEmptyAsync(database, token), "the PostgreSQL fixture uses a dedicated empty database");
-        var cold = new EfStore(OpenPostgres, postgres: true);
-        await cold.CreateAsync(1);
-        await cold.InstallPreviewRootSchemaAsync(token);
+        if (!attachExisting)
+        {
+            await using var database = OpenPostgres();
+            Check(await PostgresFixtureDatabase.IsEmptyAsync(database, token), "the PostgreSQL fixture uses a dedicated empty database");
+            var cold = new EfStore(OpenPostgres, postgres: true);
+            await cold.CreateAsync(1);
+            await cold.InstallPreviewRootSchemaAsync(token);
+        }
         var requests = publicEventHost?.ProtectsStarts == true
             ? PostgresPreviewHosting.CreateRequestsWithRootStartProtection(OpenPostgres, node, model.Type, Protect)
             : PostgresPreviewHosting.CreateRequests(OpenPostgres, node, model.Type);
