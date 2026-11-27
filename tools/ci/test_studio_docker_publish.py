@@ -630,6 +630,19 @@ class StudioDockerPublishTests(unittest.TestCase):
         self.assertIn('$STUDIO_IMAGE_VALIDATORS/verify_studio_nuget_packages.py', workflow[payload:first_docker_build])
         self.assertIn('--historical-source', workflow[payload:first_docker_build])
 
+    def test_backend_support_paths_follow_the_selected_checkout(self) -> None:
+        support = "essentials/src/Preferences/Core/Elsa.Studio.Preferences.Core.csproj"
+        cases = (
+            ("studio", support),
+            ("studio", "server/" + support),
+            ("Studio", support.replace("/Preferences/", "/Studio/Preferences/")),
+        )
+        for studio_root, expected in cases:
+            with self.subTest(studio_root=studio_root, support=expected), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / expected).parent.mkdir(parents=True)
+                self.assertEqual(expected, nuget._source_project_path(support, root / studio_root))
+
     def test_manual_archive_verification_accepts_only_the_listed_retired_non_packable_project(self) -> None:
         inventory = json.loads(nuget.IDENTITY_FILE.read_text())
         projects = {item["project"] for item in inventory["non_packable_projects"]}

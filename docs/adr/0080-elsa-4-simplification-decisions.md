@@ -133,7 +133,7 @@ is the first priority now, without waiting until 21 November or for whole peer p
 [Website and documentation #2495](https://github.com/elsa-workflows/elsa-foundation/issues/2495#issuecomment-6111314757)
 is reactivated in parallel, with Elsa 4 source in Foundation at `website/docs/` and native GitBook sync.
 These are named exceptions to D0's parking and the two-program cap; the remaining decisions in this ADR
-continue to apply. The consolidation target is `server/essentials/` (src/tests/apps),
+continue to apply. The consolidation target is `essentials/` (src/tests/apps),
 `Extensions/<capability>/` (src/optional studio/tests) and `studio/` (shell/shared UI/tests/tooling),
 with shared docs/tools/workflows at the root. This direction does not rename package or API identities.
 The [11 October preservation checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2510#issuecomment-6113334884)
@@ -421,7 +421,7 @@ unit, ratification, phase-owned) does not appear in product docs or type names.
 ([#2591](https://github.com/elsa-workflows/elsa-foundation/issues/2591)). The old names are banned by a real Roslyn
 analyzer, not an architecture test. Every production project references it, and the lock-file churn that brings is
 accepted. A term is banned domain by domain, as each domain is realigned, not across the repository at once. Not a
-decision, but a description of the result: the analyzer is `Elsa.Architecture.Analyzers`, kept in `server/essentials/build/`
+decision, but a description of the result: the analyzer is `Elsa.Architecture.Analyzers`, kept in `essentials/build/`
 outside the module roots because it is build tooling, not a domain. It reports a retired term in a type name, public or
 internal (`ELSANAME001`), and in a namespace (`ELSANAME002`), naming the replacement, and a term list it cannot parse
 is itself an error (`ELSANAME003`). A domain activates its terms with a section for its folder in the root

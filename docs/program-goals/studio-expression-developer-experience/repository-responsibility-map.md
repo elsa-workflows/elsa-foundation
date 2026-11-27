@@ -12,4 +12,4 @@
 | JavaScript/Liquid local parsing and language projection | `elsa-foundation` `studio/` expression-editor modules | Each module projects the shared context into its own syntax. |
 | Real actor browser acceptance | Matching Studio and Foundation reviewed heads | Must traverse module discovery, persisted workflow, endpoints and providers; fixtures alone are insufficient. |
 
-Studio moved into this repository under `studio/` with the Foundation/Studio consolidation (#2501); Foundation source is under `server/essentials/src/`. The canonical domain terms live in [`studio/CONTEXT.md`](../../../studio/CONTEXT.md); Studio ADRs 0002/0006 and specs 094/143 govern the implementation boundaries.
+Studio moved into this repository under `studio/` with the Foundation/Studio consolidation (#2501); Foundation source is under `essentials/src/`. The canonical domain terms live in [`studio/CONTEXT.md`](../../../studio/CONTEXT.md); Studio ADRs 0002/0006 and specs 094/143 govern the implementation boundaries.

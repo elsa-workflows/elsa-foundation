@@ -1,6 +1,6 @@
 # Extensions
 
-Optional modules live here. Backend essentials are in [`../server/essentials/src`](../server/essentials/src),
+Optional modules live here. Backend essentials are in [`../essentials/src`](../essentials/src),
 deployable backend hosts in [`../server/apps`](../server/apps), and the Studio shell in
 [`../studio`](../studio).
 
@@ -77,10 +77,10 @@ fail silently in the same way, but they do have to move with the module, and the
 | Site | What it names |
 |---|---|
 | `.github/workflows/ci.yml`, the `ef-container-suites` matrix | one `.csproj` path per container suite |
-| `server/essentials/tests/Architecture/Tests/ArchitectureGuardTests.cs` | the name-to-path convention, which has a branch per root |
-| `server/essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs` | the admitted-EF-path allowlist |
-| `server/essentials/tests/Architecture/Tests/EndpointSecurityTests.cs` | the directory scanned per endpoint group |
-| `server/essentials/tests/Architecture/Tests/ReusableActivityArchitectureTests.cs` | project and directory paths, and a path-prefix assertion |
+| `essentials/tests/Architecture/Tests/ArchitectureGuardTests.cs` | the name-to-path convention, which has a branch per root |
+| `essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs` | the admitted-EF-path allowlist |
+| `essentials/tests/Architecture/Tests/EndpointSecurityTests.cs` | the directory scanned per endpoint group |
+| `essentials/tests/Architecture/Tests/ReusableActivityArchitectureTests.cs` | project and directory paths, and a path-prefix assertion |
 | `EXTENSION_POINTS.md` | the root index of extension-point catalogs |
 
 This second list was **missing when stage 0 described the first one as complete**; it was found by
@@ -112,7 +112,7 @@ Adding a project root to the repository means auditing both lists again.
 ## Rules
 
 - **Core never references an extension.** Enforced by `ExtensionBoundaryTests` in
-  `server/essentials/tests/Architecture/ExtensionBoundary/Tests`, which fails and names the offending edge.
+  `essentials/tests/Architecture/ExtensionBoundary/Tests`, which fails and names the offending edge.
 - **An extension may reference another extension only when the edge is declared** in that same guard's
   allowlist. Undeclared extension-to-extension edges fail the same way.
 - **Every project belongs to exactly one bucket.** No project sits inside another project's directory

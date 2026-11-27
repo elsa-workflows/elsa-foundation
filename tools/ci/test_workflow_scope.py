@@ -61,7 +61,7 @@ class WorkflowScopeTests(unittest.TestCase):
             with self.subTest(event=event_name, action=event.get('action')):
                 self.assertTrue(scope.heavy_now(event_name, event, ['docs/x.md']))
         push = {'action': 'synchronize', 'pull_request': ready}
-        self.assertFalse(scope.heavy_now('pull_request', push, ['server/essentials/src/Feature.cs']))
+        self.assertFalse(scope.heavy_now('pull_request', push, ['essentials/src/Feature.cs']))
         self.assertFalse(scope.heavy_now('pull_request', {'action': 'synchronize', 'pull_request': {'labels': [{'name': 'other'}]}}, []))
         self.assertTrue(scope.heavy_now('pull_request', push, ['tools/ci/test-tiers.json']))
         self.assertTrue(scope.heavy_now('pull_request', push, None))
@@ -79,22 +79,22 @@ class WorkflowScopeTests(unittest.TestCase):
 
     def test_push_scopes_studio_and_weaver_like_a_pull_request(self):
         self.assertFalse(any(self.selected('push', ['docs/README.md']).values()))
-        self.assertTrue(self.selected('push', ['server/essentials/src/Feature.cs'])['weaver'])
+        self.assertTrue(self.selected('push', ['essentials/src/Feature.cs'])['weaver'])
         pushed = self.selected('push', ['studio/src/Feature.ts'])
         self.assertTrue(pushed['studio'] and pushed['studio-heavy'])
 
     def test_weaver_skips_foundation_test_sources_but_keeps_product_build_and_project_inputs(self):
         for event_name, event in [('push', {}), ('merge_group', {'merge_group': {}}),
                                   ('pull_request', {'action': 'ready_for_review', 'pull_request': {'draft': False}})]:
-            for path in ['server/essentials/tests/Cluster/Readability/Tests/EfSchemaReadabilitySourceTests.cs',
-                         'server/essentials/tests/Cluster/Readability/Tests/README.md']:
+            for path in ['essentials/tests/Cluster/Readability/Tests/EfSchemaReadabilitySourceTests.cs',
+                         'essentials/tests/Cluster/Readability/Tests/README.md']:
                 with self.subTest(event=event_name, path=path):
                     self.assertFalse(self.selected(event_name, [path], **event)['weaver'])
-            for path in ['server/essentials/src/Workflows/Runtime/Core/Runtime.cs',
-                         'server/essentials/build/Analyzers/Analyzer.cs',
-                         'server/essentials/Directory.Build.props', 'server/essentials/Directory.Build.targets',
-                         'server/essentials/Directory.Packages.props', 'server/essentials/Example.csproj',
-                         'server/essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj',
+            for path in ['essentials/src/Workflows/Runtime/Core/Runtime.cs',
+                         'essentials/build/Analyzers/Analyzer.cs',
+                         'essentials/Directory.Build.props', 'essentials/Directory.Build.targets',
+                         'essentials/Directory.Packages.props', 'essentials/Example.csproj',
+                         'essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj',
                          'studio/src/Feature.ts', 'extensions/Weaver/src/Feature.cs',
                          'extensions/Attention/src/Api/AttentionApiFeature.cs',
                          'extensions/Attention/tests/Api/Tests/Elsa.Attention.Api.Tests.csproj',

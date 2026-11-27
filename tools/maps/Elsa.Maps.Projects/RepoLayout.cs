@@ -2,7 +2,8 @@ namespace Elsa.Maps.Projects;
 
 /// <summary>Where backend maps look for code, and how they classify its paths.</summary>
 /// <remarks>
-/// Required modules, tests and deployable hosts live under <c>server/</c>; optional backend modules live under
+/// Required modules and tests live under <c>essentials/</c>, deployable hosts under <c>server/apps/</c>,
+/// and optional backend modules under
 /// <c>Extensions/&lt;capability&gt;/src</c> with their tests beside them. Studio has its own tree under
 /// <c>Extensions/&lt;capability&gt;/studio</c> and is deliberately excluded from these backend maps. Matching project
 /// pathspecs at the module roots keeps that exclusion explicit instead of sweeping the whole <c>Extensions/</c> tree.
@@ -11,7 +12,7 @@ public static class RepoLayout
 {
     /// <summary>Pathspecs covering every backend project the maps describe, source and test alike.</summary>
     /// <remarks>
-    /// The current backend lives under server/. Historical roots remain for commit-tree versioning.
+    /// Historical roots remain for commit-tree versioning.
     /// Git's <c>*</c> also matches <c>/</c>, so <c>Extensions/*/src/*.csproj</c> would take in a connector
     /// scaffold under <c>Extensions/&lt;capability&gt;/templates/…/src/…</c>. The exclude keeps those
     /// samples out of the backend inventory the same way Studio trees stay out.

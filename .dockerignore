@@ -24,7 +24,7 @@
 **/*.DotSettings*
 
 # --- Repo areas not needed to build the server host -------------------------
-server/essentials/tests/
+essentials/tests/
 studio/tests/
 **/node_modules/
 # Optional-module tests (#1815). extensions/<Name>/src is build input and stays; its sibling

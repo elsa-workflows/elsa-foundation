@@ -134,11 +134,11 @@ design in [the design cards](design-cards.md)): route templates by resolved wait
 ## Sources
 
 - [server/apps/Elsa.Workbench.Host/CorePreview/](../../../server/apps/Elsa.Workbench.Host/CorePreview/)
-- [server/essentials/src/Workflows/Runtime/Native/Model/Activities.cs](../../../server/essentials/src/Workflows/Runtime/Native/Model/Activities.cs),
-  [HttpRoutes.cs](../../../server/essentials/src/Workflows/Runtime/Native/Model/HttpRoutes.cs),
-  [Expression.cs](../../../server/essentials/src/Workflows/Runtime/Native/Model/Expression.cs),
-  [Build.cs](../../../server/essentials/src/Workflows/Runtime/Native/Model/Build.cs)
-- [server/essentials/src/Workflows/Runtime/Native/Activities/Activities.cs](../../../server/essentials/src/Workflows/Runtime/Native/Activities/Activities.cs)
+- [essentials/src/Workflows/Runtime/Native/Model/Activities.cs](../../../essentials/src/Workflows/Runtime/Native/Model/Activities.cs),
+  [HttpRoutes.cs](../../../essentials/src/Workflows/Runtime/Native/Model/HttpRoutes.cs),
+  [Expression.cs](../../../essentials/src/Workflows/Runtime/Native/Model/Expression.cs),
+  [Build.cs](../../../essentials/src/Workflows/Runtime/Native/Model/Build.cs)
+- [essentials/src/Workflows/Runtime/Native/Activities/Activities.cs](../../../essentials/src/Workflows/Runtime/Native/Activities/Activities.cs)
 - [ADR 0099](../../adr/0099-clean-slate-execution-kernel.md) (clean break; ADR 0043 kept)
 - [StateMachine on the kernel](../../architecture/statemachine-on-the-kernel.md), owner decision 4 (no compensation
   port in release 1)

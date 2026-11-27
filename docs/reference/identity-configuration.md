@@ -240,7 +240,7 @@ deployment still read each other's payloads when they share a key ring, wherever
   every user signs in again, and a form open across the upgrade is posted again. Changing `ApplicationName` later has
   the same effect.
 
-`server/essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md` is the reference; Docker deployments
+`essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md` is the reference; Docker deployments
 are covered in [Docker: Data Protection keys](../docker.md#data-protection-keys).
 
 ### No API kill-switch
@@ -283,7 +283,7 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
     ```bash
     dotnet ef database update \
       --context OpenIddictIdentityPostgreSqlDbContext \
-      --project server/essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore \
+      --project essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore \
       -- --connectionString "<connection string>"
     ```
 

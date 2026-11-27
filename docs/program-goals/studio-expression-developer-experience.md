@@ -59,7 +59,7 @@ Resume the existing Foundation/Studio specs, tasks and PR stack, preserving hist
 ## Restart checkpoint — 2026-10-23
 
 The owner restarted the program on 23 October 2026 under the [ADR 0080 D0 amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus).
-Studio now lives in this repository under `studio/`, and Foundation source under `server/essentials/src/`; the program's
+Studio now lives in this repository under `studio/`, and Foundation source under `essentials/src/`; the program's
 records point there.
 
 - **First units.** This plan (#2367) merges with current `main`. The expression-tooling permission-hash fix from
@@ -75,4 +75,4 @@ records point there.
 - **Milestone 1.** The rest of #2373 is rebased separately onto the new layout; it is not part of this restart.
 - **Review and merge.** Review and merge follow the [ADR 0080 D7](../adr/0080-elsa-4-simplification-decisions.md#d7--recurring-review-and-fix-routines) review loop as amended on 15 October (org-wide Issue Bus Lite): the Code Review app merges once a review round leaves nothing actionable and CI is green on the exact head. There is no separate owner acceptance before Ready or merge.
 - The 6 October delivery-scope checkpoint above is historical. Its PR stack and evidence predate the move into
-  `server/essentials/` and `studio/`, and its heads must be reverified before any gate is claimed.
+  `essentials/` and `studio/`, and its heads must be reverified before any gate is claimed.

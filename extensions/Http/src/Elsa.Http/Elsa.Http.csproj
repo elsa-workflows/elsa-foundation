@@ -23,10 +23,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Http.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\server\essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\..\server\essentials\src\Caching\Core\Elsa.Caching.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\server\essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
-    <ProjectReference Include="..\..\..\..\server\essentials\src\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\..\essentials\src\Caching\Core\Elsa.Caching.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\essentials\src\Serialization\Core\Elsa.Serialization.Core.csproj" />
   </ItemGroup>
 
 </Project>

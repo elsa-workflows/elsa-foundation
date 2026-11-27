@@ -4,9 +4,10 @@
 
 `elsa-foundation` is the transitional Elsa 4 foundation workspace.
 
-It contains the Elsa backend and Studio in three product roots:
+The repository contains the Elsa backend, Studio and extensions:
 
-- `server/`: deployable backend hosts in `apps/` and built-in backend libraries and tests in `essentials/`.
+- `essentials/`: built-in backend libraries, tests and build analyzers.
+- `server/apps/`: deployable backend hosts.
 - `studio/`: the Studio shell, shared UI, tests and frontend tooling.
 - `extensions/<capability>/`: optional backend implementations, tests and Studio components where present.
 
@@ -77,7 +78,7 @@ Management-client APIs are owned by their Elsa domains and can be composed direc
 `Elsa.Workbench` is a reference composition, not the implementation home of a server-wide management facade.
 
 The canonical areas are Workflow Design, Activity Design, Expressions, Publishing, Runtime, and
-[API Capabilities](server/essentials/src/Api/Capabilities/Elsa.Api.Capabilities/README.md). An authenticated client loads one shell-relative
+[API Capabilities](essentials/src/Api/Capabilities/Elsa.Api.Capabilities/README.md). An authenticated client loads one shell-relative
 `GET /capabilities` document, then follows the advertised domain links. Omitted domain features advertise no
 capability and expose no routes; endpoint-level action permissions remain authoritative.
 

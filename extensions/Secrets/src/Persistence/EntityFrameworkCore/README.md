@@ -71,7 +71,7 @@ readiness as proof that the requested feed features activated.
 The migrate policy is the host-wide `Elsa:Persistence:EntityFramework:Migrate:Policy`
 (`AutoMigrate` by default, or `Validate` to fail when migrations are pending), the same key every
 other EF module reads — see
-[the persistence README](../../../../../server/essentials/src/Persistence/EntityFramework/README.md#choosing-the-policy-operator-setting).
+[the persistence README](../../../../../essentials/src/Persistence/EntityFramework/README.md#choosing-the-policy-operator-setting).
 It applies when the feature is enabled **and** when CShells reloads the shell
 (`IShellInitializer`); a plain host uses the same instance as `IHostedService`. A shell that needs a
 different policy from its neighbours sets that key under its own `Configuration` node.

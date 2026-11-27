@@ -33,20 +33,20 @@
     <ProjectReference Include="..\..\..\..\src\Activities\Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Elsa.Workflows.Runtime.Http.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa.Http\Elsa.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Events\Elsa.Events\Elsa.Events.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\server\essentials\tests\Activities\Testing\Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Events\Elsa.Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\tests\Activities\Testing\Elsa.Activities.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -62,7 +62,7 @@ Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to 
 
 ## Gate index
 
-The framework Gate index applies. Elsa-specific gates with an automated check (tests in `server/essentials/tests/Architecture/Tests/`, or the generator check named); every other gate is on [docs/contributing/review-checklist.md](../../docs/contributing/review-checklist.md).
+The framework Gate index applies. Elsa-specific gates with an automated check (tests in `essentials/tests/Architecture/Tests/`, or the generator check named); every other gate is on [docs/contributing/review-checklist.md](../../docs/contributing/review-checklist.md).
 
 | § | Gate | Check |
 |---|---|---|
