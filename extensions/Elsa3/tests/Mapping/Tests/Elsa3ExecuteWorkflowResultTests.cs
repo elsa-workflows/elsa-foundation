@@ -334,6 +334,15 @@ public sealed class Elsa3ExecuteWorkflowResultTests
     }
 
     [Fact]
+    public async Task A_status_read_before_the_node_is_refused()
+    {
+        // "Finished" holds only once the node ran; Elsa 3 read V's earlier value before it.
+        var result = await ConvertAsync(Sequence("root", Write("getCredit()?.Status ?? 'not run'"), Execute()), Credit);
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnresolvableReferenceShape);
+    }
+
+    [Fact]
     public async Task An_output_read_before_the_node_reads_only_the_variable()
     {
         // The .Output rows read only the variable, so node order does not matter to them.

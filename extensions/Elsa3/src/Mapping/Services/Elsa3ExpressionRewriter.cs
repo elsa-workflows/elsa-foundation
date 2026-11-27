@@ -2469,6 +2469,13 @@ public sealed class Elsa3ExpressionRewriter(
             };
             if (text is not null)
             {
+                // "Finished" holds only once the node has run: a read before it, or in another frame, read V's earlier
+                // value in Elsa 3, so it keeps the node-output rows' frame and order checks (spec 1245 FR-010).
+                if (member == "Status" && wrapped.ProducerReadIssue is { } statusIssue)
+                {
+                    Issues.Add(statusIssue);
+                    return;
+                }
                 Edits.Add(new SourceEdit(replaced.Start, replaced.End, text));
                 return;
             }

@@ -106,8 +106,9 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     JavaScript reads convert in every row, through `getV()`, `variables.V` or a literal `getVariable('V')`, in dot,
     literal-bracket or optional-chaining form. Liquid converts only `.Output` and `.Output.X`. The node-output rows bind
     to the capturing node, which must run before the read in the same container (`VF-IMP-003`,
-    `VF-IMP-004` otherwise); a read where the node may not have run is refused at publish
-    (`ValueFlow/UnavailableProducer`). `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` refuses: a variable with another writer
+    `VF-IMP-004` otherwise); `.Status` keeps the same two checks. A node-output read where the node may not have run
+    is refused at publish (`ValueFlow/UnavailableProducer`). A `.Status` read binds nothing, so on a path where the
+    node may not have run (after a branch that skips it) it reads `"Finished"` where Elsa 3 read `V`'s earlier value. `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` refuses: a variable with another writer
     (another capture, a Set Variable, a declared initial value, or a script that calls `setV`, `setVariable('V', …)`,
     assigns `V` or a member of it, or writes a variable by a computed name); any other member of `V`; any other Liquid
     read of `V`, or a Liquid read of the node's result through the `Output` root; and a script that reads a variable by
