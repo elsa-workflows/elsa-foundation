@@ -52,7 +52,7 @@ internal static class KernelScheduleAuthority
         {
             Authority = JsonSerializer.Serialize(authority),
             Continuity = owner.Continuity?.Stamp,
-            Cutover = owner.Continuity?.ActivatedAt.ToUnixTimeMilliseconds() ?? 0
+            Cutover = owner.Continuity?.FoundationActivatedAt.ToUnixTimeMilliseconds() ?? 0
         };
         if (!FitsTypeData(JsonSerializer.Serialize(header)))
             throw new MetadataLimitExceeded(nameof(ScheduleHeader.Authority), MaxTypeDataBytes);
@@ -83,7 +83,7 @@ internal static class KernelScheduleAuthority
 
             if (owner.Continuity is { } span)
             {
-                if (!IsReference(span.Stamp) || !IsReference(span.Stimulus) || span.ActivatedAt <= DateTimeOffset.UnixEpoch)
+                if (!IsReference(span.Stamp) || !IsReference(span.Stimulus) || span.FoundationActivatedAt <= DateTimeOffset.UnixEpoch)
                     return null;
                 continuity = span.Stamp;
             }

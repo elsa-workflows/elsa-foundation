@@ -73,7 +73,8 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbConte
 
     // Only the activation switch stages these rows, after staging the exact reservation in the same Serializable transaction.
     internal async ValueTask StageAsync(PersistenceScope persistence, string slotId, IReadOnlyList<RuntimeKernelScheduleControl> desired,
-        CancellationToken cancellationToken, bool adoptSchedules = false)
+        CancellationToken cancellationToken, bool adoptSchedules = false,
+        Func<CancellationToken, ValueTask<DateTimeOffset>>? readCutover = null)
     {
         if (context.Database.CurrentTransaction is null || access.Current.RequireScope() != persistence)
             throw new InvalidOperationException("Schedule controls require the owning publication transaction.");
@@ -81,6 +82,7 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbConte
         var ids = pending.Keys.ToArray();
         var scopeHash = Hash(persistence.Value);
         var slotHash = Hash(slotId);
+        DateTimeOffset? cutover = null;
         var rows = await context.KernelScheduleControls.Where(row => row.ScopeKeyHash == scopeHash &&
             (row.OwnerSlotHash == slotHash || ids.Contains(row.Id))).OrderBy(row => row.Id).ToArrayAsync(cancellationToken);
         foreach (var row in rows)
@@ -97,18 +99,24 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbConte
                     replacement.Owner is { Continuity: { } nextContinuity } successor &&
                     priorContinuity.Stimulus == nextContinuity.Stimulus)
                 {
-                    // Freeze the first cutover for an older actor, even if it skips subsequent controls.
-                    if (former.PublicationRevision < successor.PublicationRevision)
+                    if (former.PublicationRevision == successor.PublicationRevision)
+                        replacement = replacement with { Owner = successor with { Continuity = priorContinuity } };
+                    else
+                    {
+                        replacement = await StampAsync(replacement with
+                        {
+                            Owner = successor with { Continuity = nextContinuity with { Stamp = priorContinuity.Stamp } }
+                        });
+                        // Freeze the first cutover for an older actor, even if it skips subsequent controls.
                         context.KernelScheduleCutovers.Add(new()
                         {
                             Id = CutoverId(persistence, slotId, former.PublicationRevision, priorContinuity.Stamp),
-                            ActivatedAtUtcTicks = nextContinuity.ActivatedAt.UtcTicks
+                            ActivatedAtUtcTicks = cutover!.Value.UtcTicks
                         });
-                    replacement = replacement with
-                    {
-                        Owner = successor with { Continuity = nextContinuity with { Stamp = priorContinuity.Stamp } }
-                    };
+                    }
                 }
+                else replacement = await StampAsync(replacement);
+
                 if (current.Owner != replacement.Owner || current.Scope != replacement.Scope)
                 {
                     if (adoptSchedules && current.Owner is not null) throw InvalidControl();
@@ -124,8 +132,16 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbConte
         foreach (var (id, control) in pending.OrderBy(item => item.Key, StringComparer.Ordinal))
         {
             var row = new RuntimeKernelScheduleControlEntity { Id = id, ScopeKeyHash = scopeHash, TenantKeyHash = TenantHash(control.Scope) };
-            Write(row, control with { Revision = 1 });
+            Write(row, await StampAsync(control with { Revision = 1 }));
             context.KernelScheduleControls.Add(row);
+        }
+
+        async ValueTask<RuntimeKernelScheduleControl> StampAsync(RuntimeKernelScheduleControl control)
+        {
+            if (control.Owner is not { Continuity: { } continuity } owner) return control;
+            if (readCutover is null) throw new InvalidOperationException("A managed schedule needs the Actor Foundation publication clock.");
+            cutover ??= await readCutover(cancellationToken);
+            return control with { Owner = owner with { Continuity = continuity with { FoundationActivatedAt = cutover.Value } } };
         }
     }
 
@@ -157,11 +173,11 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbConte
                 source.SourceReferenceId, executable);
             if (binding.Metadata.TryGetValue(ScheduleStimulusMetadata, out var stimulus))
             {
-                if (!IsDigest(stimulus) || slot.UpdatedAt <= DateTimeOffset.UnixEpoch) throw InvalidControl();
+                if (!IsDigest(stimulus)) throw InvalidControl();
                 owner = owner with
                 {
                     Continuity = new(CompositeId(scope.Persistence.Value, "kernel-schedule-continuity-v1", slot.SlotId, key,
-                        source.ActivationId!, slot.Revision.ToString(System.Globalization.CultureInfo.InvariantCulture)), stimulus, slot.UpdatedAt)
+                        source.ActivationId!, slot.Revision.ToString(System.Globalization.CultureInfo.InvariantCulture)), stimulus, default)
                 };
             }
             controls.Add(new(scope, key, source.DefinitionId, node, 0, owner));
@@ -207,7 +223,7 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbConte
             (control.Owner is { } owner ? !MatchesOwner(row, control.DefinitionId, owner) : row.OwnerSlotHash is not null) ||
             control.Owner?.Continuity is { } continuity &&
             (row.SchemaVersion == RuntimeKernelScheduleControlEfModule.InitialSchemaVersion || !IsDigest(continuity.Stamp) ||
-             !IsDigest(continuity.Stimulus) || continuity.ActivatedAt <= DateTimeOffset.UnixEpoch))
+             !IsDigest(continuity.Stimulus) || continuity.FoundationActivatedAt <= DateTimeOffset.UnixEpoch))
             throw InvalidControl();
         return control;
     }

@@ -43,7 +43,7 @@ internal sealed class RuntimeKernelScheduleCutoverEntityConfiguration : IEntityT
 {
     public void Configure(EntityTypeBuilder<RuntimeKernelScheduleCutoverEntity> builder)
     {
-        builder.ToTable("elsa_runtime_kernel_schedule_cutover");
+        builder.ToTable(RuntimeKernelScheduleControlEfModule.CutoverTableName);
         builder.HasKey(row => row.Id);
         builder.Property(row => row.Id).HasMaxLength(64);
     }

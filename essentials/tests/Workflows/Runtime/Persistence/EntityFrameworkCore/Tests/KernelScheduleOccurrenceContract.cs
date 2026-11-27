@@ -367,7 +367,20 @@ internal static partial class KernelScheduleOccurrenceContract
         var artifacts = new EfWorkflowExecutableStore(context, access);
         var references = new EfWorkflowExecutableSourceReferenceStore(context, access, new Codec(), clock);
         var bindings = new EfWorkflowTriggerBindingStore(context, access);
-        var activationSwitch = new EfWorkflowActivationSwitch(new EfWorkflowActivationAuthority(context, access), bindings, references, access, clock);
+        var authority = new EfWorkflowActivationAuthority(context, access);
+        string? expectedStagedActivation = null;
+        var failClock = false;
+        var clockReads = 0;
+        var boundClock = new WorkflowScheduleCutoverClock(unqualified.Persistence, async token =>
+        {
+            Assert.NotNull(context.Database.CurrentTransaction);
+            Assert.Equal(expectedStagedActivation, (await authority.FindAsync(definition, slotName, token))?.ActiveActivationId);
+            clockReads++;
+            if (failClock) throw new InvalidOperationException("The Foundation clock is unavailable.");
+            return clock.GetUtcNow().ToUnixTimeMilliseconds();
+        });
+        var activationSwitch = new EfWorkflowActivationSwitch(authority, bindings, references, access, clock, [],
+            recurringScheduleStore: null, scheduleCutoverClock: boundClock);
         var controls = new EfRuntimeKernelScheduleControlStore(context, access);
         var store = Store(context, access, clock);
         foreach (var identity in new[] { first, next, final }) await artifacts.SaveAsync(Executable(identity, node));
@@ -383,13 +396,21 @@ internal static partial class KernelScheduleOccurrenceContract
         var future = due with { ArmGeneration = 3, TimerDeliveryId = "future-at-first-cutover", Due = Now.AddSeconds(7) };
 
         clock.Advance(TimeSpan.FromSeconds(5));
+        failClock = true;
+        var clockRefusal = await Assert.ThrowsAsync<InvalidOperationException>(() => Publish(next, "repub-no-clock", 1, named, stimulus));
+        Assert.Equal("The Foundation clock is unavailable.", clockRefusal.Message);
+        Assert.Equal(firstActivation, (await authority.FindAsync(definition, slotName))?.ActiveActivationId);
+        Assert.Equal(initial, (await controls.FindAsync(unqualified, key))!.Owner!.Continuity);
+        Assert.Empty(await context.KernelScheduleCutovers.AsNoTracking().ToListAsync());
+        failClock = false;
         var middle = await Publish(next, "repub-middle", 1, named, stimulus);
         Assert.Equal(initial.Stamp, middle.Stamp);
-        Assert.Equal(Now.AddSeconds(5), middle.ActivatedAt);
+        Assert.Equal(Now.AddSeconds(5), middle.FoundationActivatedAt);
         clock.Advance(TimeSpan.FromSeconds(5));
         var latest = await Publish(final, finalActivation, 2, named, stimulus);
         Assert.Equal(initial.Stamp, latest.Stamp);
-        Assert.Equal(Now.AddSeconds(10), latest.ActivatedAt);
+        Assert.Equal(Now.AddSeconds(10), latest.FoundationActivatedAt);
+        Assert.Equal(4, clockReads);
 
         Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Refused,
             await store.TryAcceptAttemptAsync(due, due.AcceptBefore, ReadClock));
@@ -459,9 +480,12 @@ internal static partial class KernelScheduleOccurrenceContract
                         [RuntimeKernelScheduleControl.ScheduleKeyMetadata] = key,
                         [RuntimeKernelScheduleControl.ScheduleStimulusMetadata] = selectedStimulus
                     }, clock.GetUtcNow(), activation, slot, TriggerCardinality.ReservationOnly, false)]);
+            expectedStagedActivation = activation;
+            var processTime = clock.GetUtcNow().AddMinutes(-10);
             var result = await activationSwitch.TryActivateAsync(new(definition, slotName, activation, WorkflowActivationSource.Publishing,
-                expected, clock.GetUtcNow()));
+                expected, processTime));
             Assert.True(result.Succeeded);
+            Assert.Equal(processTime, result.Slot.UpdatedAt);
             return Assert.IsType<RuntimeKernelScheduleContinuity>((await controls.FindAsync(scope, key))!.Owner!.Continuity);
         }
     }

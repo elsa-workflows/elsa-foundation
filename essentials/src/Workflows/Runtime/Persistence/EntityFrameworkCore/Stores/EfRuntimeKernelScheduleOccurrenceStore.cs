@@ -290,7 +290,7 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
             control.DefinitionId != successor.Executable.DefinitionId || control.TriggerNode != successor.TriggerNode ||
             owner.SlotId != selected.SlotId || owner.SlotName != successor.SlotName || owner.ActivationId != successor.ActivationId ||
             owner.PublicationRevision != successor.PublicationRevision || owner.Executable != successor.Executable ||
-            claim.Stamp != continuity || claim.ActivatedAt != selected.UpdatedAt ||
+            claim.Stamp != continuity ||
             !binding.Metadata.TryGetValue(RuntimeKernelScheduleControl.ScheduleStimulusMetadata, out var stimulus) || stimulus != claim.Stimulus)
             return false;
 

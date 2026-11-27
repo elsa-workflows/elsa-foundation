@@ -66,6 +66,7 @@ internal static class KernelShellManagedScheduleChecks
         WorkflowActivationResult timerPublication, cronPublication;
         await using (var publisher = OpenShell())
         {
+            await publisher.GetRequiredService<KernelShellStorage>().InstallAsync(token);
             var publishingScopes = publisher.GetRequiredService<IServiceScopeFactory>();
             await using (var scope = await publishingScopes.CreateAsyncScopeAsync(Persistence))
             {
@@ -100,8 +101,11 @@ internal static class KernelShellManagedScheduleChecks
             Node(Trigger, Types.Timer, [Literal("Interval", "PT5S", "String")]), Completion(marker: "republished-timer")));
         WorkflowActivationResult republished;
         await using (var publisher = OpenShell())
+        {
+            await publisher.GetRequiredService<KernelShellStorage>().InstallAsync(token);
             republished = await PublishAsync(publisher.GetRequiredService<IServiceScopeFactory>(), replacement,
                 tenant: PersistenceScope.DefaultValue, expectedRevision: timerPublication.Slot.Revision);
+        }
         await using (var restarted = OpenShell())
         {
             var shell = restarted.GetRequiredService<KernelShellRuntime>();
@@ -109,9 +113,13 @@ internal static class KernelShellManagedScheduleChecks
             try
             {
                 var carried = await VerifyAsync(restarted, replacement, republished, tenant: PersistenceScope.DefaultValue);
-                Require(carried.Occurrence.Origin is { TenantId: null } && carried.Occurrence.Due <= republished.Slot.UpdatedAt,
-                    "the installed shell carried the exact old due Timer into the new default-alias publication");
-                Console.WriteLine($"ok {provider} republish carried the old timer due {carried.Occurrence.Due:O} at cutover {republished.Slot.UpdatedAt:O}");
+                await using var read = await restarted.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
+                var controls = read.ServiceProvider.GetRequiredService<IRuntimeKernelScheduleControlReader>();
+                var active = await controls.FindAsync(carried.Occurrence.Scope, carried.Occurrence.ScheduleKey, token);
+                Require(active?.Owner?.Continuity is { } continuity && carried.Occurrence.Origin is { TenantId: null } &&
+                    carried.Occurrence.Due > republished.Slot.UpdatedAt && carried.Occurrence.Due <= continuity.FoundationActivatedAt,
+                    "the installed shell carried the old due Timer by the Foundation clock despite the Runtime process clock skew");
+                Console.WriteLine($"ok {provider} republish carried old timer due {carried.Occurrence.Due:O} at Foundation cutover {active!.Owner!.Continuity!.FoundationActivatedAt:O}");
             }
             finally { await StopAsync(shell); }
         }
@@ -170,6 +178,7 @@ internal static class KernelShellManagedScheduleChecks
             var storage = KernelShellStorage.CreateManagedSchedulesQualification(provider, path, foundation);
             var services = new ServiceCollection();
             services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+            services.AddSingleton<TimeProvider>(new SkewedRuntimeClock());
             services.AddLogging(builder => builder.AddSimpleConsole().SetMinimumLevel(LogLevel.Warning));
             services.AddWorkflowRuntime();
             services.AddRuntimeEntityFrameworkCore(new()
@@ -191,7 +200,7 @@ internal static class KernelShellManagedScheduleChecks
             var provider = scope.ServiceProvider;
             await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable, token);
             var identity = executable.Identity;
-            var now = TimeProvider.System.GetUtcNow();
+            var now = provider.GetRequiredService<TimeProvider>().GetUtcNow();
             var source = new WorkflowExecutableSourceReference("candidate", identity.ArtifactId, "definition", identity.DefinitionId,
                 identity.ArtifactVersion, identity.DefinitionId, identity.DefinitionVersionId, identity.ArtifactVersion, now, now,
                 WorkflowExecutableReferenceScope.Published, TenantId: tenant);
@@ -200,6 +209,11 @@ internal static class KernelShellManagedScheduleChecks
             Require(result.Succeeded, $"publication of {identity.ArtifactId} failed at {result.FailedStep}: {result.Diagnostic}");
             return result;
         }
+    }
+
+    private sealed class SkewedRuntimeClock : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => TimeProvider.System.GetUtcNow().AddMinutes(-2);
     }
 
     private static ExecutableNode Completion(string marker) => WriteLine(After, Literal("text", marker, "String"));

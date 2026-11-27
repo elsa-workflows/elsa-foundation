@@ -12,7 +12,7 @@ public sealed record RuntimeKernelScheduleControlOwner(string SlotId, string Slo
 }
 
 /// <summary>A trigger's unchanged publication span and the activation time of its current owner.</summary>
-public sealed record RuntimeKernelScheduleContinuity(string Stamp, string Stimulus, DateTimeOffset ActivatedAt);
+public sealed record RuntimeKernelScheduleContinuity(string Stamp, string Stimulus, DateTimeOffset FoundationActivatedAt);
 
 /// <summary>A schedule's desired control at one monotone revision, including a retained tombstone after release.</summary>
 public sealed record RuntimeKernelScheduleControl(TriggerScope Scope, string ScheduleKey, string DefinitionId, string TriggerNode,
