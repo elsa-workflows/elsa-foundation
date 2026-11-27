@@ -147,7 +147,8 @@ public sealed partial class EfStore
     }
 
     // Every lookup is bounded by the requested actor IDs and input keys. The host retains no index of the partition's birth history.
-    private async Task<WorkerRoots> ResolveWorkerRootsAsync(WorkerRoots scope, IEnumerable<string> actors, IEnumerable<InboxKey> inputs, CancellationToken token)
+    private async Task<WorkerRoots> ResolveWorkerRootsAsync(WorkerRoots scope, IEnumerable<string> actors, IEnumerable<InboxKey> inputs,
+        CancellationToken token, KernelDb? pinnedDb = null)
     {
         if (!scope.Discover) return scope;
         var actorIds = actors.ToHashSet(StringComparer.Ordinal);
@@ -160,8 +161,15 @@ public sealed partial class EfStore
         if (actorIds.Count + references.Count == 0) return new(scope.FixedPartition, []);
         var ids = actorIds.ToArray();
         var refs = references.ToArray();
+        if (pinnedDb is not null) return await ReadWorkerRootsAsync(pinnedDb, scope, ids, refs, token);
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, token);
+        return await ReadWorkerRootsAsync(db, scope, ids, refs, token);
+    }
+
+    private static async Task<WorkerRoots> ReadWorkerRootsAsync(KernelDb db, WorkerRoots scope, string[] ids, string[] refs,
+        CancellationToken token)
+    {
         var found = db.UsesSqliteRootRuntime
             ? await ResolveSqliteWorkerRootsAsync(db, scope.FixedPartition, ids, refs, token)
             : await db.Database.SqlQuery<WorkerRoot>($"""
@@ -371,6 +379,20 @@ public sealed partial class EfStore
 
     private static NotSupportedException RootShape() => new("The PostgreSQL root owner cannot persist this batch without dropping effects.");
 
+    private sealed record PostgresMarkPreparation(EfStore Store, WorkerRoots Scope, CommitBatch Batch) : QualifiedRootCheckpoint(0)
+    {
+        internal async Task<RootCheckpoints> PrepareAsync(KernelDb db, CancellationToken token)
+        {
+            if (!db.UsesRootParkOpening || db.Database.CurrentTransaction is null)
+                throw new StoreFormatException("The PostgreSQL mark plan requires the pinned owned transaction.");
+            var roots = await Store.ResolveWorkerRootsAsync(Scope, [], Batch.Seen.Concat(Batch.Trial), token, db);
+            return Store.WorkerCheckpoints(PrepareWorkerMarks(roots, Batch, Batch.Fenced.ToDictionary(fence => fence.Partition)), [], []);
+        }
+
+        internal override Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("The PostgreSQL marks were not prepared.");
+    }
+
     private async ValueTask<Committed> CommitWorkerRootAsync(WorkerRoots roots, CommitBatch batch, long sentAt, CancellationToken cancellationToken)
     {
         var fences = batch.Fenced;
@@ -383,6 +405,10 @@ public sealed partial class EfStore
             key.Scope == -1 && (DeadlineActor(key) is not null ? !RootTimedJobSettlementEnabled : RootSelfIssuer is null) ||
             key.Scope > 0 && !RootJobsEnabled)) throw RootShape();
         StoreBatchRules.RequireDistinct(fences);
+        if (postgres && OwnedCommit && roots.Discover && roots.KeepsParkInputs && batch.Turns.Count == 0 &&
+            batch.Seen.Count + batch.Trial.Count > 0)
+            return await CommitAsync(batch with { Seen = [], Trial = [] }, new PostgresMarkPreparation(this, roots, batch), sentAt, cancellationToken);
+
         (CommitBatch Batch, RootCheckpoints Checkpoints)? prepared;
         try { prepared = await PrepareWorkerBatchAsync(roots, batch, cancellationToken); }
         catch (Exception error) when (error is not (OperationCanceledException or NotSupportedException) &&
@@ -402,20 +428,22 @@ public sealed partial class EfStore
         var byPartition = batch.Fenced.ToDictionary(f => f.Partition);
         PartitionFence FenceFor(WorkerRoot root) =>
             byPartition.TryGetValue(root.Partition, out var fence) ? fence : throw RootShape();
-        roots = await ResolveWorkerRootsAsync(roots, batch.Turns.Select(t => t.Instance), batch.Seen.Concat(batch.Trial), cancellationToken);
-        var commands = new List<QualifiedRootCheckpoint>();
+        // The birth and its pending creator can be read under the same pinned format for ordinary first turns.
+        var shareFirstRootScope = postgres && roots.Discover && roots.KeepsParkInputs && batch.Turns.Count > 0 &&
+            batch.Turns.All(turn => turn is { Expected: null, Row: not null, FoundationRootOperator: null, OpensPark: false, Delete: false } &&
+                turn.FoundationKept is null or { Count: 0 });
+        await using var db = shareFirstRootScope ? create() : null;
+        await using var pinned = db is not null ? await BeginPinnedRootOperationAsync(db, cancellationToken) : null;
+        roots = await ResolveWorkerRootsAsync(roots, batch.Turns.Select(t => t.Instance), batch.Seen.Concat(batch.Trial), cancellationToken, db);
+        var commands = PrepareWorkerMarks(roots, batch, byPartition);
         var turns = new List<TurnCommit>();
         var revisions = new Dictionary<string, long>(StringComparer.Ordinal);
         var positions = batch.Fenced.ToDictionary(fence => fence.Partition, fence => fence.Position);
         var deferred = new HashSet<string>(StringComparer.Ordinal);
-        var seen = batch.Seen.ToLookup(roots.ForInput);
-        var trials = batch.Trial.ToLookup(roots.ForInput);
-        foreach (var root in seen.Select(g => g.Key).Union(trials.Select(g => g.Key)))
-            commands.Add(new ScopedMarks(root, FenceFor(root).Epoch, seen[root].ToArray(), trials[root].ToArray()));
         foreach (var turn in batch.Turns)
         {
             var root = roots.ForActor(turn.Instance);
-            var prepared = await PrepareWorkerTurnAsync(root, turn, FenceFor(root), cancellationToken);
+            var prepared = await PrepareWorkerTurnAsync(root, turn, FenceFor(root), cancellationToken, db);
             if (prepared is null) return null;
             var checkpoint = prepared.Checkpoint;
             if (prepared.JournalTurn is { } journal)
@@ -436,10 +464,26 @@ public sealed partial class EfStore
             if (turn.FoundationTerminalOutput is { } output)
                 commands.Add(new RootTerminalOutputCheckpoint(root, checkpoint.JournalRevision, output));
         }
-        return (batch with { Turns = turns, Seen = [], Trial = [] },
-            new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled, RootTimedJobSettlementEnabled,
-                RootTimedJobPreviewEnabled, RootValuesEnabled, deferred, SqliteRuntime: !postgres));
+        return (batch with { Turns = turns, Seen = [], Trial = [] }, WorkerCheckpoints(commands, revisions, deferred));
     }
+
+    private static List<QualifiedRootCheckpoint> PrepareWorkerMarks(WorkerRoots roots, CommitBatch batch,
+        IReadOnlyDictionary<int, PartitionFence> byPartition)
+    {
+        var seen = batch.Seen.ToLookup(roots.ForInput);
+        var trials = batch.Trial.ToLookup(roots.ForInput);
+        var commands = new List<QualifiedRootCheckpoint>();
+        foreach (var root in seen.Select(g => g.Key).Union(trials.Select(g => g.Key)))
+        {
+            if (!byPartition.TryGetValue(root.Partition, out var fence)) throw RootShape();
+            commands.Add(new ScopedMarks(root, fence.Epoch, seen[root].ToArray(), trials[root].ToArray()));
+        }
+        return commands;
+    }
+
+    private RootCheckpoints WorkerCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> commands, Dictionary<string, long> revisions,
+        HashSet<string> deferred) => new(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled, RootTimedJobSettlementEnabled,
+            RootTimedJobPreviewEnabled, RootValuesEnabled, deferred, SqliteRuntime: !postgres);
 
     private static bool InputsMatch(WorkerRoot root, TurnCommit turn, bool jobs = false) =>
         turn.Done.All(k => k.Scope == InboxKey.FoundationOccurrenceScope && root.Owns(k)) &&
@@ -455,7 +499,8 @@ public sealed partial class EfStore
             keys.GroupBy(k => k.Scope).All(group => group.SequenceEqual(expected.Where(key => key.Scope == group.Key)));
     }
 
-    private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
+    private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence,
+        CancellationToken cancellationToken, KernelDb? firstRootScope = null)
     {
         if (turn.FoundationRootTimerRearms is not null && turn.FoundationRootOperator?.Kind != Kinds.Recover)
             throw RootShape();
@@ -485,8 +530,9 @@ public sealed partial class EfStore
                     ? await PrepareRootParkedTerminateAsync(root, turn, cancellationToken)
                     : await PrepareRootParkedRefusalAsync(root, turn, cancellationToken);
         }
-        if (!postgres && turn.OpensPark && turn.Expected is null)
-            return await PrepareSqliteCreatorParkAsync(root, turn, fence, cancellationToken);
+        if (turn.OpensPark && turn.Expected is null &&
+            (!postgres || _rootChildReference is not null && turn.Row?.Parent is not null))
+            return await PrepareRootCreatorParkAsync(root, turn, fence, cancellationToken);
         if (turn.OpensPark || turn.FoundationKept is { Count: > 0 })
         {
             await using var profile = create();
@@ -578,9 +624,11 @@ public sealed partial class EfStore
             if (turn.Journal is null || turn.Consumed is not [var key] || key != new InboxKey("root:" + root.Actor) ||
                 turn.Done.Count != 0 || row.Suspended || change is null ||
                 row.Status is InstanceStatus.Finished or InstanceStatus.Faulted && (turn.Sent.Count != 0 || row.Jobs is not null)) throw RootShape();
-            var creator = postgres
-                ? await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken)
-                : await ReadSqlitePendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
+            var creator = firstRootScope is not null
+                ? await PostgresRootAdmission.ReadPendingCreatorAsync(firstRootScope, root.Tenant, root.Reference, cancellationToken)
+                : postgres
+                    ? await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken)
+                    : await ReadSqlitePendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;
             if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History || row.Parent != creator.Start.Parent) throw RootShape();
             if (RootTimedJobPreviewEnabled) RequireRootTimedIssuance(turn, row);

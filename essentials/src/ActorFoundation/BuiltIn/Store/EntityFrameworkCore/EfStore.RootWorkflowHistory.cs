@@ -35,6 +35,7 @@ public sealed partial class EfStore
         {
             RequireHistoryVersion(versions[0]);
             if (db.UsesRootTerminalOutput) await RequirePostgresRootTerminalOutputSchemaAsync(db, token);
+            if (db.UsesRootSequencedJournal) await RequirePostgresSequencedJournalAsync(db, token);
         }
         // History reads the actor's own list row, so it requires the projector of this profile and not the Park metadata.
         var projection = ActorListProjection.Of(db);
@@ -98,6 +99,8 @@ public sealed partial class EfStore
                 """, token);
             if (db.UsesRootTerminalOutput)
                 await db.Database.ExecuteSqlRawAsync(PostgresRootTerminalOutputDefinition, token);
+            if (db.UsesRootSequencedJournal)
+                await db.Database.ExecuteSqlRawAsync(PostgresSequencedJournal, token);
         }
         await transaction.CommitAsync(token);
     }

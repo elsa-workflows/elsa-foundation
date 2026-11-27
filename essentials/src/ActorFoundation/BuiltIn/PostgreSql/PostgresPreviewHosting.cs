@@ -268,6 +268,7 @@ public static class PostgresPreviewHosting
                     ? "A store with held replies needs the reply transport its callers wait on."
                     : "Only a store with held replies answers held callers.");
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
+            if (db.UsesRootSequencedJournal) await EfStore.RequirePostgresSequencedJournalAsync(db, cancellationToken);
             partitions = await PostgresRootAdmission.ReadInstalledPartitionCountAsync(db, cancellationToken);
         }
 

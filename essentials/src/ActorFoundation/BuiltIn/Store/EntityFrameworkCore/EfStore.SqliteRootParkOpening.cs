@@ -4,39 +4,6 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    private async Task<PreparedRoot?> PrepareSqliteCreatorParkAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence,
-        CancellationToken token)
-    {
-        var key = new InboxKey("root:" + root.Actor);
-        if (turn.Row is not { Fault: { } fault } row || turn.FoundationHeader is not { } header || turn.Journal is null ||
-            turn.FoundationKept is not { Count: 1 } kept || !kept.TryGetValue(key, out var reason) || reason != ParkKeepReason.Consumed ||
-            turn.Done is not [var consumed] || consumed != key || turn.Consumed.Count != 0 || turn.Sent.Count != 0 ||
-            turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
-            turn != new TurnCommit(root.Actor, row, null, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
-                turn.Journal, Unsubscribe: true, Held: turn.Held)
-                { OpensPark = true, FoundationHeader = header, FoundationKept = kept, FoundationRootChildSends = turn.FoundationRootChildSends })
-            throw RootShape();
-
-        var creator = await ReadSqlitePendingCreatorAsync(root.Tenant, root.Reference, token);
-        if (creator is null) return null;
-        var start = creator.Start!;
-        var initial = new InstanceRow(root.Actor, start.Model, start.Definition, InstanceStatus.Faulted, "null", 1, start.Parent,
-            Fault: fault, History: start.History, Creation: 1, StartIntent: root.Fingerprint,
-            ParentCreation: start.ParentCreation) { FoundationNullState = true };
-        if (row != initial || header.TypeData != start.Definition || header.Labels.Count != 0) throw RootShape();
-        RootChildEffects? childEffects = null;
-        if (creator.BindFoundationChild && start.Parent is not null)
-        {
-            if (turn.FoundationRootChildSends is not [var notice] || notice != FoundationChildNotice.Create(row, null, final: false))
-                throw RootShape();
-            childEffects = PrepareRootChildEffects(root, row, turn.FoundationRootChildSends) ?? throw RootShape();
-        }
-        else if (turn.FoundationRootChildSends is not null) throw RootShape();
-        var prepared = PrepareFirstRoot(root.Tenant, root.Reference, creator, fence, null, row.StateVersion, header.TypeData,
-            header.Labels, turn.Journal, status: row.Status, creatorFault: fault);
-        return WithRootChildEffects(prepared, childEffects, row.Parent);
-    }
-
     private static async Task<bool> BindSqliteParkOpeningAsync(KernelDb db, RootParkOpening park, CancellationToken token)
     {
         if (park.Opening ? park.Reason != ParkKeepReason.Consumed : !db.UsesRootParkArrivals) return false;

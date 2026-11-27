@@ -171,6 +171,7 @@ public class KernelDb : DbContext
     internal bool UsesRootPrivateParkInputs => UsesRootSelfProtocol && UsesRootParkArrivals && UsesRootComposedParkRecovery;
     internal bool UsesRootTimerRearm => UsesRootPrivateParkInputs && Has(RootCapabilities.TimerRearm);
     internal bool UsesRootTerminalOutput => Has(RootCapabilities.TerminalOutput);
+    internal bool UsesRootSequencedJournal => Has(RootCapabilities.SequencedJournal);
     internal bool SeparateRootFormatLock =>
         RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput || UsesRootChildren;
     internal bool UsesRootComposedParkRecovery =>
@@ -187,6 +188,8 @@ public class KernelDb : DbContext
     internal static KernelDb ForPostgresRootChildrenQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.PostgresRootChildrenQualification, RootProfiles.ChildQualification);
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
+    internal static KernelDb ForPostgresRootSequencedJournalQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootSequencedJournalQualification, RootProfiles.SequencedJournalQualification);
     internal static KernelDb ForPostgresRootSelfTimedQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootSelfTimedQualification, RootProfiles.SelfTimedQualification);
     internal static KernelDb ForSqliteRootSelfTimedQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
@@ -211,6 +214,9 @@ public class KernelDb : DbContext
     {
         if (qualificationFormat == StoreFormat.SqliteRootChildrenQualification)
             return new(options, qualificationFormat.Value, RootProfiles.ChildQualification, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootSequencedJournalQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.SequencedJournalQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         return qualificationFormat is { } format
             ? ForRootTerminalOutputQualification(options, sqliteShippedInstall: true, definitions, format)
             : new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
@@ -639,6 +645,18 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new Committed(false, 0, []);
                 throw error.StoreFailure;
             }
+            catch (RootMarkPreparationFailure error)
+            {
+                var cause = error.InnerException!;
+                if (cause is not (OperationCanceledException or NotSupportedException) &&
+                    Classify(cause) is { Failure: Failure.Definite or Failure.Transient } failure)
+                {
+                    if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new Committed(false, 0, []);
+                    if (!ReferenceEquals(cause, failure)) throw failure;
+                }
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(cause);
+                throw;
+            }
             catch (PostgresException error) when (error.SqlState == PgCommitWindow.Expired)
             {
                 throw new StoreException(Failure.WindowExpired, "Database commit window expired.", error);
@@ -713,7 +731,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
-            await PinRootNamespaceForCommitAsync(db, cancellationToken);
+            await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
         var now = 0L;
         if (FenceInBatch)
         {
@@ -842,6 +860,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         internal StoreException StoreFailure { get; } = failure;
     }
 
+    private sealed class RootMarkPreparationFailure(Exception cause) : Exception(cause.Message, cause);
+
     private async ValueTask CheckRootBeforeWriteAsync(QualifiedRootCheckpoint root, KernelDb db, CancellationToken cancellationToken)
     {
         try { await root.CheckBeforeWriteAsync(db, cancellationToken); }
@@ -853,9 +873,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
     }
 
-    private async Task PinRootNamespaceForCommitAsync(KernelDb db, CancellationToken cancellationToken)
+    private async Task PinRootNamespaceForCommitAsync(KernelDb db, CommitBatch batch, CancellationToken cancellationToken)
     {
-        try { await PostgresRootAdmission.PinRootNamespaceAsync(db, cancellationToken); }
+        try
+        {
+            await PostgresRootAdmission.PinRootNamespaceAsync(db, cancellationToken,
+                writesJournal: db.UsesRootSequencedJournal && batch.Turns.Any(turn => turn.Journal is not null));
+        }
         catch (Exception error) when (error is not OperationCanceledException &&
             Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
         {

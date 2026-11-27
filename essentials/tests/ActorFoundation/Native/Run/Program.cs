@@ -43,6 +43,8 @@ if (args is ["root-admission-pressure", var pressureProvider and ("postgres" or 
     return await RootAdmissionPressureChecks.RunAsync(pressureProvider == "postgres", pressureFence == "in-batch");
 if (args is ["shipped-delay-recovery", var delayProvider and ("postgres" or "sqlite"), var delayFence and ("checked" or "in-batch")])
     return await ShippedDelayRecoveryChecks.RunAsync(delayProvider == "postgres", delayFence == "in-batch");
+if (args is ["root-sequenced-journal", var journalProvider and ("postgres" or "sqlite"), var journalFence and ("checked" or "in-batch")])
+    return await ShippedDelayRecoveryChecks.RunAsync(journalProvider == "postgres", journalFence == "in-batch", sequencedJournal: true);
 if (args is ["pg-root-operators", "admit"])
     return await PostgresRootOperatorChecks.RunAsync(null);
 if (args is ["pg-root-operators", var defaultOperatorPhase and ("read" or "resume"), var operatorA, var operatorB, var operatorC])
@@ -102,9 +104,13 @@ if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batc
     return await PostgresHttpOwnerLoss.RunOwnerAsync(workerFence, pause, new(ownerRef));
 if (args is ["pg-held-start"]) return await PostgresHeldStartChecks.RunAsync();
 if (args is ["pg-child-workflows"]) return await PostgresChildWorkflowChecks.RunAsync();
+if (args is ["pg-child-workflows", var pgChildFence and ("checked" or "in-batch")])
+    return await PostgresChildWorkflowChecks.RunAsync(pgChildFence == "in-batch");
 if (args is ["sqlite-child-workflows", var sqliteChildFence and ("checked" or "in-batch")])
     return await SqliteChildWorkflowChecks.RunAsync(sqliteChildFence == "in-batch");
 if (args is ["pg-shipped-format"]) return await PostgresShippedFormatChecks.RunAsync();
+if (args is ["pg-shipped-format", var shippedFence and ("checked" or "in-batch")])
+    return await PostgresShippedFormatChecks.RunAsync(shippedFence == "in-batch");
 if (args is ["pg-held-callers"]) return await PostgresHeldCallerChecks.RunAsync();
 if (args is ["pg-held-reply-order", var orderCallers, var orderStarts] && int.TryParse(orderCallers, out var callerCount) &&
     int.TryParse(orderStarts, out var startCount))
@@ -342,7 +348,8 @@ if (args is ["cost", "postgres", var connection])
 }
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
 Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | pg-write-budget <owned|ef> <checked|in-batch> [--require-budget] | " +
-    "shipped-write-budget <sqlite|postgres> <checked|in-batch> [--require-budget] | memory [runs] | pg-runtime-cluster [partitions] [wake]");
+    "shipped-write-budget <sqlite|postgres> <checked|in-batch> [--require-budget] | root-sequenced-journal <sqlite|postgres> <checked|in-batch> | " +
+    "memory [runs] | pg-runtime-cluster [partitions] [wake]");
 return 2;
 
 internal static class Cost

@@ -9,7 +9,8 @@ namespace Kernel.Foundation.Postgres;
 /// ordinary sends to exact root references, and the reads of those roots. With <see cref="PostgresDirectRequests"/>, on a
 /// store with held replies, a request starts a root or sends to one and holds its caller until the owner answers.
 /// </summary>
-public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IActorReads, Contract.IActorTerminalOutputReads
+public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IActorReads, Contract.IActorTerminalOutputReads,
+    Contract.IActorSequencedJournalReads
 {
     private readonly PostgresRootAdmission admission;
     private readonly PostgresRootReads reads;
@@ -62,6 +63,12 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
     ValueTask<Contract.ActorTerminalOutput?> Contract.IActorTerminalOutputReads.ReadTerminalOutputAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         long endedAt, bool includeValues, CancellationToken cancellationToken) =>
         reads.ReadTerminalOutputAsync(scope, actor, endedAt, includeValues, cancellationToken);
+
+    bool Contract.IActorSequencedJournalReads.SupportsSequencedJournal => reads.SupportsSequencedJournal;
+
+    ValueTask<Contract.ActorSequencedJournalPage?> Contract.IActorSequencedJournalReads.ReadSequencedJournalAsync(
+        Contract.BoundScope scope, Contract.ActorRef actor, long afterSequence, long? upperSequence, int limit,
+        CancellationToken cancellationToken) => reads.ReadSequencedJournalAsync(scope, actor, afterSequence, upperSequence, limit, cancellationToken);
 
     public ValueTask<Contract.ActorView?> GetAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         CancellationToken cancellationToken = default) => reads.GetAsync(scope, actor, cancellationToken);
