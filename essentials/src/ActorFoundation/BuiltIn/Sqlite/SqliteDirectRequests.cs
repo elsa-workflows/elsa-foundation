@@ -10,7 +10,7 @@ public static partial class SqliteEmbeddedHosting
     // Share this edge with ingress and the running owner, including admissions made before it starts.
     // A successor can recover durable work through a different edge. An earlier wait may then time out.
     internal static SqliteDirectRequests CreateRequests(string databasePath, string node, string actorType,
-        TimeSpan? deduplicationWindow = null)
+        TimeSpan? deduplicationWindow = null, StoreFormat? terminalOutputFormat = null)
     {
         RequireFoundationActorType(actorType);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -19,7 +19,7 @@ public static partial class SqliteEmbeddedHosting
         var window = deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         using var file = AcquireFile(databasePath);
-        return new(file.Path, node, actorType, window);
+        return new(file.Path, node, actorType, window, terminalOutputFormat);
     }
 
     internal sealed class SqliteDirectRequests : IReplyTransport
@@ -30,14 +30,16 @@ public static partial class SqliteEmbeddedHosting
         private readonly Admission admission;
         private readonly HeldRootRequests edge;
 
-        internal SqliteDirectRequests(string path, string node, string actorType, TimeSpan window)
+        internal SqliteDirectRequests(string path, string node, string actorType, TimeSpan window, StoreFormat? terminalOutputFormat = null)
         {
             (this.path, this.node, this.actorType, DeduplicationWindow) = (path, node, actorType, window);
+            TerminalOutputFormat = terminalOutputFormat;
             admission = new(this, path, window);
             edge = new(admission, node, actorType);
         }
 
         internal TimeSpan DeduplicationWindow { get; }
+        internal StoreFormat? TerminalOutputFormat { get; }
 
         internal void RequireBinding(string databasePath, string configuredType, string? owner = null)
         {
@@ -121,7 +123,8 @@ public static partial class SqliteEmbeddedHosting
             public async ValueTask<Contract.ActorStatus?> ReadStatusAsync(string tenant, string reference, CancellationToken token)
             {
                 using var file = AcquireFile(path);
-                var store = new EfStore(() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions), postgres: false);
+                var store = new EfStore(() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
+                    owner.TerminalOutputFormat), postgres: false);
                 return (Contract.ActorStatus?)(await store.ReadFirstRootAsync(tenant, reference, token))?.Status;
             }
 
@@ -132,7 +135,7 @@ public static partial class SqliteEmbeddedHosting
             }
 
             private SqliteRootAdmission ForFile(FileLease file) =>
-                new(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
+                new(() => KernelDb.ForSqliteRootShipped(file.Options, owner.TerminalOutputFormat), window, file.AdmissionDefinitions);
 
             private async Task<T> WriteAsync<T>(Func<SqliteRootAdmission, CancellationToken, Task<T>> admit, CancellationToken token)
             {

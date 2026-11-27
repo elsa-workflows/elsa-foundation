@@ -1,3 +1,4 @@
+using Kernel.EntityFramework;
 using Kernel.Runtime.Hosting;
 using Microsoft.Extensions.Logging;
 using Contract = Kernel.Foundation.Contracts;
@@ -11,17 +12,28 @@ public sealed class SqliteEmbeddedFoundation
     private readonly string path;
     private readonly string node;
     private readonly string actorType;
+    private readonly StoreFormat? terminalOutputFormat;
     private readonly Lazy<SqliteEmbeddedHosting.SqliteDirectRequests> requests;
     private readonly SemaphoreSlim installation = new(1, 1);
     private string? installedPath;
 
     /// <summary>Binds the database, owner identity and actor type for the shipped Embedded composition.</summary>
     public SqliteEmbeddedFoundation(string databasePath, string node, string actorType)
+        : this(databasePath, node, actorType, terminalOutputFormat: null) { }
+
+    /// <summary>Composes the dedicated preview format for qualifying retained terminal output.</summary>
+    public static SqliteEmbeddedFoundation ForTerminalOutputQualification(string databasePath, string node, string actorType,
+        bool withTimers = false) =>
+        new(databasePath, node, actorType, withTimers ? StoreFormat.RootS6TerminalOutputQualification : StoreFormat.RootTerminalOutputQualification);
+
+    private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? terminalOutputFormat)
     {
         path = Path.GetFullPath(databasePath);
         this.node = node;
         this.actorType = actorType;
-        requests = new(() => SqliteEmbeddedHosting.CreateRequests(InstalledPath, node, actorType), LazyThreadSafetyMode.PublicationOnly);
+        this.terminalOutputFormat = terminalOutputFormat;
+        requests = new(() => SqliteEmbeddedHosting.CreateRequests(InstalledPath, node, actorType,
+            terminalOutputFormat: terminalOutputFormat), LazyThreadSafetyMode.PublicationOnly);
     }
 
     /// <summary>Installs or verifies the file and binds future operations to its resolved path.</summary>
@@ -30,7 +42,7 @@ public sealed class SqliteEmbeddedFoundation
         await installation.WaitAsync(cancellationToken);
         try
         {
-            var verified = await SqliteEmbeddedHosting.InstallShippedFileAsync(installedPath ?? path, cancellationToken);
+            var verified = await SqliteEmbeddedHosting.InstallShippedFileAsync(installedPath ?? path, cancellationToken, terminalOutputFormat);
             Volatile.Write(ref installedPath, verified);
         }
         finally { installation.Release(); }
@@ -53,7 +65,7 @@ public sealed class SqliteEmbeddedFoundation
         SqliteEmbeddedHosting.OpenFoundationWithRequestsAsync(InstalledPath, actorType, requests.Value, cancellationToken);
 
     /// <summary>Creates a paged reader of committed roots, inboxes and journals.</summary>
-    public Contract.IActorReads CreateReads(int pageSize = 100) => SqliteEmbeddedHosting.CreateFoundationReads(InstalledPath, pageSize);
+    public Contract.IActorReads CreateReads(int pageSize = 100) => SqliteEmbeddedHosting.CreateFoundationReads(InstalledPath, pageSize, terminalOutputFormat);
 
     /// <summary>Reads the store clock used to set held-request deadlines.</summary>
     public ValueTask<long> ReadClockAsync(CancellationToken cancellationToken = default) => requests.Value.ReadClockAsync(cancellationToken);

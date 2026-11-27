@@ -11,6 +11,11 @@ internal sealed class KernelRunReader(KernelRuns runs, IWorkflowExecutableStore 
 {
     internal sealed record Run(WorkflowExecutionState State, WorkflowRunHeader? Header, WorkflowExecutable? Executable);
 
+    internal ValueTask<ActorTerminalOutput?> ReadTerminalOutputAsync(Run run, bool includeValues, CancellationToken cancellationToken) =>
+        run.Header is not null && run.State is { Status: WorkflowExecutionStatus.Completed, CompletedAt: { } ended }
+            ? runs.ReadTerminalOutputAsync(new ActorRef(run.State.WorkflowExecutionId), ended.ToUnixTimeMilliseconds(), includeValues, cancellationToken)
+            : ValueTask.FromResult<ActorTerminalOutput?>(null);
+
     internal async ValueTask<Run?> GetAsync(string id, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);

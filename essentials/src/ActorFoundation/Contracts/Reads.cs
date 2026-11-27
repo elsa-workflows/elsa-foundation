@@ -57,3 +57,14 @@ public interface IActorReads
     ValueTask<Page<DeliveryView>> InboxAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>Optional exact read of a completed actor's retained named outputs, under the host's bound scope.</summary>
+public interface IActorTerminalOutputReads
+{
+    /// <summary>Reads the output from the supplied terminal time. A metadata-only read omits the value body.</summary>
+    ValueTask<ActorTerminalOutput?> ReadTerminalOutputAsync(BoundScope scope, ActorRef actor, long endedAt, bool includeValues,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The authored names as JSON, the complete UTF-8 JSON output object when requested and retained, and its commit time.</summary>
+public sealed record ActorTerminalOutput(long CapturedAt, string Names, bool Omitted, byte[]? Values);

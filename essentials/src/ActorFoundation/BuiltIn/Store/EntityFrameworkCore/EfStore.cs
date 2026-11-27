@@ -169,6 +169,9 @@ public class KernelDb : DbContext
     internal bool UsesRootDueBacklog => Has(RootCapabilities.DueBacklog);
     internal bool UsesRootPrivateParkInputs => UsesRootSelfProtocol && UsesRootParkArrivals && UsesRootComposedParkRecovery;
     internal bool UsesRootTimerRearm => UsesRootPrivateParkInputs && Has(RootCapabilities.TimerRearm);
+    internal bool UsesRootTerminalOutput => Has(RootCapabilities.TerminalOutput);
+    internal bool SeparateRootFormatLock =>
+        RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput;
     internal bool UsesRootComposedParkRecovery =>
         UsesRootParkRecovery && (Capabilities & RootProfiles.ParkCompositionBase) == RootProfiles.ParkCompositionBase;
     // A composed set with Park and Termination (S5a, #4229): an operator command reaches a parked root, passes its withheld
@@ -196,10 +199,25 @@ public class KernelDb : DbContext
     internal static KernelDb ForSqliteRootTimerRearmQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
         new(options, StoreFormat.RootTimerRearmQualification, RootProfiles.TimerRearmQualification, sqliteShippedInstall: true,
             sqliteRuntimeDefinitions: definitions);
-    internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options) =>
-        new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true);
-    internal static KernelDb ForSqliteRootRuntime(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
-        new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+    internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options, StoreFormat? terminalOutputFormat = null) =>
+        ForSqliteRootFormat(options, terminalOutputFormat, definitions: null);
+    internal static KernelDb ForSqliteRootRuntime(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions,
+        StoreFormat? terminalOutputFormat = null) => ForSqliteRootFormat(options, terminalOutputFormat, definitions);
+    private static KernelDb ForSqliteRootFormat(DbContextOptions<KernelDb> options, StoreFormat? terminalOutputFormat,
+        SqliteAdmissionDefinitions? definitions) => terminalOutputFormat is { } format
+        ? ForRootTerminalOutputQualification(options, sqliteShippedInstall: true, definitions, format)
+        : new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+
+    internal static KernelDb ForRootTerminalOutputQualification(DbContextOptions<KernelDb> options,
+        bool sqliteShippedInstall = false, SqliteAdmissionDefinitions? definitions = null, StoreFormat? format = null)
+    {
+        var required = format ?? StoreFormat.RootTerminalOutputQualification;
+        var capabilities = required == StoreFormat.RootTerminalOutputQualification ? RootProfiles.TerminalOutputQualification
+            : required == StoreFormat.RootS6TerminalOutputQualification ? RootProfiles.S6TerminalOutputQualification
+            : throw new ArgumentOutOfRangeException(nameof(format), format, "Use a terminal output qualification profile.");
+        return new(options, required, capabilities, sqliteShippedInstall: sqliteShippedInstall, sqliteRuntimeDefinitions: definitions);
+    }
+
     internal static KernelDb ForRootDueBacklogQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions? definitions = null) =>
         new(options, StoreFormat.RootDueBacklogQualification, RootProfiles.ParkRecoveryComposition | RootCapabilities.DueBacklog,
             sqliteShippedInstall: definitions is not null, sqliteRuntimeDefinitions: definitions);

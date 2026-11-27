@@ -23,6 +23,7 @@ internal static class WorkbenchCorePreview
     /// the kernel: it serves each published definition on the preview node, so a published workflow starts on the kernel.
     /// </summary>
     internal const string PublicationsKey = "Elsa:CorePreview:Publications";
+    internal const string TerminalOutputQualificationKey = "Elsa:CorePreview:TerminalOutputQualification";
 
     internal const string ProviderKey = "Elsa:CorePreview:Provider";
     internal const string SqlitePathKey = "Elsa:CorePreview:SqlitePath";
@@ -43,9 +44,15 @@ internal static class WorkbenchCorePreview
     internal const string HttpProbePath = "core-preview/probe";
 
     /// <summary>The probe: a POST to its route answers 200 with the posted body's name.</summary>
-    internal static Workflow HttpProbeWorkflow() => Wf.Workflow("core-preview-http-probe", Wf.Sequence("main",
-        Wf.HttpEndpoint("start", HttpProbePath),
-        Wf.Respond("answer", Binding.Result("start", "Body.name"), 200)));
+    internal static Workflow HttpProbeWorkflow(bool retainOutput = false)
+    {
+        var start = Wf.HttpEndpoint("start", HttpProbePath);
+        var answer = Wf.Respond("answer", Binding.Result("start", "Body.name"), 200);
+        var steps = retainOutput
+            ? new[] { start, Wf.SetOutput("set-result", "Result", Binding.Result("start", "Body")), answer }
+            : new[] { start, answer };
+        return Wf.Workflow("core-preview-http-probe", Wf.Sequence("main", steps));
+    }
 
     internal const string HttpEchoPath = "core-preview/echo";
 
@@ -124,6 +131,10 @@ internal static class WorkbenchCorePreview
         // With publications on, the kernel's serving state is shared by this host's node and the default shell, which publishes:
         // the node runs the registry it serves into. Registered by instance, so each shell resolves this one.
         var publications = configuration.GetValue<bool>(PublicationsKey);
+        var terminalOutputsWithTimers = string.Equals(configuration[TerminalOutputQualificationKey]?.Trim(), "s6", StringComparison.OrdinalIgnoreCase);
+        var terminalOutputQualification = terminalOutputsWithTimers || configuration.GetValue<bool>(TerminalOutputQualificationKey);
+        if (terminalOutputQualification && !publications)
+            throw new InvalidOperationException($"{TerminalOutputQualificationKey} requires {PublicationsKey} and a dedicated qualification database.");
         if (useSqlite && !publications)
             throw new InvalidOperationException($"SQLite runs the shipped Core Preview. Enable {PublicationsKey}.");
         // The release profile: publications run on the shipped store, which carries Native jobs with timed settlement,
@@ -133,9 +144,10 @@ internal static class WorkbenchCorePreview
                 "With Elsa:CorePreview:Publications on, the Core Preview runs on the shipped format, which carries Native jobs: leave NativeJobs and TimedNativeJobs off.");
         // Both shipped stores take the actor-owned timers Delay uses. Schedule actors, children and HTTP wait routes
         // still need their own host support. The non-shipped PostgreSQL modes take their capabilities from their profile.
+        var sqliteHasS6 = !terminalOutputQualification || terminalOutputsWithTimers;
         var capabilities = new KernelHostCapabilities(Schedules: false,
-            Timers: useSqlite ? SqliteEmbeddedHosting.TakesTimers : PostgresPreviewHosting.TakesTimers(OpenPostgres),
-            Children: false, SelfSends: useSqlite ? SqliteEmbeddedHosting.TakesSelfSends : PostgresPreviewHosting.TakesSelfSends(OpenPostgres),
+            Timers: useSqlite ? sqliteHasS6 && SqliteEmbeddedHosting.TakesTimers : PostgresPreviewHosting.TakesTimers(OpenPostgres),
+            Children: false, SelfSends: useSqlite ? sqliteHasS6 && SqliteEmbeddedHosting.TakesSelfSends : PostgresPreviewHosting.TakesSelfSends(OpenPostgres),
             HttpWaits: false);
         string? waitProbeRefusal = null;
         var serving = publications ? new KernelServing(CronosCalendar.Error, capabilities) : null;
@@ -146,7 +158,7 @@ internal static class WorkbenchCorePreview
             // The echo probe answers with the body the edge read, and the wait probe is refused, as a publication with one is.
             if (configuration.GetValue<bool>(HttpProbeKey))
             {
-                serving.ServeHostWorkflowAsync(HttpProbeWorkflow()).AsTask().GetAwaiter().GetResult();
+                serving.ServeHostWorkflowAsync(HttpProbeWorkflow(terminalOutputQualification)).AsTask().GetAwaiter().GetResult();
                 serving.ServeHostWorkflowAsync(HttpEchoWorkflow()).AsTask().GetAwaiter().GetResult();
                 try { serving.ServeHostWorkflowAsync(HttpWaitWorkflow()).AsTask().GetAwaiter().GetResult(); }
                 catch (InvalidOperationException refused) { waitProbeRefusal = refused.Message; }
@@ -177,7 +189,9 @@ internal static class WorkbenchCorePreview
         var scripts = new JintNativeScripts(Elsa.Expressions.JavaScript.Jint.Services.JintScriptEvaluators.Create(javaScript));
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
         // On the shipped format the node answers held callers: the held requests of this host's edge.
-        var sqlite = sqlitePath is null ? null : new SqliteEmbeddedFoundation(sqlitePath, node, WorkflowActor.ActorType);
+        var sqlite = sqlitePath is null ? null : terminalOutputQualification
+            ? SqliteEmbeddedFoundation.ForTerminalOutputQualification(sqlitePath, node, WorkflowActor.ActorType, terminalOutputsWithTimers)
+            : new SqliteEmbeddedFoundation(sqlitePath, node, WorkflowActor.ActorType);
         var postgresRequests = publications && !useSqlite ? PostgresPreviewHosting.CreateRequests(OpenPostgres, node, WorkflowActor.ActorType) : null;
         var (edgeTenant, readsTenantOrNull) = Tenants(configuration[TenantKey], configuration[ReadsTenantKey]);
         KernelHttpEdgeHost? edge = null;
@@ -239,6 +253,7 @@ internal static class WorkbenchCorePreview
                     // The release profile installs its format in an empty database and starts on one already installed; any
                     // other database is refused with what to do, and the process ends before its node starts.
                     if (sqlite is not null) await sqlite.InstallShippedAsync(token);
+                    else if (terminalOutputQualification) await PostgresPreviewHosting.InstallTerminalOutputQualificationAsync(postgresOptions!, terminalOutputsWithTimers, token);
                     else if (publications) await PostgresPreviewHosting.InstallShippedAsync(postgresOptions!, token);
                     edge?.StoreInstalled();
                     await shells.GetOrActivateAsync(shellName, token);
@@ -251,7 +266,8 @@ internal static class WorkbenchCorePreview
         if (readsTenantOrNull is { } readsTenant)
             services.AddSingleton(new WorkbenchCorePreviewReads(OpenPreviewReadsAsync, EmbeddedTenant.Bind(readsTenant)));
 
-        KernelDb OpenPostgres() => publications ? PostgresPreviewHosting.CreateShippedContext(postgresOptions!) :
+        KernelDb OpenPostgres() => terminalOutputQualification ? PostgresPreviewHosting.CreateTerminalOutputQualificationContext(postgresOptions!, terminalOutputsWithTimers) :
+            publications ? PostgresPreviewHosting.CreateShippedContext(postgresOptions!) :
             timedJobs ? PostgresPreviewHosting.CreateTimedNativeJobContext(postgresOptions!) :
             nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(postgresOptions!) : new(postgresOptions!);
 

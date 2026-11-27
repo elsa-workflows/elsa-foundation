@@ -53,7 +53,7 @@ public static partial class SqliteEmbeddedHosting
 
         using var file = AcquireFile(databasePath, requests: requests);
         requests?.RequireBinding(file.Path, actorType);
-        var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
+        var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options, requests?.TerminalOutputFormat), window, file.AdmissionDefinitions);
         await admission.VerifyAsync(cancellationToken);
         return new Ingress(file.Path, actorType, window, requests, authorizeOperator);
     }
@@ -81,13 +81,13 @@ public static partial class SqliteEmbeddedHosting
                 var (actor, command, refusal) = ReadCommand(scope, target, kind, payload);
                 if (command is null) return new(Contract.AdmissionOutcome.Refused, Reason: refusal);
                 using var write = AcquireFile(path);
-                var operators = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(write.Options), window, write.AdmissionDefinitions);
+                var operators = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(write.Options, requests?.TerminalOutputFormat), window, write.AdmissionDefinitions);
                 return await operators.OperateAsync(scope.Tenant, actor, id, kind, command.Selection!, options?.DueAt, options?.KeepFor,
                     cancellationToken, thenDelete: command.ThenDelete);
             }
 
             using var file = AcquireFile(path);
-            var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
+            var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options, requests?.TerminalOutputFormat), window, file.AdmissionDefinitions);
             if (target is Contract.Target.Start start)
             {
                 var spec = start.Spec;

@@ -753,7 +753,7 @@ internal static partial class WorkbenchPostgresPreview
             WaitForOutputAsync(output.KernelServing.Task, "serving its publications on the kernel", token);
 
         internal static WorkbenchProcess Start(string executable, string connection, bool enabled, string? profile, string? releaseFile,
-            string? sqlitePath = null, DirectoryInfo? retainedWorkspace = null)
+            string? sqlitePath = null, DirectoryInfo? retainedWorkspace = null, bool terminalOutputQualification = false, bool terminalOutputsWithTimers = false)
         {
             var binary = Path.GetFullPath(executable);
             var workspace = retainedWorkspace ?? Directory.CreateTempSubdirectory("elsa-workbench-core-preview-");
@@ -790,6 +790,11 @@ internal static partial class WorkbenchPostgresPreview
                 start.Environment["Elsa__CorePreview__Publications"] = "true";
                 start.Environment["Elsa__CorePreview__HttpProbe"] = "true";
                 start.Environment["Elsa__CorePreview__Tenant"] = "default";
+            }
+            if (terminalOutputQualification)
+            {
+                start.Environment["Elsa__CorePreview__TerminalOutputQualification"] = terminalOutputsWithTimers ? "s6" : "true";
+                start.Environment["CShells__Shells__default__Features__WorkflowsRuntimeHistory__Enabled"] = "false";
             }
             if (profile is "timed" or "timeout" or "takeover" or "takeover-complete")
                 start.Environment["Elsa__CorePreview__TimedNativeJobs"] = "true";

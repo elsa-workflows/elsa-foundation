@@ -26,7 +26,8 @@ public static partial class SqliteEmbeddedHosting
     public static Task InstallShippedAsync(string databasePath, CancellationToken cancellationToken = default) =>
         InstallShippedFileAsync(databasePath, cancellationToken);
 
-    internal static async Task<string> InstallShippedFileAsync(string databasePath, CancellationToken cancellationToken)
+    internal static async Task<string> InstallShippedFileAsync(string databasePath, CancellationToken cancellationToken,
+        StoreFormat? terminalOutputFormat = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         cancellationToken.ThrowIfCancellationRequested();
@@ -34,7 +35,7 @@ public static partial class SqliteEmbeddedHosting
         // Create a missing file without opening SQLite or changing an existing store before acquiring the host lock.
         using (new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite)) { }
         using var file = AcquireFile(path, forRuntime: true);
-        await using var db = KernelDb.ForSqliteRootShipped(file.Options);
+        await using var db = KernelDb.ForSqliteRootShipped(file.Options, terminalOutputFormat);
         await EfStore.InstallSqliteShippedAsync(db, partitions: 1, cancellationToken);
         await UseWalAsync(db, cancellationToken);
         return file.Path;
@@ -51,7 +52,7 @@ public static partial class SqliteEmbeddedHosting
         CancellationToken cancellationToken = default, Action<Exception>? onFault = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
-        return StartCoreAsync(databasePath, node, _ => actor, rootType: null, endProcess, options, fenceInBatch, cancellationToken, onFault, null);
+        return StartCoreAsync(databasePath, node, (_, _) => actor, rootType: null, endProcess, options, fenceInBatch, cancellationToken, onFault, null);
     }
 
     /// <summary>Starts an Embedded node on the shipped format with root turns, timed jobs and optional held replies.</summary>
@@ -62,13 +63,14 @@ public static partial class SqliteEmbeddedHosting
     {
         ArgumentNullException.ThrowIfNull(actor);
         RequireFoundationActorType(actor.Type);
-        return StartCoreAsync(databasePath, node, store => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode(actor.Withholds)), actor, store.RootSelfIssuer,
+        return StartCoreAsync(databasePath, node, (store, terminalOutputLimit) => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode(actor.Withholds)), actor, store.RootSelfIssuer,
                 rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true,
-                retentionWindow: retentionWindow),
+                retentionWindow: retentionWindow,
+                rootTerminalOutputLimit: terminalOutputLimit),
             actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests);
     }
 
-    private static async Task<RuntimeNode> StartCoreAsync(string databasePath, string node, Func<EfStore, IActorType> createActor,
+    private static async Task<RuntimeNode> StartCoreAsync(string databasePath, string node, Func<EfStore, int, IActorType> createActor,
         string? rootType, Action<string> endProcess, LoopOptions? options, bool fenceInBatch, CancellationToken cancellationToken,
         Action<Exception>? onFault, SqliteDirectRequests? requests)
     {
@@ -88,11 +90,16 @@ public static partial class SqliteEmbeddedHosting
         {
             if (rootType is not null) requests?.RequireBinding(file.Path, rootType, node);
             var shipped = rootType is not null;
-            KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions) : new(file.Options);
+            KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
+                terminalOutputFormat: requests?.TerminalOutputFormat) : new(file.Options);
 
             int partitions;
+            bool selfSends;
+            int terminalOutputLimit;
             await using (var db = Open())
             {
+                selfSends = db.UsesRootSelfProtocol;
+                terminalOutputLimit = db.UsesRootTerminalOutput ? EfStore.RootContentBytes : 0;
                 if (shipped)
                 {
                     var admission = new SqliteRootAdmission(Open, TimeSpan.Zero, file.AdmissionDefinitions);
@@ -112,7 +119,7 @@ public static partial class SqliteEmbeddedHosting
             var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch) { CommitSql = CommitSql.Owned };
             if (shipped)
             {
-                if (TakesSelfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
+                if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
                 await store.EnableRootJobsAsync(cancellationToken);
             }
             var watchdog = new Watchdog(Defaults.Lease, endProcess);
@@ -124,7 +131,7 @@ public static partial class SqliteEmbeddedHosting
                 OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error),
                 Transport = requests
             };
-            var host = DurableHost.ForNode(node, watched, createActor(store), partitions, workers);
+            var host = DurableHost.ForNode(node, watched, createActor(store, terminalOutputLimit), partitions, workers);
             var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
                 beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault)
             {

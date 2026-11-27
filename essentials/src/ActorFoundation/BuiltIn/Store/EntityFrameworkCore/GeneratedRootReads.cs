@@ -6,10 +6,19 @@ using Bookmark = Kernel.Durable.FoundationJournalPaging.Bookmark;
 
 namespace Kernel.EntityFramework;
 
-internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, int pageSize, string provider) : IActorReads
+internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, int pageSize, string provider) : IActorReads, IActorTerminalOutputReads
 {
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
+
+    public async ValueTask<ActorTerminalOutput?> ReadTerminalOutputAsync(BoundScope scope, ActorRef actor, long endedAt,
+        bool includeValues, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!PostgresRootAdmission.IsIssuedReferenceShape(actor.Id)) return null;
+        return await store.ReadRootTerminalOutputAsync(scope.Tenant, actor.Id, endedAt, includeValues, cancellationToken);
+    }
 
     public async ValueTask<ActorView?> GetAsync(BoundScope scope, ActorRef actor, CancellationToken cancellationToken = default)
     {

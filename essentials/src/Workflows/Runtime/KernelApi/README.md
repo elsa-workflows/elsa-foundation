@@ -42,5 +42,15 @@ query that pages in the store replaces it later. Activity browse replays the req
 revision captured by its first read and fixes that revision across cursors. Point inspection keeps only the requested frame
 and can stop when that frame reaches a terminal status. Both confirm the exact run still exists before returning.
 
-The kernel run summary includes empty activity, incident and output collections. Workflow outputs need a committed
-capture projection before the runtime API can serve them.
+The kernel run summary defers activities and leaves incidents empty. The terminal-output qualification reads the original
+named JSON results from the terminal workflow history checkpoint, after run inspection authorization. A caller with
+structure-only access sees redacted output names. Retirement removes the result with its history. Neither actor headers nor
+journal reads carry these values.
+
+The Workbench switch `Elsa:CorePreview:TerminalOutputQualification` selects a dedicated preview database with
+store schema 3, message protocol 112 and journal codec 1. PostgreSQL definitions revision 6 and SQLite definitions revision
+10 use the shipped Park capability set of protocol 26 plus terminal output. The normal shipped profile keeps its existing
+schema and returns empty outputs. Set `Elsa:CorePreview:TerminalOutputQualification=s6` to test terminal output alongside
+actor-owned timers and timer rearming, on a separate database using protocol 113, PostgreSQL definitions revision 7 or
+SQLite definitions revision 11. Both qualifications retain terminal results when diagnostic history capture is disabled.
+Activity and variable value history, playback, and store migration are separate work.
