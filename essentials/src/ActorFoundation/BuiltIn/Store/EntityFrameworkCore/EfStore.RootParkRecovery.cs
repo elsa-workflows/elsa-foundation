@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,7 @@ public sealed partial class EfStore
         db.Database.ExecuteSqlRawAsync("""
             ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkGeneration" bigint NOT NULL DEFAULT 0
                 CHECK ("FoundationParkGeneration" >= 0);
+            /*consumed-job-result-definitions*/
             ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "FoundationReleasedBy" bigint
                 CHECK ("FoundationReleasedBy" IS NULL OR ("FoundationReleasedBy" > 0 AND "InboxScope" = -4));
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_Released" ON "Messages" ("Partition", "Target", "FoundationReleasedBy", "Seq")
@@ -38,8 +40,14 @@ public sealed partial class EfStore
                 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.{RootOutcomeEntry})
                 EXECUTE FUNCTION kernel_require_root_outcome_checkpoint();
             """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal)
+            .Replace("/*consumed-job-result-definitions*/", RecordsConsumedRootJob(db)
+                ? $"""
+                    ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkJobResult" text;
+                    CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_RecordedJobResult" ON "Messages" {RecordedJobResultIndex};
+                    """ : "", StringComparison.Ordinal)
             .Replace("/*composed-waiting-index*/", db.UsesRootComposedParkRecovery ? $"""
-                CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortWaiting" ON "Messages" ("Partition", "Due", "Seq")
+                CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortGroups" ON "Messages" ("Partition", "Seen", "Due", "Seq")
+                    INCLUDE ("Target")
                     WHERE {CohortWaitingWork};
                 """ : "", StringComparison.Ordinal)
             .Replace("/*parked-operator-outcomes*/",
@@ -74,9 +82,12 @@ public sealed partial class EfStore
         return $"""AND (i."FoundationParkAt" IS NOT NULL {withheld} OR {NoEarlierReleasedCohort})""";
     }
 
-    private sealed record CohortSample(long Epoch, long Through = -1, long Due = long.MinValue, long Seq = 0);
-    private sealed record CohortCandidate(int Partition, long Through, long? Due, long? Seq, string? Actor, long? Revision,
-        string? Tenant, string? Reference, string? Header);
+    private sealed record CohortSample(long Epoch, long Through = -1, long ReadyThrough = 0, long Seen = 0,
+        long Due = long.MinValue, long Seq = 0, long ScanSeq = 0, bool ScanFirst = false);
+    private sealed record CohortFence(int Partition, long Epoch, long Through, long ReadyThrough, long Seen, long Due, long Seq, long ScanSeq,
+        bool ScanFirst);
+    private sealed record CohortCandidate(int Partition, long Through, long ReadyThrough, long? SeenGroup, long? DueGroup,
+        long? Seq, bool More, int Spare, long? ScanTail, string? Actor, long? Revision, string? Tenant, string? Reference, string? Header);
     private readonly ConcurrentDictionary<int, CohortSample> _cohortSamples = new();
     private int _cohortPartitionWindow;
 
@@ -86,7 +97,7 @@ public sealed partial class EfStore
     private static readonly string CohortEligibleRoots = $"""
         SELECT i."Partition", i."Id" AS "Actor", i."Revision", i."FoundationTenant" AS "Tenant", i."FoundationReference" AS "Reference",
             i."FoundationHeader" AS "Header"
-        FROM (SELECT DISTINCT "Partition", "Target" FROM candidates WHERE "Seen" < "Epoch") w
+        FROM (SELECT DISTINCT "Partition", "Target" FROM candidates) w
         JOIN "Instances" i ON i."Id" = w."Target" AND i."Partition" = w."Partition"
         WHERE i."Status" = {(int)InstanceStatus.Running} AND NOT i."Retired"
             AND i."FoundationReference" IS NOT NULL AND i."FoundationParkGeneration" > 0
@@ -96,7 +107,8 @@ public sealed partial class EfStore
         """;
 
     // Only roots with pending released inputs and waiting controls need an authored decision. The main poll accepts
-    // each decision at the same revision. A sweep fixes a sequence ceiling so new admissions cannot prevent a wrap.
+    // each decision at the same revision. Select an unseen epoch and ready due group with separate index seeks.
+    // Inside that group, the sequence ceiling keeps later admissions outside the bounded page.
     private async Task<(string[] Actors, long[] Revisions)> ReadWithheldCohortsAsync(KernelDb db, IReadOnlyCollection<PartitionFence> fences,
         int limit, CancellationToken token)
     {
@@ -106,62 +118,45 @@ public sealed partial class EfStore
         if (width == 0) return ([], []);
         var offset = width == ordered.Length ? 0 :
             (int)((uint)(Interlocked.Add(ref _cohortPartitionWindow, width) - width) % ordered.Length);
-        var partitions = new List<int>(width);
-        var epochs = new List<long>(width);
-        var afterDue = new List<long>(width);
-        var afterSeq = new List<long>(width);
-        var through = new List<long>(width);
+        var windows = new List<CohortFence>(width);
         var sampled = new Dictionary<int, (long Epoch, CohortSample Previous)>(width);
         for (var index = 0; index < width; index++)
         {
             var fence = ordered[(offset + index) % ordered.Length];
             var sample = _cohortSamples.GetOrAdd(fence.Partition, _ => new(fence.Epoch));
             if (sample.Epoch > fence.Epoch) continue;
-            partitions.Add(fence.Partition);
-            epochs.Add(fence.Epoch);
-            afterDue.Add(sample.Epoch == fence.Epoch ? sample.Due : long.MinValue);
-            afterSeq.Add(sample.Epoch == fence.Epoch ? sample.Seq : 0);
-            through.Add(sample.Epoch == fence.Epoch ? sample.Through : -1);
+            var cursor = sample.Epoch == fence.Epoch ? sample : new(fence.Epoch);
+            windows.Add(new(fence.Partition, fence.Epoch, cursor.Through, cursor.ReadyThrough, cursor.Seen, cursor.Due, cursor.Seq,
+                cursor.ScanSeq, cursor.ScanFirst));
             sampled.Add(fence.Partition, (fence.Epoch, sample));
         }
-        if (partitions.Count == 0) return ([], []);
+        if (windows.Count == 0) return ([], []);
         var sql = db.UsesSqliteRootRuntime
-            ? SqliteCohortCandidates(partitions.ToArray(), epochs.ToArray(), afterDue.ToArray(), afterSeq.ToArray(), through.ToArray(), limit / width)
-            : System.Runtime.CompilerServices.FormattableStringFactory.Create(
-            $"""
-            WITH fences AS MATERIALIZED (
-                SELECT * FROM unnest({"{0}"}::integer[], {"{1}"}::bigint[], {"{2}"}::bigint[], {"{3}"}::bigint[], {"{4}"}::bigint[])
-                    AS f("Partition", "Epoch", "AfterDue", "AfterSeq", "Through")
-            ), bounds AS MATERIALIZED (
-                SELECT f."Partition", f."Epoch", f."AfterDue", f."AfterSeq",
-                    CASE WHEN f."Through" >= 0 THEN f."Through" ELSE coalesce(last."Seq", 0) END AS "Through"
-                FROM fences f LEFT JOIN LATERAL (
-                    SELECT "Seq" FROM "Messages" WHERE f."Through" < 0 AND "Partition" = f."Partition"
-                    ORDER BY "Seq" DESC LIMIT 1
-                ) last ON true
-            ), candidates AS MATERIALIZED (
-                SELECT b."Partition", b."Epoch", m."Target", m."Due", m."Seq", m."Seen"
-                FROM bounds b CROSS JOIN LATERAL (
-                    SELECT "Target", "Due", "Seq", "Seen" FROM "Messages"
-                    WHERE "Partition" = b."Partition" AND ("Due", "Seq") > (b."AfterDue", b."AfterSeq") AND "Seq" <= b."Through"
-                        AND "Due" <= floor(extract(epoch from statement_timestamp()) * 1000)::bigint AND {CohortWaitingWork}
-                    ORDER BY "Due", "Seq" LIMIT {"{5}"}
-                ) m
-            ), tail AS (
-                SELECT DISTINCT ON ("Partition") "Partition", "Due", "Seq" FROM candidates ORDER BY "Partition", "Due" DESC, "Seq" DESC
-            ), eligible AS (
-                {CohortEligibleRoots}
-            )
-            SELECT b."Partition", b."Through", t."Due", t."Seq", e."Actor", e."Revision", e."Tenant", e."Reference", e."Header"
-            FROM bounds b LEFT JOIN tail t ON t."Partition" = b."Partition"
-            LEFT JOIN eligible e ON e."Partition" = b."Partition"
-            /* root-cohort-waiting */
-            """, partitions.ToArray(), epochs.ToArray(), afterDue.ToArray(), afterSeq.ToArray(), through.ToArray(), limit / width);
+            ? SqliteCohortCandidates(windows, limit / width)
+            : PostgresCohortCandidates(windows, limit / width);
         var candidates = await db.Database.SqlQuery<CohortCandidate>(sql).ToArrayAsync(token);
         foreach (var page in candidates.GroupBy(candidate => candidate.Partition))
         {
             var (epoch, previous) = sampled[page.Key];
-            var next = page.First() is { Due: { } due, Seq: { } last } row ? new CohortSample(epoch, row.Through, due, last) : new(epoch);
+            var row = page.First();
+            var cursor = previous.Epoch == epoch ? previous : new(epoch);
+            var scanned = row is { DueGroup: not null, Spare: > 0 };
+            var scan = scanned ? row.ScanTail ?? 0 : cursor.ScanSeq;
+            // SQLite can reuse a swept high sequence. A full grouped page yields its next turn to the
+            // sequence scan, where newer admissions cannot overtake a still-pending lower sequence.
+            var useScanNext = row.Spare == 0;
+            // The sequence scan can finish even while later admissions keep creating empty due groups.
+            // Refresh the ceiling and clock once either scan has covered the old range.
+            var next = row switch
+            {
+                _ when row.SeenGroup is null || scanned && row.ScanTail is null => new CohortSample(epoch),
+                { SeenGroup: { } seen, DueGroup: null } => new(epoch, row.Through, row.ReadyThrough, checked(seen + 1), ScanSeq: scan),
+                _ when cursor.ScanFirst => cursor with { ScanSeq = scan, ScanFirst = false },
+                { SeenGroup: { } seen, DueGroup: { } due, Seq: { } last, More: true } =>
+                    new(epoch, row.Through, row.ReadyThrough, seen, due, last, scan, useScanNext),
+                _ => new(epoch, row.Through, row.ReadyThrough, row.SeenGroup!.Value, checked(row.DueGroup!.Value + 1),
+                    ScanSeq: scan, ScanFirst: useScanNext)
+            };
             _cohortSamples.AddOrUpdate(page.Key, next, (_, current) => current.Epoch < epoch || ReferenceEquals(current, previous) ? next : current);
         }
         var actors = new List<string>();
@@ -194,7 +189,8 @@ public sealed partial class EfStore
 
     private sealed record KeptRow(string Id, short KeptBy, string Digest, string Envelope, long Bytes);
 
-    private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding, bool Residue, string? Clearing, long? Cleared);
+    private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding, bool Residue, string? Clearing, long? Cleared,
+        string? Jobs, string? ParkJobResult);
 
     // A pending row other than a direct input: the parked retirement branch and the Park facts share it, and the C# retirement
     // lock (EfStore.RootRetirement.cs) states the same condition with the direct scope as a parameter.
@@ -253,6 +249,7 @@ public sealed partial class EfStore
             }
             var clearing = RereadsParkFacts(db) ? """ "FoundationParkClearing" AS "Clearing", "FoundationParkCleared" AS "Cleared" """
                 : """ NULL::text AS "Clearing", NULL::bigint AS "Cleared" """;
+            var jobPin = RecordsConsumedRootJob(db) ? """ "FoundationParkJobResult" """ : "NULL::text";
             var park = db.UsesSqliteRootRuntime
                 ? await ReadSqliteParkMarkAsync(db, message.Target.Id, message.Target.Partition, token)
                 : await db.Database.SqlQueryRaw<ParkMarkRow>($"""
@@ -261,7 +258,7 @@ public sealed partial class EfStore
                         OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding",
                     EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = "Instances"."Id" AND m."Partition" = "Instances"."Partition"
                         AND {PendingResidue}) AS "Residue",
-                    {clearing} FROM "Instances"
+                    {clearing}, "Jobs", {jobPin} AS "ParkJobResult" FROM "Instances"
                 WHERE "Id" = {"{0}"} AND "Partition" = {"{1}"} AND NOT "Retired"
                 """, message.Target.Id, message.Target.Partition).SingleOrDefaultAsync(token);
             // A clearing's control reads only the next page and one more row: nothing is kept while a clearing is open.
@@ -280,10 +277,17 @@ public sealed partial class EfStore
             var fits = page == charged.Length;
             var refusals = fits && command.RootParkClear && message.Kind == Kinds.Delete && park?.Clearing == message.Id
                 ? await ReadParkProtectionRefusalsAsync(db, message.Target.Id, message.Target.Partition, message.Id, long.MaxValue, token) : 0;
+            // Check the registered footprint even if the arrivals exceed one page, so a valid plan is refused for page size.
+            var consumedJob = message.Kind == Kinds.Recover &&
+                park is { At: not null, Clearing: null, Jobs: { } registry, ParkJobResult: { } pinned } &&
+                pinned == await ReadConsumedRootJobAsync(db, message.Target.Id, message.Target.Partition, registry, token)
+                ? pinned : null;
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
-                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived), kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
+                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived),
+                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed) + (db.UsesSqliteRootRuntime || consumedJob is null ? 0 : 1),
                 fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Residue = park?.Residue ?? false, Rereads = RereadsParkFacts(db), Clearing = park?.Clearing, Cleared = park?.Cleared ?? 0, Page = page,
-                    ClearsInPages = db.UsesSqliteRootRuntime || ClearsParkInPages(db), ProtectionRefusals = refusals };
+                    ClearsInPages = db.UsesSqliteRootRuntime || ClearsParkInPages(db), ProtectionRefusals = refusals,
+                    ConsumedJobRegistry = consumedJob is null ? null : park?.Jobs };
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }
         return polled with { Messages = messages };
@@ -310,7 +314,8 @@ public sealed partial class EfStore
             current.Status != (recovered ? InstanceStatus.Faulted : row.Status)) return null;
         var next = WorkerRow(root, current) with
         {
-            Status = row.Status, Revision = checked(expected + 1), Fault = recovered ? null : current.Fault, FoundationDispatchHeader = header
+            Status = row.Status, Revision = checked(expected + 1), Fault = recovered ? null : current.Fault,
+            Jobs = recovered ? null : current.Jobs, FoundationDispatchHeader = header
         };
         if (row != next || header.Tenant != root.Tenant || header.Reference != root.Reference ||
             header.Header.TypeData != current.TypeData || header.Header.Labels.Count != current.Labels.Count ||
@@ -321,7 +326,8 @@ public sealed partial class EfStore
                 current.Status == InstanceStatus.Running && AuthoredWithholding(root, current)));
     }
 
-    private sealed record LockedRecover(long? At, long? Revision, long Generation, string? Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
+    private sealed record LockedRecover(long? At, long? Revision, long Generation, string? Fault, byte[] StateDigest, byte[] HeaderDigest,
+        int StateVersion, long? NextJobGeneration, string? ParkJobResult);
 
     // One fenced commit: the root becomes Running with its Park mark cleared, the arrivals return to the inbox as the
     // next generation's cohort, and the fault input stays settled. A refusal moves only the revision and settles the command.
@@ -333,43 +339,52 @@ public sealed partial class EfStore
         {
             if (!db.UsesRootParkRecovery) return false;
             if (db.UsesSqliteRootRuntime) return await BindSqliteRootRecoverAsync(db, this, token);
+            var facts = Command.Operator!.RootParkFacts!;
             FormattableString query = $"""
                 SELECT i."FoundationParkAt" AS "At", i."FoundationParkRevision" AS "Revision", i."FoundationParkGeneration" AS "Generation",
                     i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
-                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion"
+                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion", i."NextJobGeneration",
+                    /*park-job-result*/ AS "ParkJobResult"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND NOT i."Suspended"
                     AND i."Status" = {(int)Prior} AND i."Revision" = {Expected}
-                    AND (NOT {Recovered} OR i."Jobs" IS NULL /*clearing*/)
+                    AND (NOT {Recovered} OR i."Jobs" IS NOT DISTINCT FROM {facts.ConsumedJobRegistry}::text /*clearing*/)
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
                 """;
-            var locked = await db.Database.SqlQuery<LockedRecover>(System.Runtime.CompilerServices.FormattableStringFactory.Create(
+            var locked = await db.Database.SqlQuery<LockedRecover>(SelectParkJobResult(db, FormattableStringFactory.Create(
                 query.Format.Replace("/*clearing*/", db.UsesRootComposedParkRecovery ? """AND i."FoundationParkClearing" IS NULL""" : "",
-                    StringComparison.Ordinal), query.GetArguments())).ToListAsync(token);
-            var facts = Command.Operator!.RootParkFacts!;
+                    StringComparison.Ordinal), query.GetArguments()))).ToListAsync(token);
             if (locked is not [var prior] || (prior.At is null) != (Prior == InstanceStatus.Running)) return false;
             var kept = Recovered ? await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token) : [];
             if (Recovered && (facts.Mark != new FoundationParkMark(prior.Revision ?? 0, prior.At ?? 0) || KeptSetDigest(kept) != facts.KeptDigest))
                 return false;
+            var consumedJob = Recovered && facts.ConsumedJobRegistry is not null
+                ? await ReadConsumedRootJobAsync(db, Root.Actor, Root.Partition, facts.ConsumedJobRegistry, token) : null;
+            if (Recovered && (!IsPinnedParkJobResult(prior.ParkJobResult, consumedJob, facts.ConsumedJobRegistry) ||
+                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed) + (consumedJob is null ? 0 : 1) != facts.Consumed)) return false;
             var envelope = Command with { Operator = Command.Operator with { RootParkFacts = null } };
             if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [envelope], null,
                 WithheldInputs || db.UsesRootComposedParkRecovery && facts.Clearing is not null, token,
                 parked: Prior == InstanceStatus.Faulted))
                 return false;
 
+            if (!await ClearConsumedRootJobAsync(db, Root.Actor, Root.Partition, consumedJob, token)) return false;
+
             var generation = Recovered ? checked(prior.Generation + 1) : prior.Generation;
-            if (await db.Database.ExecuteSqlInterpolatedAsync($"""
+            var update = ClearParkJobResult(db, $"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "Status" = CASE WHEN {Recovered} THEN {(int)InstanceStatus.Running} ELSE "Status" END,
                     "Fault" = CASE WHEN {Recovered} THEN NULL ELSE "Fault" END,
+                    "Jobs" = CASE WHEN {Recovered} THEN NULL ELSE "Jobs" END,
                     "FoundationParkAt" = CASE WHEN {Recovered} THEN NULL ELSE "FoundationParkAt" END,
                     "FoundationParkRevision" = CASE WHEN {Recovered} THEN NULL ELSE "FoundationParkRevision" END,
-                    "FoundationParkGeneration" = {generation}
+                    "FoundationParkGeneration" = {generation} /*park-job-result*/
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
-                """, token) != 1) return false;
+                """, Recovered);
+            if (await db.Database.ExecuteSqlInterpolatedAsync(update, token) != 1) return false;
 
             var arrived = kept.Where(row => row.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
             var cleared = kept.Where(row => row.KeptBy == (short)ParkKeepReason.Consumed).Select(row => row.Id).ToArray();
@@ -392,6 +407,8 @@ public sealed partial class EfStore
                         AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision} AND "Status" = {(int)status}
                         AND "Fault" IS NOT DISTINCT FROM {fault}::text AND "FoundationParkAt" IS NOT DISTINCT FROM {at}::bigint
                         AND "FoundationParkRevision" IS NOT DISTINCT FROM {revision}::bigint AND "FoundationParkGeneration" = {generation}
+                        AND (NOT {Recovered} OR "Jobs" IS NULL)
+                        AND "NextJobGeneration" IS NOT DISTINCT FROM {prior.NextJobGeneration}::bigint
                         AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
                         AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest})
                     AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({cleared}) AND "Target" = {Root.Actor}

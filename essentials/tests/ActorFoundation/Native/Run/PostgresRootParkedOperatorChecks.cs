@@ -1,6 +1,7 @@
 using System.Data.Common;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Runtime.Hosting;
@@ -390,6 +391,7 @@ internal static class PostgresRootParkedOperatorChecks
             await LiveCompoundRefusalSet();
             await RecordedResultParkSet(recovery: false);
             await RecordedResultParkSet(recovery: true);
+            await RecordedResultParkSet(recovery: true, currentPin: true);
             await ComposedParkRecoveryAsync();
             await WithheldReleasedCohortAsync();
             await ReleasedCohortCandidateProgressAsync();
@@ -684,11 +686,12 @@ internal static class PostgresRootParkedOperatorChecks
             }
         }
 
-        async Task RecordedResultParkSet(bool recovery)
+        async Task RecordedResultParkSet(bool recovery, bool currentPin = false)
         {
             const string key = Probe.FaultingJob;
-            var schema = recovery ? "recorded_result_recovery" : "recorded_result_park";
-            await db.Database.ExecuteSqlRawAsync(recovery ? "CREATE SCHEMA recorded_result_recovery" : "CREATE SCHEMA recorded_result_park", stop);
+            var schema = currentPin ? "recorded_result_resume" : recovery ? "recorded_result_recovery" : "recorded_result_park";
+            await db.Database.ExecuteSqlRawAsync(currentPin ? "CREATE SCHEMA recorded_result_resume"
+                : recovery ? "CREATE SCHEMA recorded_result_recovery" : "CREATE SCHEMA recorded_result_park", stop);
             var settings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = schema }.ConnectionString;
             var resultOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).Options;
             var protocol = StoreFormat.Current with { MessageProtocol = 86 };
@@ -710,6 +713,7 @@ internal static class PostgresRootParkedOperatorChecks
             await set.InstallAsync(createTables: true);
             var owner = (Worker)await set.OwnAsync();
             var root = await set.StartAsync("recorded-result");
+            if (recovery) set.Probe.RecordedJobPlans.Add(root.Id);
             var actor = (await set.ImageAsync(root)).Actor.Id;
             var epoch = owner.Epoch;
             set.Probe.FailsOn.Add((root.Id, Contract.Kinds.JobFinished));
@@ -738,13 +742,39 @@ internal static class PostgresRootParkedOperatorChecks
             EfStore.RootImage after;
             if (recovery)
             {
+                if (currentPin)
+                {
+                    await using var guards = OpenResult();
+                    await RecordedJobRecoveryChecks.AssertInstalledGuardsAsync(guards, parked, Check, stop);
+                }
+                else
+                {
+                    await set.ExecuteAsync($"""ALTER TABLE "Instances" DROP COLUMN "FoundationParkJobResult" """);
+                    await set.InstallAsync(createTables: false);
+                    await using var read = OpenResult();
+                    Check(await ReadResultAsync(actor, stop) == kept && await read.Database.SqlQuery<bool>($"""
+                        SELECT "FoundationParkJobResult" IS NULL AS "Value" FROM "Instances" WHERE "Id" = {actor}
+                        """).SingleAsync(stop), "reinstalling over the prior staged PostgreSQL shape leaves an existing Park with a null pin");
+                }
                 const string operation = "recover-recorded-result-park";
                 Check(await set.OperateAsync(root, operation, Contract.Kinds.Recover, selection),
                     "the recovery composition admits Recover for the Park with the retained job registration");
+                if (currentPin)
+                {
+                    var recovered = await set.DriveAsync(root, row => row is { Revision: 5, Status: InstanceStatus.Running });
+                    await using var read = OpenResult();
+                    var outcome = (await set.Cold.ReadJournalOfAsync(0, actor, 0, stop))[^1];
+                    Check(recovered is { Jobs: null, NextJobGeneration: 1, ParkAt: null } && recovered.State == parked.State &&
+                        outcome.Entries == Json.Write(new { Outcome = "recovered", Operation = operation, Restored = 0, Cleared = 1, AlreadyRearmed = 0 }) &&
+                        !await read.Messages.AnyAsync(row => row.Target == actor && row.InboxScope == EfStore.RootTimedJobScope, stop) &&
+                        set.Probe.Count(root, Contract.Kinds.JobFinished) == 1 && successor.Owns,
+                        "Recover clears the consumed recorded result and its registration without replay or generation reuse");
+                    return;
+                }
                 after = await set.DriveAsync(root, row => row is { Revision: 5, Status: InstanceStatus.Faulted });
                 var journal = await set.Cold.ReadJournalOfAsync(0, actor, 0, stop);
                 Check(journal[^1].Entries == Json.Write(new { Outcome = "refused", Operation = operation, Reason = "plan" }),
-                    "the current recovery composition refuses a job registration it cannot restore");
+                    "the staged owner journals a plan refusal for an older Park with a missing result pin");
             }
             else
             {
@@ -998,6 +1028,18 @@ internal static class PostgresRootParkedOperatorChecks
             var olderSelection = await set.ParkSelectionAsync(offerable, 2);
             var youngerSelection = await set.ParkSelectionAsync(withheld, 2);
             var due = younger.AsOf + 120_000;
+            await using (var source = OpenSample())
+            {
+                var epoch = await source.Partitions.Where(row => row.Id == partition).Select(row => row.Epoch).SingleAsync(stop);
+                for (var pass = 0; pass < 8; pass++)
+                    Check(await set.TerminateAsync(tail, $"observed-tail-{pass}"),
+                        "the shared partition has an earlier ready control");
+                var tailActor = (await set.ImageAsync(tail)).Actor.Id;
+                await set.ExecuteAsync($"""
+                    UPDATE "Messages" SET "Seen" = {epoch}
+                    WHERE "Target" = {tailActor} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                    """);
+            }
             for (var pass = 0; pass < 8; pass++)
                 Check(await set.OperateAsync(tail, $"future-tail-{pass}", Kinds.Terminate, set.Selections[tail], dueAt: due),
                     "the shared partition has an earlier scheduled control that is still in the future");
@@ -1016,15 +1058,25 @@ internal static class PostgresRootParkedOperatorChecks
                     WHERE "Target" IN ({older.Actor.Id}, {younger.Actor.Id}) AND "Kind" = {Kinds.Terminate} AND NOT "Done"
                     """);
                 await ProbeSweepAsync(younger);
+                await set.ExecuteAsync($"""
+                    INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
+                    SELECT 'unrelated-' || key, 0, {partition}, {older.Actor.Id}, 'ordinary', {due}, 0, 0, 0, false
+                    FROM generate_series(1, 2048) key
+                    """);
+                await set.ExecuteAsync($"""ANALYZE "Messages" """);
+                observation.CohortPlanPartition = partition;
                 observation.ObserveCohortPlan = true;
                 await set.DriveAsync(withheld, row => row is { Revision: 6, Status: InstanceStatus.Running });
                 set.Answered("younger-control", "StaleSelection");
-                var candidatePlan = observation.CohortPlan.SkipWhile(line => line.Trim() != "CTE candidates").Skip(1)
+                var candidatePlan = observation.CohortPlan.SkipWhile(line => line.Trim() != "CTE picked").Skip(1)
                     .TakeWhile(line => line.StartsWith("    ", StringComparison.Ordinal)).ToArray();
-                Check(candidatePlan.Any(line => line.Contains("IX_FoundationRootInbox_CohortWaiting", StringComparison.Ordinal) &&
+                var boundedPlan = candidatePlan.Any(line => line.Contains("IX_FoundationRootInbox_CohortGroups", StringComparison.Ordinal) &&
                         (line.Contains("Index Scan", StringComparison.Ordinal) || line.Contains("Index Only Scan", StringComparison.Ordinal))) &&
-                    candidatePlan.Any(line => line.Contains("->  Limit", StringComparison.Ordinal)),
-                    "the bounded cohort window seeks the waiting-control index and limits candidates");
+                    candidatePlan.Any(line => line.Contains("->  Limit", StringComparison.Ordinal)) &&
+                    candidatePlan.Any(line => line.Contains("Index Cond:", StringComparison.Ordinal) &&
+                        line.Contains("\"Seq\" <= ", StringComparison.Ordinal) && line.Contains(".\"Ceiling\"", StringComparison.Ordinal));
+                Check(boundedPlan, boundedPlan ? "the cohort window seeks within the sequence ceiling and limits candidates"
+                    : string.Join(Environment.NewLine, observation.CohortPlan));
                 Check(!set.AnsweredAny("older-control") && await set.ImageAsync(offerable) is { Revision: 4 } &&
                     !set.Probe.Saw(withheld, "withheld-cohort") && !set.StoodDown,
                     "a one-row poll skips a blocked older candidate and settles the younger root's control");
@@ -1059,6 +1111,31 @@ internal static class PostgresRootParkedOperatorChecks
                         commands.CohortWindows.All(window => window.Partitions.Length * window.PerPartition <= limit) &&
                         commands.CohortWindows.SelectMany(window => window.Partitions).Distinct().Count() == count,
                         "one bounded query per poll rotates across all 1,024 owned partitions");
+                    await using var write = OpenWide();
+                    var observedEpoch = fences.Single(fence => fence.Partition == 1).Epoch;
+                    await write.Database.ExecuteSqlInterpolatedAsync($"""
+                        INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
+                        SELECT 'operator/future-' || row, {InboxKey.FoundationOccurrenceScope}, 0, 'fixture', {Kinds.Terminate},
+                            {long.MaxValue}, 0, 0, 0, false FROM generate_series(1, 10000) row
+                        UNION ALL
+                        SELECT 'operator/observed-' || row, {InboxKey.FoundationOccurrenceScope}, 1, 'fixture', {Kinds.Terminate},
+                            0, {observedEpoch}, 0, 0, false FROM generate_series(1, 10000) row
+                        """, stop);
+                    await write.Database.ExecuteSqlRawAsync("""ANALYZE "Messages" """, stop);
+                    foreach (var fence in fences.Where(fence => fence.Partition is 0 or 1))
+                    {
+                        for (var pass = 0; pass < 2; pass++)
+                        {
+                            commands.CohortPlan.Clear();
+                            commands.ObserveCohortPlan = true;
+                            Check((await owner.PollAsync(fence.Partition, fence.Epoch, TimeSpan.Zero, 1, stop)).Messages.Count == 0,
+                                "a partition full of future or observed controls offers no input");
+                            var summary = commands.CohortPlan.First(line => line.TrimStart().StartsWith("Buffers:", StringComparison.Ordinal));
+                            var blocks = Regex.Matches(summary, @"(?:hit|read)=(\d+)").Sum(match => int.Parse(match.Groups[1].Value,
+                                System.Globalization.CultureInfo.InvariantCulture));
+                            Check(blocks <= 32, $"the loaded empty poll uses {blocks} buffers within the 32-buffer allowance");
+                        }
+                    }
                 }
                 finally { await owner.ReleaseAsync(fences, stop); }
             }
@@ -1093,13 +1170,84 @@ internal static class PostgresRootParkedOperatorChecks
                 var found = false;
                 for (var pass = 0; pass < 8 && !found; pass++)
                 {
-                    Check(await set.TerminateAsync(tail, $"new-tail-{pass}"),
-                        "another control is admitted while the bounded candidate window advances");
+                    Check(await set.OperateAsync(tail, $"new-tail-{pass}", Kinds.Terminate, set.Selections[tail], dueAt: pass + 1),
+                        "another backdated control is admitted with a distinct due group");
                     var offered = await sampler.PollAsync(fences, TimeSpan.Zero, 1, stop);
                     found = offered.Messages is [{ Message: { Kind: Kinds.Terminate } message }] &&
                         message.Target.Id == waiting.Actor.Id && message.Operator?.RootParkFacts is not null;
                 }
-                Check(found, "the sampler revisits the missed control despite earlier future controls and continued new admissions");
+                Check(found, "the sampler revisits the missed control despite observed controls, future controls and continued admissions");
+                await ProbeRefreshAsync();
+
+                await set.ExecuteAsync($"""
+                    INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
+                    SELECT 'operator/earlier-due-' || row, {InboxKey.FoundationOccurrenceScope}, {partition}, 'other-source',
+                        {Kinds.Terminate}, -64 + row, 0, 0, 0, false FROM generate_series(1, 32) row
+                    """);
+                var wideSampler = new EfStore(OpenSample, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
+                await wideSampler.EnableRootJobsAsync(stop);
+                wideSampler.BindWorkerNode(set.Probe.Withholds);
+                var loaded = await wideSampler.PollAsync(fences, TimeSpan.Zero, 128, stop);
+                Check(loaded.Messages.Any(row => row.Message.Kind == Kinds.Terminate &&
+                    row.Message.Target.Id == waiting.Actor.Id && row.Message.Operator?.RootParkFacts is not null),
+                    "one loaded poll reaches a selected control behind many distinct due groups");
+
+                async Task ProbeRefreshAsync()
+                {
+                    var refresh = new EfStore(OpenSample, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
+                    await refresh.EnableRootJobsAsync(stop);
+                    refresh.BindWorkerNode(set.Probe.Withholds);
+                    var actor = waiting.Actor.Id;
+                    var original = await LastControlAsync();
+                    Check(await set.OperateAsync(withheld, "mature-after-sweep-start", Kinds.Terminate, set.Selections[withheld], dueAt: due),
+                        "a future control is admitted below the next sequence ceiling");
+                    var maturing = await LastControlAsync();
+                    await MarkReleasedAsync(0);
+                    Check((await refresh.PollAsync(partition, epoch, TimeSpan.Zero, 1, stop)).Messages is [{ Message.Kind: "withheld-cohort" }],
+                        "the first sampled page freezes before the released arrival takes its output slot");
+                    await MarkReleasedAsync(epoch);
+                    await MoveControlAsync(original, due);
+                    var tailActor = (await set.ImageAsync(tail)).Actor.Id;
+                    await set.ExecuteAsync($"""
+                        UPDATE "Messages" SET "Seen" = {epoch}
+                        WHERE "Target" = {tailActor} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                        """);
+                    Check(await set.OperateAsync(withheld, "admitted-after-sweep-start", Kinds.Terminate, set.Selections[withheld], dueAt: 0),
+                        "a ready control is admitted above the old ceiling");
+                    var newControl = await LastControlAsync();
+                    await set.ExecuteAsync($"""
+                        UPDATE "Messages" SET "Due" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint + 25
+                        WHERE "Id" = {maturing} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        """);
+                    await Task.Delay(50, stop);
+                    var remaining = new HashSet<string>(StringComparer.Ordinal) { maturing, newControl };
+                    for (var pass = 0; pass < 16 && remaining.Count != 0; pass++)
+                    {
+                        await set.ExecuteAsync($"""
+                            INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Due", "Seen", "Attempts", "Trial", "Done")
+                            VALUES ({"operator/refresh-backdated-" + pass}, {InboxKey.FoundationOccurrenceScope}, {partition},
+                                'other-source', {Kinds.Terminate}, {100 + pass}, 0, 0, 0, false)
+                            """);
+                        var offered = await refresh.PollAsync(partition, epoch, TimeSpan.Zero, 1, stop);
+                        if (offered.Messages is [{ Message: { Kind: Kinds.Terminate } control }] &&
+                            control.Target.Id == actor && control.Operator is not null && remaining.Remove(control.InboxKey.Id))
+                            await MoveControlAsync(control.InboxKey.Id, due);
+                    }
+                    Check(remaining.Count == 0, "continued backdated admissions leave a newly due control and a post-ceiling admission offerable");
+                    await set.ExecuteAsync($"""
+                        DELETE FROM "Messages" WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                            AND "Id" IN ({maturing}, {newControl})
+                        """);
+                    await MoveControlAsync(original, 0);
+
+                    Task<string> LastControlAsync() => source.Messages.Where(row =>
+                            row.Target == actor && row.InboxScope == InboxKey.FoundationOccurrenceScope && row.Kind == Kinds.Terminate && !row.Done)
+                        .OrderByDescending(row => row.Seq).Select(row => row.Id).FirstAsync(stop);
+
+                    Task MoveControlAsync(string id, long at) => set.ExecuteAsync($"""
+                        UPDATE "Messages" SET "Due" = {at} WHERE "Id" = {id} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        """);
+                }
 
                 Task MarkReleasedAsync(long seen) => set.ExecuteAsync($"""
                     UPDATE "Messages" SET "Seen" = {seen} WHERE "Target" = {waiting.Actor.Id} AND "Kind" = 'withheld-cohort' AND NOT "Done"
@@ -3100,6 +3248,7 @@ internal static class PostgresRootParkedOperatorChecks
         // Commands of the set that a trigger refused: a commit lock refuses before any write, so it adds none.
         internal int TriggerRefusals => Volatile.Read(ref _refused);
         internal bool ObserveCohortPlan { get; set; }
+        internal int? CohortPlanPartition { get; set; }
         internal List<(int[] Partitions, int PerPartition)> CohortWindows { get; } = [];
         internal List<string> CohortPlan { get; } = [];
 
@@ -3115,13 +3264,14 @@ internal static class PostgresRootParkedOperatorChecks
             if (command is NpgsqlCommand cohort &&
                 cohort.CommandText.Contains("/* root-cohort-waiting */", StringComparison.Ordinal))
             {
-                CohortWindows.Add(((int[])cohort.Parameters[0].Value!, (int)cohort.Parameters[5].Value!));
-                if (!ObserveCohortPlan) return result;
+                var partitions = (int[])cohort.Parameters[0].Value!;
+                CohortWindows.Add((partitions, (int)cohort.Parameters[9].Value!));
+                if (!ObserveCohortPlan || CohortPlanPartition is int partition && !partitions.Contains(partition)) return result;
                 ObserveCohortPlan = false;
                 var planOptions = new NpgsqlConnectionStringBuilder(connection) { Options = "-c enable_seqscan=off" };
                 await using var source = new NpgsqlConnection(planOptions.ConnectionString);
                 await source.OpenAsync(cancellationToken);
-                await using var explain = new NpgsqlCommand("EXPLAIN (COSTS OFF) " + cohort.CommandText, source);
+                await using var explain = new NpgsqlCommand("EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) " + cohort.CommandText, source);
                 foreach (NpgsqlParameter parameter in cohort.Parameters) explain.Parameters.Add(parameter.Clone());
                 await using var plan = await explain.ExecuteReaderAsync(cancellationToken);
                 while (await plan.ReadAsync(cancellationToken)) CohortPlan.Add(plan.GetString(0));
@@ -3174,7 +3324,9 @@ internal static class PostgresRootParkedOperatorChecks
             if (ReadableOnce.Remove(header.Ref.Id)) Unreadable.Add(header.Ref.Id);
             return Protects.Contains(header.Ref.Id);
         }
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        internal HashSet<string> RecordedJobPlans { get; } = [];
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
+            RecordedJobPlans.Contains(header.Ref.Id) ? new([], [new(FaultingJob, null)], []) : new([], [], []);
         internal TaskCompletionSource JobEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource CohortEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource ReleaseCohort { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

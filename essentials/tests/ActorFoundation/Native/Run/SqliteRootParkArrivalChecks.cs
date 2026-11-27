@@ -188,6 +188,8 @@ internal static partial class SqliteHostLifetimeChecks
                 Require(rollback.Quote is [(ParkKeepReason.Consumed, false), (ParkKeepReason.Arrived, true), (ParkKeepReason.Arrived, false)],
                     "the Recover reader opens one quoted arrival body and skips the consumed and over-budget bodies");
                 await CheckCreatorRecoverAsync(recoveryOwner);
+                await CheckRecordedJobRecoverAsync(recoveryOwner);
+                await CheckRecordedJobRecoverAsync(recoveryOwner, large);
                 await CheckReparkFifoAsync(recoveryOwner);
                 var guardFile = new SqliteConnectionStringBuilder(connection) { DataSource = Path.Combine(directory.FullName, "guard.db") };
                 var guardOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(guardFile.ConnectionString).Options;
@@ -215,14 +217,75 @@ internal static partial class SqliteHostLifetimeChecks
                 "the same owner settles the preadmitted held input after the Park ends without invoking the actor");
             return 0;
 
+            async Task CheckRecordedJobRecoverAsync(Worker owner, string? oversizedArrival = null)
+            {
+                var operation = oversizedArrival is null ? "recorded-recover" : "recorded-recover-page";
+                var root = (await admission.StartAsync(scope.Tenant, operation, new(fixture, SqliteArrivalActor.RecordedPlan),
+                    null, null, token)).Actor!.Value;
+                await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running });
+                Require(await admission.SendAsync(scope.Tenant, root, "issue-recorded", "issue-recorded", null, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the SQLite Recover fixture issues a timed job");
+                var park = await DriveAsync(owner, root, row => row is { Revision: 4, Status: InstanceStatus.Faulted });
+                var partition = new InstanceRef(park.Actor.Id).Partition;
+                Require(JobRegistry.Read(park.Jobs) is [{ Key: SqliteArrivalActor.RecordedJob, Generation: 0 }] &&
+                    await db.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {park.Actor.Id} AND "Partition" = {partition}
+                            AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {Kinds.JobFinished} AND "Done"
+                            AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}) AS "Value"
+                        """).SingleAsync(token), "a faulting job result remains consumed beside its registration");
+                var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                if (oversizedArrival is not null)
+                {
+                    var revision = park.Revision;
+                    foreach (var id in new[] { "recorded-large-first", "recorded-large-second" })
+                    {
+                        Require(await admission.SendAsync(scope.Tenant, root, id, "ordinary", oversizedArrival, null, null, token)
+                            is { Outcome: Contract.AdmissionOutcome.Accepted }, "the recorded-result Park admits an arrival that fits by itself");
+                        var expected = ++revision;
+                        await DriveAsync(owner, root, row => row.Revision == expected && row.Status == InstanceStatus.Faulted);
+                    }
+                    Require(await admission.OperateAsync(scope.Tenant, root, "recorded-page-refusal", Kinds.Recover, selection, null, null, token)
+                        is { Outcome: Contract.AdmissionOutcome.Accepted }, "the fixture admits Recover for a recorded-result Park over one page");
+                    var samePark = await DriveAsync(owner, root, row => row.Revision == revision + 1 && row.Status == InstanceStatus.Faulted);
+                    var entry = (await store.ReadJournalOfAsync(partition, park.Actor.Id, 0, token))[^1];
+                    Require(samePark.Jobs == park.Jobs && samePark.ParkAt == park.ParkAt && owner.Owns &&
+                        entry.Entries.Contains("\"Reason\":\"page\"", StringComparison.Ordinal),
+                        "a matching job recipe with over-budget arrivals receives a page refusal");
+                    return;
+                }
+
+                await RecordedJobRecoveryChecks.AssertInstalledGuardsAsync(db, park, Require, token);
+                executor.RecordedJobArguments = new string('\0', 4 * 1024 * 1024);
+                Require(await admission.OperateAsync(scope.Tenant, root, "oversized-recorded-recipe", Kinds.Recover, selection, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the fixture admits Recover before checking its authored recipe");
+                var refused = await DriveAsync(owner, root, row => row is { Revision: 5, Status: InstanceStatus.Faulted });
+                var refusal = (await store.ReadJournalOfAsync(partition, park.Actor.Id, 0, token))[^1];
+                Require(refused.Jobs == park.Jobs && refused.ParkAt == park.ParkAt &&
+                    refusal.Entries.Contains("\"Reason\":\"plan\"", StringComparison.Ordinal),
+                    "Recover refuses an oversized encoded recipe while preserving the registration and Park");
+
+                executor.RecordedJobArguments = null;
+                Require(await admission.OperateAsync(scope.Tenant, root, "resume-recorded", Kinds.Recover, selection, null, null, token) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the selected recorded-result Park accepts Recover");
+                var recovered = await DriveAsync(owner, root, row => row is { Revision: 6, Status: InstanceStatus.Running });
+                Require(recovered is { Jobs: null, NextJobGeneration: 1, ParkAt: null } && recovered.State == park.State &&
+                    executor.RecordedJobs == 1 && executor.RecordedResults == 1 &&
+                    !await db.Messages.AnyAsync(row => row.Target == park.Actor.Id && row.InboxScope == EfStore.RootTimedJobScope, token),
+                    "SQLite Recover clears the consumed result and registration without replay or generation reuse");
+            }
+
             async Task CheckAuthoredCohortAsync()
             {
                 var root = (await admission.StartAsync(scope.Tenant, "cohort-start", new(fixture, SqliteArrivalActor.Withheld), null, null, token)).Actor!.Value;
                 EfStore.RootImage restored;
                 long oldEpoch;
+                string observedActor;
                 await using (var owner = await OwnAsync("authored-first"))
                 {
-                    await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running, Suspended: false });
+                    var initial = await DriveAsync(owner, root, row => row is { Revision: 1, Status: InstanceStatus.Running, Suspended: false });
+                    var home = new InstanceRef(initial.Actor.Id).Partition;
+                    var (other, otherImage) = await StartInPartitionAsync(owner, home);
+                    observedActor = otherImage.Actor.Id;
                     var running = (await reads.GetAsync(scope, root, token))!.Selection!;
                     Require(await admission.OperateAsync(scope.Tenant, root, "cohort-fault", Kinds.Terminate, running, null, null, token) is
                         { Outcome: Contract.AdmissionOutcome.Accepted }, "a running control reaches the actor with authored withholding");
@@ -231,6 +294,11 @@ internal static partial class SqliteHostLifetimeChecks
                         { Outcome: Contract.AdmissionOutcome.Accepted }, "the Park admits an ordinary arrival while authors still withhold");
                     var kept = await DriveAsync(owner, root, row => row is { Revision: 3, Status: InstanceStatus.Faulted });
                     var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                    var otherSelection = (await reads.GetAsync(scope, other, token))!.Selection!;
+                    for (var index = 0; index < 8; index++)
+                        Require(await admission.OperateAsync(scope.Tenant, other, $"observed-{index}", Kinds.Terminate, otherSelection,
+                            kept.AsOf + 120_000, null, token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                            "an earlier scheduled control was admitted on another root in the partition");
                     Require(await admission.OperateAsync(scope.Tenant, root, "cohort-stale", Kinds.Terminate, selection,
                             kept.AsOf + 120_000, null, token) is { Outcome: Contract.AdmissionOutcome.Accepted } &&
                         await admission.OperateAsync(scope.Tenant, root, "cohort-recover", Kinds.Recover, selection, null, null, token) is
@@ -241,21 +309,85 @@ internal static partial class SqliteHostLifetimeChecks
                 }
 
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {restored.Actor.Id} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                    UPDATE "Messages" SET "Due" = -1 WHERE "Target" = {restored.Actor.Id} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
                     """, token);
                 await using var replacement = await OwnAsync("authored-next");
+                var partition = new InstanceRef(restored.Actor.Id).Partition;
+                var epoch = await db.Partitions.Where(row => row.Id == partition).Select(row => row.Epoch).SingleAsync(token);
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Due" = 0, "Seen" = {epoch}
+                    WHERE "Target" = {observedActor} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                    """, token);
+                var polls = cohortPlan.PlanReads;
                 var settled = await DriveAsync(replacement, root, row => row.Revision > restored.Revision &&
                     row is { Status: InstanceStatus.Running, Suspended: false });
-                var partition = new InstanceRef(settled.Actor.Id).Partition;
+                Require(cohortPlan.PlanReads - polls <= 8,
+                    "observed predecessors stay outside the SQLite sampler before the selected control settles");
                 var journal = (await store.ReadJournalOfAsync(partition, settled.Actor.Id, 0, token)).Single(row => row.Revision == settled.Revision);
                 Require(replacement.Epoch > oldEpoch && replacement.Owns && executor.Order.Count == 0 &&
                     journal.Entries.Contains("\"Reason\":\"selection\"", StringComparison.Ordinal) &&
                     await db.Database.SqlQuery<bool>($"""
                         SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {settled.Actor.Id} AND "Kind" = 'cohort-arrival'
                             AND NOT "Done" AND "FoundationKeptBy" IS NULL AND "FoundationReleasedBy" = 1 AND "Payload" = {payload}) AS "Value"
-                        """).SingleAsync(token), "a cold owner settles the stale control while the withheld arrival retains its released generation");
-                Require(cohortPlan.Plan.Any(step => step.Contains("IX_FoundationRootInbox_CohortWaiting", StringComparison.Ordinal) &&
-                    step.Contains("Partition=?", StringComparison.Ordinal)), "the SQLite cohort sampler seeks the waiting controls by partition");
+                        """).SingleAsync(token), "a cold owner settles the stale control with a negative due time and preserves the released arrival");
+                Require(cohortPlan.Plan.Any(step => step.Contains("IX_FoundationRootInbox_CohortGroups", StringComparison.Ordinal) &&
+                    step.Contains("Partition=? AND Seen=? AND Due=? AND Seq>? AND Seq<?", StringComparison.Ordinal)),
+                    "the SQLite cohort sampler seeks waiting controls inside the sequence ceiling");
+                await CheckReusedSequencesAsync();
+
+                async Task CheckReusedSequencesAsync()
+                {
+                    var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
+                    const string operation = "control-after-recover";
+                    Require(epoch > 1 && await admission.OperateAsync(scope.Tenant, root, operation, Kinds.Terminate,
+                            selection, 0, null, token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                        "the replacement admits a fresh control on the authored-withheld root");
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "Messages" SET "Seen" = {epoch - 1}
+                        WHERE "Target" = {settled.Actor.Id} AND "Kind" = {Kinds.Terminate} AND NOT "Done"
+                        """, token);
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "Messages" SET "Seen" = {epoch}
+                        WHERE "Target" = {settled.Actor.Id} AND "Kind" = 'cohort-arrival' AND NOT "Done"
+                        """, token);
+                    await AddControlAsync(0);
+                    await AddControlAsync(1);
+                    var ceiling = await db.Messages.Where(row => row.Partition == partition).MaxAsync(row => row.Seq, token) + 128;
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Seq", "Due", "Seen", "Attempts", "Trial", "Done")
+                        VALUES ('old-settled-high', 0, {partition}, 'other-source', 'ordinary', {ceiling}, 0, 0, 0, 0, 1)
+                        """, token);
+
+                    var sampler = new EfStore(Open, postgres: false, fenceInBatch) { CommitSql = CommitSql.Owned };
+                    await sampler.EnableRootJobsAsync(token);
+                    sampler.BindSqliteWorkerNode(executor.Withholds);
+                    Require((await sampler.PollAsync(partition, epoch, TimeSpan.Zero, 1, token)).Messages.Count == 0,
+                        "an earlier group fills the only header slot when the SQLite sampler freezes its ceiling");
+                    await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" = 'old-settled-high'""", token);
+                    await AddControlAsync(2);
+                    Require(await db.Messages.Where(row => row.Partition == partition).MaxAsync(row => row.Seq, token) < ceiling,
+                        "a later SQLite admission reuses sequence space below the old ceiling");
+                    var next = await sampler.PollAsync(partition, epoch, TimeSpan.Zero, 1, token);
+                    Require(next.Messages is [{ Message: { Kind: Kinds.Terminate, Id: operation } }],
+                        "the next sequence pass offers the older control while recycled groups still fill the grouped path");
+
+                    Task<int> AddControlAsync(int index) => db.Database.ExecuteSqlInterpolatedAsync($"""
+                        INSERT INTO "Messages" ("Id", "InboxScope", "Partition", "Target", "Kind", "Seq", "Due", "Seen", "Attempts", "Trial", "Done")
+                        SELECT {"operator/recycled-" + index}, {InboxKey.FoundationOccurrenceScope}, {partition}, 'other-source',
+                            {Kinds.Terminate}, coalesce(max("Seq"), 0) + 1, -2, 0, 0, 0, 0 FROM "Messages"
+                        """, token);
+                }
+
+                async Task<(Contract.ActorRef Root, EfStore.RootImage Image)> StartInPartitionAsync(Worker owner, int home)
+                {
+                    for (var attempt = 0; attempt < 32; attempt++)
+                    {
+                        var started = (await admission.StartAsync(scope.Tenant, $"other-{attempt}", new(fixture, "{}"), null, null, token)).Actor!.Value;
+                        var image = await DriveAsync(owner, started, row => row is { Revision: 1, Status: InstanceStatus.Running });
+                        if (new InstanceRef(image.Actor.Id).Partition == home) return (started, image);
+                    }
+                    throw new InvalidOperationException("The fixture could not place another root in the sampled partition.");
+                }
             }
 
             async Task CheckCreatorRecoverAsync(Worker owner)
@@ -391,19 +523,37 @@ internal static partial class SqliteHostLifetimeChecks
     {
         internal const string Withheld = """{"Withholds":true}""";
         internal const string CreatorFault = """{"CreatorFault":true}""";
+        internal const string RecordedPlan = """{"RecordedPlan":true}""";
+        internal const string RecordedJob = "recorded-recover";
+        internal int RecordedJobs { get; private set; }
+        internal int RecordedResults { get; private set; }
         internal int OrdinaryTurns { get; private set; }
         internal int HeldTurns { get; private set; }
         internal List<string> Order { get; } = [];
         string Contract.IActorType.Type => type;
         public bool Withholds(Contract.ActorHeader header) => header.TypeData == Withheld;
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        internal string? RecordedJobArguments { get; set; }
+
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
+            header.TypeData == RecordedPlan ? new([], [new(RecordedJob, RecordedJobArguments)], []) : new([], [], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
-        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("The Park arrival fixture does not start jobs.");
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+        {
+            if (job.Key != RecordedJob) throw new InvalidOperationException("The Park Recover fixture received an unexpected job.");
+            RecordedJobs++;
+            return ValueTask.FromResult<object?>("recorded");
+        }
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
+            if (turn.Inbox is [{ Kind: "issue-recorded" }])
+                turn.StartJob(RecordedJob, timeout: TimeSpan.FromMinutes(1));
+            if (turn.Header.TypeData == RecordedPlan && turn.Inbox is [{ Kind: Contract.Kinds.JobFinished }])
+            {
+                RecordedResults++;
+                throw new InvalidOperationException("recorded result handler fault");
+            }
             if (turn.Inbox.Any(message => message.Kind is "fail" or "repark-fault" ||
                 message.Kind == Contract.Kinds.Start && turn.Header.TypeData == CreatorFault ||
                 message.Kind == Contract.Kinds.Terminate && turn.Header.TypeData == Withheld))

@@ -503,8 +503,6 @@ jobs:
         if: matrix.flavor == 'essentials'
         id: profile_qualification
         env:
-          # Bake metadata can exceed Linux's per-environment-string limit. Evaluate the digest in the runner.
-          PROFILE_INDEX_DIGEST: ${{ (github.event_name == 'workflow_run' || inputs.publish == true) && fromJSON(steps.profile_build.outputs.metadata).profile['containerimage.digest'] || '' }}
           PUBLISH_IMAGE: ${{ github.event_name == 'workflow_run' || inputs.publish == true }}
           SOURCE_SHA: ${{ steps.ci_source.outputs.source_sha || steps.source.outputs.sha }}
           STUDIO_VERSION: ${{ steps.image.outputs.version }}
@@ -512,8 +510,17 @@ jobs:
           set -euo pipefail
           args=()
           if [[ "$PUBLISH_IMAGE" == "true" ]]; then
-            [[ "$PROFILE_INDEX_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
-            args+=(--index "$PROFILE_INDEX_DIGEST")
+            # Bake metadata can exceed Linux's per-variable limit. Encode it as a single
+            # JSON string inside a quoted heredoc so it stays out of the environment and shell expansion.
+            if ! digest=$(jq -er 'fromjson | .profile["containerimage.digest"] | strings
+              | select(test("\\Asha256:[0-9a-f]{64}\\z"))' 2>/dev/null <<'BAKE_METADATA'
+          ${{ toJSON(steps.profile_build.outputs.metadata) }}
+          BAKE_METADATA
+            ); then
+              echo "::error::Studio Essentials Bake metadata is missing or has an invalid profile index digest." >&2
+              exit 1
+            fi
+            args+=(--index "$digest")
           fi
           python3 "$STUDIO_IMAGE_VALIDATORS/studio_profile_release.py" qualify \
             --profile "$STUDIO_IMAGE_VALIDATORS/profile" --output "$STUDIO_PROFILE_ROOT" \
