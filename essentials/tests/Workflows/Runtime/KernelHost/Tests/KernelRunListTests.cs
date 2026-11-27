@@ -139,11 +139,11 @@ public sealed class KernelRunListTests
         Assert.Empty(view.Outputs);
         Assert.Null(view.ActivityNextContinuationToken);
         Assert.Equal(("Balanced", "boundary-level"), (view.PersistenceMode, view.InspectionGranularity));
-        Assert.True(view.Permissions!.CanManage);
+        Assert.False(view.Permissions!.CanManage);
         Assert.False(view.Permissions.CanInspectValues);
         Assert.Equal(["run-1"], authorization.StructureChecks);
         Assert.Equal(["run-1"], authorization.ValueChecks);
-        Assert.Equal(["run-1"], management.Checks);
+        Assert.Empty(management.Checks);
     }
 
     [Fact]
@@ -185,7 +185,8 @@ public sealed class KernelRunListTests
     public async Task Details_fall_back_only_to_authorized_legacy_authoring_test_runs()
     {
         var reads = new Reads(Views[0], Views[0] with { Header = Views[0].Header with { Ref = new ActorRef("schedule"), Type = "schedule" } });
-        using var shell = Shell(reads, HostTenant);
+        var management = new ManageAccess();
+        using var shell = Shell(reads, HostTenant, operatorAccess: management);
         var legacy = shell.GetRequiredService<IWorkflowExecutionStateStore>();
         await legacy.SaveAsync(Legacy("test", Tenant, WorkflowRunKind.TestRun));
         await legacy.SaveAsync(Legacy("old-published", Tenant, WorkflowRunKind.PublishedRun));
@@ -196,8 +197,10 @@ public sealed class KernelRunListTests
         var preserved = await service.GetAsync(new("test"), CancellationToken.None);
         Assert.NotNull(preserved);
         Assert.Equal(("test", "TestRun"), (preserved.Instance.WorkflowExecutionId, preserved.Instance.RunKind));
+        Assert.True(preserved.Permissions!.CanManage);
         foreach (var id in new[] { "old-published", "other-tenant", "schedule" })
             Assert.Null(await service.GetAsync(new(id), CancellationToken.None));
+        Assert.Equal(["test"], management.Checks);
 
         var authorization = new InspectionAccess(structure: false, values: true);
         using var hidden = Shell(new Reads(Views[0]), HostTenant, authorization);

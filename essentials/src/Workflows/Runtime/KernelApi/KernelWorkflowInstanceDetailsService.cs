@@ -1,6 +1,5 @@
 using System.Collections.Frozen;
 using Elsa.Workflows.Runtime.Api.Coalescing;
-using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
@@ -17,8 +16,7 @@ internal sealed class KernelWorkflowInstanceDetailsService(
     IWorkflowExecutableStore executables,
     IPersistenceAccessContextAccessor access,
     IActivityInspectionContextAsync authorization,
-    WorkflowInstanceDetailsService testRuns,
-    IWorkflowRuntimeOperatorAccess? operatorAccess = null) : IWorkflowInstanceDetailsService
+    WorkflowInstanceDetailsService testRuns) : IWorkflowInstanceDetailsService
 {
     // A kernel turn commits one durable boundary and can execute several activities within it.
     private static readonly RuntimePersistenceModeProjection Mode = RuntimePersistenceModeProjection.For(PersistenceMode.Balanced);
@@ -46,7 +44,6 @@ internal sealed class KernelWorkflowInstanceDetailsService(
             return null;
 
         var canInspectSensitive = await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken);
-        var canManage = operatorAccess is not null && await operatorAccess.CanManageAsync(state, cancellationToken);
         return new WorkflowInstanceDetailsView(
             WorkflowInstanceSummaryView.From(state, canInspectSensitiveValues: canInspectSensitive),
             [],
@@ -54,6 +51,7 @@ internal sealed class KernelWorkflowInstanceDetailsService(
             Outputs,
             Mode.PersistenceMode,
             Mode.InspectionGranularity,
-            Permissions: new WorkflowInstancePermissionsView(canManage, canInspectSensitive));
+            // The runtime's existing operator endpoints still address legacy executions.
+            Permissions: new WorkflowInstancePermissionsView(CanManage: false, CanInspectValues: canInspectSensitive));
     }
 }
