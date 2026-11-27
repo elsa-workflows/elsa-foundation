@@ -20,6 +20,7 @@
 | An offset-less date-time sent to an Elsa API | read with the server's offset or as unspecified | 400, `json-datetime-offset-missing` |
 | Every hash over JSON (artifact hash, contract fingerprint, Git hash, operation fingerprints) | own options per site | one value change, then `JsonHashInput` over the canonical form |
 | Elsa 3 date literal or default without an offset | converted as written | refused, or written with the source zone's offset or `Z` (S-1's date interpretation) |
+| A JSON string converted to an enum type itself whose type and member declare no converter (spec 1236; for example an enum input's catalog default `"Sync"`) | refused | the exact declared member name is read; another casing, a number in a string or a flags list is still refused, naming the declared members. Nested and collection enums and writing (a number) are unchanged |
 
 Keys that start with a lowercase letter are byte-identical before and after.
 

@@ -81,6 +81,55 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     scope only.
   - A loop's current value captured into a variable is read as the loop's scoped variable (`index`, `currentItem`)
     inside the loop body. Outside the loop that read is not representable.
+- **Dispatch Workflow and Execute Workflow** (spec 1245). Both become an Elsa 4 Dispatch Workflow, whose outputs are
+  `ChildWorkflowExecutionId`, `Status` (the selected outcome's name) and `Output` (the completed child's named outputs;
+  `{}` after a faulted, cancelled or failed child; absent on `Dispatched`).
+  - **Dispatch Workflow `Result`** (FR-006): an awaited Elsa 3 dispatch's `Result` was the child's output dictionary, so a
+    capture becomes an `Output` capture into the same variable, whatever `WaitForCompletion` is. Not awaited, Elsa 3
+    never set it; Elsa 4 leaves `Output` absent there, so the variable keeps its value.
+  - **Execute Workflow always waits** (FR-008): `WaitForCompletion` is literal `true` whatever the Elsa 3 value, with one
+    `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` warning. Unless the Elsa 3 value was literal true it adds that Elsa 4 waits
+    for a child that suspends, where Elsa 3 continued (Elsa 3 ran an unset value as false).
+  - **Execute Workflow `Result`** (FR-010): Elsa 3's value was an `ExecuteWorkflowResult` wrapping the output. The node
+    captures `Output` into the same variable `V`, and every read of `V` becomes the Elsa 4 value it stood for:
+
+    | Elsa 3 read of `V` | Elsa 4 |
+    |---|---|
+    | `.Output`, `.Output.X` | `variables.V`, `variables.V.X` |
+    | `.WorkflowInstanceId` | the node's `ChildWorkflowExecutionId` output |
+    | `.Status` | `"Finished"` |
+    | `.SubStatus` | the node's `Status` output: `Completed` → `"Finished"`; `Faulted`, `DispatchFailed` → `"Faulted"`; `Cancelled` → `"Cancelled"` |
+    | `.CorrelationId`, `.WorkflowDefinitionVersionId` | `null` |
+    | the whole value in a script | an object with Elsa 3's keys built from the rows above |
+    | the whole value bound into another input | a JavaScript expression that builds that object |
+
+    JavaScript reads convert in every row, through `getV()`, `variables.V` or a literal `getVariable('V')`, in dot,
+    literal-bracket or optional-chaining form. Liquid converts only `.Output` and `.Output.X`. The node-output rows bind
+    to the capturing node, which must run before the read in the same container (`VF-IMP-003`,
+    `VF-IMP-004` otherwise); `.Status` keeps the same two checks. A node-output read where the node may not have run
+    is refused at publish (`ValueFlow/UnavailableProducer`). A `.Status` read binds nothing, so on a path where the
+    node may not have run (after a branch that skips it) it reads `"Finished"` where Elsa 3 read `V`'s earlier value.
+    `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` refuses: a variable with another writer
+    (another capture, a Set Variable, a declared initial value, or a script that calls `setV`, `setVariable('V', …)`,
+    assigns `V` or a member of it, or writes a variable by a computed name); any other member of `V`; any other Liquid
+    read of `V`, or a Liquid read of the node's result through the `Output` root; a script that reads a variable by
+    a computed name while `V` is in its scope; and, beyond the spec, a `Result` captured into a memory slot that is no
+    declared workflow variable, whose reads could not be rewritten.
+  - **`Done`** (FR-007, FR-009): Dispatch Workflow's `Done` maps to `Dispatched`, `Completed` and `Faulted`; Execute
+    Workflow's to `Completed` and `Faulted`. Elsa 3 continued after a child that faulted. `Cancelled` and
+    `DispatchFailed` stay unmapped.
+  - **Accepted differences** (FR-011; no warning, since they depend on how the child runs or how a script reads):
+    - a faulted child's outputs are not carried: `Output` is `{}`, where Elsa 3 resumed with the partial outputs;
+    - a cancelled child selects `Cancelled`: a Flowchart branch ends there and a Sequence runs its next step, where
+      Elsa 3 left an awaited parent suspended;
+    - a failed child start selects `DispatchFailed`, with the same Flowchart and Sequence behaviour, where Elsa 3
+      faulted the parent's activity;
+    - the child gets no `ParentInstanceId` input; pass it as an explicit input to keep it;
+    - after a waited child that suspended, Elsa 3 set an Execute Workflow `Result` to the bare output dictionary, where
+      `.Output.X` and `.SubStatus` read `undefined`; the converted reads return the child's value and `"Finished"`;
+    - an output read must match the output name's case; Elsa 3's dictionary ignored case;
+    - a `.Status` read on a path where the node may not have run (after a branch that skips it) reads `"Finished"`,
+      where Elsa 3 read `V`'s earlier value.
 - **Variable starting values** (spec 264). Elsa 3 stored a variable's starting value as text and converted it to the
   variable's type when the workflow started. The converter applies that rule, through Elsa 4's object converter, and
   carries the result as a `Literal`:
@@ -300,7 +349,8 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | Elsa 3 | Elsa 4 |
 |---|---|
 | `getVariable("x")`, `variables.x`, `variables["x"]` in an input expression or a RunJavaScript body | `variables.x`, spelled as the variable is declared; publish pins it to the nearest declaring scope. A loop's current value becomes the loop's own `variables.currentItem` or `variables.index` |
-| `getVariable(name)`, `variables[name]` (a computed name) in an input expression or a RunJavaScript body | Kept as written; the Elsa 4 run-time lookup resolves the name nearest scope first and records the read. Inside a loop, or where a name is declared in more than one visible scope, the conversion warns (`VF-IMP-011`) |
+| `getVariable("CurrentValue")`, `getVariable("CurrentIndex")` (also `variables.…`, `getCurrentValue()`) in a For or ForEach body | Elsa 3 declared these per-pass variables on the body (ForEach: both; For: `CurrentValue` only), ahead of any workflow variable of that name. The nearest enclosing loop that declares the name owns the read: ForEach `CurrentValue` → `variables.currentItem`, `CurrentIndex` → `variables.currentIndex`; For `CurrentValue` → `variables.index`, pinned to the loop node. The conversion follows where Elsa 3 stored the pass's variable (in the body when it is a Sequence, Flowchart or Parallel, else in the nearest enclosing one, after that container's own variables) and binds to the loop only where Elsa 3 read the pass value on every run. A variable of that name that Elsa 3 found first on every run (one of a container nested inside the body) keeps today's handling, unless an inner loop declaring the name or an id clash (below) applies. A read Elsa 3 resolved differently from run to run is refused (`VF-IMP-002`): a variable further up that hides the pass from a JavaScript lookup only until the workflow suspends (Liquid, and JavaScript after a resume, read the pass value); an inner loop declaring the name that may run before the read (not for a read ahead of it in the body's sequence or flowchart, nor in its own inputs when nothing in its body may suspend: Elsa 3 evaluates them again on a resume), or (where the read would reach the pass value) a reusable activity anywhere in the body (it runs inline and may hold such a loop), a loop or reusable activity that may run alongside and overwrite it, an earlier loop's leftover variable that changes the outcome (also for a read outside any loop, where a loop whose body is no container may have run before it), a declared variable with the per-pass variable's Elsa 3 id (`currentValueVariable`), or, in a reusable workflow, a variable that a calling loop's pass held above it may sit behind. Known limit: a reusable workflow is converted without its callers, so a caller that runs it inside its own loop with a container variable of the same name between the two still reads that variable in Elsa 3; the converted read binds to the reusable's loop. A generated `get{Name}()` reads the variable Elsa 3 registered it for last: per-pass variables after a scope's own, and the workflow's variables after all. A write to them is refused, as for any loop value (#5873; the same rule is meant to serve ParallelForEach, spec 1243 FR-013, PR #5841) |
+| `getVariable(name)`, `variables[name]` (a computed name) in an input expression or a RunJavaScript body | Kept as written; the Elsa 4 run-time lookup resolves the name nearest scope first and records the read. Inside a loop where no per-pass variable is in reach, or where a name is declared in more than one visible scope, the conversion warns (`VF-IMP-011`). Inside a For or ForEach body, or after a loop that left its last pass behind (a body that is no container), where the name could reach the loop's per-pass `CurrentValue`/`CurrentIndex`, which that lookup does not know, it is refused (`ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`) with guidance to use a literal name (#5873) |
 | `getInput("x")`, and a body's other reads (inputs, activity results, metadata) | A declared parameter, read as `args.x`. A body's variable reads are not arguments: it reads them over its variable session (spec 1222 FR-026a, FR-033) |
 | `{{ Variables.x }}` in Liquid | `{{ variables.x }}` |
 | `get{Name}()` generated for a variable (`get` + the name with its first letter upper-cased) or a workflow input (`get` + the name as written) | The same read as `getVariable`/`getInput`. Elsa 3's precedence applies: an activity output accessor `get{Output}From{Activity}()` shadows both and is refused; an input shadows a variable with the identical accessor name. In a reusable workflow, Elsa 3 declared inputs as variables, so only the variable-style name exists |
@@ -320,7 +370,7 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | A RunJavaScript body | Reads go through the `arguments` input, and the completion value becomes a `return`. A body whose last line is a `//` comment ends with a newline, so the comment cannot break Elsa 4's script wrapper (#3171) |
 | An expression whose value is `undefined` (a missing property, a function that returns nothing) | The pinned `UndefinedAsNull` policy gives null when the converter option is enabled; otherwise the native boundary refuses consumed undefined. Expression source is not rewritten with `?? null`. A bound RunJavaScript result uses the same explicit boundary. |
 | `setVariable('x', v)`, a generated `setX(v)` in a RunJavaScript body (a workflow's, or a reusable workflow's since spec 1241) | `variables.x = v` (`variables["x"] = v` when the name is not an identifier), a whole assignment written with the step (spec 1231 FR-032, Q6). Where the call's value could be read (the script's last statement, or inside an expression) it becomes `void (variables.x = v)`, since Elsa 3's setters returned nothing |
-| `setVariable(name, v)` with a computed name in a RunJavaScript body (a workflow's, or a reusable workflow's since spec 1241) | `variables[name] = v`: the name resolves when the script runs, nearest scope first; an undeclared name faults the step, where Elsa 3 created the variable (spec 1231 FR-033 as amended, #4899). A Run JavaScript body gets no import check of which names it can reach, as for a computed read in a body |
+| `setVariable(name, v)` with a computed name in a RunJavaScript body (a workflow's, or a reusable workflow's since spec 1241) | `variables[name] = v`: the name resolves when the script runs, nearest scope first; an undeclared name faults the step, where Elsa 3 created the variable (spec 1231 FR-033 as amended, #4899). A Run JavaScript body gets no import check of which names it can reach, as for a computed read in a body, except inside a For or ForEach body, or after a loop whose body is no container left its last pass behind, where it is refused like a computed read (#5873) |
 | `getVariable('x').m = v`, `getX().m++`, `variables.x.m = v` in a RunJavaScript body (a workflow's, or a reusable workflow's since spec 1241) | The same member change through `variables.x`: written as the stored value with that change (ADR 0090 C2, C3) |
 | `setOutcome(…)`, `setOutcomes(…)` in a RunJavaScript body | The body returns `complete(<value>, <pending selection>)` (spec 1208). Each call replaces the pending selection, and a body that sets nothing completes with `Done`. Literal names join the possible outcomes. A computed name, when the activity lists possible outcomes, selects any name outside them as a converter-declared outcome "Unlisted outcome" with no connection, so that path ends as in Elsa 3 (info `ELS3-SCRIPT-OUTCOME-CATCHALL`) |
 
@@ -349,6 +399,9 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | `get{Output}From{Activity}()`, `getOutputFrom`, a computed input or output name | `VF-IMP-005` / `VF-IMP-006` | Capture the output into a variable and read the variable; use literal input and output names |
 | A literal variable read that an enclosing container's or loop's declaration of the same name would capture in Elsa 4, or an outer loop's value read inside a nested loop of the same kind | `VF-IMP-010` | Rename one of the two, or copy the outer value into another variable first |
 | A computed variable read in a workflow where an Elsa 3 variable holds a loop's current value (Elsa 4 never writes it) | `VF-IMP-010` | Read the loop's current value by its literal name |
+| A read of a For/ForEach per-pass `CurrentValue`/`CurrentIndex` where a scope between the read and the loop declares the Elsa 4 name it converts to (`currentItem`, `currentIndex`, `index`) | `VF-IMP-010` | Rename that scope's variable (#5873) |
+| A read of a For/ForEach per-pass `CurrentValue`/`CurrentIndex` whose value in Elsa 3 depended on what ran before: a variable further up (such as the enclosing container's, for a body that is no container) that hides the pass only from a JavaScript lookup before the workflow suspends; an inner loop declaring the name that may run before the read, or (where the read would reach the pass value) a reusable activity anywhere in the body (which runs inline and may hold such a loop); another loop or reusable activity that may run alongside it (`Parallel`, `Fork`, unconnected Flowchart branches) and overwrite the same Elsa 3 variable; an earlier loop's leftover variable that decides whether a variable of that name hides it, including a read outside any loop where a loop whose body is no container may have run before it; a declared variable with the per-pass variable's Elsa 3 id; or, in a reusable workflow, a body variable of the name that a calling loop's pass held above it may sit behind | `VF-IMP-002` | At the start of the loop body, copy the loop's value into a variable with a name of its own and read that (#5873) |
+| A computed variable name (`getVariable(expr)`, `variables[expr]`, a computed `setVariable`, or the `variables` root used as a value) inside a For/ForEach body, or where a loop whose body is no container left its last pass behind, where it could reach the loop's per-pass `CurrentValue`/`CurrentIndex` | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` | Use a literal name, such as `getVariable('CurrentValue')` (#5873) |
 | A script that declares its own `args` or `variables` around a converted read, a Liquid loop variable named `variables`, or a Liquid input or output named `variables` | `VF-IMP-002` | Rename the script's own name, or the input or output (#3296) |
 | A variable or input whose accessor is a built-in name (`CorrelationId`) | `VF-IMP-002` | Rename it |
 | lodash `_`, `moment`, CLR globals, Elsa 3 `args` | `VF-IMP-005` | Rewrite with plain JavaScript and declared reads |

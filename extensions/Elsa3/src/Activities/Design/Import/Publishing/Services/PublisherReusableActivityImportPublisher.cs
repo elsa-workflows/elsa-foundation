@@ -1,10 +1,12 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Diagnostics;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa3.Activities.Design.Import.Contracts;
+using Elsa3.Activities.Design.Import.Services;
 
 namespace Elsa3.Activities.Design.Import.Publishing.Services;
 
@@ -52,22 +54,21 @@ internal sealed class PublisherReusableActivityImportPublisher(
         {
             return ReusableActivityImportPublishOutcome.Refused(Specific(rejection.ErrorCode, rejection.Diagnostics), rejection.Diagnostics);
         }
-        catch (Exception exception) when (DataSelectionRejection(exception) is { } rejection)
+        catch (Exception exception) when (ReusableActivityImportRefusals.Find<ActivityDataSelectionRejectedException>(exception) is { } rejection)
         {
             // The graph provider refused the imported manifest with located findings (#5850). They are what Studio's
             // publish endpoint reports for the same refusal, so the import reports them too, not "failed unexpectedly".
             var diagnostics = rejection.Findings.Select(finding => FromFinding(finding, rejection.ProviderKey, request)).ToArray();
             return ReusableActivityImportPublishOutcome.Refused(FirstErrorCode(diagnostics), diagnostics);
         }
-    }
-
-    /// <summary>The rejection itself, or the one a compiler wrapped it in, as the publish endpoint finds it.</summary>
-    private static ActivityDataSelectionRejectedException? DataSelectionRejection(Exception exception)
-    {
-        for (Exception? current = exception; current is not null; current = current.InnerException)
-            if (current is ActivityDataSelectionRejectedException rejection)
-                return rejection;
-        return null;
+        catch (Exception exception) when (ReusableActivityImportRefusals.Find<SchemaWriteRefusedException>(exception) is { } refusal)
+        {
+            // The store refused a write to a schema family: the value needs a version this host may not write yet, or the
+            // family is finalized at one this host cannot read; a dormancy refusal is one too (#5972). Studio's publish
+            // endpoint answers it with its code, family and both versions; so does the import, not "failed unexpectedly".
+            return ReusableActivityImportPublishOutcome.Refused(refusal.Code,
+                [ReusableActivityImportRefusals.SchemaWriteRefused(refusal, new("ActivityDraft", request.DraftId, null, Revision: request.DraftRevision))]);
+        }
     }
 
     private static ActivityDiagnostic FromFinding(ValidationError finding, string? providerKey, ReusableActivityImportPublishRequest request)

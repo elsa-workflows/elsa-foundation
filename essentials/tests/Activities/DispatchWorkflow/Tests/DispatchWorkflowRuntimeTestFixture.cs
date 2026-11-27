@@ -72,13 +72,14 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         bool terminalAfterNotification = false,
         bool ordinaryFaultAfterNotification = false,
         Action<IServiceCollection>? configureServices = null,
-        WorkflowValuePolicies? childValuePolicies = null)
+        WorkflowValuePolicies? childValuePolicies = null,
+        IReadOnlyDictionary<string, JsonElement>? childOutputs = null)
     {
         var services = new ServiceCollection();
         var timeProvider = new FakeTimeProvider(Now);
         services.AddSingleton<TimeProvider>(timeProvider);
         services.AddSingleton<CheckpointRecorder>();
-        services.AddSingleton<ChildExecutionProbe>();
+        services.AddSingleton(new ChildExecutionProbe { Outputs = childOutputs });
         var typeRegistry = SerializationServices.TypeRegistry();
         typeRegistry.RegisterType(typeof(string), "String");
         typeRegistry.RegisterType(typeof(int), "Int32");
@@ -115,6 +116,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             authoredNotificationChild ? ordinaryFaultAfterNotification ? typeof(NotificationThenFaultRootProbeActivity) :
                 terminalAfterNotification ? typeof(NotificationThenCompleteRootProbeActivity) : typeof(NotificationRootProbeActivity) :
             authoredFaultChild ? typeof(AuthoredFaultChildProbeActivity) :
+            childOutputs is not null ? typeof(OutputChildProbeActivity) :
             replaySafeChild ? typeof(ReplaySafeChildProbeActivity) : typeof(ChildProbeActivity));
         await fixture.SeedChildAsync(childValuePolicies);
         return fixture;
@@ -537,6 +539,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             RuntimeInputBindingSource.WorkflowRequest,
             workflowRequest: new RuntimeWorkflowRequestReference(workflowInputName));
 
+    private static readonly IPayloadSerializer DescriptorSerializer = SerializationServices.PayloadSerializer();
+
     private static ExecutableNode NewNode(
         string executableNodeId,
         Type activityType,
@@ -553,7 +557,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             descriptor: new RuntimeActivityDescriptor(
                 WellKnownRuntimeActivityConsumers.ClrActivity,
                 RuntimeActivityDescriptor.InitialSchemaVersion,
-                JsonSerializer.SerializeToElement(
+                // The activator reads the descriptor through the payload serializer, so write it with the same one.
+                DescriptorSerializer.SerializeToElement(
                     new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)))),
             inputBindings: CompleteInputBindings(contract, inputBindings),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
@@ -608,7 +613,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             activityType.FullName!,
             "1.0.0",
             descriptorType,
-            JsonSerializer.SerializeToElement(new ClrActivityDescriptor(alias)),
+            DescriptorSerializer.SerializeToElement(new ClrActivityDescriptor(alias)),
             inputs,
             new ActivityResultContract(
                 ValueType(resultType),
@@ -623,7 +628,10 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             new ActivityActivationRequirement(descriptorType, alias),
             activityType.GetCustomAttributes(typeof(ActivitySideEffectProfileAttribute), inherit: true)
                 .Cast<ActivitySideEffectProfileAttribute>()
-                .SingleOrDefault()?.Profile ?? SideEffectProfile.External);
+                .SingleOrDefault()?.Profile ?? SideEffectProfile.External,
+            supportsBackgroundExecution: false,
+            accessesUndeclaredVariables: false,
+            accessesWorkflowState: AccessesWorkflowStateAttribute.IsAccessedBy(activityType));
     }
 
     private static IReadOnlyDictionary<string, RuntimeInputBinding> CompleteInputBindings(
@@ -711,6 +719,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             typeof(DispatchWorkflowResult),
             typeof(ChildProbeActivity),
             typeof(AuthoredFaultChildProbeActivity),
+            typeof(OutputChildProbeActivity),
             typeof(NotificationRootProbeActivity),
             typeof(NotificationThenCompleteRootProbeActivity),
             typeof(NotificationThenFaultRootProbeActivity),
@@ -804,6 +813,19 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                     ["defaulted"] = Defaulted
                 });
             return ActivityTransition.Complete(ActivityUnit.Value);
+        }
+    }
+
+    /// <summary>A child root that sets the probe's configured workflow outputs through Set Output's state session.</summary>
+    [AccessesWorkflowState]
+    private sealed class OutputChildProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary, IWorkflowDispatchStore dispatches)
+        : ChildProbeActivity(probe, boundary, dispatches)
+    {
+        protected override async ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
+        {
+            foreach (var (name, value) in probe.Outputs ?? new Dictionary<string, JsonElement>())
+                context.WorkflowState.SetOutput(name, value);
+            return await base.ExecuteAsync(context);
         }
     }
 
@@ -1022,6 +1044,9 @@ internal sealed record ChildExecutionObservation(
 
 internal sealed class ChildExecutionProbe
 {
+    /// <summary>The workflow outputs an output-writing child sets; null for the ordinary probe child.</summary>
+    internal IReadOnlyDictionary<string, JsonElement>? Outputs { get; init; }
+
     private readonly Lock _gate = new();
     private readonly List<ChildExecutionObservation> _observations = [];
     private readonly List<ChildControlObservation> _controlObservations = [];

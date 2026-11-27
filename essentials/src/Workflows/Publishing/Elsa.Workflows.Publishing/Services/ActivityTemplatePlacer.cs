@@ -16,6 +16,7 @@ using Elsa.Workflows.Runtime.Core.Background;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Publishing.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Services;
 
@@ -176,13 +177,17 @@ public sealed class ActivityTemplatePlacer(
             while (parentId is not null)
             {
                 var parent = authored[parentId];
-                var keys = structures.ProjectScopedVariables(parent.Node).Select(variable => variable.ReferenceKey).ToArray();
+                var scopedKeys = structures.ProjectScopedVariables(parent.Node).Select(variable => variable.ReferenceKey).ToArray();
+                // A loop ancestor's iteration values (#5849) are declared by the loop node like its scoped variables.
+                var iterationKeys = structures.ProjectIterationVariables(parent.Node).Select(variable => variable.ReferenceKey).ToArray();
+                var keys = scopedKeys.Concat(iterationKeys).ToArray();
                 if (keys.Length != 0)
                 {
                     if (!overlays.TryGetValue(parentId, out var candidates) || candidates.Length != 1)
                         throw Rejected(parentId, "ActivityDataSelection/VariableDeclarationUnavailable", "The native scope has no exact compiled occurrence.");
-                    var compiledKeys = ReadCompiledVariableKeys(candidates[0].Structure?.Payload, parentId);
-                    if (!SameKeys(keys, compiledKeys))
+                    var payload = candidates[0].Structure?.Payload;
+                    if (!SameKeys(scopedKeys, ReadCompiledVariableKeys(payload, parentId)) ||
+                        !SameKeys(iterationKeys, ReadCompiledIterationValues(payload, parentId)))
                         throw Rejected(parentId, "ActivityDataSelection/VariableDeclarationMismatch", "The compiled native scope does not preserve its actual declarations.");
                     if (declarations.TryGetValue(parentId, out var existing) && !SameKeys(keys, existing))
                         throw Rejected(parentId, "ActivityDataSelection/VariableScopeAmbiguous", "The native scope collides with another declaration owner.");
@@ -230,7 +235,7 @@ public sealed class ActivityTemplatePlacer(
                 if (!authored.TryAdd(current.NodeId, structures.ProjectScopedVariables(current).Select(x => x.ReferenceKey).ToArray()))
                     throw Rejected(current.NodeId, "ActivityDataSelection/VariableScopeAmbiguous", "The authored variable scope is not unique.");
                 // A loop's iteration values (spec 1222 FR-004a) are variables the loop node declares for its body only.
-                // Its compiled structure carries no declarations for them; the scheduler supplies them per pass.
+                // The loop supplies them per pass; its compiled structure lists their keys, checked against these.
                 if (structures.ProjectIterationVariables(current) is { Count: > 0 } values)
                     iteration[current.NodeId] = values.Select(x => x.ReferenceKey).ToArray();
                 foreach (var child in structures.ProjectChildren(current).SelectMany(x => x.Activities))
@@ -272,14 +277,17 @@ public sealed class ActivityTemplatePlacer(
             }
 
             var scoped = ReadCompiledVariableKeys(node);
+            var compiledIteration = ReadCompiledIterationValues(node);
             if (!current.InClosedBody && !IsClosedScope(node.Descriptor) && authored.TryGetValue(node.AuthoredActivityId, out var actual))
             {
                 if (!SameKeys(actual, scoped))
                     throw Rejected(node.AuthoredActivityId, "ActivityDataSelection/VariableDeclarationMismatch", "The compiled scope does not preserve its actual authored declarations.");
+                if (!SameKeys(iteration.TryGetValue(node.AuthoredActivityId, out var values) ? values : [], compiledIteration))
+                    throw Rejected(node.AuthoredActivityId, "ActivityDataSelection/VariableDeclarationMismatch", "The compiled scope does not preserve its actual iteration values.");
                 scoped = actual;
             }
-            if (!current.InClosedBody && !IsClosedScope(node.Descriptor) && iteration.TryGetValue(node.AuthoredActivityId, out var values))
-                scoped = scoped.Concat(values).ToArray();
+            // Inside a closed body (a placed reusable activity) only the compiled structure remains (#5849).
+            scoped = scoped.Concat(compiledIteration).ToArray();
             if (scoped.Count != 0)
             {
                 AddDeclaration(node.ExecutableNodeId, scoped, node.AuthoredActivityId);
@@ -318,6 +326,26 @@ public sealed class ActivityTemplatePlacer(
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException)
         {
             throw Rejected(origin, "ActivityDataSelection/VariableDeclarationUnavailable", "The compiled variable declarations do not match their owned contract.");
+        }
+    }
+
+    private static IReadOnlyCollection<string> ReadCompiledIterationValues(ExecutableNode node) =>
+        ReadCompiledIterationValues(node.Structure?.Payload, node.AuthoredActivityId);
+
+    private static IReadOnlyCollection<string> ReadCompiledIterationValues(JsonElement? payload, string origin)
+    {
+        if (payload is not { ValueKind: JsonValueKind.Object } structure ||
+            !structure.TryGetProperty(CompiledStructureFields.IterationValues, out var value))
+            return [];
+        try
+        {
+            // Written by ExecutableNodeCompiler.CompileStructure and the graph provider's body compiler.
+            var keys = value.Deserialize<string[]>(DescriptorPayloadSerializer.Options) ?? throw new JsonException();
+            return keys.Any(string.IsNullOrWhiteSpace) ? throw new JsonException() : keys;
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException)
+        {
+            throw Rejected(origin, "ActivityDataSelection/VariableDeclarationUnavailable", "The compiled iteration values do not match their owned contract.");
         }
     }
 
@@ -963,29 +991,32 @@ public sealed class ActivityTemplatePlacer(
         if (structure is null)
             return null;
 
-        // The variables field holds Publishing's compiled declarations (ExecutableNodeCompiler.CompileStructure), not
-        // the owner's authored variables. The owner's remapper only routes child ids, so it never sees that field and
-        // the compiled declarations are put back unchanged after routing.
+        // The variables and iteration-values fields hold Publishing's compiled facts (ExecutableNodeCompiler.CompileStructure,
+        // GraphActivityProvider.CompileBodyStructure for reusable bodies),
+        // not the owner's authored payload. The owner's remapper only routes child ids, so it never sees those fields and
+        // they are put back unchanged after routing.
         var payload = structure.Payload;
-        var hasCompiledVariables = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("variables", out _);
-        JsonElement compiledVariables = default;
-        if (hasCompiledVariables)
+        var owned = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        if (payload.ValueKind == JsonValueKind.Object)
         {
             var routed = payload.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
-            compiledVariables = routed["variables"];
-            routed.Remove("variables");
-            payload = JsonSerializer.SerializeToElement(routed, options: DescriptorPayloadSerializer.Options);
+            foreach (var field in new[] { "variables", CompiledStructureFields.IterationValues })
+                if (routed.Remove(field, out var value))
+                    owned[field] = value;
+            if (owned.Count != 0)
+                payload = JsonSerializer.SerializeToElement(routed, options: DescriptorPayloadSerializer.Options);
         }
 
         var rewritten = activityStructureService.RemapExecutableStructure(
             new ActivityNodeStructure(structure.Kind, structure.SchemaVersion, payload),
             placedNodeIds);
-        if (!hasCompiledVariables)
+        if (owned.Count == 0)
             return new(rewritten.Kind, rewritten.SchemaVersion, rewritten.Payload);
         if (rewritten.Payload.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException($"Structure '{rewritten.Kind}@{rewritten.SchemaVersion}' remapped to a non-object payload.");
         var restored = rewritten.Payload.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
-        restored["variables"] = compiledVariables;
+        foreach (var (field, value) in owned)
+            restored[field] = value;
         return new(rewritten.Kind, rewritten.SchemaVersion, JsonSerializer.SerializeToElement(restored, options: DescriptorPayloadSerializer.Options));
     }
 

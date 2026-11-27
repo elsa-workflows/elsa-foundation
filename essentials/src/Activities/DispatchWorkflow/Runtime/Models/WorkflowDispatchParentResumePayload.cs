@@ -1,9 +1,16 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Models;
 
-/// <summary>Replay-stable, payload-safe work required to resume one waiting DispatchWorkflow activity.</summary>
+/// <summary>
+/// Replay-stable work required to resume one waiting DispatchWorkflow activity. It carries the terminal result (status,
+/// allow-listed diagnostics, child control) and, for a completed child only, the child's committed output values
+/// (<see cref="Output"/>) without any output whose value protection policy forbids carrying it, plus the names of the
+/// outputs left out (<see cref="WithheldOutputs"/>), never their values (spec 1245 FR-003).
+/// </summary>
 public sealed class WorkflowDispatchParentResumePayload
 {
     public WorkflowDispatchParentResumePayload(
@@ -14,7 +21,9 @@ public sealed class WorkflowDispatchParentResumePayload
         string bookmarkId,
         string stimulusType,
         string stimulusHash,
-        DispatchWorkflowResult result)
+        DispatchWorkflowResult result,
+        JsonElement? output,
+        IReadOnlyList<string>? withheldOutputs)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dispatchId);
         ArgumentException.ThrowIfNullOrWhiteSpace(parentWorkflowExecutionId);
@@ -37,6 +46,18 @@ public sealed class WorkflowDispatchParentResumePayload
             throw new ArgumentException("DispatchWorkflow parent-resume payload does not match its deterministic terminal dispatch identity.");
         }
 
+        if (result.Status == WorkflowDispatchStatus.Completed)
+        {
+            if (output is not { ValueKind: JsonValueKind.Object } || withheldOutputs is null)
+                throw new ArgumentException("A completed child's parent-resume payload requires its output object and withheld output names.", nameof(output));
+            if (withheldOutputs.Any(string.IsNullOrWhiteSpace))
+                throw new ArgumentException("A withheld output name must be nonblank.", nameof(withheldOutputs));
+        }
+        else if (output is not null || withheldOutputs is not null)
+        {
+            throw new ArgumentException("Only a completed child's parent-resume payload may carry child outputs.", nameof(output));
+        }
+
         DispatchId = dispatchId;
         ParentWorkflowExecutionId = parentWorkflowExecutionId;
         ParentActivityExecutionId = parentActivityExecutionId;
@@ -45,6 +66,8 @@ public sealed class WorkflowDispatchParentResumePayload
         StimulusType = stimulusType;
         StimulusHash = stimulusHash;
         Result = result;
+        Output = output?.Clone();
+        WithheldOutputs = withheldOutputs?.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
     }
 
     public string DispatchId { get; }
@@ -55,4 +78,12 @@ public sealed class WorkflowDispatchParentResumePayload
     public string StimulusType { get; }
     public string StimulusHash { get; }
     public DispatchWorkflowResult Result { get; }
+
+    /// <summary>The completed child's committed output values, name to value in ordinal order; null unless completed.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? Output { get; }
+
+    /// <summary>Names of the child outputs left out of <see cref="Output"/>, ordinal; empty when none, null unless completed.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? WithheldOutputs { get; }
 }

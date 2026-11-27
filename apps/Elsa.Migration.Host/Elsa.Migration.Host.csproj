@@ -1,0 +1,108 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <Description>Temporary Elsa 3 migration host: a local tool that runs the migration CLI's migrated/ folder on Elsa 4. Not a product or deployment host. Removed by the cleanup on #5800.</Description>
+    <!-- Run from source only: not packed, not published as an image. -->
+    <IsPackable>false</IsPackable>
+    <UserSecretsId>ff27eab3-4ac5-4be5-b2b9-ca36791dce84</UserSecretsId>
+    <!-- dotnet run uses the project folder as working directory wherever it starts, so the relative sample paths resolve. -->
+    <RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>
+  </PropertyGroup>
+
+  <!--
+    Plain CShells hosting (no Nuplane, no admin endpoints) and the host-composed services: the JSON baseline, health,
+    the Data Protection key ring, shell startup validation and the OpenIddict token store.
+  -->
+  <ItemGroup>
+    <PackageReference Include="CShells.AspNetCore" />
+    <ProjectReference Include="../../essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
+    <ProjectReference Include="../../essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj" />
+    <ProjectReference Include="../../essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+    One project per feature assembly that shells.json composes; composition-reasons.json says why each feature is there.
+    An engineer adds their own feature project below in their clone (README, "Your own activities").
+  -->
+  <ItemGroup>
+    <!-- Activities -->
+    <ProjectReference Include="../../essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/Design/Reconciliation/Json/Elsa.Activities.Design.Reconciliation.Json.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/Scripting/Elsa.Activities.Scripting.csproj" />
+    <ProjectReference Include="../../essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
+    <!-- Api -->
+    <ProjectReference Include="../../essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
+    <!-- Caching -->
+    <ProjectReference Include="../../essentials/src/Caching/Memory/Elsa.Caching.Memory.csproj" />
+    <!-- Events -->
+    <ProjectReference Include="../../essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <!-- Expressions -->
+    <ProjectReference Include="../../essentials/src/Expressions/Api/Elsa.Expressions.Api.csproj" />
+    <ProjectReference Include="../../essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj" />
+    <ProjectReference Include="../../essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="../../essentials/src/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj" />
+    <!-- Identity -->
+    <ProjectReference Include="../../essentials/src/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
+    <ProjectReference Include="../../essentials/src/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+    <ProjectReference Include="../../essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="../../essentials/src/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
+    <ProjectReference Include="../../essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
+    <!-- Http -->
+    <ProjectReference Include="../../extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="../../extensions/Http/src/Elsa.Http/Elsa.Http.csproj" />
+    <ProjectReference Include="../../extensions/Http/src/JavaScript/Elsa.Http.JavaScript.csproj" />
+    <ProjectReference Include="../../extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />
+    <!-- Locking -->
+    <ProjectReference Include="../../essentials/src/Locking/FileSystem/Elsa.Locking.FileSystem.csproj" />
+    <!-- Mediator -->
+    <ProjectReference Include="../../essentials/src/Mediator/Elsa.Mediator/Elsa.Mediator.csproj" />
+    <!-- Primitives -->
+    <ProjectReference Include="../../essentials/src/Primitives/Hosting/Elsa.Primitives.Hosting.csproj" />
+    <!-- Serialization -->
+    <ProjectReference Include="../../essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
+    <!-- Tasks -->
+    <ProjectReference Include="../../essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj" />
+    <!-- Workflows -->
+    <ProjectReference Include="../../essentials/src/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Design/Reconciliation/Json/Elsa.Workflows.Design.Reconciliation.Json.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="shells.json;composition-reasons.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- Local, git-ignored sources and the local store are never build output. -->
+    <Content Remove="shells.Local.json;data/**;migrated/**" />
+    <None Remove="data/**" />
+  </ItemGroup>
+
+</Project>
