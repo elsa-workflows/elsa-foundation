@@ -3,10 +3,12 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Api.AspNetCore;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Native;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.DependencyInjection;
 using Contract = Kernel.Foundation.Contracts;
 using NativeHttpRequest = Kernel.Native.HttpRequest;
 
@@ -16,8 +18,7 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 public sealed class KernelHttpRequestHandler(KernelServing serving,
     Func<CancellationToken, ValueTask<Contract.IIngress>> openIngress,
     Func<CancellationToken, ValueTask<long>> readClock,
-    Contract.BoundScope tenant, string basePath, TimeSpan timeout, long maxRequestBodyBytes, bool enforceRequestTimeout = false,
-    Func<HttpContext, Exception, CancellationToken, ValueTask>? handleTimeoutAsync = null)
+    Contract.BoundScope tenant, string basePath, TimeSpan timeout, long maxRequestBodyBytes, bool enforceRequestTimeout = false)
 {
     /// <summary>Serves a published workflow HTTP endpoint with the actor foundation's held reply.</summary>
     public async Task HandleAsync(HttpContext context)
@@ -80,7 +81,7 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
         await response.WriteAsync(answer.Body, token);
     }
 
-    private async Task FinishTimeoutAsync(HttpContext context, CancellationToken clientAborted, Exception cause)
+    private static async Task FinishTimeoutAsync(HttpContext context, CancellationToken clientAborted, Exception cause)
     {
         if (clientAborted.IsCancellationRequested) return;
 
@@ -93,6 +94,7 @@ public sealed class KernelHttpRequestHandler(KernelServing serving,
 
         context.Response.Clear();
         var fault = new TimeoutException("The HTTP endpoint request timeout elapsed before the response completed.", cause);
+        var handleTimeoutAsync = context.RequestServices?.GetService<WorkflowHttpEndpointSettings>()?.HandleTimeoutAsync;
         if (handleTimeoutAsync is null)
         {
             context.Response.StatusCode = StatusCodes.Status408RequestTimeout;

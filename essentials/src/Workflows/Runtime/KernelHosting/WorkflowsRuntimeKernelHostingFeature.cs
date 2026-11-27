@@ -91,7 +91,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             var requestBasePath = string.IsNullOrEmpty(shellPath) ? basePath : "/" + shellPath + basePath;
             return new KernelHttpRequestHandler(sp.GetRequiredService<KernelServing>(), runtime.IngressAsync,
                 storage.ReadClockAsync, tenant, requestBasePath, http.SyncRequestTimeout, http.MaxRequestBodyBytes,
-                enforceRequestTimeout: true, handleTimeoutAsync: http.HandleTimeoutAsync);
+                enforceRequestTimeout: true);
         });
         KernelToolbox.Register(services);
 
