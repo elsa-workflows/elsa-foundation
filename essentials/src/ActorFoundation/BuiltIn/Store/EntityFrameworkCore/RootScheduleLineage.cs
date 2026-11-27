@@ -152,7 +152,7 @@ internal static class RootScheduleLineage
         if (db.UsesSqliteRootRuntime)
             return FormattableStringFactory.Create(sql.Replace("/*lineage-source*/", """SELECT true AS "Ready" """,
                 StringComparison.Ordinal), query.GetArguments());
-        var marker = db.ScheduleLineageCommitMarker ?? throw new StoreFormatException("The PostgreSQL lineage owner has no pinned store.");
+        var marker = db.RootCommitMarker ?? throw new StoreFormatException("The PostgreSQL lineage owner has no pinned store.");
         var source = $$"""
             SELECT EXISTS (
                 SELECT 1 FROM pg_catalog.pg_class marker

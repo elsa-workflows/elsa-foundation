@@ -99,10 +99,24 @@ internal static partial class RootEventStarts
         return matches.Count == rows.Count;
     }
 
-    internal static Task DiscardStagedMatchesAsync(KernelDb db, string occurrence, Func<FormattableString, FormattableString>? bind,
-        CancellationToken token) =>
-        db.Database.ExecuteSqlInterpolatedAsync(Bind($"""
-            WITH source AS MATERIALIZED (/*event-start-source*/)
-            DELETE FROM "FoundationPagedEventStarts" WHERE "Occurrence" = {occurrence} AND (SELECT "SourceReady" FROM source)
-            """, bind), token);
+    internal static async Task DiscardStagedMatchesAsync(KernelDb db, string occurrence,
+        Func<FormattableString, FormattableString>? bind, CancellationToken token)
+    {
+        if (bind is null)
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                DELETE FROM "FoundationPagedEventStarts" WHERE "Occurrence" = {occurrence}
+                """, token);
+            return;
+        }
+
+        // A ready source with zero staged rows is valid. A false source must roll back the ticket transition.
+        var ready = (await db.Database.SqlQuery<bool>(Bind($"""
+            WITH source AS MATERIALIZED (/*event-start-source*/), discarded AS (
+                DELETE FROM "FoundationPagedEventStarts" WHERE "Occurrence" = {occurrence} AND (SELECT "SourceReady" FROM source)
+            )
+            SELECT "SourceReady" AS "Value" FROM source
+            """, bind)).ToListAsync(token)).Single();
+        if (!ready) throw SourceChanged();
+    }
 }
