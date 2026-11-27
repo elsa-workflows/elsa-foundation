@@ -837,10 +837,12 @@ internal static class PostgresRootParkedOperatorChecks
                             UPDATE "Messages" SET "Due" = 0 WHERE "Target" = {actor} AND "Kind" = 'fail' AND NOT "Done"
                             """);
                         if (invalidResult)
+                        {
                             await set.ExecuteAsync($"""
                                 UPDATE "Messages" SET "Payload" = {Json.Write(new JobFinished("another-key", null, null))}
                                 WHERE "Target" = {actor} AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {Kinds.JobFinished}
                                 """);
+                        }
                         movedFault = true;
                     }
                     return committed;
@@ -853,6 +855,16 @@ internal static class PostgresRootParkedOperatorChecks
             Check(await set.SendAsync(root, "issue-live-job", "issue-live-job"), "the staged PostgreSQL root admits a timed job before Park");
             var issued = await set.DriveAsync(root, row => row is { Revision: 2, Status: InstanceStatus.Running });
             await set.PassUntilAsync(() => set.Probe.JobEntered.Task.IsCompleted);
+            if (!publishFirst && !reversedPair)
+            {
+                var timed = await ReadTimedRowsAsync();
+                var deadline = timed.Single(row => row.Kind == Kinds.JobDeadline);
+                var ticket = timed.Single(row => row.Kind == Kinds.Job);
+                await using var guards = OpenJob();
+                await RecordedJobRecoveryChecks.AssertParkRequiresLiveReferencesAsync(guards, issued,
+                    FormattableString.Invariant($"{ticket.Id}/{ticket.Seq}/{ticket.Due}:{deadline.Id}/{deadline.Seq}/{deadline.Due}"),
+                    Check, stop);
+            }
             if (reversedPair)
                 await set.ExecuteAsync($"""
                     UPDATE "Messages" SET "Seq" = (SELECT max("Seq") + 100 FROM "Messages")
@@ -895,6 +907,8 @@ internal static class PostgresRootParkedOperatorChecks
             var recovered = await set.DriveAsync(root, row => row is { Status: InstanceStatus.Running } && row.Revision == park.Revision + 1);
             Check(recovered.Jobs == park.Jobs && recovered.NextJobGeneration == park.NextJobGeneration && recovered.ParkAt is null &&
                 (await ReadTimedRowsAsync()).SequenceEqual(before), "Recover keeps the exact pending timed rows and registration");
+            await using (var guards = OpenJob())
+                await RecordedJobRecoveryChecks.AssertOrdinaryCheckpointRetainsJobAsync(guards, recovered, publishFirst, Check, stop);
             if (publishFirst)
                 Check(before is [{ Payload.Length: > ParkRecoveryCredit.LimitBytes }] && metadata.Columns.Count >= 2 &&
                     metadata.Columns.All(columns => columns.SequenceEqual(new[] { "Id", "Kind", "Seq", "Due", "Valid" }, StringComparer.Ordinal)),

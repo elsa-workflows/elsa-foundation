@@ -115,11 +115,8 @@ internal static class RecordedJobRecoveryChecks
                     AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {kind}
                 """, token);
             check(deleted == 1, "the fixture removes a timed row after binding the recovery checkpoint");
-            var blocked = false;
-            try { await write.CommitAsync(token); }
-            catch (PostgresException error) when (error.SqlState == "23503") { blocked = true; }
-            catch (SqliteException error) when (error.SqliteExtendedErrorCode == 787) { blocked = true; }
-            check(blocked, "the deferred live job reference refuses to commit a missing envelope after Recover");
+            await ExpectMissingReferenceAsync(() => write.CommitAsync(token), check,
+                "the deferred live job reference refuses to commit a missing envelope after Recover");
         }
 
         Task<int> InsertRecoverAsync() => InsertRecoverEntryAsync(db, actor, partition, revision, entries, token);
@@ -142,6 +139,50 @@ internal static class RecordedJobRecoveryChecks
             await ExpectRefusalAsync(check, update, description);
             await write.RollbackAsync(token);
         }
+    }
+
+    internal static async Task AssertOrdinaryCheckpointRetainsJobAsync(KernelDb db, EfStore.RootImage root, bool published,
+        Action<bool, string> check, CancellationToken token)
+    {
+        var actor = root.Actor.Id;
+        var partition = new InstanceRef(actor).Partition;
+        var kind = published ? Kinds.JobFinished : Kinds.JobDeadline;
+        await using var write = await db.Database.BeginTransactionAsync(token);
+        check(await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM "Messages" WHERE "Target" = {actor} AND "Partition" = {partition}
+                AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {kind}
+            """, token) == 1, "the ordinary checkpoint fixture omits one protected timed row");
+        check(await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Instances" SET "Revision" = "Revision" + 1, "FoundationWriteRevision" = "Revision" + 1
+            WHERE "Id" = {actor} AND "Partition" = {partition} AND "Revision" = {root.Revision}
+            """, token) == 1, "the unrelated checkpoint leaves the job registration unchanged");
+        await ExpectMissingReferenceAsync(() => write.CommitAsync(token), check,
+            "an ordinary checkpoint cannot release the outstanding timed reference");
+    }
+
+    internal static async Task AssertParkRequiresLiveReferencesAsync(KernelDb db, EfStore.RootImage root, string proof,
+        Action<bool, string> check, CancellationToken token)
+    {
+        var actor = root.Actor.Id;
+        var partition = new InstanceRef(actor).Partition;
+        var revision = checked(root.Revision + 1);
+        await using var write = await db.Database.BeginTransactionAsync(token);
+        await ExpectRefusalAsync(check, () => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision},
+                "Status" = {(int)InstanceStatus.Faulted}, "Fault" = {DurableKeyJson.Write("fixture")},
+                "FoundationParkAt" = {root.AsOf}, "FoundationParkRevision" = {revision}, "FoundationParkLiveJob" = {proof}
+            WHERE "Id" = {actor} AND "Partition" = {partition} AND "Revision" = {root.Revision}
+            """, token), "a Park checkpoint requires protected references for the exact timed rows");
+        await write.RollbackAsync(token);
+    }
+
+    private static async Task ExpectMissingReferenceAsync(Func<Task> commit, Action<bool, string> check, string description)
+    {
+        var blocked = false;
+        try { await commit(); }
+        catch (PostgresException error) when (error.SqlState == "23503") { blocked = true; }
+        catch (SqliteException error) when (error.SqliteExtendedErrorCode == 787) { blocked = true; }
+        check(blocked, description);
     }
 
     private static Task<int> BindRunningAsync(KernelDb db, string actor, int partition, long revision, bool keepRegistration, CancellationToken token) =>

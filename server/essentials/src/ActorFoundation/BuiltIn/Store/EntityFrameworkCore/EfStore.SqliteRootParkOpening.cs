@@ -49,6 +49,7 @@ public sealed partial class EfStore
         var pinsResult = recorded && RecordsConsumedRootJob(db);
         var live = park.Opening && !recorded && park.Jobs is not null
             ? await ReadLiveRootJobAsync(db, root.Actor, root.Partition, park.Model, park.Jobs, token) : null;
+        if (live is not null) await ProtectLiveJobAsync(db, root.Actor, root.Partition, live, token);
         var write = WithParkJobResult(db, $"""
             UPDATE "Instances" SET "Status" = {(int)InstanceStatus.Faulted}, "Fault" = {park.EncodedFault},
                 "Revision" = {revision}, "FoundationWriteRevision" = {revision}, "FoundationParkAt" = {parkAt}, "FoundationParkRevision" = {openRevision} /*park-job-result*/ /*park-live-job*/
@@ -64,7 +65,7 @@ public sealed partial class EfStore
             """, pinsResult ? ids[0] : null);
         write = WithLiveParkJob(db, write, live?.Proof);
         if (!pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1) return false;
-        if (pinsResult) await ReleaseProtectedResultAsync(db, root.Actor, ids[0], token);
+        if (pinsResult) await ReleaseProtectedTimedJobsAsync(db, root.Actor, ids, token);
         if (!await KeepSqliteParkInputsAsync(db, root.Actor, root.Partition, scope, ids, park.Reason, token) ||
             pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1)
             return false;

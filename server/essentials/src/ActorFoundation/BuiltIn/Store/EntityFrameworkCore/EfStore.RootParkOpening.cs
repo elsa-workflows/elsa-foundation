@@ -133,6 +133,7 @@ public sealed partial class EfStore
             var pinsResult = recorded && RecordsConsumedRootJob(db);
             var live = Opening && !recorded && Jobs is not null
                 ? await ReadLiveRootJobAsync(db, Root.Actor, Root.Partition, Model, Jobs, cancellationToken) : null;
+            if (live is not null) await ProtectLiveJobAsync(db, Root.Actor, Root.Partition, live, cancellationToken);
             write = WithLiveParkJob(db, WithParkJobResult(db, write, pinsResult ? keys[0] : null), live?.Proof);
             if (!pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, cancellationToken) != 1) return false;
 
@@ -149,7 +150,7 @@ public sealed partial class EfStore
                     .SequenceEqual(Inputs.OrderBy(input => input.InboxKey.Id, StringComparer.Ordinal)))
                 return false;
 
-            if (pinsResult) await ReleaseProtectedResultAsync(db, Root.Actor, keys[0], cancellationToken);
+            if (pinsResult) await ReleaseProtectedTimedJobsAsync(db, Root.Actor, keys, cancellationToken);
             var kept = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Done" = true, "Trial" = 0, "FoundationKeptBy" = {(short)Reason}
                 WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}

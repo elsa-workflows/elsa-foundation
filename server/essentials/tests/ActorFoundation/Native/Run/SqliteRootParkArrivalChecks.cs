@@ -342,6 +342,7 @@ internal static partial class SqliteHostLifetimeChecks
                 var recovered = await DriveAsync(owner, root, row => row.Status == InstanceStatus.Running && row.Revision == park.Revision + 1);
                 Require(recovered.Jobs == park.Jobs && recovered.NextJobGeneration == park.NextJobGeneration && recovered.ParkAt is null &&
                     (await ReadTimedRowsAsync()).SequenceEqual(rows), "Recover keeps the same timed rows, deadline and job generation");
+                await RecordedJobRecoveryChecks.AssertOrdinaryCheckpointRetainsJobAsync(db, recovered, publishFirst, Require, token);
                 if (publishFirst)
                 {
                     executor.FaultLiveResult = true;
