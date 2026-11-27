@@ -153,6 +153,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         await db.Database.ExecuteSqlRawAsync(db.UsesRootInlinePromotion
             ? RootInlineBirthRevision.Columns(definitions, sqlite: false) : definitions, cancellationToken);
         if (db.UsesRootInlinePromotion) await RootInlineBirthRevision.InstallPostgresAsync(db, cancellationToken);
+        if (db.UsesRootKeyedStarts) await RootKeyedAdmission.InstallPostgresAsync(db, cancellationToken);
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO "FoundationRootIssuer" SELECT true, {RandomNumberGenerator.GetBytes(32)}, count(*)::integer FROM "Partitions"

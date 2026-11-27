@@ -176,6 +176,9 @@ public static partial class SqliteEmbeddedHosting
                 }
             }
 
+            if (target is Contract.Target.Key keyed)
+                return await admission.AdmitKeyedAsync(scope.Tenant, keyed, id, kind, payload, options?.DueAt, options?.KeepFor,
+                    actorType, cancellationToken);
             if (target is not Contract.Target.Ref direct || FoundationMetadataLimits.IsReservedKind(kind))
                 throw new NotSupportedException("SQLite supports ordinary input addressed to a root reference.");
             return await admission.SendAsync(scope.Tenant, direct.Actor, id, kind, payload, options?.DueAt, options?.KeepFor, cancellationToken);

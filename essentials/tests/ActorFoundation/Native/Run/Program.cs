@@ -115,6 +115,8 @@ if (args is ["pg-root-operators", var operatorWriter and ("owned" or "ef"), var 
         return await PostgresRootOperatorChecks.RunAsync([a, b, c], operatorWriter == "owned", operatorFence == "in-batch", operatorPhase == "resume");
 }
 if (args is ["sqlite-plan-projection", ..]) return await SqlitePlanFixtureCommand.RunAsync(args);
+if (args is ["keyed-root", var keyedProvider and ("postgres" or "sqlite"), var keyedFence and ("checked" or "in-batch")])
+    return await KeyedRootChecks.RunAsync(keyedProvider == "postgres", keyedFence == "in-batch");
 if (args is ["sqlite-shipped-install"]) return await SqliteShippedInstallChecks.RunAsync();
 if (args is ["sqlite-root-terminal-envelope", var sqliteTerminalFence and ("checked" or "in-batch")])
     return await ShippedNativeTerminalEnvelopeChecks.RunAsync(postgres: false, inBatch: sqliteTerminalFence == "in-batch");

@@ -76,6 +76,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootEventStartReceiptsQualification => new(3, 128, 1);
     internal static StoreFormat RootEventStartScanQualification => new(3, 129, 1);
     internal static StoreFormat RootSharedActivationQualification => new(3, 130, 1);
+    internal static StoreFormat RootKeyedStartsQualification => new(3, 133, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -135,7 +136,8 @@ internal enum RootCapabilities : long
     AuthoredEvents = 1L << 36,
     EventStarts = 1L << 37,
     EventStartReceipts = 1L << 38,
-    EventStartScan = 1L << 39
+    EventStartScan = 1L << 39,
+    KeyedStarts = 1L << 43
 }
 
 internal static class RootProfiles
@@ -185,6 +187,7 @@ internal static class RootProfiles
     internal const RootCapabilities EventStartReceiptsQualification = EventStartsQualification | RootCapabilities.EventStartReceipts;
     internal const RootCapabilities EventStartScanQualification = EventStartReceiptsQualification | RootCapabilities.EventStartScan;
     internal const RootCapabilities SharedActivationQualification = EventStartScanQualification | InlinePromotionQualification;
+    internal const RootCapabilities KeyedStartsQualification = SharedActivationQualification | RootCapabilities.KeyedStarts;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
     internal const RootCapabilities PlaybackDescendantsQualification = Shipped34;
@@ -258,6 +261,7 @@ internal static class RootProfiles
         [RootCapabilities.EventStarts] = RootCapabilities.AuthoredEvents | RootCapabilities.PreparedStarts,
         [RootCapabilities.EventStartReceipts] = RootCapabilities.EventStarts,
         [RootCapabilities.EventStartScan] = RootCapabilities.EventStartReceipts,
+        [RootCapabilities.KeyedStarts] = RootCapabilities.PreparedStarts,
         [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
         [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
         [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
@@ -529,6 +533,7 @@ internal static class StoreDefinitionsRevision
                 _ when db.RequiredFormat == StoreFormat.RootEventStartReceiptsQualification => sqlite ? 27 : 24,
                 _ when db.RequiredFormat == StoreFormat.RootEventStartScanQualification => sqlite ? 28 : 25,
                 _ when db.RequiredFormat == StoreFormat.RootSharedActivationQualification => sqlite ? 29 : 26,
+                _ when db.RequiredFormat == StoreFormat.RootKeyedStartsQualification => sqlite ? 31 : 28,
                 _ when db.RequiredFormat == StoreFormat.RootShipped =>
                     sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,
                 _ => sqlite ? SqliteRevision : PostgreSqlRevision
