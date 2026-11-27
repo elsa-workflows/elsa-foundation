@@ -61,6 +61,10 @@ internal static class RootPreparedStarts
 
     // Ordinary ingress cannot submit this reserved id or win a protected operation's receipt.
     internal static string OneWayOperation(string operation) => "~prepared-start/1:" + FoundationRootCreator.OperationDigest(operation);
+    private const string InlinePrefix = "~inline-start/1:";
+    internal static string InlineOperation(string operation) => InlinePrefix + FoundationRootCreator.OperationDigest(operation);
+    internal static bool IsInlineOperation(string operation) =>
+        operation.StartsWith(InlinePrefix, StringComparison.Ordinal) && FoundationRootCreator.IsGeneratedReference(operation[InlinePrefix.Length..]);
 
     internal static async Task<bool> ProtectAsync(ProtectRootStartAsync protect, PendingRootStart offer, CancellationToken token)
     {
@@ -138,6 +142,25 @@ internal static class RootPreparedStarts
                 AND (SELECT "SourceReady" FROM source)
             """, token, bindSource);
 
+    internal static async Task<bool> AdmitInlineBirthAsync(KernelDb db, PreparedRootStart stage, long now, long until,
+        CancellationToken token, Func<FormattableString, FormattableString>? bindSource)
+    {
+        if (now >= stage.Deadline || !await ConsumeAsync(db, stage, token, bindSource)) return false;
+        if (!await ChangeAsync(db, $"""
+            WITH source AS MATERIALIZED (/*prepared-start-source*/)
+            INSERT INTO "FoundationRootReceipts" ("Tenant", "Operation", "Reference", "Until")
+            SELECT {stage.Tenant}, {stage.Operation}, {stage.Reference}, {until} FROM source WHERE "SourceReady"
+            ON CONFLICT ("Tenant", "Operation") DO UPDATE SET "Reference" = excluded."Reference", "Until" = excluded."Until"
+                WHERE "FoundationRootReceipts"."Until" < {now}
+            """, token, bindSource)) return false;
+        return await ChangeAsync(db, $"""
+            WITH source AS MATERIALIZED (/*prepared-start-source*/)
+            INSERT INTO "FoundationRootBirths" ("Tenant", "Reference", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
+            SELECT {stage.Tenant}, {stage.Reference}, {stage.Actor}, {stage.Partition}, 1, {"root:" + stage.Actor}, {stage.Fingerprint}
+            FROM source WHERE "SourceReady"
+            """, token, bindSource);
+    }
+
     internal static async Task ExpireAsync(KernelDb db, PreparedRootStart stage, long now, CancellationToken token,
         Func<FormattableString, FormattableString>? bindSource = null)
     {
@@ -188,7 +211,7 @@ internal static class RootPreparedStarts
         Func<FormattableString, FormattableString>? bindSource) =>
         await db.Database.ExecuteSqlInterpolatedAsync(Bind(db, query, bindSource), token) == 1;
 
-    private static FormattableString Bind(KernelDb db, FormattableString query, Func<FormattableString, FormattableString>? bindSource)
+    internal static FormattableString Bind(KernelDb db, FormattableString query, Func<FormattableString, FormattableString>? bindSource)
     {
         if (!db.UsesRootPreparedStarts || db.Database.CurrentTransaction is null || !db.UsesSqliteShippedInstall && bindSource is null)
             throw new NotSupportedException("Held root preparation requires a bound provider transaction.");
