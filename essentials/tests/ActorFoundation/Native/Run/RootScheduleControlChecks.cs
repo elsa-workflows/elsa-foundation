@@ -132,7 +132,7 @@ internal static class RootScheduleControlChecks
             var reply = await ingress.RequestAsync(scope, new Contract.Target.Event(HeldEventActor.EventKey),
                 "managed-profile-held-event", Contract.Kinds.Event, null, null,
                 new Contract.RequestOptions(null, now + 5000), token);
-            Require(reply is { Channel: "managed-event", Error: null },
+            Require(reply is { Channel: Request.Response, Error: null } && reply.Item?.ToString() == "accepted",
                 $"the managed profile replies to a public held event (channel {reply.Channel}, error {reply.Error})");
         }
         await UntilAsync(() => Task.FromResult(acceptor.Offers.Any(offer => offer.Schedule == reference && offer.Authority == "first")));
@@ -237,7 +237,7 @@ internal static class RootScheduleControlChecks
                     turn.Subscribe(EventKey, WaitName);
                 }
                 else if (message.Event is not null)
-                    turn.Reply(message, "managed-event", "accepted");
+                    turn.Reply(message, Request.Response, "accepted");
             }
             return ValueTask.CompletedTask;
         }
