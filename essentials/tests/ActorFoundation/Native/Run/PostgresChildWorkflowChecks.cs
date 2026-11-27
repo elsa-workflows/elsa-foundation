@@ -80,17 +80,17 @@ internal static class PostgresChildWorkflowChecks
         await successor.StartAsync(token);
         try
         {
-            Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(childReference), "fault-child", ChildFixtureActor.Fault,
-                cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "the successor admitted the test child input");
+            Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(childReference), "arm-child-fault", ChildFixtureActor.ArmFault,
+                cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "the successor admitted the child's timer trigger");
             var parkedChild = await WaitForAsync(childReference, image => image.ParkAt is not null, successor);
             var awaitingAfterPark = await WaitForAsync(reference, image => image.Revision > 1, successor);
-            Check(parkedChild.Revision == 2 && awaitingAfterPark is { Status: InstanceStatus.Running, Revision: 2, Children: not null },
-                "the child's non-final Park notice commits without resuming Dispatch");
+            Check(parkedChild.Revision == 3 && awaitingAfterPark is { Status: InstanceStatus.Running, Revision: 2, Children: not null },
+                "the child's S6 timer opens Park and its non-final notice commits without resuming Dispatch");
             var parked = (await nextFoundation.GetAsync(scope, childReference, token))!;
             Check((await nextFoundation.SendAsync(scope, new Contract.Target.Ref(childReference), "recover-child", Contract.Kinds.Recover,
                 Json.Write(new Contract.OperatorCommand(parked.Selection)), cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
                 "selected Recover is admitted for the exact child Park");
-            await WaitForAsync(childReference, image => image.Status == InstanceStatus.Running && image.Revision == 3, successor);
+            await WaitForAsync(childReference, image => image.Status == InstanceStatus.Running && image.Revision == 4, successor);
             var release = await nextFoundation.SendAsync(scope, new Contract.Target.Ref(childReference), "release-1",
                 CompositeSignal.Kind, Json.Write(new CompositeSignal(wait.Id, "release", "continue")), cancellationToken: token);
             Check(release.Outcome == Contract.AdmissionOutcome.Accepted, "the successor accepted a signal to the exact child reference");
@@ -99,7 +99,7 @@ internal static class PostgresChildWorkflowChecks
             var state = Json.Read<NativeState>(parent.State!);
             Check(state.Variables.GetValueOrDefault("result")?.GetValue<string>() == "from-child",
                 "the child's output reached the authored Flowchart continuation");
-            Check(await store.ReadFirstRootAsync(scope.Tenant, childRef, token) is { Status: InstanceStatus.Finished, Revision: 4 } &&
+            Check(await store.ReadFirstRootAsync(scope.Tenant, childRef, token) is { Status: InstanceStatus.Finished, Revision: 5 } &&
                 parent.Children is null, "the child finished once and the parent removed it from the live registry");
             Check(!await db.Messages.AnyAsync(message => !message.Done, token), "the creator and notice are consumed");
             var endedChild = (await nextFoundation.GetAsync(scope, childReference, token))!;
@@ -189,17 +189,23 @@ internal static class PostgresChildWorkflowChecks
 
     private sealed class ChildFixtureActor(Contract.IActorType workflow) : Contract.IActorType
     {
+        internal const string ArmFault = "arm-child-fault";
         internal const string Fault = "fault-child";
         internal const string Spawn = "bulk-spawn";
         public string Type => workflow.Type;
         public bool Withholds(Contract.ActorHeader header) => workflow.Withholds(header);
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => workflow.RestoreWaits(header, state);
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => workflow.ProtectsDeletion(header, state, now);
-        public long TerminalGrowth(Contract.ActorHeader header, string? state) => workflow.TerminalGrowth(header, state);
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => workflow.TerminalGrowth(header, state);
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token) => workflow.ExecuteJobAsync(job, token);
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken token)
         {
             if (turn.Inbox.Any(message => message.Kind == Fault)) throw new InvalidOperationException(Fault);
+            if (turn.Inbox.Any(message => message.Kind == ArmFault))
+            {
+                turn.Send(turn.Header.Ref, Fault, dueAt: turn.Now + 50);
+                return ValueTask.CompletedTask;
+            }
             if (!turn.Inbox.Any(message => message.Kind == Spawn)) return workflow.TurnAsync(turn, token);
             for (var i = 0; i <= CascadeProtocol.PageLimit; i++)
                 turn.Start(WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("child")));
