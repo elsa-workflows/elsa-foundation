@@ -143,7 +143,7 @@ export function PublicationReviewDialog({
     && !versionEvidenceMatches
     && reviewedPreflight?.canActivate !== false;
   const statusMessage = publicationStatusMessage(review, blocked, causeNeutralBlockMessage, checkingVersionEvidence);
-  const submitDisabled = busy || (review.phase === "partialFailure"
+  const submitDisabled = busy || review.publicationUnsupported === true || (review.phase === "partialFailure"
     ? Boolean(review.reviewPending)
     : review.phase === "savedFailure"
       ? review.validationErrors.length > 0
@@ -578,7 +578,7 @@ function compactChangeSummary(changes: PublicationReviewState["changes"], trigge
 
 function publicationConfirmLabel(review: PublicationReviewState, busy: boolean) {
   if (review.phase === "success") return "View published workflow";
-  if (review.phase === "partialFailure") return "Retry publication";
+  if (review.phase === "partialFailure") return review.publicationUnsupported ? undefined : "Retry publication";
   if (review.phase === "savedFailure") return review.validationErrors.length === 0 ? "Retry publication" : undefined;
   return busy && review.phase === "publishing" ? "Publishing…" : "Publish";
 }

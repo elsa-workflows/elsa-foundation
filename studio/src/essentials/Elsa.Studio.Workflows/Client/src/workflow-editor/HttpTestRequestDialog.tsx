@@ -207,7 +207,8 @@ export function HttpTestRequestDialog({
         headers: [...response.headers.entries()],
         body,
         responseReason: responseMetadata?.reason,
-        workflowExecutionId: responseMetadata ? readHttpEndpointExecutionId(body) : null,
+        workflowExecutionId: response.headers.get("x-elsa-workflow-instance-id")?.trim()
+          || (responseMetadata ? readHttpEndpointExecutionId(body) : null),
         acceptedMessage: response.status === 202
           ? describeHttpEndpointAcceptedResponse(responseMetadata)
           : null

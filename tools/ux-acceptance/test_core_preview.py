@@ -30,20 +30,20 @@ class CorePreviewVerdictTests(unittest.TestCase):
         return {"suites": [{"specs": [{"title": self.journey, "tests": list(tests)}]}]}
 
     def test_a_complete_single_desktop_execution_passes(self):
-        self.assertEqual(1, acceptance.verdict(self.report(self.test), self.root))
+        self.assertEqual(1, acceptance.verdict(self.report(self.test), self.root, [self.journey]))
 
     def test_another_project_or_a_second_execution_is_refused(self):
         other = dict(self.test, projectName="desktop-dark")
         with self.assertRaises(ValueError):
-            acceptance.verdict(self.report(other), self.root)
+            acceptance.verdict(self.report(other), self.root, [self.journey])
         with self.assertRaises(ValueError):
-            acceptance.verdict(self.report(self.test, self.test), self.root)
+            acceptance.verdict(self.report(self.test, self.test), self.root, [self.journey])
 
     def test_a_missing_receipt_is_refused(self):
         stripped = json.loads(json.dumps(self.test))
         stripped["results"][0]["attachments"] = [item for item in stripped["results"][0]["attachments"] if item["name"] != "core-preview-smoke.json"]
         with self.assertRaises(ValueError):
-            acceptance.verdict(self.report(stripped), self.root)
+            acceptance.verdict(self.report(stripped), self.root, [self.journey])
 
     def test_an_artifact_outside_the_evidence_directory_is_refused(self):
         outside = tempfile.NamedTemporaryFile(delete=False)
@@ -52,7 +52,7 @@ class CorePreviewVerdictTests(unittest.TestCase):
         moved = json.loads(json.dumps(self.test))
         moved["results"][0]["attachments"][-1]["path"] = outside.name
         with self.assertRaises(ValueError):
-            acceptance.verdict(self.report(moved), self.root)
+            acceptance.verdict(self.report(moved), self.root, [self.journey])
 
     def test_unknown_journeys_are_refused(self):
         with self.assertRaises(ValueError):

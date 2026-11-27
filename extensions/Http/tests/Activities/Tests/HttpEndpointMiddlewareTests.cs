@@ -1248,6 +1248,21 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
     }
 
+    [Fact]
+    public async Task CanonicalDeliveryReplacesAnAuthoredRunIdWithItsCommittedExecution()
+    {
+        var committed = await HttpResponseInstructionFixture.StoreWith(new HttpResponseInstruction(
+            StatusCodes.Status201Created, new Dictionary<string, string[]> { ["X-Elsa-Workflow-Instance-Id"] = ["authored"] },
+            HttpResponseInstructionFixture.Text("created"), "text/plain"));
+        var delivery = new HttpResponseInstructionDelivery(committed, []);
+        var context = new DefaultHttpContext();
+        await using var response = new MemoryStream();
+        context.Response.Body = response;
+
+        Assert.True(await delivery.TryDeliverAsync(context.Response, ["missing", "wf-1"]));
+        Assert.Equal("wf-1", Assert.Single(context.Response.Headers["x-elsa-workflow-instance-id"]));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

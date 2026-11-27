@@ -827,6 +827,18 @@ public sealed class KernelCoordinatorTests
     }
 
     [Fact]
+    public void The_edge_uses_only_the_admitted_actor_for_its_run_header()
+    {
+        var response = Native.Values.From(new Native.HttpResponse(201, "text/plain", System.Text.Json.Nodes.JsonValue.Create("made"))
+            { Headers = new Dictionary<string, string> { ["X-Elsa-Workflow-Instance-Id"] = "authored" } });
+        var reply = new Kernel.Foundation.Contracts.Reply("response", response);
+        Assert.False(KernelHttpEdge.Answer(reply).Headers.ContainsKey(KernelHttpEdge.WorkflowInstanceIdHeader));
+
+        var answer = KernelHttpEdge.Answer(reply with { Actor = new Kernel.Foundation.Contracts.ActorRef("admitted-run") });
+        Assert.Equal("admitted-run", Assert.Single(answer.Headers).Value);
+    }
+
+    [Fact]
     public async Task A_host_workflow_serves_beside_the_publications_and_its_route_conflicts_are_refused()
     {
         var host = new Host();

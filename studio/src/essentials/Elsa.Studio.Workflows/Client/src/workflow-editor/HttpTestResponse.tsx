@@ -35,6 +35,9 @@ export function HttpTestResponse({ result, context }: { result: HttpTestResult; 
   }, [context, result]);
   const issueMessage = runFeedback?.result === result ? runFeedback.message : null;
   const acceptedMessage = issueMessage ?? result.acceptedMessage;
+  const runLink = result.workflowExecutionId
+    ? <StudioLink className="studio-button" data-variant="default" data-size="sm" href={`/workflows/instances/${encodeURIComponent(result.workflowExecutionId)}`}>Inspect run</StudioLink>
+    : null;
   return <section className="wf-http-test-result" aria-label="HTTP response">
     <header>
       <span>Response</span>
@@ -46,11 +49,9 @@ export function HttpTestResponse({ result, context }: { result: HttpTestResult; 
       <AlertTriangle size={15} aria-hidden="true" />
       <div>
         <p>{acceptedMessage}</p>
-        <StudioLink href={result.workflowExecutionId ? `/workflows/instances/${encodeURIComponent(result.workflowExecutionId)}` : "/workflows/instances"}>
-          {result.workflowExecutionId ? "Inspect run" : "Inspect workflow runs"}
-        </StudioLink>
+        {runLink ?? <StudioLink href="/workflows/instances">Inspect workflow runs</StudioLink>}
       </div>
-    </div> : null}
+    </div> : runLink ? <p className="wf-http-test-hint">{runLink}</p> : null}
     <StudioTabs
       baseId={baseId}
       ariaLabel="HTTP response sections"

@@ -680,6 +680,22 @@ describe("workflow publication operations", () => {
     expect(fixture.current().publicationReview?.failureMessage).toContain("retry Publish");
   });
 
+  it("keeps the unsupported capability reason and prevents retrying the promoted version", async () => {
+    const detail = "Delay is unavailable on this host.";
+    const fixture = renderOperations({ publishFailure: Object.assign(new Error("Publication refused"), {
+      payload: { code: "definition_unsupported", detail }
+    }) });
+    await prepare(fixture);
+    await publish(fixture);
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "partialFailure", promotedVersionId: "version-2", publicationUnsupported: true,
+      failureMessage: expect.stringContaining(detail)
+    });
+    await publish(fixture);
+    expect(fixture.mutationOrder.filter(step => step === "publish")).toHaveLength(1);
+  });
+
   it("surfaces expression diagnostics when a promoted version is rejected at publication", async () => {
     const fixture = renderOperations({
       publishValidationDiagnostics: [{

@@ -35,9 +35,11 @@ SUITE = 'core-preview'
 PROJECT = 'desktop-light'
 CAPTURES = {
     'core preview stack is ready': ['reference'],
+    'kernel HTTP response opens the committed run': ['kernel-http-result', 'kernel-http-run', 'kernel-http-refusal'],
 }
 EVIDENCE = {
     'core preview stack is ready': ['core-preview-smoke.json'],
+    'kernel HTTP response opens the committed run': ['kernel-http.json'],
 }
 JOURNEYS = set(CAPTURES)
 # The tenant the Workbench's kernel edge starts workflows in, and its reads list from.
@@ -308,6 +310,10 @@ def run(output, journey=None):
                             browser_command.extend(['--grep', r'(?:^|\s)' + re.escape(journey) + '$'])
                         command(browser_command, output / 'journeys.log', cwd=ROOT / 'studio', env=browser_env)
                 report['stubRequests'] = stub.recorded()
+                if selected is None or 'kernel HTTP response opens the committed run' in selected:
+                    calls = [item for item in report['stubRequests'] if item['path'] == '/core-preview/k10-order']
+                    if calls != [{'method': 'POST', 'path': '/core-preview/k10-order', 'body': 'kernel-outbound'}] * 2:
+                        raise ValueError(f'Expected the two kernel workflow requests at the stub, got {calls!r}')
             report['postgres']['containerRemoved'] = container_gone(report['postgres']['container'])
             report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, selected)
         report['hostExitCodes'] = {key: process.returncode for key, process in processes.items()}
