@@ -26,6 +26,7 @@ Known host-owned Slot IDs:
 - `studio.navigation`
 - `studio.routes`
 - `studio.dashboard.widgets`
+- `studio.home.sections`
 - `studio.panels`
 - `studio.toolbar.actions`
 - `workflow.activity.editors`
@@ -178,23 +179,39 @@ editing stay in the expression language's owning module.
 Module-owned Slots may use their own stable IDs and point at a parent Slot ID
 when they expose nested extension targets.
 
-## Dashboard Widget Contributions
+## Home widget and section Contributions
 
-`api.dashboardWidgets` accepts zero, one, or many contributions from any module;
-there is no one-widget-per-module rule. Contribute only a useful operational or
-decision-making surface. Dashboard owns the title and frame, semantic
-small/medium/wide/full placement, accessibility controls, loading and failure
-states, timeout, cache/stale timing, refresh, retry, and layout preferences.
+Home belongs to the shell. Every Studio flavor serves it at `/` (and `/dashboard`, `/overview`), whether or not
+the Dashboard module is installed. Modules fill it through two Slots.
+
+`api.homeWidgets` (`studio.dashboard.widgets`; `api.dashboardWidgets` is the same registry) accepts zero, one,
+or many contributions from any module; there is no one-widget-per-module rule. Prefer `registerHomeWidget`,
+which accepts S/M/L size aliases. Contribute only a useful operational or decision-making surface. The shell
+owns the title and frame, semantic small/medium/wide/full placement, accessibility controls, loading and
+failure states, timeout, cache/stale timing, refresh, retry, and the saved layout.
 
 A contribution supplies stable identity and module ownership, supported/default
 sizes, an optional cancellable loader, optional refresh/cache/timeout limits,
 optional versioned settings, and a body component. The body receives the
 host-managed snapshot and validated settings and must not render a competing
 card frame. Contributions can provide an `isEmpty` predicate and empty-state
-copy so Dashboard, rather than module bodies, renders the standard empty
-semantics. Data-backed widgets use independently authorized and tenant-scoped
+copy so the shell, rather than module bodies, renders the standard empty
+semantics. A checklist widget can provide `isComplete`: when it returns true
+for a loaded snapshot, Home hides the widget once and the user can add it back.
+Data-backed widgets use independently authorized and tenant-scoped
 backend resources. Loader-less widgets remain valid and do not participate in
-managed refresh.
+managed refresh. `requiresFeature` hides a widget unless every listed feature is
+enabled (`isHomeWidgetFeatureEnabled`); slugs match `Elsa.Studio.*` module ids only.
+
+Widgets listed in the built-in default layout show on first visit; others appear
+under Add widget until the user adds them.
+
+`api.homeSections` (`studio.home.sections`) holds fixed content the shell renders
+above the widget grid in `order`, such as the workflow task group. Sections are
+not part of the saved layout and users cannot hide or move them, so use them
+sparingly. A section honors `requiresFeature` and `requiresBackend`.
+
+With no widget contributed, Home shows an empty state that names the next step.
 
 ## Workflow run-input editor Contributions
 

@@ -118,7 +118,7 @@ a readiness-gated load balancer never sends one: the node would stay live, not r
   a host with more than one shell; a host whose only shell is the one that failed has `/health/ready` and the host log, and
   that is where its operators look.
 
-The probe itself still activates nothing. Workbench has its own `EagerShellActivationHostedService` and is unchanged.
+The probe itself still activates nothing. Workbench uses the same `EagerShellActivationHostedService` from `Elsa.Foundation.Hosting`, off by default on that host; its post-listen warmup prepares the default shell instead.
 
 ### A shell whose startup checks refuse it
 

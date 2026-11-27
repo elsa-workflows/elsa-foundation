@@ -21,7 +21,7 @@ EXPECTED_ASSETS = (
     "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/lucide-react.js",
     "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/studio-ui.js",
     "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/sdk/index.js",
-    "Studio/src/essentials/Elsa.Studio.Dashboard/wwwroot/studio/modules/dashboard/module.js",
+    "extensions/Dashboard/studio/Elsa.Studio.Dashboard/wwwroot/studio/modules/dashboard/module.js",
     "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module.js",
     "extensions/Agent/studio/Elsa.Studio.Agent/wwwroot/studio/modules/agent/module.js",
     "extensions/Attention/studio/Elsa.Studio.Attention/wwwroot/studio/modules/attention/module.js",

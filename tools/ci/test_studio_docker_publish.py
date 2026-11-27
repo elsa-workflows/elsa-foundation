@@ -1,4 +1,4 @@
-"""Focused tests for automatic Studio Docker source admission and preview tags."""
+"""Focused tests for automatic Studio Docker source admission, flavor images and preview tags."""
 
 from __future__ import annotations
 
@@ -6,18 +6,31 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 import studio_docker_publish as publish
 
 
 REPOSITORY = "elsa-workflows/elsa-foundation"
 SHA = "0123456789abcdef0123456789abcdef01234567"
+IMAGE = "elsaworkflows/elsa-studio"
+WORKBENCH_IMAGE = "elsaworkflows/elsa-studio-workbench"
+FOUNDATION_IMAGE = "elsaworkflows/elsa-studio-foundation"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def not_found(url: str) -> HTTPError:
+    return HTTPError(url, 404, "Not Found", {}, None)
+
+
+def tags_page(image: str, *names: str) -> dict[str, object]:
+    return {"results": [{"name": name} for name in names], "next": None}
 
 
 def ci_run(**overrides: object) -> dict[str, object]:
@@ -114,11 +127,11 @@ class StudioDockerPublishTests(unittest.TestCase):
             requests.append(url)
             return first if len(requests) == 1 else second
 
-        self.assertEqual(20, publish.read_preview_floor(open_page))
+        self.assertEqual(20, publish.read_repository_preview_floor(IMAGE, open_page))
         self.assertEqual(
             [
-                publish.DOCKER_HUB_TAGS_URL,
-                "https://hub.docker.com/v2/repositories/elsaworkflows/elsa-studio/tags?page=2&page_size=100",
+                publish.docker_hub_tags_url(IMAGE),
+                "https://hub.docker.com/v2/repositories/elsaworkflows/elsa-studio/tags?name=4.0.0-preview.&page=2&page_size=100",
             ],
             requests,
         )
@@ -134,8 +147,8 @@ class StudioDockerPublishTests(unittest.TestCase):
             return response
 
         with self.assertRaisesRegex(ValueError, "outside the Studio tags endpoint"):
-            publish.read_preview_floor(open_page)
-        self.assertEqual([publish.DOCKER_HUB_TAGS_URL], requests)
+            publish.read_repository_preview_floor(IMAGE, open_page)
+        self.assertEqual([publish.docker_hub_tags_url(IMAGE)], requests)
 
     def test_preview_floor_accepts_tags_path_with_trailing_slash(self) -> None:
         responses = [
@@ -148,9 +161,9 @@ class StudioDockerPublishTests(unittest.TestCase):
             requests.append(url)
             return responses[len(requests) - 1]
 
-        self.assertEqual(9, publish.read_preview_floor(open_page))
+        self.assertEqual(9, publish.read_repository_preview_floor(IMAGE, open_page))
         self.assertEqual(
-            "https://hub.docker.com/v2/repositories/elsaworkflows/elsa-studio/tags?page=2&page_size=100",
+            "https://hub.docker.com/v2/repositories/elsaworkflows/elsa-studio/tags?name=4.0.0-preview.&page=2&page_size=100",
             requests[1],
         )
 
@@ -163,7 +176,7 @@ class StudioDockerPublishTests(unittest.TestCase):
             with self.subTest(next_link=next_link):
                 response = FakeResponse({"results": [], "next": next_link})
                 with self.assertRaises(ValueError):
-                    publish.read_preview_floor(lambda url, **kwargs: response)
+                    publish.read_repository_preview_floor(IMAGE, lambda url, **kwargs: response)
 
     def test_preview_floor_rejects_a_repeated_page_link(self) -> None:
         responses = [
@@ -177,16 +190,159 @@ class StudioDockerPublishTests(unittest.TestCase):
             return responses[len(requests) - 1]
 
         with self.assertRaisesRegex(ValueError, "repeated a page URL"):
-            publish.read_preview_floor(open_page)
+            publish.read_repository_preview_floor(IMAGE, open_page)
         self.assertEqual(2, len(requests))
 
     def test_preview_floor_fails_closed_on_registry_errors_or_bad_pages(self) -> None:
         with self.assertRaises(URLError):
-            publish.read_preview_floor(lambda url, **kwargs: (_ for _ in ()).throw(URLError("offline")))
+            publish.read_repository_preview_floor(IMAGE, lambda url, **kwargs: (_ for _ in ()).throw(URLError("offline")))
         with self.assertRaisesRegex(ValueError, "invalid tags response"):
-            publish.read_preview_floor(lambda url, **kwargs: FakeResponse({"next": None}))
+            publish.read_repository_preview_floor(IMAGE, lambda url, **kwargs: FakeResponse({"next": None}))
         with self.assertRaisesRegex(ValueError, "malformed tag entry"):
-            publish.read_preview_floor(lambda url, **kwargs: FakeResponse({"results": [None], "next": None}))
+            publish.read_repository_preview_floor(IMAGE, lambda url, **kwargs: FakeResponse({"results": [None], "next": None}))
+
+    def test_preview_floor_rejects_pagination_into_another_studio_image(self) -> None:
+        response = FakeResponse({"results": [], "next": "/v2/repositories/elsaworkflows/elsa-studio-workbench/tags?page=2"})
+        with self.assertRaisesRegex(ValueError, "outside the Studio tags endpoint"):
+            publish.read_repository_preview_floor(IMAGE, lambda url, **kwargs: response)
+
+    def test_a_missing_repository_names_the_exact_repository_to_create(self) -> None:
+        def open_page(url: str, *, timeout: int) -> FakeResponse:
+            raise not_found(url)
+
+        with self.assertRaises(publish.MissingRepositoryError) as raised:
+            publish.read_repository_preview_floor(WORKBENCH_IMAGE, open_page)
+        self.assertIn("Docker Hub repository elsaworkflows/elsa-studio-workbench does not exist", str(raised.exception))
+        self.assertIn("Create it", str(raised.exception))
+
+    def test_a_404_on_a_later_tags_page_fails_closed_without_claiming_a_missing_repository(self) -> None:
+        requests: list[str] = []
+
+        def open_page(url: str, *, timeout: int) -> FakeResponse:
+            requests.append(url)
+            if len(requests) == 1:
+                return FakeResponse({"results": [{"name": "4.0.0-preview.3"}], "next": "?page=2&page_size=100"})
+            raise not_found(url)
+
+        with self.assertRaises(HTTPError) as raised:
+            publish.read_repository_preview_floor(IMAGE, open_page)
+        self.assertNotIsInstance(raised.exception, publish.MissingRepositoryError)
+
+    def test_shared_floor_takes_the_highest_preview_across_the_studio_images(self) -> None:
+        floors = {IMAGE: ("4.0.0-preview.20",), WORKBENCH_IMAGE: ("4.0.0-preview.22",), FOUNDATION_IMAGE: ()}
+
+        def open_page(url: str, *, timeout: int) -> FakeResponse:
+            image = next(image for image in floors if url == publish.docker_hub_tags_url(image))
+            return FakeResponse(tags_page(image, *floors[image]))
+
+        for image in floors:
+            with self.subTest(image=image):
+                self.assertEqual(22, publish.read_preview_floor(image, open_page))
+
+    def test_shared_floor_ignores_a_sibling_repository_that_does_not_exist_yet(self) -> None:
+        def open_page(url: str, *, timeout: int) -> FakeResponse:
+            if url == publish.docker_hub_tags_url(IMAGE):
+                return FakeResponse(tags_page(IMAGE, "4.0.0-preview.40"))
+            raise not_found(url)
+
+        self.assertEqual(40, publish.read_preview_floor(IMAGE, open_page))
+
+    def test_shared_floor_refuses_when_the_image_own_repository_is_missing(self) -> None:
+        def open_page(url: str, *, timeout: int) -> FakeResponse:
+            if url == publish.docker_hub_tags_url(IMAGE):
+                return FakeResponse(tags_page(IMAGE, "4.0.0-preview.40"))
+            raise not_found(url)
+
+        with self.assertRaisesRegex(publish.MissingRepositoryError, "elsaworkflows/elsa-studio-foundation"):
+            publish.read_preview_floor(FOUNDATION_IMAGE, open_page)
+
+    def test_shared_floor_skips_an_unreadable_sibling_but_never_the_image_itself(self) -> None:
+        def sibling_fails(url: str, *, timeout: int) -> FakeResponse:
+            if url == publish.docker_hub_tags_url(WORKBENCH_IMAGE):
+                return FakeResponse(tags_page(WORKBENCH_IMAGE, "4.0.0-preview.3"))
+            raise HTTPError(url, 403, "Forbidden", {}, None)
+
+        with redirect_stderr(io.StringIO()) as notices:
+            self.assertEqual(3, publish.read_preview_floor(WORKBENCH_IMAGE, sibling_fails))
+        self.assertIn("Skipped the elsaworkflows/elsa-studio preview floor", notices.getvalue())
+
+        def own_fails(url: str, *, timeout: int) -> FakeResponse:
+            if url == publish.docker_hub_tags_url(WORKBENCH_IMAGE):
+                raise HTTPError(url, 403, "Forbidden", {}, None)
+            return FakeResponse(tags_page(IMAGE, "4.0.0-preview.40"))
+
+        with self.assertRaises(HTTPError):
+            publish.read_preview_floor(WORKBENCH_IMAGE, own_fails)
+
+    def test_the_floor_read_lists_only_preview_named_tags(self) -> None:
+        # Docker Hub refuses anonymous pages past 1,000 tags; the name filter keeps the listing under that offset.
+        self.assertEqual(
+            "https://hub.docker.com/v2/repositories/elsaworkflows/elsa-studio/tags?name=4.0.0-preview.&page=1&page_size=100",
+            publish.docker_hub_tags_url(IMAGE),
+        )
+
+    def test_pagination_must_keep_the_preview_name_filter(self) -> None:
+        for next_link in ("?name=latest&page=2", "?name=&page=2", "?name=4.0.0-preview.&name=x&page=2"):
+            with self.subTest(next_link=next_link):
+                response = FakeResponse({"results": [], "next": next_link})
+                with self.assertRaises(ValueError):
+                    publish.read_repository_preview_floor(IMAGE, lambda url, **kwargs: response)
+        responses = [
+            FakeResponse({"results": [{"name": "4.0.0-preview.4"}], "next": "?page=2&page_size=100"}),
+            FakeResponse({"results": [{"name": "4.0.0-preview.9"}], "next": None}),
+        ]
+        requests: list[str] = []
+
+        def open_page(url: str, *, timeout: int) -> FakeResponse:
+            requests.append(url)
+            return responses[len(requests) - 1]
+
+        # A next link that drops the filter gets it back, so the read never pages through every tag.
+        self.assertEqual(9, publish.read_repository_preview_floor(IMAGE, open_page))
+        self.assertIn("name=4.0.0-preview.", requests[1])
+
+    def test_a_manual_rerun_of_one_flavor_accepts_a_number_another_flavor_already_pushed(self) -> None:
+        # A manual main publish chose 4.0.0-preview.708. Essentials pushed it; Workbench failed on its missing repository.
+        # Once the repository exists, the Workbench rerun checks the number against its own floor and is admitted.
+        floors = {IMAGE: ("4.0.0-preview.708",), WORKBENCH_IMAGE: (), FOUNDATION_IMAGE: ("4.0.0-preview.707",)}
+
+        def open_page(url: str, *, timeout: int) -> FakeResponse:
+            image = next(image for image in floors if url == publish.docker_hub_tags_url(image))
+            return FakeResponse(tags_page(image, *floors[image]))
+
+        publish.require_preview_above_floor("4.0.0-preview.708", publish.read_repository_preview_floor(WORKBENCH_IMAGE, open_page))
+        publish.require_preview_above_floor("4.0.0-preview.708", publish.read_repository_preview_floor(FOUNDATION_IMAGE, open_page))
+        # The image's own repository still refuses a number it has already used.
+        with self.assertRaises(ValueError):
+            publish.require_preview_above_floor("4.0.0-preview.708", publish.read_repository_preview_floor(IMAGE, open_page))
+        # The shared floor is what refused the rerun, so the manual path must not use it.
+        with self.assertRaises(ValueError):
+            publish.require_preview_above_floor("4.0.0-preview.708", publish.read_preview_floor(WORKBENCH_IMAGE, open_page))
+        workflow = (REPO_ROOT / ".github/workflows/studio-docker.yml").read_text()
+        self.assertIn('require_preview_above_floor(os.environ["PREVIEW_IMAGE_TAG"], read_repository_preview_floor(image))', workflow)
+        self.assertNotIn("read_preview_floor", workflow)
+
+    def test_repository_check_distinguishes_present_missing_and_unavailable(self) -> None:
+        requests: list[str] = []
+
+        def present(url: str, *, timeout: int) -> FakeResponse:
+            requests.append(url)
+            return FakeResponse({"name": "elsa-studio-workbench"})
+
+        self.assertTrue(publish.repository_exists(WORKBENCH_IMAGE, present))
+        self.assertEqual(["https://hub.docker.com/v2/repositories/elsaworkflows/elsa-studio-workbench/"], requests)
+        self.assertFalse(publish.repository_exists(WORKBENCH_IMAGE, lambda url, **kwargs: (_ for _ in ()).throw(not_found(url))))
+        with self.assertRaises(HTTPError):
+            publish.repository_exists(
+                WORKBENCH_IMAGE, lambda url, **kwargs: (_ for _ in ()).throw(HTTPError(url, 503, "Unavailable", {}, None))
+            )
+
+    def test_registry_reads_accept_only_the_studio_images(self) -> None:
+        for image in ("elsaworkflows/elsa-workbench", "attacker/elsa-studio", "elsaworkflows/elsa-studio/../x", ""):
+            with self.subTest(image=image), self.assertRaises(ValueError):
+                publish.read_repository_preview_floor(image, lambda url, **kwargs: self.fail("no registry read expected"))
+            with self.subTest(image=image), self.assertRaises(ValueError):
+                publish.repository_exists(image, lambda url, **kwargs: self.fail("no registry read expected"))
 
     def test_next_version_starts_at_one_and_advances_the_global_floor(self) -> None:
         self.assertEqual("4.0.0-preview.1", publish.next_preview_version(None))
@@ -204,7 +360,7 @@ class StudioDockerPublishTests(unittest.TestCase):
                 publish.require_preview_above_floor(version, floor)
 
     def test_preview_tags_include_short_compatibility_and_full_unique_sha_without_latest(self) -> None:
-        tags = publish.preview_image_tags(SHA, "4.0.0-preview.21")
+        tags = publish.preview_image_tags(IMAGE, SHA, "4.0.0-preview.21")
         self.assertEqual(
             [
                 "elsaworkflows/elsa-studio:4.0.0-preview.21",
@@ -215,7 +371,17 @@ class StudioDockerPublishTests(unittest.TestCase):
         )
         self.assertNotIn("elsaworkflows/elsa-studio:latest", tags)
         with self.assertRaises(ValueError):
-            publish.preview_image_tags(SHA, "4.0.0-preview.bad")
+            publish.preview_image_tags(IMAGE, SHA, "4.0.0-preview.bad")
+        with self.assertRaises(ValueError):
+            publish.preview_image_tags("elsaworkflows/elsa-workbench", SHA, "4.0.0-preview.21")
+        self.assertEqual(
+            [
+                f"{WORKBENCH_IMAGE}:4.0.0-preview.21",
+                f"{WORKBENCH_IMAGE}:sha-0123456",
+                f"{WORKBENCH_IMAGE}:sha-{SHA}",
+            ],
+            publish.preview_image_tags(WORKBENCH_IMAGE, SHA, "4.0.0-preview.21"),
+        )
 
     def test_validate_source_cli_writes_only_verified_source_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -235,15 +401,126 @@ class StudioDockerPublishTests(unittest.TestCase):
     def test_preview_version_cli_writes_preview_tags_but_never_latest(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "github-output"
-            with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output), "SOURCE_SHA": SHA}), patch.object(
+            with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output), "SOURCE_SHA": SHA, "STUDIO_IMAGE": WORKBENCH_IMAGE}), patch.object(
                 publish, "read_preview_floor", return_value=20
-            ):
+            ) as read_floor:
                 with redirect_stdout(io.StringIO()):
                     self.assertEqual(0, publish.main(["preview-version"]))
+            read_floor.assert_called_once_with(WORKBENCH_IMAGE)
             text = output.read_text()
             self.assertIn("studio_version=4.0.0-preview.21\n", text)
-            self.assertIn(f"elsaworkflows/elsa-studio:sha-{SHA}\n", text)
-            self.assertNotIn("elsaworkflows/elsa-studio:latest", text)
+            self.assertIn(f"{WORKBENCH_IMAGE}:sha-{SHA}\n", text)
+            self.assertNotIn(":latest", text)
+            self.assertNotIn(f"{IMAGE}:", text)
+
+    def test_preview_version_cli_refuses_an_unknown_or_missing_image(self) -> None:
+        for image in ("", "elsaworkflows/elsa-workbench"):
+            with self.subTest(image=image), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "github-output"
+                with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output), "SOURCE_SHA": SHA, "STUDIO_IMAGE": image}), patch.object(
+                    publish, "read_preview_floor", return_value=20
+                ), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    self.assertEqual(1, publish.main(["preview-version"]))
+                self.assertFalse(output.exists())
+
+    def test_preview_version_cli_reports_a_missing_repository_in_the_job_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "github-output"
+            summary = Path(directory) / "summary"
+            stderr = io.StringIO()
+            with patch.dict(os.environ, {
+                "GITHUB_OUTPUT": str(output),
+                "GITHUB_STEP_SUMMARY": str(summary),
+                "SOURCE_SHA": SHA,
+                "STUDIO_IMAGE": FOUNDATION_IMAGE,
+            }), patch.object(
+                publish, "read_preview_floor", side_effect=publish.MissingRepositoryError(FOUNDATION_IMAGE)
+            ), redirect_stdout(io.StringIO()), redirect_stderr(stderr):
+                self.assertEqual(1, publish.main(["preview-version"]))
+            self.assertFalse(output.exists())
+            self.assertIn("elsaworkflows/elsa-studio-foundation does not exist", stderr.getvalue())
+            self.assertIn("elsaworkflows/elsa-studio-foundation does not exist", summary.read_text())
+
+    def test_require_repository_cli_passes_or_names_the_repository_to_create(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            summary = Path(directory) / "summary"
+            with patch.dict(os.environ, {"STUDIO_IMAGE": IMAGE, "GITHUB_STEP_SUMMARY": str(summary)}), patch.object(
+                publish, "repository_exists", return_value=True
+            ), redirect_stdout(io.StringIO()):
+                self.assertEqual(0, publish.main(["require-repository"]))
+            self.assertFalse(summary.exists())
+
+            stderr = io.StringIO()
+            with patch.dict(os.environ, {"STUDIO_IMAGE": WORKBENCH_IMAGE, "GITHUB_STEP_SUMMARY": str(summary)}), patch.object(
+                publish, "repository_exists", return_value=False
+            ), redirect_stdout(io.StringIO()), redirect_stderr(stderr):
+                self.assertEqual(1, publish.main(["require-repository"]))
+            self.assertIn("::error::Docker Hub repository elsaworkflows/elsa-studio-workbench does not exist", stderr.getvalue())
+            self.assertIn("Create it on Docker Hub", summary.read_text())
+
+    def test_require_repository_cli_fails_closed_on_an_unknown_image_or_registry_error(self) -> None:
+        cases = (
+            ({"STUDIO_IMAGE": "attacker/elsa-studio"}, None),
+            ({"STUDIO_IMAGE": IMAGE}, URLError("offline")),
+        )
+        for env, failure in cases:
+            with self.subTest(env=env), patch.dict(os.environ, env, clear=True), patch.object(
+                publish, "repository_exists", side_effect=failure or AssertionError("no registry read expected")
+            ), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                self.assertEqual(1, publish.main(["require-repository"]))
+
+    def test_resolve_flavor_cli_writes_the_flavor_image_and_dockerfile(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "github-output"
+            with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output), "STUDIO_FLAVOR": "essentials"}), redirect_stdout(io.StringIO()):
+                self.assertEqual(0, publish.main(["resolve-flavor"]))
+            text = output.read_text()
+            self.assertIn("flavor=essentials\n", text)
+            self.assertIn(f"image={IMAGE}\n", text)
+            self.assertIn("dockerfile=Studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile\n", text)
+        for flavor in ("", "web", "Essentials"):
+            with self.subTest(flavor=flavor), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "github-output"
+                with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output), "STUDIO_FLAVOR": flavor}), redirect_stdout(
+                    io.StringIO()
+                ), redirect_stderr(io.StringIO()):
+                    self.assertEqual(1, publish.main(["resolve-flavor"]))
+                self.assertFalse(output.exists())
+
+    def test_flavor_table_follows_the_owner_image_decision(self) -> None:
+        self.assertEqual(
+            {
+                "essentials": ("elsaworkflows/elsa-studio", "Studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile"),
+                "workbench": ("elsaworkflows/elsa-studio-workbench", "Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile"),
+                "foundation": ("elsaworkflows/elsa-studio-foundation", "Studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile"),
+            },
+            {flavor: (values["image"], values["dockerfile"]) for flavor, values in publish.STUDIO_FLAVORS.items()},
+        )
+
+    def test_flavor_label_values_are_single_line_without_commas(self) -> None:
+        for flavor, values in publish.STUDIO_FLAVORS.items():
+            for key in ("title", "description"):
+                with self.subTest(flavor=flavor, key=key):
+                    self.assertTrue(values[key])
+                    self.assertNotRegex(values[key], r"[,\r\n]")
+
+    def test_each_flavor_dockerfile_exists_and_starts_its_own_app(self) -> None:
+        for flavor, values in publish.STUDIO_FLAVORS.items():
+            with self.subTest(flavor=flavor):
+                dockerfile = REPO_ROOT / values["dockerfile"]
+                self.assertTrue(dockerfile.is_file(), f"{values['dockerfile']} is missing.")
+                app = dockerfile.parent.name
+                text = dockerfile.read_text()
+                self.assertIn(f'ENTRYPOINT ["dotnet", "{app}.dll"]', text)
+                self.assertIn(f"dotnet publish Studio/src/apps/{app}/{app}.csproj", text)
+
+    def test_the_docker_workflow_builds_every_flavor_and_nothing_else(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/studio-docker.yml").read_text()
+        match = re.search(r"^\s+flavor: \[([a-z, ]+)\]$", workflow, re.MULTILINE)
+        self.assertIsNotNone(match, "studio-docker.yml has no flavor matrix.")
+        self.assertEqual(sorted(publish.STUDIO_FLAVORS), sorted(item.strip() for item in match.group(1).split(",")))
+        # The image and Dockerfile come only from resolve-flavor, never from a literal in the workflow.
+        self.assertNotIn("Studio/src/apps/", workflow)
 
     def test_invalid_source_cli_fails_without_writing_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

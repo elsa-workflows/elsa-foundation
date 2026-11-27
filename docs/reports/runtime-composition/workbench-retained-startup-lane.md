@@ -1,6 +1,8 @@
 # Retained startup lane proof (#2072)
 
-Status: bounded, disposable Workbench proof. It establishes a viable host-owned configuration lane for the declared JSON artifact and process overrides. It does **not** establish complete deployment attestation, package identity, reviewed-candidate equality, or `candidateMatch=verified`.
+Status: removed. #5716 deleted the opt-in probe and its three host tests from the Workbench, since no production path used it. The record below describes the proof as it ran.
+
+Original status: bounded, disposable Workbench proof. It establishes a viable host-owned configuration lane for the declared JSON artifact and process overrides. It does **not** establish complete deployment attestation, package identity, reviewed-candidate equality, or `candidateMatch=verified`.
 
 ## Result
 

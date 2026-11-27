@@ -591,6 +591,14 @@ public sealed class FeatureCompositionTests
             services.AddOpenIddict().AddCore(core => core.UseEntityFrameworkCore().UseDbContext<OpenIddictStoreContext>());
             // The Workbench shares Nuplane's admin operations with its shells; the module catalog reads packages through them.
             services.AddSingleton<INuplaneAdminOperations, NoPackageFeed>();
+            // The kernel's shell feature serves on the state a kernel host shares with its shells, by instance, as the
+            // Workbench's Core Preview does with publications on.
+            services.AddSingleton(new Elsa.Workflows.Runtime.KernelHost.KernelServing());
+            services.AddSingleton<Elsa.Workflows.Runtime.KernelHost.IScheduleActors>(
+                new Elsa.Workflows.Runtime.KernelHost.UnavailableScheduleActors("The composition test runs no schedule actor."));
+            // The kernel's run list reads the runs the host's foundation holds; the composition test opens none.
+            services.AddSingleton(new Elsa.Workflows.Runtime.KernelHost.KernelRuns(Elsa.ActorFoundation.Hosting.EmbeddedTenant.Bind("default"),
+                _ => throw new NotSupportedException("The composition test reads no kernel run.")));
         }
 
         private static void Compose(

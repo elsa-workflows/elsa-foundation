@@ -4,8 +4,8 @@
     <RootNamespace>Kernel.Runtime.Conformance</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../Kernel.Store.Conformance/Kernel.Store.Conformance.csproj" />
-    <ProjectReference Include="../../runtime/Kernel.Runtime.Hosting/Kernel.Runtime.Hosting.csproj" />
+    <ProjectReference Include="../../../../essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

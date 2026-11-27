@@ -1,7 +1,7 @@
 import { useStudioTimeZone, formatStudioDate } from "@elsa-workflows/studio-sdk";
 import type { ActivityContractTypeCapability } from "./activityDefinitionTypes";
 import { typeAllowsNull } from "./typeNullability";
-import { StatusChip, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioButton, StudioDialog, StudioDialogFooter, StudioField, type StudioStatusTone } from "@elsa-workflows/studio-ui";
 import {
   useCallback,
   useEffect,
@@ -14,6 +14,7 @@ import {
 } from "react";
 import {
   AlertCircle,
+  ChevronRight,
   CircleStop,
   ExternalLink,
 } from "lucide-react";
@@ -54,7 +55,8 @@ import {
 import { ActivityDiagnosticList } from "./ActivityDefinitionDiagnosticsPanel";
 import { observeActivityDefinitions } from "./activityDefinitionObservability";
 import { getActivityExecutionInspection } from "./api/runtime";
-import type { ActivityExecutionInspection } from "./workflowTypes";
+import type { ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot } from "./workflowTypes";
+import { evaluationSequence } from "./inputInspectionRows";
 import { runtimeValueContextId, RuntimeValueEvidenceCard, RuntimeValueEvidenceResolutionProvider } from "./workflow-editor/RuntimeValueEvidence";
 import { WorkflowRunInputField } from "./workflow-editor/WorkflowRunInputDialog";
 import { CopyValueButton } from "./workflow-editor/executableShared";
@@ -85,7 +87,7 @@ export function ActivityDefinitionTestRunDialog({
 }: {
   context: StudioEndpointContext;
   draft: ActivityDefinitionDraftView;
-  sourceVersion?: ActivityDefinitionVersionView | null;
+  sourceVersion?: Pick<ActivityDefinitionVersionView, "versionId" | "version" | "publishedAt"> | null;
   publishedRunAvailability?: "unavailable" | "unverified" | null;
   definitionLabel: string;
   inputEditors: StudioWorkflowRunInputEditorContribution[];
@@ -319,7 +321,7 @@ export function ActivityDefinitionTestRunDialog({
   const canRerun = Boolean(stage && isTerminalActivityTestRun(stage));
 
   return (
-    <StudioDialog open className="ad-test-run-dialog" title={`Test run: ${definitionLabel}`} onClose={onClose}
+    <StudioDialog open className="ad-test-run-dialog wf-tokens" title={`Test run: ${definitionLabel}`} onClose={onClose}
       closeLabel="Close Test Run" dismissDisabled={busy}
       onCloseAutoFocus={restoreFocus ? event => { event.preventDefault(); restoreFocus(); } : undefined}
       description={sourceVersion ? `Runs published version ${sourceVersion.version} without publishing.` : `Runs draft revision ${prepared?.revision ?? draft.revision} without publishing.`}>
@@ -365,9 +367,15 @@ export function ActivityDefinitionTestRunDialog({
               ) : contractInputs.map(contractInput => {
                 const input = toWorkflowRunInput(contractInput);
                 const value = inputDrafts[input.referenceKey] ?? { presence: "Absent", draft: "" };
+                const inputError = errors[input.referenceKey];
                 return (
                   <div className="ad-form-grid ad-test-run-input" key={input.referenceKey}>
-                    <StudioField className="ad-dialog-field" label={input.displayName || input.name}>
+                    <StudioField
+                      className="ad-dialog-field"
+                      label={input.displayName || input.name}
+                      error={value.presence === "Value" ? undefined : inputError}
+                      errorRole="alert"
+                    >
                       <select
                         aria-label={input.displayName || input.name}
                         value={value.presence}
@@ -391,7 +399,7 @@ export function ActivityDefinitionTestRunDialog({
                         input={input}
                         editors={failedEditorKeys.has(input.referenceKey) ? [] : inputEditors}
                         value={value.draft}
-                        error={errors[input.referenceKey]}
+                        error={inputError}
                         disabled={busy}
                         onEditorFailure={() => {
                           setFailedEditorKeys(current => new Set(current).add(input.referenceKey));
@@ -408,7 +416,7 @@ export function ActivityDefinitionTestRunDialog({
                           clearError(setErrors, input.referenceKey);
                         }}
                       />
-                    ) : errors[input.referenceKey] ? <small className="ad-test-run-input-error" role="alert">{errors[input.referenceKey]}</small> : null}
+                    ) : null}
                   </div>
                 );
               })}
@@ -419,7 +427,6 @@ export function ActivityDefinitionTestRunDialog({
             <ActivityTestRunEvidence
               key={currentRun.testRunId}
               context={context}
-              definitionLabel={definitionLabel}
               sourceVersion={sourceVersion}
               view={currentRun}
               stage={stage}
@@ -447,7 +454,6 @@ export function ActivityDefinitionTestRunDialog({
 
 function ActivityTestRunEvidence({
   context,
-  definitionLabel,
   sourceVersion,
   view,
   stage,
@@ -456,8 +462,7 @@ function ActivityTestRunEvidence({
   onOpenRun
 }: {
   context: StudioEndpointContext;
-  definitionLabel: string;
-  sourceVersion: ActivityDefinitionVersionView | null;
+  sourceVersion: Pick<ActivityDefinitionVersionView, "versionId" | "version" | "publishedAt"> | null;
   view: ActivityDraftTestRunView;
   stage: ActivityTestRunStage;
   dispatchPhase: DispatchPhase;
@@ -512,22 +517,33 @@ function ActivityTestRunEvidence({
     };
   }, [activityExecutionId, context, inspectionIdentity, stage, workflowExecutionId]);
 
-  const outputSnapshots = inspection?.valueSnapshots.filter(snapshot => snapshot.subject === "ActivityOutput") ?? [];
-  const inputSnapshots = inspection?.valueSnapshots.filter(snapshot => snapshot.subject === "ActivityInput") ?? [];
+  const outputSnapshots = latestSnapshotPerValue(inspection?.valueSnapshots.filter(snapshot => snapshot.subject === "ActivityOutput") ?? []);
+  const inputSnapshots = latestSnapshotPerValue(inspection?.valueSnapshots.filter(snapshot => snapshot.subject === "ActivityInput") ?? []);
   const firstIncident = inspection?.incidents.find(incident => incident.message.trim());
+  const outcomeNames = inspectionStatus === "ready" ? inspection?.outcomeNames ?? [] : [];
+  const duration = formatDuration(inspection?.startedAt, inspection?.completedAt);
 
   return (
     <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
-      <section className={`ad-historical-contract ad-test-run-evidence is-${stage}`} aria-label="Test run result">
-        <div className="ad-test-run-result-heading">
-          <span className="ad-test-run-stage" role="status" aria-live="polite"><StatusChip>{dispatchPhase === "cancelling" ? "Cancellation requested" : copy.label}</StatusChip></span>
-          {stage !== "completed" && stage !== "faulted" && !view.failure ? <p>{copy.description}</p> : null}
+      <section className={`ad-test-run-evidence is-${stage}`} aria-label="Test run result">
+        <div className="ad-test-run-summary">
+          <span className="ad-test-run-stage" role="status" aria-live="polite"><StatusChip tone={dispatchPhase === "cancelling" ? "warning" : stageTone(stage)}>{dispatchPhase === "cancelling" ? "Cancellation requested" : copy.label}</StatusChip></span>
+          {stage === "completed" ? (
+            <span className="ad-test-run-summary-fact" aria-label="Outcome">
+              <span>Outcome</span>
+              <strong>{inspectionStatus === "loading" ? "Loading…"
+                : inspectionStatus !== "ready" ? "Unavailable"
+                  : outcomeNames.length ? outcomeNames.join(", ") : "None recorded"}</strong>
+            </span>
+          ) : null}
+          {duration ? <span className="ad-test-run-summary-fact"><span>Duration</span><strong>{duration}</strong></span> : null}
+          {stage !== "completed" && stage !== "faulted" && !view.failure && copy.description ? <p>{copy.description}</p> : null}
         </div>
 
         {stage === "faulted" ? (
           <div className="ad-inline-error ad-test-run-failure is-runtime" role="alert">
             <strong>Activity Definition failed</strong>
-            <p>{view.failure?.message ?? firstIncident?.message ?? (inspectionStatus === "loading" ? "Loading failure details…" : "Failure details are unavailable. View run details or open the full run data.")}</p>
+            <p>{view.failure?.message ?? firstIncident?.message ?? (inspectionStatus === "loading" ? "Loading failure details…" : "Failure details are unavailable. Expand Run details or open the full run data.")}</p>
           </div>
         ) : view.failure ? (
           <div className={`ad-inline-error ad-test-run-failure is-${view.failure.kind === "Validation" ? "validation" : "runtime"}`} role="alert">
@@ -550,44 +566,33 @@ function ActivityTestRunEvidence({
         ) : null}
 
         {stage === "completed" ? (
-          <section className="ad-test-run-result" aria-labelledby={`${resultTitleId}-summary`}>
-            <h3 id={`${resultTitleId}-summary`}>Result</h3>
-            <section className="ad-test-run-outputs" aria-label="Outputs">
-              <h4>Outputs</h4>
-              {inspectionStatus === "loading" ? <p role="status">Loading output evidence…</p>
-                : inspectionStatus !== "ready" ? <p>Output evidence is unavailable.</p>
-                  : outputSnapshots.length === 0 ? <p>No output snapshots were recorded for this execution.</p>
-                    : <div className="ad-test-run-output-list" role="list">
-                      {outputSnapshots.map((snapshot, index) => <RuntimeValueEvidenceCard
-                        key={`${snapshot.name}:${index}`}
-                        snapshot={snapshot}
-                        compactObjects
-                        showCaptureMode={false}
-                      />)}
-                    </div>}
-            </section>
-            <section className="ad-test-run-outcome" aria-label="Outcome">
-              <h4>Outcome</h4>
-              {inspectionStatus === "loading" ? <p role="status">Loading outcome…</p>
-                : inspectionStatus !== "ready" ? <p>Outcome is unavailable.</p>
-                  : inspection?.outcomeNames.length ? <p>{inspection.outcomeNames.join(", ")}</p>
-                    : <p>No outcome was recorded.</p>}
-            </section>
+          <section className="ad-test-run-result" aria-labelledby={`${resultTitleId}-outputs`}>
+            <h3 id={`${resultTitleId}-outputs`}>Outputs</h3>
+            {inspectionStatus === "loading" ? <p className="ad-test-run-note" role="status">Loading output evidence…</p>
+              : inspectionStatus !== "ready" ? <p className="ad-test-run-note">Output evidence is unavailable.</p>
+                : outputSnapshots.length === 0 ? <p className="ad-test-run-note">No output snapshots were recorded for this execution.</p>
+                  : <div className="wf-runtime-input-list ad-test-run-value-list" role="list" aria-label="Outputs">
+                    {outputSnapshots.map((snapshot, index) => <RuntimeValueEvidenceCard
+                      key={`${snapshot.name}:${index}`}
+                      snapshot={snapshot}
+                      compactObjects
+                      showCaptureMode={false}
+                    />)}
+                  </div>}
           </section>
         ) : null}
 
         <details className="ad-test-run-details" onToggle={event => setDetailsOpen(event.currentTarget.open)}>
-          <summary>View run details</summary>
+          <summary><ChevronRight size={14} aria-hidden className="ad-test-run-details-chevron" /> Run details</summary>
           {detailsOpen ? (
             <div className="ad-test-run-details-content">
-              <p className="ad-selected-record"><strong>{definitionLabel}</strong> · {sourceVersion ? `published version ${sourceVersion.version}` : `draft revision ${view.draftRevision}`}</p>
               {stage !== "validation-rejected" && stage !== "dispatch-rejected" ? (
-                <section className="ad-test-run-recorded-inputs" aria-label="Recorded inputs">
-                  <h4>Recorded inputs</h4>
-                  {inspectionStatus === "loading" ? <p role="status">Loading recorded inputs…</p>
-                    : inspectionStatus !== "ready" ? <p>Recorded inputs are unavailable.</p>
-                      : inputSnapshots.length === 0 ? <p>No input snapshots were recorded for this execution.</p>
-                        : <div className="ad-test-run-input-list" role="list">
+                <section className="ad-test-run-recorded-inputs" aria-labelledby={`${resultTitleId}-inputs`}>
+                  <h3 id={`${resultTitleId}-inputs`}>Recorded inputs</h3>
+                  {inspectionStatus === "loading" ? <p className="ad-test-run-note" role="status">Loading recorded inputs…</p>
+                    : inspectionStatus !== "ready" ? <p className="ad-test-run-note">Recorded inputs are unavailable.</p>
+                      : inputSnapshots.length === 0 ? <p className="ad-test-run-note">No input snapshots were recorded for this execution.</p>
+                        : <div className="wf-runtime-input-list ad-test-run-value-list" role="list" aria-label="Recorded inputs">
                           {inputSnapshots.map((snapshot, index) => <RuntimeValueEvidenceCard
                             key={`${snapshot.name}:${index}`}
                             snapshot={snapshot}
@@ -597,6 +602,7 @@ function ActivityTestRunEvidence({
                         </div>}
                 </section>
               ) : null}
+              <h3 className="ad-test-run-details-heading">Execution</h3>
               <dl className="ad-review-facts ad-test-run-technical">
                 {sourceVersion ? <div><dt>Published version</dt><dd>{sourceVersion.version}</dd></div> : <div><dt>Draft revision</dt><dd>{view.draftRevision}</dd></div>}
                 <div><dt>Requested</dt><dd>{formatTime(view.requestedAt)}</dd></div>
@@ -618,7 +624,7 @@ function ActivityTestRunEvidence({
               {view.sourceReferenceId ? <ExpirationEvidence view={view} /> : null}
               {history.length > 1 ? (
                 <section className="ad-test-run-history-section" aria-label="Test Run rerun history">
-                  <h4>Rerun history ({history.length})</h4>
+                  <h3>Rerun history ({history.length})</h3>
                   <ol className="ad-test-run-history">
                     {history.map(item => <li key={item.testRunId}>
                       <code title={item.testRunId}>{shortenActivityTestRunIdentifier(item.testRunId)}</code>
@@ -705,6 +711,49 @@ function stageCopy(stage: ActivityTestRunStage) {
     case "dispatch-ambiguous": return { label: "Reconciling", description: "Checking the dispatch receipt; no duplicate run will be started." };
     case "expired": return { label: "Test Run data expired", description: "" };
   }
+}
+
+function stageTone(stage: ActivityTestRunStage): StudioStatusTone {
+  switch (stage) {
+    case "completed": return "success";
+    case "faulted":
+    case "validation-rejected":
+    case "dispatch-rejected": return "danger";
+    case "cancelled":
+    case "expired": return "warning";
+    case "accepted":
+    case "waiting":
+    case "running":
+    case "suspended":
+    case "dispatch-ambiguous": return "accent";
+  }
+}
+
+/** Runtime can record the same value more than once (for example per evaluation); show only the latest capture per value. */
+function latestSnapshotPerValue(snapshots: ActivityExecutionInspectionValueSnapshot[]) {
+  const latest = new Map<string, ActivityExecutionInspectionValueSnapshot>();
+  for (const snapshot of snapshots) {
+    const key = snapshot.inputKey?.trim() || snapshot.name;
+    const current = latest.get(key);
+    if (!current || compareCaptures(snapshot, current) >= 0) latest.set(key, snapshot);
+  }
+  return [...latest.values()];
+}
+
+function compareCaptures(left: ActivityExecutionInspectionValueSnapshot, right: ActivityExecutionInspectionValueSnapshot) {
+  const leftSequence = evaluationSequence(left);
+  const rightSequence = evaluationSequence(right);
+  if (typeof leftSequence === "number" && typeof rightSequence === "number" && leftSequence !== rightSequence) return leftSequence - rightSequence;
+  return (Date.parse(left.capturedAt) || 0) - (Date.parse(right.capturedAt) || 0);
+}
+
+function formatDuration(startedAt?: string | null, completedAt?: string | null) {
+  if (!startedAt || !completedAt) return null;
+  const milliseconds = Date.parse(completedAt) - Date.parse(startedAt);
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return null;
+  if (milliseconds < 1000) return `${milliseconds} ms`;
+  if (milliseconds < 60_000) return `${(milliseconds / 1000).toFixed(milliseconds < 10_000 ? 1 : 0)} s`;
+  return `${Math.floor(milliseconds / 60_000)} min ${Math.round((milliseconds % 60_000) / 1000)} s`;
 }
 
 function preparationLabel(phase: PreparationPhase) {

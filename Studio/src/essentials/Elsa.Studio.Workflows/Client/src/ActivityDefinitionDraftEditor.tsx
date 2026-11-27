@@ -69,6 +69,7 @@ const ActivityGraphOutputValueEditor = lazy(() => import("./ActivityGraphOutputV
 const ActivityGraphVariablesEditor = lazy(() => import("./ActivityGraphImplementationEditor").then(module => ({ default: module.ActivityGraphVariablesEditor })));
 
 type ManagementSection = "drafts" | "versions" | "overview" | "relationships";
+type DraftSourceVersion = { definitionId: string; versionId: string; providerKey: string; schemaVersion: string };
 
 export function ActivityDefinitionDraftEditor({ agentWorkspace = false, context, definitionId, draftId, versionId, allowStartEditing = false, readOnly = false, openPublicationReviewOnMount = false, onManage, onDraftStarted, activityEditors, propertyEditors = [], expressionEditors = [], graphAuthoringPanels = [], inputEditors = [], recoverySettings, identity, workspaceContribution, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
   agentWorkspace?: boolean;
@@ -107,7 +108,14 @@ export function ActivityDefinitionDraftEditor({ agentWorkspace = false, context,
     };
   }, []);
   const scope = JSON.stringify([context.baseUrl, identity?.subject, identity?.tenantId, authorityRevision]);
-  const [started, setStarted] = useState<{ draft: ActivityDefinitionDraftView; version: ActivityDefinitionVersionView; scope: string } | null>(null);
+  const [started, setStarted] = useState<{
+    draft: ActivityDefinitionDraftView;
+    version?: ActivityDefinitionVersionView;
+    sourceVersionId?: string;
+    pendingFromDraftId?: string;
+    mountKey: string;
+    scope: string;
+  } | null>(null);
   const query = useFullActivityDefinitionDraft(context, draftId ?? null);
   const versionQuery = useQuery({
     queryKey: [...activityDesignKeys.fullDefinitionVersion(versionId ?? ""), scope],
@@ -119,21 +127,42 @@ export function ActivityDefinitionDraftEditor({ agentWorkspace = false, context,
     retry: false
   });
   const definitionQuery = useActivityDefinition(context, definitionId);
-  const ownClone = started?.scope === scope && started.draft.definitionId === definitionId && (draftId === started.draft.draftId || !draftId && versionId === started.version.versionId) ? started : null;
+  const ownClone = started?.scope === scope
+    && started.draft.definitionId === definitionId
+    && (
+      draftId === started.draft.draftId
+      || (Boolean(started.pendingFromDraftId) && draftId === started.pendingFromDraftId)
+      || (!draftId && Boolean(started.sourceVersionId) && versionId === started.sourceVersionId)
+    )
+    ? started
+    : null;
   if (started && !ownClone) setStarted(null);
+  useEffect(() => {
+    if (started?.pendingFromDraftId && draftId === started.draft.draftId) {
+      setStarted(current => current && current.draft.draftId === draftId ? { ...current, pendingFromDraftId: undefined } : current);
+    }
+  }, [draftId, started]);
   const version = ownClone?.version ?? (!draftId ? versionQuery.data : undefined);
   const initialDraft = ownClone?.draft ?? (draftId ? query.data : version ? publishedEditorDocument(version) : undefined);
   const loading = !ownClone && (draftId ? query.isPending || query.isFetching && !query.isFetchedAfterMount : versionQuery.isPending || versionQuery.isFetching && !versionQuery.isFetchedAfterMount);
   const failed = !ownClone && (draftId ? query.isError : versionQuery.isError);
 
   if (loading) return <main className="ad-page ad-draft-editor" aria-busy="true"><div className="ad-skeleton" role="status">Loading the exact Activity Definition {draftId ? "draft" : "version"}…</div></main>;
-  if (failed || !initialDraft || initialDraft.definitionId !== definitionId || version && version.versionId !== (ownClone?.version.versionId ?? versionId)) return <main className="ad-page ad-draft-editor"><button type="button" className="ad-back" onClick={() => onBack()}><ArrowLeft size={16} /> {onManage ? "Activity Definitions" : "Activity Definition"}</button><StudioResultState tone="danger" headingLevel={1} icon={<AlertTriangle size={22} aria-hidden />} title={<>Activity {draftId ? "draft" : "version"} unavailable</>} description={<>Studio could not confirm the exact authorized {draftId ? "draft" : "version"}. No provider state is shown.</>} actions={<><StudioButton type="button" onClick={() => void (draftId ? query.refetch() : versionQuery.refetch())}>Retry</StudioButton></>} /></main>;
+  if (failed || !initialDraft || initialDraft.definitionId !== definitionId || version && version.versionId !== (ownClone?.version?.versionId ?? versionId)) return <main className="ad-page ad-draft-editor"><button type="button" className="ad-back" onClick={() => onBack()}><ArrowLeft size={16} /> {onManage ? "Activity Definitions" : "Activity Definition"}</button><StudioResultState tone="danger" headingLevel={1} icon={<AlertTriangle size={22} aria-hidden />} title={<>Activity {draftId ? "draft" : "version"} unavailable</>} description={<>Studio could not confirm the exact authorized {draftId ? "draft" : "version"}. No provider state is shown.</>} actions={<><StudioButton type="button" onClick={() => void (draftId ? query.refetch() : versionQuery.refetch())}>Retry</StudioButton></>} /></main>;
 
   const designAuthoringAllowed = !definitionQuery.isError && definitionQuery.data?.definition.contentAuthority.kind.toLowerCase() === "design" && definitionQuery.data?.actions.some(action => action.action === "create-draft" && action.allowed) === true;
-  return <LoadedActivityDefinitionDraftEditor agentWorkspace={agentWorkspace} key={`${scope}:${definitionId}:${ownClone || !draftId ? `version:${version?.versionId}` : `draft:${draftId}`}`} context={context} initialDraft={initialDraft} initialVersion={version} readOnly={readOnly} allowStartEditing={allowStartEditing && designAuthoringAllowed && !readOnly} openPublicationReviewOnMount={openPublicationReviewOnMount} onManage={onManage} onDraftStarted={draft => {
-    if (!version) return;
+  const mountKey = ownClone?.mountKey ?? (!draftId ? `version:${version?.versionId}` : `draft:${draftId}`);
+  return <LoadedActivityDefinitionDraftEditor agentWorkspace={agentWorkspace} key={`${scope}:${definitionId}:${mountKey}`} context={context} initialDraft={initialDraft} initialVersion={version} readOnly={readOnly} allowStartEditing={allowStartEditing && designAuthoringAllowed && !readOnly} openPublicationReviewOnMount={openPublicationReviewOnMount} onManage={onManage} onDraftStarted={(draft, sourceVersionId) => {
     queryClient.setQueryData(activityDesignKeys.fullDefinitionDraft(draft.draftId), draft);
-    setStarted({ draft, version, scope });
+    void queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionResources, refetchType: "inactive" });
+    setStarted({
+      draft,
+      version: version && version.versionId === sourceVersionId ? version : undefined,
+      sourceVersionId,
+      pendingFromDraftId: draftId && draftId !== draft.draftId ? draftId : undefined,
+      mountKey,
+      scope
+    });
     onDraftStarted?.(draft);
     onOpenDraft(definitionId, draft.draftId);
   }} blockAuthoringAllowed={designAuthoringAllowed} definitionDisplayName={definitionQuery.data?.definition.displayName?.trim() || version?.definition.displayName?.trim() || undefined} definitionLabel={definitionQuery.data?.definition.displayName?.trim() || version?.definition.displayName?.trim() || initialDraft.presentationLabel?.trim() || generatedDraftLabel(initialDraft)} activityEditors={activityEditors} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} inputEditors={inputEditors} recoverySettings={recoverySettings} identity={identity} workspaceContribution={workspaceContribution} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} onOpenStudioPath={onOpenStudioPath} />;
@@ -148,7 +177,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
   readOnly: boolean;
   openPublicationReviewOnMount: boolean;
   onManage?(section: ManagementSection): void;
-  onDraftStarted(draft: ActivityDefinitionDraftView): void;
+  onDraftStarted(draft: ActivityDefinitionDraftView, sourceVersionId: string): void;
   blockAuthoringAllowed: boolean;
   definitionDisplayName?: string;
   definitionLabel: string;
@@ -170,9 +199,21 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
   const initialDraftIsActive = isActiveDraft(initialDraft.status);
   const [draft, setDraft] = useState(initialDraft);
   const [publishedVersion, setPublishedVersion] = useState(initialVersion && !initialDraftIsActive ? initialVersion.version : null);
-  const sourceVersionRef = useRef(initialDraft.draftId ? null : initialVersion);
-  const startAllowedRef = useRef(allowStartEditing);
-  startAllowedRef.current = allowStartEditing;
+  const [publishedRunSource, setPublishedRunSource] = useState<Pick<ActivityDefinitionVersionView, "versionId" | "version" | "publishedAt"> | null>(null);
+  const [publishedBaselineContract, setPublishedBaselineContract] = useState<ActivityDefinitionDraftView["contract"] | null>(null);
+  const sourceVersionRef = useRef<DraftSourceVersion | null>(
+    initialDraft.draftId || !initialVersion
+      ? null
+      : {
+          definitionId: initialVersion.definition.definitionId,
+          versionId: initialVersion.versionId,
+          providerKey: initialVersion.provider.providerKey,
+          schemaVersion: initialVersion.provider.schemaVersion
+        }
+  );
+  const effectiveAllowStartEditing = allowStartEditing || (Boolean(publishedRunSource) && blockAuthoringAllowed && !readOnly);
+  const startAllowedRef = useRef(effectiveAllowStartEditing);
+  startAllowedRef.current = effectiveAllowStartEditing;
   const readOnlyRef = useRef(readOnly);
   readOnlyRef.current = readOnly;
   const startingRef = useRef(false);
@@ -309,10 +350,10 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
     setStartFailure(false);
     setStatus("saving");
     try {
-      const created = await createActivityDefinitionDraft(context, source.definition.definitionId, { sourceVersionId: source.versionId, presentationLabel: null });
+      const created = await createActivityDefinitionDraft(context, source.definitionId, { sourceVersionId: source.versionId, presentationLabel: null });
       await new Promise<void>(resolve => whenActive(resolve));
       if (!mountedRef.current) return;
-      if (!created.draftId || created.definitionId !== source.definition.definitionId || created.sourceVersionId !== source.versionId || !isActiveDraft(created.status) || created.provider.providerKey !== source.provider.providerKey || created.provider.schemaVersion !== source.provider.schemaVersion) throw new Error("The exact source clone could not be confirmed.");
+      if (!created.draftId || created.definitionId !== source.definitionId || created.sourceVersionId !== source.versionId || !isActiveDraft(created.status) || created.provider.providerKey !== source.providerKey || created.provider.schemaVersion !== source.schemaVersion) throw new Error("The exact source clone could not be confirmed.");
       const local = currentRef.current;
       const next = {
         ...created,
@@ -334,11 +375,13 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
       savedSignatureRef.current = editableSignature(created);
       autosavePausedRef.current = false;
       currentRef.current = next;
+      setPublishedVersion(null);
+      setPublishedRunSource(null);
       setDraft(next);
       setStatus("pending");
       recoveryStore?.write(next);
       enqueueSave(next);
-      onDraftStarted(created);
+      onDraftStarted(created, source.versionId);
     } catch {
       await new Promise<void>(resolve => whenActive(resolve));
       if (!mountedRef.current) return;
@@ -761,15 +804,16 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
   const Editor = contribution?.component;
   const PublicInterfaceEditor = contribution?.publicInterfaceComponent;
   const draftIsActive = isActiveDraft(draft.status);
-  const canStartEditing = !draft.draftId && Boolean(sourceVersionRef.current) && allowStartEditing && hasPayload && Boolean(contribution && Editor) && !providerEditorFailed;
+  const testRunSourceVersion = draftIsActive ? null : publishedRunSource ?? (!draft.draftId ? initialVersion ?? null : null);
+  const canStartEditing = !draft.draftId && Boolean(sourceVersionRef.current) && effectiveAllowStartEditing && hasPayload && Boolean(contribution && Editor) && !providerEditorFailed;
   const documentEditable = !readOnly && (draftIsActive || canStartEditing);
   const providerReadOnly = !documentEditable || publicationPending || status === "conflict" || proposalApplying;
   const canEditProvider = !readOnly && draftIsActive && !publicationPending && hasPayload && Boolean(contribution && Editor) && !providerEditorFailed;
   const revisionSensitiveActionsBlocked = publicationPending || status !== "saved" || !contractLocallyValid || proposalApplying || codeBufferState.dirty;
   const dependentActionsBlocked = readOnly || publicationPending || Boolean(recovery) || !draftIsActive || !contractLocallyValid || status === "conflict" || validating || proposalApplying || codeBufferState.dirty;
-  const testRunActionsBlocked = readOnly || publicationPending || Boolean(recovery) || !contractLocallyValid || status === "conflict" || validating || proposalApplying || codeBufferState.dirty || (!draftIsActive && (Boolean(draft.draftId) || !initialVersion));
+  const testRunActionsBlocked = readOnly || publicationPending || Boolean(recovery) || !contractLocallyValid || status === "conflict" || validating || proposalApplying || codeBufferState.dirty || (!draftIsActive && !testRunSourceVersion);
   const openTestRun = async () => {
-    if (!initialVersion || draft.draftId) {
+    if (!testRunSourceVersion) {
       setTestRunOpen(true);
       return;
     }
@@ -885,14 +929,31 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
     if (!isActiveDraft(current.status)) return;
     publicationFocusPendingRef.current = true;
     autosavePausedRef.current = true;
-    const published = { ...current, status: "published" };
+    const published: ActivityDefinitionDraftView = {
+      ...current,
+      draftId: "",
+      revision: 0,
+      sourceVersionId: outcome.definitionVersionId,
+      status: "Published",
+      presentationLabel: null,
+      validation: null
+    };
+    sourceVersionRef.current = {
+      definitionId: current.definitionId,
+      versionId: outcome.definitionVersionId,
+      providerKey: current.provider.providerKey,
+      schemaVersion: current.provider.schemaVersion
+    };
+    layoutEditedRef.current = false;
     currentRef.current = published;
     setDraft(published);
     setPublishedVersion(outcome.version);
+    setPublishedRunSource({ versionId: outcome.definitionVersionId, version: outcome.version, publishedAt: outcome.publishedAt });
+    setPublishedBaselineContract(current.contract);
     setStatus("saved");
     setMigrationOpen(false);
     setTestRunOpen(false);
-    recoveryStore?.clear(published);
+    recoveryStore?.clear(current);
     setRecovery(null);
     onNavigationGuardChange(false);
     const canNotify = publicationNotificationGuardRef.current;
@@ -909,7 +970,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
 
   const historyResetKey = `${historyIdentity}:${draft.provider.providerKey}:${draft.provider.schemaVersion}:${status === "conflict" ? `conflict-${conflictRevision ?? "unknown"}` : documentEditable ? "active" : "published"}`;
   const saveStatusNeedsAttention = status === "offline" || status === "failed" || !contractLocallyValid;
-  const saveStatusDetail = draftIsActive || status !== "saved" ? <div className={`ad-save-state is-${contractLocallyValid ? status : "failed"}`} role={status === "failed" || status === "conflict" || !contractLocallyValid || status === "offline" ? "alert" : "status"} aria-live="polite"><strong>{startFailure ? "Your changes are still here" : contractLocallyValid ? saveStatusLabel(status, draft.revision) : "An input needs attention"}</strong><span>{startFailure ? "A draft could not be confirmed. Retry to save your changes; keep this editor open." : contractLocallyValid ? saveStatusDescription(status, revisionSensitiveActionsBlocked) : "Apply or correct the highlighted default value before leaving this editor, testing, or publishing."}</span>{startFailure ? <button type="button" onClick={saveNow} disabled={starting || !allowStartEditing}>Retry saving changes</button> : null}</div> : null;
+  const saveStatusDetail = draftIsActive || status !== "saved" ? <div className={`ad-save-state is-${contractLocallyValid ? status : "failed"}`} role={status === "failed" || status === "conflict" || !contractLocallyValid || status === "offline" ? "alert" : "status"} aria-live="polite"><strong>{startFailure ? "Your changes are still here" : contractLocallyValid ? saveStatusLabel(status, draft.revision) : "An input needs attention"}</strong><span>{startFailure ? "A draft could not be confirmed. Retry to save your changes; keep this editor open." : contractLocallyValid ? saveStatusDescription(status, revisionSensitiveActionsBlocked) : "Apply or correct the highlighted default value before leaving this editor, testing, or publishing."}</span>{startFailure ? <button type="button" onClick={saveNow} disabled={starting || !effectiveAllowStartEditing}>Retry saving changes</button> : null}</div> : null;
   const visibleSaveStatus = saveStatusNeedsAttention ? saveStatusDetail : null;
   const advancedSaveStatus = saveStatusNeedsAttention || status === "conflict" ? null : saveStatusDetail;
 
@@ -935,7 +996,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
         ref={contractEditorHandle}
         memberKind={activeView === "outputs" ? "output" : activeView === "outcomes" ? "outcome" : "input"}
         contract={draft.contract}
-        baselineContract={initialVersion?.contract ?? (baselineQuery.data?.definition.definitionId === draft.definitionId ? baselineQuery.data.contract : undefined)}
+        baselineContract={publishedBaselineContract ?? initialVersion?.contract ?? (baselineQuery.data?.definition.definitionId === draft.definitionId ? baselineQuery.data.contract : undefined)}
         capabilities={capabilitiesQuery.data}
         expressions={expressionsQuery.data ?? []}
         providerRequiredOutcomes={capabilitiesQuery.data?.providers.find(provider => provider.providerKey === draft.provider.providerKey)?.requiredOutcomes ?? []}
@@ -1066,7 +1127,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
               disclosure.open = false;
             });
             void openTestRun();
-          }} disabled={testRunActionsBlocked || checkingPublishedTestRunAvailability} title={initialVersion && !draft.draftId ? `Test published version ${initialVersion.version}` : "Test the exact saved draft revision"}><Play size={16} aria-hidden="true" /> Test Run</StudioButton>}
+          }} disabled={testRunActionsBlocked || checkingPublishedTestRunAvailability} title={testRunSourceVersion ? `Test published version ${testRunSourceVersion.version}` : "Test the exact saved draft revision"}><Play size={16} aria-hidden="true" /> Test Run</StudioButton>}
           <details className="ad-authoring-more-actions" onKeyDown={event => {
             if (event.key !== "Escape") return;
             event.preventDefault();
@@ -1094,11 +1155,11 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
                 <summary>Advanced</summary>
                 <div className="ad-authoring-advanced-panel">
                   <dl className="ad-authoring-identity">
-                    {draft.draftId ? <div><dt>Draft ID</dt><dd><code>{draft.draftId}</code></dd></div> : <div><dt>Version ID</dt><dd><code>{initialVersion?.versionId}</code></dd></div>}
+                    {draft.draftId ? <div><dt>Draft ID</dt><dd><code>{draft.draftId}</code></dd></div> : <div><dt>Version ID</dt><dd><code>{publishedRunSource?.versionId ?? initialVersion?.versionId}</code></dd></div>}
                     <div><dt>Definition ID</dt><dd><code>{draft.definitionId}</code></dd></div>
                     <div><dt>Provider</dt><dd><code>{draft.provider.providerKey}</code></dd></div>
                     <div><dt>Provider schema</dt><dd>{draft.provider.schemaVersion}</dd></div>
-                    {draft.draftId ? <div><dt>Saved revision</dt><dd>{draft.revision}</dd></div> : <div><dt>Version</dt><dd>{initialVersion?.version}</dd></div>}
+                    {draft.draftId ? <div><dt>Saved revision</dt><dd>{draft.revision}</dd></div> : <div><dt>Version</dt><dd>{publishedRunSource?.version ?? initialVersion?.version}</dd></div>}
                   </dl>
                   <StudioField className="ad-draft-label" label={<><span>Draft label </span></>}><input value={draft.presentationLabel ?? ""} maxLength={200} disabled={readOnly || !draftIsActive || publicationPending || status === "conflict"} placeholder={generatedDraftLabel(draft)} onChange={event => scheduleSave({ ...currentRef.current, presentationLabel: event.target.value || null })} /><small>The generated fallback is derived from the stable draft identity.</small><small>Optional · need not be unique</small></StudioField>
                   {advancedSaveStatus}
@@ -1119,7 +1180,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
     {testRunOpen && !readOnly ? <Suspense fallback={<div className="ad-inline-status" role="status">Loading the Activity Definition Test Run workbench…</div>}><ActivityDefinitionTestRunDialog
       context={context}
       draft={draft}
-      sourceVersion={!draft.draftId ? initialVersion : null}
+      sourceVersion={testRunSourceVersion}
       publishedRunAvailability={publishedTestRunAvailability}
       definitionLabel={definitionLabel}
       inputEditors={inputEditors}

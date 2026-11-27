@@ -1,7 +1,7 @@
 import { expect, type Dialog, type Page, type TestInfo } from "@playwright/test";
 import { attachDashboardJson, dashboardBackend, observeNativeWeaverBoundary, tag, type Capture, type Resource } from "./dashboardJourneySupport";
 import { captureResultViews } from "./liveDashboardsJourney";
-import type { QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
+import type { QueryResult } from "../../../extensions/Dashboard/studio/Elsa.Studio.Dashboard/Client/src/native/types";
 
 type FeatureCatalog = { revision: string; features: { id: string; enabled: boolean; configuration: unknown }[] };
 

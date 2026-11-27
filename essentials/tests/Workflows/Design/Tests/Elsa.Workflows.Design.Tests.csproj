@@ -42,7 +42,7 @@
     <ProjectReference Include="..\..\..\..\src\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Workflows\Design\Reconciliation\Git\Elsa.Workflows.Design.Reconciliation.Git.csproj" />
+    <ProjectReference Include="..\..\..\..\..\extensions\Git\src\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation.Git.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Design\Reconciliation\Json\Elsa.Workflows.Design.Reconciliation.Json.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Design\Validations\Elsa.Workflows.Design.Validations\Elsa.Workflows.Design.Validations.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />

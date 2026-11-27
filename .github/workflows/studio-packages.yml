@@ -60,12 +60,16 @@ jobs:
     name: Validate publication request
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
+      signed_snapshot: ${{ steps.resume.outputs.id }}
       version: ${{ steps.version.outputs.version }}
       publish_target: ${{ steps.version.outputs.publish_target }}
       publisher_gate: ${{ steps.version.outputs.publisher_gate }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
@@ -142,44 +146,60 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Find an already signed snapshot of this run before rebuilding
+        if: ${{ inputs.publish_target != 'none' && github.run_attempt != '1' }}
+        id: resume
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash ../tools/versioning/package-evidence/studio_snapshot.sh
+
   build:
     name: Build packages
     needs: version
+    if: ${{ !needs.version.outputs.signed_snapshot }}
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           package_json_file: Studio/package.json
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
           cache-dependency-path: Studio/pnpm-lock.yaml
 
+      - name: Install release inventory tools
+        run: npm ci --prefix ../tools/versioning/package-evidence --ignore-scripts --no-audit
+
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build Studio host and RCL frontend assets
+        env:
+          STUDIO_INVENTORY: ${{ runner.temp }}/studio-bundles
         run: pnpm build
 
       - name: Verify generated Studio host and RCL assets
         run: python3 ../tools/ci/verify-studio-assets.py --root ..
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.x
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
@@ -195,11 +215,22 @@ jobs:
       - name: Test
         run: dotnet test Elsa.Studio.slnx -c Release --no-build "/p:Version=$VERSION"
 
-      - name: Pack
-        run: dotnet pack Elsa.Studio.slnx -c Release --no-build "/p:Version=$VERSION" -p:WarningsNotAsErrors=NU1603 "-p:PackageOutputPath=$(pwd)/packages/nuget"
+      - name: Generate frontend inventories and pack official Studio projects
+        run: |
+          set -euo pipefail
+          inventories="$RUNNER_TEMP/studio-inventories"
+          node ../tools/versioning/package-evidence/studio.mjs nuget "$RUNNER_TEMP/studio-bundles" ../tools/ci/studio-package-identities.json "$inventories"
+          # The solution includes independently packable UX fixtures. The public project list owns this feed.
+          jq -r '.packable_projects[].project' ../tools/ci/studio-package-identities.json | while IFS= read -r project; do
+            dotnet pack "../$project" -c Release --no-build "/p:Version=$VERSION" -p:WarningsNotAsErrors=NU1603 \
+              "-p:PackageOutputPath=$(pwd)/packages/nuget" "-p:StudioFrontendInventories=$inventories"
+          done
 
       - name: Verify exact Studio NuGet package set
         run: python3 ../tools/ci/verify_studio_nuget_packages.py --root .. --packages packages/nuget --version "$VERSION"
+
+      - name: Verify embedded frontend inventories and record final NuGet digests
+        run: python3 ../tools/versioning/package-evidence/studio_archives.py packages/nuget --write nuget
 
       - name: Write Studio artifact provenance
         env:
@@ -227,27 +258,34 @@ jobs:
           PY
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: elsa-foundation-studio-nuget-packages
           path: Studio/packages/nuget/
+          overwrite: true
 
   publish_preview_feedz:
     name: Publish to feedz.io
-    needs: [build, build_npm]
+    needs: attest
     environment: studio-publish
     runs-on: ubuntu-latest
     timeout-minutes: 20
     if: >-
-      ${{ vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING == 'true'
+      ${{ !cancelled() && needs.attest.result == 'success' && vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING == 'true'
       && inputs.publish_target == 'feedz-preview'
       && (github.ref == 'refs/heads/main' || github.ref_type == 'tag') }}
     steps:
-      - name: Download Packages
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/studio-signed-packages
         with:
-          name: elsa-foundation-studio-nuget-packages
-          path: Studio/packages/nuget
+          artifact-id: ${{ needs.attest.outputs.artifact_id }}
+          kind: nuget
+          receipt-sha256: ${{ needs.attest.outputs.nuget_receipt }}
+          version: ${{ needs.attest.outputs.version }}
+
+      - name: Verify any existing NuGet versions before the first push
+        run: python3 ../tools/versioning/package-evidence/studio_nuget_feed.py packages/nuget "$RUNNER_TEMP/existing-nuget" "$feedz_feed_source" --preflight
 
       - name: Publish to feedz.io
         env:
@@ -256,20 +294,25 @@ jobs:
 
   publish_nuget:
     name: Publish release to nuget.org
-    needs: [build, build_npm]
+    needs: attest
     environment: studio-publish
     runs-on: ubuntu-latest
     timeout-minutes: 20
     if: >-
-      ${{ vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING == 'true'
+      ${{ !cancelled() && needs.attest.result == 'success' && vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING == 'true'
       && inputs.publish_target == 'public-release'
       && github.ref_type == 'tag' }}
     steps:
-      - name: Download Packages
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/studio-signed-packages
         with:
-          name: elsa-foundation-studio-nuget-packages
-          path: Studio/packages/nuget
+          artifact-id: ${{ needs.attest.outputs.artifact_id }}
+          kind: nuget
+          receipt-sha256: ${{ needs.attest.outputs.nuget_receipt }}
+          version: ${{ needs.attest.outputs.version }}
+
+      - name: Verify any existing NuGet versions before the first push
+        run: python3 ../tools/versioning/package-evidence/studio_nuget_feed.py packages/nuget "$RUNNER_TEMP/existing-nuget" "$nuget_feed_source" --preflight
 
       - name: Publish to nuget.org
         env:
@@ -281,20 +324,23 @@ jobs:
   build_npm:
     name: Build npm packages
     needs: version
+    if: ${{ !needs.version.outputs.signed_snapshot }}
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # pnpm must be set up BEFORE setup-node so that `cache: pnpm` can find the pnpm binary.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           package_json_file: Studio/package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -305,7 +351,19 @@ jobs:
 
       # Build the four publishable libraries (each produces dist/index.js + dist/index.d.ts,
       # plus dist/tokens.css for studio-ui and dist/style.css for studio-workflows).
+      - name: Record locked production resolutions
+        run: |
+          npm ci --prefix ../tools/versioning/package-evidence --ignore-scripts --no-audit
+          python3 -m unittest discover -s ../tools/versioning/package-evidence -p test_studio_evidence.py
+          mkdir -p "$RUNNER_TEMP/studio-locked"
+          pnpm --filter @elsa-workflows/studio-sdk --filter @elsa-workflows/studio-ui \
+            --filter @elsa-workflows/studio-code-editor --filter @elsa-workflows/studio-workflows \
+            sbom --lockfile-only --prod --split --sbom-format cyclonedx --sbom-spec-version 1.6 \
+            --out "$RUNNER_TEMP/studio-locked/%s.cdx.json"
+
       - name: Build libraries
+        env:
+          STUDIO_INVENTORY: ${{ runner.temp }}/studio-bundles
         run: >-
           pnpm
           --filter @elsa-workflows/studio-sdk
@@ -328,6 +386,9 @@ jobs:
 
       # Pack each package into packages/npm. `pnpm pack` writes the tarball relative to the
       # package dir by default, so we pin the destination to an absolute path shared by all four.
+      - name: Generate library inventories from the release manifests
+        run: node ../tools/versioning/package-evidence/studio.mjs npm "$RUNNER_TEMP/studio-bundles" "$RUNNER_TEMP/studio-locked"
+
       - name: Pack packages
         run: |
           mkdir -p packages/npm
@@ -418,95 +479,199 @@ jobs:
             printf '%s\n' "$actual_id_set" >&2
             exit 1
           fi
+          python3 ../tools/versioning/package-evidence/studio_archives.py packages/npm --write npm
           echo "All tarballs verified."
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: elsa-foundation-studio-npm-packages
-          path: Studio/packages/npm/*.tgz
+          path: Studio/packages/npm/
+          overwrite: true
+
+  attest:
+    name: Select and attest the Studio release snapshot
+    needs: [version, build, build_npm]
+    if: >-
+      ${{ !cancelled() && needs.version.result == 'success' && needs.version.outputs.publisher_gate == 'true'
+      && needs.version.outputs.publish_target != 'none'
+      && (needs.version.outputs.signed_snapshot || (needs.build.result == 'success' && needs.build_npm.result == 'success')) }}
+    environment: studio-publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      actions: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    outputs:
+      artifact_id: ${{ steps.save.outputs.artifact-id || steps.recover.outputs.id }}
+      npm_receipt: ${{ steps.receipts.outputs.npm }}
+      nuget_receipt: ${{ steps.receipts.outputs.nuget }}
+      version: ${{ needs.version.outputs.version }}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Check again for a snapshot saved by an interrupted signing job
+        id: recover
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/versioning/package-evidence/studio_snapshot.sh
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: ${{ !steps.recover.outputs.id }}
+        with:
+          artifact-ids: ${{ needs.build_npm.outputs.artifact_id }}
+          merge-multiple: true
+          path: release/npm
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: ${{ !steps.recover.outputs.id }}
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          merge-multiple: true
+          path: release/nuget
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: ${{ steps.recover.outputs.id }}
+        with:
+          artifact-ids: ${{ steps.recover.outputs.id }}
+          merge-multiple: true
+          path: release
+      - name: Verify the original release set before signing or resuming
+        id: receipts
+        env:
+          SNAPSHOT: ${{ steps.recover.outputs.id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for kind in npm nuget; do
+            receipt="release/$kind/$kind-subjects.json"
+            args=()
+            if [[ -n "$SNAPSHOT" ]]; then
+              gh attestation verify "$receipt" --repo "$GITHUB_REPOSITORY" --bundle release/producer.sigstore.json \
+                --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/studio-packages.yml" \
+                --source-ref "$GITHUB_REF" --source-digest "$GITHUB_SHA"
+              args+=(--signed-retry)
+            fi
+            python3 tools/versioning/package-evidence/studio_archives.py "release/$kind" --check "$kind" "${args[@]}"
+            echo "$kind=$(sha256sum "$receipt" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          done
+      - name: Sign archive, inventory, NuGet payload and receipt digests
+        if: ${{ !steps.recover.outputs.id }}
+        id: sign
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            release/**/*.tgz
+            release/**/*.nupkg
+            release/**/*.cdx.json
+            release/**/*.payload.json
+            release/**/*-subjects.json
+      - name: Retain the signature bundle with the immutable candidates
+        if: ${{ !steps.recover.outputs.id }}
+        env:
+          BUNDLE: ${{ steps.sign.outputs.bundle-path }}
+        run: cp "$BUNDLE" release/producer.sigstore.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ !steps.recover.outputs.id }}
+        id: save
+        with:
+          name: studio-signed-release
+          path: release/
+          if-no-files-found: error
+          retention-days: 30
 
   # Publishes preview npm builds only after an explicit gated manual request.
   publish_npm_preview_feedz:
     name: Publish npm to feedz.io
-    needs: [build, build_npm]
+    needs: attest
     environment: studio-publish
     runs-on: ubuntu-latest
     timeout-minutes: 20
     if: >-
-      ${{ vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING == 'true'
+      ${{ !cancelled() && needs.attest.result == 'success' && vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING == 'true'
       && inputs.publish_target == 'feedz-preview'
       && (github.ref == 'refs/heads/main' || github.ref_type == 'tag') }}
     steps:
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           registry-url: ${{ env.npm_feed_feedz }}
 
-      - name: Download Packages
-        uses: actions/download-artifact@v4
+      - uses: ./.github/actions/studio-signed-packages
         with:
-          name: elsa-foundation-studio-npm-packages
-          path: Studio/packages/npm
+          artifact-id: ${{ needs.attest.outputs.artifact_id }}
+          kind: npm
+          receipt-sha256: ${{ needs.attest.outputs.npm_receipt }}
+          version: ${{ needs.attest.outputs.version }}
 
-      # Publish IN DEPENDENCY ORDER (sdk -> ui -> code-editor -> workflows) so each package's
-      # intra-monorepo deps already exist on the feed. We order explicitly by filename pattern
-      # rather than relying on glob order.
-      - name: Publish to feedz.io
+      - name: Publish verified tarballs in dependency order and check registry integrity
         env:
           NODE_AUTH_TOKEN: ${{ secrets.FEEDZ_API_KEY_BASE64 }}
-        run: |
-          set -euo pipefail
-          for pattern in studio-sdk studio-ui studio-code-editor studio-workflows; do
-            for file in packages/npm/*"$pattern"-*.tgz; do
-              echo "Publishing $file"
-              npm publish "$file" --access public --tag preview
-            done
-          done
+        run: python3 ../tools/versioning/package-evidence/studio_publish_npm.py packages/npm "$npm_feed_feedz" --tag preview
 
   # Publishes a stable tagged version to npmjs.org only after an explicit gated request.
   publish_npm_release:
     name: Publish npm release to npmjs.org
-    needs: [build, build_npm]
+    needs: attest
     environment: studio-publish
     runs-on: ubuntu-latest
     timeout-minutes: 20
     if: >-
-      ${{ vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING == 'true'
+      ${{ !cancelled() && needs.attest.result == 'success' && vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING == 'true'
       && inputs.publish_target == 'public-release'
       && github.ref_type == 'tag' }}
     steps:
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           registry-url: ${{ env.npm_feed_npm }}
 
-      - name: Download Packages
-        uses: actions/download-artifact@v4
+      - uses: ./.github/actions/studio-signed-packages
         with:
-          name: elsa-foundation-studio-npm-packages
-          path: Studio/packages/npm
+          artifact-id: ${{ needs.attest.outputs.artifact_id }}
+          kind: npm
+          receipt-sha256: ${{ needs.attest.outputs.npm_receipt }}
+          version: ${{ needs.attest.outputs.version }}
 
-      # Publish IN DEPENDENCY ORDER (sdk -> ui -> code-editor -> workflows). A prerelease tag
-      # (any version containing a '-' suffix, e.g. 4.0.0-preview.1) is published under the
-      # `preview` dist-tag so it never becomes `latest`; a clean release omits the flag.
-      # This job doesn't run the Set VERSION step, so we derive the version from the release tag
-      # (GITHUB_REF_NAME, e.g. v4.0.0) here purely to decide the dist-tag.
-      - name: Publish to npmjs.org
+      - name: Publish verified tarballs in dependency order and check registry integrity
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_API_KEY }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          VERSION="$RELEASE_TAG"
-          VERSION=${VERSION#v}
-          TAG_ARGS=()
-          if [[ "$VERSION" == *-* ]]; then
-            TAG_ARGS=(--tag preview)
-          fi
-          for pattern in studio-sdk studio-ui studio-code-editor studio-workflows; do
-            for file in packages/npm/*"$pattern"-*.tgz; do
-              echo "Publishing $file"
-              npm publish "$file" --access public "${TAG_ARGS[@]}"
-            done
-          done
+        run: python3 ../tools/versioning/package-evidence/studio_publish_npm.py packages/npm "$npm_feed_npm" --tag latest
+
+  verify_nuget_feed:
+    name: Verify registry-served NuGet packages and attest the receipt
+    needs: [attest, publish_preview_feedz, publish_nuget]
+    if: ${{ !cancelled() && (needs.publish_preview_feedz.result == 'success' || needs.publish_nuget.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/studio-signed-packages
+        with:
+          artifact-id: ${{ needs.attest.outputs.artifact_id }}
+          kind: nuget
+          receipt-sha256: ${{ needs.attest.outputs.nuget_receipt }}
+          version: ${{ needs.attest.outputs.version }}
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 10.x
+      - name: Read back the package set and verify payload and registry signatures
+        env:
+          FEED: ${{ inputs.publish_target == 'public-release' && env.nuget_feed_source || env.feedz_feed_source }}
+        run: python3 ../tools/versioning/package-evidence/studio_nuget_feed.py packages/nuget packages/published "$FEED"
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: Studio/packages/published/nuget-feed-receipt.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: elsa-foundation-studio-nuget-feed-receipt-attempt-${{ github.run_attempt }}
+          path: Studio/packages/published/nuget-feed-receipt.json

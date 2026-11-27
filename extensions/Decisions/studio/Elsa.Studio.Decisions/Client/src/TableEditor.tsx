@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { MoreHorizontal, Plus, Redo2, Undo2 } from "lucide-react";
 import { StudioAlert, AnchoredPopover, OverflowMenu, StudioButton, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
 import { editTable, parseTable, type Clause, type Table, type TableEdit } from "./decisionXml";
 import type { Diagnostic } from "./decisionsApi";
@@ -165,10 +166,10 @@ function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], tabl
       <option value="UNIQUE">Unique — one match</option><option value="ANY">Any — equal results</option><option value="FIRST">First — first match</option><option value="RULE ORDER">Rule order — all matches</option><option value="COLLECT">Collect — all matches</option>
     </select></StudioField></div>
     <div className="decision-grid-toolbar" aria-label="Decision table tools">
-      {!readOnly ? <div className="decision-grid-tool-group" role="group" aria-label="History"><StudioButton size="sm" disabled={!undoStack.length} onClick={undo} aria-label="Undo table edit">Undo</StudioButton><StudioButton size="sm" disabled={!redoStack.length} onClick={redo} aria-label="Redo table edit">Redo</StudioButton></div> : null}
+      {!readOnly ? <div className="decision-grid-tool-group" role="group" aria-label="History"><StudioButton size="sm" disabled={!undoStack.length} onClick={undo} aria-label="Undo table edit"><Undo2 size={14} aria-hidden="true" /> Undo</StudioButton><StudioButton size="sm" disabled={!redoStack.length} onClick={redo} aria-label="Redo table edit"><Redo2 size={14} aria-hidden="true" /> Redo</StudioButton></div> : null}
       <div className="decision-grid-tool-group" role="group" aria-label="Structure">
-        {!readOnly ? <StudioButton size="sm" onClick={() => change({ kind: "add-rule" })} disabled={table.rules.length >= 1000}>Add rule</StudioButton> : null}
-        <OverflowMenu ariaLabel="More table actions" items={[
+        {!readOnly ? <StudioButton size="sm" onClick={() => change({ kind: "add-rule" })} disabled={table.rules.length >= 1000}><Plus size={14} aria-hidden="true" /> Add rule</StudioButton> : null}
+        <OverflowMenu ariaLabel="More table actions" triggerIcon={<MoreHorizontal size={16} aria-hidden="true" />} items={[
           ...(!readOnly ? [
             { id: "add-input", label: "Add input", disabled: table.inputs.length >= 32, onSelect: () => addColumn(false) },
             { id: "add-output", label: "Add output", disabled: table.outputs.length >= 16, onSelect: () => addColumn(true) }

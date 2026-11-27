@@ -1,13 +1,14 @@
 name: Docker Images
 
-# Builds and pushes two Elsa 4 host images to Docker Hub:
+# Builds and pushes three Elsa 4 host images to Docker Hub:
 #   - elsaworkflows/elsa-workbench       — development and demo host
 #   - elsaworkflows/elsa-foundation-host — minimal Nuplane + CShells server host
+#   - elsaworkflows/elsa-essentials-host — Nuplane + CShells host with the curated workflow essentials compiled in
 # The workbench is a development and demo host, not the shipped product; the
 # elsaworkflows/elsa-server name is reserved for the clean host once it exists.
 # The Elsa major version (4) is encoded in the image tags:
 #   - pushes to main produce latest + 4.0.0-preview.<run_number>
-# That tag is a build number and names no package version. The Elsa assemblies in both images
+# That tag is a build number and names no package version. The Elsa assemblies in every image
 # carry the versions the Packages workflow computes for the same commit (the versions job below).
 # Images are built only after a merge into main (once the Packages workflow completes for it) and on
 # manual dispatch for a commit on main (#2751). Pull requests build no image; until #2751 a PR that
@@ -101,7 +102,7 @@ jobs:
   versions:
     name: Compute package versions
     needs: admission
-    # Both images are built with computed package versions (ADR 0067, spec 150, #2084, #2126), so each deps.json
+    # Every image is built with computed package versions (ADR 0067, spec 150, #2084, #2126), so each deps.json
     # records every Elsa package at the version the feed carries, and each production configuration declares its
     # Elsa shares host-provided: Nuplane then refuses a feed package that needs a newer one than the image carries.
     # The versions come from the Packages workflow run for the commit being built - never a plan this job computes
@@ -186,7 +187,7 @@ jobs:
     # Pinned to an exact release, not the floating @v1. This workflow pins the
     # BuildKit and Buildx versions the build runs on, and a frontend older than
     # that BuildKit fails the build outright -- see the `# syntax=` pin in
-    # apps/Elsa.Workbench/Dockerfile. On the floating tag an upstream
+    # apps/Elsa.Workbench.Host/Dockerfile. On the floating tag an upstream
     # release moves BuildKit under us and breaks main with no change of ours;
     # pinned, that becomes a deliberate bump where both pins move together.
     uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
@@ -197,7 +198,7 @@ jobs:
       output: image
       push: true
       context: .
-      file: apps/Elsa.Workbench/Dockerfile
+      file: apps/Elsa.Workbench.Host/Dockerfile
       # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
       build-args: |
         ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}
@@ -249,6 +250,42 @@ jobs:
       labels: |
         org.opencontainers.image.title=Elsa Foundation Host
         org.opencontainers.image.description=Minimal Nuplane + CShells Elsa 4 server host
+    secrets:
+      registry-auths: |
+        - registry: docker.io
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+  build-and-push-essentials-host:
+    name: Build & push elsa-essentials-host
+    needs: versions
+    # Same pinned reusable builder as the workbench job above (see the pinning note there):
+    # the BuildKit/Buildx versions must match the `# syntax=` pin in
+    # apps/Elsa.Essentials.Host/Dockerfile.
+    uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      output: image
+      push: true
+      context: .
+      file: apps/Elsa.Essentials.Host/Dockerfile
+      # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
+      build-args: |
+        ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}
+      platforms: linux/amd64,linux/arm64
+      cache: true
+      cache-mode: max
+      cache-scope: elsa-essentials-host
+      meta-images: elsaworkflows/elsa-essentials-host
+      meta-tags: |
+        type=sha
+        type=raw,value=latest
+        type=raw,value=4.0.0-preview.${{ github.run_number }}
+      labels: |
+        org.opencontainers.image.title=Elsa Essentials Host
+        org.opencontainers.image.description=Elsa 4 server host with the curated workflow essentials compiled in
     secrets:
       registry-auths: |
         - registry: docker.io

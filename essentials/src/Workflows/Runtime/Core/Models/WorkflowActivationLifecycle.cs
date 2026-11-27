@@ -31,7 +31,19 @@ public enum WorkflowActivationStep
     SlotTransition,
     ProjectionActivation,
     TriggerObserverNotification,
-    ChannelValidation
+    ChannelValidation,
+
+    /// <summary>
+    /// A kernel host could not map the executable onto its execution model: the diagnostic starts with the refusal's code
+    /// (<c>activity-unsupported</c> or <c>binding-unsupported</c>) and names the node and input. Nothing was minted.
+    /// </summary>
+    Mapping,
+
+    /// <summary>
+    /// A kernel host refused what the executable would serve beside the rest of its serving set: a route that conflicts,
+    /// or a recurring start trigger it does not accept. Nothing was minted.
+    /// </summary>
+    ServingCheck
 }
 
 /// <summary>Where one activation's serving projection stands in a projection store.</summary>

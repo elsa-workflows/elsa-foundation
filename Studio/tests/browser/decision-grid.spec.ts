@@ -109,6 +109,9 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as
     const trigger = actions.getByRole("button", { name: "More decision actions", exact: true });
     await trigger.click();
     const menu = page.getByRole("menu", { name: "More decision actions", exact: true });
+    const autosaveToggle = menu.getByRole("menuitemcheckbox", { name: /Autosave/ });
+    await expect(autosaveToggle).toBeVisible();
+    await expect(autosaveToggle).toHaveAttribute("aria-checked", "true");
     await expect(menu.getByRole("menuitem", { name: "Validate", exact: true })).toBeVisible();
     await expect(menu.getByRole("menuitem", { name: "Export DMN", exact: true })).toBeVisible();
     await expect(menu.getByRole("menuitem", { name: "Publish", exact: true })).toHaveCount(0);
@@ -124,7 +127,10 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as
     await editor.fill(">= 20");
     await editor.press("Enter");
     await expect(save).toBeEnabled();
-    await expect(publish).toBeDisabled();
+    await expect(publish).toBeEnabled();
+    await expect(page.locator(".decision-save-status")).toHaveText("Autosaving…");
+    await expect(page.locator(".decision-save-status")).toHaveText("Autosaved", { timeout: 4000 });
+    await expect(save).toBeDisabled();
     if (width < 600) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   });
 }
@@ -681,7 +687,7 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as
     await page.getByRole("textbox", { name: "Edit selected cell", exact: true }).press("Enter");
     await expect(secondCell).toHaveText("> 21");
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect.poll(() => page.evaluate(() => document.querySelector(".decision-editor-title .studio-status-chip")?.textContent)).toBe("Saved draft");
+    await expect(page.locator(".decision-save-status")).toHaveText("Saved draft");
 
     await page.getByRole("tab", { name: "Tests", exact: true }).click();
     await page.getByRole("button", { name: "Run saved cases", exact: true }).click();
@@ -708,3 +714,69 @@ test("Tab exits the data cells at both grid boundaries while browsing or editing
     expect(await page.evaluate(() => document.activeElement?.closest('[role="gridcell"]') === null)).toBe(true);
   }
 });
+
+test("creating a new decision from the modal opens on the Rules tab", async ({ page }) => {
+  await openComposedDecision(page, "dark");
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("link", { name: "Decisions", exact: true }).click();
+  await page.getByRole("button", { name: "New decision", exact: true }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New decision", exact: true });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Can vote");
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("tab", { name: "Rules", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tabpanel", { name: "Rules" })).toBeVisible();
+  await expect(page.getByRole("tabpanel", { name: "Settings" })).toBeHidden();
+  await expect(page.getByRole("grid")).toBeVisible();
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Can vote");
+});
+
+for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as const) {
+  test(`stays editable after publishing and supports inline edits from a published version in ${theme} theme at ${width}px`, async ({ page }, testInfo) => {
+    const grid = await openComposedDecision(page, theme, width);
+    const publish = page.locator(".decision-actions").getByRole("button", { name: "Publish", exact: true });
+    const save = page.locator(".decision-actions").getByRole("button", { name: "Save", exact: true });
+    await publish.click();
+
+    const badge = page.locator(".decision-editor-title .studio-status-chip");
+    await expect(badge).toHaveText("Published · v1");
+    await expect(badge).toHaveAttribute("data-tone", "success");
+    await expect(publish).toBeDisabled();
+    await expect(grid).toHaveAttribute("aria-readonly", "false");
+    const publishedShot = testInfo.outputPath(`decision-published-editable-${theme}-${width}.png`);
+    await page.screenshot({ path: publishedShot, fullPage: true, animations: "disabled" });
+
+    const firstCell = grid.getByRole("gridcell", { name: "Rule 1, input amount", exact: true });
+    await firstCell.click();
+    await firstCell.press("Enter");
+    const editor = page.getByRole("textbox", { name: "Edit selected cell", exact: true });
+    await editor.fill("<= 25");
+    await editor.press("Enter");
+    await expect(badge).toHaveText("Draft · Unpublished changes");
+    await expect(publish).toBeEnabled();
+    await save.click();
+    await expect(page.locator(".decision-save-status")).toHaveText("Saved draft");
+
+    await page.getByRole("tab", { name: "Version 1", exact: true }).click();
+    await expect(badge).toHaveText("Version 1");
+    await expect(page.getByRole("button", { name: "Restore to draft", exact: true })).toBeVisible();
+    const versionCell = page.getByRole("grid").getByRole("gridcell", { name: "Rule 1, input amount", exact: true });
+    await versionCell.click();
+    await versionCell.press("Enter");
+    const versionEditor = page.getByRole("textbox", { name: "Edit selected cell", exact: true });
+    await versionEditor.fill("<= 30");
+    await versionEditor.press("Enter");
+    await expect(badge).toHaveText("Editing from v1");
+    const banner = page.locator(".decision-version-edit-banner");
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText("Editing from Version 1.");
+    const bannerShot = testInfo.outputPath(`decision-version-inline-edit-${theme}-${width}.png`);
+    await page.screenshot({ path: bannerShot, fullPage: true, animations: "disabled" });
+    if (width < 600) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+
+    await save.click();
+    await expect(badge).toHaveText("Draft · Unpublished changes");
+    await expect(page.getByRole("grid").getByRole("gridcell", { name: "Rule 1, input amount", exact: true })).toHaveText("<= 30");
+  });
+}

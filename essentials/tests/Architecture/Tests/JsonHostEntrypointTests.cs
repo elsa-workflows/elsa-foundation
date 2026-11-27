@@ -9,7 +9,7 @@ public sealed class JsonHostEntrypointTests
 {
     [Theory]
     [InlineData("Elsa.Foundation.Host", true)]
-    [InlineData("Elsa.Workbench", true)]
+    [InlineData("Elsa.Workbench.Host", true)]
     [InlineData("JsonHostOptionsProbe", false)]
     public async Task Real_host_entrypoints_keep_root_HTTP_JSON_options_and_the_default_host_is_a_negative_control(string name, bool conforms)
     {
