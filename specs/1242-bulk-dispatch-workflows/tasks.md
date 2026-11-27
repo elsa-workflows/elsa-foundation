@@ -20,7 +20,7 @@ converter) needs the activity in the catalog.
   - `Dispatch` once per item with iteration id and scope, at most 16 passes open (FR-004, FR-005);
   - routing by outcome and completion, with the ended-index state of plan §2 (FR-006);
   - the cap (FR-007);
-  - faults, child and descendant: intervene and defer, never absorb (FR-008);
+  - faults: no fault handler, so the incident strategy decides; never absorb (FR-008);
   - the `Items` durable-binding treatment, and slots scheduled with the pass's iteration id and their own
     `LoopIterationScopeRequest` (plan §2).
 - [ ] T005 [P] [US1] [US2] Runtime tests (plan, Test scope: Runtime).

@@ -217,12 +217,12 @@ and on-completed-callbacks suites pass.
   dispatched nothing. The converter README documents the difference (FR-023).
 - **Two waiting activities in one parent instance**: each keeps its own children. Elsa 3's shared per-instance
   bookmark and counter is not reproduced.
-- **A slot activity faults**, for example the `WriteLine` in `ChildFaulted`: it becomes a blocking incident on that
-  item's pass. The other passes keep running. The bulk activity does not complete until the incident is resolved, for
-  example by retrying the slot activity (FR-008).
+- **A slot activity faults**, for example the `WriteLine` in `ChildFaulted`: the workflow's incident strategy decides
+  (FR-008). Under the default Fault strategy the workflow faults. Under ContinueWithIncidents it becomes a retryable
+  incident on that item's pass, the other passes keep running, and the bulk activity completes after a retry.
 - **The `Dispatch` execution itself faults** (an input the child does not declare, the nesting depth, a missing pinned
-  target, an error in the `Inputs` or `CorrelationId` expression): the fault stays a retryable blocking incident on that
-  pass (FR-008). `ChildFaulted` does not run for it. Elsa 3 faulted the whole activity.
+  target, an error in the `Inputs` or `CorrelationId` expression): the incident strategy decides, as above.
+  `ChildFaulted` does not run for it. Elsa 3 faulted the whole activity, which is what the default strategy does.
 - **`Dispatch` left empty, or holding another activity**: publish refuses the bulk node (FR-003).
 
 ## Requirements *(mandatory)*
@@ -281,12 +281,12 @@ and on-completed-callbacks suites pass.
   - The cap itself is under question in #5875 (Elsa 3 had none). #5875 settles it for the parallel ForEach and this
     activity together, and this spec follows the outcome.
   - The same cap applies whether or not the children are awaited (Q1).
-- **FR-008**: Faults of child executions are never absorbed.
-  - A fault of the `Dispatch` execution itself, a fault of a slot child, or a fault of an activity deeper inside a slot
-    (which reaches the bulk activity as a descendant fault) stays a blocking incident on its pass, through the
-    child-fault intervention path.
-  - The bulk activity defers; it does not fault, and the other passes go on.
-  - Retrying the faulted activity (`RetryFaultedActivity`) lets the pass end and the bulk activity continue.
+- **FR-008**: Faults of child executions are never absorbed. The bulk activity handles no child faults itself, as
+  `ForEach` and `If` do not, so the workflow's incident strategy decides.
+  - This covers a fault of the `Dispatch` execution itself, of a slot child, or of an activity deeper inside a slot.
+  - Under the default Fault strategy the workflow faults, matching Elsa 3, where the activity faulted.
+  - Under ContinueWithIncidents the fault is a retryable incident on its pass. The other passes go on, and retrying the
+    faulted activity (`RetryFaultedActivity`) lets the pass end and the bulk activity continue.
   - `ChildFaulted` is for children that ended badly (FR-006 outcomes), not for faults of the `Dispatch` node. The node
     raises those as plain exceptions, so they cannot be told apart, and absorbing them would hide recoverable errors.
 - **FR-009**: The activity has one outcome, `Done`.
@@ -310,8 +310,8 @@ and on-completed-callbacks suites pass.
     fails to start is not seen by the bulk activity;
   - that a slot holding a `Flowchart` or another composite that handles its own child faults reports the fault as the
     slot's direct child, so the activity to retry is that direct child;
-  - that a faulted pass keeps its place in the window of 16 until it is retried, so 16 open incidents stall the
-    activity.
+  - that under ContinueWithIncidents a faulted pass keeps its place in the window of 16 until it is retried, so 16
+    open incidents stall the activity.
 
 **Converter**
 
