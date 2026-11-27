@@ -289,6 +289,9 @@ internal interface IFoundationSchedulingStore
     ParkDrainSample? SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere);
 }
 
+internal readonly record struct DueBacklogRead(int Partition, bool ReadPublished);
+internal sealed record DueBacklogSample(int Partition, int? Published, int Estimate);
+
 internal interface IDueBacklogStore
 {
     bool MeasuresDueBacklog => true;
@@ -296,6 +299,26 @@ internal interface IDueBacklogStore
 
     // Count pending due rows using the store's clock, stopping at a positive cap.
     ValueTask<int> CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken = default);
+
+    async ValueTask<IReadOnlyList<DueBacklogSample>> SampleDueBacklogAsync(IReadOnlyList<DueBacklogRead> reads, int cap,
+        CancellationToken cancellationToken)
+    {
+        var samples = new List<DueBacklogSample>(reads.Count);
+        foreach (var read in reads)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            try
+            {
+                int? published = read.ReadPublished ? await ReadPublishedDueBacklogAsync(read.Partition, cancellationToken) : null;
+                samples.Add(new(read.Partition, published, await CountDueBacklogAsync(read.Partition, cap, cancellationToken)));
+            }
+            catch (Exception)
+            {
+                // Observations are independent. Leave the last estimate in place until the next interval.
+            }
+        }
+        return samples;
+    }
 }
 
 /// <summary>

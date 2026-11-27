@@ -21,6 +21,7 @@ internal sealed class BacklogSampling(IDueBacklogStore store, BacklogOptions opt
 
     internal async ValueTask ReadAsync(IReadOnlyList<PartitionFence> fences, long now, CancellationToken cancellationToken)
     {
+        List<DueBacklogRead>? reads = null;
         foreach (var fence in fences)
         {
             if (cancellationToken.IsCancellationRequested) return;
@@ -29,19 +30,26 @@ internal sealed class BacklogSampling(IDueBacklogStore store, BacklogOptions opt
             if (now < sample.NextRead) continue;
 
             sample.NextRead = now + SampleMs;
-            try
+            (reads ??= []).Add(new(fence.Partition, !sample.HasPublished));
+        }
+        if (reads is null) return;
+
+        try
+        {
+            foreach (var row in await store.SampleDueBacklogAsync(reads, options.HighWater + 1, cancellationToken))
             {
-                if (!sample.HasPublished)
+                var sample = _samples[row.Partition];
+                if (row.Published is { } published)
                 {
-                    sample.Estimate = sample.Published = await store.ReadPublishedDueBacklogAsync(fence.Partition, cancellationToken);
+                    sample.Published = published;
                     sample.HasPublished = true;
                 }
-                sample.Estimate = await store.CountDueBacklogAsync(fence.Partition, options.HighWater + 1, cancellationToken);
+                sample.Estimate = row.Estimate;
             }
-            catch (Exception)
-            {
-                // A failed observational read leaves the last estimate and tries again at the next interval.
-            }
+        }
+        catch (Exception)
+        {
+            // A failed observational read leaves the last estimates and tries again at the next interval.
         }
     }
 

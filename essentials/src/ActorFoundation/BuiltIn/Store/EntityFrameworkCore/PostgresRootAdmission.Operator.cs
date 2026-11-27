@@ -190,6 +190,8 @@ internal sealed partial class PostgresRootAdmission
                 if (atCapacity) throw new OperatorReplyCapacity();
             }
 
+            var actor = new InstanceRef(address.Id);
+            attempt?.Require(actor.Partition);
             var receipt = await db.Database.SqlQuery<long>($"""
                 INSERT INTO "FoundationOperatorReceipts" AS r ("Tenant","Operation","Reference","Until")
                 VALUES ({tenant},{digest},{reference},floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
@@ -206,8 +208,6 @@ internal sealed partial class PostgresRootAdmission
                 await tx.CommitAsync(token);
                 return (selected || requireExactTarget) && prior != reference ? null : new(prior, true);
             }
-            var actor = new InstanceRef(address.Id);
-            attempt?.Require(actor.Partition);
             var replyAddress = reply?.Address;
             var (id, header) = EncodeOperator(reference, operation, digest, address.Creation, kind, due, terminal, park,
                 park is not null ? (long)deduplicationWindow.TotalMilliseconds : null, thenDelete, retentionDelete, replyAddress);

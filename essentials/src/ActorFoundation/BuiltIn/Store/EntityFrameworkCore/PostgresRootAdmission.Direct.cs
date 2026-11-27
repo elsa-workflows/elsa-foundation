@@ -110,6 +110,13 @@ internal sealed partial class PostgresRootAdmission
             SELECT ({reply.Deadline} > floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
             """).SingleAsync(cancellationToken)) return await RefuseAsync(DirectResult.Expired);
 
+        var target = new InstanceRef(address.Id);
+        try { attempt?.Require(target.Partition); }
+        catch (RootAdmissionRefused)
+        {
+            if (await HasReceiptAsync()) return await DuplicateAsync();
+            throw;
+        }
         var receipt = await db.Database.SqlQuery<long>($"""
             INSERT INTO "FoundationDirectReceipts" AS r ("Reference", "Operation", "Until")
             VALUES ({reference}, {digest}, floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
@@ -129,8 +136,6 @@ internal sealed partial class PostgresRootAdmission
         if (!FitsEnvelope(header, body, reply?.Address))
             return await RefuseAsync(DirectResult.Refused);
 
-        var target = new InstanceRef(address.Id);
-        attempt?.Require(target.Partition);
         db.Messages.Add(new MessageEntity
         {
             Id = occurrence, InboxScope = InboxKey.FoundationOccurrenceScope, Target = target.Id, Partition = target.Partition,
