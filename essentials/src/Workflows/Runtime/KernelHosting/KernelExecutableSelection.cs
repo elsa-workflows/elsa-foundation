@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Native;
 using Kernel.WorkflowActor;
 
@@ -15,11 +16,9 @@ internal sealed record KernelExecutableSelection(string Workflow, string Definit
                 start.Model != NativeExecutionModel.ModelKey || string.IsNullOrWhiteSpace(start.Workflow) ||
                 string.IsNullOrWhiteSpace(start.Definition)) return null;
             if (start.ExecutableSelection is null) return new(start.Workflow, start.Definition, null);
-            var identity = JsonSerializer.Deserialize<WorkflowExecutableIdentity>(start.ExecutableSelection);
             // The material keeps its original source fields when another logical definition publishes it.
-            return identity is not null && identity.ArtifactId == start.Workflow && !string.IsNullOrWhiteSpace(identity.DefinitionId) &&
-                !string.IsNullOrWhiteSpace(identity.ArtifactHash) && !string.IsNullOrWhiteSpace(identity.ArtifactVersion) &&
-                !string.IsNullOrWhiteSpace(identity.DefinitionVersionId) ? new(start.Workflow, start.Definition, identity) : null;
+            return NativeExecutableMapper.ReadMaterialSelection(start.ExecutableSelection, start.Workflow) is { } identity
+                ? new(start.Workflow, start.Definition, identity) : null;
         }
         catch (JsonException)
         {

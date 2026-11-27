@@ -55,7 +55,7 @@ public sealed partial class RuntimeModelMigrationTests
             history.Skip(previousHistory.Length).Select(id => id[(id.LastIndexOf('_') + 1)..]));
         var after = await LegacyRows(connection);
         foreach (var (table, bytes) in before) Assert.Equal(bytes, after[table]);
-        Assert.Equal(before.Count + 17, after.Count);
+        Assert.Equal(before.Count + 18, after.Count);
         Assert.Empty(await upgraded.KernelScheduleOccurrences.ToListAsync());
         Assert.Empty(await upgraded.KernelScheduleControls.ToListAsync());
         Assert.Empty(await upgraded.KernelExecutablePins.ToListAsync());

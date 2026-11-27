@@ -15,7 +15,10 @@ internal static class KernelScheduleAuthority
 {
     // The built-in Actor Foundation limits StartSpec.TypeData and SetHeader to 16 KiB of UTF-8.
     private const int MaxTypeDataBytes = 16 * 1024;
-    private const int AuthorityVersion = 1;
+    private const int LegacyAuthorityVersion = 1;
+    // Private managed-schedule qualification starts with a fresh Foundation store. A v1 Set already
+    // committed at the same revision has different authority bytes. Runtime occurrence receipts still replay v1.
+    private const int AuthorityVersion = 2;
 
     /// <summary>Builds a managed header from the selected committed control and immutable publication material.</summary>
     /// <returns>Null when the control has been released or its exact source or artifact no longer matches.</returns>
@@ -38,15 +41,16 @@ internal static class KernelScheduleAuthority
             !source.IsLive(timeProvider.GetUtcNow())) return null;
 
         var executable = await executables.FindAsync(owner.Executable.ArtifactId, cancellationToken);
-        if (executable is null || executable.Identity != owner.Executable) return null;
-        var workflow = NativeExecutableMapper.Map(executable, capabilities);
-        var schedules = new NativeSchedules(new WorkflowRegistry().Add(workflow), calendar is null ? null : expression => CronError(calendar, expression));
+        if (executable is null || executable.Identity.ArtifactId != owner.Executable.ArtifactId ||
+            executable.Identity.ArtifactHash != owner.Executable.ArtifactHash) return null;
+        var workflow = NativeExecutableMapper.Map(executable, capabilities, control.DefinitionId);
+        var schedules = NativeSchedules.ForPublications([workflow], calendar is null ? null : expression => CronError(calendar, expression));
         var schedule = schedules.All.SingleOrDefault(item => item.Workflow == owner.Executable.ArtifactId &&
             item.Definition == control.DefinitionId && item.Node == control.TriggerNode && item.Key == control.ScheduleKey);
         if (schedule is null || owner.Continuity is { } continuity &&
             continuity.Stimulus != KernelScheduleClaim.Stimulus(schedule)) return null;
 
-        var start = JsonSerializer.Serialize(WorkflowActor.Start(schedule.Start()));
+        var start = JsonSerializer.Serialize(WorkflowActor.Start(schedule.Start() with { ExecutableSelection = workflow.ExecutableSelection }));
         var authority = new Authority(AuthorityVersion, control.Scope, actors.Tenant, control.ScheduleKey, control.TriggerNode, owner, start);
         var header = new ScheduleHeader(new(schedule.Kind, schedule.Value), schedule.StartKey, control.Revision)
         {
@@ -60,12 +64,13 @@ internal static class KernelScheduleAuthority
     }
 
     internal static RuntimeKernelScheduleOccurrence? ReadOffer(ScheduleOccurrence offer, TriggerScope scope, BoundScope actors) =>
-        ReadOffer(offer, scope, actors, out _);
+        ReadOffer(offer, scope, actors, out _, out _);
 
     internal static RuntimeKernelScheduleOccurrence? ReadOffer(ScheduleOccurrence offer, TriggerScope scope, BoundScope actors,
-        out string? continuity)
+        out string? continuity, out WorkflowExecutableIdentity? material)
     {
         continuity = null;
+        material = null;
         if (offer.Tenant != actors.Tenant || !IsReference(offer.Schedule.Id) ||
             offer.TimerDeliveryId is not { Length: 65 } timer || timer[0] != '~' || timer.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEF") >= 0 ||
             offer.ArmGeneration <= 0 || offer.DueAtUnixMilliseconds <= 0 || offer.DueAtUnixMilliseconds >= offer.OfferUntilUnixMilliseconds ||
@@ -75,10 +80,12 @@ internal static class KernelScheduleAuthority
         try
         {
             if (JsonSerializer.Deserialize<Authority>(payload) is not
-                    { Version: AuthorityVersion, Scope: { Persistence: not null } exactScope, Owner: { Executable: { } executable } owner } authority ||
+                    { Version: LegacyAuthorityVersion or AuthorityVersion, Scope: { Persistence: not null } exactScope,
+                      Owner: { Executable: { } executable } owner } authority ||
                 CanonicalScope(exactScope) != CanonicalScope(scope) || authority.FoundationTenant != actors.Tenant ||
                 !MatchesClaim(authority.ScheduleKey, executable.DefinitionId, authority.TriggerNode, owner) ||
-                ReadPinnedStart(authority.PinnedStart, authority.FoundationTenant, executable, authority.TriggerNode, authority.ScheduleKey) is null)
+                ReadPinnedStart(authority.PinnedStart, authority.FoundationTenant, executable, authority.TriggerNode, authority.ScheduleKey,
+                    out material) is null || (authority.Version == AuthorityVersion) != (material is not null))
                 return null;
 
             if (owner.Continuity is { } span)
@@ -112,8 +119,13 @@ internal static class KernelScheduleAuthority
         owner.SourceReferenceId == WorkflowActivationReferenceIdentity.Create(owner.ActivationId);
 
     // Verify the pinned start structurally and retain the original bytes for immutable receipt replay.
-    internal static StartSpec? ReadPinnedStart(string? pinned, string tenant, WorkflowExecutableIdentity executable, string triggerNode, string scheduleKey)
+    internal static StartSpec? ReadPinnedStart(string? pinned, string tenant, WorkflowExecutableIdentity executable, string triggerNode, string scheduleKey) =>
+        ReadPinnedStart(pinned, tenant, executable, triggerNode, scheduleKey, out _);
+
+    private static StartSpec? ReadPinnedStart(string? pinned, string tenant, WorkflowExecutableIdentity executable, string triggerNode,
+        string scheduleKey, out WorkflowExecutableIdentity? material)
     {
+        material = null;
         if (pinned is not { Length: > 0 } || !FitsTypeData(pinned) ||
             JsonSerializer.Deserialize<StartSpec>(pinned) is not
                 { Type: WorkflowActor.ActorType, TypeData.Length: > 0, Input: { } input, Ephemeral: false, History: History.Full } start)
@@ -124,6 +136,13 @@ internal static class KernelScheduleAuthority
             header.TryGetProperty("Version", out var version) && version.ValueKind != JsonValueKind.Null ||
             header.TryGetProperty("Ephemeral", out var ephemeral) && ephemeral.ValueKind != JsonValueKind.False)
             return null;
+        if (header.TryGetProperty("ExecutableSelection", out var selection))
+        {
+            if (selection.ValueKind != JsonValueKind.String ||
+                NativeExecutableMapper.ReadMaterialSelection(selection.GetString(), executable.ArtifactId) is not { } canonical ||
+                canonical.ArtifactHash != executable.ArtifactHash) return null;
+            material = canonical;
+        }
         var run = WorkflowActor.DescribeRun(new(default, start.Type, tenant, ActorStatus.Running,
             null, null, null, start.TypeData, new Dictionary<string, string>()));
         var matches = run is { Model: NativeExecutionModel.ModelKey, StartedAt: null, Suspended: false, SubStatus: null, History: History.Full } &&
@@ -150,7 +169,7 @@ internal static class KernelScheduleAuthority
 }
 
 internal delegate ValueTask<RuntimeKernelScheduleAttemptOutcome> AcceptScheduleOccurrence(RuntimeKernelScheduleOccurrence occurrence,
-    DateTimeOffset attemptDeadline,
+    WorkflowExecutableIdentity? material, DateTimeOffset attemptDeadline,
     Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken);
 
 internal delegate ValueTask<RuntimeKernelScheduleAttemptOutcome> HandoffScheduleOccurrence(ScheduleOccurrence job,
@@ -184,10 +203,10 @@ internal sealed class KernelScheduleOccurrenceAcceptor : IScheduleOccurrenceAcce
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (attemptDeadline < occurrence.OfferUntilUnixMilliseconds || attemptDeadline > DateTimeOffset.MaxValue.ToUnixTimeMilliseconds() ||
-            KernelScheduleAuthority.ReadOffer(occurrence, _scope, _actors, out var continuity) is not { } offer)
+            KernelScheduleAuthority.ReadOffer(occurrence, _scope, _actors, out var continuity, out var material) is not { } offer)
             return false;
         var deadline = DateTimeOffset.FromUnixTimeMilliseconds(attemptDeadline);
-        var outcome = await _accept(offer, deadline, ReadClockAsync, cancellationToken);
+        var outcome = await _accept(offer, material, deadline, ReadClockAsync, cancellationToken);
         if (outcome == RuntimeKernelScheduleAttemptOutcome.Refused && continuity is not null && _handoff is not null)
             outcome = await _handoff(occurrence, offer, continuity, deadline, ReadClockAsync, cancellationToken);
         return outcome switch

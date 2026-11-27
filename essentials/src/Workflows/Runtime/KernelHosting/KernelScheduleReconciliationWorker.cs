@@ -64,9 +64,13 @@ internal sealed class KernelScheduleReconciliationWorker
     }
 
     internal IScheduleOccurrenceAcceptor CreateAcceptor() =>
-        new KernelScheduleOccurrenceAcceptor(_controlScope, _actors, _readScheduleClock, (occurrence, attemptDeadline, readClock, token) =>
-            WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleOccurrenceStore>()
-                .TryAcceptAttemptAsync(occurrence, attemptDeadline, readClock, token)), TryHandoffAsync);
+        new KernelScheduleOccurrenceAcceptor(_controlScope, _actors, _readScheduleClock, (occurrence, material, attemptDeadline, readClock, token) =>
+            WithRuntimeAsync(services =>
+            {
+                var store = services.GetRequiredService<IRuntimeKernelScheduleOccurrenceStore>();
+                return material is null ? store.TryAcceptAttemptAsync(occurrence, attemptDeadline, readClock, token) :
+                    store.TryAcceptSelectedAttemptAsync(occurrence, material, attemptDeadline, readClock, token);
+            }), TryHandoffAsync);
 
     private ValueTask<RuntimeKernelScheduleAttemptOutcome> TryHandoffAsync(ScheduleOccurrence job,
         RuntimeKernelScheduleOccurrence origin, string continuity, DateTimeOffset attemptDeadline,
@@ -87,11 +91,12 @@ internal sealed class KernelScheduleReconciliationWorker
                 services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(), services.GetRequiredService<IWorkflowExecutableStore>(),
                 _capabilities, _calendar, services.GetRequiredService<IPersistenceAccessContextAccessor>(), _clock, token);
             if (header?.Authority is not { } authority ||
-                KernelScheduleAuthority.ReadOffer(job with { Authority = authority }, _controlScope, _actors) is not { } successor)
+                KernelScheduleAuthority.ReadOffer(job with { Authority = authority }, _controlScope, _actors, out _, out var material) is not { } successor ||
+                material is null)
                 return RuntimeKernelScheduleAttemptOutcome.Retry;
 
             return await services.GetRequiredService<IRuntimeKernelScheduleOccurrenceStore>()
-                .TryHandoffAttemptAsync(origin, successor, continuity, attemptDeadline, readClock, token);
+                .TryHandoffSelectedAttemptAsync(origin, successor, material, continuity, attemptDeadline, readClock, token);
         });
 
     internal async Task RunAsync(CancellationToken token)
