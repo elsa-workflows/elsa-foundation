@@ -11,7 +11,7 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresChildWorkflowChecks
 {
-    internal static async Task<int> RunAsync(bool? fenceInBatch = null, bool shipped = false)
+    internal static async Task<int> RunAsync(bool? fenceInBatch = null, bool shipped = false, bool protectBirths = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(70));
         var token = deadline.Token;
@@ -52,12 +52,15 @@ internal static class PostgresChildWorkflowChecks
             .Add(Wf.Workflow(creatorFaultChild, Wf.SetOutput("finish", "child-value", "unused")))
             .Add(Wf.Workflow("job-parent", Wf.Dispatch("dispatch", "job-child", wait: true)))
             .Add(Wf.Workflow("job-child", Wf.Http("fetch", "https://partner.example/stuck", timeout: TimeSpan.FromMinutes(2))))
-            .Add(Wf.Workflow("bulk-parent", Wf.Node<ReleaseChild>("wait")));
+            .Add(Wf.Workflow("bulk-parent", Wf.Node<ReleaseChild>("wait")))
+            .Add(Wf.Workflow("detached-parent", Wf.Dispatch("dispatch", "detached-child", wait: false)))
+            .Add(Wf.Workflow("detached-child", Wf.Node<ReleaseChild>("wait")));
         var partner = new BlockingPartner();
         using var http = new HttpClient(partner);
         var actor = new ChildFixtureActor(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases,
             new NativeExecutionOptions { Http = new NativeHttpOptions { Client = http } })]), creatorFaultChild);
         var scope = EmbeddedTenant.Bind("workflow-children");
+        var protection = protectBirths ? new ChildBirthProtectionChecks(Open, scope) : null;
         var foundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(Open, actor.Type,
             (bound, _, kind) => ReferenceEquals(bound, scope) && kind == Contract.Kinds.Recover,
             PostgresPreviewHosting.CreateRequests(Open, node, actor.Type), cancellationToken: token);
@@ -91,6 +94,10 @@ internal static class PostgresChildWorkflowChecks
         Check(await foundation.GetAsync(ContractScopes.Bind("other-tenant"), childReference, token) is null,
             "another tenant cannot see the exact child reference");
         var birth = await ChildBirthProofChecks.ReadBirthAsync(Open, scope, reference, childReference, 1, token);
+        if (protection is not null)
+            Check(await protection.MatchesBirthAsync(childReference, birth, token),
+                "the protector authenticated the exact child and creator before the parent's first checkpoint");
+        var attemptsBeforePark = protection?.Attempts(childReference);
         var abandoned = await ChildBirthProofChecks.PlanAbsentAsync(Open, birth, long.MaxValue, long.MaxValue, token);
         Check(birth.Reference == childReference &&
             await birth.ConfirmAsync(Open, scope, token) == FoundationChildBirthProof.Unresolved &&
@@ -113,6 +120,8 @@ internal static class PostgresChildWorkflowChecks
             var awaitingAfterPark = await WaitForAsync(reference, image => image.Revision > 1, successor);
             Check(parkedChild.Revision == 3 && awaitingAfterPark is { Status: InstanceStatus.Running, Revision: 2, Children: not null },
                 "the child's S6 timer opens Park and its non-final notice commits without resuming Dispatch");
+            if (protection is not null)
+                Check(protection.Attempts(childReference) == attemptsBeforePark, "Park creates no new protection for the existing child birth");
             Check(await abandoned.ConfirmAsync(Open, scope, token) == FoundationChildBirthProof.IssuanceFencedAbsent &&
                 await birth.ConfirmAsync(Open, scope, token) == FoundationChildBirthProof.Unresolved,
                 "a replacement epoch proves exact absence without releasing a committed parked child");
@@ -217,6 +226,20 @@ internal static class PostgresChildWorkflowChecks
             Check(!await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "FoundationRootChildCascades" WHERE "Reference" = {bulkParent.Id}) AS "Value"
                 """).SingleAsync(token), "the durable second cascade page reaches its child and clears the ledger");
+            if (protection is not null)
+            {
+                var detached = await nextFoundation.SendAsync(scope, new Contract.Target.Start(
+                    WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("detached-parent"))),
+                    "detached-parent", Contract.Kinds.Start, cancellationToken: token);
+                var detachedParent = detached.Actor!.Value;
+                var ended = await WaitForAsync(detachedParent, image => image.Status == InstanceStatus.Finished, successor);
+                var detachedRef = protection.ForWorkflow("detached-child");
+                var detachedChild = await WaitForAsync(detachedRef, image => image.Status == InstanceStatus.Running, successor);
+                var detachedBirth = await ChildBirthProofChecks.ReadBirthAsync(Open, scope, detachedParent, detachedRef, ended.Revision, token);
+                Check(ended.Revision == 1 && detachedChild.Parent is null && await protection.MatchesBirthAsync(detachedRef, detachedBirth, token),
+                    "a detached Native child was protected by its issuing parent checkpoint without an attachment");
+                Check(protection.RetriedExactPartial, "a partial pin batch was retried with identical issuance and no Foundation write or birth");
+            }
             await CheckRegistryGuardAsync();
             Check(service.LastError is null && successor.LastError is null, "both owners stopped and ran without fault");
         }
@@ -225,11 +248,14 @@ internal static class PostgresChildWorkflowChecks
         PostgresPreviewHostedService StartService(string name, PostgresDirectRequests? requests)
         {
             var loop = new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(15) };
+            if (protection is not null && fenceInBatch is null)
+                return PostgresPreviewHostedService.CreateWithChildBirthProtection(Open, name, actor, protection.ProtectAsync,
+                    Escalate, options: loop, requests: requests);
             return new(Open, name, actor, Escalate, loop, requests: requests)
             {
                 StartNode = fenceInBatch is null ? null : (onFault, stop) =>
                     PostgresPreviewHosting.StartAsync(Open, name, actor, Escalate, loop, stop, onFault,
-                        (IReplyTransport?)requests, fenceInBatch)
+                        (IReplyTransport?)requests, fenceInBatch, protectChildBirths: protection is null ? null : protection.ProtectAsync)
             };
 
             static void Escalate(string message) => throw new InvalidOperationException(message);
@@ -283,6 +309,9 @@ internal static class PostgresChildWorkflowChecks
                             AND "InboxScope" = 0 AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}) AS "Value"
                         """).SingleAsync(token), "the first child checkpoint retains the failed creator and commits the non-final parent notice");
                 var creatorPark = await ChildBirthProofChecks.ReadBirthAsync(Open, scope, target, address, 1, token);
+                if (protection is not null)
+                    Check(await protection.MatchesBirthAsync(address, creatorPark, token) && protection.Attempts(address) == 1,
+                        "creator Park keeps the original exact protection and does not request another");
                 Check(await creatorPark.ConfirmAsync(Open, scope, token) == FoundationChildBirthProof.Unresolved,
                     "a child parked at its first creator checkpoint keeps the existing birth pin");
                 return (target, address, creator);

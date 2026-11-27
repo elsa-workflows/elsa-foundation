@@ -1,5 +1,6 @@
 using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
+using Kernel.Foundation.Hosting;
 using Kernel.Runtime.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -39,8 +40,21 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
         return new(create, node, actor, endProcess, options, logger, requests, auxiliaryActor) { RetentionWindow = retentionWindow };
     }
 
+    /// <summary>Creates an owner that protects every prepared child birth before committing its parent checkpoint.</summary>
+    public static PostgresPreviewHostedService CreateWithChildBirthProtection(Func<KernelDb> create, string node, IActorType actor,
+        ProtectChildBirthsAsync protectChildBirths, Action<string> endProcess,
+        Func<ActorHeader, TimeSpan?>? retentionWindow = null, LoopOptions? options = null,
+        ILogger<PostgresPreviewHostedService>? logger = null, PostgresDirectRequests? requests = null, IActorType? auxiliaryActor = null)
+    {
+        ArgumentNullException.ThrowIfNull(protectChildBirths);
+        if (auxiliaryActor is not null) Kernel.Durable.ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
+        return new(create, node, actor, endProcess, options, logger, requests, auxiliaryActor, protectChildBirths)
+            { RetentionWindow = retentionWindow };
+    }
+
     private PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor, Action<string> endProcess,
-        LoopOptions? options, ILogger<PostgresPreviewHostedService>? logger, PostgresDirectRequests? requests, IActorType? auxiliaryActor)
+        LoopOptions? options, ILogger<PostgresPreviewHostedService>? logger, PostgresDirectRequests? requests, IActorType? auxiliaryActor,
+        ProtectChildBirthsAsync? protectChildBirths = null)
     {
         ArgumentNullException.ThrowIfNull(endProcess);
         if (requests is not null && requests.Node != node)
@@ -53,7 +67,7 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
                 Kernel.Durable.IReplyTransport? replies = requests;
                 if (replies is not null && ObserveReplies is { } observe) replies = observe(replies);
                 return PostgresPreviewHosting.StartAsync(create, node, actor, escalate, options, token, fault, replies,
-                    retentionWindow: RetentionWindow, auxiliaryActor: auxiliaryActor);
+                    retentionWindow: RetentionWindow, auxiliaryActor: auxiliaryActor, protectChildBirths: protectChildBirths);
             }, logger);
     }
 
