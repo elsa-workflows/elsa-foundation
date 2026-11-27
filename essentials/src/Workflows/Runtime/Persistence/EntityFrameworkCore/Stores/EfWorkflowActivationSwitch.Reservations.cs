@@ -12,8 +12,8 @@ public sealed partial class EfWorkflowActivationSwitch
     internal IReadOnlyDictionary<string, IIngressReservationPolicy> ReservationPolicies => _reservationPolicies;
     internal RuntimeDbContext ReservationContext => _context;
 
-    private async ValueTask StageReservationsAsync(WorkflowActivationSlot slot, CancellationToken ct,
-        IReadOnlyList<WorkflowTriggerBinding>? adoptedSchedules = null, bool repair = false)
+    private async ValueTask<Func<CancellationToken, Task>?> StageReservationsAsync(WorkflowActivationSlot slot, CancellationToken ct,
+        IReadOnlyList<WorkflowTriggerBinding>? adoptedSchedules = null, bool repair = false, bool slotFenced = false)
     {
         var persistence = _accessContextAccessor.Current.RequireScope();
         var store = new EfIngressReservationStore(_context, _accessContextAccessor);
@@ -53,8 +53,35 @@ public sealed partial class EfWorkflowActivationSwitch
         }
         var previous = await store.StageOwnerAsync(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId,
             claims, ct, _reservationPolicies, adoptSchedules: onlySchedules);
-        if (desired.Length != 0 || previous.Any(claim => claim.StimulusType == RuntimeKernelScheduleOccurrence.ReservationType))
-            await new EfRuntimeKernelScheduleControlStore(_context, _accessContextAccessor).StageAsync(persistence, slot.SlotId,
-                desired, ct, adoptSchedules: adoptedSchedules is not null);
+        if (desired.Length == 0 && !previous.Any(claim => claim.StimulusType == RuntimeKernelScheduleOccurrence.ReservationType))
+            return null;
+
+        var controls = new EfRuntimeKernelScheduleControlStore(_context, _accessContextAccessor);
+        if (!desired.Any(control => control.Owner?.Continuity is not null))
+        {
+            await controls.StageAsync(persistence, slot.SlotId, desired, ct, adoptSchedules: adoptedSchedules is not null);
+            return null;
+        }
+
+        // The first SaveChanges claims or moves the physical slot. Sample the Foundation clock with that claim held,
+        // inside the transaction that will publish the sampled instant with its controls.
+        return async token =>
+        {
+            await controls.StageAsync(persistence, slot.SlotId, desired, token, adoptSchedules: adoptedSchedules is not null,
+                readCutover: ReadCutoverAsync);
+            if (!_context.ChangeTracker.HasChanges()) return;
+            var assignOrdinals = EfRuntimeKernelScheduleControlStore.AssignOrdinalsAfterSave(_context, persistence.Value);
+            await _context.SaveChangesAsync(token);
+            if (assignOrdinals is not null) await assignOrdinals(token);
+        };
+
+        async ValueTask<DateTimeOffset> ReadCutoverAsync(CancellationToken token)
+        {
+            var clock = _scheduleCutoverClock ?? throw new InvalidOperationException("Managed schedule publication requires the bound Actor Foundation clock.");
+            if (!slotFenced && !await EfAdmissionTargetFence.LockSlotAsync(_context, persistence.Value, slot.WorkflowDefinitionId,
+                    slot.SlotName, slot, token))
+                throw new DbUpdateConcurrencyException("The schedule publication changed before its cutover clock could be sampled.");
+            return await clock.ReadAsync(persistence, token);
+        }
     }
 }

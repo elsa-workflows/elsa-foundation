@@ -99,11 +99,12 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 
 [assembly: EfSchemaFamily(RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion,
     Entities = [typeof(RuntimeKernelScheduleOccurrenceEntity)],
-    Upcasters = [typeof(RuntimeKernelScheduleOccurrenceV1Upcaster), typeof(RuntimeKernelScheduleOccurrenceRetirementUpcaster)])]
+    Upcasters = [typeof(RuntimeKernelScheduleOccurrenceV1Upcaster), typeof(RuntimeKernelScheduleOccurrenceRetirementUpcaster), typeof(RuntimeKernelScheduleOccurrenceRenewalUpcaster)])]
 [assembly: EfSchemaContent(RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily, typeof(RuntimeKernelScheduleOccurrenceEntity),
     nameof(RuntimeKernelScheduleOccurrenceEntity.ContentJson))]
 [assembly: EfSchemaFamily(RuntimeKernelScheduleControlEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelScheduleControlEfModule.SchemaVersion,
-    Entities = [typeof(RuntimeKernelScheduleControlEntity), typeof(RuntimeKernelScheduleControlScanEntity)])]
+    Entities = [typeof(RuntimeKernelScheduleControlEntity), typeof(RuntimeKernelScheduleControlScanEntity), typeof(RuntimeKernelScheduleCutoverEntity)],
+    Upcasters = [typeof(RuntimeKernelScheduleControlV1Upcaster)])]
 [assembly: EfSchemaContent(RuntimeKernelScheduleControlEfModule.SchemaFamily, typeof(RuntimeKernelScheduleControlEntity),
     nameof(RuntimeKernelScheduleControlEntity.ContentJson))]
 [assembly: EfSchemaFamily(RuntimeKernelExecutablePinEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelExecutablePinEfModule.SchemaVersion,

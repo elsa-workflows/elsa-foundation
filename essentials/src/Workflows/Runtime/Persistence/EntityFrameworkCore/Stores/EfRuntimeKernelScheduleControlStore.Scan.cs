@@ -81,7 +81,7 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore
         var afterOrdinal = next?.Ordinal ?? 0;
         var afterId = next?.Id;
         var writeVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleControlEfModule.SchemaFamily,
-            RuntimeKernelScheduleControlEfModule.SchemaVersion, pass.SchemaVersion);
+            RuntimeKernelScheduleControlEfModule.InitialSchemaVersion, pass.SchemaVersion);
         var count = await ScanState(context, Hash(scope.Persistence.Value), TenantHash(scope)).Where(state => state.Pass == pass.Pass &&
                 state.Through == pass.Through && state.AfterOrdinal == pass.AfterOrdinal && state.AfterId == pass.AfterId &&
                 state.SchemaVersion == pass.SchemaVersion)
@@ -136,7 +136,7 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore
 
     private static void StampScanState(RuntimeDbContext db, RuntimeKernelScheduleControlScanEntity state) =>
         state.SchemaVersion = RuntimeSchemaWriteVersion.For(db, RuntimeKernelScheduleControlEfModule.SchemaFamily,
-            RuntimeKernelScheduleControlEfModule.SchemaVersion, state.SchemaVersion);
+            RuntimeKernelScheduleControlEfModule.InitialSchemaVersion, state.SchemaVersion);
 
     private sealed record ScanPosition(long Pass, long Through, long AfterOrdinal, string? AfterId, string SchemaVersion);
     private sealed record ScanPage(TriggerScope Scope, IReadOnlyList<RuntimeKernelScheduleControl> Items, ScanPosition Position,

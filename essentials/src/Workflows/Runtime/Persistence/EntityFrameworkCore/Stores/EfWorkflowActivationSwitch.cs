@@ -42,6 +42,7 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
     private readonly EfWorkflowTriggerBindingStore _bindings;
     private readonly EfRecurringTriggerScheduleStore? _schedules;
     private readonly EfWorkflowExecutableSourceReferenceStore _references;
+    private readonly WorkflowScheduleCutoverClock? _scheduleCutoverClock;
 
     public EfWorkflowActivationSwitch(
         IWorkflowActivationAuthority authority,
@@ -55,7 +56,15 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
     public EfWorkflowActivationSwitch(IWorkflowActivationAuthority authority, IWorkflowTriggerBindingStore triggerBindingStore,
         IWorkflowExecutableSourceReferenceStore sourceReferenceStore, IPersistenceAccessContextAccessor accessContextAccessor,
         TimeProvider timeProvider, IEnumerable<IIngressReservationPolicy> reservationPolicies, IRecurringTriggerScheduleStore? recurringScheduleStore = null)
+        : this(authority, triggerBindingStore, sourceReferenceStore, accessContextAccessor, timeProvider, reservationPolicies,
+            recurringScheduleStore, scheduleCutoverClock: null) { }
+
+    public EfWorkflowActivationSwitch(IWorkflowActivationAuthority authority, IWorkflowTriggerBindingStore triggerBindingStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore, IPersistenceAccessContextAccessor accessContextAccessor,
+        TimeProvider timeProvider, IEnumerable<IIngressReservationPolicy> reservationPolicies, IRecurringTriggerScheduleStore? recurringScheduleStore,
+        WorkflowScheduleCutoverClock? scheduleCutoverClock)
     {
+        _scheduleCutoverClock = scheduleCutoverClock;
         _reservationPolicies = RuntimeIngressReservationRules.Policies(reservationPolicies);
         _authority = authority as EfWorkflowActivationAuthority ?? throw Unsupported(authority);
         _context = _authority.Context;
@@ -82,8 +91,8 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(request.ActivationId), current => ResumeFailed(current, request.ActivationId), cancellationToken);
                 if (replaced is not null)
                     await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(replaced), current => RetireReplaced(current, request.UpdatedAt), cancellationToken);
-                await StageReservationsAsync(transition.Slot, cancellationToken);
-                return Step.Commit(transition);
+                var afterSave = await StageReservationsAsync(transition.Slot, cancellationToken, slotFenced: true);
+                return Step.Commit(transition, afterSave);
             },
             cancellationToken);
     }
@@ -114,8 +123,8 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 if (replaced is not null)
                     await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(replaced), current => RestoreReplaced(current, replaced), cancellationToken);
                 await _references.StageMoveAsync(revert.Reference.SourceReferenceId, current => RetireFailed(current, revert.Reference, _timeProvider.GetUtcNow()), cancellationToken);
-                await StageReservationsAsync(reverted.Slot, cancellationToken);
-                return Step.Commit(true);
+                var afterSave = await StageReservationsAsync(reverted.Slot, cancellationToken, slotFenced: true);
+                return Step.Commit(true, afterSave);
             },
             cancellationToken);
     }
@@ -138,8 +147,8 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 foreach (var activationId in serving.OfType<string>().Distinct(StringComparer.Ordinal))
                     if (await StageDeletionAsync(scope, activationId, unlessServing: false, cancellationToken) == ProjectionStaging.Moved)
                         return Step.Moved<WorkflowActivationTransition>();
-                await StageReservationsAsync(transition.Slot, cancellationToken);
-                return Step.Commit(transition);
+                var afterSave = await StageReservationsAsync(transition.Slot, cancellationToken, slotFenced: true);
+                return Step.Commit(transition, afterSave);
             },
             cancellationToken);
     }
@@ -182,8 +191,8 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                         await StageStatesAsync(scope, plan.ActivationId, cancellationToken)))
                     return Step.Discard(false);
                 if (await StageRepairAsync(scope, plan, cancellationToken)) return Step.Moved<bool>();
-                await StageReservationsAsync(slot, cancellationToken);
-                return Step.Commit(true);
+                var afterSave = await StageReservationsAsync(slot, cancellationToken);
+                return Step.Commit(true, afterSave);
             },
             cancellationToken);
     }
@@ -260,10 +269,18 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                     return step.HasMoved ? EfWriteAttempt<T>.Retry() : step.Value;
                 }
 
-                return await _context.TryCommitAndClearAsync(transaction, Commits, operation, cancellationToken,
-                        EfRuntimeKernelScheduleControlStore.AssignOrdinalsAfterSave(_context, scope)) is { } conflict
-                    ? EfWriteAttempt<T>.Retry(conflict)
-                    : step.Value;
+                try
+                {
+                    return await _context.TryCommitAndClearAsync(transaction, Commits, operation, cancellationToken,
+                            step.AfterSave ?? EfRuntimeKernelScheduleControlStore.AssignOrdinalsAfterSave(_context, scope)) is { } conflict
+                        ? EfWriteAttempt<T>.Retry(conflict)
+                        : step.Value;
+                }
+                catch
+                {
+                    _context.ChangeTracker.Clear();
+                    throw;
+                }
             },
             conflict => throw EfRuntimeOperationalStoreSupport.CommitFailure(operation, conflict),
             cancellationToken);
@@ -278,11 +295,11 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
         "Compose the slot authority, the projection stores and the source-reference store through AddRuntimeEntityFrameworkCore (#2230).");
 
     /// <summary>What one attempt staged: a value to commit, a value to roll back, or a state that moved.</summary>
-    private readonly record struct Step<T>(T Value, bool Commits, bool HasMoved);
+    private readonly record struct Step<T>(T Value, bool Commits, bool HasMoved, Func<CancellationToken, Task>? AfterSave = null);
 
     private static class Step
     {
-        public static Step<T> Commit<T>(T value) => new(value, true, false);
+        public static Step<T> Commit<T>(T value, Func<CancellationToken, Task>? afterSave = null) => new(value, true, false, afterSave);
 
         public static Step<T> Discard<T>(T value) => new(value, false, false);
 
