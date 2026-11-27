@@ -90,7 +90,8 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return new(databasePath, node, actorType, StoreFormat.RootDirectTestRunQualification, protectRootStart);
     }
 
-    internal static SqliteEmbeddedFoundation ForEphemeralTestRunQualification(string databasePath, string node, string actorType,
+    /// <summary>Binds the private SQLite Ephemeral Test Run format with its executable protection.</summary>
+    public static SqliteEmbeddedFoundation ForEphemeralTestRunQualification(string databasePath, string node, string actorType,
         ProtectRootStartAsync protectRootStart)
     {
         ArgumentNullException.ThrowIfNull(protectRootStart);

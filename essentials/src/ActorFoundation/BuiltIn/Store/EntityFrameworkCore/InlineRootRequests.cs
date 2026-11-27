@@ -27,11 +27,15 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
     private (EfStore Store, Worker Worker, Action<Kernel.Runtime.InstanceRef> Wake)? _owner;
     private bool _closed;
 
-    internal InlineRootRequests(Contract.BoundScope scope, string actorType,
+    /// <summary>Binds the primary scope and a second host-owned scope to the same inline owner.</summary>
+    /// <remarks>The installed format must explicitly support the additional scope. Configure it once with a distinct isolated tenant.</remarks>
+    public InlineRootRequests(Contract.BoundScope scope, string actorType,
         Func<Contract.StartSpec, object, bool> validate, ProtectRootStartAsync protect,
         Contract.BoundScope additionalScope, Func<Contract.ActorStatus, bool> allowAdditionalWriteFreeCompletion)
         : this(scope, actorType, validate, protect)
     {
+        ArgumentNullException.ThrowIfNull(additionalScope);
+        ArgumentNullException.ThrowIfNull(allowAdditionalWriteFreeCompletion);
         if (additionalScope.Tenant == scope.Tenant)
             throw new ArgumentException("The additional inline scope must name a distinct tenant.", nameof(additionalScope));
         _additionalScope = additionalScope;
@@ -70,10 +74,14 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
     public ValueTask<InlineStartOutcome> StartAsync(string operationId, Contract.StartSpec start, object material,
         CancellationToken token) => StartCoreAsync(scope, operationId, start, material, token);
 
-    internal ValueTask<InlineStartOutcome> StartAdditionalAsync(string operationId, Contract.StartSpec start, object material,
-        CancellationToken token) => _additionalScope is { } additional
-        ? StartCoreAsync(additional, operationId, start, material, token)
-        : ValueTask.FromResult(new InlineStartOutcome(InlineStartDisposition.Refused));
+    /// <summary>Offers an exact start and its trusted local material to the additional scope bound at composition.</summary>
+    public ValueTask<InlineStartOutcome> StartAdditionalAsync(string operationId, Contract.StartSpec start, object material,
+        CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        return _additionalScope is { } additional ? StartCoreAsync(additional, operationId, start, material, token)
+            : ValueTask.FromResult(new InlineStartOutcome(InlineStartDisposition.Refused));
+    }
 
     private async ValueTask<InlineStartOutcome> StartCoreAsync(Contract.BoundScope selectedScope, string operationId,
         Contract.StartSpec start, object material, CancellationToken token)
