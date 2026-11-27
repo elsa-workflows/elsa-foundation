@@ -429,7 +429,46 @@ bash essentials/tests/ActorFoundation/Native/Run/check-sqlite-shipped-compatibil
 ```
 
 This is a tested SQLite floor for family versions 3/27/1 and definitions 2/10/0.
-Published rollback floors for both providers remain a release qualification item.
+
+### Shipped protocol 30 to 31 rehearsal
+
+The archive launchers also accept an explicit `--pair`, with a full local Git commit and both stored marker rows for each
+side. Invoking either script without `--pair` still selects its historical pair. Each receipt records the selected
+commits and markers and the provider and store assembly hashes compiled from each archive.
+
+| Provider | Prior `d12556dd3e` | Candidate `1735303b8c` | Tested compatible reopen |
+|---|---|---|---|
+| PostgreSQL 17.12 | `3/30/1`, definitions `1/10/0` | `3/31/1`, definitions `1/11/0` | `1735303b8c`, both fences, epoch 2 |
+| SQLite | `3/30/1`, definitions `2/13/0` | `3/31/1`, definitions `2/14/0` | `1735303b8c`, both fences, epoch 2 |
+
+On PostgreSQL, the shipped installers created 1,024 virtual partitions in each disposable database. The incompatible
+installer, startup, take, sweep, projector, Foundation edge and journal refused while the other owner was live. After
+stop, the installer, startup and take also refused in both directions. Schema, table contents and sequence state matched
+after each refusal, with live heartbeat timestamps excluded. On SQLite, the process lock refused the live cross-version
+attachment in both directions. After stop, the candidate installer and startup refused the prior marker, and the prior
+installer, startup, sweeper, projected read and journal read refused the candidate marker. Schema and persisted rows
+matched across those checks, with live heartbeat timestamps excluded. Each live owner committed again at the same epoch.
+
+The protocol 31 owner started on a separate empty store under pre-GA recreation. The same protocol 31 build reopened it
+in a separate process, continued the exact actor and preserved the earlier physical journal prefix. The tested rollback
+floor for those protocol 31 stores is the candidate build in the table. To run protocol 30 again, use the retained
+protocol 30 store or restore its pre-recreation backup before opening it with the matching build. The evidence covers
+this exact pair and the recreation and reopen paths. The final release's published floor remains a release qualification
+item.
+
+```sh
+bash essentials/tests/ActorFoundation/Native/Run/check-postgres-shipped-compatibility.sh --pair \
+  d12556dd3ecce63ede740692a786a4c92312c6e3 '1=3/30/1 2=1/10/0' \
+  1735303b8c164d09d9ae4bb91a3776bc1dc070e9 '1=3/31/1 2=1/11/0'
+bash essentials/tests/ActorFoundation/Native/Run/check-sqlite-shipped-compatibility.sh --pair \
+  d12556dd3ecce63ede740692a786a4c92312c6e3 '1=3/30/1 2=2/13/0' \
+  1735303b8c164d09d9ae4bb91a3776bc1dc070e9 '1=3/31/1 2=2/14/0'
+```
+
+The existing `pg-runtime-cluster 1024 wake` fixture also passed on the candidate product tree using its ordinary relational
+profile on PostgreSQL 17.12. Two local processes owned 512 partitions each, continued the actor through an orderly handoff,
+and released all 1,024 partitions. This is single-host topology evidence. Networked-machine takeover latency remains a
+separate gate.
 
 ## Gate 2 review: counterexamples and answers
 
