@@ -16,6 +16,7 @@ using Contract = Kernel.Foundation.Contracts;
 using NativeHttpRequest = Kernel.Native.HttpRequest;
 using NativeHttpResponse = Kernel.Native.HttpResponse;
 using LiveWorkflowActor = Kernel.WorkflowActor.WorkflowActor;
+using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
 
 namespace Kernel.Native.Run;
 
@@ -39,11 +40,24 @@ internal static class PostgresLiveRemoteHttpChecks
         const string caller = "z-http-caller";
         var scope = ContractScopes.Bind("postgres-live-replies");
         var body = new string('π', 96 * 1024);
-        var registry = new WorkflowRegistry()
-            .Add(Wf.Workflow("reply", Wf.Sequence("main", Wf.HttpEndpoint("open", "reply"), Wf.Respond("answer", body, 202))))
-            .Add(Wf.Workflow("oversized", Wf.Sequence("main", Wf.HttpEndpoint("open", "oversized"), Wf.Node<OverWireBudget>("answer"))))
-            .Add(Wf.Workflow("end-only", Wf.HttpEndpoint("open", "end-only")));
-        var model = new LiveWorkflowActor([new NativeExecutionModel(registry)]);
+        var serving = new KernelServing(capabilities: new(Schedules: false, Children: false, HttpWaits: false));
+        await serving.ServeHostWorkflowAsync(Wf.Workflow("reply", Wf.Sequence("main",
+            Wf.HttpEndpoint("open", "reply"), Wf.Respond("answer", body, 202))), stop);
+        await serving.ServeHostWorkflowAsync(Wf.Workflow("oversized", Wf.Sequence("main",
+            Wf.HttpEndpoint("open", "oversized"), Wf.Node<OverWireBudget>("answer"))), stop);
+        await serving.ServeHostWorkflowAsync(Wf.Workflow("end-only", Wf.HttpEndpoint("open", "end-only")), stop);
+        var flowchart = NativeExecutableMapper.Map(ExecutableOf("mapped-http", "mapped-http",
+            Node("flow", Types.Flowchart, structure: Structure("elsa.flowchart.structure", new
+            {
+                startNodeId = "open",
+                connections = new[] { new { source = new { nodeId = "open", port = "Done" }, target = new { nodeId = "answer" } } }
+            }), slots: [Slot("Flowchart.Activities",
+                Node("open", Types.HttpEndpoint, [Literal("Path", "flowchart"), Literal("SupportedMethods", new[] { "POST" }),
+                    Literal("CanStartWorkflow", true, "Boolean")]),
+                Node("answer", Types.WriteHttpResponse, [Literal("StatusCode", 201, "Int32"), Literal("Body", "mapped flowchart")]))])),
+            serving.Capabilities);
+        await serving.ServeHostWorkflowAsync(flowchart, stop);
+        var model = new LiveWorkflowActor([new NativeExecutionModel(serving.Registry)]);
         var loops = new LoopOptions { BalanceEvery = TimeSpan.FromMilliseconds(125), PollInterval = TimeSpan.FromMilliseconds(25) };
         var edge = PostgresPreviewHosting.CreateRequests(Open, caller, model.Type);
         var ownerEdge = PostgresPreviewHosting.CreateRequests(Open, owner, model.Type);
@@ -68,8 +82,8 @@ internal static class PostgresLiveRemoteHttpChecks
         {
             var token = context.RequestAborted;
             var start = Start(workflow);
-            var reply = await foundation.RequestAsync(scope, new Contract.Target.Start(start), workflow + "-id", Contract.Kinds.Start,
-                null, null, new(null, await edge.ReadClockAsync(token) + (workflow == "oversized" ? 2_000 : 10_000)), token);
+            var reply = await foundation.RequestAsync(scope, new Contract.Target.Start(start.Spec), workflow + "-id", Contract.Kinds.Start,
+                null, null, new(null, await edge.ReadClockAsync(token) + (workflow == "oversized" ? 2_000 : 10_000), start.RespondBeforeCommit), token);
             var answer = KernelHttpEdge.Answer(reply);
             foreach (var field in answer.Headers) context.Response.Headers[field.Key] = field.Value;
             return Results.Text(answer.Body, answer.ContentType, statusCode: answer.StatusCode);
@@ -89,12 +103,18 @@ internal static class PostgresLiveRemoteHttpChecks
             !await db.Messages.AsNoTracking().AnyAsync(row => row.Target == checkpoint.Actor.Id && row.ReplyTo != null, stop),
             "the remote owner committed once and cleared the live route before delivery");
 
+        using var mapped = await client.PostAsync("/flowchart", new StringContent(""), stop);
+        Check(mapped.StatusCode == HttpStatusCode.Created && await mapped.Content.ReadAsStringAsync(stop) == "mapped flowchart" &&
+            mapped.Headers.GetValues(KernelHttpEdge.WorkflowInstanceIdHeader).Single() is { } mappedId &&
+            await store.ReadFirstRootAsync(scope.Tenant, mappedId, stop) is { Status: InstanceStatus.Finished, TerminalRevision: 1 } &&
+            await db.Partitions.AsNoTracking().Where(row => row.Id == 0).Select(row => row.Owner).SingleAsync(stop) == owner,
+            "the mapped Flowchart answers through the actual carrier after its remote owner commits");
         using var oversized = await client.PostAsync("/oversized", new StringContent(""), stop);
         await refusedWire.Task.WaitAsync(stop);
         Check(oversized.StatusCode == HttpStatusCode.GatewayTimeout &&
             await oversized.Content.ReadAsStringAsync(stop) == "the workflow did not answer in time",
             "an authored reply over the real carrier's byte limit leaves the caller to time out");
-        var original = await foundation.SendAsync(scope, new Contract.Target.Start(Start("oversized")), "oversized-id",
+        var original = await foundation.SendAsync(scope, new Contract.Target.Start(Start("oversized").Spec), "oversized-id",
             Contract.Kinds.Start, cancellationToken: stop);
         Check(original is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: { } oversizedActor } &&
             await store.ReadFirstRootAsync(scope.Tenant, oversizedActor.Id, stop) is { Status: InstanceStatus.Finished, TerminalRevision: 1 },
@@ -105,8 +125,12 @@ internal static class PostgresLiveRemoteHttpChecks
         await application.StopAsync(stop);
         return 0;
 
-        static Contract.StartSpec Start(string workflow) => LiveWorkflowActor.Start(NativeExecutionModel.Start(workflow, triggerNode: "open",
-            trigger: Values.From(new NativeHttpRequest("POST", "/" + workflow, new JsonObject()))));
+        KernelHttpStart Start(string workflow)
+        {
+            var path = "/" + workflow;
+            return KernelHttpEdge.Match(serving, new NativeHttpRequest("POST", path, new JsonObject()), path)
+                ?? throw new InvalidOperationException("The fixture route does not start its registered workflow.");
+        }
     }
 
     public sealed class OverWireBudget : Activity
