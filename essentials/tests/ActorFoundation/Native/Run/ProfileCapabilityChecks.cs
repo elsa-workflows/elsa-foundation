@@ -416,6 +416,21 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(publicEventsPostgres) is { StoreSchema: 1, MessageProtocol: 27, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(publicEventsSqlite) is { StoreSchema: 2, MessageProtocol: 30, JournalCodec: 0 },
             "private outside Events carry their own marker and definitions while preserving shared activation");
+        using var publicHostPostgres = KernelDb.ForPostgresRootPublicEventHostQualification(options, new("fixture", ProtectsStarts: true));
+        using var publicHostSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(),
+            StoreFormat.RootPublicEventHostQualification, new("fixture", ProtectsStarts: false));
+        Check(publicHostPostgres.RequiredFormat == StoreFormat.RootPublicEventHostQualification &&
+            publicHostSqlite.RequiredFormat == publicHostPostgres.RequiredFormat &&
+            publicHostPostgres.Capabilities == (publicEventsPostgres.Capabilities | RootCapabilities.PublicEventHost) &&
+            publicHostSqlite.Capabilities == publicHostPostgres.Capabilities &&
+            publicHostPostgres.PublicEventHost is { ProtectsStarts: true } && publicHostSqlite.PublicEventHost is { ProtectsStarts: false } &&
+            !sharedPostgres.UsesRootPublicEventHost && !sharedSqlite.UsesRootPublicEventHost &&
+            !publicEventsPostgres.UsesRootPublicEventHost && !publicEventsSqlite.UsesRootPublicEventHost &&
+            RootProfiles.MissingPrerequisites(publicHostPostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(publicHostPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(publicHostPostgres) is { StoreSchema: 1, MessageProtocol: 29, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(publicHostSqlite) is { StoreSchema: 2, MessageProtocol: 32, JournalCodec: 0 },
+            "the public Event host binding has separate private wire and provider definitions in both host modes");
         using var keyedPostgres = KernelDb.ForPostgresRootKeyedStartsQualification(options);
         using var keyedSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(),
             StoreFormat.RootKeyedStartsQualification);
@@ -451,7 +466,7 @@ internal static class ProfileCapabilityChecks
             playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities | lineagePostgres.Capabilities |
             inlinePostgres.Capabilities | authoredPostgres.Capabilities | startEventsPostgres.Capabilities |
             receiptsPostgres.Capabilities | eventScanPostgres.Capabilities | testPostgres.Capabilities | publicEventsPostgres.Capabilities |
-            keyedPostgres.Capabilities;
+            keyedPostgres.Capabilities | publicHostPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -490,6 +505,7 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.EventStartReceipts] = RootCapabilities.EventStarts,
             [RootCapabilities.EventStartScan] = RootCapabilities.EventStartReceipts,
             [RootCapabilities.PublicEventStarts] = RootCapabilities.EventStartScan,
+            [RootCapabilities.PublicEventHost] = RootCapabilities.PublicEventStarts,
             [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
             [RootCapabilities.KeyedStarts] = RootCapabilities.PreparedStarts | RootCapabilities.Retirement | RootCapabilities.Children,
             [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
