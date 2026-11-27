@@ -103,7 +103,8 @@ public sealed partial class EfStore
                 (!db.UsesRootPrivateParkInputs || row.Scope != RootSelfScope)) ||
             KeptSetDigest(keptFacts) != facts.KeptDigest ||
             facts.KeepsQueuedCreator != KeepsQueuedRootCreator(db, root.Actor, keptFacts) ||
-            facts.InlineRetry != await ReadInlineRetryAsync(db, root.Actor, root.Partition, keptFacts, turn.SelfIssuer, token)))
+            (facts.KeepsInlineRetry, facts.InlineRetry) !=
+                await ReadInlineRetryAsync(db, root.Actor, root.Partition, keptFacts, turn.SelfIssuer, token)))
             return false;
         if (!await BindRootTimerRearmsAsync(db, root, turn.JournalRevision, turn.SelfIssuer, turn.Rearms, facts.RestorableTimers, token))
             return false;
