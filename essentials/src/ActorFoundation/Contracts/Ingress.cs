@@ -3,7 +3,11 @@ namespace Kernel.Foundation.Contracts;
 /// <summary>The tenant selected by the trusted host for an ingress operation.</summary>
 public sealed class BoundScope
 {
-    internal BoundScope(string tenant, bool isHostIsolated = false)
+    internal BoundScope(string tenant) : this(tenant, isHostIsolated: false)
+    {
+    }
+
+    internal BoundScope(string tenant, bool isHostIsolated)
     {
         ArgumentNullException.ThrowIfNull(tenant);
         if (tenant.Length is < 1 or > 64 || tenant.Any(c => c is not (>= 'a' and <= 'z' or >= '0' and <= '9' or '-')))
