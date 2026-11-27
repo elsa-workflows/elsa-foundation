@@ -61,13 +61,21 @@ public sealed partial class EfStore
                     AND b."Creation" = {notice.TargetCreation} AND NOT i."Retired"
                     AND (i."FoundationTerminalRevision" IS NULL OR i."Children" IS NOT NULL AND {final})
                 """;
-            var sqlite = db.UsesSqliteRootRuntime;
-            await db.Database.ExecuteSqlInterpolatedAsync(FormattableStringFactory.Create(insert.Format
-                .Replace("/*seq-column*/", sqlite ? """, "Seq" """ : "", StringComparison.Ordinal)
-                .Replace("/*seq*/", sqlite ? """, (SELECT coalesce(max("Seq"), 0) + 1 FROM "Messages")""" : "", StringComparison.Ordinal),
-                insert.GetArguments()), token);
+            await db.Database.ExecuteSqlInterpolatedAsync(RootChildDialectQuery(db, insert), token);
             return true;
         }
+    }
+
+    private static FormattableString RootChildDialectQuery(KernelDb db, FormattableString query)
+    {
+        var sqlite = db.UsesSqliteRootRuntime;
+        var sql = query.Format
+            .Replace("/*seq-column*/", sqlite ? """, "Seq" """ : "", StringComparison.Ordinal)
+            .Replace("/*seq*/", sqlite ? """, (SELECT coalesce(max("Seq"), 0) + 1 FROM "Messages")""" : "", StringComparison.Ordinal)
+            .Replace("/*json-cast*/", sqlite ? "" : "::jsonb", StringComparison.Ordinal)
+            .Replace("/*text-cast*/", sqlite ? "" : "::text", StringComparison.Ordinal)
+            .Replace("/*lock*/", sqlite ? "" : " FOR UPDATE", StringComparison.Ordinal);
+        return FormattableStringFactory.Create(sql, query.GetArguments());
     }
 
     private static async Task<bool> BindRootChildStartsAsync(KernelDb db, string tenant, RootChildStart[] starts, CancellationToken token)
@@ -179,7 +187,8 @@ public sealed partial class EfStore
                     message.TargetCreation != row.ParentCreation || message.Sender != row.Id || message.SenderCreation != row.Creation ||
                     message.Id != CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision) || message.Payload is null)
                     throw RootShape();
-                notice = message with { StorageId = ChildOccurrence(reference(root.Tenant, new(row.Parent, row.ParentCreation)), message.Id) };
+                notice = message with { StorageId = ChildNoticeOccurrence(reference(root.Tenant, new(row.Parent, row.ParentCreation)),
+                    message.Id, sqlite: !postgres) };
             }
             else throw RootShape();
         }
@@ -240,6 +249,9 @@ public sealed partial class EfStore
     private static string ChildOccurrence(string reference, string id) =>
         reference + "/child/" + FoundationRootCreator.OperationDigest(id);
 
+    private static string ChildNoticeOccurrence(string reference, string id, bool sqlite) =>
+        sqlite ? reference + SqliteChildNoticePath + id : ChildOccurrence(reference, id);
+
     private static string RootChildNoticePredicate(string alias) =>
         $"""(COALESCE({alias}."Start", '') LIKE '{RootChildNoticePrefix}%' OR COALESCE({alias}."Start", '') LIKE '{RootChildInputPrefix}%' OR COALESCE({alias}."Start", '') = '{RootChildCascadeWire}')""";
 
@@ -287,7 +299,7 @@ public sealed partial class EfStore
     private static bool IsStoredRootChildNotice(string? header) =>
         header?.StartsWith(RootChildNoticePrefix, StringComparison.Ordinal) == true;
 
-    private static Message DecodeRootChildNotice(MessageEntity row, string reference)
+    private static Message DecodeRootChildNotice(MessageEntity row, string reference, bool sqlite = false)
     {
         var stored = DurableKeyJson.Read<StoredChildNotice>(row.Start![RootChildNoticePrefix.Length..]);
         var notice = DurableKeyJson.Read<FoundationChildNotice>(stored.Payload);
@@ -296,7 +308,7 @@ public sealed partial class EfStore
             notice.Creation != 1 || notice.Status is not (InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled) ||
             stored.Final != notice.Final || !notice.Final && notice.Status != InstanceStatus.Faulted ||
             !CreationProtocol.IsTerminalHandle(stored.Id, CreationProtocol.Origin(notice.Child, 1)) ||
-            row.Id != ChildOccurrence(reference, stored.Id))
+            row.Id != ChildNoticeOccurrence(reference, stored.Id, sqlite))
             throw new StoreException(Failure.Definite, "Invalid PostgreSQL child notice.");
         return (new Message(stored.Id, new(row.Target), Kinds.ChildFinished, stored.Payload,
             row.Sender, TargetCreation: 1, SenderCreation: 1) { FoundationRootChildNotice = true, StorageId = row.Id })

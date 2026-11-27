@@ -11,10 +11,13 @@ public sealed partial class EfStore
 
     private sealed record SqliteKeptRow(string Id, long Scope, KeptRow Facts);
 
-    private static Task<ParkMarkRow?> ReadSqliteParkMarkAsync(KernelDb db, string actor, int partition, CancellationToken token) =>
+    private static Task<ParkMarkRow?> ReadSqliteParkMarkAsync(KernelDb db, string actor, int partition, CancellationToken token,
+        bool endsAttachedChild = false) =>
         db.Database.SqlQuery<ParkMarkRow>(SelectParkJobPins(db, $"""
             SELECT i."FoundationParkAt" AS "At", i."FoundationParkRevision" AS "Revision",
-                (i."Jobs" IS NOT NULL OR i."Children" IS NOT NULL OR i."CustomHandles" IS NOT NULL OR EXISTS (
+                ((i."Jobs" IS NOT NULL OR i."Children" IS NOT NULL) AND NOT ({endsAttachedChild} AND i."Parent" IS NOT NULL
+                    AND (i."Jobs" IS NULL OR /*park-job-result*/ IS NOT NULL OR /*park-live-job*/ IS NOT NULL))
+                    OR i."CustomHandles" IS NOT NULL OR EXISTS (
                     SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = i."Id" AND s."Partition" = i."Partition")) AS "Outstanding",
                 EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Partition" = i."Partition"
                     AND NOT m."Done" AND (m."InboxScope" <> {InboxKey.FoundationOccurrenceScope}
@@ -24,7 +27,8 @@ public sealed partial class EfStore
             FROM "Instances" i WHERE i."Id" = {actor} AND i."Partition" = {partition} AND NOT i."Retired"
             """)).SingleOrDefaultAsync(token);
 
-    private static async Task<List<SqliteKeptRow>> ReadSqliteKeptAsync(KernelDb db, string actor, int partition, bool opening, CancellationToken token)
+    private static async Task<List<SqliteKeptRow>> ReadSqliteKeptAsync(KernelDb db, string actor, int partition, bool opening, CancellationToken token,
+        bool omitPinnedJob = false)
     {
         var kept = new List<SqliteKeptRow>();
         // Quote up to one full page and a sentinel using stored lengths. The join opens only the quoted envelopes, including a
@@ -35,6 +39,7 @@ public sealed partial class EfStore
                 SELECT CASE WHEN {opening} THEN (SELECT count(*) FROM "Messages" m
                     WHERE m."Target" = {actor} AND m."Partition" = {partition} AND m."EventMatch" IS NULL
                         AND m."Done" AND m."FoundationKeptBy" IS NOT NULL
+                        AND (NOT {omitPinnedJob} OR m."InboxScope" <> {RootTimedJobScope})
                         AND m."InboxScope" IN (0, /*park-input-scopes*/, {RootTimedJobScope})) ELSE 0 END AS "TotalRows"
             ), kept AS MATERIALIZED (
                 SELECT m."Id", m."InboxScope", m."Seq", m."FoundationKeptBy" AS "KeptBy",
@@ -42,6 +47,7 @@ public sealed partial class EfStore
                         + coalesce(octet_length(m."Payload"), 0) + coalesce(octet_length(m."ReplyTo"), 0)) AS "Bytes"
                 FROM "Messages" m WHERE m."Target" = {actor} AND m."Partition" = {partition} AND m."EventMatch" IS NULL
                     AND m."Done" AND m."FoundationKeptBy" IS NOT NULL
+                    AND (NOT {omitPinnedJob} OR m."InboxScope" <> {RootTimedJobScope})
                     AND m."InboxScope" IN (0, /*park-input-scopes*/, {RootTimedJobScope})
                 ORDER BY m."Seq", m."Id", m."InboxScope" LIMIT {InMemoryStore.ParkPageLimit + 1}
             ), quote AS (
@@ -63,8 +69,10 @@ public sealed partial class EfStore
     }
 
     private static async Task<List<SqliteKeptRow>?> BindSqliteParkPageAsync(KernelDb db, WorkerRoot root, long expected, bool suspended,
-        FoundationParkMark mark, string? clearing, long cleared, string digest, int count, bool ends, Message command, CancellationToken token)
+        FoundationParkMark mark, string? clearing, long cleared, string digest, int count, bool ends, Message command, CancellationToken token,
+        string? children = null, string? jobs = null, bool omitPinnedJob = false)
     {
+        var parentTerminate = db.UsesRootChildren && IsRootChildTerminate(command);
         if (!await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS (SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
@@ -76,14 +84,16 @@ public sealed partial class EfStore
                     AND i."FoundationParkClearing" IS NOT DISTINCT FROM {clearing} AND coalesce(i."FoundationParkCleared", 0) = {cleared}
                     AND ({clearing} IS NULL OR i."FoundationParkClearingKind" = {command.Kind})
                     AND i."FoundationTerminalAt" IS NULL AND i."FoundationTerminalRevision" IS NULL AND i."Fault" IS NOT NULL
-                    AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."CustomHandles" IS NULL
+                    AND i."Jobs" IS {jobs} AND i."Children" IS {children} AND i."CustomHandles" IS NULL
+                    AND (NOT {parentTerminate} OR i."Parent" = {command.Sender})
                     AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = i."Id" AND "Partition" = i."Partition")) AS "Value"
             """).SingleAsync(token)) return null;
 
-        var kept = await ReadSqliteKeptAsync(db, root.Actor, root.Partition, clearing is null, token);
+        var kept = await ReadSqliteKeptAsync(db, root.Actor, root.Partition, clearing is null, token, omitPinnedJob);
         var facts = kept.Select(row => row.Facts).ToArray();
+        var persisted = parentTerminate ? command with { Operator = null } : command;
         if (KeptSetDigest(facts) != digest || PageLength(facts) != count || ends != (count == facts.Length) ||
-            !await SettleSqliteRootInputsAsync(db, root.Reference, new(root.Actor, 1), [command.InboxKey], [command],
+            !await SettleSqliteRootInputsAsync(db, root.Reference, new(root.Actor, 1), [command.InboxKey], [persisted],
                 suspended: !db.UsesRootParkArrivals || clearing is not null, token, parked: true))
             return null;
         return kept.GetRange(0, count);
@@ -121,27 +131,41 @@ public sealed partial class EfStore
     private static async Task<bool> BindSqliteParkedTerminateAsync(KernelDb db, RootParkedTerminate turn, CancellationToken token)
     {
         var root = turn.Root;
+        var actor = new CreationAddress(root.Actor, 1);
+        var prior = turn.Jobs is null ? null : await ReadSqliteParkMarkAsync(db, root.Actor, root.Partition, token, endsAttachedChild: true);
+        var omitPinnedJob = prior?.ParkJobResult is not null;
+        var job = turn.Ends && turn.Jobs is not null
+            ? await ReadRecoverableRootJobAsync(db, root.Actor, root.Partition, turn.Jobs, prior?.ParkJobResult, prior?.ParkLiveJob, token)
+            : new RecoverableRootJob();
+        if (job is null) return false;
+        var pinned = job.Value.ConsumedId is not null ? 1 : 0;
         var page = await BindSqliteParkPageAsync(db, root, turn.Expected, turn.Suspended, turn.Mark, turn.Clearing, turn.Cleared,
-            turn.KeptDigest, turn.Count, turn.Ends, turn.Command, token);
+            turn.KeptDigest, turn.Count - pinned, turn.Ends, turn.Command, token, turn.Children, turn.Jobs, omitPinnedJob);
         var window = turn.Command.Operator!.RootParkWindow!.Value;
         if (page is null || !await ClearSqliteParkPageAsync(db, root, page, window, token)) return false;
-        var total = checked(turn.Cleared + page.Count);
+        if (turn.Ends && (!await ClearConsumedRootJobAsync(db, root.Actor, root.Partition, job.Value.ConsumedId, token) ||
+            db.UsesRootChildren && !await ClearTerminalRootSelfAsync(db, actor, root.Partition, turn.Expected, turn.SelfIssuer,
+                includeImmediate: false, token))) return false;
+        var total = checked(turn.Cleared + page.Count + pinned);
         var revision = turn.JournalRevision;
         var discard = turn.Ends && turn.Command.Kind == Kinds.Delete;
         var status = turn.Ends && !discard ? InstanceStatus.Cancelled : InstanceStatus.Faulted;
-        var changed = turn.Ends ? await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock($"""
+        var changed = turn.Ends ? await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock(ClearParkJobPins(db, $"""
             UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision},
+                "Children" = NULL, "Jobs" = NULL,
                 "Status" = {(int)status}, "Suspended" = {discard && turn.Suspended}, "FoundationParkAt" = NULL,
                 "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkClearingKind" = NULL, "FoundationParkCleared" = NULL,
-                "FoundationTerminalRevision" = {revision}, "FoundationTerminalAt" = /*sqlite-root-clock*/
+                "FoundationTerminalRevision" = {revision}, "FoundationTerminalAt" = /*sqlite-root-clock*/ /*park-job-result*/
             WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" = {turn.Expected}
-            """), token) : await db.Database.ExecuteSqlInterpolatedAsync($"""
+            """, turn.Jobs is not null)), token) : await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision},
                 "FoundationParkClearing" = {turn.Command.Id}, "FoundationParkClearingKind" = {turn.Command.Kind}, "FoundationParkCleared" = {total}
             WHERE "Id" = {root.Actor} AND "Partition" = {root.Partition} AND "Revision" = {turn.Expected}
             """, token);
         if (changed != 1) return false;
-        if (turn.Ends) return true;
+        if (turn.Ends)
+            return (job.Value.Live is not { } live || await DeleteRootTimedRowsAsync(db, actor, live.Ids, token)) &&
+                (turn.ChildEffects is null || await turn.ChildEffects.BindAsync(db, root.Tenant, token));
         if (turn.Clearing is null)
             await db.Database.ExecuteSqlInterpolatedAsync(WithParkInputScopeParameters(db, $"""
                 UPDATE "Messages" SET "Seen" = 0, "Trial" = 0

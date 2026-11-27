@@ -292,10 +292,11 @@ public sealed partial class EfStore
             """);
         yield return new("trigger", "kernel_require_root_checkpoint_writer", "Instances", RenderSqlite($$"""
             CREATE TRIGGER kernel_require_root_checkpoint_writer BEFORE UPDATE ON "Instances"
-            WHEN (OLD."FoundationReference" IS NOT NULL AND NOT (({{RootCheckpointWriteAllowed}}) IS TRUE))
+            WHEN (OLD."FoundationReference" IS NOT NULL AND NOT (({{RootCheckpointWriteAllowed}}{{SqliteTerminalChildRegistryWrite(db)}}) IS TRUE))
                 OR (NEW."Id" <> OLD."Id" AND {{qualifiedTarget}})
             BEGIN SELECT RAISE(ABORT, 'Qualified actor checkpoint requires a qualified update'); END
             """));
+        if (db.UsesRootChildren) yield return SqliteTerminalChildSettlement();
         yield return new("trigger", "kernel_require_root_checkpoint_delete", "Instances", """
             CREATE TRIGGER kernel_require_root_checkpoint_delete BEFORE DELETE ON "Instances"
             WHEN OLD."FoundationReference" IS NOT NULL

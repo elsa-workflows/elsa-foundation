@@ -67,6 +67,10 @@ public sealed class SqliteEmbeddedFoundation
     public Task<Contract.IIngress> OpenIngressAsync(CancellationToken cancellationToken = default) =>
         SqliteEmbeddedHosting.OpenFoundationWithRequestsAsync(InstalledPath, actorType, requests.Value, cancellationToken);
 
+    internal Task<Contract.IIngress> OpenIngressWithOperatorsAsync(Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorize,
+        CancellationToken cancellationToken) =>
+        SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(InstalledPath, actorType, authorize, requests.Value, cancellationToken);
+
     /// <summary>Creates a paged reader of committed roots, inboxes and journals.</summary>
     public Contract.IActorReads CreateReads(int pageSize = 100) => SqliteEmbeddedHosting.CreateFoundationReads(InstalledPath, pageSize, qualificationFormat);
 

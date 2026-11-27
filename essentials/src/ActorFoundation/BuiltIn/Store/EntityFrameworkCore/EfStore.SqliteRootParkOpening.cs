@@ -13,17 +13,28 @@ public sealed partial class EfStore
             turn.Done is not [var consumed] || consumed != key || turn.Consumed.Count != 0 || turn.Sent.Count != 0 ||
             turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
             turn != new TurnCommit(root.Actor, row, null, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
-                turn.Journal, Unsubscribe: true, Held: turn.Held) { OpensPark = true, FoundationHeader = header, FoundationKept = kept })
+                turn.Journal, Unsubscribe: true, Held: turn.Held)
+                { OpensPark = true, FoundationHeader = header, FoundationKept = kept, FoundationRootChildSends = turn.FoundationRootChildSends })
             throw RootShape();
 
         var creator = await ReadSqlitePendingCreatorAsync(root.Tenant, root.Reference, token);
         if (creator is null) return null;
         var start = creator.Start!;
-        var initial = new InstanceRow(root.Actor, start.Model, start.Definition, InstanceStatus.Faulted, "null", 1, null,
-            Fault: fault, History: start.History, Creation: 1, StartIntent: root.Fingerprint) { FoundationNullState = true };
+        var initial = new InstanceRow(root.Actor, start.Model, start.Definition, InstanceStatus.Faulted, "null", 1, start.Parent,
+            Fault: fault, History: start.History, Creation: 1, StartIntent: root.Fingerprint,
+            ParentCreation: start.ParentCreation) { FoundationNullState = true };
         if (row != initial || header.TypeData != start.Definition || header.Labels.Count != 0) throw RootShape();
-        return PrepareFirstRoot(root.Tenant, root.Reference, creator, fence, null, row.StateVersion, header.TypeData,
+        RootChildEffects? childEffects = null;
+        if (creator.BindFoundationChild && start.Parent is not null)
+        {
+            if (turn.FoundationRootChildSends is not [var notice] || notice != FoundationChildNotice.Create(row, null, final: false))
+                throw RootShape();
+            childEffects = PrepareRootChildEffects(root, row, turn.FoundationRootChildSends) ?? throw RootShape();
+        }
+        else if (turn.FoundationRootChildSends is not null) throw RootShape();
+        var prepared = PrepareFirstRoot(root.Tenant, root.Reference, creator, fence, null, row.StateVersion, header.TypeData,
             header.Labels, turn.Journal, status: row.Status, creatorFault: fault);
+        return WithRootChildEffects(prepared, childEffects, row.Parent);
     }
 
     private static async Task<bool> BindSqliteParkOpeningAsync(KernelDb db, RootParkOpening park, CancellationToken token)
@@ -84,11 +95,18 @@ public sealed partial class EfStore
                 WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
                     AND "EventMatch" IS NULL AND NOT "Done" AND (/*supported-operator*/) AND "Start" LIKE {ParkSelectedOperator}
                 """), token);
+        if (db.UsesRootChildren)
+            await db.Database.ExecuteSqlRawAsync($"""
+                UPDATE "Messages" AS m SET "Seen" = 0, "Trial" = 0
+                WHERE m."Target" = {"{0}"} AND m."Partition" = {"{1}"} AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                    AND m."EventMatch" IS NULL AND NOT m."Done" AND {RootChildNoticePredicate("m")}
+                """, [root.Actor, root.Partition], token);
         if (park.Reason == ParkKeepReason.Consumed)
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 DELETE FROM "Subscriptions" WHERE "Instance" = {root.Actor} AND "Partition" = {root.Partition}
                 """, token);
-        return await VerifySqliteParkProjectionAsync(db, root.Tenant, root.Reference, openRevision, park.EncodedFault, token);
+        return await VerifySqliteParkProjectionAsync(db, root.Tenant, root.Reference, openRevision, park.EncodedFault, token) &&
+            (park.ChildEffects is null || await park.ChildEffects.BindAsync(db, root.Tenant, token));
     }
 
     private static async Task<bool> KeepSqliteParkInputsAsync(KernelDb db, string actor, int partition, long scope,

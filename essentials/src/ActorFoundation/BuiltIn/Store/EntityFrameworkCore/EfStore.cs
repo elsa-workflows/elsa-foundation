@@ -941,11 +941,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             : db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
             : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : ClearsParkInPages(db) ? RootClearingOperatorPollFilter
             : RootOperatorPollFilter;
-        filter = filter.Replace("/*root-child-cascade*/", db.UsesRootChildren ? $"""
-            {RootChildCascadeRow} OR EXISTS (SELECT 1 FROM "Instances" child
-                WHERE child."Id" = m."Target" AND child."Partition" = m."Partition" AND child."Suspended"
-                AND {RootChildTerminatePredicate("m", "child")}) OR
-            """ : "", StringComparison.Ordinal);
+        filter = filter.Replace("/*root-child-cascade*/", db.UsesRootChildren ? RootChildPriorityPoll : "", StringComparison.Ordinal);
         // A running actor can withhold even when the physical suspension flag is clear. Offer the first due operator
         // beside earlier ordinary inputs so the owner can choose from its committed header.
         filter = filter.Replace("/*root-self-predecessor*/",
@@ -995,7 +991,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             : db.UsesRootParkRecovery ? SqliteParkRecoveryPollFilter
             : db.UsesRootParkArrivals ? SqliteParkArrivalsPollFilter : SqliteRootPollFilter)
         .Replace("/*root-self-scope*/", RootSelfIssuer is not null ? $", {RootSelfScope}" : "", StringComparison.Ordinal)
-        .Replace("/*root-self-predecessor*/", db.UsesRootPrivateParkInputs ? $", {RootSelfScope}" : "", StringComparison.Ordinal));
+        .Replace("/*root-self-predecessor*/", db.UsesRootPrivateParkInputs ? $", {RootSelfScope}" : "", StringComparison.Ordinal)
+        .Replace("/*root-child-cascade*/", db.UsesRootChildren ? RootChildPriorityPoll : "", StringComparison.Ordinal)
+        .Replace("/*root-child-visible*/", db.UsesRootChildren ? $"AND {RootChildParkInputs("m", "i")}" : "", StringComparison.Ordinal)
+        .Replace("/*root-child-ledger*/", db.UsesRootChildren ? RootChildCascadePollFilter : "", StringComparison.Ordinal)
+        .Replace("/*root-child-prior*/", db.UsesRootChildren ? $"AND {RootChildParkInputs("prior", "target")}" : "", StringComparison.Ordinal));
 
     private static string SqliteRootPoll(bool includeParkArrivals, bool recovery, bool authoredCohort = false) =>
         (recovery ? WithReleasedCohort(RootOperatorPollTemplate) : RootOperatorPollTemplate)
@@ -1004,6 +1004,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             ? $"""
               AND (target."FoundationParkAt" IS NOT NULL AND target."FoundationParkClearing" IS NULL AND prior."ReplyTo" IS NULL
                   AND prior."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("prior.", recovery)}))
+              /*root-child-prior*/
               """
             : "AND " + SqliteSupportedOperator("prior."), StringComparison.Ordinal)
         .Replace("/*supported-operator*/", "AND " + SqliteSupportedOperator("op.", recovery), StringComparison.Ordinal) +

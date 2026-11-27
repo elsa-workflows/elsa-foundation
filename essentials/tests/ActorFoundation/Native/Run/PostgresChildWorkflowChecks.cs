@@ -327,7 +327,7 @@ internal static class PostgresChildWorkflowChecks
         return 0;
     }
 
-    private sealed class ChildFixtureActor(Contract.IActorType workflow) : Contract.IActorType
+    internal sealed class ChildFixtureActor(Contract.IActorType workflow) : Contract.IActorType
     {
         internal const string ArmFault = "arm-child-fault";
         internal const string Fault = "fault-child";

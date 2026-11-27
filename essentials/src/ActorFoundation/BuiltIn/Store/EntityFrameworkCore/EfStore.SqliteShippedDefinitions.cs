@@ -285,6 +285,13 @@ public sealed partial class EfStore
             "Until" INTEGER NOT NULL,
             PRIMARY KEY ("Reference", "Operation")
             """);
+        if (db.UsesRootChildren)
+            yield return Table("FoundationRootChildCascades", """
+                "Reference" TEXT NOT NULL PRIMARY KEY REFERENCES "FoundationRootBirths" ("Reference"),
+                "Revision" INTEGER NOT NULL CHECK ("Revision" > 0),
+                "Cursor" INTEGER NOT NULL CHECK ("Cursor" > 0),
+                "Children" TEXT NOT NULL CHECK (json_valid("Children") AND "Cursor" < json_array_length("Children"))
+                """);
         yield return Table("FoundationOperatorReceipts", """
             "Tenant" TEXT NOT NULL,
             "Operation" TEXT NOT NULL,

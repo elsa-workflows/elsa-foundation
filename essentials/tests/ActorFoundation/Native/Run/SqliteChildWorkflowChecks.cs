@@ -6,6 +6,7 @@ using Kernel.Runtime.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
+using Fixture = Kernel.Native.Run.PostgresChildWorkflowChecks.ChildFixtureActor;
 
 namespace Kernel.Native.Run;
 
@@ -13,7 +14,7 @@ internal static class SqliteChildWorkflowChecks
 {
     internal static async Task<int> RunAsync(bool fenceInBatch)
     {
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(35));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var token = deadline.Token;
         var folder = Directory.CreateTempSubdirectory("sqlite-child-workflows-");
         var path = Path.Combine(folder.FullName, "kernel.db");
@@ -28,8 +29,12 @@ internal static class SqliteChildWorkflowChecks
                 Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("gate"), Wf.SetOutput("return", "child-value", "from-child"))))
             .Add(Wf.Workflow("parent", Wf.Flowchart("chart",
                 [Wf.Dispatch("dispatch", "child", wait: true), Wf.Set("use-child", "result", Binding.Result("dispatch", "Output.child-value"))],
-                [new Connection("dispatch", "use-child", "Completed")])));
-        var model = new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases)]);
+                [new Connection("dispatch", "use-child", "Completed")])))
+            .Add(Wf.Workflow("cancel-parent", Wf.Parallel("race", 1,
+                Wf.Dispatch("dispatch", "child", wait: true), Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("win"))))
+            .Add(Wf.Workflow("nested-parent", Wf.Dispatch("dispatch", "parent", wait: true)))
+            .Add(Wf.Workflow("bulk-parent", Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("wait")));
+        var model = new Fixture(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases)]));
         var loop = new LoopOptions
         {
             BalanceEvery = TimeSpan.FromMilliseconds(100),
@@ -75,18 +80,54 @@ internal static class SqliteChildWorkflowChecks
             await replacement.InstallShippedAsync(token);
             await using var successor = replacement.CreateHostedService(model, Escalate, loop, fenceInBatch);
             await successor.StartAsync(token);
-            var replacementIngress = await replacement.OpenIngressAsync(token);
+            var replacementIngress = await replacement.OpenIngressWithOperatorsAsync(
+                (scope, _, kind) => ReferenceEquals(scope, tenant) &&
+                    kind is Contract.Kinds.Terminate or Contract.Kinds.Delete or Contract.Kinds.Recover, token);
+            await SendAsync(childRef, "arm-child-fault", Fixture.ArmFault);
+            var parked = await WaitAsync(childRef, row => row.ParkAt is not null);
+            var waitingAfterPark = await WaitAsync(parentRef, row => row.Revision > 1);
+            Check(parked.Revision == 3 && waitingAfterPark is { Status: InstanceStatus.Running, Revision: 2, Children: not null },
+                "the timer parks the child and delivers a non-final notice without advancing Dispatch");
+            var childSelection = (await reads.GetAsync(tenant, childRef, token))!.Selection;
+            await SendAsync(childRef, "recover-child", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(childSelection)));
+            await WaitAsync(childRef, row => row is { Status: InstanceStatus.Running, Revision: 4 });
+
             Check(await replacementIngress.SendAsync(tenant, new Contract.Target.Ref(childRef), "release-1", CompositeSignal.Kind,
                 Json.Write(new CompositeSignal(gate.Id, "release", "continue")), cancellationToken: token) is
                 { Outcome: Contract.AdmissionOutcome.Accepted }, "the replacement owner accepts the exact child signal");
             var finished = await EventuallyAsync(successor, () => store.ReadFirstRootAsync(tenant.Tenant, parentRef.Id, token),
                 row => row is { Status: InstanceStatus.Finished });
-            Check(finished is { Revision: 2, Children: null } &&
+            Check(finished is { Revision: 3, Children: null } &&
                 Json.Read<NativeState>(finished.State!).Variables.GetValueOrDefault("result")?.GetValue<string>() == "from-child",
                 "the final child output reaches the committed Flowchart continuation exactly once");
-            Check(await store.ReadFirstRootAsync(tenant.Tenant, childRef.Id, token) is { Status: InstanceStatus.Finished, Revision: 2 } &&
+            Check(await store.ReadFirstRootAsync(tenant.Tenant, childRef.Id, token) is { Status: InstanceStatus.Finished, Revision: 5 } &&
                 !await db.Messages.AnyAsync(message => !message.Done, token),
                 "the child finishes once and creator and notice are settled");
+
+            var terminalChild = (await reads.GetAsync(tenant, childRef, token))!.Selection;
+            await SendAsync(childRef, "delete-child", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(terminalChild)));
+            await EventuallyAsync(successor, async () => await reads.GetAsync(tenant, childRef, token), view => view is null);
+            Check(await reads.GetAsync(tenant, parentRef, token) is { Header.Status: Contract.ActorStatus.Finished },
+                "retiring the attached terminal child preserves the parent continuation");
+
+            var raceParent = await StartAsync("cancel-parent", "race-parent");
+            var (raceWait, raceChild) = await ChildAsync(raceParent);
+            var win = Json.Read<NativeState>(raceWait.State!).Frames.Values.Single(frame => frame.Node == "win");
+            await SendAsync(raceParent, "win-race", CompositeSignal.Kind, Json.Write(new CompositeSignal(win.Id, "release", "continue")));
+            var cancelled = await WaitAsync(raceChild, row => row.Status == InstanceStatus.Cancelled);
+            var endedRace = await WaitAsync(raceParent, row => row is { Status: InstanceStatus.Finished, Children: null });
+            Check(cancelled.Revision == 2 && endedRace.Revision == 2, "the losing child cancels and its final notice closes the terminal registry without a new revision");
+
+            var nestedParent = await StartAsync("nested-parent", "nested-parent");
+            var (_, middle) = await ChildAsync(nestedParent);
+            var (_, descendant) = await ChildAsync(middle);
+            await SendAsync(middle, "park-middle", Fixture.Fault);
+            await WaitAsync(middle, row => row.ParkAt is not null);
+            await SendAsync(nestedParent, "terminate-middle", Fixture.TerminateChild, middle.Id);
+            await WaitAsync(middle, row => row is { Status: InstanceStatus.Cancelled, ParkAt: null });
+            await WaitAsync(descendant, row => row.Status == InstanceStatus.Cancelled);
+            await WaitAsync(nestedParent, row => row.Children is null);
+            Check(true, "the parent's exact Terminate closes the parked child's lifecycle and cascades to its live descendant");
             await successor.StopAsync(token);
 
             var shipped = new SqliteEmbeddedFoundation(path, "other-format", model.Type);
@@ -95,6 +136,38 @@ internal static class SqliteChildWorkflowChecks
             catch (StoreFormatException) { refused = true; }
             Check(refused, "the shipped SQLite installer refuses the private child profile");
             return 0;
+
+            async Task<Contract.ActorRef> StartAsync(string definition, string operation)
+            {
+                var result = await replacementIngress.SendAsync(tenant, new Contract.Target.Start(
+                    WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start(definition))), operation, Contract.Kinds.Start, cancellationToken: token);
+                if (result is not { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } reference })
+                    throw new InvalidOperationException($"The SQLite host returned {result.Outcome} for {operation}: {result.Reason}.");
+                return reference;
+            }
+
+            async Task SendAsync(Contract.ActorRef target, string operation, string kind, string? payload = null)
+            {
+                var result = await replacementIngress.SendAsync(tenant, new Contract.Target.Ref(target), operation, kind, payload, cancellationToken: token);
+                if (result.Outcome != Contract.AdmissionOutcome.Accepted)
+                    throw new InvalidOperationException($"The SQLite host returned {result.Outcome} for {operation}: {result.Reason}.");
+            }
+
+            async Task<(EfStore.RootImage Parent, Contract.ActorRef Child)> ChildAsync(Contract.ActorRef parentRef)
+            {
+                var parent = await WaitAsync(parentRef, row => row.Children is not null);
+                var exact = ChildRegistry.Read(parent.Children).Single();
+                var reference = await db.Database.SqlQuery<string>($"""
+                    SELECT "Reference" AS "Value" FROM "FoundationRootBirths" WHERE "Actor" = {exact.Id} AND "Tenant" = {tenant.Tenant}
+                    """).SingleAsync(token);
+                Contract.ActorRef childRef = new(reference);
+                await WaitAsync(childRef, row => row.Status == InstanceStatus.Running);
+                return (parent, childRef);
+            }
+
+            async Task<EfStore.RootImage> WaitAsync(Contract.ActorRef target, Func<EfStore.RootImage, bool> ready) =>
+                (await EventuallyAsync(successor, () => store.ReadFirstRootAsync(tenant.Tenant, target.Id, token),
+                    row => row is not null && ready(row)))!;
 
             async Task<T> EventuallyAsync<T>(SqliteEmbeddedHostedService owner, Func<Task<T>> read, Func<T, bool> match)
             {

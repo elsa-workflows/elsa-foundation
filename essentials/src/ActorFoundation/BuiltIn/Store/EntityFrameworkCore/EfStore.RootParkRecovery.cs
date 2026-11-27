@@ -331,7 +331,7 @@ public sealed partial class EfStore
             var jobPin = RecordsConsumedRootJob(db) ? """ "FoundationParkJobResult" """ : "NULL::text";
             var livePin = RecordsConsumedRootJob(db) ? """ "FoundationParkLiveJob" """ : "NULL::text";
             var park = db.UsesSqliteRootRuntime
-                ? await ReadSqliteParkMarkAsync(db, message.Target.Id, message.Target.Partition, token)
+                ? await ReadSqliteParkMarkAsync(db, message.Target.Id, message.Target.Partition, token, endsAttachedChild)
                 : await db.Database.SqlQueryRaw<ParkMarkRow>($"""
                 SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision",
                     ("Jobs" IS NOT NULL OR "Children" IS NOT NULL) AND NOT ({"{2}"} AND "Parent" IS NOT NULL
@@ -355,13 +355,15 @@ public sealed partial class EfStore
             }
             if (command is null) throw RootShape();
             var recover = message.Kind == Kinds.Recover;
+            var omitsPinnedJob = db.UsesSqliteRootRuntime && endsAttachedChild &&
+                park is { Outstanding: false, ParkJobResult: not null };
             var quoteFits = true;
             List<KeptRow> kept;
             if (db.UsesSqliteRootRuntime)
             {
                 kept = (recover
                     ? await ReadSqliteRecoveryRowsAsync(db, message.Target.Id, message.Target.Partition, null, token)
-                    : await ReadSqliteKeptAsync(db, message.Target.Id, message.Target.Partition, !command.RootParkClear, token))
+                    : await ReadSqliteKeptAsync(db, message.Target.Id, message.Target.Partition, !command.RootParkClear, token, omitsPinnedJob))
                     .Select(row => row.Facts).ToList();
             }
             else if (recover)
@@ -387,7 +389,8 @@ public sealed partial class EfStore
                 : null;
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived),
-                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed) + (db.UsesSqliteRootRuntime || job?.ConsumedId is null ? 0 : 1),
+                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed) +
+                    (omitsPinnedJob || !db.UsesSqliteRootRuntime && job?.ConsumedId is not null ? 1 : 0),
                 fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Residue = park?.Residue ?? false, Rereads = RereadsParkFacts(db), Clearing = park?.Clearing, Cleared = park?.Cleared ?? 0, Page = page,
                     ClearsInPages = db.UsesSqliteRootRuntime || ClearsParkInPages(db), ProtectionRefusals = refusals,
                     RecoverableJobRegistry = job is null ? null : park?.Jobs, KeepsRegisteredJob = job?.KeepsRegistration == true,

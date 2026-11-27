@@ -42,8 +42,9 @@ public sealed partial class EfStore
                     AND NOT i."Retired" AND (i."FoundationParkAt" IS NULL OR
                         m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" GLOB 'operator/*'
                         {(includeParkArrivals ? """OR (m."InboxScope" IN (/*park-input-scopes*/) AND i."FoundationParkClearing" IS NULL AND m."ReplyTo" IS NULL)""" : "")})
-                    {cohort})
+                    {cohort} /*root-child-visible*/)
             AND (m."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("m.", recovery)}))))
+        /*root-child-ledger*/
         """;
     }
 
@@ -231,7 +232,7 @@ public sealed partial class EfStore
 
     private static async Task<bool> SettleSqliteRootInputsAsync(KernelDb db, string reference, CreationAddress actor,
         IReadOnlyList<InboxKey> expected, Message[]? expectedEnvelopes, bool suspended, CancellationToken token, bool parked = false,
-        FoundationSelfIssuer? issue = null)
+        FoundationSelfIssuer? issue = null, WorkerRoot? ended = null)
     {
         if (expected.Any(key => key.Match is not null ||
             key.Scope != InboxKey.FoundationOccurrenceScope && (issue is null || SelfActor(key) != actor.Id))) return false;
@@ -242,29 +243,43 @@ public sealed partial class EfStore
             SELECT m.* FROM "Messages" m WHERE "Target" = {actor.Id} AND "Partition" = {home}
                 AND ("InboxScope" = {InboxKey.FoundationOccurrenceScope} OR {includePrivate} AND "InboxScope" = {RootSelfScope})
                 AND "EventMatch" IS NULL AND NOT "Done"
-                AND "Due" <= /*sqlite-root-clock*/ AND (NOT {suspended} OR "Id" GLOB 'operator/*')
+                AND "Due" <= /*sqlite-root-clock*/ AND (NOT {suspended} OR "Id" GLOB 'operator/*' /*root-child-terminate*/)
                 AND (NOT {parked && db.UsesRootParkArrivals} OR "ReplyTo" IS NULL OR "Id" GLOB 'operator/*')
-                AND ("Id" NOT GLOB 'operator/*' OR (/*supported-operator*/)) /*released-cohort*/
+                AND ("Id" NOT GLOB 'operator/*' OR (/*supported-operator*/)) /*released-cohort*/ /*root-child-selection*/
             ORDER BY "Seq" LIMIT {expected.Count}
             """;
         var cohort = db.UsesRootParkRecovery && !parked && !suspended
             ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter(db)})"""
             : "";
-        var eligible = WithSqliteOperatorPredicate(db, UseSqliteRootClock(FormattableStringFactory.Create(
-            ready.Format.Replace("/*released-cohort*/", cohort, StringComparison.Ordinal), ready.GetArguments())));
+        var childTerminate = db.UsesRootChildren && suspended ? $"""
+            OR EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition"
+                AND {RootChildTerminatePredicate("m", "i")})
+            """ : "";
+        var childSelection = !db.UsesRootChildren ? ""
+            : expected.Any(key => key.Id.StartsWith(ChildCascadePrefix(reference), StringComparison.Ordinal)) ? $"AND {RootChildCascadeRow}"
+            : parked ? $"""
+                AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition"
+                    AND {RootChildParkInputs("m", "i")})
+                """ : "";
+        var selection = ready.Format.Replace("/*released-cohort*/", cohort, StringComparison.Ordinal)
+            .Replace("/*root-child-terminate*/", childTerminate, StringComparison.Ordinal)
+            .Replace("/*root-child-selection*/", childSelection, StringComparison.Ordinal);
+        var eligible = WithSqliteOperatorPredicate(db, UseSqliteRootClock(FormattableStringFactory.Create(selection, ready.GetArguments())));
         var rows = await db.Messages.FromSqlInterpolated(eligible).AsNoTracking().ToListAsync(token);
         if (issue is null && rows.Any(row => row.InboxScope == RootSelfScope))
             return false;
         var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(message => message.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
+        var registered = ended is null ? [] : await CloseSqliteEndedChildRegistryAsync(db, ended, messages, token);
+        if (registered is null) return false;
         var self = expected.Where(key => key.Scope == -1).Select(key => key.Id).ToArray();
         if (self.Length > 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "InboxScope" = {RootSelfScope}
                 AND "Id" IN (SELECT value FROM json_each({Json.Write(self)})) AND "Target" = {actor.Id}
                 AND "Partition" = {home} AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
             """, token) != self.Length) return false;
-        var children = messages.Where(IsSqliteInternalChildInput).Select(message => message.InboxKey.Id).ToArray();
+        var children = messages.Where(IsSqliteInternalChildInput).Select(message => message.InboxKey.Id).Except(registered).ToArray();
         if (children.Length > 0 && !await DeleteSqliteRootChildInputsAsync(db, actor, home, children, token)) return false;
         var outside = messages.Where(message => message.InboxScope == InboxKey.FoundationOccurrenceScope &&
             !IsSqliteInternalChildInput(message)).Select(message => message.InboxKey.Id).ToArray();
