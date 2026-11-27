@@ -271,9 +271,10 @@ public sealed class StartWorkflowTestRunRequestHandler(
             return null;
 
         var testRun = await testRunStore.FindAsync(testRunId, cancellationToken);
-        if (scopeRecord?.Scope.IsExpired(timeProvider.GetUtcNow()) == true) return null;
-        var usesDirectDispatcher = testRun is not null && FindDirectDispatcher(testRun, scopeRecord) is not null;
-        if (testRun is null || usesDirectDispatcher &&
+        var isolated = SelectsIsolatedSource(testRun, scopeRecord);
+        if (isolated && scopeRecord!.Scope.IsExpired(timeProvider.GetUtcNow())) return null;
+        var direct = isolated ? ambientServices?.GetService<IWorkflowDirectTestRunDispatcher>() : null;
+        if (testRun is null || direct is not null &&
             testRun.Status is not (WorkflowTestRunStatus.Rejected or WorkflowTestRunStatus.DispatchRejected) &&
             (scopeRecord!.State != WorkflowTestScopeState.Open ||
              testRun.WorkflowExecutionId != scopeRecord.IsolatedActor?.ActorReference))
@@ -282,7 +283,6 @@ public sealed class StartWorkflowTestRunRequestHandler(
 
         if (testRun.Status == WorkflowTestRunStatus.StopRequested && testRun.WorkflowExecutionId is { } stoppingExecutionId)
         {
-            var direct = FindDirectDispatcher(testRun, scopeRecord);
             var settled = direct is not null
                 ? await direct.IsStoppedAsync(scopeRecord!.Scope, stoppingExecutionId, cancellationToken)
                 : executionStateStore is not null &&
@@ -307,7 +307,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var command = result.Dispatch.CommandDispatch;
         var refreshed = testRun with
         {
-            WorkflowExecutionId = TestRunActorId(result.Dispatch, usesDirectDispatcher),
+            WorkflowExecutionId = TestRunActorId(result.Dispatch, direct is not null),
             Status = MapStatus(command.Status),
             Reason = command.Reason,
             DriverAction = null
@@ -325,9 +325,11 @@ public sealed class StartWorkflowTestRunRequestHandler(
             return null;
 
         var testRun = await testRunStore.FindAsync(testRunId, cancellationToken);
-        if (scopeRecord?.Scope.IsExpired(timeProvider.GetUtcNow()) == true) return null;
         testRun ??= (await RecoverDirectRunAsync(scopeRecord, null, cancellationToken))?.Run;
         if (testRun is null) return null;
+        var isolated = SelectsIsolatedSource(testRun, scopeRecord);
+        if (isolated && scopeRecord!.Scope.IsExpired(timeProvider.GetUtcNow())) return null;
+        var direct = isolated ? ambientServices?.GetService<IWorkflowDirectTestRunDispatcher>() : null;
 
         var targetBeforeStop = testRunTargetStore is null
             ? null
@@ -344,7 +346,6 @@ public sealed class StartWorkflowTestRunRequestHandler(
             await StopTargetAfterScopeCloseAsync(testRunId, cancellationToken);
         }
 
-        var direct = FindDirectDispatcher(testRun, scopeRecord);
         if (direct is not null)
         {
             var closed = await FindCurrentTestScopeAsync(testRunId, cancellationToken);
@@ -1152,15 +1153,16 @@ public sealed class StartWorkflowTestRunRequestHandler(
         return scope;
     }
 
-    private IWorkflowDirectTestRunDispatcher? FindDirectDispatcher(WorkflowTestRun run, WorkflowTestScopeRecord? scope) =>
-        scope is not null && run.Metadata.GetValueOrDefault("runtime.sourceReferenceId") == scope.Scope.ScopeId
-            ? ambientServices?.GetService<IWorkflowDirectTestRunDispatcher>()
-            : null;
+    // Only isolated starts use the exact scope ID as their source reference ID. The presentation stores the selected source.
+    private static bool SelectsIsolatedSource(WorkflowTestRun? run, WorkflowTestScopeRecord? scope) =>
+        run is not null && scope is not null && run.TestRunId == scope.Scope.ScopeId &&
+        run.Metadata.GetValueOrDefault("runtime.sourceReferenceId") == scope.Scope.ScopeId;
 
     private async Task<(WorkflowTestRun Run, WorkflowExecutionCommandDispatchStatus? Command)?> RecoverDirectRunAsync(
         WorkflowTestScopeRecord? scope, WorkflowTestRun? presentation, CancellationToken cancellationToken)
     {
         if (scope is null || ambientServices?.GetService<IWorkflowDirectTestRunDispatcher>() is not { } direct ||
+            scope.Scope.IsExpired(timeProvider.GetUtcNow()) ||
             await sourceReferenceStore.FindAsync(scope.Scope.ScopeId, cancellationToken) is not { } source ||
             !source.IsLive(timeProvider.GetUtcNow()) ||
             await direct.ObserveAsync(scope, source, cancellationToken) is not { } observation)

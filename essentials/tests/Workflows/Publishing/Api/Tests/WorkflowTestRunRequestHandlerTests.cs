@@ -152,17 +152,44 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
-    public async Task DraftTriggerTestRunPreparesExternalActionAndStopCleansItsDriverResource()
+    public async Task ExpiredLegacyTestRunCanStillBeInspectedAndStoppedWhileItsPresentationIsAvailable()
+    {
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var canceller = new CapturingTestRunRootCanceller();
+        var handler = DraftSnapshotHandler(timeProvider: clock, rootCanceller: canceller);
+        var run = await handler.StartDraftAsync(new("definition-1", "snapshot-legacy-expiry", DraftState()), CancellationToken.None);
+        Assert.Equal("DispatchAccepted", run.Status);
+        var executionId = Assert.IsType<string>(run.WorkflowExecutionId);
+        Assert.NotEqual(run.TestRunId, run.Metadata["runtime.sourceReferenceId"]);
+        clock.Advance(StartWorkflowTestRunRequestHandler.DefaultRetention.Add(TimeSpan.FromSeconds(1)));
+
+        Assert.NotNull(await handler.GetAsync(run.TestRunId, CancellationToken.None));
+        Assert.Equal("StopRequested", (await handler.StopAsync(run.TestRunId, CancellationToken.None))?.Status);
+        var scope = Assert.IsType<WorkflowTestScopeRecord>(await _testScopeStore.FindAsync(run.TestRunId));
+        Assert.Equal(WorkflowTestScopeState.Closing, scope.State);
+        Assert.Equal((run.TestRunId, executionId, scope.Scope.Partition), Assert.Single(canceller.Requests));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DraftTriggerTestRunPreparesExternalActionAndStopCleansItsDriverResource(bool expiredOnPrivateHost)
     {
         var driver = new ExternalTestRunDriver();
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
         using var runtime = CreateTestRunRuntime(driver);
+        using var services = expiredOnPrivateHost ? new ServiceCollection()
+            .AddSingleton<IWorkflowDirectTestRunDispatcher>(new UnadmittedTestRunDispatcher(_executableStore, WorkflowExecutionCommandDispatchStatus.Rejected))
+            .BuildServiceProvider() : null;
         var extractor = new SingleBindingTriggerExtractor();
         var handler = DraftSnapshotHandler(
             triggerBindingExtractor: extractor,
             triggerDrivers: [driver],
             testRunTargetStore: runtime.Targets,
             testRunTargetDispatcher: runtime.Dispatcher,
-            testRunTargetCleaner: runtime.Cleaner);
+            testRunTargetCleaner: runtime.Cleaner,
+            ambientServices: services,
+            timeProvider: clock);
         var options = await handler.GetDraftOptionsAsync(DraftOptionsRequest(), CancellationToken.None);
         var option = Assert.Single(options.Options);
         Assert.True(option.IsAvailable);
@@ -186,6 +213,9 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         Assert.NotNull(target.WorkflowExecutionId);
         Assert.NotNull(target.IdempotencyKey);
 
+        Assert.NotEqual(prepared.TestRunId, prepared.Metadata["runtime.sourceReferenceId"]);
+        if (expiredOnPrivateHost)
+            clock.Advance(StartWorkflowTestRunRequestHandler.DefaultRetention.Add(TimeSpan.FromSeconds(1)));
         var refreshed = await handler.GetAsync(prepared.TestRunId, CancellationToken.None);
         Assert.Equal("Prepared", refreshed?.Status);
 
@@ -353,12 +383,18 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         using var services = new ServiceCollection()
             .AddSingleton<IWorkflowDirectTestRunDispatcher>(new UnadmittedTestRunDispatcher(_executableStore, status))
             .BuildServiceProvider();
-        var handler = DraftSnapshotHandler(ambientServices: services);
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var handler = DraftSnapshotHandler(ambientServices: services, timeProvider: clock);
         var run = await handler.StartDraftAsync(new("definition-1", "snapshot-unadmitted", DraftState()), CancellationToken.None);
 
         Assert.Equal(status.ToString(), run.CommandDispatchStatus);
         Assert.Null(run.WorkflowExecutionId);
         Assert.Null((await handler.GetAsync(run.TestRunId, CancellationToken.None))!.WorkflowExecutionId);
+        Assert.Equal(run.TestRunId, run.Metadata["runtime.sourceReferenceId"]);
+        clock.Advance(StartWorkflowTestRunRequestHandler.DefaultRetention.Add(TimeSpan.FromSeconds(1)));
+
+        Assert.Null(await handler.GetAsync(run.TestRunId, CancellationToken.None));
+        Assert.Null(await handler.StopAsync(run.TestRunId, CancellationToken.None));
     }
 
     [Fact]
@@ -1040,7 +1076,9 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
         bool inputValidatorUnavailable = false,
         Action<WorkflowExecutableCompileRequest>? onCompile = null,
-        IServiceProvider? ambientServices = null)
+        IServiceProvider? ambientServices = null,
+        TimeProvider? timeProvider = null,
+        ITestRunRootCanceller? rootCanceller = null)
     {
         return new(
             ObserveCompiler(TestCompiler.Create(
@@ -1054,7 +1092,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
             _testRunStore,
             dispatcher ?? Dispatcher(),
             TestRootWriteLeases.Create(_executableStore),
-            TimeProvider.System,
+            timeProvider ?? TimeProvider.System,
             authoredInputsSidecar: new WorkflowExecutableAuthoredInputsSidecar(new ActivityTreeProjector(_activityStructureService)),
             testScopeStore: _testScopeStore,
             expressionValidator: expressionValidator ?? StubExpressionValidator.Valid,
@@ -1068,7 +1106,8 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
                 : inputValidator ?? new WorkflowExecutableInputValidator(TestWellKnownTypeRegistry.Create()),
             accessContextAccessor: accessContextAccessor,
             partitionAccessor: partitionAccessor,
-            ambientServices: ambientServices);
+            ambientServices: ambientServices,
+            rootCanceller: rootCanceller);
     }
 
     private static IWorkflowExecutableCompiler ObserveCompiler(IWorkflowExecutableCompiler compiler, Action<WorkflowExecutableCompileRequest>? observer) =>
@@ -1323,6 +1362,18 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
 
         public ValueTask<bool> IsStoppedAsync(WorkflowTestScope scope, string workflowExecutionId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class CapturingTestRunRootCanceller : ITestRunRootCanceller
+    {
+        public List<(string TestRunId, string ExecutionId, WorkflowExecutionPartition Partition)> Requests { get; } = [];
+
+        public ValueTask<WorkflowExecutionCommandDispatchResult?> RequestCancelAsync(string testRunId, string workflowExecutionId,
+            WorkflowExecutionPartition partition, CancellationToken cancellationToken)
+        {
+            Requests.Add((testRunId, workflowExecutionId, partition));
+            return ValueTask.FromResult<WorkflowExecutionCommandDispatchResult?>(null);
+        }
     }
 
     private sealed class TestRunRuntime : IDisposable
