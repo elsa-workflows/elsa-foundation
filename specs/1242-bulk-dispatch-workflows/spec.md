@@ -136,8 +136,8 @@ An author adds `BulkDispatchWorkflows` to `acme.order-received`:
 - `Items`: the order lines;
 - in `Dispatch`, a `DispatchWorkflow` with:
   - `WorkflowDefinitionId` `acme.fulfil-line`;
-  - `Inputs` `{ sku: currentItem.sku, quantity: currentItem.quantity }`;
-  - `CorrelationId` `` `order-17_${currentIndex + 1}` ``;
+  - `Inputs` `{ sku: variables.currentItem.sku, quantity: variables.currentItem.quantity }`;
+  - `CorrelationId` `` `order-17_${variables.currentIndex + 1}` ``;
   - `WaitForCompletion` true;
 - a `WriteLine` in `ChildFaulted`.
 
@@ -153,7 +153,8 @@ and the activity completes with `Done` after the third child has ended.
 1. **Given** three items, **When** the activity runs with waiting, **Then** three children start before any of them
    ends, and the activity completes with `Done` only after all three have ended.
 2. **Given** 40 items and waiting, **When** the activity runs, **Then** at most 16 children are outstanding at once.
-   The next item's child starts as one ends, and all 40 are dispatched in item order.
+   The next item's pass starts as one ends, and all 40 passes are scheduled in item order. The order in which the
+   children actually start is not guaranteed.
 3. **Given** a child completes, **When** it ends, **Then** `ChildCompleted` runs once for it, with `currentItem` and
    `currentIndex` of that item in scope.
 4. **Given** a child faults, is cancelled, or cannot be dispatched (`DispatchFailed`), **When** it ends, **Then**
@@ -288,7 +289,9 @@ and on-completed-callbacks suites pass.
     raises those as plain exceptions, so they cannot be told apart, and absorbing them would hide recoverable errors.
 - **FR-009**: The activity has one outcome, `Done`.
 - **FR-010**: A slot reads its item as `variables.currentItem` and `variables.currentIndex`. Reading the dispatched
-  child's result in a slot is not part of this spec (Out of Scope).
+  child's result in a slot is not part of this spec (Out of Scope). Publish MUST refuse a slot binding to the
+  `Dispatch` node's result: passes run concurrently, so such a binding cannot tell which item's `Dispatch` run it
+  reads.
 - **FR-010a**: Passes run concurrently, so `Dispatch` and both slots are unordered with themselves across passes.
   - A variable write under the bulk node, from `Dispatch` (an output capture) or from either slot, raises spec 266's
     publish warning `ValueFlow/ConcurrentWrite`. Spec 266 warns and never refuses, and this spec follows that rule.
@@ -297,6 +300,10 @@ and on-completed-callbacks suites pass.
   - The README explains the lost-update risk and the alternative: record per-child results in the child workflow, or
     read them after the bulk activity.
 - **FR-010b**: The README also states:
+  - that only `RetryFaultedActivity` ends a faulted pass. `RescheduleActivity` is refused, because the bulk activity
+    does not accept rescheduled faulted children;
+  - that `DispatchFailed` reaches `ChildFaulted` only when the `Dispatch` node waits. A fire-and-forget child that
+    fails to start is not seen by the bulk activity;
   - that a slot holding a `Flowchart` or another composite that handles its own child faults reports the fault as the
     slot's direct child, so the activity to retry is that direct child;
   - that a faulted pass keeps its place in the window of 16 until it is retried, so 16 open incidents stall the
@@ -354,7 +361,8 @@ and on-completed-callbacks suites pass.
     inputs are passed, that a child-declared `ParentInstanceId` is no longer filled, that the static `Input` is now
     evaluated per item, and that `ChildFaulted` now also runs for cancelled and undispatchable children (FR-018). It
     also says that without a correlation function the child now inherits the parent's correlation id, where Elsa 3
-    bulk dispatch gave it none.
+    bulk dispatch gave it none. It also says that an expression `WaitForCompletion` is now evaluated once per pass on
+    the `Dispatch` node, where Elsa 3 evaluated it once.
 - **FR-017**: Outcomes:
   - `Done` maps to `Done`.
   - `Completed` (Elsa 3 emitted it with `Done` when it waited and had items):

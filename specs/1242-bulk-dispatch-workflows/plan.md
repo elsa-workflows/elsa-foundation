@@ -62,12 +62,16 @@ the design side), and converter rules.
 - **Input**: `Items`.
 - **Slots**: `Dispatch`, `ChildCompleted`, `ChildFaulted`, all `[ActivityChildSlot(… Single)]`.
 - **Structure handler**: `BulkDispatchWorkflowsStructureHandler` projects and replaces the three slots, as
-  `IfStructureHandler` does, with two differences from `If`:
+  `IfStructureHandler` does, with these members spelled out (do not copy If's answers):
   - **`ProjectIterationVariables`** returns `currentItem` and `currentIndex`, typed as `LoopStructureHandler` types
     them. `ScopedVariableResolver` adds them to the descendants' scope only then. Without it, publish refuses every
     `variables.currentItem` read.
-  - **`CompletesAfterItsChildren`** returns true, as `LoopStructureHandler` does, so spec 266's unordered-write
+  - **`CompletesAfterItsChildren`** returns true, as `If` and `LoopStructureHandler` do, so spec 266's unordered-write
     analysis does not report false findings around the bulk node.
+  - **`AssessChildResult`** returns `Unknown` with `MayRunConcurrently = true` and
+    `EarlierProducerRunCanReachConsumer = true`, so a slot binding to the `Dispatch` node's result is refused
+    (`ActivityChildResultFacts`). If returns `false` for the second flag, which here would let a branch read another
+    item's dispatch result (spec FR-010).
   - **`RelateChildren`** answers `Unordered` for every pair, including a child paired with itself. `Dispatch` and both
     slots run concurrently across passes. If's "never overlap" facts would feed spec 266's concurrency checks false
     ordering.
@@ -218,7 +222,8 @@ the design side), and converter rules.
   - a fault inside a `Sequence` in a slot takes the intervention path (descendant fault);
   - parent cancellation cancels the waiting children;
   - publish pins the `Dispatch` node through the unchanged `DispatchPinSource`;
-  - a slot that writes a workflow variable publishes with the `ValueFlow/ConcurrentWrite` warning.
+  - a slot that writes a workflow variable publishes with the `ValueFlow/ConcurrentWrite` warning;
+  - a slot binding to the `Dispatch` node's result is refused at publish.
 - **Converter** (`Elsa3BulkDispatchConversionTests`): every member rule; each FR-017 and FR-019 row; an item key
   that clashes with a workflow variable (the item wins in `Inputs`, and the variable wins in the correlation function,
   as in Elsa 3); the item-read
