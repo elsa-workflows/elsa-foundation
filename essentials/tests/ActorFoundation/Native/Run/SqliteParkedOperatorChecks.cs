@@ -132,7 +132,7 @@ internal static partial class SqliteHostLifetimeChecks
                 """).SingleAsync(token), "the byte cut keeps the second large row and persists a retry when final-page protection is unavailable");
             Require(await compoundRetireReply is { Channel: Request.Response, Item: "started" } &&
                 await compoundKeepReply is { Channel: Request.Response, Item: "started" },
-                "both held compound operations answer started before the final protection decision");
+                "both held compound operations acknowledge paged clearing with started");
             while (await reads.GetAsync(scope, compoundRetire, token) is not null) await Task.Delay(25, token);
             var kept = await WaitAsync(owner, compoundKeep, 4);
             Require(kept is { Status: InstanceStatus.Cancelled, TerminalAt: > 0, ParkAt: null } &&
