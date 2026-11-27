@@ -119,6 +119,8 @@ if (args is ["kernel-paged-event-owner-replacement", var replacementProvider and
 if (args is ["kernel-paged-event-paused-owner", var pausedProvider and ("postgres" or "sqlite"),
     var pausedFence and ("checked" or "in-batch"), var pausedPath])
     return await KernelAuthoredEventChecks.RunPausedPagedEventOwnerAsync(pausedProvider, pausedFence == "in-batch", pausedPath);
+if (args is ["kernel-paged-event-cleanup", var cleanupProvider and ("postgres" or "sqlite")])
+    return await KernelAuthoredEventChecks.RunPagedEventCleanupAsync(cleanupProvider);
 if (args is ["kernel-paged-authored-event", var pagedAuthoredProvider and ("postgres" or "sqlite"), var pagedAuthoredFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(pagedAuthoredProvider, pagedAuthoredFence == "in-batch", authored: true);
 if (args is ["kernel-paged-authored-park", var pagedParkProvider and ("postgres" or "sqlite"), var pagedParkFence and ("checked" or "in-batch")])
