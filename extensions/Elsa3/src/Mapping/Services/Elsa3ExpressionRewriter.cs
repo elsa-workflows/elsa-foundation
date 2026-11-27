@@ -213,31 +213,39 @@ public sealed class Elsa3ExpressionRewriter(
         // Spec 1223 FR-016 to FR-018: the converted source, with the values that were live .NET objects in Elsa 3. It runs
         // on every path, a refusal on another ground too: a .NET type read as a global (new Uri(…)) is .NET usage, not a
         // custom global, so the refusal lists the other undeclared globals but never the names the analysis flagged as .NET.
-        // Where the conversion failed before producing a source, the Elsa 3 source is analyzed; a .NET type the converter
-        // already refused as unavailable in Elsa 4 (DateTime, Guid, …) is not refused twice.
+        // Where the conversion failed before producing a source, the Elsa 3 source is analyzed. An expression the analysis
+        // cannot parse in strict mode (sloppy-only syntax such as the legacy octal 010, refused itself) is analyzed as the
+        // sloppy script Elsa 3 parsed, so it gets the same .NET usage, and the same components, as one without that syntax.
         var analyzed = rewritten.Succeeded ? rewritten.Definition!.Source : source;
-        var analysis = dotNetUsage.Analyze(
-            analyzed,
-            scriptBody: mode == Elsa3JavaScriptMode.Script,
-            new JavaScriptDotNetUsageContext(analyzer.KnownDotNetValues));
+        var context = new JavaScriptDotNetUsageContext(analyzer.KnownDotNetValues);
+        var analysis = dotNetUsage.Analyze(analyzed, scriptBody: mode == Elsa3JavaScriptMode.Script, context);
+        if (analysis is null && mode != Elsa3JavaScriptMode.Script)
+            analysis = dotNetUsage.Analyze(analyzed, scriptBody: true, context);
         var usages = analysis ?? [];
         var usageRoots = DotNetUsageRoots(analyzed, usages);
-        var dotNetRoots = usageRoots.OfType<string>().ToHashSet(StringComparer.Ordinal);
-        // A source the analysis cannot parse (sloppy-mode syntax such as 010, refused itself) is not analyzed: the .NET
-        // type names the analysis knows are then left out of the components by name.
+        var dotNetRoots = usageRoots.Select(root => root.Flagged).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        // A source the analysis still cannot parse is not analyzed: the .NET type names the analysis knows are then left
+        // out of the components by name.
         if (analysis is null)
             dotNetRoots.UnionWith(DotNetTypeNames);
-        var refusesDotNet = result.Succeeded
-            ? usages.Count > 0
-            : usageRoots.Any(root => root is null || !JavaScriptAnalyzer.ElsaThreeGlobals.Contains(root)) &&
-              !result.Issues.Any(issue => issue.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
 
         // Every refusal also lists the undeclared custom globals the script uses (spec 1237 FR-016a), filtered: not the
-        // names it writes itself before reading them, none under a with statement and none the analysis flagged as .NET.
+        // names it writes itself before reading them, none in a with statement's body and none the analysis flagged as .NET.
         var missing = analyzer.ReportableMissingGlobals
             .Where(issue => !(issue.Metadata?.TryGetValue(Elsa3MigrationDiagnosticMetadataKeys.ComponentName, out var name) == true &&
                               dotNetRoots.Contains(name)))
             .ToArray();
+
+        // One problem, one refusal: on a failure path, a .NET usage whose value comes from a name already refused (an Elsa 3
+        // global Elsa 4 does not have, such as DateTime, Guid or Random, a refused or unknown host function, or a listed
+        // component), through calls, constructions, member reads and local variables, is not refused again as .NET usage.
+        var refusedNames = analyzer.RefusedGlobalNames
+            .Concat(missing.Select(issue => issue.Metadata?.GetValueOrDefault(Elsa3MigrationDiagnosticMetadataKeys.ComponentName)).OfType<string>())
+            .ToHashSet(StringComparer.Ordinal);
+        var refusesDotNet = result.Succeeded
+            ? usages.Count > 0
+            : usageRoots.Any(root => root.Origin is null || !refusedNames.Contains(root.Origin)) &&
+              !result.Issues.Any(issue => issue.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
         // The analyzer's own message quotes the script, and its position is one in the converted source, not the Elsa 3
         // one, so the refusal names the cause only (spec 1237 FR-019).
         Elsa3ExpressionRewriteIssue[] dotNetIssue = refusesDotNet
@@ -271,16 +279,21 @@ public sealed class Elsa3ExpressionRewriter(
     };
 
     /// <summary>
-    /// The global name the .NET-usage analysis flagged as .NET at each refusal's range in the analyzed source, one per
-    /// usage, or null where none: the type a <c>new X(…)</c> constructs, and the root of a flagged member access or member
-    /// call (<c>Uri</c> in <c>Uri.EscapeDataString(s)</c>, <c>lib</c> in <c>lib.Format(1)</c>). Those are not custom
-    /// globals to build.
+    /// Per .NET usage in the analyzed source, two names, either null where none.
+    /// <c>Flagged</c>: the global name the analysis flagged as .NET, the type a <c>new X(…)</c> constructs, and the static
+    /// root of a flagged member access or member call (<c>Uri</c> in <c>Uri.EscapeDataString(s)</c>, <c>lib</c> in
+    /// <c>lib.Format(1)</c>). Those are not custom globals to build.
+    /// <c>Origin</c>: the name the used value comes from, followed through calls, constructions, member reads and locals
+    /// initialised once (<c>Random</c> in <c>new Random(1).Next()</c> and in <c>const r = new Random(); r.Next()</c>,
+    /// <c>moment</c> in <c>moment().Format()</c>), so a usage of a value already refused is not refused twice.
     /// </summary>
-    private static string?[] DotNetUsageRoots(string source, IReadOnlyList<JavaScriptDotNetUsage> usages)
+    private static (string? Flagged, string? Origin)[] DotNetUsageRoots(string source, IReadOnlyList<JavaScriptDotNetUsage> usages)
     {
         if (usages.Count == 0)
             return [];
-        var roots = new Dictionary<ExpressionToolingRange, string>();
+        var roots = new Dictionary<ExpressionToolingRange, (string? Flagged, string? Origin)>();
+        // Each local declared by one declarator: its initializer. A name declared more than once maps to null.
+        var initializers = new Dictionary<string, Node?>(StringComparer.Ordinal);
         Node tree;
         try
         {
@@ -294,24 +307,51 @@ public sealed class Elsa3ExpressionRewriter(
             }
             catch (ParseErrorException)
             {
-                return new string?[usages.Count];
+                return new (string?, string?)[usages.Count];
             }
         }
 
         var ranges = usages.Select(usage => usage.Range).ToHashSet();
+        CollectInitializers(tree);
         Walk(tree);
         return usages.Select(usage => roots.GetValueOrDefault(usage.Range)).ToArray();
+
+        void CollectInitializers(Node node)
+        {
+            if (node is VariableDeclarator { Id: Identifier local } declarator)
+                initializers[local.Name] = initializers.ContainsKey(local.Name) ? null : declarator.Init;
+            foreach (var child in node.ChildNodes)
+                CollectInitializers(child);
+        }
 
         void Walk(Node node)
         {
             var range = new ExpressionToolingRange(
                 new(Math.Max(0, node.Location.Start.Line - 1), Math.Max(0, node.Location.Start.Column)),
                 new(Math.Max(0, node.Location.End.Line - 1), Math.Max(0, node.Location.End.Column)));
-            if (ranges.Contains(range) && FlaggedRoot(node) is { } root)
-                roots.TryAdd(range, root);
+            if (ranges.Contains(range) && !roots.ContainsKey(range))
+            {
+                var flagged = FlaggedRoot(node);
+                var origin = Origin(node, new HashSet<string>(StringComparer.Ordinal));
+                if (flagged is not null || origin is not null)
+                    roots[range] = (flagged, origin);
+            }
             foreach (var child in node.ChildNodes)
                 Walk(child);
         }
+
+        // A local declared without an initializer, or by more than one declarator, has no known origin. Any other name is
+        // taken as written: the global it names (a parameter of that name is not told apart).
+        string? Origin(Node node, HashSet<string> followed) => node switch
+        {
+            Identifier identifier => !initializers.TryGetValue(identifier.Name, out var init) ? identifier.Name
+                : init is not null && followed.Add(identifier.Name) ? Origin(init, followed) : null,
+            MemberExpression member => Origin(member.Object, followed),
+            CallExpression call => Origin(call.Callee, followed),
+            NewExpression construction => Origin(construction.Callee, followed),
+            ChainExpression chain => Origin(chain.Expression, followed),
+            _ => null,
+        };
 
         static string? FlaggedRoot(Node node) => node switch
         {
@@ -1220,6 +1260,19 @@ public sealed class Elsa3ExpressionRewriter(
         private bool _usesWith;
 
         /// <summary>
+        /// How many with statement bodies enclose the node being visited: a name used there resolves against the statement's
+        /// object first, so it is not known to be a custom global and is not reported.
+        /// </summary>
+        private int _withBodyDepth;
+
+        /// <summary>
+        /// The global names refused on another ground than a missing custom global: the Elsa 3 globals Elsa 4 does not have
+        /// (<c>DateTime</c>, <c>Guid</c>, ...), <c>crypto</c>, and the host functions refused as unknown, unapproved or
+        /// built-in where no host function can take them over. A .NET usage rooted in one of them is not refused a second time.
+        /// </summary>
+        public HashSet<string> RefusedGlobalNames { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>
         /// Function declarations inside a block (not at the top of the script or of a function body), each with the script
         /// or function bodies that enclose one of that name. Elsa 3's sloppy mode also made each a variable of the enclosing
         /// function (Annex B); Elsa 4's strict mode scopes it to its block, so a use outside the block names nothing.
@@ -1237,26 +1290,30 @@ public sealed class Elsa3ExpressionRewriter(
         /// guidance of its most specific use (a direct call's if any use is one, else an object use's, else a value use's).
         /// A name the script writes itself (an implicit global it creates, refused as an undeclared write) is left out when
         /// every use comes after its first write in source order; a use before it, or inside the right side of the
-        /// assignment that writes it (<c>foo = foo || {}</c>), read a custom global Elsa 3 provided. Under a with statement
-        /// (refused itself) none is reported: a with statement's names resolve against its object first, so none of them is
-        /// known to be a custom global.
+        /// assignment that writes it (<c>foo = foo || {}</c>), read a custom global Elsa 3 provided. A use in a with
+        /// statement's body (refused itself) is never recorded: its names resolve against the statement's object first, so
+        /// none of them is known to be a custom global. Uses elsewhere in the script are reported as usual.
         /// </summary>
-        public IEnumerable<Elsa3ExpressionRewriteIssue> ReportableMissingGlobals => _usesWith
-            ? []
-            : _missingGlobals
-                .Select((use, index) => (use, index, name: ComponentNameOf(use.Issue)))
-                .GroupBy(entry => entry.name ?? $"\0{entry.index}", StringComparer.Ordinal)
-                .Where(group => group.First().name is not { } name ||
-                                !_undeclaredWrites.TryGetValue(name, out var firstWrite) ||
-                                group.Any(entry => entry.use.Position < firstWrite))
-                .Select(group => group.OrderBy(entry => entry.use.Use).ThenBy(entry => entry.index).First().use.Issue);
+        public IEnumerable<Elsa3ExpressionRewriteIssue> ReportableMissingGlobals => _missingGlobals
+            .Select((use, index) => (use, index, name: ComponentNameOf(use.Issue)))
+            .GroupBy(entry => entry.name ?? $"\0{entry.index}", StringComparer.Ordinal)
+            .Where(group => group.First().name is not { } name ||
+                            !_undeclaredWrites.TryGetValue(name, out var firstWrite) ||
+                            group.Any(entry => entry.use.Position < firstWrite))
+            .Select(group => group.OrderBy(entry => entry.use.Use).ThenBy(entry => entry.index).First().use.Issue);
 
         private static string? ComponentNameOf(Elsa3ExpressionRewriteIssue issue) =>
             issue.Metadata is not null && issue.Metadata.TryGetValue(Elsa3MigrationDiagnosticMetadataKeys.ComponentName, out var name) ? name : null;
 
-        /// <summary>Records a missing global's refusal for the use that starts at <paramref name="at"/>.</summary>
-        private void AddMissingGlobal(Elsa3ExpressionRewriteIssue issue, Node at, GlobalUse use) =>
-            _missingGlobals.Add(new MissingGlobalUse(issue, use, at.Start));
+        /// <summary>
+        /// Records a missing global's refusal for the use that starts at <paramref name="at"/>, unless the use is in a with
+        /// statement's body.
+        /// </summary>
+        private void AddMissingGlobal(Elsa3ExpressionRewriteIssue issue, Node at, GlobalUse use)
+        {
+            if (_withBodyDepth == 0)
+                _missingGlobals.Add(new MissingGlobalUse(issue, use, at.Start));
+        }
 
         /// <summary>The local functions the rewritten source calls, one per line, or empty.</summary>
         public string Prelude =>
@@ -1354,7 +1411,14 @@ public sealed class Elsa3ExpressionRewriter(
                 .Concat(ElsaThreeGlobals).Concat(ClrNamespaceRoots).Concat(NativeJavaScriptGlobals).Concat(JavaScriptBuiltInFunctions.ReadRoots),
             StringComparer.Ordinal);
 
-        private static Elsa3ExpressionRewriteIssue UnavailableGlobal(string name) => new(
+        /// <summary>The refusal of an Elsa 3 global Elsa 4 does not have; the name counts as refused (<see cref="RefusedGlobalNames"/>).</summary>
+        private Elsa3ExpressionRewriteIssue UnavailableGlobal(string name)
+        {
+            RefusedGlobalNames.Add(name);
+            return UnavailableGlobalIssue(name);
+        }
+
+        private static Elsa3ExpressionRewriteIssue UnavailableGlobalIssue(string name) => new(
             Elsa3ImportDiagnosticCodes.ForbiddenCapability,
             $"JavaScript uses '{name}', which the Elsa 4 JavaScript engine does not provide.",
             name switch
@@ -1724,6 +1788,55 @@ public sealed class Elsa3ExpressionRewriter(
                 Visit(argument);
         }
 
+        /// <summary>
+        /// Visits the operands of a refused ambient mutation, so the custom globals they use are reported too (spec 1237
+        /// FR-016a): the computed keys and reader arguments of the target, in source order, then the assigned value. The
+        /// ambient root itself is not visited: the mutation's own refusal names it.
+        /// </summary>
+        private void VisitMutationOperands(Node mutation, Node target)
+        {
+            VisitTargetOperands(target);
+            if (mutation is AssignmentExpression assignment)
+                Visit(assignment.Right);
+        }
+
+        private void VisitTargetOperands(Node target)
+        {
+            switch (target)
+            {
+                case Identifier:
+                    return;
+                case MemberExpression member:
+                    VisitTargetOperands(member.Object);
+                    if (member.Computed)
+                        Visit(member.Property);
+                    return;
+                case CallExpression { Callee: Identifier reader } call when !IsDeclared(reader.Name) &&
+                                                                             (reader.Name is "getVariable" or "getInput" || TryGetAccessorName(reader.Name, "get", out _)):
+                    VisitArguments(call);
+                    return;
+                case ChainExpression chain:
+                    VisitTargetOperands(chain.Expression);
+                    return;
+                case ArrayPattern or ObjectPattern or RestElement:
+                    foreach (var child in target.ChildNodes)
+                        VisitTargetOperands(child);
+                    return;
+                case Property property:
+                    if (property.Computed)
+                        Visit(property.Key);
+                    VisitTargetOperands(property.Value);
+                    return;
+                case AssignmentPattern assigned:
+                    VisitTargetOperands(assigned.Left);
+                    Visit(assigned.Right);
+                    return;
+                default:
+                    Visit(target);
+                    return;
+            }
+        }
+
         private void VisitNode(Node node)
         {
             if (node is AssignmentExpression assignment && ContainsAmbientRoot(assignment.Left) ||
@@ -1737,6 +1850,7 @@ public sealed class Elsa3ExpressionRewriter(
                 if (!memberChange && _ambiguousMemberTarget is { } ambiguous)
                 {
                     Issues.Add(ambiguous);
+                    VisitMutationOperands(node, target);
                     return;
                 }
 
@@ -1748,6 +1862,7 @@ public sealed class Elsa3ExpressionRewriter(
                         Mode != Elsa3JavaScriptMode.Script ? VariableWriteGuidance
                         : "Change a variable with setVariable('name', value), or a member of its value through getVariable('name'), in the Elsa 3 script before import; " +
                           "a loop's current value and workflow inputs are read-only in Elsa 4."));
+                    VisitMutationOperands(node, target);
                     return;
                 }
             }
@@ -1776,6 +1891,24 @@ public sealed class Elsa3ExpressionRewriter(
                 Issues.Add(UndeclaredWrite(written));
             }
             CheckThisAndArguments(node);
+
+            // Names in a with statement's body resolve against its object first, so none of them is known to be a custom
+            // global; its object, and the rest of the script, are visited as usual.
+            if (node is WithStatement with)
+            {
+                Visit(with.Object);
+                _withBodyDepth++;
+                try
+                {
+                    Visit(with.Body);
+                }
+                finally
+                {
+                    _withBodyDepth--;
+                }
+
+                return;
+            }
 
             // A function the script declares itself is a local call, not an Elsa 3 host function.
             if (node is CallExpression call && call.Callee is Identifier callee && !IsDeclared(callee.Name))
@@ -2059,6 +2192,9 @@ public sealed class Elsa3ExpressionRewriter(
 
                 if (RefusedHostFunctions.TryGetValue(callee.Name, out var refused))
                 {
+                    // A refusal a host function can take over is a missing global, reported with the components.
+                    if (!CanBeMatched(callee.Name))
+                        RefusedGlobalNames.Add(callee.Name);
                     // A refused Elsa 3 built-in a host function may take over says so (#5664); one it may not does not.
                     Report(CanBeMatched(callee.Name)
                         ? Elsa3ExpressionRewriteIssue.HostFunctionMissing(callee.Name, refused.Message, $"{refused.Guidance} {RebuiltFunctionGuidance(callee.Name)}")
@@ -2069,6 +2205,8 @@ public sealed class Elsa3ExpressionRewriter(
 
                 if (!PureGlobalCalls.Contains(callee.Name))
                 {
+                    if (!CanBeMatched(callee.Name))
+                        RefusedGlobalNames.Add(callee.Name);
                     var message = $"JavaScript calls unknown or unapproved host function '{callee.Name}'.";
                     Report(CanBeMatched(callee.Name)
                         ? Elsa3ExpressionRewriteIssue.HostFunctionMissing(callee.Name, message, UndeclaredFunctionGuidance(callee.Name))
@@ -2167,16 +2305,21 @@ public sealed class Elsa3ExpressionRewriter(
                 return;
             }
 
-            if (node is NewExpression { Callee: Identifier constructed } && IsUnavailableGlobal(constructed.Name))
+            // The arguments and a computed key are visited, so the custom globals they use are reported too (spec 1237 FR-016a).
+            if (node is NewExpression { Callee: Identifier constructed } unavailableConstruction && IsUnavailableGlobal(constructed.Name))
             {
                 Issues.Add(UnavailableGlobal(constructed.Name));
+                foreach (var argument in unavailableConstruction.Arguments)
+                    Visit(argument);
                 return;
             }
 
-            if (node is MemberExpression { Object: Identifier global } && IsUnavailableGlobal(global.Name) &&
+            if (node is MemberExpression { Object: Identifier global } globalMember && IsUnavailableGlobal(global.Name) &&
                 !IsNondeterministicMember(node))
             {
                 Issues.Add(UnavailableGlobal(global.Name));
+                if (globalMember.Computed)
+                    Visit(globalMember.Property);
                 return;
             }
 
@@ -2290,13 +2433,15 @@ public sealed class Elsa3ExpressionRewriter(
                 return;
             }
 
-            if (node is CallExpression { Callee: MemberExpression { Object: Identifier helperRoot, Property: Identifier helper } calledMember } &&
+            if (node is CallExpression { Callee: MemberExpression { Object: Identifier helperRoot, Property: Identifier helper } calledMember } nondeterministicCall &&
                 IsNondeterministicCall(calledMember))
             {
+                RefusedGlobalNames.Add(helperRoot.Name);
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
                     Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                     $"JavaScript calls '{helperRoot.Name}.{helper.Name}', which Elsa 3 did not provide.",
                     UniqueValueGuidance));
+                VisitArguments(nondeterministicCall);
                 return;
             }
 

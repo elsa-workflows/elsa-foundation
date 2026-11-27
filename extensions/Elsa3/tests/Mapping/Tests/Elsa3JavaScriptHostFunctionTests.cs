@@ -1086,6 +1086,167 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     }
 
     /// <summary>
+    /// A .NET-style use of a value that comes from a name already refused, through calls, constructions and a local, is
+    /// not refused again as .NET usage: one problem, one refusal.
+    /// </summary>
+    [Theory]
+    [InlineData("new Random(1).Next()", "'Random'")]
+    [InlineData("Guid.NewGuid().ToString()", "'Guid'")]
+    [InlineData("(() => { const r = new Random(); return r.Next(); })()", "'Random'")]
+    [InlineData("moment().Format()", "'moment'")]
+    public async Task A_dotnet_use_of_an_already_refused_value_is_not_refused_twice(string expression, string named)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
+                                                          diagnostic.Message.Contains(named, StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
+    }
+
+    /// <summary>In a Run JavaScript body too, a .NET-style use of an already refused value is refused once.</summary>
+    [Theory]
+    [InlineData("return new Random(1).Next();")]
+    [InlineData("const r = new Random(); return r.Next();")]
+    [InlineData("return Guid.NewGuid().ToString();")]
+    public async Task A_dotnet_use_of_an_already_refused_value_in_a_script_is_not_refused_twice(string script)
+    {
+        var result = await ConvertScriptAsync(script);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
+    }
+
+    /// <summary>A refused change of an ambient value still reports the custom globals of its assigned value and computed key.</summary>
+    [Theory]
+    [InlineData("variables.x = myFn(1)")]
+    [InlineData("variables[myFn(1)] = 2")]
+    [InlineData("variables.x += myFn(1)")]
+    public async Task A_refused_ambient_mutation_reports_its_operands_custom_globals(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
+                                                          diagnostic.Message.Contains("ambient value", StringComparison.Ordinal));
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("myFn", missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+    }
+
+    [Theory]
+    [InlineData("variables.flag = myFn(1); return 1;")]
+    [InlineData("variables[myFn(1)] = 2; return 1;")]
+    public async Task A_refused_ambient_mutation_in_a_script_reports_its_operands_custom_globals(string script)
+    {
+        var result = await ConvertScriptAsync(script);
+
+        Assert.False(result.Succeeded);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("myFn", missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+    }
+
+    /// <summary>
+    /// Constructing an Elsa 3 global Elsa 4 does not have, or calling crypto.randomUUID, still reports the custom globals
+    /// of the arguments, as the member form does, and the .NET-style use of the refused value is not refused again.
+    /// </summary>
+    [Theory]
+    [InlineData("new DateTime(myFn(1))")]
+    [InlineData("new Guid(myFn(1))")]
+    [InlineData("new Random(myFn(1)).Next()")]
+    [InlineData("DateTime.Parse(myFn(1))")]
+    [InlineData("crypto.randomUUID(myFn(1))")]
+    public async Task A_refused_construction_reports_its_arguments_custom_globals(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("myFn", missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
+    }
+
+    [Theory]
+    [InlineData("return new DateTime(myFn(1));")]
+    [InlineData("return new Random(myFn(1)).Next();")]
+    [InlineData("return crypto.randomUUID(myFn(1));")]
+    public async Task A_refused_construction_in_a_script_reports_its_arguments_custom_globals(string script)
+    {
+        var result = await ConvertScriptAsync(script);
+
+        Assert.False(result.Succeeded);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("myFn", missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
+    }
+
+    /// <summary>A with statement hides only the names used in its body: the script's other custom globals are still listed.</summary>
+    [Theory]
+    [InlineData("(() => { var r = lookup(1); with ({ a: 1 }) { r += a; } return r; })()")]
+    [InlineData("(() => { var r = 0; with ({ a: 1 }) { r += inner(a); } return r + lookup(1); })()")]
+    public async Task A_with_statement_hides_only_the_names_in_its_body(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape &&
+                                                          diagnostic.Message.Contains("with statement", StringComparison.Ordinal));
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("lookup", missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+    }
+
+    [Fact]
+    public async Task A_with_statement_in_a_script_hides_only_the_names_in_its_body()
+    {
+        var result = await ConvertScriptAsync("var r = lookup(1); with ({ a: 1 }) { r += inner(a); } return r;");
+
+        Assert.False(result.Succeeded);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("lookup", missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+    }
+
+    /// <summary>
+    /// Sloppy-only syntax (a legacy octal literal, refused itself) does not change the .NET-usage result: a .NET-style
+    /// member root is .NET usage, not a component, as without that syntax, and the other custom globals stay listed.
+    /// </summary>
+    [Theory]
+    [InlineData("(() => { const n = 010; return myLib.Format(1); })()", null)]
+    [InlineData("(() => { return myLib.Format(1); })()", null)]
+    [InlineData("(() => { const n = 010; return Int32.Parse('1') + lookup(n); })()", "lookup")]
+    [InlineData("(() => { const n = 1; undeclaredX = 1; return Int32.Parse('1') + lookup(n); })()", "lookup")]
+    public async Task Sloppy_only_syntax_keeps_the_dotnet_usage_refusal(string expression, string? component)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
+        var components = result.Diagnostics
+            .Where(diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing)
+            .Select(diagnostic => diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName])
+            .ToArray();
+        string[] expected = component is null ? [] : [component];
+        Assert.Equal(expected, components);
+    }
+
+    [Theory]
+    [InlineData("const n = 010; return myLib.Format(1);", null)]
+    [InlineData("const n = 010; return Int32.Parse('1') + lookup(n);", "lookup")]
+    public async Task Sloppy_only_syntax_in_a_script_keeps_the_dotnet_usage_refusal(string script, string? component)
+    {
+        var result = await ConvertScriptAsync(script);
+
+        Assert.False(result.Succeeded);
+        Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
+        var components = result.Diagnostics
+            .Where(diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing)
+            .Select(diagnostic => diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName])
+            .ToArray();
+        string[] expected = component is null ? [] : [component];
+        Assert.Equal(expected, components);
+    }
+
+    /// <summary>
     /// A name the script reads before its first write, or in the right side of the assignment that writes it, was an
     /// Elsa 3 custom global: it stays a component next to the undeclared-write refusal.
     /// </summary>
