@@ -131,8 +131,11 @@ internal static class KernelShellChildExecutableChecks
             await new StartKernelShell(shell).InitializeAsync(token);
             try
             {
-                Check(!services.GetRequiredService<KernelServing>().Registry.Contains(child.Identity.ArtifactId),
+                var registry = services.GetRequiredService<KernelServing>().Registry;
+                Check(!registry.Contains(child.Identity.ArtifactId),
                     "the cold installed owner does not serve the unpublished artifact");
+                registry.Add(new Workflow(child.Identity.ArtifactId, Wf.WriteLine("unrelated", "replacement"),
+                    definition: child.Identity.DefinitionId) { ExecutableSelection = "unrelated material" });
                 var reads = await shell.ReadAsync(token);
                 var ingress = await shell.IngressAsync(token);
                 var release = await ingress.SendAsync(scope, new Contract.Target.Ref(childRef), "continue-protected-child",
@@ -140,6 +143,8 @@ internal static class KernelShellChildExecutableChecks
                 Check(release.Outcome == Contract.AdmissionOutcome.Accepted, "the exact committed child accepted its resume after restart");
                 var terminal = await WaitAsync(() => reads.GetAsync(scope, childRef, token),
                     item => item?.Header.Status == Contract.ActorStatus.Finished, token);
+                Check(registry.Get(child.Identity.ArtifactId).ExecutableSelection == Json.Write(child.Identity),
+                    "the cold owner replaced the stale same-ID plan with the exact retained executable before resuming");
                 await WaitAsync(() => reads.GetAsync(scope, parentRef, token), item => item?.Header.Status == Contract.ActorStatus.Finished, token);
                 var operators = await OpenOperatorsAsync();
                 var retired = await operators.SendAsync(scope, new Contract.Target.Ref(childRef), "retire-protected-child", Contract.Kinds.Delete,
