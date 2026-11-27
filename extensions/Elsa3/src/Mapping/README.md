@@ -276,6 +276,38 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     is its own inputs and whose root variables are its own (spec 265, #3027).
   - What to change in Elsa 3 before exporting: [Elsa 3 migration readiness](../../../../docs/reference/elsa3-migration-readiness.md).
 
+- **BulkDispatchWorkflows** (spec 1242). It becomes the Elsa 4 structural activity `BulkDispatchWorkflows` with the
+  same `Items` and branches. The conversion generates its `Dispatch` slot child, a `DispatchWorkflow` with id
+  `{elsa3NodeId}.dispatch`, from the Elsa 3 dispatch members:
+  - `WorkflowDefinitionId` must be a literal (it is pinned at publish); `StartNewTrace` and `ChannelName` must be unset,
+    false or empty (`ELS3-ACTIVITY-REMOVED-INPUT-BOUND`); `CancelChildOnParentCancellation` is `false`.
+  - `WaitForCompletion` goes to the Dispatch node: missing is `true` (Elsa 3's default), null or a valueless literal is
+    `false`, a literal is read in any letter case, an expression is carried and now evaluated once per item.
+  - `CorrelationIdFunction` becomes the Dispatch node's `CorrelationId`. `get{DefaultItemInputKey}()` (for example
+    `getItem()`) and `args.<camelKey>` read the item as the bulk node's `variables.currentItem`; a workflow input or
+    variable named like the accessor still wins, as in Elsa 3.
+  - `Inputs` is generated per item: the literal `Input` map's entries, then a map item's members that the target
+    declares (matched in any letter case, passed in the declared spelling), or any other item under the item key when
+    the target declares it. The item wins a clash. `ParentInstanceId` is not passed. The target's declared inputs come
+    from the same import or from a workflow already published in Elsa 4; a target in neither is
+    `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`. A literal `Items`, an expression `DefaultItemInputKey` and an
+    expression `Input` are `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
+  - `Completed` is dropped where `Done` already reaches its target (not a WaitAll join), and with a literal-false wait;
+    `Canceled` (never emitted) is dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. Any other route, and one into a
+    WaitAll join, is `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`: connect the follow-up to `Done`. With a literal-false
+    wait the branches never ran in Elsa 3 and are dropped with the same warning.
+  - A branch reading what Elsa 3 passed it about the child (`ChildInstanceId`, `WorkflowOutput`, `WorkflowInstanceId`,
+    `WorkflowStatus`, `WorkflowSubStatus`) is `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`.
+  - Every conversion warns `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` (more than 1,000 items fault; at most 16 passes open at
+    once; batch with a sequential ForEach) and `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS` (only declared inputs, no
+    `ParentInstanceId`, `ChildFaulted` also for cancelled and undispatchable children, an inherited correlation id
+    without a function, a per-item wait).
+  - Outer writes: Elsa 3 ran the branches one at a time, Elsa 4 runs them concurrently. A branch that writes a variable
+    declared outside the bulk node (a Set Variable, a captured output or a script) converts with
+    `ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE`, and publish adds Elsa 4's `ValueFlow/ConcurrentWrite` warning. Record
+    per-child results in the child workflow, or compute the total after the bulk dispatch.
+  - Elsa 3 silently dispatched nothing for an `Items` value that is not a collection; Elsa 4 faults, as ForEach does.
+
 ## Migrating Elsa 3 JavaScript
 
 Elsa 4 evaluates JavaScript in a sandbox. Each expression sees the parameters it declares (`args`) and the workflow

@@ -178,7 +178,13 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | (Elsa 4) DispatchWorkflow.CancelChildOnParentCancellation | default true | R2: emit `false` | 2 |
 | DispatchWorkflow outcome `Done` | Dispatched / Completed / Faulted / Cancelled / DispatchFailed | R8 | 2 |
 | ExecuteWorkflow → DispatchWorkflow | `WaitForCompletion = true` | R1 + **W** (durable dispatch instead of an in-process call); members as DispatchWorkflow | 1 (Result captured → unconvertible; target is an expression → unconvertible) |
-| BulkDispatchWorkflows, RunTask | — | R6 | 2 / 0 |
+| BulkDispatchWorkflows → BulkDispatchWorkflows (spec 1242) | structural activity, `Done` only | R1 + **W** `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` (cap 1,000, window 16) and `…-ITEM-INPUTS` | 2 |
+| BulkDispatchWorkflows.Items | `Items` | R1; null → no binding; a non-null literal → R5 refused (Elsa 3 read it as text) | 2 |
+| BulkDispatchWorkflows.WorkflowDefinitionId, CorrelationIdFunction, WaitForCompletion, Input, DefaultItemInputKey | the generated `Dispatch` child (`{id}.dispatch`): `WorkflowDefinitionId` (literal), `CorrelationId` (item read → `currentItem`), `WaitForCompletion` (missing → `true`), per-item `Inputs` (target-declared names) | R7 (rewrite `BulkDispatchChild`) | 2 |
+| BulkDispatchWorkflows.StartNewTrace, ChannelName | — | R3 (false / null), checked by the rewrite | 2 |
+| BulkDispatchWorkflows.ChildCompleted, ChildFaulted | slots `ChildCompleted`, `ChildFaulted`; dropped with a literal-false wait | R7 | 1 |
+| BulkDispatchWorkflows outcomes `Completed`, `Canceled` | dropped where faithful, else `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` | R8 | 1 |
+| RunTask | — | R6 | 0 |
 
 ## JavaScript
 

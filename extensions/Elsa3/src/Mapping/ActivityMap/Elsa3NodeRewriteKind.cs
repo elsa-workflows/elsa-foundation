@@ -25,5 +25,8 @@ public enum Elsa3NodeRewriteKind
     LoopVariableReferences,
 
     /// <summary>HttpEndpoint: ResponseMode Sync and the request projections.</summary>
-    HttpTriggerResponseMode
+    HttpTriggerResponseMode,
+
+    /// <summary>BulkDispatchWorkflows: the generated Dispatch child, the branches and the wait (spec 1242).</summary>
+    BulkDispatchChild
 }
