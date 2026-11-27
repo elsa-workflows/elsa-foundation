@@ -77,7 +77,8 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
   publisher that throws it, wrapped or not, as a refused state with the refusal's code, family and both versions
   (`ReusableActivityImportRefusals`, #5972). The engine-start folder import skips the version with its first error's
   message, so the family and versions reach the log; for a schema refusal or an unexpected failure it says the next
-  start tries again instead of giving the upload remediation, and any other refusal keeps its remediation.
+  start tries again instead of giving the upload remediation, and any other refusal keeps its remediation. A version
+  blocked by a dependency names only that dependency, whose own skip says why.
 - **Tenant:** the publisher must resolve the import's tenant.
 - **Absence:** without an implementation, an apply that selects a reusable workflow is refused before anything is
   written with `ELS3-REUSABLE-PUBLISHING-UNAVAILABLE`.
