@@ -61,7 +61,7 @@ internal sealed class KernelParkRecovery(KernelRunReader runs, KernelRuns founda
         if (view is null) return Results.NotFound();
         if (view.Park is not { } park) return Results.Ok(new RecoveryView("NotParked"));
         var at = DateTimeOffset.FromUnixTimeMilliseconds(park.At);
-        return Results.Ok(park.OpenResolution is null && view.Selection is { } selection
+        return Results.Ok(view.Header.Status == ActorStatus.Faulted && park.OpenResolution is null && view.Selection is { } selection
             ? new RecoveryView("Available", at, selection)
             : new RecoveryView("Unavailable", at));
     }
@@ -70,16 +70,17 @@ internal sealed class KernelParkRecovery(KernelRunReader runs, KernelRuns founda
     {
         var view = await ReadAuthorizedAsync(workflowExecutionId, context, token);
         if (view is null) return Results.NotFound();
-        if (view is not { Park: { OpenResolution: null }, Selection: { } exactSelection } ||
-            !StringComparer.Ordinal.Equals(selection.Token, exactSelection)) return Results.Conflict();
+        if (view is not { Header.Status: ActorStatus.Faulted, Park: { OpenResolution: null }, Selection: not null } ||
+            selection.Token is not { Length: > 0 and <= 1024 } selected) return Results.Conflict();
 
         var binding = foundation.Tenant;
         var actor = view.Header.Ref;
         var ingress = await operators.Open((scope, target, operation) =>
             scope.Tenant == binding.Tenant && target == actor && operation == Kinds.Recover, token);
-        var operationId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(exactSelection)));
+        // Reads reseal selections with a fresh nonce. Admission verifies the caller's token against the exact Park mark.
+        var operationId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(selected)));
         var admission = await ingress.SendAsync(binding, new Target.Ref(actor), operationId, Kinds.Recover,
-            JsonSerializer.Serialize(new OperatorCommand(exactSelection, ExpectedTarget: actor)), cancellationToken: token);
+            JsonSerializer.Serialize(new OperatorCommand(selected, ExpectedTarget: actor)), cancellationToken: token);
         return admission switch
         {
             { Outcome: AdmissionOutcome.Accepted or AdmissionOutcome.Duplicate } => Results.Accepted(),

@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using CShells;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
 using Elsa.Expressions.Core.Contracts;
@@ -109,6 +110,7 @@ public sealed class KernelPublishedExecuteTests
         builder.Services.AddSingleton<IWorkflowExecutableStartPolicy, FixturePolicy>();
         builder.Services.AddSingleton<IPermissionResourceHandler, DeleteResourcePolicy>();
         builder.Services.AddSingleton<IWellKnownTypeRegistry, FixtureTypes>();
+        builder.Services.AddSingleton(new ShellSettings(new ShellId("default")));
         var expressions = new FixtureExpressions();
         builder.Services.AddSingleton<IPortableExpressionEvaluator>(expressions);
         builder.Services.AddSingleton(new WorkflowHttpEndpointSettings("/fixture/workflows", TimeSpan.FromSeconds(3), 4096,
@@ -251,7 +253,8 @@ public sealed class KernelPublishedExecuteTests
                 using var parked = await RecoveryAsync(HttpMethod.Get);
                 Assert.Equal(HttpStatusCode.OK, parked.StatusCode);
                 var status = await parked.Content.ReadFromJsonAsync<JsonElement>(token);
-                Assert.Equal("Available", status.GetProperty("status").GetString());
+                Assert.True(status.GetProperty("status").GetString() == "Available",
+                    $"Recovery status {status}; workflow HTTP {(int)first.StatusCode}: {await first.Content.ReadAsStringAsync(token)}");
                 var selected = status.GetProperty("token").GetString();
                 Assert.False(string.IsNullOrEmpty(selected));
                 using var stale = await RecoveryAsync(HttpMethod.Post, selection: "stale");
