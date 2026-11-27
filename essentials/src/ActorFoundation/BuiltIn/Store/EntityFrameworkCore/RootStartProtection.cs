@@ -7,3 +7,11 @@ public sealed record PendingRootStart(string Tenant, ActorRef Actor, string Type
 
 /// <summary>Protects the selected executable after preparation commits and before its root is admitted.</summary>
 public delegate ValueTask<bool> ProtectRootStartAsync(PendingRootStart start, CancellationToken cancellationToken);
+
+/// <summary>What the durable Foundation state establishes about the exact held root.</summary>
+public enum RootStartProof
+{
+    Unresolved,
+    BirthRetired,
+    PreparationDisarmed
+}

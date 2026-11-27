@@ -132,11 +132,11 @@ internal static class RootPreparedStarts
 
     private static FormattableString Bind(KernelDb db, FormattableString query, Func<FormattableString, FormattableString>? bindSource)
     {
-        if (!db.UsesRootPreparedStarts || db.Database.CurrentTransaction is null || !db.UsesSqliteRootRuntime && bindSource is null)
+        if (!db.UsesRootPreparedStarts || db.Database.CurrentTransaction is null || !db.UsesSqliteShippedInstall && bindSource is null)
             throw new NotSupportedException("Held root preparation requires a bound provider transaction.");
 
         // Keep the source selection in the same statement as the query.
-        var format = query.Format.Replace("/*prepared-only*/", db.UsesSqliteRootRuntime ? "" : "ONLY ", StringComparison.Ordinal);
+        var format = query.Format.Replace("/*prepared-only*/", db.UsesSqliteShippedInstall ? "" : "ONLY ", StringComparison.Ordinal);
         query = FormattableStringFactory.Create(format, query.GetArguments());
         return bindSource is not null ? bindSource(query) : FormattableStringFactory.Create(
             format.Replace(Source, """SELECT true AS "SourceReady" """, StringComparison.Ordinal), query.GetArguments());
