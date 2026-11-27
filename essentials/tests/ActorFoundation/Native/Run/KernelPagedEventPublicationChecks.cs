@@ -101,7 +101,12 @@ internal static partial class KernelAuthoredEventChecks
                         """).SingleAsync(token);
                     Check(kept, "the exhausted owner parks its author and keeps the original pending ticket and cursor");
                 }
-                var recover = JsonSerializer.Serialize(new Contract.OperatorCommand(parked!.Selection, ExpectedTarget: author));
+                var selection = parked!.Selection;
+                var parkInbox = (Contract.IActorParkInboxReads)reads;
+                var keptInbox = await parkInbox.ReadParkInboxAsync(scope, author, selection, cancellationToken: token);
+                Check(keptInbox?.Items is [{ Kind: "Event publication", State: Contract.DeliveryState.Consumed, Attempts: 3 }],
+                    "the exact Park inbox identifies the kept Event publication and its exhausted attempt count");
+                var recover = JsonSerializer.Serialize(new Contract.OperatorCommand(selection, ExpectedTarget: author));
                 var received = await ingress.SendAsync(scope, new Contract.Target.Ref(author), "recover-publication",
                     Contract.Kinds.Recover, recover, cancellationToken: token);
                 Check(received.Outcome == Contract.AdmissionOutcome.Accepted, "the author accepts its exact Park selection");

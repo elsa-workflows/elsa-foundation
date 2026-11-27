@@ -7,7 +7,7 @@ namespace Kernel.EntityFramework;
 internal static partial class RootPublicEventStarts
 {
     internal sealed record MatchPage(string? Through, bool Complete);
-    private sealed record MatchCandidate(bool SourceReady, string? Wait, long? TemplateBytes);
+    private sealed record MatchCandidate(bool SourceReady, string? Wait, string? Registration, long? TemplateBytes);
 
     internal static async Task<bool> HasMatchesAsync(KernelDb db, string tenant, string key,
         Func<FormattableString, FormattableString>? bind, CancellationToken token)
@@ -16,7 +16,7 @@ internal static partial class RootPublicEventStarts
         if (await RootPublicEventHost.ReadAsync(db, bind, token) is { ProtectsStarts: true }) return false;
         var result = await db.Database.SqlQuery<MatchCandidate>(Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)
-            SELECT source."SourceReady", found."Wait", CAST(NULL AS BIGINT) AS "TemplateBytes"
+            SELECT source."SourceReady", found."Wait", CAST(NULL AS TEXT) AS "Registration", CAST(NULL AS BIGINT) AS "TemplateBytes"
             FROM source LEFT JOIN (
                 SELECT "Wait" FROM "FoundationPublicEventStarts" WHERE "Tenant" = {tenant} AND "Key" = {key} LIMIT 1
             ) found ON source."SourceReady"
@@ -33,7 +33,8 @@ internal static partial class RootPublicEventStarts
         if (await RootPublicEventHost.ReadAsync(db, bind, token) is { ProtectsStarts: true }) return new(after, Complete: true);
         FormattableString select = $"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/), candidates AS MATERIALIZED (
-                SELECT "Wait", CAST(/*template-bytes*/ AS BIGINT) AS "TemplateBytes" FROM "FoundationPublicEventStarts"
+                SELECT "Wait", "Incarnation" AS "Registration", CAST(/*template-bytes*/ AS BIGINT) AS "TemplateBytes"
+                FROM "FoundationPublicEventStarts"
                 WHERE "Tenant" = {publication.Tenant} AND "Key" = {publication.Key} AND "Wait" > {after ?? ""}
                     AND (SELECT "SourceReady" FROM source)
                 ORDER BY "Wait" LIMIT {InMemoryStore.ParkPageLimit}
@@ -49,6 +50,7 @@ internal static partial class RootPublicEventStarts
         var (text, escaped) = publication.Payload;
         var payloadBytes = text is null ? 0 : Encoding.UTF8.GetByteCount(text);
         var waits = new List<string>(candidates.Count);
+        var registrations = new List<string>(candidates.Count);
         var bytes = 0L;
         foreach (var candidate in candidates)
         {
@@ -56,6 +58,7 @@ internal static partial class RootPublicEventStarts
             var size = 2 * (candidate.TemplateBytes!.Value + payloadBytes) + Encoding.UTF8.GetByteCount(candidate.Wait!) + 1024;
             if (waits.Count > 0 && bytes + size > ParkRecoveryCredit.LimitBytes) break;
             waits.Add(candidate.Wait!);
+            registrations.Add(candidate.Registration!);
             bytes += size;
         }
 
@@ -77,7 +80,8 @@ internal static partial class RootPublicEventStarts
         write = FormattableStringFactory.Create(write.Format.Replace("/*selected-waits*/", selected, StringComparison.Ordinal),
             [.. write.GetArguments(), packed]);
         await db.Database.ExecuteSqlInterpolatedAsync(Bind(write, bind), token);
-        await DispatchAsync(db, publication.Tenant, publication.Occurrence, publication.KeepUntil, bind, token, rememberDelivery: true);
+        await DispatchAsync(db, publication.Tenant, publication.Occurrence, publication.KeepUntil, bind, token,
+            rememberDelivery: true, selectedRegistrations: registrations);
         return new(waits[^1], waits.Count == candidates.Count && candidates.Count < InMemoryStore.ParkPageLimit);
     }
 }

@@ -149,18 +149,28 @@ internal static partial class RootPublicEventStarts
     }
 
     internal static async Task<int[]> DispatchAsync(KernelDb db, string tenant, string publication, long until,
-        Func<FormattableString, FormattableString>? bind, CancellationToken token, Func<int, string>? replyTo = null, bool rememberDelivery = false)
+        Func<FormattableString, FormattableString>? bind, CancellationToken token, Func<int, string>? replyTo = null,
+        bool rememberDelivery = false, IReadOnlyList<string>? selectedRegistrations = null)
     {
         RequireTransaction(db, bind);
         var host = await RootPublicEventHost.ReadAsync(db, bind, token);
         if (host is { ProtectsStarts: true }) return [];
-        var targets = await db.Database.SqlQuery<CapturedStart>(Bind($"""
+        FormattableString query = $"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)
             SELECT source."SourceReady", t."Registration", t."Key", t."Wait", t."EventId", t."Start", t."Payload", t."PayloadEscaped"
             FROM source LEFT JOIN "FoundationPublicEventTargets" t
                 ON source."SourceReady" AND t."Tenant" = {tenant} AND t."Publication" = {publication} AND t."Reference" IS NULL
+                /*selected-registrations*/
             ORDER BY t."Wait"
-            """, bind)).ToListAsync(token);
+            """;
+        var registered = selectedRegistrations is not null;
+        var parameter = "{" + query.ArgumentCount + "}";
+        var values = bind is null ? $"SELECT value FROM json_each({parameter})" :
+            $"SELECT value FROM jsonb_array_elements_text({parameter}::jsonb)";
+        var filter = registered ? $"""AND t."Registration" IN ({values})""" : "";
+        query = FormattableStringFactory.Create(query.Format.Replace("/*selected-registrations*/", filter, StringComparison.Ordinal),
+            registered ? [.. query.GetArguments(), Json.Write(selectedRegistrations)] : query.GetArguments());
+        var targets = await db.Database.SqlQuery<CapturedStart>(Bind(query, bind)).ToListAsync(token);
         RequireSource(targets[0].SourceReady);
         if (targets is [{ Registration: null }]) return [];
 
