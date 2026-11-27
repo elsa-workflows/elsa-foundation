@@ -12,8 +12,9 @@ using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRun
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-internal sealed class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access,
-    IWorkflowExecutableStore executables, IWorkflowExecutableRootWriteLeaseManager leases, TimeProvider clock) : IRuntimeKernelExecutablePinStore, IRuntimeMaterialRetentionRootSource
+internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access,
+    IWorkflowExecutableStore executables, IWorkflowExecutableRootWriteLeaseManager leases, TimeProvider clock)
+    : IRuntimeKernelExecutablePinStore, IRuntimeKernelExecutablePinScanStore, IRuntimeMaterialRetentionRootSource
 {
     private static readonly UTF8Encoding PinEncoding = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
     private static readonly EfWriteRetry Writes = new(EfWriteRetry.DefaultMaxAttempts, error =>
@@ -37,10 +38,15 @@ internal sealed class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context
             throw new NotSupportedException("Kernel executable pins require one clean Runtime transaction over the selected material store.");
 
         return await Writes.RunAsync(context, TryWriteAsync,
-            error => throw new InvalidOperationException("The Runtime executable pin batch changed concurrently.", error), cancellationToken);
+            error =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new TimeoutException("The Runtime executable pin batch exceeded its write retry budget.", error);
+            }, cancellationToken);
 
         async ValueTask<bool> TryWriteAsync()
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var initial = await ReadBatchAsync(desired, cancellationToken);
             if (initial.Released) return false;
             if (initial.Missing.Count == 0) return true;
@@ -64,7 +70,9 @@ internal sealed class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context
                             }
                             var roots = current.Missing.Select(pin => pin.Executable).Distinct().ToArray();
                             var deadlines = await material.FenceRootWriteLeasesAsync(grants, clock, token, expectedRoots: roots);
-                            context.KernelExecutablePins.AddRange(current.Missing.Select(Create));
+                            var pending = current.Missing.Select(Create).OrderBy(row => row.Id, StringComparer.Ordinal).ToArray();
+                            await AssignOrdinalsAsync(scope, pending, token);
+                            context.KernelExecutablePins.AddRange(pending);
                             await context.SaveChangesAsync(token);
                             foreach (var (grant, expires) in deadlines)
                                 if (clock.GetUtcNow() >= expires)
