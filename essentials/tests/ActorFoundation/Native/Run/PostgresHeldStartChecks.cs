@@ -154,6 +154,28 @@ internal static class PostgresHeldStartChecks
                 unblock.TrySetResult(true);
                 Require(timed.Error == "timeout" && await BirthsAsync(Open, stop) == committed,
                     "the caller's budget expires during uncooperative host protection with no root admission");
+                var expiredOffer = offers.Last();
+                while (await PostgresPreviewHosting.PrunePreparedStartsAsync(Open, scope, stop) == 0)
+                    await Task.Delay(20, stop);
+                Require(await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, expiredOffer.Actor,
+                        expiredOffer.Issuance, stop) == RootStartProof.PreparationDisarmed,
+                    "the pruned preparation cannot admit its exact held root");
+                var finishedOffer = offers.First();
+                Require(await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, finishedOffer.Actor,
+                        finishedOffer.Issuance, stop) == RootStartProof.Unresolved,
+                    "the finished held root keeps its protection until retirement");
+                var policies = (Contract.IActorRetentionPolicies)foundation;
+                Require(await policies.TryApplyRetentionPolicyAsync(scope, 0, new(Finished: TimeSpan.Zero),
+                        long.MaxValue, cancellationToken: stop) is { Outcome: Contract.ActorRetentionPolicyChangeOutcome.Applied },
+                    "the host enables terminal retention");
+                var terminal = await foundation.GetAsync(scope, finishedOffer.Actor, stop);
+                Require(terminal?.Selection is not null &&
+                        (await foundation.AdmitRetentionDeleteAsync(scope, finishedOffer.Actor, terminal.Selection, stop)).Outcome ==
+                        Contract.AdmissionOutcome.Accepted, "normal retention accepts the exact held root");
+                while (await PostgresPreviewHosting.ConfirmPreparedStartAsync(Open, scope, finishedOffer.Actor,
+                           finishedOffer.Issuance, stop) != RootStartProof.BirthRetired)
+                    await Task.Delay(25, stop);
+                Console.WriteLine("ok protected held root retires with its committed deletion mark");
             }
 
             async Task<Contract.Reply> RequestOnlyAsync(string id, long timeout)

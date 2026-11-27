@@ -145,7 +145,16 @@ public static partial class SqliteEmbeddedHosting
                     (admission, ct) => admission.PrepareHeldStartAsync(request, spec, attempt, ct), token);
                 if (prepared.Stage is not { } stage || prepared.Offer is not { } offer)
                     return prepared.Existing;
-                if (!await protect(offer, token))
+                var protecting = protect(offer, token).AsTask();
+                bool protectedStart;
+                try { protectedStart = await protecting.WaitAsync(token); }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    _ = ObserveAbandonedAsync(protecting);
+                    throw;
+                }
+                token.ThrowIfCancellationRequested();
+                if (!protectedStart)
                 {
                     await WriteWithFileAsync(RootAdmissionKind.Start, attempt,
                         (admission, ct) => admission.DisarmHeldStartAsync(stage, ct), token);

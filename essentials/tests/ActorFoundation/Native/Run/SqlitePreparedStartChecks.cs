@@ -21,6 +21,7 @@ internal static class SqlitePreparedStartChecks
             var offered = new TaskCompletionSource<PendingRootStart>(TaskCreationOptions.RunContinuationsAsynchronously);
             var refused = new TaskCompletionSource<PendingRootStart>(TaskCreationOptions.RunContinuationsAsynchronously);
             var expired = new TaskCompletionSource<PendingRootStart>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var expiredProtection = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var calls = 0;
             var foundation = SqliteEmbeddedFoundation.ForPreparedStartsQualification(
@@ -60,6 +61,7 @@ internal static class SqlitePreparedStartChecks
                 throw new InvalidOperationException("The expiry witness did not enter protection.");
             var late = await expired.Task;
             Require((await expiredCall).Error == "timeout", "the held deadline expires while material protection is pending");
+            expiredProtection.TrySetResult(true);
             while (await foundation.PrunePreparedStartsAsync(scope, token) == 0) await Task.Delay(20, token);
             Require(await foundation.ConfirmPreparedStartAsync(scope, late.Actor, late.Issuance, token) == RootStartProof.PreparationDisarmed,
                 "pruning durably disarms an expired preparation before reporting absence");
@@ -90,7 +92,7 @@ internal static class SqlitePreparedStartChecks
                 if (start.TypeData == "expire")
                 {
                     expired.SetResult(start);
-                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                    return await expiredProtection.Task;
                 }
                 offered.SetResult(start);
                 await release.Task.WaitAsync(ct);
