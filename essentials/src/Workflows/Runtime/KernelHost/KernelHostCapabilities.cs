@@ -46,15 +46,20 @@ public sealed record KernelHostCapabilities(bool Schedules = true, bool Timers =
     /// <summary>The first node of <paramref name="workflow"/>, by id, that needs what this host lacks, with why; or null.</summary>
     internal (string Node, string Reason)? Refusal(Kernel.Native.Workflow workflow)
     {
-        var starts = HttpWaits ? null : Kernel.Native.NativeStartTriggers.StartEndpoints(workflow).ToHashSet();
+        var starts = Kernel.Native.NativeStartTriggers.StartEndpoints(workflow).ToHashSet();
         foreach (var node in workflow.Nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal))
         {
             var activity = node.Type;
             var reason = !Schedules && (activity == typeof(Kernel.Native.Timer) || activity == typeof(Kernel.Native.Cron)) ? SchedulesUnavailable :
                 !Timers && activity == typeof(Kernel.Native.Delay) ? DelayUnavailable :
-                !Children && activity == typeof(Kernel.Native.DispatchWorkflow) ? DispatchUnavailable :
-                starts is not null && activity == typeof(Kernel.Native.HttpEndpoint) && !starts.Contains(node) ? HttpWaitUnavailable : null;
+                !Children && activity == typeof(Kernel.Native.DispatchWorkflow) ? DispatchUnavailable : null;
             if (reason is not null) return (node.Id, reason);
+            if (activity != typeof(Kernel.Native.HttpEndpoint) || starts.Contains(node)) continue;
+            if (!HttpWaits) return (node.Id, HttpWaitUnavailable);
+            if (node.Inputs.GetValueOrDefault("Path") is not Kernel.Native.LiteralBinding { Value: not null })
+                return (node.Id, "An HTTP Endpoint that waits needs a route template the host can publish. Set a literal Path and bind its parameters through Route values.");
+            if (node.Inputs.GetValueOrDefault("Method") is { } method && method is not Kernel.Native.LiteralBinding { Value: not null })
+                return (node.Id, "An HTTP Endpoint that waits needs an HTTP method the host can publish. Select one literal method.");
         }
         return null;
     }

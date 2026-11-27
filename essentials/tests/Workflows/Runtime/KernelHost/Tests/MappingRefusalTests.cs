@@ -180,8 +180,6 @@ public sealed class MappingRefusalTests
     [InlineData("Request", "body")]
     [InlineData("Request", "path")]
     [InlineData("Request", null)]
-    [InlineData("RouteData", null)]
-    [InlineData("RouteData", "id")]
     public void An_http_endpoint_result_whose_shape_differs_is_refused(string projection, string? member)
     {
         var read = member is null ? Result("text", "http", projection) : ResultMember("text", "http", projection, member);

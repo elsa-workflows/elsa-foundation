@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Kernel.Native;
 using Contract = Kernel.Foundation.Contracts;
@@ -8,14 +9,16 @@ namespace Elsa.Workflows.Runtime.KernelHost;
 /// <summary>A request's start on a kernel host: the start of the workflow its route serves, and whether it answers before the commit.</summary>
 public sealed record KernelHttpStart(Contract.StartSpec Spec, string Workflow, bool RespondBeforeCommit);
 
-/// <summary>What an HTTP edge writes back for a held start's reply.</summary>
+/// <summary>A matched HTTP request to the resolved key of a waiting workflow.</summary>
+public sealed record KernelHttpWait(string Key, string Payload, bool RespondBeforeCommit);
+
+/// <summary>What an HTTP edge writes back for a held request's reply.</summary>
 public sealed record KernelHttpAnswer(int StatusCode, string ContentType, string? Body, IReadOnlyDictionary<string, string> Headers);
 
 /// <summary>
 /// The framework-free half of a kernel host's HTTP edge. A request's path, relative to the edge's base path, is matched
-/// against the start routes of what serves now (<see cref="KernelServing.Routes"/>); a match starts the route's workflow
-/// with the request as its trigger. Wait routes are not served by a start: a request for one, or for no route, is not
-/// found. A held start's reply becomes the HTTP answer as the test edges map it.
+/// against the routes of what serves now (<see cref="KernelServing.Routes"/>). A start match uses the request as its
+/// trigger. A wait match uses the resolved event key when the host supports held event requests.
 /// </summary>
 public static class KernelHttpEdge
 {
@@ -25,14 +28,15 @@ public static class KernelHttpEdge
     // Before NotFound: static fields initialize in order.
     private static readonly IReadOnlyDictionary<string, string> NoHeaders = new Dictionary<string, string>();
 
-    /// <summary>The start route of what serves now that a request's method and path match, or null when none does.</summary>
+    /// <summary>The route of what serves now that a request's method and path match, or null when none does.</summary>
     /// <param name="path">The request path as the client sent it, relative to the edge's base path.</param>
     /// <remarks>An edge matches the route before it reads the request's body, so a path no route serves reads none.</remarks>
     public static NativeHttpRouteMatch? Route(KernelServing serving, string method, string path)
     {
         ArgumentNullException.ThrowIfNull(serving);
         var match = HttpRouteMatcher.Match(serving.Routes, method, path);
-        return match.Route is { Start: true } route && serving.Registry.Contains(route.Workflow) ? match : null;
+        return match.Route is { } route && (route.Start || serving.Capabilities.HttpWaits) && serving.Registry.Contains(route.Workflow)
+            ? match : null;
     }
 
     /// <summary>
@@ -61,7 +65,21 @@ public static class KernelHttpEdge
         return Route(serving, request.Method, path) is { } match ? Start(serving, match, request) : null;
     }
 
-    /// <summary>The HTTP answer to a held start's reply.</summary>
+    /// <summary>The event a request delivers to a matched wait route while that route still serves.</summary>
+    public static KernelHttpWait? Wait(KernelServing serving, NativeHttpRouteMatch match, HttpRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(serving);
+        ArgumentNullException.ThrowIfNull(match);
+        ArgumentNullException.ThrowIfNull(request);
+        if (!serving.Capabilities.HttpWaits || match.Route is not { Start: false } route ||
+            !serving.Routes.Routes.Any(current => current == route ||
+                !current.Start && current.Method == route.Method && current.Workflow == route.Workflow && current.Node == route.Node &&
+                current.RespondBeforeCommit == route.RespondBeforeCommit && current.Template.Text == route.Template.Text)) return null;
+        var message = request with { RouteValues = match.Values };
+        return new(HttpRoutes.WaitKey(route.Method, route.Template, message.RouteValues), JsonSerializer.Serialize(message), route.RespondBeforeCommit);
+    }
+
+    /// <summary>The HTTP answer to a held request's reply.</summary>
     public static KernelHttpAnswer Answer(Contract.Reply reply)
     {
         ArgumentNullException.ThrowIfNull(reply);
@@ -98,7 +116,7 @@ public static class KernelHttpEdge
         return answer with { Headers = headers };
     }
 
-    /// <summary>The answer for a request no start route serves.</summary>
+    /// <summary>The answer for a request no route serves.</summary>
     public static KernelHttpAnswer NotFound { get; } = Text(404, "no workflow serves this route");
 
     private static KernelHttpAnswer Designed(HttpResponse response) => new(response.StatusCode, response.ContentType,

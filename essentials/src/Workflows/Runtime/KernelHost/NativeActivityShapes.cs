@@ -33,7 +33,9 @@ internal sealed record AbsentDefault(string Native, Func<Func<string, bool>, boo
 /// <param name="Path">The Native path, "" for the whole result; null when only <paramref name="Members"/> may be read.</param>
 /// <param name="Members">The members a read may select, by their old names, to their Native names; null when any member may be read as it is named.</param>
 /// <param name="Refused">For a projection whose shape differs on this host: why, and what to read instead.</param>
-internal sealed record ResultProjection(string? Path, IReadOnlyDictionary<string, string>? Members = null, string? Refused = null);
+/// <param name="LowercaseFirstMember">Whether the first selected member is a name canonicalized to lower case.</param>
+internal sealed record ResultProjection(string? Path, IReadOnlyDictionary<string, string>? Members = null, string? Refused = null,
+    bool LowercaseFirstMember = false);
 
 /// <summary>
 /// What the mapper knows about each release 1 activity: how its compiled inputs, keyed as the old core's activity declares
@@ -55,7 +57,7 @@ internal sealed record ResultProjection(string? Path, IReadOnlyDictionary<string
 /// <item>SendHttpRequest sends no content for an empty Content, as the old core does.</item>
 /// <item>SendHttpRequest sends its Content as text, text/plain unless its ContentType says otherwise, as the old core does.</item>
 /// <item>Result reads whose shapes differ on this host are refused until the shapes match: an HttpEndpoint request's
-/// path, headers, query and body, its RouteData (Native lower-cases route value names and joins repeated values),
+/// path, headers, query and body,
 /// SendHttpRequest's ResponseHeaders and ResponseBody (Native parses the body), and DispatchWorkflow's Result (Native's
 /// is the child's output and status, with other status names). An HttpEndpoint's ParsedContent reads the same for a JSON
 /// or text body; for a body with no content type the old core reads null and Native the body.</item>
@@ -154,11 +156,9 @@ internal sealed class NativeActivityShape
         endpoint.Rules["RequestTimeout"] = new InputRule.Unmodelled(IsNull, "this host's reply deadline is the route timeout", "Clear the request timeout.");
         endpoint.Rules["RequestSizeLimit"] = new InputRule.Unmodelled(IsNull, "this host's HTTP edge sets the request size limit", "Clear the request size limit.");
         endpoint.Rules["ResponseMode"] = new InputRule.Unmodelled(value => IsNull(value) || IsSync(value), "this host answers a request from the workflow only", "Set the response mode to Sync.");
-        // A request's method reads alike. Its path is the edge's form, its headers and query are lower-cased with repeated
-        // values joined, and its body is parsed, so those read differently and are refused.
+        // A request's method reads alike. Its path, headers, query, and body can differ and are refused.
         endpoint.Results["Request"] = new(null, new Dictionary<string, string>(StringComparer.Ordinal) { ["method"] = "Method" });
-        endpoint.Results["RouteData"] = new(null, Refused:
-            "On this host route value names are lower-cased, so route data reads differently. Remove this read until the shapes match.");
+        endpoint.Results["RouteData"] = new("RouteValues", LowercaseFirstMember: true);
         endpoint.Results["ParsedContent"] = new("Body");
 
         var send = Add(typeof(Native.SendHttpRequest));
