@@ -130,10 +130,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly HashSet<Delivery> _schedulerRetries = [];
     private sealed record QueuedInlineRoot(long Generation, Message Creator, int Partition, long Epoch, object Material,
         TaskCompletionSource<InlineRootResult> Receipt);
-    private sealed record PendingInlineRoot(int Partition, TaskCompletionSource<InlineRootResult> Receipt, InlineRootCreatorWitness? Witness);
+    private sealed record PendingInlineRoot(int Partition, TaskCompletionSource<InlineRootResult> Receipt,
+        InlineRootCreatorWitness? Witness, long Bytes);
+    private const long MaxPendingInlineRootBytes = 64 * 1024 * 1024;
+    private const int InlineRootCaptureOverheadBytes = 8 * 1024;
     private readonly ConcurrentQueue<(long Generation, Message Creator)> _inlineStarts = new();
     private readonly Queue<QueuedInlineRoot> _queuedInlineRoots = new(); // protected by _turnSync with their pending receipts
     private readonly Dictionary<string, PendingInlineRoot> _pendingInlineRoots = new(StringComparer.Ordinal);
+    private long _pendingInlineRootBytes;
     private int _jobsDeferredByCancellation;
     private long _lastReceivedJob; // owner-side observation order of the latest result moved into an inbox
 
@@ -1455,6 +1459,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var pending in _pendingInlineRoots.Values)
                 pending.Receipt.TrySetResult(new(InlineRootDisposition.OwnershipLost));
             _pendingInlineRoots.Clear();
+            _pendingInlineRootBytes = 0;
             Volatile.Write(ref _jobsDeferredByCancellation, 0);
             _held.Clear();
             _polling = _loading = _flushing = _meeting = _releasing = _aliasesChangedDuringLoad = _retryAliases = false;
@@ -1597,11 +1602,36 @@ public sealed class Worker : IScopeActivation, ITurnServices
         return true;
     }
 
-    // Only a provider that can commit the first promoted checkpoint may register an inline root.
-    // The receipt observes the disposition, not placement in the process queue.
+    internal (Message Creator, Task<InlineRootResult> Receipt)? TryPlaceQualifiedInlineStart(string name, StartSpec start,
+        object material, object? issuer, RootAdmissionPressure? pressure, Func<InstanceRef, Message> bind)
+    {
+        ArgumentNullException.ThrowIfNull(material);
+        if (!_type.AcceptsQualifiedInlineStart(start, material, issuer)) return null;
+        lock (_turnSync)
+        {
+            var eligible = _held.Keys.Where(partition => !_handingOver.Contains(partition)).ToArray();
+            if (RootAdmissionPressure.PlaceInlineStart(name, eligible, pressure) is not { } partition) return null;
+            var target = InstanceRef.In(partition, name);
+            var creator = bind(target);
+            // Binding adds the creation proof. It cannot substitute the prevalidated spec or its input.
+            if (creator.Target != target || creator.Start is not { } bound || !ReferenceEquals(bound.Input, start.Input) ||
+                (bound with { Creation = null }) != start)
+                return null;
+            return QueueQualifiedInlineStart(creator, material, issuer) is { } receipt ? (creator, receipt) : null;
+        }
+    }
+
     internal Task<InlineRootResult>? TryQueueQualifiedInlineStart(Message creator, object material, object? issuer = null)
     {
         ArgumentNullException.ThrowIfNull(material);
+        if (creator.Start is not { } start || !_type.AcceptsQualifiedInlineStart(start, material, issuer)) return null;
+        lock (_turnSync) return QueueQualifiedInlineStart(creator, material, issuer);
+    }
+
+    // Only an owner that can commit the first promotion may register a creator. Under _turnSync, keep its receipt
+    // and its memory reservation until the disposition, including while the actor waits in memory.
+    private Task<InlineRootResult>? QueueQualifiedInlineStart(Message creator, object material, object? issuer)
+    {
         if (creator.Start is not { Ephemeral: true, Parent: null, Creation: { Generation: 1, Previous: 0 } creation } start ||
             creator.FoundationRootBinding is not { } binding || binding.Actor != creator.Target.Id ||
             !FoundationRootCreator.IsGeneratedReference(binding.Reference) ||
@@ -1609,29 +1639,32 @@ public sealed class Worker : IScopeActivation, ITurnServices
             creator.InboxKey != new InboxKey("root:" + binding.Actor) ||
             creator.Payload != start.Input || creation.Intent != FoundationRootCreator.OperationDigest(creator.Id) ||
             creator is not { Kind: Kinds.Start, TargetCreation: 1, Sender: null, ReplyTo: null, Due: null, KeepUntil: null,
-                Operator: null, ActorAuthored: false, BindFoundationChild: false } ||
-            !_type.AcceptsQualifiedInlineStart(start, material, issuer))
+                Operator: null, ActorAuthored: false, BindFoundationChild: false })
             return null;
-        lock (_turnSync)
-        {
-            var generation = _generation;
-            if (_releasing || _handingOver.Contains(partition) || !CanStartGeneration(generation) ||
-                !_held.TryGetValue(partition, out var fence) || _pendingInlineRoots.Count >= _options.MaxBatch)
-                return null;
-            var receipt = new TaskCompletionSource<InlineRootResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var local = creator with { Start = start with { FoundationInlineTenant = binding.Tenant } };
-            var witness = issuer is null ? null : new InlineRootCreatorWitness(issuer, local, Remaining);
-            if (!_pendingInlineRoots.TryAdd(binding.Actor, new(partition, receipt, witness))) return null;
-            _queuedInlineRoots.Enqueue(new(generation, local, partition, fence.Epoch, material, receipt));
-            return receipt.Task;
+        var generation = _generation;
+        if (_releasing || _handingOver.Contains(partition) || !CanStartGeneration(generation) ||
+            !_held.TryGetValue(partition, out var fence) || _pendingInlineRoots.Count >= _options.MaxBatch)
+            return null;
 
-            TimeSpan Remaining()
-            {
-                lock (_turnSync)
-                    return _held.TryGetValue(partition, out var current) && current.Epoch == fence.Epoch && CanStartGeneration(generation)
-                        ? TimeSpan.FromMilliseconds(Math.Max(0, Volatile.Read(ref _safeUntil) - _options.Monotonic()))
-                        : TimeSpan.Zero;
-            }
+        // Charge the retained UTF-16 creator text once plus the bounded envelope, capture and receipt.
+        // The native capture references an immutable mapped workflow shared with the registry.
+        var bytes = InlineRootCaptureOverheadBytes + 2L * (start.Input?.Length ?? 0) + 2L * start.Definition.Length;
+        if (!ReferenceEquals(creator.Payload, start.Input)) bytes += 2L * (creator.Payload?.Length ?? 0);
+        if (bytes > MaxPendingInlineRootBytes - _pendingInlineRootBytes) return null;
+        var receipt = new TaskCompletionSource<InlineRootResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var local = creator with { Start = start with { FoundationInlineTenant = binding.Tenant } };
+        var witness = issuer is null ? null : new InlineRootCreatorWitness(issuer, local, Remaining);
+        if (!_pendingInlineRoots.TryAdd(binding.Actor, new(partition, receipt, witness, bytes))) return null;
+        _pendingInlineRootBytes += bytes;
+        _queuedInlineRoots.Enqueue(new(generation, local, partition, fence.Epoch, material, receipt));
+        return receipt.Task;
+
+        TimeSpan Remaining()
+        {
+            lock (_turnSync)
+                return _held.TryGetValue(partition, out var current) && current.Epoch == fence.Epoch && CanStartGeneration(generation)
+                    ? TimeSpan.FromMilliseconds(Math.Max(0, Volatile.Read(ref _safeUntil) - _options.Monotonic()))
+                    : TimeSpan.Zero;
         }
     }
 
@@ -1647,7 +1680,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             if (!_pendingInlineRoots.TryGetValue(actor, out var pending) || exactReceipt is not null && pending.Receipt != exactReceipt) return;
             _pendingInlineRoots.Remove(actor);
-            if (appliedSlot is not null) appliedSlot.Ambient = null;
+            _pendingInlineRootBytes -= pending.Bytes;
+            if (appliedSlot is not null) (appliedSlot.Ambient, appliedSlot.Starting) = (null, null);
             pending.Receipt.TrySetResult(result);
         }
     }

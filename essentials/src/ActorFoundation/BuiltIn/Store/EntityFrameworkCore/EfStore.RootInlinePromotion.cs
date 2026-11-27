@@ -55,18 +55,22 @@ public sealed partial class EfStore
         StartSpec start, object material, Action<InstanceRef>? wake)
     {
         if (_inlineStarts is not { } inline || !ReferenceEquals(_ordinaryRoots?.InlineIssuer, inline)) return null;
-        var fences = worker.Fences;
-        var owner = AdmissionPressure is { } pressure ? pressure.PlaceInlineStart(fences) : fences.FirstOrDefault();
-        if (owner is null) return null;
         var scope = inline.Scope;
-        var actor = InstanceRef.In(owner.Partition, scope.Tenant + "_" + Guid.NewGuid().ToString("N"));
-        var reference = FoundationRootCreator.ReferenceFor(inline.Key, scope.Tenant, new(actor.Id, 1));
+        var name = scope.Tenant + "_" + Guid.NewGuid().ToString("N");
         var operation = RootPreparedStarts.InlineOperation(operationId);
-        var creator = FoundationRootCreator.Create(actor, operation, FoundationRootCreator.OperationDigest(operation), start, null, null)
-            with { FoundationRootBinding = (actor.Id, scope.Tenant, reference) };
-        if (worker.TryQueueQualifiedInlineStart(creator, material, inline) is not { } receipt) return null;
-        wake?.Invoke(actor);
-        return (new(reference), receipt);
+        var digest = FoundationRootCreator.OperationDigest(operation);
+        if (worker.TryPlaceQualifiedInlineStart(name, start, material, inline, AdmissionPressure, Bind) is not { } selected)
+            return null;
+        var (creator, receipt) = selected;
+        wake?.Invoke(creator.Target);
+        return (new(creator.FoundationRootBinding!.Value.Reference), receipt);
+
+        Message Bind(InstanceRef actor)
+        {
+            var reference = FoundationRootCreator.ReferenceFor(inline.Key, scope.Tenant, new(actor.Id, 1));
+            return FoundationRootCreator.Create(actor, operation, digest, start, null, null)
+                with { FoundationRootBinding = (actor.Id, scope.Tenant, reference) };
+        }
     }
 
     // The direct qualification path exercises the same preparation and binding as the owned worker.

@@ -1,3 +1,4 @@
+using Kernel.Runtime;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Durable;
@@ -90,11 +91,14 @@ internal sealed class RootAdmissionPressure
 
     internal Attempt BeginInlineStart(string tenant) => new(this, tenant, RootAdmissionKind.Start, reserved: null);
 
-    internal PartitionFence? PlaceInlineStart(IReadOnlyList<PartitionFence> owned)
+    internal static int? PlaceInlineStart(string name, int[] eligible, RootAdmissionPressure? pressure)
     {
-        var full = Volatile.Read(ref _full);
+        if (eligible.Length == 0) return null;
+        var full = pressure is null ? null : Volatile.Read(ref pressure._full);
         // A full partition can still execute a start that never needs a provider write.
-        return owned.FirstOrDefault(fence => !full.Contains(fence.Partition)) ?? owned.FirstOrDefault();
+        var healthy = full is { Count: > 0 } ? eligible.Where(partition => !full.Contains(partition)).ToArray() : eligible;
+        var placement = healthy.Length > 0 ? healthy : eligible;
+        return placement[InstanceRef.Spread(name, placement.Length)];
     }
 
     // A standalone receiving edge has no node heartbeat. Refresh at most once per interval and continue using

@@ -324,6 +324,7 @@ internal static class ProfileCapabilityChecks
             preparedPostgres.UsesRootPreparedStarts && !preparedPostgres.UsesRootInlinePromotion &&
             !sharedPostgres.UsesRootInlinePromotion && !sharedSqlite.UsesRootInlinePromotion &&
             !inlinePostgres.UsesRootAuthoredEvents && !inlineSqlite.UsesRootAuthoredEvents &&
+            !inlinePostgres.UsesRootEventStarts && !inlineSqlite.UsesRootEventStarts &&
             inlinePostgres.Capabilities == (preparedPostgres.Capabilities | RootCapabilities.InlinePromotion) &&
             inlineSqlite.Capabilities == inlinePostgres.Capabilities &&
             RootProfiles.MissingPrerequisites(inlinePostgres.Capabilities) == RootCapabilities.None &&
@@ -377,6 +378,7 @@ internal static class ProfileCapabilityChecks
             eventScanPostgres.Capabilities == (receiptsPostgres.Capabilities | RootCapabilities.EventStartScan) &&
             eventScanSqlite.Capabilities == eventScanPostgres.Capabilities &&
             eventScanPostgres.UsesRootEventStartScan && eventScanSqlite.UsesRootEventStartScan &&
+            !eventScanPostgres.UsesRootInlinePromotion && !eventScanSqlite.UsesRootInlinePromotion &&
             !receiptsPostgres.UsesRootEventStartScan && !receiptsSqlite.UsesRootEventStartScan &&
             !sharedPostgres.UsesRootEventStartScan && !sharedSqlite.UsesRootEventStartScan &&
             RootProfiles.MissingPrerequisites(eventScanPostgres.Capabilities) == RootCapabilities.None &&
