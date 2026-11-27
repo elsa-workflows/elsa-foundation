@@ -81,7 +81,11 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
                     options.Keys = new Dictionary<string, string>(WorkflowAlterationPayloadProtectionKeys, StringComparer.Ordinal);
             });
         }
-        services.TryAddScoped<WorkflowExecutableInspector>();
+        services.TryAddScoped<LegacyWorkflowExecutableRetentionReader>();
+        services.TryAddScoped<IWorkflowExecutableRetentionReader>(sp => sp.GetRequiredService<LegacyWorkflowExecutableRetentionReader>());
+        services.TryAddScoped(sp => new WorkflowExecutableInspector(sp.GetRequiredService<IWorkflowExecutableStore>(),
+            sp.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(), sp.GetRequiredService<IWorkflowExecutableRetentionReader>(),
+            sp.GetService<TimeProvider>()));
         services.TryAddScoped<WorkflowActivationSlotInspectionService>();
 
         // The operation seams the endpoint classes dispatch to. Registered against the concrete
