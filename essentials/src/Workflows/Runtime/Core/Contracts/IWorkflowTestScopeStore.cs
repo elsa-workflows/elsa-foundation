@@ -54,6 +54,14 @@ public interface IWorkflowTestScopeAdmissionStore
         Func<DateTimeOffset> readClock,
         CancellationToken cancellationToken = default) =>
         throw new TestScopeAdmissionException("The store does not support isolated Test Run actor admission.");
+
+    /// <summary>Reserves the inline start once while the exact Test Run scope is open and unexpired.</summary>
+    ValueTask<bool> BeginInlineStartAsync(WorkflowTestScope scope, Func<DateTimeOffset> readClock,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+
+    /// <summary>Records a definite no-actor outcome for a previously reserved inline start.</summary>
+    ValueTask<bool> SettleInlineStartAsync(WorkflowTestScope scope, WorkflowTestRunInlineState outcome,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
 }
 
 /// <summary>

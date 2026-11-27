@@ -22,6 +22,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     bool protectChildExecutables = false, BoundScope? testTenant = null, KernelEventPublicationRelay? events = null) : IAsyncDisposable
 {
     private static readonly TimeSpan MaintenanceStopBudget = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan InlineSettlementBudget = TimeSpan.FromSeconds(5);
 
     private IHostedService? _owner;
     private IAsyncDisposable? _lifetime;
@@ -64,10 +65,21 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ServedWorkflow = serving.ServedWorkflow,
             ResolveWorkflow = ResolveWorkflowAsync
         });
-        var inline = storage.TakesInlineStarts ? new InlineRootRequests(tenant, WorkflowActor.ActorType,
-            (spec, material) => WorkflowActor.DescribeStart(spec.Type, spec.TypeData) is { } selected &&
-                model.MatchesInlineMaterial(material, selected.Workflow, selected.Definition, selected.ExecutableSelection),
-            protection!.ProtectHeldStartAsync) : null;
+        InlineRootRequests? inline = null;
+        if (storage.TakesEphemeralTestRuns)
+        {
+            await using var runtime = await scopes.CreateAsyncScopeAsync(persistenceScope);
+            var recordCompletion = runtime.ServiceProvider.GetRequiredService<PersistenceModeOptions>().RecordCompletion;
+            inline = new(tenant, WorkflowActor.ActorType, MatchesInlineMaterial, protection!.ProtectHeldStartAsync,
+                testTenant ?? throw new InvalidOperationException("Inline Test Runs require the isolated tenant."),
+                status => !recordCompletion && status == ActorStatus.Finished);
+        }
+        else if (storage.TakesInlineStarts)
+            inline = new(tenant, WorkflowActor.ActorType, MatchesInlineMaterial, protection!.ProtectHeldStartAsync);
+
+        bool MatchesInlineMaterial(StartSpec spec, object material) =>
+            WorkflowActor.DescribeStart(spec.Type, spec.TypeData) is { } selected &&
+            model.MatchesInlineMaterial(material, selected.Workflow, selected.Definition, selected.ExecutableSelection);
         var auxiliary = schedules is null ? null : new ScheduleActor(schedules.Value.Calendar, schedules.Value.Worker.CreateAcceptor());
         (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window, auxiliary,
             protectChildExecutables || inline is not null ? protection!.ProtectAsync : null, inline);
@@ -96,16 +108,25 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async Task StopAsync(CancellationToken token)
     {
-        Volatile.Write(ref _publishedStarts, null);
-        Volatile.Write(ref _testStarts, null);
-        Interlocked.Exchange(ref _publishedInlineStarts, null)?.Requests.Close();
+        var inline = CloseAdmissions();
         using var maintenanceDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         maintenanceDeadline.CancelAfter(MaintenanceStopBudget);
         try { await StopMaintenanceAsync(maintenanceDeadline.Token); }
         finally
         {
             if (_owner is not null) await _owner.StopAsync(token);
+            if (inline is not null) await inline.DrainSettlementsAsync(token);
         }
+    }
+
+    private InlineRootRequests? CloseAdmissions()
+    {
+        Volatile.Write(ref _publishedStarts, null);
+        Volatile.Write(ref _testStarts, null);
+        // Keep the closed edge so disposal can rejoin its settlements after an interrupted stop.
+        var inline = Volatile.Read(ref _publishedInlineStarts)?.Requests;
+        inline?.Close();
+        return inline;
     }
 
     private async Task<bool> StopMaintenanceAsync(CancellationToken token)
@@ -158,6 +179,53 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     public Task<RootStartProof> ConfirmPreparedTestAsync(ActorRef actor, string issuance, CancellationToken token) =>
         testTenant is null ? Task.FromResult(RootStartProof.Unresolved) :
             storage.ConfirmPreparedStartAsync(testTenant, actor, issuance, token);
+
+    internal bool TakesEphemeralTestRuns => storage.TakesEphemeralTestRuns;
+
+    internal async ValueTask<InlineStartOutcome> StartInlineTestAsync(WorkflowTestScope test, StartSpec start, Workflow executable,
+        CancellationToken token)
+    {
+        if (Volatile.Read(ref _publishedInlineStarts) is { } inline)
+            return await inline.Requests.StartAdditionalAsync(test.ScopeId, start, inline.Model.CaptureInlineMaterial(executable),
+                outcome => SettleInlineTestOutcomeAsync(test, outcome), token);
+        var unavailable = await SettleInlineTestOutcomeAsync(test, new(InlineStartDisposition.Unavailable));
+        token.ThrowIfCancellationRequested();
+        return unavailable;
+    }
+
+    private async ValueTask<InlineStartOutcome> SettleInlineTestOutcomeAsync(WorkflowTestScope test, InlineStartOutcome outcome)
+    {
+        var settlement = outcome switch
+        {
+            { Disposition: InlineStartDisposition.Volatile, Status: ActorStatus.Finished } => WorkflowTestRunInlineState.CompletedWithoutRecord,
+            { Disposition: InlineStartDisposition.Volatile } => throw new InvalidOperationException("An inline Test Run without a record must have completed."),
+            { Disposition: InlineStartDisposition.Refused } => WorkflowTestRunInlineState.Refused,
+            { Disposition: InlineStartDisposition.Unavailable, RefusalReason: RefusalReason.RateLimited } => WorkflowTestRunInlineState.RateLimited,
+            { Disposition: InlineStartDisposition.Unavailable } => WorkflowTestRunInlineState.Unavailable,
+            _ => (WorkflowTestRunInlineState?)null
+        };
+        if (settlement is { } definite && !await SettleInlineTestAsync(test, definite))
+            return new(InlineStartDisposition.Unknown);
+        return outcome;
+    }
+
+    internal async ValueTask<bool> SettleInlineTestAsync(WorkflowTestScope test, WorkflowTestRunInlineState outcome)
+    {
+        // The exact Test Run scope is durable and can outlive the original request's service scope.
+        using var budget = new CancellationTokenSource(InlineSettlementBudget, clock);
+        try
+        {
+            await using var runtime = await scopes.CreateAsyncScopeAsync(persistenceScope);
+            var admissions = runtime.ServiceProvider.GetRequiredService<IWorkflowTestScopeAdmissionStore>();
+            return await admissions.SettleInlineStartAsync(test, outcome, budget.Token);
+        }
+        catch (OperationCanceledException) when (budget.IsCancellationRequested) { return false; }
+        catch (Exception error)
+        {
+            logs.CreateLogger<KernelShellRuntime>().LogError(error, "Failed to settle inline Test Run {TestRunId}.", test.ScopeId);
+            return false;
+        }
+    }
 
     internal ValueTask<InlineStartOutcome> StartInlinePublishedAsync(string operationId, StartSpec start, Workflow executable,
         CancellationToken token)
@@ -219,9 +287,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async ValueTask DisposeAsync()
     {
-        Volatile.Write(ref _publishedStarts, null);
-        Volatile.Write(ref _testStarts, null);
-        Interlocked.Exchange(ref _publishedInlineStarts, null)?.Requests.Close();
+        var inline = CloseAdmissions();
         using var stop = new CancellationTokenSource(MaintenanceStopBudget);
         try
         {
@@ -233,7 +299,24 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             {
                 if (_lifetime is not null) await _lifetime.DisposeAsync();
             }
-            finally { _client?.Dispose(); }
+            finally
+            {
+                try
+                {
+                    if (inline is not null) await DrainInlineSettlementsAsync(inline);
+                }
+                finally { _client?.Dispose(); }
+            }
+        }
+    }
+
+    private async Task DrainInlineSettlementsAsync(InlineRootRequests inline)
+    {
+        using var drain = new CancellationTokenSource(InlineSettlementBudget, clock);
+        try { await inline.DrainSettlementsAsync(drain.Token); }
+        catch (OperationCanceledException) when (drain.IsCancellationRequested)
+        {
+            logs.CreateLogger<KernelShellRuntime>().LogWarning("Inline Test Run settlements did not finish within the shell's disposal deadline.");
         }
     }
 

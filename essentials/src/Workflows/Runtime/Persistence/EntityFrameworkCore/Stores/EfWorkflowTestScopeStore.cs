@@ -169,6 +169,58 @@ public sealed class EfWorkflowTestScopeStore(
         await transaction.CommitAsync(cancellationToken);
     }
 
+    public ValueTask<bool> BeginInlineStartAsync(WorkflowTestScope scope, Func<DateTimeOffset> readClock,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(readClock);
+        return ChangeInlineStartAsync(scope, WorkflowTestRunInlineState.Pending, readClock, cancellationToken);
+    }
+
+    public ValueTask<bool> SettleInlineStartAsync(WorkflowTestScope scope, WorkflowTestRunInlineState outcome,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Enum.IsDefined(outcome) || outcome == WorkflowTestRunInlineState.Pending)
+            throw new ArgumentOutOfRangeException(nameof(outcome));
+        return ChangeInlineStartAsync(scope, outcome, null, cancellationToken);
+    }
+
+    private ValueTask<bool> ChangeInlineStartAsync(WorkflowTestScope scope, WorkflowTestRunInlineState outcome,
+        Func<DateTimeOffset>? readClock, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        var accessScope = RequireScope();
+        EnsureAccess(scope);
+        var exact = AdmissionScope(accessScope, scope.ScopeId);
+        return Transitions.RunUntilSettledAsync<bool>(_context, async () =>
+        {
+            var row = await exact.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
+            if (row is null) return false;
+            var record = WorkflowTestScopeEfSupport.Read(row, accessScope, scope.ScopeId);
+            if (!WorkflowTestScope.ContextEquals(record.Scope, scope) || record.IsolatedActor is not null)
+                return false;
+
+            if (readClock is not null)
+            {
+                if (record.InlineStart is not null || record.State != WorkflowTestScopeState.Open || scope.IsExpired(readClock()))
+                    return false;
+            }
+            else if (record.InlineStart != WorkflowTestRunInlineState.Pending)
+                return record.InlineStart == outcome;
+
+            var revision = checked(row.Revision + 1);
+            var content = RuntimeArtifactJson.Serialize(record with { InlineStart = outcome });
+            var schema = RuntimeWorkflowTestScopeEfModule.SchemaVersion;
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            if (await exact.Where(x => x.Revision == row.Revision).ExecuteUpdateAsync(update => update
+                    .SetProperty(x => x.Revision, revision).SetProperty(x => x.ContentJson, content)
+                    .SetProperty(x => x.SchemaVersion, schema), cancellationToken) != 1)
+                return EfWriteAttempt<bool>.Retry();
+            if (readClock is not null && scope.IsExpired(readClock())) return false;
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }, _ => ValueTask.FromResult(false), cancellationToken);
+    }
+
     private IQueryable<WorkflowTestScopeEntity> AdmissionScope(string accessScope, string scopeId) =>
         _context.WorkflowTestScopes.Where(x => x.Id == WorkflowTestScopeEfSupport.Id(accessScope, scopeId) &&
             x.AccessScopeKey == EfRelationalIdentity.Encode(accessScope) && x.AccessScopeKeyHash == EfRelationalIdentity.Hash(accessScope) &&

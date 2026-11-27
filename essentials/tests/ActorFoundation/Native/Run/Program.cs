@@ -62,6 +62,8 @@ if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile, 
 if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
 if (args is ["direct-test-run-profile", var testRunProfileProvider and ("postgres" or "sqlite")])
     return await ProfileCapabilityChecks.RunDirectTestRunStoreAsync(testRunProfileProvider == "postgres");
+if (args is ["ephemeral-test-run-profile", var ephemeralTestRunProvider and ("postgres" or "sqlite")])
+    return await ProfileCapabilityChecks.RunDirectTestRunStoreAsync(ephemeralTestRunProvider == "postgres", ephemeral: true);
 if (args is ["qualified-inline-root-core"]) return await QualifiedInlineRootCoreChecks.RunAsync();
 if (args is ["inline-root-promotion", var inlineProvider and ("postgres" or "sqlite"), var inlineFence and ("checked" or "in-batch")])
     return await InlineRootPromotionChecks.RunAsync(inlineProvider == "postgres", inlineFence == "in-batch");

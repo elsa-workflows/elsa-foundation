@@ -584,11 +584,12 @@ export function useWorkflowOperations({
       const prepared = nextTestRun.status === "Prepared" && !nextTestRun.workflowExecutionId;
       const deferred = nextTestRun.status === "DispatchDeferred";
       const duplicate = nextTestRun.status === "DispatchDuplicate";
+      const completedWithoutRecord = nextTestRun.status === "CompletedWithoutRecord";
       setStatus(rejected ? "Test run rejected" : "");
       // Runtime and the attached-run status retain progress and problems after this confirmation fades.
       if (canNotify() && !rejected && !runtimeIssue) getNotifications().notify({
         level: deferred || duplicate ? "info" : "success",
-        title: prepared ? "Test trigger prepared" : deferred ? "Test run dispatch deferred" : duplicate ? "Test run already dispatched" : "Test run started",
+        title: completedWithoutRecord ? "Test run completed" : prepared ? "Test trigger prepared" : deferred ? "Test run dispatch deferred" : duplicate ? "Test run already dispatched" : "Test run started",
         message: prepared ? "Waiting for a test event. Follow progress in the Runtime panel." : undefined,
         ...(nextTestRun.workflowExecutionId ? { link: { label: "Open run", path: qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(nextTestRun.workflowExecutionId)}`) } } : {})
       });

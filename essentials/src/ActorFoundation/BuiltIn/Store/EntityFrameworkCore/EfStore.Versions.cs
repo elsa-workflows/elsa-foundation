@@ -79,6 +79,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootDirectTestRunQualification => new(3, 131, 1);
     internal static StoreFormat RootPublicEventStartsQualification => new(3, 132, 1);
     internal static StoreFormat RootKeyedStartsQualification => new(3, 133, 1);
+    internal static StoreFormat RootEphemeralTestRunQualification => new(3, 134, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -194,6 +195,7 @@ internal static class RootProfiles
     internal const RootCapabilities PublicEventStartsQualification = SharedActivationQualification | RootCapabilities.PublicEventStarts;
     internal const RootCapabilities DirectTestRunQualification = PreparedStartsQualification | RootCapabilities.DirectTestRuns;
     internal const RootCapabilities KeyedStartsQualification = SharedActivationQualification | RootCapabilities.KeyedStarts;
+    internal const RootCapabilities EphemeralTestRunQualification = SharedActivationQualification | RootCapabilities.DirectTestRuns;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
     internal const RootCapabilities PlaybackDescendantsQualification = Shipped34;
@@ -543,6 +545,7 @@ internal static class StoreDefinitionsRevision
                 _ when db.RequiredFormat == StoreFormat.RootEventStartReceiptsQualification => sqlite ? 27 : 24,
                 _ when db.RequiredFormat == StoreFormat.RootEventStartScanQualification => sqlite ? 28 : 25,
                 _ when db.RequiredFormat == StoreFormat.RootSharedActivationQualification ||
+                    db.RequiredFormat == StoreFormat.RootEphemeralTestRunQualification ||
                     db.RequiredFormat == StoreFormat.RootShipped =>
                     sqlite ? SqliteSharedActivationRevision : PostgreSqlSharedActivationRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPublicEventStartsQualification => sqlite ? 30 : 27,

@@ -40,6 +40,8 @@ export function useTestRunObservation({ context, testRun, enabled = true, onRunV
       if (scope.isCurrent()) notify.current?.(refreshed);
       if (refreshed.status === "Expired" || refreshed.expiresAt && Date.parse(refreshed.expiresAt) <= Date.now())
         return { value: null, expired: true, terminal: true };
+      if (refreshed.status === "CompletedWithoutRecord")
+        return { value: { details: null, waits: [], waitsError: "", waitsLoading: false }, terminal: true };
       const waitController = new AbortController();
       pollingWaits.current = waitController;
       const expectedWaitsRevision = ++waitsRevision.current;
