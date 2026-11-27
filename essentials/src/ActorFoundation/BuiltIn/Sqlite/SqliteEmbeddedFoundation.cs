@@ -41,6 +41,9 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     internal static SqliteEmbeddedFoundation ForLiveEventQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootLiveEventQualification);
 
+    internal static SqliteEmbeddedFoundation ForAuthoredEventsQualification(string databasePath, string node, string actorType) =>
+        new(databasePath, node, actorType, StoreFormat.RootAuthoredEventsQualification);
+
     /// <summary>Composes the dedicated preview format for qualifying indexed playback.</summary>
     public static SqliteEmbeddedFoundation ForPlaybackQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootPlaybackQualification);
