@@ -11,6 +11,7 @@ internal sealed class RootAdmissionPressure
     {
         internal double Tokens { get; set; } = tokens;
         internal long At { get; set; } = at;
+        internal int Reserved { get; set; }
     }
 
     private readonly object _sync = new();
@@ -64,7 +65,7 @@ internal sealed class RootAdmissionPressure
             foreach (var (key, bucket) in _buckets.ToArray())
             {
                 var rate = Limits(key.Kind);
-                if (_time.GetElapsedTime(bucket.At, now).TotalSeconds >= (double)rate.Burst * _nodes / rate.PerSecond)
+                if (bucket.Reserved == 0 && _time.GetElapsedTime(bucket.At, now).TotalSeconds >= (double)rate.Burst * _nodes / rate.PerSecond)
                     _buckets.Remove(key);
             }
         }
@@ -83,11 +84,19 @@ internal sealed class RootAdmissionPressure
 
     private Rate Limits(RootAdmissionKind kind) => kind == RootAdmissionKind.ShedLoad ? _operatorRate : _ordinaryRate;
 
+    private double Refill(Bucket bucket, Rate limits, long now)
+    {
+        var rate = (double)limits.PerSecond / _nodes;
+        bucket.Tokens = Math.Min(limits.Burst, bucket.Tokens + _time.GetElapsedTime(bucket.At, now).TotalSeconds * rate);
+        bucket.At = now;
+        return rate;
+    }
+
     internal sealed class Attempt(RootAdmissionPressure owner, string tenant, RootAdmissionKind kind, SemaphoreSlim? reserved) : IDisposable
     {
         private SemaphoreSlim? _slot = reserved;
         private HashSet<int>? _placement;
-        private Bucket? _debited;
+        private Bucket? _reservation;
 
         internal bool IsBusy => _slot is null;
 
@@ -103,8 +112,8 @@ internal sealed class RootAdmissionPressure
             return candidate;
         }
 
-        // Call after a duplicate can win and before the creator or event is written. The transactional receipt rolls back
-        // if this refuses. The attempt remains reserved through the end of the provider transaction.
+        // The attempt remains reserved through the provider transaction. A successful write spends the token at
+        // commit. Replays and rollbacks release only the reservation, so refill never credits them twice.
         internal void Require(int partition)
         {
             RequireCapacity();
@@ -115,17 +124,15 @@ internal sealed class RootAdmissionPressure
 
                 var key = (tenant, kind);
                 var limits = owner.Limits(kind);
-                var rate = (double)limits.PerSecond / owner._nodes;
                 var now = owner._time.GetTimestamp();
-                var tokens = owner._buckets.TryGetValue(key, out var bucket)
-                    ? Math.Min(limits.Burst, bucket.Tokens + owner._time.GetElapsedTime(bucket.At, now).TotalSeconds * rate)
-                    : limits.Burst;
-                if (tokens < 1)
-                    throw new RootAdmissionRefused(Contract.RefusalReason.RateLimited, TimeSpan.FromSeconds((1 - tokens) / rate));
-                if (bucket is null || tokens >= limits.Burst) owner._buckets[key] = bucket = new(tokens, now);
-                bucket.Tokens = tokens - 1;
-                bucket.At = now;
-                _debited = bucket;
+                if (!owner._buckets.TryGetValue(key, out var bucket))
+                    owner._buckets.Add(key, bucket = new(limits.Burst, now));
+                var rate = owner.Refill(bucket, limits, now);
+                var available = bucket.Tokens - bucket.Reserved;
+                if (available < 1)
+                    throw new RootAdmissionRefused(Contract.RefusalReason.RateLimited, TimeSpan.FromSeconds((1 - available) / rate));
+                bucket.Reserved++;
+                _reservation = bucket;
             }
         }
 
@@ -135,19 +142,23 @@ internal sealed class RootAdmissionPressure
                 throw new RootAdmissionRefused(Contract.RefusalReason.NodeBusy, TimeSpan.FromSeconds(1));
         }
 
-        internal void Committed() => _debited = null;
+        internal void Committed()
+        {
+            if (_reservation is not { } bucket) return;
+            _reservation = null;
+            lock (owner._sync)
+            {
+                owner.Refill(bucket, owner.Limits(kind), owner._time.GetTimestamp());
+                bucket.Reserved--;
+                bucket.Tokens--;
+            }
+        }
 
         internal void RolledBack()
         {
-            if (_debited is not { } charged) return;
-            _debited = null;
-            lock (owner._sync)
-            {
-                var key = (tenant, kind);
-                // Refresh or full refill can retire this bucket while its provider transaction is still open.
-                if (owner._buckets.TryGetValue(key, out var bucket) && ReferenceEquals(bucket, charged))
-                    bucket.Tokens = Math.Min(owner.Limits(kind).Burst, bucket.Tokens + 1);
-            }
+            if (_reservation is not { } bucket) return;
+            _reservation = null;
+            lock (owner._sync) bucket.Reserved--;
         }
 
         public void Dispose()

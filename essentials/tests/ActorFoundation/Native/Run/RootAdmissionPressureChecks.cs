@@ -14,8 +14,8 @@ internal static class RootAdmissionPressureChecks
 {
     internal static async Task<int> RunAsync(bool postgres, bool inBatch)
     {
-        CheckExpiredRefund(refresh: true);
-        CheckExpiredRefund(refresh: false);
+        CheckRollbackDuringRefill(TimeSpan.FromSeconds(2), refresh: true);
+        CheckRollbackDuringRefill(TimeSpan.FromMilliseconds(500), refresh: false);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var token = timeout.Token;
         var directory = Directory.CreateTempSubdirectory("root-admission-pressure-");
@@ -211,14 +211,14 @@ internal static class RootAdmissionPressureChecks
         Console.WriteLine("ok " + description);
     }
 
-    private static void CheckExpiredRefund(bool refresh)
+    private static void CheckRollbackDuringRefill(TimeSpan elapsed, bool refresh)
     {
         var clock = new RateClock();
         var pressure = new RootAdmissionPressure(new(2, 1, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1)),
-            ordinaryCapacity: 2, operatorCapacity: 1, ordinaryRate: new(1, 1), operatorRate: new(1, 1), clock);
+            ordinaryCapacity: 2, operatorCapacity: 1, ordinaryRate: new(1, 2), operatorRate: new(1, 1), clock);
         using var stalled = pressure.Begin("one", RootAdmissionKind.Input);
         stalled.Require(0);
-        clock.Advance(TimeSpan.FromSeconds(2));
+        clock.Advance(elapsed);
         if (refresh) pressure.Refresh(new Dictionary<int, int>(), nodes: 1);
         using (var admitted = pressure.Begin("one", RootAdmissionKind.Input))
         {
@@ -226,14 +226,20 @@ internal static class RootAdmissionPressureChecks
             admitted.Committed();
         }
         stalled.Dispose();
+        using (var third = pressure.Begin("one", RootAdmissionKind.Input))
+        {
+            third.Require(0);
+            third.Committed();
+        }
+        clock.Advance(TimeSpan.FromMilliseconds(500));
         using var next = pressure.Begin("one", RootAdmissionKind.Input);
         try { next.Require(0); }
         catch (RootAdmissionRefused refusal) when (refusal.Admission.Reason == Contract.RefusalReason.RateLimited)
         {
-            Console.WriteLine("ok a stale debit cannot refund a bucket replaced by " + (refresh ? "refresh" : "refill"));
+            Console.WriteLine("ok a rollback does not mint a token after " + (refresh ? "full" : "partial") + " refill");
             return;
         }
-        throw new InvalidOperationException("The stale rollback refilled a different bucket.");
+        throw new InvalidOperationException("A rolled-back reservation incorrectly credited the bucket.");
     }
 
     private sealed class RateClock : TimeProvider
