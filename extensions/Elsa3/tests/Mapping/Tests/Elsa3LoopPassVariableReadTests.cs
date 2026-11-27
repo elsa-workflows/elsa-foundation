@@ -278,13 +278,20 @@ public sealed class Elsa3LoopPassVariableReadTests
             diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'acme-child'", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task A_variable_with_the_per_pass_variables_elsa3_id_is_refused()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_variable_with_the_per_pass_variables_elsa3_id_is_refused(bool onContainer)
     {
         // Elsa 3 gave the per-pass CurrentValue the id 'currentValueVariable'; a declared variable with that id shares it.
-        var clash = new Elsa3Variable { Id = "currentValueVariable", Name = "AcmeOther", TypeName = "String" };
+        var root = Sequence("root", ForEach("loop", Read("getVariable('CurrentValue')")));
+        Elsa3Variable[] workflowVariables = [];
+        if (onContainer)
+            root.AdditionalProperties["variables"] = JsonSerializer.SerializeToElement(new[] { new { id = "currentValueVariable", name = "AcmeOther", typeName = "String" } });
+        else
+            workflowVariables = [new Elsa3Variable { Id = "currentValueVariable", Name = "AcmeOther", TypeName = "String" }];
 
-        var result = await ConvertAsync(Sequence("root", ForEach("loop", Read("getVariable('CurrentValue')"))), clash);
+        var result = await ConvertAsync(root, workflowVariables);
 
         Assert.False(result.Succeeded);
         Assert.Contains(result.Diagnostics, diagnostic =>

@@ -46,10 +46,10 @@ internal sealed record Elsa3PassRead(Elsa3PassReadKind Kind, string Name, string
 /// <item>A declared variable whose id is <c>{camelName}Variable</c> shares the block.</item>
 /// </list>
 /// The read binds to the loop only where the pass value wins on every run; where a variable of that name wins on every
-/// run, the read keeps today's handling; anything else is refused rather than guessed. The refusals for an inner loop, a
-/// reusable activity and an id clash come first, even where a nested variable of that name would win (refusal over
-/// guessing). A reusable activity anywhere in the
-/// owning loop's body is refused, as its contents are not visible here.
+/// run, the read keeps today's handling; anything else is refused rather than guessed. The refusals for an inner loop and
+/// an id clash come first, even where a nested variable of that name would win (refusal over guessing). Where the read
+/// would reach the pass value, a reusable activity anywhere in the owning loop's body is refused, as its contents are not
+/// visible here.
 /// </summary>
 internal static class Elsa3LoopPassVariables
 {
