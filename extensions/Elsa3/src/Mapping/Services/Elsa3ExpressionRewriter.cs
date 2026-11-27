@@ -1850,6 +1850,13 @@ public sealed class Elsa3ExpressionRewriter(
                 return;
             }
 
+            if (node is MemberExpression { Computed: false, Object: Identifier { Name: "args" }, Property: Identifier argumentName } argumentRead &&
+                !IsDeclared("args"))
+            {
+                AddResolvedEdit(argumentRead, Elsa3AmbientReferenceKind.EvaluatorArgument, argumentName.Name);
+                return;
+            }
+
             if (node is Identifier { Name: "args" } && !IsDeclared("args"))
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
@@ -3104,6 +3111,12 @@ public enum Elsa3AmbientReferenceKind
     /// reusable run it declared each input as a variable, with a setter (spec 247 R-2).
     /// </summary>
     GeneratedSetter,
+
+    /// <summary>
+    /// A read <c>args.&lt;name&gt;</c> of an Elsa 3 evaluator argument. Elsa 4 has none, except where the conversion
+    /// gives the value another source: a bulk dispatch's item in its correlation function (spec 1242 FR-015).
+    /// </summary>
+    EvaluatorArgument,
 }
 
 public sealed record Elsa3AmbientReference(Elsa3AmbientReferenceKind Kind, string Name);

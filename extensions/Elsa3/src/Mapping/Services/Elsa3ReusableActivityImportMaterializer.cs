@@ -7,6 +7,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Mapping.ActivityMap.Rewrites;
@@ -35,6 +36,102 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
     {
         _types = types;
         _typeDescriptors = typeDescriptors;
+    }
+
+    private readonly IWorkflowExecutableSourceReferenceStore? _sourceReferences;
+    private readonly IWorkflowExecutableStore? _executables;
+    private readonly TimeProvider? _timeProvider;
+
+    /// <summary>
+    /// With the published executables, a bulk dispatch may also target a workflow already published in Elsa 4: its
+    /// declared inputs come from the executable a dispatch pins (spec 1242 FR-016, Q2).
+    /// </summary>
+    public Elsa3ReusableActivityImportMaterializer(IElsa3DefinitionConverter converter,
+        Elsa3ArgumentDefinitionToInputOutput argumentMapper, IActivityDefinitionLookup activityLookup,
+        IWellKnownTypeRegistry types, IVariableTypeDescriptorCatalog typeDescriptors,
+        IWorkflowExecutableSourceReferenceStore sourceReferences, IWorkflowExecutableStore executables, TimeProvider timeProvider)
+        : this(converter, argumentMapper, activityLookup, types, typeDescriptors)
+    {
+        _sourceReferences = sourceReferences;
+        _executables = executables;
+        _timeProvider = timeProvider;
+    }
+
+    /// <summary>
+    /// The declared inputs of every workflow a selected definition's BulkDispatchWorkflows starts by literal id (spec 1242
+    /// FR-016): the newest selected version in this import, else the live published Elsa 4 executable a dispatch would
+    /// pin. A target found in neither is left out, and the conversion refuses the bulk dispatch. The Elsa 4 definition id
+    /// is the Elsa 3 definition id unchanged.
+    /// </summary>
+    private async ValueTask<IReadOnlyDictionary<string, IReadOnlyList<string>>> BulkDispatchTargetInputsAsync(
+        IEnumerable<Elsa3WorkflowDefinition> sources,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> sameImport,
+        CancellationToken cancellationToken)
+    {
+        var targets = sources
+            .SelectMany(source => source.Root is null ? [] : BulkDispatchTargets(JsonSerializer.SerializeToElement(source.Root, JsonOptions)))
+            .ToHashSet(StringComparer.Ordinal);
+        var result = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        if (targets.Count == 0)
+            return result;
+
+        IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference>? published = null;
+        foreach (var target in targets.Order(StringComparer.Ordinal))
+        {
+            if (sameImport.TryGetValue(target, out var declared))
+            {
+                result[target] = declared;
+                continue;
+            }
+
+            if (_sourceReferences is null || _executables is null || _timeProvider is null)
+                continue;
+            published ??= await _sourceReferences.ListAllAsync(
+                Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope.Published,
+                liveOnly: true,
+                now: _timeProvider.GetUtcNow(),
+                cancellationToken);
+            var reference = published
+                .Where(candidate => StringComparer.Ordinal.Equals(candidate.DefinitionId, target))
+                .OrderByDescending(candidate => candidate.PublishedAt)
+                .ThenBy(candidate => candidate.SourceReferenceId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            if (reference is null ||
+                await _executables.FindAsync(reference.ArtifactId, cancellationToken) is not { InputContract: { } contract })
+                continue;
+            result[target] = contract.Inputs.Select(input => input.Name).ToArray();
+        }
+
+        return result;
+    }
+
+    /// <summary>The literal <c>workflowDefinitionId</c> of every BulkDispatchWorkflows node in an Elsa 3 activity tree.</summary>
+    private static IEnumerable<string> BulkDispatchTargets(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                if (element.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String &&
+                    StringComparer.Ordinal.Equals(type.GetString(), "Elsa.BulkDispatchWorkflows"))
+                {
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        if (StringComparer.OrdinalIgnoreCase.Equals(property.Name, "workflowDefinitionId") &&
+                            Elsa3TypedValues.TryGetLiteral(property.Value, out var literal) && !string.IsNullOrWhiteSpace(literal))
+                            yield return literal.Trim();
+                    }
+                }
+
+                foreach (var property in element.EnumerateObject())
+                foreach (var target in BulkDispatchTargets(property.Value))
+                    yield return target;
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                foreach (var target in BulkDispatchTargets(item))
+                    yield return target;
+                break;
+        }
     }
 
     private const string SequenceTypeKey = "Elsa.Activities.Sequence.Activities.Sequence";
@@ -93,6 +190,8 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                     .Inputs ?? []).Select(input => input.Name).ToArray(),
                 StringComparer.Ordinal);
 
+        var bulkDispatchTargetInputs = await BulkDispatchTargetInputsAsync(sourceById.Values, dispatchTargetInputs, cancellationToken);
+
         foreach (var item in reusable.Concat(selection.Where(x => !x.IsReusable).OrderBy(x => x.SourceVersionId, StringComparer.Ordinal)))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -102,7 +201,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                 continue;
             var replacements = BuildReplacements(item, sourceById, selectedById, convertedById);
             var conversion = await converter.ConvertAsync(
-                new Elsa3ConversionRequest(source, item.IsReusable, replacements, DiagnosticMetadata(item), dispatchTargetInputs),
+                new Elsa3ConversionRequest(source, item.IsReusable, replacements, DiagnosticMetadata(item), dispatchTargetInputs, bulkDispatchTargetInputs),
                 cancellationToken);
             if (!conversion.Succeeded)
             {

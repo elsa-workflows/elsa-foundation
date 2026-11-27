@@ -6,6 +6,7 @@ using Elsa3.Models;
 
 using Elsa3.Mapping.Resolution;
 
+using Elsa3.Mapping.ActivityMap;
 using Elsa3.Mapping.ActivityMap.Rewrites;
 
 namespace Elsa3.Mapping.Conversion;
@@ -208,6 +209,60 @@ internal sealed class Elsa3DefinitionConverter(
         var inventory = await memoryReferenceGraph.CollectAsync(
             plan.Definition.Root, node => ContractOf(plan, node), jsonPaths, cancellationToken, plan.SourceName);
         plan.Diagnostics.AddRange(valueFlowLowerer.Lower(plan, inventory, node => AncestorScopeNames(plan, node)));
+        if (!plan.HasErrors)
+            WarnBulkDispatchOuterWrites(plan);
+    }
+
+    /// <summary>
+    /// Spec 1242 FR-020a: Elsa 3 ran a bulk dispatch's branches one at a time, Elsa 4 runs them concurrently, so a branch
+    /// that writes a variable declared outside the bulk node can now lose updates. Elsa 4 allows the write and warns at
+    /// publish (spec 266), so the conversion warns too and still converts. A variable a composite inside the branch
+    /// declares is not an outer write.
+    /// </summary>
+    private static void WarnBulkDispatchOuterWrites(Elsa3ConversionPlan plan)
+    {
+        foreach (var bulk in plan.BulkDispatches.Values)
+        {
+            var inside = Descendants(bulk.Bulk).Select(Elsa3ConversionDiagnostics.NodeId).ToHashSet(StringComparer.Ordinal);
+            foreach (var node in bulk.Branches.SelectMany(Descendants))
+            {
+                if (plan.Find(node) is not { Resolved: { } resolved } nodePlan)
+                    continue;
+
+                var written = new List<string>();
+                if (nodePlan.Intrinsic is { Kind: AuthoredWorkflowIntrinsicKind.Set, Variable: { } variable } &&
+                    (variable.DeclaringScopeId is null || !inside.Contains(variable.DeclaringScopeId)))
+                    written.Add($"variable '{variable.ReferenceKey}'");
+                // An output can only be captured into a workflow variable (the lowerer refuses a container variable).
+                written.AddRange(node.AdditionalProperties
+                    .Where(property => resolved.Outputs.Any(output => StringComparer.Ordinal.Equals(output.ReferenceKey, property.Key)) &&
+                                       Elsa3TypedValues.TryGetExpression(property.Value, out var type, out _) &&
+                                       StringComparer.Ordinal.Equals(type, "Variable"))
+                    .Select(property => $"output '{plan.SourceName(node, property.Key)}' into a workflow variable"));
+                if (plan.BulkDispatchBranchScriptWrites.Contains(node))
+                    written.Add("variables from its script");
+                if (written.Count == 0)
+                    continue;
+
+                plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Warning(plan, nodePlan,
+                    Elsa3ActivityDiagnosticCodes.BulkDispatchOuterWrite,
+                    $"'{Elsa3ConversionDiagnostics.NodeId(node)}' in a branch of bulk dispatch '{bulk.BulkNodeId}' writes {string.Join(", ", written)}, declared outside the bulk dispatch. Elsa 3 ran the branches one at a time; Elsa 4 runs them concurrently, so a shared counter or list can lose updates.",
+                    "Record each child's result in the child workflow, or compute the total after the bulk dispatch. Publishing adds Elsa 4's own ValueFlow/ConcurrentWrite warning."));
+            }
+        }
+
+        static IEnumerable<Elsa3Activity> Descendants(Elsa3Activity root)
+        {
+            var stack = new Stack<Elsa3Activity>();
+            stack.Push(root);
+            while (stack.Count > 0)
+            {
+                var node = stack.Pop();
+                yield return node;
+                foreach (var child in node.Activities ?? [])
+                    stack.Push(child);
+            }
+        }
     }
 
     /// <summary>
@@ -228,6 +283,12 @@ internal sealed class Elsa3DefinitionConverter(
                 names.Add((loopValue, scopeNodeId));
                 if (loopValue == "currentItem")
                     names.Add(("currentIndex", scopeNodeId));
+            }
+            // A bulk dispatch gives its Dispatch node and branches each pass's currentItem and currentIndex (spec 1242).
+            else if (StringComparer.Ordinal.Equals(parentPlan.Resolved?.ActivityTypeKey, Elsa3BuiltInActivityMap.BulkDispatchWorkflows))
+            {
+                names.Add(("currentItem", scopeNodeId));
+                names.Add(("currentIndex", scopeNodeId));
             }
 
             names.AddRange(parentPlan.Variables.Select(variable => (variable.Name, scopeNodeId)));
