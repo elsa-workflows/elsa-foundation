@@ -54,10 +54,11 @@ Elsa.Workflows.Publishing.Api
 Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore
 Elsa.Workflows.Runtime
 Elsa.Workflows.Runtime.Api
-Elsa.Workflows.Runtime.Distributed
-Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore
 Elsa.Workflows.Runtime.Http
 Elsa.Workflows.Runtime.JavaScript
+Elsa.Workflows.Runtime.KernelApi
+Elsa.Workflows.Runtime.KernelHost
+Elsa.Workflows.Runtime.KernelHosting
 Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore
 Elsa.Workflows.Runtime.Resumption
 Elsa.Workflows.Runtime.Scheduling

@@ -13,6 +13,27 @@ If you mount a volume at `/app/data`, set `ConnectionStrings__Elsa` and
 `CShells__Shells__default__Features__FoundationIdentityOpenIddict__ConnectionString` to database paths on that
 volume. Use the same connection settings for the migration CLI and the running containers.
 
+## Workflow execution
+
+The default shell runs Native and Flowchart workflows on the built-in Actor Foundation. Its dedicated
+SQLite file is `/app/data/elsa-kernel.db`. Mount a writable volume at `/app/data` to keep workflow
+execution state across container replacement. Run one process per SQLite file. The existing module
+connections still hold workflow definitions, published executables, identity, and other module data.
+
+To use a dedicated PostgreSQL database for workflow execution, set these feature values under the
+`CShells__Shells__default__Features__WorkflowsRuntimeKernelHosting__` environment variable prefix.
+
+| Setting | Value |
+| --- | --- |
+| `Provider` | `PostgreSQL` |
+| `SqlitePath` | Empty |
+| `PostgresConnectionString` | Connection string supplied through your deployment configuration |
+
+For the pre-release switch, use a fresh local development database. To rehearse rollback, restore the
+previous profile and use a separate fresh local database. Keep persistent deployment volumes intact.
+
+## Build
+
 To build locally, copy this directory, select the matching released Foundation and builder version, and follow
 the [lock and build steps](../README.md#generate-and-review-locks). Keep the `settings` directory and both shell
 files in the build context. `settings/appsettings.json` and `settings/appsettings.Production.json` layer onto the
