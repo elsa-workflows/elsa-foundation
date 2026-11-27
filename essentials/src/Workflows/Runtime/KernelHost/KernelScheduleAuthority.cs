@@ -135,7 +135,8 @@ internal static class KernelScheduleAuthority
         RuntimeKernelScheduleControlOwner Owner, string PinnedStart);
 }
 
-internal delegate ValueTask<bool> AcceptScheduleOccurrence(RuntimeKernelScheduleOccurrence occurrence,
+internal delegate ValueTask<RuntimeKernelScheduleAttemptOutcome> AcceptScheduleOccurrence(RuntimeKernelScheduleOccurrence occurrence,
+    DateTimeOffset attemptDeadline,
     Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken);
 
 /// <summary>Bridges authenticated managed schedule jobs to the scoped Runtime occurrence transaction.</summary>
@@ -156,12 +157,23 @@ internal sealed class KernelScheduleOccurrenceAcceptor : IScheduleOccurrenceAcce
         _accept = accept ?? throw new ArgumentNullException(nameof(accept));
     }
 
-    public ValueTask<bool> TryAcceptAsync(ScheduleOccurrence occurrence, CancellationToken cancellationToken = default)
+    public ValueTask<bool> TryAcceptAsync(ScheduleOccurrence occurrence, CancellationToken cancellationToken = default) =>
+        TryAcceptAttemptAsync(occurrence, occurrence.OfferUntilUnixMilliseconds, cancellationToken);
+
+    public async ValueTask<bool> TryAcceptAttemptAsync(ScheduleOccurrence occurrence, long attemptDeadline, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return KernelScheduleAuthority.ReadOffer(occurrence, _scope, _actors) is { } offer
-            ? _accept(offer, ReadClockAsync, cancellationToken)
-            : ValueTask.FromResult(false);
+        if (attemptDeadline < occurrence.OfferUntilUnixMilliseconds || attemptDeadline > DateTimeOffset.MaxValue.ToUnixTimeMilliseconds() ||
+            KernelScheduleAuthority.ReadOffer(occurrence, _scope, _actors) is not { } offer)
+            return false;
+        var outcome = await _accept(offer, DateTimeOffset.FromUnixTimeMilliseconds(attemptDeadline), ReadClockAsync, cancellationToken);
+        return outcome switch
+        {
+            RuntimeKernelScheduleAttemptOutcome.Accepted => true,
+            RuntimeKernelScheduleAttemptOutcome.Refused => false,
+            RuntimeKernelScheduleAttemptOutcome.Retry => throw new TimeoutException("The managed schedule attempt did not settle the occurrence."),
+            _ => throw new InvalidOperationException("The Runtime store returned an unknown schedule attempt outcome.")
+        };
     }
 
     private async ValueTask<DateTimeOffset> ReadClockAsync(CancellationToken cancellationToken) =>

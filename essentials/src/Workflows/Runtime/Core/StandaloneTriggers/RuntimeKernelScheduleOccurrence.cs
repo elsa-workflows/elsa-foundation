@@ -35,6 +35,30 @@ public interface IRuntimeKernelScheduleOccurrenceStore
     /// <returns>True when the exact occurrence was accepted or is an immutable replay. False when authority has moved or expired.</returns>
     ValueTask<bool> TryAcceptAsync(RuntimeKernelScheduleOccurrence occurrence,
         Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default);
+
+    /// <summary>Decides the original occurrence within a separately fenced job deadline.</summary>
+    /// <remarks>Replays retain the original occurrence bytes, including their first attempt's deadline.</remarks>
+    async ValueTask<RuntimeKernelScheduleAttemptOutcome> TryAcceptAttemptAsync(RuntimeKernelScheduleOccurrence occurrence,
+        DateTimeOffset attemptDeadline, Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default)
+    {
+        if (attemptDeadline != occurrence.AcceptBefore)
+            throw new NotSupportedException("The Runtime provider does not support renewed schedule attempts.");
+        // The predecessor contract cannot distinguish an expired attempt from displaced authority.
+        return await TryAcceptAsync(occurrence, readScheduleClock, cancellationToken)
+            ? RuntimeKernelScheduleAttemptOutcome.Accepted
+            : RuntimeKernelScheduleAttemptOutcome.Retry;
+    }
+}
+
+/// <summary>Whether a managed schedule attempt resolved its immutable occurrence.</summary>
+public enum RuntimeKernelScheduleAttemptOutcome
+{
+    /// <summary>The window expired or the provider could not settle the original occurrence.</summary>
+    Retry,
+    /// <summary>The original occurrence committed or replayed its exact receipt.</summary>
+    Accepted,
+    /// <summary>The original occurrence no longer owns its selected publication.</summary>
+    Refused
 }
 
 /// <summary>A seek position within one pass over the pending occurrences of a bound tenant.</summary>
