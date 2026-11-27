@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Diagnostics;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -51,6 +52,45 @@ internal sealed class PublisherReusableActivityImportPublisher(
         {
             return ReusableActivityImportPublishOutcome.Refused(Specific(rejection.ErrorCode, rejection.Diagnostics), rejection.Diagnostics);
         }
+        catch (Exception exception) when (DataSelectionRejection(exception) is { } rejection)
+        {
+            // The graph provider refused the imported manifest with located findings (#5850). They are what Studio's
+            // publish endpoint reports for the same refusal, so the import reports them too, not "failed unexpectedly".
+            var diagnostics = rejection.Findings.Select(finding => FromFinding(finding, rejection.ProviderKey, request)).ToArray();
+            return ReusableActivityImportPublishOutcome.Refused(FirstErrorCode(diagnostics), diagnostics);
+        }
+    }
+
+    /// <summary>The rejection itself, or the one a compiler wrapped it in, as the publish endpoint finds it.</summary>
+    private static ActivityDataSelectionRejectedException? DataSelectionRejection(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+            if (current is ActivityDataSelectionRejectedException rejection)
+                return rejection;
+        return null;
+    }
+
+    private static ActivityDiagnostic FromFinding(ValidationError finding, string? providerKey, ReusableActivityImportPublishRequest request)
+    {
+        // A finding's path is a JSON pointer into the provider manifest (/variables/0/initialValue) or an authored node
+        // path ({NodeId}/inputs/{ReferenceKey}), as the publish endpoint locates it.
+        const string inputMarker = "/inputs/";
+        var input = finding.Path.LastIndexOf(inputMarker, StringComparison.Ordinal);
+        var location = finding.Path.StartsWith('/')
+            ? new ActivityDiagnosticLocation(ProviderKey: providerKey, JsonPointer: finding.Path)
+            : new ActivityDiagnosticLocation(
+                ProviderKey: providerKey,
+                ReferenceKey: input >= 0 ? finding.Path[(input + inputMarker.Length)..] : null,
+                NodeOrigin: [new ActivityNodeOrigin("AuthoredNode", input >= 0 ? finding.Path[..input] : finding.Path)]);
+        return new(
+            finding.Type,
+            StringComparer.Ordinal.Equals(finding.Severity, ValidationSeverities.Warning) ? ActivityDiagnosticSeverity.Warning : ActivityDiagnosticSeverity.Error,
+            finding.Message,
+            new("ActivityDraft", request.DraftId, null, Revision: request.DraftRevision),
+            location,
+            "Elsa 4 refused the activity graph this import converted from the Elsa 3 workflow. The conversion should have refused it " +
+            "with guidance or converted it to a graph Elsa 4 accepts, so report this finding with the Elsa 3 export.",
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["authoredPath"] = finding.Path });
     }
 
     /// <summary>
