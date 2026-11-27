@@ -476,6 +476,10 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         }
         catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
         {
+            // A later relation in the batch may be absent on an older store. Preserve the installed format diagnosis
+            // even when draining the failed batch precedes reading its marker result.
+            await current.RollbackAsync(token);
+            await EfStore.RequireStoreVersionsAsync(db, token);
             throw new StoreFormatException("The generated-root admission schema is unreadable.", error);
         }
         catch (PostgresException error) when (
