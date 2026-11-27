@@ -1132,6 +1132,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (_ordinaryRoots is { } root)
         {
+            if (postgres && root.Discover && db.RequiresPinnedRootNamespace)
+                return await LoadPostgresWorkerRootsAsync(db, root, ids, cancellationToken);
             root = await ResolveWorkerRootsAsync(root, ids, [], cancellationToken);
             var found = new List<InstanceRow>();
             foreach (var binding in ids.Distinct().Select(root.ForActor))
