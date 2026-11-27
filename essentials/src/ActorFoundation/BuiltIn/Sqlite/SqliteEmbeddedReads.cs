@@ -1,3 +1,4 @@
+using Kernel.Foundation.Hosting;
 using Kernel.EntityFramework;
 using Microsoft.Data.Sqlite;
 using Contract = Kernel.Foundation.Contracts;
@@ -6,6 +7,14 @@ namespace Kernel.Foundation.Sqlite;
 
 public static partial class SqliteEmbeddedHosting
 {
+    internal static async ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(string path, StoreFormat? qualificationFormat,
+        Contract.BoundScope scope, Contract.ActorRef child, string issuance, CancellationToken token)
+    {
+        using var file = AcquireFile(path, forRuntime: false);
+        KernelDb Open() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
+        return await EfStore.ConfirmRootChildBirthAsync(Open, scope, child, issuance, token);
+    }
+
     internal static Contract.IActorReads CreateFoundationReads(string databasePath, int pageSize = 100, StoreFormat? qualificationFormat = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);

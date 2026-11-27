@@ -16,7 +16,8 @@ internal sealed record KernelExecutableSelection(string Workflow, string Definit
                 string.IsNullOrWhiteSpace(start.Definition)) return null;
             if (start.ExecutableSelection is null) return new(start.Workflow, start.Definition, null);
             var identity = JsonSerializer.Deserialize<WorkflowExecutableIdentity>(start.ExecutableSelection);
-            return identity is not null && identity.ArtifactId == start.Workflow && identity.DefinitionId == start.Definition &&
+            // The material keeps its original source fields when another logical definition publishes it.
+            return identity is not null && identity.ArtifactId == start.Workflow && !string.IsNullOrWhiteSpace(identity.DefinitionId) &&
                 !string.IsNullOrWhiteSpace(identity.ArtifactHash) && !string.IsNullOrWhiteSpace(identity.ArtifactVersion) &&
                 !string.IsNullOrWhiteSpace(identity.DefinitionVersionId) ? new(start.Workflow, start.Definition, identity) : null;
         }

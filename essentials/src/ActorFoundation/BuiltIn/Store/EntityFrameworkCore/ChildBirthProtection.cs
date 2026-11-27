@@ -24,3 +24,14 @@ public enum ChildBirthProtectionOutcome
 /// </summary>
 public delegate ValueTask<ChildBirthProtectionOutcome> ProtectChildBirthsAsync(IReadOnlyList<PendingChildBirth> births,
     CancellationToken cancellationToken);
+
+/// <summary>The durable disposition of an exact child birth, as proved by its issuing store.</summary>
+public enum FoundationChildBirthProof
+{
+    /// <summary>The store cannot yet prove retirement or irrevocable absence.</summary>
+    Unresolved,
+    /// <summary>The exact child birth was durably retired.</summary>
+    BirthRetired,
+    /// <summary>The birth is absent and its issuing checkpoint is permanently fenced.</summary>
+    IssuanceFencedAbsent
+}
