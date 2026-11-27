@@ -117,8 +117,8 @@ internal static class ShippedDelayRecoveryChecks
             await using var db = Open();
             var marker = await db.StoreVersions.AsNoTracking().SingleAsync(row => row.Id == StoreVersionEntity.MarkerId, token);
             Check(marker.Format == (qualification ?? StoreFormat.RootShipped), "the journey verifies its exact store marker");
-            Check(await runs.SupportsSequencedJournalAsync(token) == sequencedJournal,
-                "the optional reader is available only on the sequenced journal profile");
+            Check(await runs.SupportsSequencedJournalAsync(token),
+                "the sequenced reader is available on the selected store profile");
             var sequencedPrefixes = new Dictionary<Contract.ActorRef, Contract.ActorSequencedJournalPage>();
             Contract.ActorRef nativeRoot, flowRoot;
             Contract.Page<Contract.JournalEntry> nativePrefix, flowPrefix;

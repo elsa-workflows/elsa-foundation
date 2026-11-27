@@ -66,7 +66,7 @@ internal static class ProfileCapabilityChecks
                 RootCapabilities.JobProtocol | RootCapabilities.TimedJobSettlement | RootCapabilities.TimedJobPreview | RootCapabilities.ReplyProtocol |
                 RootCapabilities.ParkOpening | RootCapabilities.ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery |
                 RootCapabilities.SelfProtocol | RootCapabilities.Timers | RootCapabilities.TimerRearm | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput |
-                RootCapabilities.Children)
+                RootCapabilities.Children | RootCapabilities.SequencedJournal)
         ];
         // The true accessors of each profile, taken from the pre-refactor subclass chains (UsesRootTimers is new),
         // so that a property bound to the wrong capability fails even when the capability set is right.
@@ -96,7 +96,7 @@ internal static class ProfileCapabilityChecks
             ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory", "UsesRootChildren", "UsesRootComposedParkRecovery", "UsesRootDueBacklog", "UsesRootJobProtocol",
                 "UsesRootOperatorProtocol", "UsesRootOperatorReplies", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening",
                 "UsesRootParkRecovery", "UsesRootParkedOperators", "UsesRootPrivateParkInputs", "UsesRootReplyProtocol", "UsesRootRetention",
-                "UsesRootRetirement", "UsesRootSelfProtocol", "UsesRootStableBody", "UsesRootTerminalOutput", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination",
+                "UsesRootRetirement", "UsesRootSelfProtocol", "UsesRootSequencedJournal", "UsesRootStableBody", "UsesRootTerminalOutput", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination",
                 "UsesRootTimedJobPreview", "UsesRootTimedJobSettlement", "UsesRootTimerRearm", "UsesRootTimers"],
         };
         // S3: each profile's root state family, the prefix bytes written before S3 and the statuses besides Finished that end it.
@@ -216,11 +216,12 @@ internal static class ProfileCapabilityChecks
         using var sharedPostgres = KernelDb.ForPostgresRootShipped(options);
         using var sharedSqlite = KernelDb.ForSqliteRootShipped(sqliteOptions);
         Check(sharedPostgres.RequiredFormat == StoreFormat.RootShipped && sharedSqlite.RequiredFormat == StoreFormat.RootShipped &&
-            sharedPostgres.Capabilities == (s6TerminalOutput.Capabilities | RootCapabilities.DueBacklog | RootCapabilities.Children) &&
+            sharedPostgres.Capabilities == (s6TerminalOutput.Capabilities | RootCapabilities.DueBacklog | RootCapabilities.Children |
+                RootCapabilities.SequencedJournal) &&
             sharedSqlite.Capabilities == sharedPostgres.Capabilities &&
-            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, MessageProtocol: 10, JournalCodec: 0 } &&
-            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, MessageProtocol: 13, JournalCodec: 0 },
-            "the shipped format composes owned children, admission pressure and terminal output under distinct provider definitions");
+            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, MessageProtocol: 11, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, MessageProtocol: 14, JournalCodec: 0 },
+            "the shipped format composes owned children, admission pressure, terminal output and sequencing under distinct provider definitions");
         using var sequencedPostgres = KernelDb.ForPostgresRootSequencedJournalQualification(options);
         using var sequencedSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(),
             StoreFormat.RootSequencedJournalQualification);
@@ -230,7 +231,8 @@ internal static class ProfileCapabilityChecks
             sequencedSqlite.Capabilities == sequencedPostgres.Capabilities &&
             sequencedPostgres.UsesRootSequencedJournal && sequencedSqlite.UsesRootSequencedJournal &&
             RootProfiles.MissingPrerequisites(sequencedPostgres.Capabilities) == RootCapabilities.None &&
-            !RootProfiles.Formats.ContainsKey(sequencedPostgres.RequiredFormat) && !mapped.HasFlag(RootCapabilities.SequencedJournal) &&
+            !RootProfiles.Formats.ContainsKey(sequencedPostgres.RequiredFormat) &&
+            sharedPostgres.Capabilities == (sequencedPostgres.Capabilities | RootCapabilities.Children) &&
             StoreDefinitionsRevision.Seed(sequencedPostgres) is { StoreSchema: 1, MessageProtocol: 10, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(sequencedSqlite) is { StoreSchema: 2, MessageProtocol: 14, JournalCodec: 0 },
             "protocol 115 privately retains the protocol-29 capabilities and distinct PostgreSQL and SQLite journal definitions");

@@ -42,6 +42,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             Http = new NativeHttpOptions { Client = _client },
             Expressions = expressions,
             SelfSends = serving.Capabilities.SelfSends,
+            UseStructuralJournal = Foundation.Reads is IActorSequencedJournalReads { SupportsSequencedJournal: true },
             ServedWorkflow = serving.ServedWorkflow,
             ResolveWorkflow = ResolveWorkflowAsync
         });

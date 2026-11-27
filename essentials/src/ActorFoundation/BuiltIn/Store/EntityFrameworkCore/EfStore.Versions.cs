@@ -69,7 +69,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 30 };
+    internal static StoreFormat RootShipped => Current with { MessageProtocol = 31 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -132,12 +132,13 @@ internal static class RootProfiles
         RootCapabilities.SelfProtocol | RootCapabilities.Timers;
 
     /// <summary>
-    /// The shared shipped format includes owned children, durable self-sends and timers, one-page Park Resume and fenced due pressure.
+    /// The shared shipped format includes owned children, durable self-sends and timers, one-page Park Resume,
+    /// fenced due pressure and sequenced workflow history.
     /// The growth rule: each widening of this set takes a new protocol number, and a database installed with an older set
     /// is refused. Before GA a preview database is recreated; after GA a widening migrates, with a rollback floor (K12).
     /// </summary>
     private const RootCapabilities Shipped29 = TimerRearmQualification | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput;
-    internal const RootCapabilities Shipped = Shipped29 | RootCapabilities.Children;
+    internal const RootCapabilities Shipped = Shipped29 | RootCapabilities.Children | RootCapabilities.SequencedJournal;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
 
     internal const RootCapabilities ParkRecoveryComposition = ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
@@ -391,6 +392,8 @@ internal static class StoreDefinitionsRevision
     private const int SqliteChildrenRevision = 13;
     private const int PostgreSqlSequencedJournalRevision = 10;
     private const int SqliteSequencedJournalRevision = 14;
+    private const int PostgreSqlShippedRevision = 11;
+    private const int SqliteShippedRevision = 14;
     private const int SqliteParkRecoverRevision = 5;
     private const int PostgreSqlDueBacklogRevision = 5;
     private const int SqliteDueBacklogRevision = 10;
@@ -421,6 +424,7 @@ internal static class StoreDefinitionsRevision
                     sqlite ? SqliteSequencedJournalRevision : PostgreSqlSequencedJournalRevision,
                 _ when db.RequiredFormat == StoreFormat.RootTerminalOutputQualification => sqlite ? SqliteTerminalOutputRevision : PostgreSqlTerminalOutputRevision,
                 _ when db.RequiredFormat == StoreFormat.RootS6TerminalOutputQualification => sqlite ? SqliteS6TerminalOutputRevision : PostgreSqlS6TerminalOutputRevision,
+                _ when db.RequiredFormat == StoreFormat.RootShipped => sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,
                 _ => sqlite ? SqliteRevision : PostgreSqlRevision
             },
             JournalCodec = 0
