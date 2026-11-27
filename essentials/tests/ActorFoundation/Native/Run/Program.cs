@@ -62,6 +62,8 @@ if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile, 
 if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
 if (args is ["root-auxiliary-owner", var auxiliaryProvider and ("postgres" or "sqlite"), var auxiliaryFence and ("checked" or "in-batch")])
     return await RootAuxiliaryOwnerChecks.RunAsync(auxiliaryProvider == "postgres", auxiliaryFence == "in-batch");
+if (args is ["root-schedule-controls", var controlsProvider and ("postgres" or "sqlite"), var controlsFence and ("checked" or "in-batch")])
+    return await RootScheduleControlChecks.RunAsync(controlsProvider == "postgres", controlsFence == "in-batch");
 if (args is ["root-schedule-inventory", var scheduleProvider and ("postgres" or "sqlite")])
     return await RootScheduleInventoryChecks.RunAsync(scheduleProvider == "postgres");
 if (args is ["root-schedule-occurrence", var occurrenceProvider and ("postgres" or "sqlite")])
