@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Inspection.Core;
@@ -13,7 +14,8 @@ using Kernel.WorkflowActor;
 namespace Elsa.Workflows.Runtime.KernelApi;
 
 internal sealed class KernelPlaybackPageReader(KernelRunReader runs, KernelRuns host, KernelPlaybackCursor cursor,
-    IActivityInspectionContextAsync authorization, RuntimeHistoryInspectionService legacy, TimeProvider time)
+    IActivityInspectionContextAsync authorization, TimeProvider time, RuntimeHistoryOccurrenceAuthorization? currentAuthorization = null,
+    RuntimeHistoryInspectionService? legacy = null)
     : IRuntimeHistoryOccurrencePageReader
 {
     private static readonly RuntimeHistoryCapturePolicy Policy = new(KernelHistoryJournal.Policy, 1, false, KernelHistoryJournal.SupportedKinds);
@@ -24,7 +26,7 @@ internal sealed class KernelPlaybackPageReader(KernelRunReader runs, KernelRuns 
         if (run is null) return null;
         if (run.Header is not { } header)
         {
-            if (KernelPlaybackCursor.Owns(request.SequenceToken)) return null;
+            if (legacy is null || KernelPlaybackCursor.Owns(request.SequenceToken)) return null;
             var original = await legacy.ReadOccurrencesAsync(request, cancellationToken);
             return await FindAsync() is { Header: null } current && current.State.TenantId == run.State.TenantId ? original : null;
         }
@@ -73,7 +75,8 @@ internal sealed class KernelPlaybackPageReader(KernelRunReader runs, KernelRuns 
         {
             var initial = RuntimeHistoryIdentity.CreateBinding([authorization.TenantScope, authorization.AuditSubject,
                 await authorization.GetAuthorizationProfileAsync(cancellationToken)]);
-            return await legacy.BindOccurrencesAsync(state, initial, cancellationToken);
+            if (legacy is not null) return await legacy.BindOccurrencesAsync(state, initial, cancellationToken);
+            return currentAuthorization is null ? null : await currentAuthorization.BindAsync(state, initial, cancellationToken);
         }
 
         async ValueTask<T> ProviderAsync<T>(Func<ValueTask<T>> read, string operation)

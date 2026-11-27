@@ -1,9 +1,12 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Extensions;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Endpoints;
+using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Services;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Inspection.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -19,6 +22,8 @@ internal static class WorkflowsRuntimeApiHttpServices
         services.AddElsaEndpoints();
         services.AddHttpContextAccessor();
         services.AddDynamicEndpointApiExplorerRefresh();
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddScoped<RuntimeHistoryOccurrenceAuthorization>();
 
         // Keyed failure services preserve each module's response shape on a shared host.
         services.TryAddKeyedSingleton<IEndpointProblemWriter, WorkflowsRuntimeProblemWriter>(WorkflowsRuntimeApi.OwnerId);
@@ -35,5 +40,33 @@ internal static class WorkflowsRuntimeApiHttpServices
         services.TryAddScoped<HttpContextWorkflowRuntimeOperatorAccess>();
         services.TryAddScoped<IWorkflowRuntimeOperatorAccess>(sp => sp.GetRequiredService<HttpContextWorkflowRuntimeOperatorAccess>());
         services.AddPermissionContributor<WorkflowRuntimePermissionContributor>();
+    }
+
+    internal static void AddExecutableInspectionServices(this IServiceCollection services)
+    {
+        services.TryAddScoped(sp => new WorkflowExecutableInspector(sp.GetRequiredService<IWorkflowExecutableStore>(),
+            sp.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(), sp.GetRequiredService<IWorkflowExecutableRetentionReader>(),
+            sp.GetService<TimeProvider>()));
+        services.TryAddScoped<WorkflowActivationSlotInspectionService>();
+        services.TryAddScoped<IWorkflowExecutableInspector>(sp => sp.GetRequiredService<WorkflowExecutableInspector>());
+        // The exact Executable read for other domains uses the same inspector as the HTTP endpoints.
+        WorkflowExecutableInspectionStartupTask.Validate(services);
+        services.TryAddScoped<IWorkflowExecutableInspection, WorkflowExecutableInspection>();
+        AddExecutableInspectionValidator(services);
+    }
+
+    // One validator per configuring collection: a copied child shell rebinds it to its own collection.
+    private static void AddExecutableInspectionValidator(IServiceCollection services)
+    {
+        if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowExecutableInspectionStartupTask))
+                ?.ImplementationInstance is not WorkflowExecutableInspectionStartupTask validator || !validator.Owns(services))
+            validator = new WorkflowExecutableInspectionStartupTask(services);
+        services.RemoveAll<WorkflowExecutableInspectionStartupTask>();
+        services.AddSingleton(validator);
+        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
+                     && (item.ImplementationInstance is WorkflowExecutableInspectionStartupTask
+                         || item.ImplementationType == typeof(WorkflowExecutableInspectionStartupTask))).ToArray())
+            services.Remove(previous);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
     }
 }
