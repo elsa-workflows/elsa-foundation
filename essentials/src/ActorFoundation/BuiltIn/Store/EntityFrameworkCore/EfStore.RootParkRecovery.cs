@@ -21,6 +21,7 @@ public sealed partial class EfStore
                 CHECK ("FoundationReleasedBy" IS NULL OR ("FoundationReleasedBy" > 0 AND "InboxScope" = -4));
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_Released" ON "Messages" ("Partition", "Target", "FoundationReleasedBy", "Seq")
                 WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationReleasedBy" IS NOT NULL;
+            /*recovery-kept-index*/
             /*composed-waiting-index*/
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootJournal_Outcome" ON "Journal" ("Partition", "Instance", "Revision")
                 WHERE {RootOutcomeEntry};
@@ -48,6 +49,9 @@ public sealed partial class EfStore
                     CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_LiveJob" ON "Messages" {LiveRootJobIndex};
                     {PostgresParkLiveJobGuards()}
                     """ : "", StringComparison.Ordinal)
+            .Replace("/*recovery-kept-index*/", $"""
+                CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_RecoveryKept" ON "Messages" {RecoveryKeptIndex};
+                """, StringComparison.Ordinal)
             .Replace("/*composed-waiting-index*/", db.UsesRootComposedParkRecovery ? $"""
                 CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortGroups" ON "Messages" ("Partition", "Seen", "Due", "Seq")
                     INCLUDE ("Target")
@@ -224,6 +228,12 @@ public sealed partial class EfStore
                 AND k."InboxScope" = -4 AND k."EventMatch" IS NULL AND k."Done" AND k."FoundationKeptBy" IS NOT NULL
             ORDER BY k."Seq", k."Id" COLLATE "C" {(limit < int.MaxValue ? $"LIMIT {limit}" : "")} {(lockRows ? "FOR UPDATE" : "")}
             """, actor, partition).ToListAsync(token);
+
+    // The arrival quote can stop at its limit without scanning pending rows or the consumed reason.
+    private const string RecoveryKeptIndex = """
+        ("Partition", "Target" COLLATE "C", "FoundationKeptBy", "Seq", "Id" COLLATE "C")
+        WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" IN (0, 1)
+        """;
 
     private sealed record PostgresRecoveryRow(bool Fits, string? Id, short? KeptBy, string? Digest, string? Envelope, long? Bytes);
 

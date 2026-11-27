@@ -20,6 +20,7 @@ internal static class PostgresRootParkOpeningChecks
         internal bool ObserveNext { get; set; }
         internal int Quoted { get; private set; }
         internal bool SkippedKeptScan { get; private set; }
+        internal bool ArrivalsUseKeptIndex { get; private set; }
 
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
             CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
@@ -31,8 +32,12 @@ internal static class PostgresRootParkOpeningChecks
             explain.CommandText = "EXPLAIN (ANALYZE, FORMAT JSON) " + command.CommandText;
             using var plan = JsonDocument.Parse((string)(await explain.ExecuteScalarAsync(cancellationToken))!);
             var nodes = Plans(plan.RootElement[0].GetProperty("Plan")).ToArray();
-            Quoted = nodes.Single(node => node.TryGetProperty("Subplan Name", out var name) && name.GetString() == "CTE arrivals")
-                .GetProperty("Actual Rows").GetInt32();
+            var arrivals = nodes.Single(node => node.TryGetProperty("Subplan Name", out var name) && name.GetString() == "CTE arrivals");
+            Quoted = arrivals.GetProperty("Actual Rows").GetInt32();
+            ArrivalsUseKeptIndex = Plans(arrivals).Any(node =>
+                node.TryGetProperty("Index Name", out var index) && index.GetString() == "IX_FoundationRootInbox_RecoveryKept" &&
+                node.TryGetProperty("Index Cond", out var condition) && condition.GetString() is { } indexCondition &&
+                indexCondition.Contains("Target", StringComparison.Ordinal) && indexCondition.Contains("FoundationKeptBy", StringComparison.Ordinal));
             SkippedKeptScan = nodes.Any(node => node.TryGetProperty("Relation Name", out var relation) && relation.GetString() == "Messages" &&
                 node.GetProperty("Actual Loops").GetInt32() == 0);
             return result;
@@ -663,20 +668,25 @@ internal static class PostgresRootParkOpeningChecks
             await using (var db = Open())
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Kind", "Partition", "Due", "Seen", "Attempts", "Trial", "Done", "JobGeneration", "FoundationKeptBy")
-                    SELECT 'page-filler-' || n, -4, {before.Actor.Id}, 'ordinary', 0, 0, 0, 0, 0, true, 0, 1 FROM generate_series(1, {InMemoryStore.ParkPageLimit}) n
+                    SELECT 'page-filler-' || n, -4, {before.Actor.Id}, 'ordinary', 0, 0, 0, 0, 0, true, 0, 1 FROM generate_series(1, {InMemoryStore.ParkPageLimit}) n;
+                    INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Kind", "Partition", "Due", "Seen", "Attempts", "Trial", "Done", "JobGeneration", "Seq")
+                    SELECT 'page-pending-' || n, -4, {before.Actor.Id}, 'ordinary', 0, {long.MaxValue}, 0, 0, 0, false, 0, -n
+                    FROM generate_series(1, 8192) n;
+                    ANALYZE "Messages";
                     """, stop);
             Check(await Send(actor, "recover-page", new(selection)) is { Outcome: Contract.AdmissionOutcome.Accepted }, "ingress admits a recover of the oversized Park");
             recoveryQuote.ObserveNext = true;
             await using (var pager = await Own("recover-page"))
                 await Drive(pager, row => row is { Revision: 5 });
-            Check(recoveryQuote.Quoted == InMemoryStore.ParkPageLimit + 1 && recoveryQuote.SkippedKeptScan,
-                $"the PostgreSQL row-limit refusal quotes one page and its overflow row and skips the kept-envelope scan (quoted {recoveryQuote.Quoted}, skipped {recoveryQuote.SkippedKeptScan})");
+            Check(recoveryQuote.Quoted == InMemoryStore.ParkPageLimit + 1 && recoveryQuote.SkippedKeptScan && recoveryQuote.ArrivalsUseKeptIndex,
+                $"the PostgreSQL row-limit refusal skips 8192 earlier pending rows through the actor-and-reason index and opens no bodies " +
+                $"(quoted {recoveryQuote.Quoted}, kept index {recoveryQuote.ArrivalsUseKeptIndex}, skipped scan {recoveryQuote.SkippedKeptScan})");
             Check((await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop))[^1] is { Revision: 5, Entries: """{"Outcome":"refused","Operation":"recover-page","Reason":"page"}""" } &&
                 (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop)) is { Status: InstanceStatus.Faulted, Fault: fault, State: original } &&
                 await ReadParkMark(before.Actor.Id) == opened && (await reads.GetAsync(tenant, actor, stop))?.Park == parked.Park,
                 "the owner records a page refusal at the next revision and keeps the Park mark and fault");
             await using (var db = Open())
-                await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" LIKE 'page-filler-%'""", stop);
+                await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" LIKE 'page-filler-%' OR "Id" LIKE 'page-pending-%'""", stop);
 
             Check(await Send(actor, "recover", new(selection)) is { Outcome: Contract.AdmissionOutcome.Accepted }, "ingress admits the recover");
             Check(await Send(actor, "recover", new(selection)) is { Outcome: Contract.AdmissionOutcome.Duplicate }, "a repeated recover operation is a duplicate");
