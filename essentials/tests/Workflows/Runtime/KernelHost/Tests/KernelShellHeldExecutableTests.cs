@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection
 using Kernel.Foundation.Hosting;
 using Kernel.Native;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -98,9 +99,11 @@ public sealed class KernelShellHeldExecutableTests
                 var context = new DefaultHttpContext { RequestServices = services, RequestAborted = token };
                 context.Request.Path = Route;
                 context.Request.Method = "POST";
+                context.Features.GetRequiredFeature<IHttpRequestFeature>().RawTarget = Route;
                 context.Response.Body = body;
                 await handler.HandleAsync(context);
-                Assert.Equal(202, context.Response.StatusCode);
+                Assert.True(context.Response.StatusCode == 202,
+                    $"The held endpoint returned {context.Response.StatusCode}: {System.Text.Encoding.UTF8.GetString(body.ToArray())}");
                 actor = new(Assert.Single(context.Response.Headers[KernelHttpEdge.WorkflowInstanceIdHeader])!);
                 var reads = await shell.ReadAsync(token);
                 Assert.Equal(Contract.ActorStatus.Running, (await reads.GetAsync(tenant, actor, token))?.Header.Status);

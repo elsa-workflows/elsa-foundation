@@ -246,9 +246,9 @@ public sealed class KernelShellChildExecutableTests
             var selectedStart = KernelWorkflowActor.Start(NativeExecutionModel.Start(NativeExecutableMapper.Map(old)));
             Check(await material.DeleteAsync(old.Identity.ArtifactId, token), "old unreferenced material was removed before protection");
             await material.SaveAsync(replacement, token);
-            var protector = new KernelChildBirthProtection(shellServices.GetRequiredService<IServiceScopeFactory>(), Scope, scope, serving,
+            var protector = new KernelExecutableProtection(shellServices.GetRequiredService<IServiceScopeFactory>(), Scope, scope, serving,
                 shellServices.GetRequiredService<KernelShellStorage>(), TimeProvider.System,
-                shellServices.GetRequiredService<ILogger<KernelChildBirthProtection>>());
+                shellServices.GetRequiredService<ILogger<KernelExecutableProtection>>());
             var decision = await protector.ProtectAsync([new(scope.Tenant, new(new string('A', 64)), selectedStart.Type,
                 selectedStart.TypeData, "fixture-issuance")], token);
             Check(decision == ChildBirthProtectionOutcome.Refused &&
