@@ -23,6 +23,9 @@ internal sealed class RootAdmissionPressure
     private readonly Rate _operatorRate;
     private HashSet<int> _full = [];
     private int _nodes = 1;
+    private Func<CancellationToken, Task>? _coldRead;
+    private long _lastColdRead;
+    private bool _coldReading;
 
     internal sealed record Rate(int PerSecond, int Burst);
 
@@ -52,6 +55,12 @@ internal sealed class RootAdmissionPressure
 
     internal BacklogOptions Backlog { get; }
 
+    internal void RefreshOnDemand(Func<CancellationToken, Task> read)
+    {
+        _coldRead = read;
+        _lastColdRead = _time.GetTimestamp();
+    }
+
     // A complete pressure-list refresh is also an opportunity to release idle tenant buckets.
     internal void Refresh(IReadOnlyDictionary<int, int> estimates, int nodes)
     {
@@ -73,9 +82,32 @@ internal sealed class RootAdmissionPressure
 
     internal Attempt Begin(string tenant, RootAdmissionKind kind)
     {
+        if (_coldRead is { } read) ScheduleColdRead(read);
         var lane = kind == RootAdmissionKind.ShedLoad ? _operators : _ordinary;
         // A busy attempt can still replay a receipt. The store presents the refusal only after checking the receipt.
         return new(this, tenant, kind, lane.Wait(0) ? lane : null);
+    }
+
+    // A standalone receiving edge has no node heartbeat. Refresh at most once per interval and continue using
+    // the existing sample while the read runs. An idle edge starts no background work.
+    private void ScheduleColdRead(Func<CancellationToken, Task> read)
+    {
+        lock (_sync)
+        {
+            var now = _time.GetTimestamp();
+            if (_coldReading || _time.GetElapsedTime(_lastColdRead, now) < Backlog.SampleInterval) return;
+            _coldReading = true;
+            _lastColdRead = now;
+        }
+        _ = Task.Run(RefreshAsync);
+
+        async Task RefreshAsync()
+        {
+            using var stop = new CancellationTokenSource(Backlog.SampleInterval);
+            try { await read(stop.Token); }
+            catch (Exception) { } // A failed observational read leaves the previous pressure intact.
+            finally { lock (_sync) _coldReading = false; }
+        }
     }
 
     internal static RootAdmissionKind Operator(string kind) => kind is

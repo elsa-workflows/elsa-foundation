@@ -30,7 +30,8 @@ internal static class RootAdmissionPressureChecks
             else
                 options.UseSqlite(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true, Pooling = false }.ToString());
 
-            KernelDb Open() => KernelDb.ForRootDueBacklogQualification(options.Options, postgres ? null : definitions);
+            KernelDb Open() => postgres ? KernelDb.ForPostgresRootShipped(options.Options)
+                : KernelDb.ForSqliteRootRuntime(options.Options, definitions);
             var store = new EfStore(Open, postgres);
             await using var db = Open();
             if (postgres)
@@ -73,7 +74,7 @@ internal static class RootAdmissionPressureChecks
             }
             else
             {
-                var requests = SqliteEmbeddedHosting.CreateRequests(path, node, actor.Type, pressure: pressure, qualifyPressure: true);
+                var requests = SqliteEmbeddedHosting.CreateRequests(path, node, actor.Type, pressure: pressure);
                 ingress = await SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(path, actor.Type, Authorize, requests, token);
                 reads = new GeneratedRootReads(store, await SqliteRootAdmission.ReadSelectionCursorAsync(db, token), 8, provider: "sqlite");
                 owner = await SqliteEmbeddedHosting.StartFoundationAsync(path, node, actor, Fatal, loops, inBatch, token, requests: requests);
@@ -157,6 +158,16 @@ internal static class RootAdmissionPressureChecks
             Check(await ingress.SendAsync(scope, target, "retry-direct", "work", cancellationToken: token) is
                 { Outcome: Contract.AdmissionOutcome.Accepted }, "the refused exact send left its operation ID reusable after relief");
             await owner.StopAsync(token);
+            await db.Partitions.Where(partition => partition.Id == 0)
+                .ExecuteUpdateAsync(update => update.SetProperty(partition => partition.Backlog, 10_001), token);
+            Contract.IIngress standalone = postgres
+                ? await PostgresPreviewHosting.OpenFoundationAsync(Open, actor.Type, cancellationToken: token)
+                : await SqliteEmbeddedHosting.OpenFoundationAsync(path, actor.Type, cancellationToken: token);
+            Check(await standalone.SendAsync(scope, Start("serve"), "cold-edge-start", Contract.Kinds.Start, cancellationToken: token) is
+                    { Reason: Contract.RefusalReason.InboxFull, RetryAfter: not null } &&
+                await standalone.SendAsync(scope, Start("serve"), "live", Contract.Kinds.Start, cancellationToken: token) is
+                    { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: { } old } && old == live,
+                "one-way ingress primes the published pressure list and still replays existing starts");
             return 0;
 
             Contract.Target.Start Start(string typeData) => new(new(actor.Type, TypeData: typeData));

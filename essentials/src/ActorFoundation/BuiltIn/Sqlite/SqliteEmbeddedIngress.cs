@@ -53,9 +53,26 @@ public static partial class SqliteEmbeddedHosting
 
         using var file = AcquireFile(databasePath, requests: requests);
         requests?.RequireBinding(file.Path, actorType);
-        var admission = CreateAdmission(file, window, requests);
+        var pressure = requests?.Pressure;
+        using (var db = KernelDb.ForSqliteRootShipped(file.Options))
+            if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
+        var admission = CreateAdmission(file, window, pressure);
         await admission.VerifyAsync(cancellationToken);
-        return new Ingress(file.Path, actorType, window, requests, authorizeOperator);
+        var path = file.Path;
+        if (pressure is not null && requests?.Pressure is null)
+        {
+            await ReadPressureAsync(cancellationToken);
+            pressure.RefreshOnDemand(ReadPressureAsync);
+        }
+        return new Ingress(path, actorType, window, requests, pressure, authorizeOperator);
+
+        async Task ReadPressureAsync(CancellationToken token)
+        {
+            using var lease = AcquireFile(path);
+            var store = new EfStore(() => KernelDb.ForSqliteRootRuntime(lease.Options, lease.AdmissionDefinitions), postgres: false)
+                { AdmissionPressure = pressure };
+            await store.PrimeAdmissionPressureAsync(token);
+        }
     }
 
     private static void RequireFoundationActorType(string actorType)
@@ -65,14 +82,10 @@ public static partial class SqliteEmbeddedHosting
             throw new ArgumentException("Invalid SQLite root actor type.", nameof(actorType));
     }
 
-    private static KernelDb OpenRoot(FileLease file, bool qualifyPressure, bool runtime) => qualifyPressure
-        ? KernelDb.ForRootDueBacklogQualification(file.Options, file.AdmissionDefinitions)
-        : runtime ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions) : KernelDb.ForSqliteRootShipped(file.Options);
+    private static SqliteRootAdmission CreateAdmission(FileLease file, TimeSpan window, RootAdmissionPressure? pressure) =>
+        new(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions, pressure);
 
-    private static SqliteRootAdmission CreateAdmission(FileLease file, TimeSpan window, SqliteDirectRequests? requests) =>
-        new(() => OpenRoot(file, requests?.QualifiesPressure == true, runtime: false), window, file.AdmissionDefinitions, requests?.Pressure);
-
-    private sealed class Ingress(string path, string actorType, TimeSpan window, SqliteDirectRequests? requests,
+    private sealed class Ingress(string path, string actorType, TimeSpan window, SqliteDirectRequests? requests, RootAdmissionPressure? pressure,
         Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator) : Contract.IIngress
     {
         public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
@@ -95,13 +108,13 @@ public static partial class SqliteEmbeddedHosting
                 var (actor, command, refusal) = ReadCommand(scope, target, kind, payload);
                 if (command is null) return new(Contract.AdmissionOutcome.Refused, Reason: refusal);
                 using var write = AcquireFile(path);
-                var operators = CreateAdmission(write, window, requests);
+                var operators = CreateAdmission(write, window, pressure);
                 return await operators.OperateAsync(scope.Tenant, actor, id, kind, command.Selection!, options?.DueAt, options?.KeepFor,
                     cancellationToken, thenDelete: command.ThenDelete);
             }
 
             using var file = AcquireFile(path);
-            var admission = CreateAdmission(file, window, requests);
+            var admission = CreateAdmission(file, window, pressure);
             if (target is Contract.Target.Start start)
             {
                 var spec = start.Spec;

@@ -155,6 +155,7 @@ public static class PostgresPreviewHosting
             throw new ArgumentException("Held requests carry their own deduplication window.", nameof(deduplicationWindow));
         var window = requests?.DeduplicationWindow ?? deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
+        var pressure = requests?.Pressure;
         await using (var db = create())
         {
             if (!db.Database.IsNpgsql() || !(db.SupportsCorePreview || db.UsesRootReplyProtocol))
@@ -163,8 +164,15 @@ public static class PostgresPreviewHosting
                 throw new NotSupportedException("Held requests require a PostgreSQL store with held replies.");
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
+            if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
         }
-        var admission = new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: requests?.Pressure);
+        if (pressure is not null && requests?.Pressure is null)
+        {
+            var receivingStore = new EfStore(create, postgres: true) { AdmissionPressure = pressure };
+            await receivingStore.PrimeAdmissionPressureAsync(cancellationToken);
+            pressure.RefreshOnDemand(receivingStore.PrimeAdmissionPressureAsync);
+        }
+        var admission = new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: pressure);
         var store = new EfStore(create, postgres: true);
         return new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(cancellationToken), pageSize),
             actorType, directRequests: requests, authorizeExactOperator: authorizeOperator);

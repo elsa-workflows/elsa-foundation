@@ -88,7 +88,7 @@ public static partial class SqliteEmbeddedHosting
         {
             if (rootType is not null) requests?.RequireBinding(file.Path, rootType, node);
             var shipped = rootType is not null;
-            KernelDb Open() => shipped ? OpenRoot(file, requests?.QualifiesPressure == true, runtime: true) : new(file.Options);
+            KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions) : new(file.Options);
 
             int partitions;
             bool selfSends;

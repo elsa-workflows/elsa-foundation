@@ -18,7 +18,8 @@ public sealed partial class EfStore
     private async Task RefreshAdmissionPressureAsync(KernelDb db, int nodes, CancellationToken cancellationToken)
     {
         if (AdmissionPressure is not { } pressure) return;
-        RequireDueBacklog(db);
+        if (!db.UsesRootDueBacklog)
+            throw new StoreFormatException("Admission pressure requires the due-backlog store profile.");
         var depths = await db.Partitions.Where(partition => partition.Backlog >= pressure.Backlog.LowWater)
             .ToDictionaryAsync(partition => partition.Id, partition => partition.Backlog, cancellationToken);
         pressure.Refresh(depths, nodes);

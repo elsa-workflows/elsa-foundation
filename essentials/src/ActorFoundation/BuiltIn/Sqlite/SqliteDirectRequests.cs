@@ -10,7 +10,7 @@ public static partial class SqliteEmbeddedHosting
     // Share this edge with ingress and the running owner, including admissions made before it starts.
     // A successor can recover durable work through a different edge. An earlier wait may then time out.
     internal static SqliteDirectRequests CreateRequests(string databasePath, string node, string actorType,
-        TimeSpan? deduplicationWindow = null, RootAdmissionPressure? pressure = null, bool qualifyPressure = false)
+        TimeSpan? deduplicationWindow = null, RootAdmissionPressure? pressure = null)
     {
         RequireFoundationActorType(actorType);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -19,9 +19,9 @@ public static partial class SqliteEmbeddedHosting
         var window = deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         using var file = AcquireFile(databasePath);
-        using var db = OpenRoot(file, qualifyPressure, runtime: false);
+        using var db = KernelDb.ForSqliteRootShipped(file.Options);
         if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
-        return new(file.Path, node, actorType, window, pressure, qualifyPressure);
+        return new(file.Path, node, actorType, window, pressure);
     }
 
     internal sealed class SqliteDirectRequests : IReplyTransport
@@ -33,18 +33,16 @@ public static partial class SqliteEmbeddedHosting
         private readonly HeldRootRequests edge;
 
         internal SqliteDirectRequests(string path, string node, string actorType, TimeSpan window,
-            RootAdmissionPressure? pressure = null, bool qualifyPressure = false)
+            RootAdmissionPressure? pressure = null)
         {
             (this.path, this.node, this.actorType, DeduplicationWindow) = (path, node, actorType, window);
             Pressure = pressure;
-            QualifiesPressure = qualifyPressure;
             admission = new(this, path, window);
             edge = new(admission, node, actorType);
         }
 
         internal TimeSpan DeduplicationWindow { get; }
         internal RootAdmissionPressure? Pressure { get; }
-        internal bool QualifiesPressure { get; }
 
         internal void RequireBinding(string databasePath, string configuredType, string? owner = null)
         {
@@ -131,7 +129,7 @@ public static partial class SqliteEmbeddedHosting
             public async ValueTask<Contract.ActorStatus?> ReadStatusAsync(string tenant, string reference, CancellationToken token)
             {
                 using var file = AcquireFile(path);
-                var store = new EfStore(() => OpenRoot(file, owner.QualifiesPressure, runtime: true), postgres: false);
+                var store = new EfStore(() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions), postgres: false);
                 return (Contract.ActorStatus?)(await store.ReadFirstRootAsync(tenant, reference, token))?.Status;
             }
 
@@ -142,7 +140,7 @@ public static partial class SqliteEmbeddedHosting
             }
 
             private SqliteRootAdmission ForFile(FileLease file) =>
-                new(() => OpenRoot(file, owner.QualifiesPressure, runtime: false), window, file.AdmissionDefinitions, owner.Pressure);
+                CreateAdmission(file, window, owner.Pressure);
 
             private async Task<T> WriteAsync<T>(string tenant, RootAdmissionKind kind,
                 Func<SqliteRootAdmission, RootAdmissionPressure.Attempt?, CancellationToken, Task<T>> admit, CancellationToken token)
