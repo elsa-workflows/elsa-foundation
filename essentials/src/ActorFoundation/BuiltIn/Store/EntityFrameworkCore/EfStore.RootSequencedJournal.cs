@@ -26,7 +26,6 @@ public sealed partial class EfStore
         "RecordedAt" {integer} NOT NULL,
         PRIMARY KEY ("Partition", "Actor", "LastSequence"),
         UNIQUE ("Partition", "Position"),
-        UNIQUE ("Partition", "Actor", "Revision"),
         FOREIGN KEY ("Partition", "Position") REFERENCES "Journal" ("Partition", "Position") ON DELETE CASCADE
         """;
 
@@ -37,12 +36,13 @@ public sealed partial class EfStore
         INSERT INTO "{SequencedJournalName}" (
             "Partition", "Position", "Actor", "Revision", "FirstSequence", "LastSequence", "EntryBytes", "RecordedAt")
         SELECT NEW."Partition", NEW."Position", NEW."Instance", NEW."Revision",
-            prior."LastSequence" + 1,
-            prior."LastSequence" + ({count}),
+            coalesce(prior."LastSequence", 0) + 1,
+            coalesce(prior."LastSequence", 0) + ({count}),
             octet_length(NEW."Entries"), {clock}
-        FROM (SELECT coalesce((SELECT "LastSequence" FROM "{SequencedJournalName}"
+        FROM (SELECT 1) sentinel LEFT JOIN (SELECT "LastSequence", "Revision" FROM "{SequencedJournalName}"
             WHERE "Partition" = NEW."Partition" AND "Actor" = NEW."Instance"
-            ORDER BY "LastSequence" DESC LIMIT 1), 0) AS "LastSequence") prior;
+            ORDER BY "LastSequence" DESC LIMIT 1) prior ON true
+        WHERE prior."Revision" IS NULL OR prior."Revision" < NEW."Revision";
         """;
 
     private const string QualifiedSequencedJournal = """
@@ -59,6 +59,9 @@ public sealed partial class EfStore
                     CASE WHEN json_typeof(NEW."Entries"::json) = 'array'
                         THEN greatest(json_array_length(NEW."Entries"::json), 1) ELSE 1 END
                     """, PostgresJournalClock)}
+                IF NOT FOUND THEN
+                    RAISE EXCEPTION 'Sequenced journal requires increasing revisions' USING ERRCODE = '23514';
+                END IF;
             END IF;
             RETURN NULL;
         END
@@ -78,22 +81,27 @@ public sealed partial class EfStore
                     CASE WHEN json_type(NEW."Entries") = 'array'
                         THEN max(json_array_length(NEW."Entries"), 1) ELSE 1 END
                     """, SqliteCommitDialect.MillisecondClock)}
+                SELECT RAISE(ABORT, 'Sequenced journal requires increasing revisions') WHERE changes() <> 1;
             END
             """);
     }
 
-    private static async Task RequirePostgresSequencedJournalAsync(KernelDb db, CancellationToken token)
+    private static readonly string PostgresSequencedJournalReady = $"""
+        EXISTS (SELECT 1 FROM pg_catalog.pg_trigger stamp
+            JOIN pg_catalog.pg_proc projector ON projector.oid = stamp.tgfoid
+            JOIN pg_catalog.pg_class source ON source.oid = stamp.tgrelid
+            JOIN pg_catalog.pg_class target ON target.relnamespace = source.relnamespace
+            WHERE stamp.tgrelid = to_regclass('"Journal"') AND stamp.tgname = '{SequencedJournalTrigger}'
+                AND stamp.tgenabled IN ('O', 'A') AND stamp.tgtype = 5 AND NOT stamp.tgisinternal
+                AND projector.proname = stamp.tgname AND projector.pronamespace = source.relnamespace
+                AND target.relname = '{SequencedJournalName}' AND target.relkind = 'r'
+                AND target.oid = to_regclass('"FoundationSequencedJournal"'))
+        """;
+
+    internal static async Task RequirePostgresSequencedJournalAsync(KernelDb db, CancellationToken token)
     {
-        if (!await db.Database.SqlQuery<bool>($"""
-            SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger stamp
-                JOIN pg_catalog.pg_proc projector ON projector.oid = stamp.tgfoid
-                JOIN pg_catalog.pg_class source ON source.oid = stamp.tgrelid
-                JOIN pg_catalog.pg_class target ON target.relnamespace = source.relnamespace
-                WHERE stamp.tgrelid = to_regclass('"Journal"') AND stamp.tgname = {SequencedJournalTrigger}
-                    AND stamp.tgenabled IN ('O', 'A') AND projector.proname = stamp.tgname
-                    AND projector.pronamespace = source.relnamespace AND target.relname = {SequencedJournalName}
-                    AND target.oid = to_regclass('"FoundationSequencedJournal"')) AS "Value"
-            """).SingleAsync(token))
+        var check = "SELECT " + PostgresSequencedJournalReady + """ AS "Value" """;
+        if (!await db.Database.SqlQueryRaw<bool>(check).SingleAsync(token))
             throw new StoreFormatException("The installed sequenced journal projection is incomplete.");
     }
 
@@ -103,7 +111,7 @@ public sealed partial class EfStore
         return db.UsesRootSequencedJournal;
     }
 
-    private sealed record SequencedJournalRow(long AsOf, long? RootRevision, int? History, long? FirstRevision,
+    private sealed record SequencedJournalRow(long AsOf, bool SourceReady, long? RootRevision, int? History, long? FirstRevision,
         long? RetainedFromSequence, long? LatestSequence, long? LastRecordedAt, long? FirstSequence, long? LastSequence,
         long? Revision, long? RecordedAt, long? EntryBytes, string? Entries,
         int? StoreSchema, int? MessageProtocol, int? JournalCodec, string? DefinitionStamp);
@@ -165,9 +173,10 @@ public sealed partial class EfStore
                         ORDER BY s."LastSequence" LIMIT 1) AS "LastPageRow"
                 FROM head h WHERE coalesce({upper}, h."LatestSequence") > {after}
             ), slice AS MATERIALIZED (
-                SELECT s.* FROM end_bound e JOIN "FoundationSequencedJournal" s
-                    ON s."Partition" = e."Partition" AND s."Actor" = e."Actor"
-                WHERE s."LastSequence" > {after} AND s."LastSequence" <= e."LastPageRow"
+                SELECT s.* FROM "FoundationSequencedJournal" s
+                WHERE s."Partition" = (SELECT "Partition" FROM end_bound)
+                    AND s."Actor" = (SELECT "Actor" FROM end_bound)
+                    AND s."LastSequence" > {after} AND s."LastSequence" <= (SELECT "LastPageRow" FROM end_bound)
                 ORDER BY s."LastSequence" LIMIT {limit}
             ), quoted AS (
                 SELECT slice.*,
@@ -181,7 +190,8 @@ public sealed partial class EfStore
                 FROM quoted q
                 WHERE q."PageBytes" <= {SequencedJournalPageBytes}
             )
-            SELECT /* journal-clock */ AS "AsOf", h."Revision" AS "RootRevision", h."History", h."FirstRevision",
+            SELECT /* journal-clock */ AS "AsOf", /* journal-ready */ AS "SourceReady",
+                h."Revision" AS "RootRevision", h."History", h."FirstRevision",
                 h."RetainedFromSequence", h."LatestSequence",
                 (SELECT s."RecordedAt" FROM "FoundationSequencedJournal" s
                     WHERE s."Partition" = h."Partition" AND s."Actor" = h."Actor"
@@ -193,8 +203,10 @@ public sealed partial class EfStore
             FROM (SELECT 1) sentinel LEFT JOIN head h ON true LEFT JOIN marker ON true LEFT JOIN page p ON true
             ORDER BY p."LastSequence"
             """;
-        var sql = query.Format.Replace("/* journal-clock */", sqlite ? SqliteCommitDialect.MillisecondClock :
-            "floor(extract(epoch from statement_timestamp()) * 1000)::bigint", StringComparison.Ordinal);
+        var sql = query.Format
+            .Replace("/* journal-clock */", sqlite ? SqliteCommitDialect.MillisecondClock :
+                "floor(extract(epoch from statement_timestamp()) * 1000)::bigint", StringComparison.Ordinal)
+            .Replace("/* journal-ready */", sqlite ? "true" : PostgresSequencedJournalReady, StringComparison.Ordinal);
         if (sqlite)
         {
             // The admission policy, install stamp, actor head and page are pinned to one read snapshot.
@@ -217,6 +229,7 @@ public sealed partial class EfStore
         }
         var format = rows[0];
         RequireSnapshotFormat(db, format.StoreSchema, format.MessageProtocol, format.JournalCodec, format.DefinitionStamp);
+        if (!format.SourceReady) throw new StoreFormatException("The installed sequenced journal projection is incomplete.");
         return BuildSequencedJournalPage(rows, after, upper, limit, format.AsOf);
     }
 

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Data.Common;
 using System.Globalization;
 using Elsa.ActorFoundation.TestSupport;
 using Elsa.Workflows.Runtime.KernelHost;
@@ -9,6 +10,7 @@ using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Contract = Kernel.Foundation.Contracts;
 using PublicActor = Kernel.WorkflowActor.WorkflowActor;
 using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
@@ -42,9 +44,11 @@ internal static class ShippedDelayRecoveryChecks
             else options.UseSqlite(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true }.ConnectionString);
             var definitions = new SqliteAdmissionDefinitions();
             StoreFormat? qualification = sequencedJournal ? StoreFormat.RootSequencedJournalQualification : null;
-            KernelDb Open() => postgres ? sequencedJournal ? KernelDb.ForPostgresRootSequencedJournalQualification(options.Options)
-                    : PostgresPreviewHosting.CreateShippedContext(options.Options)
-                : KernelDb.ForSqliteRootRuntime(options.Options, definitions, qualification);
+            KernelDb Open() => OpenWith(options.Options);
+            KernelDb OpenWith(DbContextOptions<KernelDb> configuration) => postgres
+                ? sequencedJournal ? KernelDb.ForPostgresRootSequencedJournalQualification(configuration)
+                    : PostgresPreviewHosting.CreateShippedContext(configuration)
+                : KernelDb.ForSqliteRootRuntime(configuration, definitions, qualification);
 
             var cold = new EfStore(Open, postgres);
             if (postgres)
@@ -212,7 +216,11 @@ internal static class ShippedDelayRecoveryChecks
                 }
             }
             await CheckTerminationAsync();
-            if (sequencedJournal) await CheckOversizedAsync();
+            if (sequencedJournal)
+            {
+                await CheckIndexedWindowAsync();
+                await CheckOversizedAsync();
+            }
             var retaining = await AdmitAsync(TerminalDefinition, "retain-immediate-at-end");
             var retainingTimer = await WaitingAsync(retaining, FarFutureDelay);
             await successor.StopAsync(token);
@@ -245,6 +253,7 @@ internal static class ShippedDelayRecoveryChecks
                 }
                 catch (StoreFormatException) { refused = true; }
                 Check(refused, "the ordinary shipped install refuses the private sequenced journal store");
+                if (postgres) await CheckProjectorRefusalAsync(retaining);
             }
             Check(failures.IsEmpty, "the retained provider owners stop cleanly");
             return 0;
@@ -287,6 +296,46 @@ internal static class ShippedDelayRecoveryChecks
                 Check(after.Items is [{ Entry: null, CommitOrdinal: 0 }] && after.UpperSequence == first.UpperSequence + 1 &&
                     after.ScannedThroughSequence == after.UpperSequence,
                     "the bounded source advances through the oversized commit without loading its body");
+            }
+
+            async Task CheckIndexedWindowAsync()
+            {
+                var plan = new SequencedJournalPlan(postgres);
+                var observed = new DbContextOptionsBuilder<KernelDb>(options.Options).AddInterceptors(plan);
+                var probe = new EfStore(() => OpenWith(observed.Options), postgres);
+                await probe.ReadRootSequencedJournalAsync(scope.Tenant, nativeRoot.Id, 1, sequencedPrefixes[nativeRoot].UpperSequence, 1, token);
+                foreach (var line in plan.Lines) Console.WriteLine(line);
+                Check(plan.Lines.Any(line => postgres
+                    ? line.Contains("Index Cond:", StringComparison.Ordinal) &&
+                        line.Contains("\"LastSequence\" >", StringComparison.Ordinal) && line.Contains("\"LastSequence\" <=", StringComparison.Ordinal)
+                    : line.Contains("Partition=? AND Actor=? AND LastSequence>? AND LastSequence<?", StringComparison.Ordinal)),
+                    "the installed plan bounds both ends of the actor's sequenced segment index");
+            }
+
+            async Task CheckProjectorRefusalAsync(Contract.ActorRef actor)
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    ALTER TABLE "Journal" DISABLE TRIGGER kernel_project_root_sequenced_journal
+                    """, token);
+                try
+                {
+                    var readRefused = false;
+                    try { await runs.ReadSequencedJournalAsync(actor, 0, null, 1, token); }
+                    catch (StoreFormatException) { readRefused = true; }
+                    var ownerRefused = false;
+                    try { await using var blocked = await StartOwnerAsync("disabled-projector"); }
+                    catch (StoreFormatException) { ownerRefused = true; }
+                    Check(readRefused && ownerRefused,
+                        "a disabled journal projector fails both an exact history read and a replacement owner start");
+                }
+                finally
+                {
+                    await db.Database.ExecuteSqlRawAsync("""
+                        ALTER TABLE "Journal" ENABLE TRIGGER kernel_project_root_sequenced_journal
+                        """, token);
+                }
+                Check(await runs.ReadSequencedJournalAsync(actor, 0, null, 1, token) is { UpperSequence: > 0 },
+                    "reenabling the journal projector restores the same retained page");
             }
 
             async Task<Contract.ActorRef> AdmitAsync(string definition, string? operation = null)
@@ -494,5 +543,30 @@ internal static class ShippedDelayRecoveryChecks
     {
         if (!pass) throw new InvalidOperationException(description);
         Console.WriteLine($"ok {description}");
+    }
+
+    private sealed class SequencedJournalPlan(bool postgres) : DbCommandInterceptor
+    {
+        internal List<string> Lines { get; } = [];
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (!command.CommandText.Contains("/* root-sequenced-journal */", StringComparison.Ordinal)) return result;
+            await using var explain = command.Connection!.CreateCommand();
+            explain.Transaction = command.Transaction;
+            explain.CommandText = (postgres ? "EXPLAIN " : "EXPLAIN QUERY PLAN ") + command.CommandText;
+            foreach (DbParameter parameter in command.Parameters)
+            {
+                var copy = explain.CreateParameter();
+                copy.ParameterName = parameter.ParameterName;
+                copy.DbType = parameter.DbType;
+                copy.Value = parameter.Value;
+                explain.Parameters.Add(copy);
+            }
+            await using var rows = await explain.ExecuteReaderAsync(cancellationToken);
+            while (await rows.ReadAsync(cancellationToken)) Lines.Add(rows.GetString(postgres ? 0 : 3));
+            return result;
+        }
     }
 }
