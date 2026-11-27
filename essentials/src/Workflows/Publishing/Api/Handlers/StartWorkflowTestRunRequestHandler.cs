@@ -1172,12 +1172,13 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var status = (scope.State, observation) switch
         {
             (_, WorkflowDirectTestRunObservation.CompletedWithoutRecord) => WorkflowTestRunStatus.CompletedWithoutRecord,
+            (_, WorkflowDirectTestRunObservation.Refused) => WorkflowTestRunStatus.DispatchRejected,
             (not WorkflowTestScopeState.Open, WorkflowDirectTestRunObservation.Started or WorkflowDirectTestRunObservation.Pending) =>
                 WorkflowTestRunStatus.StopRequested,
             (not WorkflowTestScopeState.Open, _) or (_, WorkflowDirectTestRunObservation.Retired) => WorkflowTestRunStatus.Stopped,
             (_, WorkflowDirectTestRunObservation.Prepared) => WorkflowTestRunStatus.Prepared,
-            (_, WorkflowDirectTestRunObservation.Pending) => WorkflowTestRunStatus.DispatchDeferred,
-            (_, WorkflowDirectTestRunObservation.Unavailable) => WorkflowTestRunStatus.DispatchDeferred,
+            (_, WorkflowDirectTestRunObservation.Pending or WorkflowDirectTestRunObservation.Unavailable or WorkflowDirectTestRunObservation.RateLimited) =>
+                WorkflowTestRunStatus.DispatchDeferred,
             (_, WorkflowDirectTestRunObservation.Disarmed) => WorkflowTestRunStatus.DispatchRejected,
             _ => WorkflowTestRunStatus.DispatchAccepted
         };
@@ -1192,7 +1193,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
             started ? scope.IsolatedActor!.ActorReference : null, status, RequestedBy, scope.CreatedAt, scope.Scope.ExpiresAt,
             (status, observation) switch
             {
-                (_, WorkflowDirectTestRunObservation.Unavailable) => "NodeBusy",
+                (WorkflowTestRunStatus.DispatchDeferred, WorkflowDirectTestRunObservation.Unavailable) => "NodeBusy",
+                (WorkflowTestRunStatus.DispatchDeferred, WorkflowDirectTestRunObservation.RateLimited) => nameof(WorkflowDirectTestRunObservation.RateLimited),
                 (WorkflowTestRunStatus.DispatchDeferred, _) => "The isolated Test Run has not yet appeared.",
                 (WorkflowTestRunStatus.DispatchRejected, _) => "The isolated Test Run did not start.",
                 (WorkflowTestRunStatus.StopRequested, _) => "The Test Run scope is closed. Stop can be retried until the actor settles.",

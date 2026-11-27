@@ -160,6 +160,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
                 { Disposition: InlineStartDisposition.Volatile, Status: ActorStatus.Finished } => WorkflowTestRunInlineState.CompletedWithoutRecord,
                 { Disposition: InlineStartDisposition.Volatile } => throw new InvalidOperationException("An inline Test Run without a record must have completed."),
                 { Disposition: InlineStartDisposition.Refused } => WorkflowTestRunInlineState.Refused,
+                { Disposition: InlineStartDisposition.Unavailable, RefusalReason: RefusalReason.RateLimited } => WorkflowTestRunInlineState.RateLimited,
                 { Disposition: InlineStartDisposition.Unavailable } => WorkflowTestRunInlineState.Unavailable,
                 _ => (WorkflowTestRunInlineState?)null
             };
@@ -191,8 +192,9 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             {
                 WorkflowTestRunInlineState.Pending => WorkflowDirectTestRunObservation.Pending,
                 WorkflowTestRunInlineState.CompletedWithoutRecord => WorkflowDirectTestRunObservation.CompletedWithoutRecord,
-                WorkflowTestRunInlineState.Refused => WorkflowDirectTestRunObservation.Disarmed,
+                WorkflowTestRunInlineState.Refused => WorkflowDirectTestRunObservation.Refused,
                 WorkflowTestRunInlineState.Unavailable => WorkflowDirectTestRunObservation.Unavailable,
+                WorkflowTestRunInlineState.RateLimited => WorkflowDirectTestRunObservation.RateLimited,
                 _ => WorkflowDirectTestRunObservation.Prepared
             };
 

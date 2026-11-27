@@ -428,13 +428,13 @@ internal static class ProfileCapabilityChecks
         Check(ephemeralTestPostgres.RequiredFormat == StoreFormat.RootEphemeralTestRunQualification &&
             ephemeralTestSqlite.RequiredFormat == ephemeralTestPostgres.RequiredFormat &&
             ephemeralTestPostgres.RequiredFormat != testPostgres.RequiredFormat &&
-            ephemeralTestPostgres.Capabilities == (sharedPostgres.Capabilities | RootCapabilities.DirectTestRuns) &&
+            ephemeralTestPostgres.Capabilities == (privateActivationPostgres.Capabilities | RootCapabilities.DirectTestRuns) &&
             ephemeralTestSqlite.Capabilities == ephemeralTestPostgres.Capabilities &&
             RootProfiles.MissingPrerequisites(ephemeralTestPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(ephemeralTestPostgres.RequiredFormat) &&
             StoreDefinitionsRevision.Seed(ephemeralTestPostgres) is { StoreSchema: 1, MessageProtocol: 26, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(ephemeralTestSqlite) is { StoreSchema: 2, MessageProtocol: 29, JournalCodec: 0 },
-            "Ephemeral Test Runs qualify privately with shipped Event and inline definitions on both providers");
+            "Ephemeral Test Runs qualify privately on the frozen shared activation definitions on both providers");
         mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
             playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities | lineagePostgres.Capabilities |
             inlinePostgres.Capabilities | authoredPostgres.Capabilities | startEventsPostgres.Capabilities |

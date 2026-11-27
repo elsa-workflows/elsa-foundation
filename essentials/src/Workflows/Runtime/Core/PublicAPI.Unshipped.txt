@@ -1276,6 +1276,8 @@ Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Ended = 4
 Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Retired = 5 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
 Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.CompletedWithoutRecord = 6 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
 Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Unavailable = 7 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.Refused = 8 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
+Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation.RateLimited = 9 -> Elsa.Workflows.Runtime.Core.Contracts.WorkflowDirectTestRunObservation
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore.AdmitIsolatedActorAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, string! actorReference, System.Func<System.DateTimeOffset>! readClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestScopeAdmissionStore.BeginInlineStartAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, System.Func<System.DateTimeOffset>! readClock, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
@@ -7235,6 +7237,7 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.Pending = 0 -> Els
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.CompletedWithoutRecord = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.Refused = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.Unavailable = 3 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState.RateLimited = 4 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestRunInlineState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState.Closed = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState.Closing = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState
 Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState.Open = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScopeState

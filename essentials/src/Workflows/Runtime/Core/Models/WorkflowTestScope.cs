@@ -78,7 +78,8 @@ public enum WorkflowTestRunInlineState
     Pending,
     CompletedWithoutRecord,
     Refused,
-    Unavailable
+    Unavailable,
+    RateLimited
 }
 
 /// <summary>Durable monotonic lifecycle evidence for one immutable test scope.</summary>

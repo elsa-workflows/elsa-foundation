@@ -189,7 +189,7 @@ internal static class RootProfiles
     internal const RootCapabilities EventStartScanQualification = EventStartReceiptsQualification | RootCapabilities.EventStartScan;
     internal const RootCapabilities SharedActivationQualification = EventStartScanQualification | InlinePromotionQualification;
     internal const RootCapabilities DirectTestRunQualification = PreparedStartsQualification | RootCapabilities.DirectTestRuns;
-    internal const RootCapabilities EphemeralTestRunQualification = Shipped | RootCapabilities.DirectTestRuns;
+    internal const RootCapabilities EphemeralTestRunQualification = SharedActivationQualification | RootCapabilities.DirectTestRuns;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
     internal const RootCapabilities PlaybackDescendantsQualification = Shipped34;

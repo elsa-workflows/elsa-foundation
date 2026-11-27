@@ -81,5 +81,7 @@ public enum WorkflowDirectTestRunObservation
     Ended,
     Retired,
     CompletedWithoutRecord,
-    Unavailable
+    Unavailable,
+    Refused,
+    RateLimited
 }
