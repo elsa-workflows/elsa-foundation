@@ -1,8 +1,10 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
@@ -26,6 +28,7 @@ internal static class RuntimeEfContextRegistration
                 RuntimeOperationalStateEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
                 RuntimeDurableTimerEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
                 RuntimeSchedulerWorkQueueEntityFrameworkCoreOptions options => options.RecoveryContinuationSigningKey,
+                ConfigureArtifactRecoveryContinuationSigningKey key => key.SigningKey,
                 _ => null
             })
             .Where(key => !string.IsNullOrWhiteSpace(key))
@@ -203,4 +206,11 @@ internal static class RuntimeEfContextRegistration
         services.TryAddSingleton<IRuntimeSchemaFinalization, EfRuntimeSchemaFinalization>();
         return services.Skip(start).ToArray();
     }
+}
+
+internal sealed class ConfigureArtifactRecoveryContinuationSigningKey(string signingKey) : IConfigureOptions<RuntimeRecoveryContinuationOptions>
+{
+    internal string SigningKey { get; } = signingKey;
+
+    public void Configure(RuntimeRecoveryContinuationOptions options) => options.SigningKey = SigningKey;
 }
