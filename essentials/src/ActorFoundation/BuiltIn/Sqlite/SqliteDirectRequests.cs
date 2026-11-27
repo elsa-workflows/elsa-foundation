@@ -23,7 +23,7 @@ public static partial class SqliteEmbeddedHosting
         using var file = AcquireFile(databasePath);
         using var db = KernelDb.ForSqliteRootShipped(file.Options, qualificationFormat);
         if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
-        return new(file.Path, node, actorType, window, pressure, qualificationFormat, protectRootStart);
+        return new(file.Path, node, actorType, window, db.UsesRootPublicEventStarts, pressure, qualificationFormat, protectRootStart);
     }
 
     internal sealed class SqliteDirectRequests : IReplyTransport
@@ -35,7 +35,7 @@ public static partial class SqliteEmbeddedHosting
         private readonly HeldRootRequests edge;
         private readonly ProtectRootStartAsync? protectRootStart;
 
-        internal SqliteDirectRequests(string path, string node, string actorType, TimeSpan window,
+        internal SqliteDirectRequests(string path, string node, string actorType, TimeSpan window, bool supportsPublicEvents,
             RootAdmissionPressure? pressure = null, StoreFormat? qualificationFormat = null,
             ProtectRootStartAsync? protectRootStart = null)
         {
@@ -43,7 +43,7 @@ public static partial class SqliteEmbeddedHosting
             Pressure = pressure;
             QualificationFormat = qualificationFormat;
             this.protectRootStart = protectRootStart;
-            admission = new(this, path, window, protectRootStart);
+            admission = new(this, path, window, protectRootStart, supportsPublicEvents);
             edge = new(admission, node, actorType);
         }
 
@@ -155,26 +155,24 @@ public static partial class SqliteEmbeddedHosting
             catch (Exception) { } // The caller's wait has already settled.
         }
 
-        private sealed class Admission(SqliteDirectRequests owner, string path, TimeSpan window, ProtectRootStartAsync? protectRootStart) : IHeldRootAdmission
+        private sealed class Admission(SqliteDirectRequests owner, string path, TimeSpan window, ProtectRootStartAsync? protectRootStart,
+            bool supportsPublicEvents) : IHeldRootAdmission
         {
-            public bool SupportsEvents => owner.QualificationFormat is { } format
+            public bool SupportsEvents => SupportsPublicEvents || (owner.QualificationFormat is { } format
                 ? format == StoreFormat.RootLiveEventQualification || format == StoreFormat.RootPlaybackDescendantsQualification ||
                   format == StoreFormat.RootManagedSchedulesQualification || format == StoreFormat.RootPreparedStartsQualification ||
                   format == StoreFormat.RootInlinePromotionQualification ||
                   format == StoreFormat.RootAuthoredEventsQualification || format == StoreFormat.RootEventStartsQualification ||
                   format == StoreFormat.RootEventStartReceiptsQualification || format == StoreFormat.RootEventStartScanQualification ||
                   format == StoreFormat.RootDirectTestRunQualification || format == StoreFormat.RootSharedActivationQualification ||
-                  format == StoreFormat.RootPublicEventStartsQualification || format == StoreFormat.RootPublicEventHostQualification ||
                   format == StoreFormat.RootKeyedStartsQualification || format == StoreFormat.RootEphemeralTestRunQualification
-                : TakesHttpWaits;
+                : TakesHttpWaits);
 
             public Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>
                 WriteAsync(request.Tenant, RootAdmissionKind.Input, (admission, attempt, ct) =>
                     admission.PublishRequestAsync(request, key, payload, ct, attempt), token);
 
-            public bool SupportsPublicEvents => owner.QualificationFormat is { } format
-                ? format == StoreFormat.RootPublicEventStartsQualification
-                : RootProfiles.Shipped.HasFlag(RootCapabilities.PublicEventStarts);
+            public bool SupportsPublicEvents { get; } = supportsPublicEvents;
 
             public bool SupportsKeys => owner.QualificationFormat == StoreFormat.RootKeyedStartsQualification;
 
