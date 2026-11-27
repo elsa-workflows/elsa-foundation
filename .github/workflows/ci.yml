@@ -1516,6 +1516,24 @@ jobs:
           dotnet "$runner/bin/Debug/net10.0/Kernel.Native.Run.dll" workbench-http-waits sqlite \
             "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host"
 
+      - name: Run the PostgreSQL Workbench HTTP wait journey
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          postgres=$(docker run --rm --detach --env POSTGRES_PASSWORD=kernel --env POSTGRES_DB=kernel_http_waits \
+            --publish 127.0.0.1::5432 postgres:17)
+          trap 'docker stop --time 3 "$postgres" >/dev/null' EXIT
+          for ((attempt = 0; attempt < 60; attempt++)); do
+            if docker exec "$postgres" pg_isready -h 127.0.0.1 -U postgres -d kernel_http_waits >/dev/null; then break; fi
+            sleep 1
+          done
+          docker exec "$postgres" pg_isready -h 127.0.0.1 -U postgres -d kernel_http_waits >/dev/null
+          binding=$(docker port "$postgres" 5432/tcp)
+          KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=${binding##*:};Username=postgres;Password=kernel;Database=kernel_http_waits;SSL Mode=Disable;GSS Encryption Mode=Disable" \
+            dotnet essentials/tests/ActorFoundation/Native/Run/bin/Debug/net10.0/Kernel.Native.Run.dll workbench-http-waits postgres \
+            "$PWD/server/apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host"
+
       - name: Run the focused WriteLine bound-input test
         shell: bash
         run: dotnet test essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
@@ -2407,6 +2425,7 @@ jobs:
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
 
       # S7: the shipped format hosted as a host runs it, and the S5a parked-operator guard on its capability set.
+      # S9: the shipped HTTP wait runs under both fences, with one owner-transfer case for the held response.
       - name: Shipped format
         if: ${{ !cancelled() }}
         env:
@@ -2415,7 +2434,8 @@ jobs:
         run: |
           failed=()
           for run in "pg-shipped-format" "shipped-child-workflows postgres in-batch" "shipped-delay-recovery postgres checked" "shipped-delay-recovery postgres in-batch" \
-              "pg-root-parked-operators owned checked shipped" "pg-root-parked-operators owned in-batch shipped" "pg-root-parked-operators ef checked shipped"; do
+              "pg-root-parked-operators owned checked shipped" "pg-root-parked-operators owned in-batch shipped" "pg-root-parked-operators ef checked shipped" \
+              "kernel-http-waits postgres checked shipped" "kernel-http-waits postgres in-batch shipped" "pg-http-event-owner-loss in-batch"; do
             db="shipped_$(tr -c 'a-z0-9' '_' <<<"$run")"
             echo "::group::$run"
             docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE ${db:0:60}"
