@@ -134,11 +134,19 @@ internal abstract class KernelShellStorage
         public override bool TakesManagedSchedules => TakesPreparedStarts || Foundation.TakesManagedSchedules;
         public override bool TakesPreparedStarts => profile is Profile.PreparedStarts or Profile.InlineStarts || TakesEventStarts ||
             profile == Profile.Shipped && SqliteEmbeddedHosting.TakesPreparedStarts;
-        internal override bool TakesEventStarts => profile == Profile.EventStarts || RetainsEventStartReceipts;
-        internal override bool RetainsEventStartReceipts => profile == Profile.EventStartReceipts || TakesOrderedEventScan;
-        internal override bool TakesOrderedEventScan => profile is Profile.EventStartScan or Profile.SharedActivation;
+        internal override bool TakesEventStarts => profile == Profile.Shipped
+            ? SqliteEmbeddedHosting.TakesEventStarts
+            : profile == Profile.EventStarts || RetainsEventStartReceipts;
+        internal override bool RetainsEventStartReceipts => profile == Profile.Shipped
+            ? SqliteEmbeddedHosting.RetainsEventStartReceipts
+            : profile == Profile.EventStartReceipts || TakesOrderedEventScan;
+        internal override bool TakesOrderedEventScan => profile == Profile.Shipped
+            ? SqliteEmbeddedHosting.TakesOrderedEventScan
+            : profile is Profile.EventStartScan or Profile.SharedActivation;
         internal override IEventStartAdmissions BindEventStarts(BoundScope scope) => Foundation.BindEventStarts(scope);
-        public override bool TakesInlineStarts => profile is Profile.InlineStarts or Profile.SharedActivation;
+        public override bool TakesInlineStarts => profile == Profile.Shipped
+            ? SqliteEmbeddedHosting.TakesInlineStarts
+            : profile is Profile.InlineStarts or Profile.SharedActivation;
         public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Foundation.BindProtectedRootStarts(scope);
 
         public override ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token) =>
@@ -224,11 +232,11 @@ internal abstract class KernelShellStorage
         public override bool TakesHttpWaits => PostgresPreviewHosting.TakesHttpWaits(OpenDatabase);
         public override bool TakesManagedSchedules => PostgresPreviewHosting.TakesManagedSchedules(OpenDatabase);
         public override bool TakesPreparedStarts => PostgresPreviewHosting.TakesPreparedStarts(OpenDatabase);
-        internal override bool TakesEventStarts => _profile == Profile.EventStarts || RetainsEventStartReceipts;
-        internal override bool RetainsEventStartReceipts => _profile == Profile.EventStartReceipts || TakesOrderedEventScan;
-        internal override bool TakesOrderedEventScan => _profile is Profile.EventStartScan or Profile.SharedActivation;
+        internal override bool TakesEventStarts => PostgresPreviewHosting.TakesEventStarts(OpenDatabase);
+        internal override bool RetainsEventStartReceipts => PostgresPreviewHosting.RetainsEventStartReceipts(OpenDatabase);
+        internal override bool TakesOrderedEventScan => PostgresPreviewHosting.TakesOrderedEventScan(OpenDatabase);
         internal override IEventStartAdmissions BindEventStarts(BoundScope scope) => PostgresPreviewHosting.BindEventStarts(OpenDatabase, scope, Requests);
-        public override bool TakesInlineStarts => _profile is Profile.InlineStarts or Profile.SharedActivation;
+        public override bool TakesInlineStarts => PostgresPreviewHosting.TakesInlineStarts(OpenDatabase);
         public override IProtectedRootStarts BindPublishedStarts(BoundScope scope) => Requests.BindProtectedRootStarts(scope);
         private PostgresDirectRequests Requests => _requests ??
             throw new InvalidOperationException("Install the PostgreSQL prepared-start store before opening it.");

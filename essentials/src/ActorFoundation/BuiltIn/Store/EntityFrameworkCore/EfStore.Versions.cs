@@ -84,7 +84,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 35 };
+    internal static StoreFormat RootShipped => Current with { MessageProtocol = 36 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -170,7 +170,7 @@ internal static class RootProfiles
     private const RootCapabilities Shipped31 = Shipped29 | RootCapabilities.Children | RootCapabilities.SequencedJournal;
     private const RootCapabilities Shipped33 = Shipped31 | RootCapabilities.LiveEventWaits | RootCapabilities.RetentionPolicy;
     private const RootCapabilities Shipped34 = Shipped33 | RootCapabilities.Playback | RootCapabilities.PlaybackDescendants;
-    internal const RootCapabilities Shipped = PreparedStartsQualification;
+    internal const RootCapabilities Shipped = SharedActivationQualification;
     // Freeze this private profile to the base it qualified. Playback has its own qualification profile.
     internal const RootCapabilities ScheduleInventoryQualification = Shipped31 | RootCapabilities.LiveEventWaits |
         RootCapabilities.RetentionPolicy | RootCapabilities.ScheduleInventory;
@@ -456,8 +456,8 @@ internal static class StoreDefinitionsRevision
     private const int SqliteSequencedJournalRevision = 14;
     private const int PostgreSqlLiveEventRevision = 11;
     private const int SqliteLiveEventRevision = 14;
-    private const int PostgreSqlShippedRevision = 20;
-    private const int SqliteShippedRevision = 23;
+    private const int PostgreSqlSharedActivationRevision = 26;
+    private const int SqliteSharedActivationRevision = 29;
     private const int PostgreSqlPlaybackRevision = 12;
     private const int SqlitePlaybackRevision = 15;
     private const int PostgreSqlPlaybackDescendantsRevision = 14;
@@ -528,9 +528,9 @@ internal static class StoreDefinitionsRevision
                 _ when db.RequiredFormat == StoreFormat.RootEventStartsQualification => sqlite ? 26 : 23,
                 _ when db.RequiredFormat == StoreFormat.RootEventStartReceiptsQualification => sqlite ? 27 : 24,
                 _ when db.RequiredFormat == StoreFormat.RootEventStartScanQualification => sqlite ? 28 : 25,
-                _ when db.RequiredFormat == StoreFormat.RootSharedActivationQualification => sqlite ? 29 : 26,
-                _ when db.RequiredFormat == StoreFormat.RootShipped =>
-                    sqlite ? SqliteShippedRevision : PostgreSqlShippedRevision,
+                _ when db.RequiredFormat == StoreFormat.RootSharedActivationQualification ||
+                    db.RequiredFormat == StoreFormat.RootShipped =>
+                    sqlite ? SqliteSharedActivationRevision : PostgreSqlSharedActivationRevision,
                 _ => sqlite ? SqliteRevision : PostgreSqlRevision
             },
             JournalCodec = 0

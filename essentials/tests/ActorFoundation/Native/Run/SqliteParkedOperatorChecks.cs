@@ -90,6 +90,7 @@ internal static partial class SqliteHostLifetimeChecks
                 await Task.Delay(25, token);
             var observation = new ParkReadObservation("bounded-park-page");
             var probe = new EfStore(() => OpenFoundationDb(file, definitions, observation), postgres: false, fenceInBatch) { CommitSql = CommitSql.Owned };
+            await probe.EnableRootSelfSendsAsync(token);
             await probe.EnableRootJobsAsync(token);
             await probe.EnableRootChildrenAsync(token);
             probe.BindSqliteWorkerNode();

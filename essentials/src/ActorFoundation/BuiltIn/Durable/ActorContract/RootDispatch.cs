@@ -274,7 +274,12 @@ internal sealed partial class ActorAdapter
     {
         if (row.Jobs != facts.RecoverableJobRegistry) return false;
         if (roots?.RecoversInlineInitialRoots == true && row is { FoundationNullState: true, Parent: null })
-            return facts.InlineRetry is { } retry && issueSelf is { } issuer && Durable.FoundationInlineRetry.Matches(issuer, row, retry);
+        {
+            if (facts.KeepsInlineRetry)
+                return facts.InlineRetry is { } retry && issueSelf is { } issuer && Durable.FoundationInlineRetry.Matches(issuer, row, retry);
+            // A first-turn inline Park has no ordinary creator. A later Park can follow a valid null checkpoint.
+            if (facts.Mark?.Revision == 1 && !facts.KeepsQueuedCreator) return false;
+        }
         try
         {
             var header = RootHeader(row);

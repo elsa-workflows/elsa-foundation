@@ -95,6 +95,7 @@ internal static partial class SqliteHostLifetimeChecks
                 { Outcome: Contract.AdmissionOutcome.Accepted }, "an earlier future input is admitted");
             Require(await ingress.SendAsync(scope, exact, "ordinary", "record", cancellationToken: token) is
                 { Outcome: Contract.AdmissionOutcome.Accepted }, "an earlier ready input is admitted");
+            await store.EnableRootSelfSendsAsync(token);
             await store.EnableRootJobsAsync(token);
             await store.EnableRootChildrenAsync(token);
             store.BindSqliteWorkerNode();

@@ -129,6 +129,7 @@ internal static class ShippedNativeTerminalEnvelopeChecks
             async Task<Worker> OwnAsync(string name, PublicActor actor)
             {
                 var store = new EfStore(open, postgres, inBatch) { CommitSql = CommitSql.Owned };
+                await store.EnableRootSelfSendsAsync(token);
                 await store.EnableRootJobsAsync(token);
                 await store.EnableRootChildrenAsync(token);
                 var roots = postgres ? store.BindWorkerNode(actor.Withholds) : store.BindSqliteWorkerNode(actor.Withholds);

@@ -260,6 +260,7 @@ internal static class PostgresShippedFormatChecks
                 await check();
                 await restart.StopAsync(stop);
             }, extended: new(), stop);
+        await CheckQueuedCreatorRecoveryAsync(Open, store, inBatch, stop);
         return 0;
 
         async Task<Contract.ActorRef> StartAsync(string workflow, string id) =>
@@ -340,13 +341,88 @@ internal static class PostgresShippedFormatChecks
         }
     }
 
+    private static async Task CheckQueuedCreatorRecoveryAsync(Func<KernelDb> open, EfStore store, bool inBatch, CancellationToken token)
+    {
+        var actor = new QueuedCreatorActor();
+        var scope = EmbeddedTenant.Bind("shipped");
+        const string node = "queued-creator-owner";
+        var requests = PostgresPreviewHosting.CreateRequests(open, node, actor.Type);
+        var foundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(open, actor.Type,
+            (bound, _, kind) => ReferenceEquals(bound, scope) && kind == Contract.Kinds.Recover, requests, cancellationToken: token);
+        await using var owner = await PostgresPreviewHosting.StartAsync(open, node, actor,
+            reason => throw new InvalidOperationException(reason), new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(20) },
+            token, onFault: null, replies: requests, fenceInBatch: inBatch);
+
+        async Task<Contract.Admission> StartAsync(string id) =>
+            await foundation.SendAsync(scope, new Contract.Target.Start(new(actor.Type, id)), id, Contract.Kinds.Start, cancellationToken: token);
+        var started = await StartAsync("queued-start");
+        Require(started is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null },
+            "the shipped provider admits the queued creator");
+        var actorRef = started.Actor!.Value;
+        var parked = await WaitForRevisionAsync(actorRef, 1);
+        Require(parked is { Status: InstanceStatus.Faulted, ParkAt: not null, State: null },
+            "the ordinary creator faults before its first state");
+        var selection = (await foundation.GetAsync(scope, actorRef, token))!.Selection;
+        Require(await foundation.SendAsync(scope, new Contract.Target.Ref(actorRef), "recover-queued-creator", Contract.Kinds.Recover,
+            JsonSerializer.Serialize(new Contract.OperatorCommand(selection)), cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+            "the exact queued creator Park admits Recover");
+        Require(await WaitForRevisionAsync(actorRef, 2) is { Status: InstanceStatus.Running, ParkAt: null },
+            "the queued creator uses the actor's recovery plan in the shared inline-capable format");
+        await using var db = open();
+        Require(!await db.Messages.AnyAsync(row => row.Target == parked.Actor.Id && row.InboxScope == 0, token) &&
+            await StartAsync("queued-start") is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var duplicate } && duplicate == actorRef,
+            "queued recovery clears the creator while retaining the original receipt");
+
+        var nullableStart = await StartAsync("save-null");
+        var nullable = nullableStart.Actor!.Value;
+        Require(await WaitForRevisionAsync(nullable, 1) is { Status: InstanceStatus.Running, State: null },
+            "the ordinary creator can commit a null state before later inputs");
+        Require(await foundation.SendAsync(scope, new Contract.Target.Ref(nullable), "fault-later", "fail", cancellationToken: token) is
+            { Outcome: Contract.AdmissionOutcome.Accepted }, "a later input is admitted against the null checkpoint");
+        Require(await WaitForRevisionAsync(nullable, 2) is { Status: InstanceStatus.Faulted, ParkAt: not null, State: null },
+            "a later failure can park the same null checkpoint");
+        var later = (await foundation.GetAsync(scope, nullable, token))!.Selection;
+        Require(await foundation.SendAsync(scope, new Contract.Target.Ref(nullable), "recover-later", Contract.Kinds.Recover,
+            JsonSerializer.Serialize(new Contract.OperatorCommand(later)), cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+            "the later null-state Park admits Recover");
+        Require(await WaitForRevisionAsync(nullable, 3) is { Status: InstanceStatus.Running, ParkAt: null },
+            "a later null checkpoint uses its ordinary recovery plan");
+
+        async Task<EfStore.RootImage> WaitForRevisionAsync(Contract.ActorRef reference, long revision)
+        {
+            while (true)
+            {
+                if (await store.ReadFirstRootAsync(scope.Tenant, reference.Id, token) is { } row && row.Revision >= revision)
+                    return row;
+                await Task.Delay(20, token);
+            }
+        }
+    }
+
+    private sealed class QueuedCreatorActor : Contract.IActorType
+    {
+        public string Type => "queued-creator-fault";
+        public bool Withholds(Contract.ActorHeader header) => false;
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            if (turn.Header.TypeData == "save-null" && turn.Inbox is [{ Kind: Contract.Kinds.Start }])
+                return ValueTask.CompletedTask;
+            throw new InvalidOperationException("The queued fixture faults without changing state.");
+        }
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("The queued fixture has no jobs.");
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+    }
+
     // These fingerprints pin the PostgreSQL definitions revision. A deliberate definition change advances its revision.
     private static async Task CheckGuardBodyParityAsync(Func<KernelDb> open, CancellationToken token)
     {
         await using var db = open();
         var sql = EfStore.RenderPostgresFirstRootGuards(db).ReplaceLineEndings("\n");
         var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
-        Require(fingerprint == "386668f5b48fff1df215164659610a159b98efa15fb588264a65c0375ef094ba",
+        Require(fingerprint == "b0b5889fd66fe781935b9364e934b8a7c0c0d7f9b3e5f9a1f0f42d05c43b8943",
             $"the complete emitted PostgreSQL guard installation batch matches its revision ({fingerprint})");
         var bodies = await db.Database.SqlQueryRaw<string>("""
             SELECT md5(p.prosrc) AS "Value"
@@ -357,7 +433,7 @@ internal static class PostgresShippedFormatChecks
             ORDER BY p.proname
             """).ToListAsync(token);
         Require(bodies is ["631edb89241ac99b9413e1101d7eea78", "e7baf78be308c2709f13bfda3a6c4a1e",
-                "4a83fb3dc15c4bdf262a7da76f726a47", "32455ab166ed6b45a9ecf861da7d4d74", "dc1bee032b85280076623ff9c5561d04"],
+                "bcd6ab56c79da3232833fa96c6ddeb76", "32455ab166ed6b45a9ecf861da7d4d74", "dc1bee032b85280076623ff9c5561d04"],
             $"the installed PostgreSQL Park job protection, projector, checkpoint, journal and deferred outcome functions match their revision ({string.Join(", ", bodies)})");
     }
 

@@ -132,10 +132,13 @@ public static partial class SqliteEmbeddedHosting
             }
         }
 
+        internal IDisposable AcquireReplyLease(CancellationToken cancellationToken = default) =>
+            AcquireFile(path, this, cancellationToken);
+
         private async ValueTask<Contract.Reply> DuringLocalOwnershipAsync(Func<ValueTask<Contract.Reply>> request, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
-            using (AcquireFile(path, requests: this)) token.ThrowIfCancellationRequested();
+            using (AcquireReplyLease(token)) token.ThrowIfCancellationRequested();
             try { return await request(); }
             catch (SqliteHostLockException)
             {
@@ -291,7 +294,7 @@ public static partial class SqliteEmbeddedHosting
                     token.ThrowIfCancellationRequested();
                     try
                     {
-                        using var file = AcquireFile(path, requests: owner);
+                        using var file = AcquireFile(path, owner, token);
                         if (attempt?.IsBusy == true) return await admit(ForFile(file), token);
                         var lane = attempt is not null && kind == RootAdmissionKind.ShedLoad ? file.ReplyOperatorWrites : file.ReplyWrites;
                         await lane.WaitAsync(token);
