@@ -1,5 +1,6 @@
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Hosting;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Foundation.Postgres;

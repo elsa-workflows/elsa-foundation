@@ -24,9 +24,10 @@ public sealed class Endpoint(IReusableActivityImportOperationService service) : 
     {
         var request = HttpContext.Request;
         var scope = ReusableActivityImportHttp.Scope(HttpContext.User);
-        var type = request.GetTypedHeaders().ContentType;
         ReusableActivityImportUploadResult result;
-        if (type?.MediaType.Equals("multipart/form-data", StringComparison.OrdinalIgnoreCase) == true)
+        // The host's typed headers can use a different copy of the header types than a feed-loaded feature.
+        if (MediaTypeHeaderValue.TryParse(request.ContentType, out var type)
+            && type.MediaType.Equals("multipart/form-data", StringComparison.OrdinalIgnoreCase))
         {
             if (service is not IReusableActivityExportFileUpload upload)
                 throw new RawCollectionOnlyException();

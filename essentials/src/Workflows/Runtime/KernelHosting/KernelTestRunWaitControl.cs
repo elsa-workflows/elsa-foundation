@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Foundation.Contracts;
-using Kernel.EntityFramework;
+using Kernel.Foundation.Hosting;
 using Kernel.Native;
 using Kernel.WorkflowActor;
 using Microsoft.Extensions.DependencyInjection;
