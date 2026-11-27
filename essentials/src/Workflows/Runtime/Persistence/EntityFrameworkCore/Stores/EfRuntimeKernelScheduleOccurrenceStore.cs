@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.EntityFrameworkCore;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeOperationalStoreSupport;
 
@@ -20,7 +21,7 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
     IWorkflowTriggerBindingStore triggerBindings,
     IWorkflowExecutableRootWriteLeaseManager leases,
     TimeProvider clock) : IRuntimeKernelScheduleOccurrenceStore, IRuntimeKernelScheduleOccurrenceDeliveryStore,
-        IRuntimeKernelScheduleOccurrenceRetirementStore, IRuntimeKernelScheduleRetentionRoots
+        IRuntimeKernelScheduleOccurrenceRetirementStore, IRuntimeKernelScheduleRetentionRoots, IRuntimeMaterialRetentionRootSource
 {
     public async ValueTask<bool> TryAcceptAsync(RuntimeKernelScheduleOccurrence occurrence,
         Func<CancellationToken, ValueTask<DateTimeOffset>> readScheduleClock, CancellationToken cancellationToken = default)
@@ -259,24 +260,23 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         return source;
     }
 
-    public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
+    bool IRuntimeMaterialRetentionRootSource.IsCoveredBy(IWorkflowExecutableStore material) =>
+        material is EfWorkflowExecutableStore physical && ReferenceEquals(physical.Context, context);
+
+    public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+        ReadPinnedExecutableIdsAsync(context, RequireScope(access), cancellationToken);
+
+    internal static async ValueTask<IReadOnlyCollection<string>> ReadPinnedExecutableIdsAsync(RuntimeDbContext context,
+        string scope, CancellationToken cancellationToken)
     {
-        var scope = RequireScope(access);
         var scopeKey = Encode(scope);
         var scopeHash = Hash(scope);
         var roots = new HashSet<string>(StringComparer.Ordinal);
-        string? after = null;
-        const int pageSize = 100;
-        while (true)
-        {
-            var query = context.KernelScheduleOccurrences.AsNoTracking().Where(row =>
-                (row.ScopeKeyHash == scopeHash || row.ScopeKey == scopeKey) && row.RetiredAtUtcTicks == null);
-            if (after is not null) query = query.Where(row => string.Compare(row.Id, after) > 0);
-            var page = await query.OrderBy(row => row.Id).Take(pageSize).ToArrayAsync(cancellationToken);
-            foreach (var row in page) roots.Add(Read(row, scope).Executable.ArtifactId);
-            if (page.Length < pageSize) return roots;
-            after = page[^1].Id;
-        }
+        var query = context.KernelScheduleOccurrences.AsNoTracking().Where(row =>
+            (row.ScopeKeyHash == scopeHash || row.ScopeKey == scopeKey) && row.RetiredAtUtcTicks == null);
+        await foreach (var row in query.AsAsyncEnumerable().WithCancellation(cancellationToken))
+            roots.Add(Read(row, scope).Executable.ArtifactId);
+        return roots;
     }
 
     private static RuntimeKernelScheduleOccurrence Read(RuntimeKernelScheduleOccurrenceEntity row, string scope)

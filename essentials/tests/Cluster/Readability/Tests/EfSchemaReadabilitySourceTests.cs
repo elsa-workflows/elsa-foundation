@@ -39,6 +39,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         new(RuntimeArtifactEfModule.SchemaFamily, Runtime, [RuntimeArtifactEfModule.SchemaVersion, RuntimeArtifactEfModule.ScopedPublicationSchemaVersion]),
         new(RuntimeBackgroundActivityWorkEfModule.SchemaFamily, Runtime, [RuntimeBackgroundActivityWorkEfModule.SchemaVersion]),
         new("RuntimeHistory", Runtime, ["1.0.0"]),
+        new("RuntimeKernelExecutablePin", Runtime, ["1.0.0"]),
         new("RuntimeKernelScheduleControl", Runtime, ["1.0.0"]),
         new("RuntimeKernelScheduleOccurrence", Runtime, ["1.0.0", "1.1.0"]),
         // Model state/input is a separately versioned family; keep this expectation independent of discovery.

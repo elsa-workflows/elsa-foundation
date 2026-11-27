@@ -30,6 +30,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     private readonly IWorkflowExecutionStateStore _physicalWorkflowExecutions;
     private readonly IWorkflowDispatchRetentionRootStore? _workflowDispatchRootStore;
     private IRuntimeKernelScheduleRetentionRoots? KernelScheduleRoots { get; init; }
+    private IRuntimeKernelExecutablePinStore? KernelExecutablePins { get; init; }
     private readonly IStimulusDeliveryStore? _stimulusDeliveryStore;
     private readonly IStimulusDeliveryStore? _ordinaryCollectionGuard;
     private readonly IRuntimePostCommitOutboxStore? _ordinaryOutbox;
@@ -214,6 +215,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             ? sp.GetService<CoalescingInner<IWorkflowExecutionStateStore>>()?.Value : executions;
         var dispatch = sp.GetService<IWorkflowDispatchRetentionRootStore>();
         var scheduleRoots = sp.GetService<IRuntimeKernelScheduleRetentionRoots>();
+        var executablePins = sp.GetService<IRuntimeKernelExecutablePinStore>();
         var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkflowExecutableGarbageCollectionOptions>>();
         var clock = sp.GetRequiredService<TimeProvider>();
         var logger = sp.GetRequiredService<ILogger<WorkflowExecutableReferenceGarbageCollector>>();
@@ -225,10 +227,10 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             templates.CanMaintainReferences(material, references) && references.CanWriteRootReferences(material) &&
             delivery.CanRetainExecutables(physicalOutbox, material, references, physicalExecutions))
             return new WorkflowExecutableReferenceGarbageCollector(material, references, templates, executions, dispatch,
-                options, clock, logger, delivery, physicalExecutions) { KernelScheduleRoots = scheduleRoots };
+                options, clock, logger, delivery, physicalExecutions) { KernelScheduleRoots = scheduleRoots, KernelExecutablePins = executablePins };
         return new WorkflowExecutableReferenceGarbageCollector(material, references, templates, executions, dispatch,
             options, clock, logger, delivery ?? physicalOutbox as IStimulusDeliveryStore, physicalOutbox, physicalExecutions ?? executions)
-            { KernelScheduleRoots = scheduleRoots };
+            { KernelScheduleRoots = scheduleRoots, KernelExecutablePins = executablePins };
     }
 
     private WorkflowExecutableReferenceGarbageCollector(
@@ -563,10 +565,16 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         roots.AddRange(await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         if (_workflowDispatchRootStore is not null)
             roots.AddRange(await _workflowDispatchRootStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
-        if (KernelScheduleRoots is not null)
-            roots.AddRange(await KernelScheduleRoots.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
+        roots.AddRange(await _executableStore.ListMaterialRetentionRootIdsAsync(cancellationToken));
+        if (KernelScheduleRoots is { } schedules && !IsMaterialRootSource(schedules))
+            roots.AddRange(await schedules.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
+        if (KernelExecutablePins is { } pins && !IsMaterialRootSource(pins))
+            roots.AddRange(await pins.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         return roots;
     }
+
+    private bool IsMaterialRootSource(object reader) =>
+        reader is IRuntimeMaterialRetentionRootSource source && source.IsCoveredBy(_executableStore.GetMaterialStore());
 
     private async ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(
         IEnumerable<string> artifactIds,

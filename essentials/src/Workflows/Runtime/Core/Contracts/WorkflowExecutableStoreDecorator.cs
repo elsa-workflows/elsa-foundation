@@ -18,6 +18,10 @@ public abstract class WorkflowExecutableStoreDecorator : IWorkflowExecutableStor
 
     protected IWorkflowExecutableStore Inner { get; }
 
+    /// <inheritdoc />
+    public virtual ValueTask<IReadOnlyCollection<string>> ListMaterialRetentionRootIdsAsync(CancellationToken cancellationToken = default) =>
+        Inner.ListMaterialRetentionRootIdsAsync(cancellationToken);
+
     public virtual ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default) =>
         Inner.SaveAsync(executable, cancellationToken);
 
