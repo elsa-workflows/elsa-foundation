@@ -18617,6 +18617,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.KernelHosting",
+          "path": "essentials/src/Workflows/Runtime/KernelHosting/Elsa.Workflows.Runtime.KernelHosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+          "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.ActorFoundation.TestSupport",
           "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj"
         },
@@ -18639,6 +18649,11 @@
           "type": "external",
           "id": "Microsoft.NET.Test.Sdk",
           "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "Xunit.SkippableFact",
+          "version": "1.5.23"
         },
         {
           "type": "external",
