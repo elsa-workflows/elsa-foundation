@@ -218,9 +218,11 @@ public static class PostgresPreviewHosting
 
         int partitions;
         bool nativeJobs;
+        bool shipped;
         await using (var db = create())
         {
             nativeJobs = db.UsesRootJobProtocol;
+            shipped = db.RequiredFormat == StoreFormat.RootShipped;
             if (!db.Database.IsNpgsql() || !(db.SupportsCorePreview || db.UsesRootReplyProtocol))
                 throw new NotSupportedException("Hosting requires a PostgreSQL Core Preview format.");
             if (db.UsesRootReplyProtocol != (replies is not null))
@@ -242,20 +244,37 @@ public static class PostgresPreviewHosting
         // A store error a drain retried is reported as a loop error of the node made below: counted, and reported once per
         // distinct error per window, so a drain the deadline kills shows why it made no progress.
         RuntimeNode? reporter = null;
+        var edge = shipped ? replies as PostgresDirectRequests : null;
+        var relay = edge is null ? null : await edge.OpenLiveRepliesAsync(create,
+            error => Volatile.Read(ref reporter)?.RecordLoopError(error), cancellationToken);
         var workers = new WorkerOptions { Partitions = partitions, OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error) };
         var host = DurableHost.ForNode(node, watched, adapter, partitions, replies is null ? workers : workers with { Transport = replies });
-        var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
+        var runtime = new RuntimeNode(node, watched, partitions, options, beside: RunBesideAsync,
             beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault);
         Volatile.Write(ref reporter, runtime);
+        if (relay is not null) edge!.AttachLiveReplies(relay);
         try
         {
             await runtime.StartAsync(host, cancellationToken);
+            if (relay is not null) await relay.ReadyAsync(cancellationToken);
             return runtime;
         }
         catch
         {
+            if (relay is not null) edge!.DetachLiveReplies(relay);
             await runtime.KillAsync();
             throw;
+        }
+
+        async Task RunBesideAsync(CancellationToken stop)
+        {
+            if (relay is null)
+            {
+                await watchdog.RunAsync(stop);
+                return;
+            }
+            try { await Task.WhenAll(watchdog.RunAsync(stop), relay.RunAsync(stop)); }
+            finally { edge!.DetachLiveReplies(relay); }
         }
     }
 }
