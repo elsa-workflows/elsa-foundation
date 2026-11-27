@@ -250,6 +250,8 @@ public sealed class KernelCoordinatorTests
         var claim = Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1"));
         Assert.Equal(TriggerCardinality.ReservationOnly, claim.Cardinality);
         Assert.True(claim.IsActive);
+        // A custom direct adapter can reserve the logical schedule without a bound Foundation clock.
+        Assert.Equal(RuntimeKernelScheduleControl.ScheduleKeyMetadata, Assert.Single(claim.Metadata).Key);
         var scheduleKey = claim.Metadata[RuntimeKernelScheduleControl.ScheduleKeyMetadata];
         Assert.Equal("schedule:ticks:tick", scheduleKey);
         Assert.Equal(RuntimeKernelScheduleOccurrence.ReservationKey(scheduleKey), claim.StimulusHash);
@@ -266,8 +268,13 @@ public sealed class KernelCoordinatorTests
         var second = await host.ActivateAsync(Ticks("ticks@2"), "ticks-2");
         Assert.True(first.Succeeded);
         Assert.True(second.Succeeded);
-        Assert.False(Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1")).IsActive);
-        Assert.Equal(TriggerCardinality.ReservationOnly, Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-2")).Cardinality);
+        var original = Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1"));
+        var replacement = Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-2"));
+        Assert.False(original.IsActive);
+        Assert.Equal(TriggerCardinality.ReservationOnly, replacement.Cardinality);
+        var stimulus = original.Metadata[RuntimeKernelScheduleControl.ScheduleStimulusMetadata];
+        Assert.Equal(64, stimulus.Length);
+        Assert.Equal(stimulus, replacement.Metadata[RuntimeKernelScheduleControl.ScheduleStimulusMetadata]);
         Assert.Equal("ticks@2", Assert.Single(host.Serving.Schedules.All).Workflow);
 
         Assert.True((await host.DeactivateAsync(Ticks("ticks@2"))).Succeeded);

@@ -9,17 +9,15 @@ namespace Elsa.Workflows.Runtime.KernelHost;
 internal static class KernelScheduleClaim
 {
     internal static WorkflowTriggerBinding Create(WorkflowExecutableIdentity identity, string activationId,
-        string slotId, NativeSchedule schedule, DateTimeOffset createdAt)
+        string slotId, NativeSchedule schedule, DateTimeOffset createdAt, bool managed)
     {
         var key = Key(schedule);
+        var metadata = new Dictionary<string, string> { [RuntimeKernelScheduleControl.ScheduleKeyMetadata] = schedule.Key };
+        if (managed) metadata.Add(RuntimeKernelScheduleControl.ScheduleStimulusMetadata, Stimulus(schedule));
         return new(WorkflowTriggerBinding.BuildId(activationId, identity.ArtifactId, schedule.Node, key),
             identity.ArtifactId, identity.DefinitionId, identity.ArtifactVersion, identity.ArtifactHash,
             schedule.Node, RuntimeKernelScheduleOccurrence.ReservationType, key, null,
-            new Dictionary<string, string>
-            {
-                [RuntimeKernelScheduleControl.ScheduleKeyMetadata] = schedule.Key,
-                [RuntimeKernelScheduleControl.ScheduleStimulusMetadata] = Stimulus(schedule)
-            }, createdAt, activationId, slotId,
+            metadata, createdAt, activationId, slotId,
             TriggerCardinality.ReservationOnly, IsActive: false);
     }
 
