@@ -26,7 +26,7 @@ internal sealed partial class Burst
         if (pinned is null) return Hydrator.Create(node, b => Evaluate(b, scope));
         try { return Hydrator.Create(node, pinned); }
         catch (Exception error) when (HandlesAuthoredFault(frame, error))
-        { Apply(frame, AuthoredFault(error)); return null; }
+        { Fail(frame, AuthoredFault(error).Fault!); return null; }
     }
 
     private async ValueTask<Transition> InvokeAuthored(Frame frame, Func<ValueTask<Transition>> invoke)

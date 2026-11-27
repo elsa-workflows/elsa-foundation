@@ -58,10 +58,10 @@ internal static class Compiled
 
     public static ExecutableNode Node(string id, string type, RuntimeInputBinding[]? inputs = null, ExecutableActivityStructure? structure = null,
         ExecutableChildSlot[]? slots = null, RuntimeOutputCapture[]? captures = null, string descriptorType = WellKnownRuntimeActivityConsumers.ClrActivity,
-        object? descriptor = null, string? displayName = null) =>
+        object? descriptor = null, string? displayName = null, IReadOnlyDictionary<string, string>? metadata = null) =>
         new(id, id, type, "1.0.0", descriptorType, JsonSerializer.SerializeToElement(descriptor ?? new { }),
             (inputs ?? []).ToDictionary(input => input.InputKey, StringComparer.Ordinal),
-            displayName is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["displayName"] = displayName }, slots, structure,
+            metadata ?? (displayName is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["displayName"] = displayName }), slots, structure,
             outputCaptures: (captures ?? []).ToDictionary(capture => capture.OutputName, StringComparer.Ordinal));
 
     public static ExecutableNode Intrinsic(string id, WorkflowIntrinsicKind kind, RuntimeVariableReference? variable, params RuntimeInputBinding[] inputs) =>

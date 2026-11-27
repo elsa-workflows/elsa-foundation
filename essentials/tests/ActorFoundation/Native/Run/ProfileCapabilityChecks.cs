@@ -590,7 +590,9 @@ internal static class ProfileCapabilityChecks
         return failures == 0 ? 0 : 1;
     }
 
-    internal static async Task<int> RunDirectTestRunStoreAsync(bool postgres, bool ephemeral = false)
+    internal enum TestRunProfile { Direct, Ephemeral, Attached }
+
+    internal static async Task<int> RunDirectTestRunStoreAsync(bool postgres, TestRunProfile profile = TestRunProfile.Direct)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var token = deadline.Token;
@@ -607,8 +609,12 @@ internal static class ProfileCapabilityChecks
             await using (var empty = OpenStock())
                 if (!await PostgresFixtureDatabase.IsEmptyAsync(empty, token))
                     throw new InvalidOperationException("The profile check requires an empty PostgreSQL database.");
-            if (ephemeral) await PostgresPreviewHosting.InstallEphemeralTestRunQualificationAsync(options, token);
-            else await PostgresPreviewHosting.InstallDirectTestRunQualificationAsync(options, token);
+            await (profile switch
+            {
+                TestRunProfile.Attached => PostgresPreviewHosting.InstallAttachedTestRunQualificationAsync(options, token),
+                TestRunProfile.Ephemeral => PostgresPreviewHosting.InstallEphemeralTestRunQualificationAsync(options, token),
+                _ => PostgresPreviewHosting.InstallDirectTestRunQualificationAsync(options, token)
+            });
             var requests = PostgresPreviewHosting.CreateRequests(OpenStock, node, actor.Type);
             await MustRefuseAsync(() => PostgresPreviewHosting.StartAsync(OpenStock, node, actor, EndProcess,
                 cancellationToken: token, requests: requests));
@@ -620,9 +626,12 @@ internal static class ProfileCapabilityChecks
             {
                 var path = Path.Combine(directory.FullName, "store.db");
                 ProtectRootStartAsync refuse = (_, _) => ValueTask.FromResult(false);
-                var privateStore = ephemeral
-                    ? SqliteEmbeddedFoundation.ForEphemeralTestRunQualification(path, node, actor.Type, refuse)
-                    : SqliteEmbeddedFoundation.ForDirectTestRunQualification(path, node, actor.Type, refuse);
+                var privateStore = profile switch
+                {
+                    TestRunProfile.Attached => SqliteEmbeddedFoundation.ForAttachedTestRunQualification(path, node, actor.Type, refuse),
+                    TestRunProfile.Ephemeral => SqliteEmbeddedFoundation.ForEphemeralTestRunQualification(path, node, actor.Type, refuse),
+                    _ => SqliteEmbeddedFoundation.ForDirectTestRunQualification(path, node, actor.Type, refuse)
+                };
                 await privateStore.InstallShippedAsync(token);
                 await MustRefuseAsync(() => SqliteEmbeddedHosting.StartFoundationAsync(path, node, actor, EndProcess,
                     cancellationToken: token));

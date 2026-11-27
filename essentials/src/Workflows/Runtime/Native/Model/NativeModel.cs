@@ -118,6 +118,10 @@ public class NativeExecutionOptions
     /// </summary>
     public Func<string, ServedDefinition>? ServedWorkflow { get; init; }
 
+    /// <summary>Validates and normalizes the evaluated inputs of an exact compiled Test Run child before staging its start.</summary>
+    public Func<TestRunChildSelection, JsonObject?, CancellationToken, ValueTask<(JsonObject? Inputs, ActivityFault? Refusal)>>?
+        ValidateTestRunChildInputs { get; init; }
+
     /// <summary>
     /// The workflow for an id the registry does not hold, which the host loads (null when it has none). A publishing host's
     /// registry holds, after a restart, the versions its slots serve, and an instance started on an earlier version still runs
@@ -471,7 +475,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 var trigger = delivery ? _s.Trigger : null;
                 if (delivery) (_s.TriggerNode, _s.Trigger, _s.EmptyEventStartPending) = (null, null, false);
                 var context = Context(frame);
-                Apply(frame, await InvokeAuthored(frame, () => stateful.StartAsync(context, delivery, trigger)));
+                await ApplyAsync(frame, await InvokeAuthored(frame, () => stateful.StartAsync(context, delivery, trigger)));
                 break;
             }
             case ILeaf leaf:
@@ -483,7 +487,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                     turn.ExternalAttempt(frame.Id, node.Id, frame.Attempt, again);
                 }
                 var leafContext = Context(frame);
-                Apply(frame, await InvokeAuthored(frame, () => leaf.ExecuteAsync(leafContext)));
+                await ApplyAsync(frame, await InvokeAuthored(frame, () => leaf.ExecuteAsync(leafContext)));
                 break;
         }
     }
@@ -512,9 +516,10 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             var finished = Values.To<Contract.JobFinished>(work.Payload)!;
             // A job whose deadline passed completes an activity that names a timeout outcome on it (SendHttpRequest's Timeout).
             if (finished.Error == "timeout" && node.Type.GetCustomAttributes(typeof(BackgroundAttribute), false) is [BackgroundAttribute { TimeoutOutcome: { } timedOut }])
-                Apply(frame, new Transition(TransitionKind.Complete, null, timedOut));
+                await ApplyAsync(frame, new Transition(TransitionKind.Complete, null, timedOut));
             else if (finished.Error is { } error) Fail(frame, new ActivityFault("job", error));
-            else if (System.Text.Json.JsonSerializer.Deserialize<BackgroundResult>(finished.Result!)! is var r) Apply(frame, new Transition(r.Kind, r.Result, r.Outcome, r.Fault));
+            else if (System.Text.Json.JsonSerializer.Deserialize<BackgroundResult>(finished.Result!)! is var r)
+                await ApplyAsync(frame, new Transition(r.Kind, r.Result, r.Outcome, r.Fault));
             return;
         }
         // The wait and the frame are gone by now, so a host expression that fails here faults the frame directly.
@@ -524,7 +529,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         if (activity is null) return;
         var context = Context(frame);
         var state = frame.RecoveryStateful ? frame.State?.DeepClone() : frame.State;
-        Apply(frame, await InvokeAuthored(frame, () => activity.ResumeAsync(context, state, work.Payload)));
+        await ApplyAsync(frame, await InvokeAuthored(frame, () => activity.ResumeAsync(context, state, work.Payload)));
     }
 
     private ActivityContext Context(Frame frame)
@@ -589,14 +594,39 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
 
     // ---- transitions -------------------------------------------------------------------------------------------------
 
-    private void Apply(Frame frame, Transition t)
+    private async ValueTask ApplyAsync(Frame frame, Transition t)
     {
         // Each child the transition starts, read off the host once: that answer both checks the start and makes it.
-        var children = ChildTargets(t, out var refused);
+        var children = ChildTargets(frame, t, out var refused);
         if (refused is not null)
         {
             Fail(frame, refused);
             return;
+        }
+        if (turn.TestScopeId is not null && children is not null && t.Triggers is { } triggers)
+        {
+            var normalized = new List<Trigger>(triggers.Count);
+            foreach (var trigger in triggers)
+            {
+                if (trigger is not ChildTrigger child)
+                {
+                    normalized.Add(trigger);
+                    continue;
+                }
+                if (options.ValidateTestRunChildInputs is not { } validate || child.Input is not (null or JsonObject))
+                {
+                    Fail(frame, new ActivityFault("dispatch.test.invalid-input", "The Test Run could not validate the child workflow input object."));
+                    return;
+                }
+                var (inputs, rejection) = await validate(children[child.Workflow].TestRunChild!, child.Input as JsonObject, cancellationToken);
+                if (rejection is not null)
+                {
+                    Fail(frame, rejection);
+                    return;
+                }
+                normalized.Add(child with { Input = inputs });
+            }
+            t = t with { Triggers = normalized };
         }
         if (t.Kind == TransitionKind.Complete && t.Effects?.OfType<ExitEffect>().FirstOrDefault() is { } exit)
         {
@@ -664,16 +694,32 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     /// read once per id here. On a publishing host, a Dispatch the host serves nothing for, and whose id the registry does not
     /// hold, is refused with the fault returned, as is one several serve; nothing starts then.
     /// </summary>
-    private Dictionary<string, ChildWorkflowTarget>? ChildTargets(Transition t, out ActivityFault? refused)
+    private Dictionary<string, ChildWorkflowTarget>? ChildTargets(Frame frame, Transition t, out ActivityFault? refused)
     {
         refused = null;
         Dictionary<string, ChildWorkflowTarget>? targets = null;
+        if (turn.TestScopeId is not null && t.Effects?.Any(effect => effect is DispatchEffect) == true)
+        {
+            refused = new ActivityFault("dispatch.test.detached", "Dispatch Workflow must wait for completion in this Test Run.");
+            return null;
+        }
         var named = (t.Triggers ?? []).OfType<ChildTrigger>().Select(child => child.Workflow)
             .Concat((t.Effects ?? []).OfType<DispatchEffect>().Select(dispatch => dispatch.Workflow));
         foreach (var id in named)
         {
             targets ??= new(StringComparer.Ordinal);
             if (targets.ContainsKey(id)) continue;
+            if (turn.TestScopeId is not null)
+            {
+                if (_wf.Nodes[frame.Node].TestRunChild is not { } child || child.Definition != id.Trim())
+                {
+                    refused = new ActivityFault(UnpublishedFaultCode,
+                        $"Dispatch Workflow names definition '{id}', which has no exact child executable in this Test Run.");
+                    return null;
+                }
+                targets[id] = new(child.ArtifactId, TestRunChild: child);
+                continue;
+            }
             if (options.ServedWorkflow is not { } served)
             {
                 targets[id] = Registered(id);

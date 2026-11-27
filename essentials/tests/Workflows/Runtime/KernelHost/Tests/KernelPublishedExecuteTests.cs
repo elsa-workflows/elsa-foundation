@@ -66,6 +66,18 @@ public sealed partial class KernelPublishedExecuteTests
     public Task Sqlite_ephemeral_test_runs_preserve_completion_policy(bool recordCompletion) =>
         RunAsync(false, directTests: true, recordEphemeralTestCompletion: recordCompletion);
 
+    [Fact]
+    public Task Sqlite_ephemeral_test_runs_attach_the_exact_compiled_child() =>
+        RunAsync(false, directTests: true, recordEphemeralTestCompletion: false, attachedTests: true);
+
+    [SkippableFact]
+    public Task PostgreSql_ephemeral_test_runs_attach_the_exact_compiled_child()
+    {
+        Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)), "Requires two dedicated PostgreSQL databases.");
+        return RunAsync(true, directTests: true, recordEphemeralTestCompletion: false, attachedTests: true);
+    }
+
     [SkippableFact]
     public Task PostgreSql_standard_execute_admits_published_native_and_flowchart()
     {
@@ -106,7 +118,8 @@ public sealed partial class KernelPublishedExecuteTests
         return RunAsync(true, inline: true);
     }
 
-    private static async Task RunAsync(bool postgres, bool directTests = false, bool inline = false, bool? recordEphemeralTestCompletion = null)
+    private static async Task RunAsync(bool postgres, bool directTests = false, bool inline = false, bool? recordEphemeralTestCompletion = null,
+        bool attachedTests = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var directory = postgres ? null : Directory.CreateTempSubdirectory("kernel-published-execute-");
@@ -120,13 +133,13 @@ public sealed partial class KernelPublishedExecuteTests
             if (postgres) Assert.NotEqual(new Npgsql.NpgsqlConnectionStringBuilder(foundation).Database,
                 new Npgsql.NpgsqlConnectionStringBuilder(runtime).Database);
             await RunAsync(postgres ? "PostgreSql" : "Sqlite", directory?.FullName, foundation, runtime, directTests, inline,
-                recordEphemeralTestCompletion, deadline.Token);
+                recordEphemeralTestCompletion, attachedTests, deadline.Token);
         }
         finally { directory?.Delete(recursive: true); }
     }
 
     private static async Task RunAsync(string provider, string? directory, string? foundation, string runtime, bool directTests, bool inline,
-        bool? recordEphemeralTestCompletion, CancellationToken token)
+        bool? recordEphemeralTestCompletion, bool attachedTests, CancellationToken token)
     {
         var canonical = ExecutableOf("execute-native", "canonical-publication", Sequence("sequence",
             SetOutput("input", "message", Request("input", "message")), SetOutput("variable", "seed", VariableRead("input", "seed-key"))),
@@ -217,7 +230,11 @@ public sealed partial class KernelPublishedExecuteTests
             SqlitePath = directory is null ? null : Path.Combine(directory, "foundation.db"),
             PostgresConnectionString = foundation
         };
-        if (recordEphemeralTestCompletion.HasValue)
+        if (attachedTests)
+            kernelHosting.ConfigureServices(builder.Services,
+                KernelShellStorage.CreateAttachedTestRunQualification(provider, kernelHosting.SqlitePath, foundation),
+                protectChildExecutables: true);
+        else if (recordEphemeralTestCompletion.HasValue)
             kernelHosting.ConfigureServices(builder.Services,
                 KernelShellStorage.CreateEphemeralTestRunQualification(provider, kernelHosting.SqlitePath, foundation),
                 protectChildExecutables: true);
@@ -305,6 +322,11 @@ public sealed partial class KernelPublishedExecuteTests
             var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
             using var http = new HttpClient { BaseAddress = new(address) };
             var isolatedActors = new List<Contract.ActorRef>();
+            if (attachedTests)
+            {
+                await VerifyAttachedTestsAsync();
+                return;
+            }
             if (recordEphemeralTestCompletion is { } recordCompletion)
             {
                 await VerifyEphemeralMappingRefusalAsync(refusedInlineTest);
@@ -560,14 +582,14 @@ public sealed partial class KernelPublishedExecuteTests
                 }
             }
 
-            async Task<long> DurableRowCountAsync()
+            async Task<long> DurableRowCountAsync(bool birthsOnly = false)
             {
                 await using System.Data.Common.DbConnection db = directory is null
                     ? new Npgsql.NpgsqlConnection(foundation)
                     : new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(directory, "foundation.db"), Pooling = false }.ToString());
                 await db.OpenAsync(token);
                 await using var command = db.CreateCommand();
-                command.CommandText = """
+                command.CommandText = birthsOnly ? "SELECT count(*) FROM \"FoundationRootBirths\"" : """
                     SELECT (SELECT count(*) FROM "Instances") + (SELECT count(*) FROM "FoundationRootBirths")
                        + (SELECT count(*) FROM "FoundationRootReceipts") + (SELECT count(*) FROM "FoundationPreparedRootStarts")
                        + (SELECT count(*) FROM "Journal")
@@ -782,6 +804,145 @@ public sealed partial class KernelPublishedExecuteTests
                 return actor.Id;
             }
 
+            async Task VerifyAttachedTestsAsync()
+            {
+                const string logicalDefinition = "test-child-published-alias";
+                var original = WithInputContract(ExecutableOf("test-child-original", "test-child-canonical", Sequence("root",
+                    SetOutput("answer", "selection", Request("value", "message")))),
+                    new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion,
+                        [new("message", new TypeReference("String"), isRequired: false, JsonSerializer.SerializeToElement("original-default"))]));
+                var replacement = WithInputContract(ExecutableOf("test-child-replacement", original.Identity.DefinitionId, Sequence("root",
+                    SetOutput("answer", "selection", Literal("value", "replacement")))));
+                var longChild = WithInputContract(ExecutableOf("test-child-waiting", "test-child-waiting-definition", Sequence("root",
+                    Node("wait", Types.Delay, [Literal("Duration", "00:00:45", "TimeSpan")]))));
+                var immediate = AttachedParent("attach-immediate", original, logicalDefinition);
+                var delayed = AttachedParent("attach-after-republish", original, logicalDefinition, waitFirst: true);
+                var terminating = AttachedParent("attach-stop", longChild);
+                var detached = AttachedParent("attach-refuse-detached", original, logicalDefinition, detached: true);
+                var invalidInputs = AttachedParent("attach-refuse-input", original, logicalDefinition, dynamicInputs: true);
+                foreach (var artifact in new[] { original, replacement, longChild, immediate, delayed, terminating, detached, invalidInputs })
+                    await materials.SaveAsync(artifact, token);
+                await PublishAsync(PublishedAs(original, logicalDefinition, "1"), "default");
+                await PublishAsync(longChild, "default");
+
+                var isolated = app.Services.GetRequiredService<KernelTestRuns>().Reads;
+                var production = app.Services.GetRequiredService<KernelRuns>();
+                await using var authoring = await scopes.CreateAsyncScopeAsync(Scope);
+                var services = authoring.ServiceProvider;
+                var scopeStore = services.GetRequiredService<IWorkflowTestScopeStore>();
+                var pins = services.GetRequiredService<IRuntimeKernelExecutablePinStore>();
+
+                var (first, firstActor) = await StartAsync(immediate);
+                var firstChild = await FindChildAsync(first, firstActor, original, logicalDefinition);
+                await ExpectOriginalCompletionAsync(firstActor, firstChild);
+
+                var (held, heldActor) = await StartAsync(delayed);
+                var waitControl = services.GetRequiredService<IWorkflowTestRunWaitControl>();
+                WorkflowTestRunActiveWait? wait;
+                while ((wait = (await waitControl.ReadAsync(held, heldActor.Id, token)).SingleOrDefault()) is null)
+                    await Task.Delay(35, token);
+                await PublishAsync(PublishedAs(replacement, logicalDefinition, "2"), "default", expectedRevision: 1);
+                var digest = TestRunDeliveryReceipt.Digest(null);
+                var delivery = new TestRunDeliveryReceipt(held.ScopeId, Guid.NewGuid().ToString("D"), wait.WaitId, digest, digest);
+                Assert.Equal("Delivered", await waitControl.DeliverAsync(held, heldActor.Id, delivery, null, token));
+                var republishedChild = await FindChildAsync(held, heldActor, original, logicalDefinition);
+                await ExpectOriginalCompletionAsync(heldActor, republishedChild);
+
+                var (stopped, stoppedActor) = await StartAsync(terminating);
+                var runningChild = await FindChildAsync(stopped, stoppedActor, longChild);
+                Assert.Equal(Contract.ActorStatus.Running, (await isolated.GetAsync(runningChild, token)).Run?.View.Header.Status);
+                await scopeStore.CloseAsync(new(stopped.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, DateTimeOffset.UtcNow), token);
+                await services.GetRequiredService<IWorkflowDirectTestRunDispatcher>().RequestStopAsync(stopped, stoppedActor.Id, token);
+                while ((await isolated.GetAsync(runningChild, token)).Run?.View.Header.Status == Contract.ActorStatus.Running)
+                    await Task.Delay(35, token);
+                Assert.Equal(Contract.ActorStatus.Cancelled, (await isolated.GetAsync(runningChild, token)).Run?.View.Header.Status);
+                Assert.Equal(stoppedActor.Id, (await scopeStore.FindAsync(stopped.ScopeId, token))?.IsolatedActor?.ActorReference);
+
+                var (refused, _, refusal) = await SubmitEphemeralTestAsync(services, detached);
+                Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, refusal.CommandDispatch.Status);
+                Assert.Contains("Wait for completion", refusal.CommandDispatch.Reason);
+                Assert.Null((await scopeStore.FindAsync(refused.ScopeId, token))?.IsolatedActor);
+
+                var birthsBeforeInvalid = await DurableRowCountAsync(birthsOnly: true);
+                var (_, _, invalid) = await SubmitEphemeralTestAsync(services, invalidInputs,
+                    new Dictionary<string, object?> { ["childInputs"] = new Dictionary<string, int> { ["message"] = 42 } });
+                Assert.Equal(WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted, invalid.CommandDispatch.Status);
+                var invalidRoot = new Contract.ActorRef(Assert.IsType<string>(invalid.WorkflowExecutionId));
+                Assert.Equal("dispatch.test.invalid-input", (await isolated.GetAsync(invalidRoot, token)).Run?.Run.SubStatus);
+                Assert.Equal(birthsBeforeInvalid + 1, await DurableRowCountAsync(birthsOnly: true));
+
+                var provider = app.Services.GetRequiredService<KernelShellStorage>();
+                var retirement = new KernelDirectTestRunRetirement(isolated.Tenant, await shell.ReadAsync(token), provider.OpenOperatorsAsync,
+                    new FakeTimeProvider(DateTimeOffset.UtcNow.AddMinutes(31)), app.Services.GetRequiredService<ILogger<KernelDirectTestRunRetirement>>());
+                while (!(await isolated.GetAsync(runningChild, token)).Missing)
+                {
+                    await retirement.SweepPageAsync(null, token);
+                    await Task.Delay(80, token);
+                }
+                while ((await pins.ListPinnedExecutableArtifactIdsAsync(token)).Contains(longChild.Identity.ArtifactId))
+                    await Task.Delay(80, token);
+
+                async Task<(WorkflowTestScope Scope, Contract.ActorRef Root)> StartAsync(WorkflowExecutable executable)
+                {
+                    var (test, _, started) = await SubmitReadyEphemeralTestAsync(services, executable);
+                    Assert.True(started.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Accepted, started.CommandDispatch.Reason);
+                    Assert.False(started.TestRunCompletedWithoutRecord);
+                    var actor = new Contract.ActorRef(Assert.IsType<string>(started.WorkflowExecutionId));
+                    Assert.Equal(actor.Id, (await scopeStore.FindAsync(test.ScopeId, token))?.IsolatedActor?.ActorReference);
+                    Assert.True((await production.GetAsync(actor, token)).Missing);
+                    return (test, actor);
+                }
+
+                async Task<Contract.ActorRef> FindChildAsync(WorkflowTestScope test, Contract.ActorRef parent, WorkflowExecutable selected,
+                    string? logicalDefinition = null)
+                {
+                    while (true)
+                    {
+                        var through = Assert.IsType<string>(await pins.ReadOpenTailAsync(Scope, token));
+                        var page = await pins.ListOpenAsync(Scope, null, through, 32, token);
+                        var found = new List<Contract.ActorRef>();
+                        foreach (var pin in page.Items.Where(pin => pin.IsolatedTenant == isolated.Tenant.Tenant && pin.Executable == selected.Identity))
+                        {
+                            var actor = new Contract.ActorRef(pin.ActorReference);
+                            if ((await isolated.GetAsync(actor, token)).Run is not { } run || run.View.Header.Parent != parent) continue;
+                            Assert.Equal(test.ScopeId, run.Run.TestStart?.ScopeId);
+                            Assert.Equal(parent.Id, run.Run.TestStart?.RootActor);
+                            Assert.Equal(logicalDefinition ?? selected.Identity.DefinitionId, run.Run.Definition);
+                            Assert.True((await production.GetAsync(actor, token)).Missing);
+                            Assert.Null(await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(actor.Id, token));
+                            found.Add(actor);
+                        }
+                        if (found.Count != 0) return Assert.Single(found);
+                        await Task.Delay(35, token);
+                    }
+                }
+
+                async Task ExpectOriginalCompletionAsync(Contract.ActorRef parent, Contract.ActorRef child)
+                {
+                    while ((await isolated.GetAsync(parent, token)).Run?.View.Header.Status == Contract.ActorStatus.Running)
+                        await Task.Delay(35, token);
+                    Assert.Equal(Contract.ActorStatus.Finished, (await isolated.GetAsync(parent, token)).Run?.View.Header.Status);
+                    var ended = Assert.IsType<long>((await isolated.GetAsync(child, token)).Run?.View.Header.EndedAt);
+                    var output = await isolated.ReadTerminalOutputAsync(child, ended, includeValues: true, token);
+                    using var values = JsonDocument.Parse(Assert.IsType<byte[]>(output?.Values));
+                    Assert.Equal("original-default", values.RootElement.GetProperty("selection").GetString());
+                    using var sameTenant = await ReadChildAsync(child, Scope.Value);
+                    Assert.Equal(HttpStatusCode.OK, sameTenant.StatusCode);
+                    using var otherTenant = await ReadChildAsync(child, "other-tenant");
+                    Assert.Equal(HttpStatusCode.NotFound, otherTenant.StatusCode);
+                }
+
+                async Task<HttpResponseMessage> ReadChildAsync(Contract.ActorRef child, string tenant)
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Get, $"/runtime/workflows/instances/{child.Id}");
+                    request.Headers.Add("X-Fixture-Subject", "accepted");
+                    request.Headers.Add("X-Fixture-Tenant", tenant);
+                    request.Headers.Add("X-Fixture-Read", "yes");
+                    request.Headers.Add("X-Fixture-Inspect", "yes");
+                    return await http.SendAsync(request, token);
+                }
+            }
+
             async Task VerifyEphemeralMappingRefusalAsync(WorkflowExecutable executable)
             {
                 var before = await DurableRowCountAsync();
@@ -823,15 +984,7 @@ public sealed partial class KernelPublishedExecuteTests
                 await using var authoring = await scopes.CreateAsyncScopeAsync(Scope);
                 var author = authoring.ServiceProvider;
                 var scopeStore = author.GetRequiredService<IWorkflowTestScopeStore>();
-                var started = System.Diagnostics.Stopwatch.GetTimestamp();
-                var (test, source, receipt) = await SubmitEphemeralTestAsync(author, executable);
-                while (receipt.CommandDispatch.Metadata.GetValueOrDefault("elsa.kernel.start.persistence-outcome") == "Unavailable" &&
-                    System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(8))
-                {
-                    // An owner may still be acquiring its partitions. A definitive shed response did not enter the queue.
-                    await Task.Delay(100, token);
-                    (test, source, receipt) = await SubmitEphemeralTestAsync(author, executable);
-                }
+                var (test, source, receipt) = await SubmitReadyEphemeralTestAsync(author, executable);
                 Assert.True(receipt.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Accepted, receipt.CommandDispatch.Reason);
                 Assert.Equal(source.SourceReferenceId, receipt.PinnedSource?.SourceReferenceId);
                 var durable = Assert.IsType<WorkflowTestScopeRecord>(await scopeStore.FindAsync(test.ScopeId, token));
@@ -999,15 +1152,34 @@ public sealed partial class KernelPublishedExecuteTests
             }
 
             async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Receipt)>
-                SubmitEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable)
+                SubmitEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable, IReadOnlyDictionary<string, object?>? inputs = null)
             {
-                var (test, source, start) = await PrepareEphemeralTestAsync(author, executable);
+                var (test, source, start) = await PrepareEphemeralTestAsync(author, executable, inputs);
                 var dispatcher = author.GetRequiredService<IWorkflowDirectTestRunDispatcher>();
                 return (test, source, await dispatcher.DispatchAsync(start, WorkflowExecutableReferenceScope.TestRun, cancellationToken: token));
             }
 
+            async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Receipt)>
+                SubmitReadyEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable)
+            {
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                var result = await SubmitEphemeralTestAsync(author, executable);
+                while (result.Receipt.CommandDispatch.Metadata.GetValueOrDefault("elsa.kernel.start.persistence-outcome") == "Unavailable" &&
+                    System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(8))
+                {
+                    // An owner may still be acquiring partitions. A definitive shed response did not enter the queue.
+                    var now = DateTimeOffset.UtcNow;
+                    var store = author.GetRequiredService<IWorkflowTestScopeStore>();
+                    await store.CloseAsync(new(result.Test.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, now), token);
+                    await store.CompleteAsync(result.Test.ScopeId, now, token);
+                    await Task.Delay(100, token);
+                    result = await SubmitEphemeralTestAsync(author, executable);
+                }
+                return result;
+            }
+
             async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchRequest Request)>
-                PrepareEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable)
+                PrepareEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable, IReadOnlyDictionary<string, object?>? inputs = null)
             {
                 var now = DateTimeOffset.UtcNow;
                 var selected = new WorkflowTestScope(Guid.NewGuid().ToString("N"), now.AddMinutes(30), Scope.Value, new(Scope.Value));
@@ -1018,7 +1190,7 @@ public sealed partial class KernelPublishedExecuteTests
                     WorkflowExecutableReferenceScope.TestRun, ExpiresAt: selected.ExpiresAt, TenantId: selected.TenantId);
                 await author.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(reference, token);
                 var start = new WorkflowExecutionStartDispatchRequest(id.ArtifactId, "workflow-designer-test-run",
-                    workflowExecutionId: null, idempotencyKey: null, metadata: null, variables: null, inputs: null,
+                    workflowExecutionId: null, idempotencyKey: null, metadata: null, variables: null, inputs: inputs,
                     stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.TestRun,
                     sourceSelection: new(sourceReferenceId: reference.SourceReferenceId),
                     provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
@@ -1184,15 +1356,16 @@ public sealed partial class KernelPublishedExecuteTests
         }
         finally { await shell.StopAsync(CancellationToken.None); }
 
-        async Task PublishAsync(WorkflowExecutable executable, string slot)
+        async Task PublishAsync(WorkflowExecutable executable, string slot, long expectedRevision = 0)
         {
             var id = executable.Identity;
             var now = DateTimeOffset.UtcNow;
             var source = new WorkflowExecutableSourceReference("candidate", id.ArtifactId, "definition", id.DefinitionId, id.ArtifactVersion,
                 id.DefinitionId, id.DefinitionVersionId, id.ArtifactVersion, now, now, WorkflowExecutableReferenceScope.Published);
             var coordinator = stores.GetRequiredService<IWorkflowActivationCoordinator>();
-            var result = await coordinator.ActivateAsync(new(executable, source, slot, "publish-" + id.DefinitionId,
-                WorkflowActivationSource.Publishing, 0), token);
+            var activation = "publish-" + id.DefinitionId + (expectedRevision == 0 ? "" : "-" + id.ArtifactVersion);
+            var result = await coordinator.ActivateAsync(new(executable, source, slot, activation,
+                WorkflowActivationSource.Publishing, expectedRevision), token);
             Assert.True(result.Succeeded, result.Diagnostic);
         }
     }
@@ -1234,6 +1407,35 @@ public sealed partial class KernelPublishedExecuteTests
         executable.ResumeTargets, executable.CreatedAt, executable.CompatibilityMetadata, executable.InputContract, executable.Dependencies,
         executable.RuntimeRequirements, executable.StorageDriverRequirements, executable.IncidentStrategy,
         persistenceMode: PersistenceMode.Ephemeral, workflowVariables: executable.WorkflowVariables);
+
+    private static WorkflowExecutable WithInputContract(WorkflowExecutable executable, WorkflowExecutableInputContract? contract = null) =>
+        new(executable.Identity, executable.RootActivity, executable.ResumeTargets, executable.CreatedAt,
+            executable.CompatibilityMetadata, contract ?? new(WorkflowExecutableInputContract.CurrentVersion, []), executable.Dependencies,
+            executable.RuntimeRequirements, executable.StorageDriverRequirements, executable.IncidentStrategy, workflowVariables: executable.WorkflowVariables);
+
+    private static WorkflowExecutable AttachedParent(string id, WorkflowExecutable child, string? logicalDefinition = null,
+        bool waitFirst = false, bool detached = false, bool dynamicInputs = false)
+    {
+        const string dispatch = "dispatch";
+        var identity = child.Identity;
+        var definition = logicalDefinition ?? identity.DefinitionId;
+        var publication = new WorkflowExecutableSourceProvenance("activation-ref:publish-" + definition, "definition", definition, "1",
+            definition, definition + "-v1", "1", "publish-" + definition, WorkflowActivationSlotIdentity.Create(definition, "default"));
+        List<RuntimeInputBinding> inputs = [Literal("WorkflowDefinitionId", definition, "String"), Literal("WaitForCompletion", !detached, "Boolean")];
+        if (dynamicInputs) inputs.Add(Request("Inputs", "childInputs"));
+        var start = Node(dispatch, Types.Dispatch, inputs.ToArray(),
+            metadata: new Dictionary<string, string>
+            {
+                ["Elsa.DispatchWorkflow.PinnedTarget"] = JsonSerializer.Serialize(new { executable = identity, source = publication },
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            });
+        var root = waitFirst ? Sequence("root", Node("gate", Types.Event,
+            [Literal("EventName", "continue", "String"), Literal("CanStartWorkflow", false, "Boolean")]), start) : Sequence("root", start);
+        var executable = ExecutableOf(id, id, root);
+        return new(executable.Identity, root, executable.ResumeTargets, executable.CreatedAt, executable.CompatibilityMetadata,
+            executable.InputContract, [new(identity.ArtifactId, identity.ArtifactHash, [dispatch])], executable.RuntimeRequirements,
+            executable.StorageDriverRequirements, executable.IncidentStrategy, persistenceMode: PersistenceMode.Ephemeral);
+    }
 
     private static WorkflowExecutable PublishedAs(WorkflowExecutable canonical, string definition, string version) =>
         new(canonical.Identity with { DefinitionId = definition, DefinitionVersionId = definition + "-v" + version, ArtifactVersion = version },
@@ -1345,6 +1547,9 @@ public sealed partial class KernelPublishedExecuteTests
             if (!await inner.TryPinTestRunAsync(pin, scope, source, observedBinding, token)) return false;
             return boundary.AfterTestAdmission is not { } after || await after(pin, token);
         }
+        public ValueTask<bool> TryPinAttachedTestRunAsync(RuntimeKernelExecutablePin pin, WorkflowTestScope scope,
+            WorkflowExecutableSourceReference source, WorkflowTestRunActorBinding root, CancellationToken token) =>
+            inner.TryPinAttachedTestRunAsync(pin, scope, source, root, token);
         public ValueTask<string?> ReadOpenTailAsync(PersistenceScope scope, CancellationToken token) => inner.ReadOpenTailAsync(scope, token);
         public ValueTask<RuntimeKernelExecutablePinPage> ListOpenAsync(PersistenceScope scope, string? after, string through, int limit,
             CancellationToken token) => inner.ListOpenAsync(scope, after, through, limit, token);

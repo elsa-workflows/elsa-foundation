@@ -122,8 +122,13 @@ public sealed class Node(string id, Type type)
     public string? Slot { get; set; }
     /// <summary>The time allowed for a background activity's job.</summary>
     public TimeSpan? JobTimeout { get; init; }
+    /// <summary>The exact immutable dependency selected at compilation for this Dispatch Workflow in a Test Run.</summary>
+    public TestRunChildSelection? TestRunChild { get; init; }
     internal bool External, Background;
 }
+
+/// <summary>Identifies the compiled executable that one isolated Dispatch Workflow may start.</summary>
+public sealed record TestRunChildSelection(string ArtifactId, string Definition, string ExecutableSelection);
 
 public sealed class Workflow
 {
