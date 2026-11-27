@@ -119,6 +119,17 @@ if (args is ["pg-root-operators", var operatorWriter and ("owned" or "ef"), var 
 if (args is ["sqlite-plan-projection", ..]) return await SqlitePlanFixtureCommand.RunAsync(args);
 if (args is ["keyed-root", var keyedProvider and ("postgres" or "sqlite"), var keyedFence and ("checked" or "in-batch")])
     return await KeyedRootChecks.RunAsync(keyedProvider == "postgres", keyedFence == "in-batch");
+if (args is ["pg-k12-ownership", .. var k12Args])
+{
+    if (k12Args is [var run, var scenario and ("crash" or "wedge"), var role and ("survivor" or "victim" or "revive"),
+        var topology and ("network" or "local")] && Guid.TryParse(run, out var runId))
+        return await PostgresNetworkOwnershipChecks.RunAsync(runId, scenario, role, local: topology == "local");
+
+    Console.Error.WriteLine("Usage: pg-k12-ownership <run-uuid> <crash|wedge> <survivor|victim|revive> <network|local>");
+    Console.Error.WriteLine("Use the same Release binaries, run UUID and fresh dedicated KERNEL_PREVIEW_POSTGRES database for all roles.");
+    Console.Error.WriteLine("Start survivor first. Launch victim when survivor logs start-victim and revive on that same host when it logs revive.");
+    return 2;
+}
 if (args is ["sqlite-shipped-install"]) return await SqliteShippedInstallChecks.RunAsync();
 if (args is ["sqlite-root-terminal-envelope", var sqliteTerminalFence and ("checked" or "in-batch")])
     return await ShippedNativeTerminalEnvelopeChecks.RunAsync(postgres: false, inBatch: sqliteTerminalFence == "in-batch");
