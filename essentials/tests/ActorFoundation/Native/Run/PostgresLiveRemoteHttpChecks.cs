@@ -36,7 +36,7 @@ internal static class PostgresLiveRemoteHttpChecks
         for (var depth = 0; depth < 64; depth++) deep = new JsonArray(deep);
         var refusedDepth = false;
         try { frames.Encode(channel, fits with { Item = deep }); }
-        catch (InvalidOperationException) { refusedDepth = true; }
+        catch (System.Text.Json.JsonException error) when (error.InnerException is InvalidOperationException) { refusedDepth = true; }
         Check(refusedDepth, "the producer refuses a nested reply that cannot pass the receiver's wire depth");
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
