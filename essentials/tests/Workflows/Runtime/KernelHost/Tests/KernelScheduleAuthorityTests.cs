@@ -164,6 +164,10 @@ public sealed class KernelScheduleAuthorityTests
         payload["PinnedStart"] = JsonSerializer.Serialize(pinned with { TypeData = typeData.ToJsonString() });
         Assert.Null(KernelScheduleAuthority.ReadOffer(original with { Authority = payload.ToJsonString() }, fixture.Control.Scope, fixture.FoundationTenant));
 
+        typeData["ExecutableSelection"] = JsonSerializer.Serialize(fixture.Control.Owner.Executable, new JsonSerializerOptions { WriteIndented = true });
+        payload["PinnedStart"] = JsonSerializer.Serialize(pinned with { TypeData = typeData.ToJsonString() });
+        Assert.Null(KernelScheduleAuthority.ReadOffer(original with { Authority = payload.ToJsonString() }, fixture.Control.Scope, fixture.FoundationTenant));
+
         typeData.Remove("ExecutableSelection");
         var legacyPinned = JsonSerializer.Serialize(pinned with { TypeData = typeData.ToJsonString() });
         payload["PinnedStart"] = legacyPinned;

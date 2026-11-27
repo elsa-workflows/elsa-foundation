@@ -48,7 +48,8 @@ public static class NativeExecutableMapper
         {
             return JsonSerializer.Deserialize<WorkflowExecutableIdentity>(token) is { } identity && identity.ArtifactId == artifactId &&
                 !string.IsNullOrWhiteSpace(identity.DefinitionId) && !string.IsNullOrWhiteSpace(identity.DefinitionVersionId) &&
-                !string.IsNullOrWhiteSpace(identity.ArtifactHash) && !string.IsNullOrWhiteSpace(identity.ArtifactVersion) ? identity : null;
+                !string.IsNullOrWhiteSpace(identity.ArtifactHash) && !string.IsNullOrWhiteSpace(identity.ArtifactVersion) &&
+                token == JsonSerializer.Serialize(identity) ? identity : null;
         }
         catch (JsonException) { return null; }
     }

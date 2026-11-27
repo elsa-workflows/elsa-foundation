@@ -432,8 +432,13 @@ internal static partial class KernelScheduleOccurrenceContract
         clock.Advance(TimeSpan.FromMinutes(2));
         var renewedDeadline = clock.GetUtcNow().AddMinutes(1);
         var alternate = final with { DefinitionId = "alternate-canonical-source", DefinitionVersionId = "alternate-v3" };
-        var selected = Successor(due) with { PinnedStart = PinnedStart(alternate) };
+        var selected = Successor(due) with { PinnedStart = PinnedStart(JsonSerializer.Serialize(alternate)) };
         await Assert.ThrowsAsync<ArgumentException>(() => store.TryHandoffSelectedAttemptAsync(due, selected, final, latest.Stamp,
+            renewedDeadline, ReadClock).AsTask());
+        var equivalentToken = JsonSerializer.Serialize(final, new JsonSerializerOptions { WriteIndented = true });
+        var noncanonical = selected with { PinnedStart = PinnedStart(equivalentToken) };
+        await Assert.ThrowsAsync<ArgumentException>(() => store.TryAcceptSelectedAttemptAsync(noncanonical, final, renewedDeadline, ReadClock).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => store.TryHandoffSelectedAttemptAsync(due, noncanonical, final, latest.Stamp,
             renewedDeadline, ReadClock).AsTask());
 
         // Use real leases for the same artifact to exercise the database fence independently of lease preflight.
@@ -486,9 +491,9 @@ internal static partial class KernelScheduleOccurrenceContract
 
         RuntimeKernelScheduleOccurrence Successor(RuntimeKernelScheduleOccurrence offer) =>
             offer with { Scope = named, ActivationId = finalActivation, PublicationRevision = 3, Executable = final, PinnedStart = "{\"version\":3}" };
-        static string PinnedStart(WorkflowExecutableIdentity material) => JsonSerializer.Serialize(new
+        static string PinnedStart(string token) => JsonSerializer.Serialize(new
         {
-            TypeData = JsonSerializer.Serialize(new { ExecutableSelection = JsonSerializer.Serialize(material) })
+            TypeData = JsonSerializer.Serialize(new { ExecutableSelection = token })
         });
         ValueTask<DateTimeOffset> ReadClock(CancellationToken _) => ValueTask.FromResult(clock.GetUtcNow());
         static ValueTask<DateTimeOffset> NoClock(CancellationToken _) => throw new InvalidOperationException("An immutable replay does not need a clock.");

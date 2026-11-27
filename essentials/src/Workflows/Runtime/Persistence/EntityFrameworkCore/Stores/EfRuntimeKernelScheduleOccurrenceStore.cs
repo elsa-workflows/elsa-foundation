@@ -444,17 +444,18 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         if (payload.RootElement.ValueKind != JsonValueKind.Object)
             throw new ArgumentException("The scheduled start payload must be a JSON object.", nameof(occurrence));
         if (selectedMaterial is not null && (selectedMaterial.ArtifactId != occurrence.Executable.ArtifactId ||
-            selectedMaterial.ArtifactHash != occurrence.Executable.ArtifactHash || ReadSelectedMaterial(payload.RootElement) != selectedMaterial))
+            selectedMaterial.ArtifactHash != occurrence.Executable.ArtifactHash || !MatchesSelectedMaterial(payload.RootElement, selectedMaterial)))
             throw new ArgumentException("The selected material must match the published artifact and the pinned Native start token.", nameof(occurrence));
     }
 
-    private static WorkflowExecutableIdentity? ReadSelectedMaterial(JsonElement start)
+    private static bool MatchesSelectedMaterial(JsonElement start, WorkflowExecutableIdentity selectedMaterial)
     {
-        if (!start.TryGetProperty("TypeData", out var data) || data.ValueKind != JsonValueKind.String) return null;
+        if (!start.TryGetProperty("TypeData", out var data) || data.ValueKind != JsonValueKind.String) return false;
         using var header = JsonDocument.Parse(data.GetString()!);
+        // Native resumes only the literal token emitted by the executable mapper.
         return header.RootElement.ValueKind == JsonValueKind.Object &&
-            header.RootElement.TryGetProperty("ExecutableSelection", out var token) && token.ValueKind == JsonValueKind.String
-            ? JsonSerializer.Deserialize<WorkflowExecutableIdentity>(token.GetString()!) : null;
+            header.RootElement.TryGetProperty("ExecutableSelection", out var token) && token.ValueKind == JsonValueKind.String &&
+            token.GetString() == JsonSerializer.Serialize(selectedMaterial);
     }
 
     private static bool IsReference(string? reference) =>
