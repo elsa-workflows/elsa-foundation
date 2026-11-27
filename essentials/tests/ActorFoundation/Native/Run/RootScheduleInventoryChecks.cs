@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data.Common;
 using Elsa.ActorFoundation.Hosting;
 using Kernel.Durable;
@@ -14,7 +15,8 @@ namespace Kernel.Native.Run;
 
 internal static class RootScheduleInventoryChecks
 {
-    internal static async Task<int> RunAsync(bool postgres, bool settleOccurrences = false, bool fenceInBatch = true)
+    internal static async Task<int> RunAsync(bool postgres, bool settleOccurrences = false, bool fenceInBatch = true,
+        bool trackLineage = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var token = timeout.Token;
@@ -33,9 +35,11 @@ internal static class RootScheduleInventoryChecks
                     DataSource = Path.Combine(directory!.FullName, "schedules.db"), ForeignKeys = true, Pooling = false, DefaultTimeout = 1
                 }.ConnectionString);
 
-            var format = settleOccurrences ? StoreFormat.RootScheduleSettlementQualification : StoreFormat.RootScheduleInventoryQualification;
+            var format = trackLineage ? StoreFormat.RootScheduleLineageQualification
+                : settleOccurrences ? StoreFormat.RootScheduleSettlementQualification : StoreFormat.RootScheduleInventoryQualification;
             var definitions = new SqliteAdmissionDefinitions();
             KernelDb Open() => !postgres ? KernelDb.ForSqliteRootRuntime(options.Options, definitions, qualificationFormat: format)
+                : trackLineage ? KernelDb.ForPostgresRootScheduleLineageQualification(options.Options)
                 : settleOccurrences ? KernelDb.ForPostgresRootScheduleSettlementQualification(options.Options)
                 : KernelDb.ForPostgresRootScheduleInventoryQualification(options.Options);
             await using var db = Open();
@@ -187,22 +191,69 @@ internal static class RootScheduleInventoryChecks
         const string tenant = "tenant-a";
         var occurrence = new RootScheduleOccurrence(timer, reference, 1, "~timer-a", 1000);
         var pinned = new StartSpec("workflow", """{"Workflow":"version-a"}""", Input: "original");
+        var foundation = postgres ? null : SqliteEmbeddedFoundation.ForScheduleQualification(db.Database.GetDbConnection().DataSource,
+            "scheduled-occurrence-relay", pinned.Model, trackLineage: db.UsesRootScheduleLineage);
+        if (foundation is not null) await foundation.InstallShippedAsync(token);
+        var bound = EmbeddedTenant.Bind(tenant);
+        if (postgres)
+        {
+            var shared = PostgresPreviewHosting.CreateRequests(open, "scheduled-occurrence-relay", pinned.Model);
+            await PostgresPreviewHosting.OpenScheduleOccurrencesAsync(open, bound, pinned.Model, ScheduleActor.ActorType, shared, token);
+            try
+            {
+                await PostgresPreviewHosting.OpenScheduleOccurrencesAsync(() => open(), bound, pinned.Model,
+                    ScheduleActor.ActorType, shared, token);
+                throw new InvalidOperationException("The relay accepted another database factory's held requests.");
+            }
+            catch (ArgumentException) { Console.WriteLine("ok the PostgreSQL relay enforces the shared request binding"); }
+
+            var pressure = RootAdmissionPressure.CreateDefault().Backlog.HighWater + 1;
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Partitions" SET "Backlog" = "Backlog" + {pressure}
+                """, token);
+            try
+            {
+                var throttled = await PostgresPreviewHosting.OpenScheduleOccurrencesAsync(open, bound, pinned.Model,
+                    ScheduleActor.ActorType, cancellationToken: token);
+                var denied = await throttled.AdmitAsync(Wire(occurrence), new(pinned.Model, pinned.Definition, pinned.Input), token);
+                Require(denied is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.InboxFull, RetryAfter: not null },
+                    "a PostgreSQL relay without shared requests still honors the persisted partition backlog");
+            }
+            finally
+            {
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Partitions" SET "Backlog" = "Backlog" - {pressure}
+                    """, token);
+            }
+        }
+        var relay = postgres
+            ? await PostgresPreviewHosting.OpenScheduleOccurrencesAsync(open, bound, pinned.Model, ScheduleActor.ActorType, cancellationToken: token)
+            : foundation!.BindScheduleOccurrences(bound, ScheduleActor.ActorType);
+        try
+        {
+            await relay.AdmitAsync(Wire(occurrence), new(ScheduleActor.ActorType, "{}"), token);
+            throw new InvalidOperationException("A host occurrence admitted the auxiliary type as its workflow.");
+        }
+        catch (ArgumentException) { Console.WriteLine("ok the host occurrence relay enforces the configured primary workflow type"); }
         var before = await db.Messages.CountAsync(token);
-        var otherTenant = await AdmitAsync("tenant-b", occurrence, pinned);
+        var foreign = postgres
+            ? await pg.ReadScheduleRootsAsync("tenant-b", timer.Definition, null, 1, token)
+            : await sqlite.ReadScheduleRootsAsync("tenant-b", timer.Definition, null, 1, token);
+        var otherTenant = await AdmitAsync(occurrence with { ScheduleReference = foreign.Roots.Single().Reference }, pinned);
         Require(otherTenant is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch },
             "an occurrence cannot use a different tenant's schedule binding");
-        var contenders = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(() => AdmitAsync(tenant, occurrence, pinned), token)));
+        var contenders = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(() => AdmitAsync(occurrence, pinned), token)));
         var first = contenders.Single(item => item.Outcome == Contract.AdmissionOutcome.Accepted);
         Require(first.Actor is not null && contenders.Count(item => item.Outcome == Contract.AdmissionOutcome.Duplicate && item.Actor == first.Actor) == 3 &&
             await db.Messages.CountAsync(token) == before + 1, "a repeated relay acceptance writes one workflow birth and queues one creator");
-        Require((await AdmitAsync(tenant, occurrence, pinned)) is { Outcome: Contract.AdmissionOutcome.Duplicate } replay && replay.Actor == first.Actor &&
+        Require((await AdmitAsync(occurrence, pinned)) is { Outcome: Contract.AdmissionOutcome.Duplicate } replay && replay.Actor == first.Actor &&
             !await db.Database.SqlQueryRaw<bool>("""SELECT EXISTS (SELECT 1 FROM "FoundationRootReceipts") AS "Value" """).SingleAsync(token),
             "replay uses the durable birth even with no generic operation receipt");
 
         await MustRefuseAsync(occurrence, pinned with { Definition = """{"Workflow":"version-b"}""" });
         await MustRefuseAsync(occurrence with { Due = 2000 }, pinned);
         Require(await db.Messages.CountAsync(token) == before + 1, "changed pinned workflow or due time adds no creator to the existing occurrence");
-        var next = await AdmitAsync(tenant, occurrence with { ArmGeneration = 2 }, pinned);
+        var next = await AdmitAsync(occurrence with { ArmGeneration = 2 }, pinned);
         Require(next.Outcome == Contract.AdmissionOutcome.Accepted && next.Actor != first.Actor &&
             await db.Messages.CountAsync(token) == before + 2, "the next arm generation has a distinct occurrence even with the same timer identity");
         Require(!await RetiredAsync(occurrence, first.Actor!.Value.Id),
@@ -210,7 +261,7 @@ internal static class RootScheduleInventoryChecks
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "Target" = (SELECT "Actor" FROM "FoundationRootBirths" WHERE "Reference" = {first.Actor?.Id})
             """, token);
-        Require((await AdmitAsync(tenant, occurrence, pinned)).Actor == first.Actor &&
+        Require((await AdmitAsync(occurrence, pinned)).Actor == first.Actor &&
             await db.Messages.CountAsync(token) == before + 1, "replay does not require or recreate the original inbox row");
         Require(!await RetiredAsync(occurrence, first.Actor.Value.Id), "an absent actor body never proves retirement");
         if (postgres)
@@ -224,7 +275,7 @@ internal static class RootScheduleInventoryChecks
                 """, token);
             try { await MustRefuseAsync(blocked, pinned); }
             finally { await db.Database.ExecuteSqlRawAsync("""DROP TRIGGER schedule_reject_creator ON "Messages"; DROP FUNCTION schedule_reject_creator();""", token); }
-            Require((await AdmitAsync(tenant, blocked, pinned)).Outcome == Contract.AdmissionOutcome.Accepted &&
+            Require((await AdmitAsync(blocked, pinned)).Outcome == Contract.AdmissionOutcome.Accepted &&
                 await db.Messages.CountAsync(token) == before + 2, "a suppressed PostgreSQL creator rolls back its birth and the exact retry can enqueue it");
         }
 
@@ -246,23 +297,121 @@ internal static class RootScheduleInventoryChecks
         Require(!await RetiredAsync(nextOccurrence, first.Actor.Value.Id),
             "retirement proof is tied to the exact occurrence birth");
         var messageCount = await db.Messages.CountAsync(token);
-        var retiredReplay = await AdmitAsync(tenant, nextOccurrence, pinned);
+        var retiredReplay = await AdmitAsync(nextOccurrence, pinned);
         Require(retiredReplay is { Outcome: Contract.AdmissionOutcome.Duplicate } && retiredReplay.Actor == nextActor &&
             await db.Messages.CountAsync(token) == messageCount, "the retired birth replays without recreating its inbox");
+        if (db.UsesRootScheduleLineage)
+        {
+            var definition = postgres
+                ? """CREATE INDEX "IX_FoundationScheduleLineage_Cohort" ON "FoundationScheduleLineage" ("Tenant", "RootReference", "Retired")"""
+                : await db.Database.SqlQueryRaw<string>("""
+                    SELECT sql AS "Value" FROM sqlite_schema WHERE name = 'IX_FoundationScheduleLineage_Cohort'
+                    """).SingleAsync(token);
+            await db.Database.ExecuteSqlRawAsync("""
+                DROP INDEX "IX_FoundationScheduleLineage_Cohort";
+                CREATE INDEX "IX_FoundationScheduleLineage_Cohort"
+                    ON "FoundationScheduleLineage" ("Reference", "Retired");
+                """, token);
+            try
+            {
+                await RetiredAsync(nextOccurrence, nextActor.Id);
+                throw new InvalidOperationException("Cohort retirement accepted an incompatible live-member index.");
+            }
+            catch (StoreFormatException) { Console.WriteLine("ok cohort retirement refuses an incompatible live-member index"); }
+            finally
+            {
+                await db.Database.ExecuteSqlRawAsync("""DROP INDEX "IX_FoundationScheduleLineage_Cohort" """, token);
+                await db.Database.ExecuteSqlRawAsync(definition, token);
+            }
+        }
+        if (postgres && db.UsesRootScheduleLineage)
+        {
+            var beforeDrift = await db.Messages.CountAsync(token);
+            try
+            {
+                await using var changing = open();
+                await using var schema = await changing.Database.BeginTransactionAsync(token);
+                await changing.Database.ExecuteSqlRawAsync("""
+                    ALTER TABLE "FoundationScheduleLineage" ENABLE ROW LEVEL SECURITY;
+                    """, token);
+                var proof = RetiredAsync(nextOccurrence, nextActor.Id);
+                do
+                {
+                    if (proof.IsCompleted) throw new InvalidOperationException("The lineage proof did not wait for its DDL lock.");
+                    await Task.Delay(10, token);
+                } while (!await db.Database.SqlQueryRaw<bool>("""
+                    SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_locks
+                        WHERE relation = pg_catalog.to_regclass('"FoundationScheduleLineage"')
+                            AND mode = 'RowExclusiveLock' AND NOT granted) AS "Value"
+                    """).SingleAsync(token));
+                await schema.CommitAsync(token);
+                await RequireUnsafeDefinitionRefusalAsync("row-level security committed while the proof waited", proof);
+            }
+            finally
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    ALTER TABLE "FoundationScheduleLineage" DISABLE ROW LEVEL SECURITY;
+                    """, token);
+            }
 
-        Task<Contract.Admission> AdmitAsync(string tenantId, RootScheduleOccurrence item, StartSpec spec) => postgres
-            ? pg.AdmitScheduledOccurrenceAsync(tenantId, item, spec, token)
-            : sqlite.AdmitScheduledOccurrenceAsync(tenantId, item, spec, token);
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE FUNCTION rewrite_live_lineage() RETURNS trigger LANGUAGE plpgsql AS $body$
+                BEGIN NEW."Retired" := true; RETURN NEW; END; $body$;
+                CREATE TRIGGER rewrite_live_lineage BEFORE INSERT ON "FoundationScheduleLineage"
+                FOR EACH ROW EXECUTE FUNCTION rewrite_live_lineage();
+                """, token);
+            try { await RequireUnsafeDefinitionRefusalAsync("a user trigger that rewrites a live member"); }
+            finally
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    DROP TRIGGER rewrite_live_lineage ON "FoundationScheduleLineage";
+                    DROP FUNCTION rewrite_live_lineage();
+                    """, token);
+            }
+
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE TABLE schedule_lineage_child () INHERITS ("FoundationScheduleLineage");
+                """, token);
+            try { await RequireUnsafeDefinitionRefusalAsync("an attached inheritance child"); }
+            finally { await db.Database.ExecuteSqlRawAsync("DROP TABLE schedule_lineage_child", token); }
+
+            Require(await db.Messages.CountAsync(token) == beforeDrift && await RetiredAsync(nextOccurrence, nextActor.Id),
+                "lineage schema refusals preserve the inbox and exact retirement receipt");
+        }
+
+        Task<Contract.Admission> AdmitAsync(RootScheduleOccurrence item, StartSpec spec) =>
+            relay.AdmitAsync(Wire(item),
+                new(spec.Model, spec.Definition, spec.Input, spec.Ephemeral, (Contract.History)spec.History), token).AsTask();
+
+        static Contract.AcceptedScheduleOccurrence Wire(RootScheduleOccurrence item) =>
+            new(item.Schedule.Definition, item.Schedule.Key, new(item.ScheduleReference), item.ArmGeneration, item.TimerDelivery, item.Due);
 
         Task<bool> RetiredAsync(RootScheduleOccurrence item, string actorReference) => postgres
             ? pg.IsScheduledOccurrenceRetiredAsync(tenant, item, pinned, actorReference, token)
             : sqlite.IsScheduledOccurrenceRetiredAsync(tenant, item, pinned, actorReference, token);
 
+        async Task RequireUnsafeDefinitionRefusalAsync(string mutation, Task<bool>? pendingProof = null)
+        {
+            try
+            {
+                await (pendingProof ?? RetiredAsync(nextOccurrence, nextActor.Id));
+                throw new InvalidOperationException("Cohort retirement accepted " + mutation + ".");
+            }
+            catch (StoreFormatException error) when (error.Message.Contains("PostgreSQL schedule lineage", StringComparison.Ordinal)) { }
+            try
+            {
+                await AdmitAsync(occurrence with { ArmGeneration = 4 }, pinned);
+                throw new InvalidOperationException("Occurrence admission accepted " + mutation + ".");
+            }
+            catch (StoreFormatException error) when (error.Message.Contains("PostgreSQL schedule lineage", StringComparison.Ordinal)) { }
+            Console.WriteLine($"ok cohort retirement and occurrence admission refuse {mutation}");
+        }
+
         async Task MustRefuseAsync(RootScheduleOccurrence item, StartSpec spec)
         {
             try
             {
-                await AdmitAsync(tenant, item, spec);
+                await AdmitAsync(item, spec);
                 throw new InvalidOperationException("A changed immutable occurrence was accepted.");
             }
             catch (StoreFormatException) { }
@@ -273,7 +422,7 @@ internal static class RootScheduleInventoryChecks
         Contract.ActorRef reference, Func<Task<bool>> isRetired, CancellationToken token)
     {
         const string node = "schedule-retirement";
-        var actor = new FinishingActor(type);
+        var actor = new LifecycleActor(type, db.UsesRootScheduleLineage ? reference : null);
         var store = new EfStore(open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
         await store.EnableRootSelfSendsAsync(token);
         await store.EnableRootJobsAsync(token);
@@ -292,7 +441,7 @@ internal static class RootScheduleInventoryChecks
         else
         {
             var path = db.Database.GetDbConnection().DataSource;
-            var format = StoreFormat.RootScheduleSettlementQualification;
+            var format = db.RequiredFormat;
             var requests = SqliteEmbeddedHosting.CreateRequests(path, node, type, qualificationFormat: format);
             ingress = await SqliteEmbeddedHosting.OpenFoundationWithOperatorsAsync(path, type, Authorize, requests, token);
             reads = SqliteEmbeddedHosting.CreateFoundationReads(path, qualificationFormat: format);
@@ -306,21 +455,79 @@ internal static class RootScheduleInventoryChecks
         Require(await host.ActivateAsync(0, token) == worker && worker.Fences.Count == partitions,
             $"the fixture holds its partition fences ({(fenceInBatch ? "in-batch" : "checked")})");
         var scope = EmbeddedTenant.Bind(tenant);
-        Contract.ActorView? completed;
-        do
-        {
-            await DriveAsync();
-            completed = await reads.GetAsync(scope, reference, token);
-        } while (completed?.Header.Status != Contract.ActorStatus.Finished);
+        var completed = await WaitForAsync(reference, Contract.ActorStatus.Finished);
         Require(!await isRetired(), "a finished scheduled workflow still owns its executable pin");
-        var command = Json.Write(new Contract.OperatorCommand(completed.Selection!, ExpectedTarget: reference));
-        Require((await ingress.SendAsync(scope, new Contract.Target.Ref(reference), "retire-occurrence", Contract.Kinds.Delete,
-            command, cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "the owner admits selected scheduled workflow retirement");
-        while (!await isRetired())
+        if (!db.UsesRootScheduleLineage)
         {
-            await DriveAsync();
+            await RetireAsync(reference, completed);
+            Require(await isRetired(), "the fenced owner committed a durable exact retirement proof");
+            return;
         }
-        Require(await isRetired(), "the fenced owner committed a durable exact retirement proof");
+
+        var child = actor.Descendants[reference];
+        // Hold back just this exact creator to distinguish a queued child from a persisted child checkpoint.
+        Require(await ChangeChildDueAsync(child, long.MaxValue - 1) == 1 &&
+            await reads.GetAsync(scope, child, token) is null && await IsActiveMemberAsync(child),
+            "a committed detached creator belongs to the cohort before it has a checkpoint");
+        await RetireAsync(reference, completed);
+        Require(!await isRetired() && await IsActiveMemberAsync(child),
+            "root retirement leaves a queued detached child holding the occurrence");
+        Require(await ChangeChildDueAsync(child, 0) == 1, "the exact queued child is released to its owner");
+        await WaitForAsync(child, Contract.ActorStatus.Running);
+        if (postgres)
+            await db.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "FoundationScheduleLineage" ALTER COLUMN "Retired" SET DEFAULT true
+                """, token);
+        Require((await ingress.SendAsync(scope, new Contract.Target.Ref(child), "dispatch-nested", LifecycleActor.DispatchNested,
+            cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "a detached child accepts a new turn after root retirement");
+        var completedChild = await WaitForAsync(child, Contract.ActorStatus.Finished);
+        var grandchild = actor.Descendants[child];
+        Require(await IsActiveMemberAsync(grandchild), "a nested detached child inherits the original retired root's cohort");
+        if (postgres)
+            await db.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "FoundationScheduleLineage" ALTER COLUMN "Retired" DROP DEFAULT
+                """, token);
+        await RetireAsync(child, completedChild);
+        Require(!await isRetired() && await IsActiveMemberAsync(grandchild),
+            "retiring the detached child leaves its nested descendant holding the occurrence");
+        await WaitForAsync(grandchild, Contract.ActorStatus.Running);
+        Require((await ingress.SendAsync(scope, new Contract.Target.Ref(grandchild), "complete-nested", LifecycleActor.Complete,
+            cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted, "the nested descendant accepts completion");
+        var completedGrandchild = await WaitForAsync(grandchild, Contract.ActorStatus.Finished);
+        Require(!await isRetired(), "a finished descendant still belongs to the active cohort before its tombstone");
+        await RetireAsync(grandchild, completedGrandchild);
+        Require(await isRetired(), "retiring the last exact descendant releases the occurrence while unrelated cohorts remain");
+
+        async Task<Contract.ActorView> WaitForAsync(Contract.ActorRef target, Contract.ActorStatus status)
+        {
+            while (true)
+            {
+                await DriveAsync();
+                if (await reads.GetAsync(scope, target, token) is { } view && view.Header.Status == status) return view;
+            }
+        }
+
+        async Task RetireAsync(Contract.ActorRef target, Contract.ActorView view)
+        {
+            var command = Json.Write(new Contract.OperatorCommand(view.Selection!, ExpectedTarget: target));
+            var retired = await ingress.SendAsync(scope, new Contract.Target.Ref(target), "retire-occurrence/" + target.Id,
+                Contract.Kinds.Delete, command, cancellationToken: token);
+            Require(retired.Outcome == Contract.AdmissionOutcome.Accepted, $"the owner admits selected scheduled workflow retirement ({retired.Outcome})");
+            do { await DriveAsync(); } while (await reads.GetAsync(scope, target, token) is not null);
+        }
+
+        Task<int> ChangeChildDueAsync(Contract.ActorRef target, long due) => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Messages" AS pending SET "Due" = {due}
+            WHERE pending."InboxScope" = 0 AND EXISTS (
+                SELECT 1 FROM "FoundationRootBirths" birth
+                WHERE birth."Reference" = {target.Id} AND birth."Tenant" = {tenant}
+                    AND birth."Creator" = pending."Id" AND birth."Actor" = pending."Target" AND birth."Partition" = pending."Partition")
+            """, token);
+
+        Task<bool> IsActiveMemberAsync(Contract.ActorRef target) => db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM "FoundationScheduleLineage" WHERE "Tenant" = {tenant}
+                AND "Reference" = {target.Id} AND "RootReference" = {reference.Id} AND NOT "Retired") AS "Value"
+            """).SingleAsync(token);
 
         async Task DriveAsync()
         {
@@ -331,20 +538,32 @@ internal static class RootScheduleInventoryChecks
         }
 
         bool Authorize(Contract.BoundScope bound, Contract.ActorRef target, string kind) =>
-            bound.Tenant == tenant && target == reference && kind == Contract.Kinds.Delete;
+            bound.Tenant == tenant && (target == reference || actor.Descendants.Values.Contains(target)) && kind == Contract.Kinds.Delete;
     }
 
-    private sealed class FinishingActor(string type) : Contract.IActorType
+    private sealed class LifecycleActor(string type, Contract.ActorRef? lineageRoot) : Contract.IActorType
     {
+        private const string Child = "detached child";
+        private const string Grandchild = "detached grandchild";
+        internal const string DispatchNested = "fixture.dispatch-nested";
+        internal const string Complete = "fixture.complete";
+        internal ConcurrentDictionary<Contract.ActorRef, Contract.ActorRef> Descendants { get; } = new();
         public string Type => type;
         public bool Withholds(Contract.ActorHeader header) => false;
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
-            if (turn.Header.Type == type)
+            var kind = turn.Inbox[0].Kind;
+            turn.State = "{}";
+            if (turn.Header.Ref == lineageRoot)
+                Descendants[turn.Header.Ref] = turn.Start(new(type, Child), detached: true);
+            else if (turn.Header.TypeData == Child)
             {
-                turn.State = "{}";
-                turn.End(Contract.ActorStatus.Finished);
+                if (kind != DispatchNested) return ValueTask.CompletedTask;
+                Descendants[turn.Header.Ref] = turn.Start(new(type, Grandchild), detached: true);
             }
+            else if (turn.Header.TypeData == Grandchild && kind != Complete)
+                return ValueTask.CompletedTask;
+            turn.End(Contract.ActorStatus.Finished);
             return ValueTask.CompletedTask;
         }
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();

@@ -233,7 +233,8 @@ public sealed class KernelActivationCoordinator(
     /// <summary>
     /// Serves <paramref name="plan"/>: its workflow joins the registry and its routes replace the table, then each schedule of
     /// the workflow it serves has its run pointed at it and its schedule set at <paramref name="revision"/>, and each schedule
-    /// only the workflow it replaces had is stopped and its run removed, in that order.
+    /// only the workflow it replaces had is stopped and its run removed, in that order. A managed owner reconciles
+    /// the Runtime transaction's schedule controls separately, so it only checks the active claims here.
     /// </summary>
     /// <param name="replaced">
     /// The workflow whose schedules the slot served before, when this host may not serve it (a deactivation after a restart);
@@ -257,6 +258,8 @@ public sealed class KernelActivationCoordinator(
         }
         var before = (replaced ?? serving.Find(plan.SlotId)?.Workflow) is { } previous ? serving.SchedulesOf(previous) : [];
         serving.Apply(plan with { State = state });
+        if (schedules is RuntimeManagedScheduleActors) return;
+
         foreach (var schedule in after)
         {
             await schedules.RegisterRunAsync(schedule.StartKey, schedule.Start(), cancellationToken);

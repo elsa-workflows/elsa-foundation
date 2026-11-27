@@ -304,8 +304,20 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(controlsSqlite) is { StoreSchema: 2, MessageProtocol: 19, JournalCodec: 0 },
             "trusted schedule controls are private with independently verified provider definitions");
 
+        using var lineagePostgres = KernelDb.ForPostgresRootScheduleLineageQualification(options);
+        using var lineageSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootScheduleLineageQualification);
+        Check(lineagePostgres.RequiredFormat == new StoreFormat(3, 122, 1) && lineageSqlite.RequiredFormat == lineagePostgres.RequiredFormat &&
+            lineagePostgres.Capabilities == (settlementPostgres.Capabilities | RootCapabilities.ScheduleLineage) &&
+            lineageSqlite.Capabilities == lineagePostgres.Capabilities &&
+            !sharedPostgres.UsesRootScheduleLineage && !settlementPostgres.UsesRootScheduleLineage &&
+            !lineagePostgres.UsesRootScheduleControls && !controlsPostgres.UsesRootScheduleLineage &&
+            RootProfiles.MissingPrerequisites(lineagePostgres.Capabilities) == RootCapabilities.None &&
+            !RootProfiles.Formats.ContainsKey(lineagePostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(lineagePostgres) is { StoreSchema: 1, MessageProtocol: 17, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(lineageSqlite) is { StoreSchema: 2, MessageProtocol: 20, JournalCodec: 0 },
+            "the occurrence lineage has a closed private profile and provider-specific definitions");
         mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities |
-            playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities;
+            playbackPostgres.Capabilities | descendantsPostgres.Capabilities | controlsPostgres.Capabilities | lineagePostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -344,7 +356,8 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
             [RootCapabilities.ScheduleInventory] = RootCapabilities.Timers | RootCapabilities.ParkOpening,
             [RootCapabilities.ScheduleSettlement] = RootCapabilities.ScheduleInventory | RootCapabilities.JobProtocol,
-            [RootCapabilities.ScheduleControls] = RootCapabilities.ScheduleInventory | RootCapabilities.TimedJobSettlement
+            [RootCapabilities.ScheduleControls] = RootCapabilities.ScheduleInventory | RootCapabilities.TimedJobSettlement,
+            [RootCapabilities.ScheduleLineage] = RootCapabilities.ScheduleSettlement | RootCapabilities.Children | RootCapabilities.Retirement
         };
         Check(RootProfiles.Prerequisites.Count == expectedEdges.Count &&
             expectedEdges.All(edge => RootProfiles.Prerequisites.TryGetValue(edge.Key, out var needs) && needs == edge.Value),

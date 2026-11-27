@@ -15,6 +15,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
 {
     internal RootAdmissionPressure? Pressure => pressure;
 
+    internal bool UsesDatabaseFactory(Func<KernelDb> factory) => create == factory;
+
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record PinnedRootSource(uint Marker, uint Namespace, Issuer? Issuer);
@@ -155,6 +157,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         await EfStore.InstallFirstRootCheckpointsAsync(db, cancellationToken);
         if (db.UsesRootScheduleInventory) await RootScheduleInventory.InstallPostgresAsync(db, cancellationToken);
         if (db.UsesRootScheduleControls) await RootScheduleControls.InstallPostgresAsync(db, cancellationToken);
+        if (db.UsesRootScheduleLineage) await RootScheduleLineage.InstallPostgresAsync(db, cancellationToken);
         if (db.UsesRootChildren) await EfStore.InstallRootChildCascadeAsync(db, cancellationToken);
         if (db.UsesRootStableBody)
             await db.Database.ExecuteSqlRawAsync("""
