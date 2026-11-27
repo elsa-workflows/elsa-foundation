@@ -23,6 +23,7 @@ import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+STORE_VERSIONS = ROOT / 'essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/EfStore.Versions.cs'
 
 # Share the acceptance runner's process ownership, readiness, clean-environment and copy guards.
 _spec = importlib.util.spec_from_file_location('current_acceptance_runner', ROOT / 'tools/ux-acceptance/run.py')
@@ -71,12 +72,30 @@ def kernel_environment(connection=None, *, sqlite_path=None):
     return dict(switches, ConnectionStrings__KernelCorePreview=connection)
 
 
-def sqlite_markers(path):
+def sqlite_shipped_markers():
+    # Derive the expected release from the same source as Workbench. Refuse an unrecognized declaration.
+    source = STORE_VERSIONS.read_text(encoding='utf-8')
+
+    def number(pattern):
+        match = re.search(pattern, source)
+        if not match:
+            raise ValueError('Cannot derive SQLite shipped markers from EfStore.Versions.cs')
+        return int(match.group(1))
+
+    def constant(name):
+        return number(rf'\bconst int {name}\s*=\s*(\d+)\s*;')
+
+    protocol = number(r'\bStoreFormat RootShipped\s*=>\s*Current with\s*\{\s*MessageProtocol\s*=\s*(\d+)\s*\}\s*;')
+    return [(1, constant('StoreSchemaVersion'), protocol, constant('JournalCodecVersion')),
+            (2, constant('Sqlite'), constant('SqliteShippedRevision'), 0)]
+
+
+def sqlite_markers(path, expected):
     with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as store:
         markers = store.execute('SELECT "Id", "StoreSchema", "MessageProtocol", "JournalCodec" '
                                 'FROM "KernelStoreVersions" ORDER BY "Id"').fetchall()
-    if len(markers) != 2 or markers[0][0] != 1 or markers[1][:2] != (2, 2):
-        raise ValueError('The owned kernel file has no installed SQLite format and definitions markers')
+    if markers != expected:
+        raise ValueError(f'Expected SQLite shipped markers {expected}, got {markers}')
     return markers
 
 
@@ -308,7 +327,7 @@ def run(output, journey=None, provider='postgres'):
                 store = postgres(output / 'postgres.log')
             else:
                 store = nullcontext()
-                report['sqlite'] = {'database': sqlite_path.name}
+                report['sqlite'] = {'database': sqlite_path.name, 'expectedMarkers': sqlite_shipped_markers()}
             with store as database, Stub() as stub:
                 # The store is empty: the Workbench installs the shipped format itself before its node starts.
                 if sqlite_path is None:
@@ -345,7 +364,7 @@ def run(output, journey=None, provider='postgres'):
                 if not report['postgres']['containerRemoved']:
                     raise ValueError('The owned PostgreSQL container outlived the run')
             else:
-                report['sqlite']['markers'] = sqlite_markers(sqlite_path)
+                report['sqlite']['markers'] = sqlite_markers(sqlite_path, report['sqlite']['expectedMarkers'])
             report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, selected)
         report['hostExitCodes'] = {key: process.returncode for key, process in processes.items()}
         report['ownedRootRemoved'] = not data.exists()
@@ -372,6 +391,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     def terminate(_signum, _frame):
-        raise InterruptedError('Acceptance interrupted; owned hosts and the container will be stopped')
+        raise InterruptedError('Acceptance interrupted; owned resources will be stopped')
     signal.signal(signal.SIGTERM, terminate)
     run(args.output.resolve(), args.journey, args.provider)

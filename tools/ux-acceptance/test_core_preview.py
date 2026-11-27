@@ -1,7 +1,9 @@
 """Synthetic controls for the Core Preview acceptance runner, never product or screenshot evidence."""
 import importlib.util
 import json
+import sqlite3
 from pathlib import Path
+from contextlib import closing
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
@@ -73,9 +75,22 @@ class CorePreviewCompositionTests(unittest.TestCase):
             self.assertEqual({"Elsa__CorePreview__Enabled": "true", "Elsa__CorePreview__Publications": "true",
                               "Elsa__CorePreview__Tenant": acceptance.TENANT, "Elsa__CorePreview__Provider": "SQLite",
                               "Elsa__CorePreview__SqlitePath": str(path)}, env)
-            with self.assertRaises(acceptance.sqlite3.OperationalError):
-                acceptance.sqlite_markers(path)
+            with self.assertRaises(sqlite3.OperationalError):
+                acceptance.sqlite_markers(path, acceptance.sqlite_shipped_markers())
             self.assertFalse(path.exists())
+
+    def test_a_different_sqlite_profile_is_refused_even_with_both_markers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "kernel.sqlite"
+            expected = acceptance.sqlite_shipped_markers()
+            with closing(sqlite3.connect(path)) as store, store:
+                store.execute('CREATE TABLE "KernelStoreVersions" ("Id", "StoreSchema", "MessageProtocol", "JournalCodec")')
+                store.executemany('INSERT INTO "KernelStoreVersions" VALUES (?, ?, ?, ?)', expected)
+            self.assertEqual(expected, acceptance.sqlite_markers(path, expected))
+            with closing(sqlite3.connect(path)) as store, store:
+                store.execute('UPDATE "KernelStoreVersions" SET "MessageProtocol" = "MessageProtocol" + 1 WHERE "Id" = 1')
+            with self.assertRaisesRegex(ValueError, "Expected SQLite shipped markers"):
+                acceptance.sqlite_markers(path, expected)
 
     def test_kernel_serving_is_the_serving_line_and_its_failures_are_named(self):
         with tempfile.TemporaryDirectory() as directory:
