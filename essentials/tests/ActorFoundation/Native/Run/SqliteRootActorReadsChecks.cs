@@ -37,6 +37,7 @@ internal static partial class SqliteHostLifetimeChecks
             var hidden = await AdmitAsync(other, "hidden", "nul");
             await reader.EnableRootSelfSendsAsync(token);
             await reader.EnableRootJobsAsync(token);
+            await reader.EnableRootChildrenAsync(token);
             reader.BindSqliteWorkerNode();
             var pending = await CheckCreatorRollbackAsync(file, tenant.Tenant, first, fenceInBatch, token);
             Require((await reader.LoadAsync([pending, pending], token)).Count == 0,
@@ -177,6 +178,7 @@ internal static partial class SqliteHostLifetimeChecks
         var store = new EfStore(() => OpenFoundationDb(file, definitions, drift), postgres: false, fenceInBatch);
         await store.EnableRootSelfSendsAsync(token);
         await store.EnableRootJobsAsync(token);
+        await store.EnableRootChildrenAsync(token);
         store.BindSqliteWorkerNode();
 
         var leaseTime = TimeSpan.FromSeconds(10);

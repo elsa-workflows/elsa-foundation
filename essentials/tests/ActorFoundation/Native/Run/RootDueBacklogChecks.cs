@@ -50,6 +50,8 @@ internal static class RootDueBacklogChecks
             catch (StoreFormatException) { Console.WriteLine("ok shipped format refuses the qualification store"); }
 
             await store.EnableRootJobsAsync(token);
+
+            await store.EnableRootChildrenAsync(token);
             if (postgres) store.BindWorkerNode();
             else store.BindSqliteWorkerNode();
             IDueBacklogStore backlog = store;

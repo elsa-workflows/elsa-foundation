@@ -140,6 +140,14 @@ public static class PostgresPreviewHosting
         return db.UsesRootTimers;
     }
 
+    /// <summary>Whether the selected format takes attached and detached workflow starts from an owned turn.</summary>
+    public static bool TakesChildren(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootChildren;
+    }
+
     /// <summary>
     /// Opens the Foundation's ingress and reads on an installed PostgreSQL Core Preview store, for the configured actor type.
     /// With <paramref name="requests"/> (<see cref="CreateRequests"/>), on a store with held replies (<c>ReplyProtocol</c>),

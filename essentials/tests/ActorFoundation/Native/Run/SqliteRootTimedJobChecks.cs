@@ -197,7 +197,8 @@ internal static partial class SqliteHostLifetimeChecks
             Action? onPublished = null)
         {
             await store.EnableRootJobsAsync(token);
-            var headers = new EfStore.RootHeaders(store.BindSqliteWorkerNode());
+            await store.EnableRootChildrenAsync(token);
+            var headers = store.WorkerHeaders(store.BindSqliteWorkerNode());
             var adapter = new ActorAdapter(headers, executor, rootJobHandle: store.RootJobHandle, rootTimedJobClock: async ct =>
             {
                 var now = await store.ReadRootTimedJobPublicationTimeAsync(ct);

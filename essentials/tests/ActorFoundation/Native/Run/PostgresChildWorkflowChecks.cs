@@ -11,7 +11,7 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresChildWorkflowChecks
 {
-    internal static async Task<int> RunAsync(bool? fenceInBatch = null)
+    internal static async Task<int> RunAsync(bool? fenceInBatch = null, bool shipped = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(70));
         var token = deadline.Token;
@@ -20,13 +20,21 @@ internal static class PostgresChildWorkflowChecks
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(
             Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
             throw new InvalidOperationException("Supply an empty dedicated PostgreSQL fixture.")).Options;
-        KernelDb Open() => KernelDb.ForPostgresRootChildrenQualification(options);
+        KernelDb Open() => shipped ? PostgresPreviewHosting.CreateShippedContext(options) : KernelDb.ForPostgresRootChildrenQualification(options);
         await using (var empty = Open())
             Check(await PostgresFixtureDatabase.IsEmptyAsync(empty, token), "the fixture is empty");
 
         var store = new EfStore(Open, postgres: true);
-        await store.CreateAsync(2);
-        await store.InstallPreviewRootSchemaAsync(token);
+        if (shipped)
+        {
+            await PostgresPreviewHosting.InstallShippedAsync(options, token);
+            Check(PostgresPreviewHosting.TakesChildren(Open), "the PostgreSQL shipped host advertises owned child starts");
+        }
+        else
+        {
+            await store.CreateAsync(2);
+            await store.InstallPreviewRootSchemaAsync(token);
+        }
 
         var aliases = new WorkflowRegistry()
             .Add(Wf.Workflow("child", Wf.Sequence("child-sequence", Wf.Node<ReleaseChild>("gate"),

@@ -390,13 +390,16 @@ internal static class PostgresRootRetirementChecks
         const string probe = "0/retirement-guard-probe";
         const string reference = "retirement-guard-probe";
         string?[] cases = [null, "jobs", "children", "parent", "handles", "subscriptions", "pending messages"];
+        if (db.UsesRootChildren) cases = [.. cases, "parent without a terminal mark"];
         var unexpectedlyWritten = new List<string>();
         foreach (var residue in cases)
         {
             await using var transaction = await db.Database.BeginTransactionAsync(token);
             string? jobs = residue == "jobs" ? "[]" : null;
             string? children = residue == "children" ? "[]" : null;
-            string? parent = residue == "parent" ? "0/parent" : null;
+            string? parent = residue is "parent" or "parent without a terminal mark" ? "0/parent" : null;
+            var missingTerminalMark = residue == "parent without a terminal mark";
+            var allowed = residue is null || db.UsesRootChildren && residue == "parent";
             string? handles = residue == "handles" ? "[]" : null;
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "FoundationRootBirths" ("Reference", "Tenant", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
@@ -408,7 +411,9 @@ internal static class PostgresRootRetirementChecks
                     "FoundationTerminalRevision", "FoundationTerminalAt", "Retired")
                     SELECT {probe}, "Partition", "Model", "Definition", "Status", "State", "Revision",
                         "History", "Suspended", "StateVersion", {jobs}, {children}, {parent}, {handles},
-                        {reference}, "FoundationTenant", "FoundationHeader", "FoundationTerminalRevision", "FoundationTerminalAt", false
+                        {reference}, "FoundationTenant", "FoundationHeader",
+                        CASE WHEN {missingTerminalMark} THEN NULL ELSE "FoundationTerminalRevision" END,
+                        CASE WHEN {missingTerminalMark} THEN NULL ELSE "FoundationTerminalAt" END, false
                     FROM "Instances" WHERE "Id" = {exemplar};
                 INSERT INTO "FoundationActorList" ("Tenant", "Reference", "Status", "EndedAt", "Header", "Type", "Labels", "TerminalRevision")
                     SELECT l."Tenant", {reference}, l."Status", l."EndedAt", l."Header", l."Type", l."Labels", l."TerminalRevision"
@@ -436,15 +441,16 @@ internal static class PostgresRootRetirementChecks
                         "Jobs" = NULL, "Children" = NULL, "Parent" = NULL, "CustomHandles" = NULL
                     WHERE "Id" = {probe}
                     """, token);
-                if (residue is null)
-                    Check(written == 1, "the checkpoint guard accepts a clean terminal retirement");
+                if (allowed)
+                    Check(written == 1, parent is null ? "the checkpoint guard accepts a clean terminal retirement" :
+                        "the checkpoint guard accepts retirement of an attached child with a current terminal mark");
                 else
                 {
                     Check(written == 1, "the fixture wrote the terminal retirement under test");
-                    unexpectedlyWritten.Add(residue);
+                    unexpectedlyWritten.Add(residue!);
                 }
             }
-            catch (PostgresException error) when (residue is not null && error.SqlState == PostgresErrorCodes.CheckViolation &&
+            catch (PostgresException error) when (!allowed && error.SqlState == PostgresErrorCodes.CheckViolation &&
                 error.ConstraintName == "kernel_require_root_checkpoint_writer")
             {
                 Check(true, $"the retirement checkpoint guard refuses {residue}");
@@ -453,7 +459,7 @@ internal static class PostgresRootRetirementChecks
         }
         if (unexpectedlyWritten.Count != 0)
             throw new InvalidOperationException("The terminal retirement guard allowed " + string.Join(", ", unexpectedlyWritten) + ".");
-        Check(true, "the retirement checkpoint guard refused every residual resource");
+        Check(true, "the retirement checkpoint guard refused every unsupported residual resource");
     }
 
     private enum RetirementRejection { MarkerError, MarkerSuppressed, ProjectionSuppressed }

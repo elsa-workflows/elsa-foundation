@@ -96,6 +96,7 @@ internal static partial class SqliteHostLifetimeChecks
             Require(await ingress.SendAsync(scope, exact, "ordinary", "record", cancellationToken: token) is
                 { Outcome: Contract.AdmissionOutcome.Accepted }, "an earlier ready input is admitted");
             await store.EnableRootJobsAsync(token);
+            await store.EnableRootChildrenAsync(token);
             store.BindSqliteWorkerNode();
             var fence = (await store.TakeAsync(0, "probe", Defaults.Lease, token))!;
             var due = await store.ReadRootTimedJobPublicationTimeAsync(token) + 4_000;

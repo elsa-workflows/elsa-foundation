@@ -13,6 +13,11 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["workbench-shipped-children", var childrenProvider and ("sqlite" or "postgres"), var childrenWorkbench])
+{
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedChildrenAsync(childrenWorkbench, childrenProvider == "postgres");
+    return 0;
+}
 if (args is ["workbench-terminal-output", var outputsProvider and ("sqlite" or "postgres"), var outputsWorkbench, .. var outputMode] &&
     outputMode is ([] or ["s6"] or ["shared"]))
 {
@@ -108,6 +113,10 @@ if (args is ["pg-child-workflows", var pgChildFence and ("checked" or "in-batch"
     return await PostgresChildWorkflowChecks.RunAsync(pgChildFence == "in-batch");
 if (args is ["sqlite-child-workflows", var sqliteChildFence and ("checked" or "in-batch")])
     return await SqliteChildWorkflowChecks.RunAsync(sqliteChildFence == "in-batch");
+if (args is ["shipped-child-workflows", var childProvider and ("postgres" or "sqlite"), var childFence and ("checked" or "in-batch")])
+    return childProvider == "postgres"
+        ? await PostgresChildWorkflowChecks.RunAsync(childFence == "in-batch", shipped: true)
+        : await SqliteChildWorkflowChecks.RunAsync(childFence == "in-batch", shipped: true);
 if (args is ["pg-shipped-format"]) return await PostgresShippedFormatChecks.RunAsync();
 if (args is ["pg-shipped-format", var shippedFence and ("checked" or "in-batch")])
     return await PostgresShippedFormatChecks.RunAsync(shippedFence == "in-batch");

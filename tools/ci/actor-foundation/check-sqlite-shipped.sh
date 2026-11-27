@@ -4,6 +4,7 @@ runner=${1:?Pass the path to Kernel.Native.Run.dll}
 
 dotnet "$runner" sqlite-shipped-install
 dotnet "$runner" sqlite-root-ingress
+dotnet "$runner" shipped-child-workflows sqlite in-batch
 for fence in checked in-batch; do
   dotnet "$runner" shipped-delay-recovery sqlite "$fence"
   dotnet "$runner" sqlite-host-lifetime "$fence" shipped

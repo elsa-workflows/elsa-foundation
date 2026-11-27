@@ -106,11 +106,12 @@ internal static class ShippedWriteBudget
             Check(store.OwnedCommit && store.FenceInBatch == inBatch && pressure is not null, "The measurement must use the requested owned writer.");
             await store.EnableRootSelfSendsAsync(token);
             await store.EnableRootJobsAsync(token);
+            await store.EnableRootChildrenAsync(token);
             var definition = Reference.WriteLines(Lines);
             var model = new NativeExecutionModel(new WorkflowRegistry().Add(definition), new() { SelfSends = true });
             var actor = new PublicActor([model]);
             var roots = postgres ? store.BindWorkerNode(actor.Withholds) : store.BindSqliteWorkerNode(actor.Withholds);
-            var adapter = new ActorAdapter(new EfStore.RootHeaders(roots), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
+            var adapter = new ActorAdapter(store.WorkerHeaders(roots), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
                 rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true);
             var lease = TimeSpan.FromMinutes(2);
             // The cadence clock stays fixed across the three warm samples. Database time, ownership and all SQL remain real.

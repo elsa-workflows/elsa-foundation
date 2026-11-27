@@ -53,7 +53,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(storage);
         services.AddSingleton(new ShellRestartRequirement(FeatureName));
         services.AddSingleton(new KernelServing(capabilities: new KernelHostCapabilities(
-            Schedules: false, Timers: storage.TakesTimers, Children: false, SelfSends: storage.TakesSelfSends, HttpWaits: false),
+            Schedules: false, Timers: storage.TakesTimers, Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends, HttpWaits: false),
             publicationScope: persistenceScope));
         services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),

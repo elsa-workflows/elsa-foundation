@@ -130,6 +130,7 @@ internal static class ShippedNativeTerminalEnvelopeChecks
             {
                 var store = new EfStore(open, postgres, inBatch) { CommitSql = CommitSql.Owned };
                 await store.EnableRootJobsAsync(token);
+                await store.EnableRootChildrenAsync(token);
                 var roots = postgres ? store.BindWorkerNode(actor.Withholds) : store.BindSqliteWorkerNode(actor.Withholds);
                 var adapter = new ActorAdapter(new EfStore.RootHeaders(roots), actor, rootJobHandle: store.RootJobHandle,
                     rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true);

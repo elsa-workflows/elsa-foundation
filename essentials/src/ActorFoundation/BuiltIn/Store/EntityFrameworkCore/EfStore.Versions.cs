@@ -69,7 +69,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 29 };
+    internal static StoreFormat RootShipped => Current with { MessageProtocol = 30 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -132,12 +132,12 @@ internal static class RootProfiles
         RootCapabilities.SelfProtocol | RootCapabilities.Timers;
 
     /// <summary>
-    /// The shared shipped format includes durable self-sends and timers, one-page Park Resume and fenced due pressure.
+    /// The shared shipped format includes owned children, durable self-sends and timers, one-page Park Resume and fenced due pressure.
     /// The growth rule: each widening of this set takes a new protocol number, and a database installed with an older set
     /// is refused. Before GA a preview database is recreated; after GA a widening migrates, with a rollback floor (K12).
     /// </summary>
     private const RootCapabilities Shipped29 = TimerRearmQualification | RootCapabilities.DueBacklog | RootCapabilities.TerminalOutput;
-    internal const RootCapabilities Shipped = Shipped29;
+    internal const RootCapabilities Shipped = Shipped29 | RootCapabilities.Children;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
 
     internal const RootCapabilities ParkRecoveryComposition = ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
@@ -385,9 +385,9 @@ internal static class StoreDefinitionsRevision
     private const int PostgreSql = 1;
     private const int Sqlite = 2;
     private const int LegacyPostgreSqlRevision = 1;
-    private const int PostgreSqlRevision = 8;
+    private const int PostgreSqlRevision = 10;
     private const int PostgreSqlChildrenRevision = 10;
-    private const int SqliteRevision = 12;
+    private const int SqliteRevision = 13;
     private const int SqliteChildrenRevision = 13;
     private const int PostgreSqlSequencedJournalRevision = 10;
     private const int SqliteSequencedJournalRevision = 14;
