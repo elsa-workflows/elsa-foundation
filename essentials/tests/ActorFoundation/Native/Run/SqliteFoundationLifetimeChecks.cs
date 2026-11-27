@@ -36,6 +36,7 @@ internal static partial class SqliteHostLifetimeChecks
             var sibling = await AdmitFoundationStartAsync(ingress, scope, "sibling", token);
             var definitions = new SqliteAdmissionDefinitions();
             var store = new EfStore(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
+            await store.EnableRootSelfSendsAsync(token);
             await store.EnableRootJobsAsync(token);
             await store.EnableRootChildrenAsync(token);
             store.BindSqliteWorkerNode();
@@ -194,6 +195,7 @@ internal static partial class SqliteHostLifetimeChecks
 
         var definitions = new SqliteAdmissionDefinitions();
         var store = new EfStore(() => OpenFoundationDb(path, definitions), postgres: false, fenceInBatch);
+        await store.EnableRootSelfSendsAsync(token);
         await store.EnableRootJobsAsync(token);
         await store.EnableRootChildrenAsync(token);
         store.BindSqliteWorkerNode();
@@ -238,6 +240,7 @@ internal static partial class SqliteHostLifetimeChecks
         var definitions = new SqliteAdmissionDefinitions();
         var drift = new DefinitionDrift();
         var store = new EfStore(() => OpenFoundationDb(path, definitions, drift), postgres: false, fenceInBatch);
+        await store.EnableRootSelfSendsAsync(token);
         await store.EnableRootJobsAsync(token);
         await store.EnableRootChildrenAsync(token);
         store.BindSqliteWorkerNode();

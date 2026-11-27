@@ -196,6 +196,7 @@ internal static partial class SqliteHostLifetimeChecks
         async Task<Worker> TakeAsync(EfStore store, string name, TimedJobActor executor, ConcurrentQueue<long>? samples = null,
             Action? onPublished = null)
         {
+            await store.EnableRootSelfSendsAsync(token);
             await store.EnableRootJobsAsync(token);
             await store.EnableRootChildrenAsync(token);
             var headers = store.WorkerHeaders(store.BindSqliteWorkerNode());

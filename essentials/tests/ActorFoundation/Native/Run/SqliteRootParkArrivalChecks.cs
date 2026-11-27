@@ -55,6 +55,7 @@ internal static partial class SqliteHostLifetimeChecks
             var admission = new SqliteRootAdmission(Open, TimeSpan.FromHours(1), definitions);
             var cursor = await SqliteRootAdmission.ReadSelectionCursorAsync(db, token);
             var store = new EfStore(Open, postgres: false, fenceInBatch) { CommitSql = CommitSql.Owned };
+            if (shipped) await store.EnableRootSelfSendsAsync(token);
             await store.EnableRootJobsAsync(token);
             await store.EnableRootChildrenAsync(token);
             Func<CommitBatch, CancellationToken, Task>? afterCommit = null;
@@ -537,6 +538,7 @@ internal static partial class SqliteHostLifetimeChecks
                         """, token);
 
                     var sampler = new EfStore(Open, postgres: false, fenceInBatch) { CommitSql = CommitSql.Owned };
+                    if (shipped) await sampler.EnableRootSelfSendsAsync(token);
                     await sampler.EnableRootJobsAsync(token);
                     await sampler.EnableRootChildrenAsync(token);
                     sampler.BindSqliteWorkerNode(executor.Withholds);
