@@ -20,6 +20,7 @@ using Elsa.Workflows.Runtime.Core.Attributes;
 using Elsa.Workflows.Runtime.Core.Background;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Services;
@@ -205,7 +206,7 @@ public sealed class ExecutableNodeCompiler(
             ? TriggerNodeMetadata.TriggerExecutionType
             : activityVersion.ExecutionType.ToString();
         EnsureDeclaredStructureHasHandler(activity, activityVersion, catalogActivityType);
-        var structure = CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity));
+        var structure = CompileStructure(activity);
         var activityContract = clrActivityType is null
             ? null
             : BuildActivityContract(activity with { Inputs = projectedInputs.States }, activityVersion, projectedInputs.Definitions,
@@ -673,7 +674,7 @@ public sealed class ExecutableNodeCompiler(
                 [TriggerNodeMetadata.ExecutionTypeKey] = ActivityExecutionType.Action.ToString()
             },
             childSlots: CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs),
-            structure: CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity)),
+            structure: CompileStructure(activity),
             activityContract: null,
             intrinsicKind: runtimeKind,
             intrinsicVariable: variable);
@@ -1076,20 +1077,33 @@ public sealed class ExecutableNodeCompiler(
             "Compiling the structure as opaque would publish an executable that fails at execution time.");
     }
 
-    private ExecutableActivityStructure? CompileStructure(string nodeId, ActivityNodeStructure? structure)
+    private ExecutableActivityStructure? CompileStructure(ActivityNode activity)
     {
+        var nodeId = activity.NodeId;
+        var structure = activityStructureService.CompileExecutableStructure(activity);
         if (structure is null)
             return null;
 
         if (structure.Payload.ValueKind != JsonValueKind.Object)
             throw new ArgumentException($"Activity node '{nodeId}' has a non-object executable structure payload.");
-        if (!structure.Payload.TryGetProperty("variables", out var variables) || variables.ValueKind == JsonValueKind.Null)
+        if (structure.Payload.TryGetProperty(CompiledStructureFields.IterationValues, out _))
+            throw new ArgumentException($"Activity node '{nodeId}' structure '{structure.Kind}' writes the Publishing-owned field '{CompiledStructureFields.IterationValues}'.");
+        var hasVariables = structure.Payload.TryGetProperty("variables", out var variables) && variables.ValueKind != JsonValueKind.Null;
+        var iterationValues = activityStructureService.ProjectIterationVariables(activity).Select(value => value.ReferenceKey).ToArray();
+        if (!hasVariables && iterationValues.Length == 0)
             return new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);
-        var authored = variables.Deserialize<IReadOnlyCollection<VariableDefinition>>(DescriptorPayloadSerializer.Options)
-            ?? throw new ArgumentException($"Activity node '{nodeId}' has malformed variable declarations.");
-        var compiled = authored.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray();
         var payload = structure.Payload.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
-        payload["variables"] = JsonSerializer.SerializeToElement(compiled, options: DescriptorPayloadSerializer.Options);
+        if (hasVariables)
+        {
+            var authored = variables.Deserialize<IReadOnlyCollection<VariableDefinition>>(DescriptorPayloadSerializer.Options)
+                ?? throw new ArgumentException($"Activity node '{nodeId}' has malformed variable declarations.");
+            var compiled = authored.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray();
+            payload["variables"] = JsonSerializer.SerializeToElement(compiled, options: DescriptorPayloadSerializer.Options);
+        }
+        // A loop's iteration values travel with its compiled structure, so read admission can accept a body read
+        // pinned to the loop even where the authored document is gone, as in a placed reusable body (#5849).
+        if (iterationValues.Length != 0)
+            payload[CompiledStructureFields.IterationValues] = JsonSerializer.SerializeToElement(iterationValues, options: DescriptorPayloadSerializer.Options);
 
         return new ExecutableActivityStructure(
             structure.Kind,

@@ -1062,9 +1062,15 @@ public sealed class GraphActivityProvider(
     {
         var structure = activityStructureService.CompileExecutableStructure(node.Activity);
         var variables = activityStructureService.ProjectScopedVariables(node.Activity);
-        if (structure is null || variables.Count == 0) return structure;
+        var iterationValues = activityStructureService.ProjectIterationVariables(node.Activity).Select(value => value.ReferenceKey).ToArray();
+        if (structure is null || variables.Count == 0 && iterationValues.Length == 0) return structure;
         var payload = structure.Payload.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
-        payload["variables"] = compiler!.CompileGraphVariables(node.NodeId, variables);
+        if (variables.Count != 0)
+            payload["variables"] = compiler!.CompileGraphVariables(node.NodeId, variables);
+        // Same Publishing-owned field ExecutableNodeCompiler writes: a loop in a reusable body keeps its iteration
+        // values in the template, so the caller's placed-tree read admission can see them (#5849).
+        if (iterationValues.Length != 0)
+            payload[CompiledStructureFields.IterationValues] = JsonSerializer.SerializeToElement(iterationValues, NodeSerializerOptions);
         return new ActivityNodeStructure(structure.Kind, structure.SchemaVersion, JsonSerializer.SerializeToElement(payload, NodeSerializerOptions));
     }
 
