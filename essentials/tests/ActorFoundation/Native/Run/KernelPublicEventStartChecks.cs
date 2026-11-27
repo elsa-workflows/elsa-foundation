@@ -28,8 +28,8 @@ internal static partial class KernelAuthoredEventChecks
         var directory = Directory.CreateTempSubdirectory("public-event-starts");
         try
         {
-            var (open, ingress, reads, owner, _, restart) = await OpenAsync(model, provider, Path.Combine(directory.FullName, "store.db"),
-                inBatch, token, publicStarts: true);
+            var path = Path.Combine(directory.FullName, "store.db");
+            var (open, ingress, reads, owner, _, restart) = await OpenAsync(model, provider, path, inBatch, token, publicStarts: true);
             await using var owned = owner;
             var initial = new Contract.StartSpec(model.Type, "starter", "first\0template");
             var replacement = initial with { Input = "replacement" };
@@ -147,8 +147,7 @@ internal static partial class KernelAuthoredEventChecks
 
             var keeper = await StartAsync("keeper", "cold subscription actor");
             await UntilAsync(async () => (await reads.GetAsync(scope, keeper, token))?.Header.Status == Contract.ActorStatus.Running);
-            if (owner is RuntimeNode postgresOwner) await postgresOwner.StopAsync(token);
-            else await ((SqliteEmbeddedHostedService)owner).StopAsync(token);
+            await StopOwnerAsync(owner);
 
             const string quietKey = "quiet";
             var quiet = new Contract.Target.Event(quietKey);
@@ -254,7 +253,45 @@ internal static partial class KernelAuthoredEventChecks
                 Check(barred && backdated.Outcome == Contract.AdmissionOutcome.Accepted,
                     "retention cleanup's tenant watermark survives a clock backstep without changing publication acceptance");
             }
+            await StopOwnerAsync(successor);
+            await CheckReinstallationAsync();
             return 0;
+
+            async Task StopOwnerAsync(IAsyncDisposable host)
+            {
+                if (host is RuntimeNode postgresOwner) await postgresOwner.StopAsync(token);
+                else await ((SqliteEmbeddedHostedService)host).StopAsync(token);
+            }
+
+            async Task CheckReinstallationAsync()
+            {
+                await ReinstallAsync();
+                var afterReinstall = await ingress.SendAsync(scope, heldTarget, "held-id", "ignored", "ignored", cancellationToken: token);
+                Check(afterReinstall.Outcome == Contract.AdmissionOutcome.Duplicate && afterReinstall.Publication == heldReplay.Publication,
+                    "reinstalling a complete public Event store preserves the exact publication receipt");
+
+                await using var db = open();
+                await db.Database.ExecuteSqlRawAsync("""DROP TABLE "FoundationPublicEventLiveReceipts" """, token);
+                var rejected = false;
+                try { await ReinstallAsync(); }
+                catch (StoreFormatException error) when (error.Message.Contains(provider == "postgres"
+                    ? "missing an authoritative relation" : "installed SQLite store definitions differ", StringComparison.Ordinal))
+                {
+                    rejected = true;
+                }
+                var stillMissing = provider == "postgres"
+                    ? await db.Database.SqlQueryRaw<bool>("""
+                        SELECT pg_catalog.to_regclass('"FoundationPublicEventLiveReceipts"') IS NULL AS "Value"
+                        """).SingleAsync(token)
+                    : await db.Database.SqlQueryRaw<bool>("""
+                        SELECT NOT EXISTS (SELECT 1 FROM main.sqlite_schema WHERE name = 'FoundationPublicEventLiveReceipts') AS "Value"
+                        """).SingleAsync(token);
+                Check(rejected && stillMissing, "reinstallation refuses to recreate missing live receipts in an initialized public Event store");
+            }
+
+            Task ReinstallAsync() => provider == "postgres"
+                ? new EfStore(open, postgres: true).InstallPreviewRootSchemaAsync(token)
+                : SqliteEmbeddedFoundation.ForPublicEventStartsQualification(path, "authored-event-owner", model.Type).InstallShippedAsync(token);
 
             async Task<Contract.Reply> RequestAsync(Contract.Target.Event requested, string id, string item)
             {
