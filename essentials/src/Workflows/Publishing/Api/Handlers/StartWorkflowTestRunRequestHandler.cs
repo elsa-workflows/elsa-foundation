@@ -272,10 +272,12 @@ public sealed class StartWorkflowTestRunRequestHandler(
 
         if (testRun.Status == WorkflowTestRunStatus.StopRequested && testRun.WorkflowExecutionId is { } stoppingExecutionId)
         {
-            var execution = executionStateStore is null
-                ? null
-                : await executionStateStore.FindAsync(stoppingExecutionId, cancellationToken);
-            if (execution?.Status == WorkflowExecutionStatus.Cancelled)
+            var direct = FindDirectDispatcher(testRun, scopeRecord);
+            var settled = direct is not null
+                ? await direct.IsStoppedAsync(scopeRecord!.Scope, stoppingExecutionId, cancellationToken)
+                : executionStateStore is not null &&
+                    (await executionStateStore.FindAsync(stoppingExecutionId, cancellationToken))?.Status == WorkflowExecutionStatus.Cancelled;
+            if (settled)
             {
                 var stopped = testRun with { Status = WorkflowTestRunStatus.Stopped, Reason = null };
                 if (scopeRecord?.State == WorkflowTestScopeState.Open)
@@ -334,13 +336,23 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var workflowExecutionId = targetBeforeStop?.DispatchResult?.Dispatch.WorkflowExecutionId ??
                                   (targetBeforeStop?.State == TestRunTargetState.Dispatching ? targetBeforeStop.WorkflowExecutionId : null) ??
                                   testRun.WorkflowExecutionId;
-        if (workflowExecutionId is not null && rootCanceller is not null && scopeRecord is not null)
-            await rootCanceller.RequestCancelAsync(testRunId, workflowExecutionId, scopeRecord.Scope.Partition, cancellationToken);
+        var direct = FindDirectDispatcher(testRun, scopeRecord);
+        if (direct is not null && testRun.Status is WorkflowTestRunStatus.DispatchDeferred or WorkflowTestRunStatus.DispatchRejected)
+            workflowExecutionId = null; // A refused Foundation admission returns an operation ID, with no actor to stop.
+        if (workflowExecutionId is not null && scopeRecord is not null)
+        {
+            if (direct is not null)
+                await direct.RequestStopAsync(scopeRecord.Scope, workflowExecutionId, cancellationToken);
+            else if (rootCanceller is not null)
+                await rootCanceller.RequestCancelAsync(testRunId, workflowExecutionId, scopeRecord.Scope.Partition, cancellationToken);
+        }
 
-        var executionState = workflowExecutionId is null || executionStateStore is null
+        var executionState = workflowExecutionId is null || executionStateStore is null || direct is not null
             ? null
             : await executionStateStore.FindAsync(workflowExecutionId, cancellationToken);
-        var rootWasCancelled = executionState?.Status == WorkflowExecutionStatus.Cancelled;
+        var rootWasCancelled = workflowExecutionId is not null && direct is not null
+            ? await direct.IsStoppedAsync(scopeRecord!.Scope, workflowExecutionId, cancellationToken)
+            : executionState?.Status == WorkflowExecutionStatus.Cancelled;
         var noRootWasStarted = workflowExecutionId is null ||
                                targetBeforeStop is { State: TestRunTargetState.Prepared, DispatchResult: null } && executionState is null;
 
@@ -1120,6 +1132,11 @@ public sealed class StartWorkflowTestRunRequestHandler(
             return null;
         return scope;
     }
+
+    private IWorkflowDirectTestRunDispatcher? FindDirectDispatcher(WorkflowTestRun run, WorkflowTestScopeRecord? scope) =>
+        scope is not null && run.Metadata.GetValueOrDefault("runtime.sourceReferenceId") == scope.Scope.ScopeId
+            ? ambientServices?.GetService<IWorkflowDirectTestRunDispatcher>()
+            : null;
 
     private sealed record ResolvedTestRunTrigger(
         TestRunTriggerContext Context,

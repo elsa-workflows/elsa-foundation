@@ -51,4 +51,11 @@ public interface IWorkflowStartDispatcher
 }
 
 /// <summary>A host's dispatcher for direct authoring Test Runs in an exact runtime test scope.</summary>
-public interface IWorkflowDirectTestRunDispatcher : IWorkflowStartDispatcher;
+public interface IWorkflowDirectTestRunDispatcher : IWorkflowStartDispatcher
+{
+    /// <summary>Requests cancellation of the exact isolated actor after its authoring scope closes.</summary>
+    ValueTask RequestStopAsync(WorkflowTestScope scope, string workflowExecutionId, CancellationToken cancellationToken = default);
+
+    /// <summary>Observes whether the exact isolated test actor is terminal.</summary>
+    ValueTask<bool> IsStoppedAsync(WorkflowTestScope scope, string workflowExecutionId, CancellationToken cancellationToken = default);
+}

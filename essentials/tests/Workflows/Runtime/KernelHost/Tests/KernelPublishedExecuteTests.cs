@@ -196,6 +196,7 @@ public sealed class KernelPublishedExecuteTests
             {
                 await VerifyDirectTestAsync(canonical, "workflow-draft-snapshot", "draft:witness", closeBeforePin: false);
                 await VerifyDirectTestAsync(flowchart, "workflow-definition-version", "saved-witness", closeBeforePin: false);
+                await VerifyDirectTestAsync(waiting, "workflow-definition-version", "stop-witness", closeBeforePin: false, stop: true);
                 await VerifyDirectTestAsync(waiting, "workflow-definition-version", "closed-witness", closeBeforePin: true);
                 return;
             }
@@ -437,7 +438,7 @@ public sealed class KernelPublishedExecuteTests
                 return actor.Id;
             }
 
-            async Task VerifyDirectTestAsync(WorkflowExecutable executable, string sourceKind, string version, bool closeBeforePin)
+            async Task VerifyDirectTestAsync(WorkflowExecutable executable, string sourceKind, string version, bool closeBeforePin, bool stop = false)
             {
                 var privateRuns = app.Services.GetRequiredService<KernelTestRuns>().Reads;
                 Assert.Throws<ArgumentException>(() => EmbeddedTenant.Bind(privateRuns.Tenant.Tenant));
@@ -472,8 +473,8 @@ public sealed class KernelPublishedExecuteTests
                     authority: WorkflowExecutionAuthoritySnapshot.CreateRoot("workflow-designer-test-run",
                         new Dictionary<string, string> { ["elsa.identity.subject-id"] = "accepted", ["elsa.identity.subject-kind"] = "persisted-user" }),
                     startAuthority: null, dispatchNestingDepth: 0, testScope: test);
-                var result = await author.GetRequiredService<IWorkflowDirectTestRunDispatcher>().DispatchAsync(start,
-                    WorkflowExecutableReferenceScope.TestRun, cancellationToken: token);
+                var dispatcher = author.GetRequiredService<IWorkflowDirectTestRunDispatcher>();
+                var result = await dispatcher.DispatchAsync(start, WorkflowExecutableReferenceScope.TestRun, cancellationToken: token);
                 if (closeBeforePin)
                 {
                     Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, result.CommandDispatch.Status);
@@ -482,6 +483,21 @@ public sealed class KernelPublishedExecuteTests
                 Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
                 Assert.Equal(source.SourceReferenceId, result.PinnedSource?.SourceReferenceId);
                 var actor = new Contract.ActorRef(result.WorkflowExecutionId);
+                if (stop)
+                {
+                    while ((await privateRuns.TailAsync(actor, cancellationToken: token)).JournalHeadRevision is not > 0)
+                        await Task.Delay(40, token);
+                    Assert.Equal(Contract.ActorStatus.Running, (await privateRuns.GetAsync(actor, token)).Run?.View.Header.Status);
+                    await Assert.ThrowsAsync<Core.Exceptions.TestScopeAdmissionException>(() =>
+                        dispatcher.RequestStopAsync(test, actor.Id, token).AsTask());
+                    await scopeStore.CloseAsync(new(test.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, DateTimeOffset.UtcNow), token);
+                    await dispatcher.RequestStopAsync(test, actor.Id, token);
+                    Assert.True(await dispatcher.IsStoppedAsync(test, actor.Id, token));
+                    Assert.Equal(Contract.ActorStatus.Cancelled, (await privateRuns.GetAsync(actor, token)).Run?.View.Header.Status);
+                    Assert.True((await real.GetAsync(actor, token)).Missing);
+                    Assert.Null(await author.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(actor.Id, token));
+                    return;
+                }
                 Contract.ActorView? view;
                 do
                 {

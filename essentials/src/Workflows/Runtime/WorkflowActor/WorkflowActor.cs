@@ -69,6 +69,12 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     {
         var header = turn.Header;
         var workflow = ReadHeader(header);
+        if (header.Status == ActorStatus.Running && workflow.TestStart is { } test &&
+            DateTimeOffset.FromUnixTimeMilliseconds(turn.Now) >= test.ExpiresAt)
+        {
+            turn.End(ActorStatus.Cancelled);
+            return;
+        }
         if (workflow.Model == MigrationPlanModel.ModelKey && turn.StartSettings is { } settings &&
             settings is not { History: History.Full, Ephemeral: false })
         {
