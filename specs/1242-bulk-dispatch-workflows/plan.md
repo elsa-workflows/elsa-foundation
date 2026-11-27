@@ -178,13 +178,19 @@ the design side), and converter rules.
   - The static `Input` follows the #5808 rules (literal or Object). A JavaScript `Input` is lowered on its own by the
     existing JavaScript rewrite; Elsa 3 evaluated it without the item. Its lowered text and bindings are embedded as
     the first operand.
-  - **Target declarations**: from `DispatchTargetInputs` (the same import, filled by
-    `Elsa3ReusableActivityImportMaterializer`). Otherwise from the published Elsa 4 definition with that definition
-    id: the materializer gets a lookup of published workflow input declarations from the host's workflow definition
-    store.
-    - Research item R-3: confirm the lookup, and how an Elsa 3 definition id maps to the published Elsa 4 definition
-      id after an earlier import.
-    - A target in neither place is refused (`…-TARGET-UNKNOWN`).
+  - **Target declarations**: a separate, bulk-only field on `Elsa3ConversionRequest`, `BulkDispatchTargetInputs`. It
+    stays separate so that the #5808 check for plain dispatches, which reads `DispatchTargetInputs`, keeps its
+    same-import scope.
+    - `Elsa3ReusableActivityImportMaterializer` fills it before conversion, because the request is synchronous. It
+      pre-scans the import's sources for `BulkDispatchWorkflows` nodes with a literal `WorkflowDefinitionId`, and for
+      each target id takes the same-import declarations, or else loads the published Elsa 4 definition's declared
+      inputs.
+    - The Elsa 4 workflow definition id is the Elsa 3 `DefinitionId` unchanged (`ReusableActivityCollectionAnalyzer`),
+      so the id maps one to one.
+    - Research item R-3 is narrowed to which store or lookup service gives the published workflow's declared inputs.
+    - A target in neither place is refused (`…-TARGET-UNKNOWN`). The single-definition entry point
+      `Elsa3WorkflowDefinitionImporter.ImportAsync` passes no targets, so a bulk node converted there is always refused
+      as target-unknown. Its callers are the test fixture and the migration boundary, so that is acceptable.
   - Item resolution through `get{key}`/`args.<key>` (Item read, above) therefore applies only to the correlation
     function.
 - **Outcomes** (spec FR-017): in `Elsa3FlowchartGraphBuilder.DropDeadEdges`, before `MapPorts` and `CheckJoins`. The
@@ -192,8 +198,9 @@ the design side), and converter rules.
   recorded, because `WaitForCompletion` is a consumed `Structure` member by then.
 - **Branches with a literal-false wait** (spec FR-018): the rewrite does not call `AddChild` for them, and raises
   `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` for each dropped branch.
-- **Outer writes** (spec FR-010a, FR-020a, Q5): after lowering, a write inside a converted branch or the `Dispatch`
-  child to a variable declared outside the bulk node raises the behaviour warning `…-BULK-DISPATCH-OUTER-WRITE`. It
+- **Outer writes** (spec FR-010a, FR-020a, Q5): after lowering, a write inside a converted `ChildCompleted` or
+  `ChildFaulted` branch to a variable declared outside the bulk node raises the behaviour warning
+  `…-BULK-DISPATCH-OUTER-WRITE`. It
   goes in `raisedByRewrites`. The definition converts. Publish adds spec 266's `ValueFlow/ConcurrentWrite` warning,
   because Elsa 4 deliberately allows such writes.
 - **Child-result reads** (spec FR-019): resolved to `…-CHILD-RESULT-READ` in name resolution for nodes inside the

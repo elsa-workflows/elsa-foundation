@@ -280,7 +280,7 @@ and on-completed-callbacks suites pass.
   - The cap is not an author-facing input.
   - The cap itself is under question in #5875 (Elsa 3 had none). #5875 settles it for the parallel ForEach and this
     activity together, and this spec follows the outcome.
-  - Whether it applies to fire-and-forget children too is Q1.
+  - The same cap applies whether or not the children are awaited (Q1).
 - **FR-008**: Faults of child executions are never absorbed.
   - A fault of the `Dispatch` execution itself, a fault of a slot child, or a fault of an activity deeper inside a slot
     (which reaches the bulk activity as a descendant fault) stays a blocking incident on its pass, through the
@@ -349,8 +349,11 @@ and on-completed-callbacks suites pass.
   expression.
   - **The target's declared inputs must be known**, from either of two sources:
     - the same import;
-    - a workflow already published in Elsa 4 by an earlier import, whose declared inputs the converter reads from the
-      published definition.
+    - a workflow already published in Elsa 4, imported earlier or authored natively, whose declared inputs the
+      converter reads from the published definition.
+
+    These target declarations are used only for bulk dispatch. The existing #5808 check for plain
+    `DispatchWorkflow`/`ExecuteWorkflow` keeps reading same-import targets only, so its behaviour does not change.
 
     A target in neither place is refused with `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` (Q2).
   - **Contents**: the static `Input` first, then, for a map item, each declared input the item has, in the declared
@@ -405,8 +408,11 @@ and on-completed-callbacks suites pass.
   warning on the map entry. It says that more than 1,000
   items fault in Elsa 4 (FR-007), and that at most 16 passes are open at once (FR-005), where Elsa 3 dispatched every
   child at once. It points to batching with a sequential `ForEach` over batches.
-- **FR-020a**: A conversion where a branch, the correlation function or the static `Input` writes a variable declared
-  outside the bulk node MUST raise behaviour warning `ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE`. Guidance: Elsa 3 ran
+- **FR-020a**: A conversion where an activity inside a converted `ChildCompleted` or `ChildFaulted` branch writes a
+  variable declared outside the bulk node MUST raise behaviour warning `ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE`.
+  - Every converted write targets a workflow variable, so this applies to every branch write.
+  - Writes in the correlation function or the static `Input` are already refused as input expressions
+    (`ForbiddenCapability`). The generated `Dispatch` child has no output capture. Guidance: Elsa 3 ran
   the branches one at a time, and Elsa 4 runs them concurrently, so a shared counter or list can lose updates. Record
   per-child results in the child workflow, or compute the total after the bulk activity. The definition still
   converts, and publish adds Elsa 4's own `ValueFlow/ConcurrentWrite` warning (FR-010a).
@@ -464,8 +470,8 @@ and on-completed-callbacks suites pass.
 - The cap and the window of 16 take their numbers from `docs/architecture/large-fan-out.md` decision 1. That decision
   was made for the clean-slate kernel's parallel ForEach, and it exposes the degree as an author input
   (`MaxDegreeOfParallelism`, 1–64), as spec 1243 does. This spec fixes 16 with no input, because of the
-  no-author-knobs stance. That departs from decision 1's shape and from spec 1243, and the approver should weigh it
-  (Q4).
+  no-author-knobs stance. That departs from decision 1's shape and from spec 1243. The coordinator kept 16 as the
+  starting value; tuning it for GA is #5980 (Q4).
 - The release 1 cap of 1,000 applies (FR-007, Q1, #5875).
 
 ## Out of Scope
@@ -479,7 +485,8 @@ and on-completed-callbacks suites pass.
 
 1. **Q1, the cap**: settled in #5875, which covers the parallel ForEach and this activity. Sipke is looking at it.
    FR-007 follows its outcome, with one rule for waiting and fire-and-forget children.
-2. **Q2, the target outside the import**: a target published in Elsa 4 by an earlier import is valid. The converter
+2. **Q2, the target outside the import**: a target already published in Elsa 4 (imported earlier or authored natively)
+   is valid. The converter
    reads its declared inputs from the published Elsa 4 definition. It refuses only a target that is neither in the
    import nor published (FR-016).
 3. **Q3, `ChildFaulted` for cancelled and undispatchable children**: agreed. A separate `ChildCanceled` slot can be
