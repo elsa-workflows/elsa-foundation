@@ -11,7 +11,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore
 {
     private sealed record RetiredOccurrence(string OccurrenceId, string ActorReference, string IntentFingerprint,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? AttemptDeadlineUtcTicks = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? AttemptDeadlineUtcTicks = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RuntimeKernelScheduleOccurrenceOrigin? Origin = null);
 
     public ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadMaterializedTailAsync(TriggerScope scope, CancellationToken cancellationToken = default) =>
         ReadTailAsync(scope, materialized: true, cancellationToken);
@@ -53,7 +54,7 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore
 
         _ = Read(current, scope, out var acceptedDeadline);
         var content = RuntimeArtifactJson.Serialize(new RetiredOccurrence(occurrence.Id, actorReference, IntentFingerprint(occurrence),
-            acceptedDeadline > occurrence.AcceptBefore.UtcTicks ? acceptedDeadline : null));
+            acceptedDeadline > occurrence.AcceptBefore.UtcTicks ? acceptedDeadline : null, occurrence.Origin));
         var retiredAt = clock.GetUtcNow().UtcTicks;
         var count = await context.KernelScheduleOccurrences.Where(row => row.Id == id && row.Revision == current.Revision &&
                 row.ActorReference == actorReference && row.RetiredAtUtcTicks == null && row.ContentJson == current.ContentJson)
@@ -74,19 +75,53 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore
     private static bool MatchesOccurrence(RuntimeKernelScheduleOccurrenceEntity row, string scope, RuntimeKernelScheduleOccurrence occurrence)
     {
         if (row.RetiredAtUtcTicks is null) return Read(row, scope) == occurrence;
+        var retired = ReadRetired(row, scope);
+        return MatchesRetired(row, retired, occurrence);
+    }
+
+    private static bool MatchesAcceptedAttempt(RuntimeKernelScheduleOccurrenceEntity row, string scope,
+        RuntimeKernelScheduleOccurrence candidate, RuntimeKernelScheduleOccurrence origin)
+    {
+        if (row.RetiredAtUtcTicks is null)
+        {
+            var accepted = Read(row, scope);
+            return accepted == candidate || accepted == origin || MatchesOrigin(accepted.Origin, origin);
+        }
+        var retired = ReadRetired(row, scope);
+        return MatchesRetired(row, retired, candidate) || MatchesRetired(row, retired, origin) ||
+            MatchesOrigin(retired.Origin, origin) && MatchesAcceptanceTime(row.AcceptedAtUtcTicks, origin, retired.AttemptDeadlineUtcTicks);
+    }
+
+    private static bool MatchesOrigin(RuntimeKernelScheduleOccurrenceOrigin? link, RuntimeKernelScheduleOccurrence origin) =>
+        link is not null && link.TenantId == origin.Scope.TenantId && link.Fingerprint == IntentFingerprint(origin);
+
+    private static RetiredOccurrence ReadRetired(RuntimeKernelScheduleOccurrenceEntity row, string scope)
+    {
         if (row.Revision != 3 || row.RetiredAtUtcTicks <= 0 || !IsReference(row.ActorReference) || row.ArtifactId != string.Empty ||
-            row.SchemaVersion is not (RuntimeKernelScheduleOccurrenceEfModule.RetirementSchemaVersion or RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion))
+            row.SchemaVersion != RuntimeKernelScheduleOccurrenceEfModule.RetirementSchemaVersion && !SupportsRenewal(row.SchemaVersion))
             throw new InvalidDataException("The schedule retirement receipt has an invalid physical state.");
         var retired = RuntimeArtifactJson.Deserialize<RetiredOccurrence>(row.ContentJson);
-        var tenant = JsonSerializer.Serialize(occurrence.Scope.TenantId);
+        var tenantKey = Decode(row.TenantKey);
+        var tenant = JsonSerializer.Deserialize<string>(tenantKey);
+        var tenantScope = new TriggerScope(new(scope), tenant);
         if (retired.ActorReference != row.ActorReference || !IsReference(retired.IntentFingerprint) ||
-            retired.AttemptDeadlineUtcTicks is not null && row.SchemaVersion != RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion ||
+            retired.OccurrenceId is not { Length: 64 } identity || identity.AsSpan().IndexOfAnyExcept("0123456789abcdef") >= 0 ||
+            retired.AttemptDeadlineUtcTicks is not null && !SupportsRenewal(row.SchemaVersion) ||
+            retired.Origin is { } origin && (row.SchemaVersion != RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion ||
+                !IsReference(origin.Fingerprint) ||
+                RuntimeKernelScheduleControl.CanonicalScope(tenantScope) !=
+                RuntimeKernelScheduleControl.CanonicalScope(tenantScope with { TenantId = origin.TenantId })) ||
             row.Id != CompositeId(scope, retired.OccurrenceId) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
-            row.TenantKey != Encode(tenant) || row.TenantKeyHash != Hash(tenant))
+            row.TenantKeyHash != Hash(tenantKey) || tenantKey != JsonSerializer.Serialize(tenant))
             throw new InvalidDataException("The schedule retirement receipt differs from its physical identity.");
-        return retired.OccurrenceId == occurrence.Id && retired.IntentFingerprint == IntentFingerprint(occurrence) &&
-            MatchesAcceptanceTime(row.AcceptedAtUtcTicks, occurrence, retired.AttemptDeadlineUtcTicks);
+        return retired;
     }
+
+    private static bool MatchesRetired(RuntimeKernelScheduleOccurrenceEntity row, RetiredOccurrence retired,
+        RuntimeKernelScheduleOccurrence occurrence) =>
+        row.TenantKey == Encode(JsonSerializer.Serialize(occurrence.Scope.TenantId)) && retired.OccurrenceId == occurrence.Id &&
+        retired.IntentFingerprint == IntentFingerprint(occurrence) &&
+        MatchesAcceptanceTime(row.AcceptedAtUtcTicks, occurrence, retired.AttemptDeadlineUtcTicks);
 
     private static string IntentFingerprint(RuntimeKernelScheduleOccurrence occurrence) =>
         Hash(RuntimeArtifactJson.Serialize(occurrence with { Due = occurrence.Due.ToUniversalTime(), AcceptBefore = occurrence.AcceptBefore.ToUniversalTime() }));
