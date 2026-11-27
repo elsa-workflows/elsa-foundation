@@ -54,7 +54,7 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
 
         var input = new JsonObject();
         foreach (var (name, value) in inputs) input.Add(name, JsonNode.Parse(value.GetRawText()));
-        var mode = services.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(executable);
+        var mode = KernelPersistenceMode.Resolve(services, executable);
 
         // Recheck after policy and input work, using the physical publication ledger as well as the served slot.
         var selected = await sources.ResolvePublishedAsync(request.ArtifactId, request.SourceSelection, persistence, cancellationToken);
