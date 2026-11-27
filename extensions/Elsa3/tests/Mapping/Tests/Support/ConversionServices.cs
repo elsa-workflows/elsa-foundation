@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Testing;
 using Elsa3.Mapping.Conversion;
+using Elsa3.Mapping.Mappings;
 using Elsa3.Models;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -35,12 +36,13 @@ internal static class ConversionServices
         bool isReusable = false,
         Elsa3MappingFeature? feature = null,
         Action<IServiceCollection>? configure = null,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? dispatchTargetInputs = null)
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? dispatchTargetInputs = null,
+        IReadOnlyDictionary<string, Elsa3ActivityExactReplacement>? replacements = null)
     {
         await using var provider = Create(catalog, feature, configure);
         await using var scope = provider.CreateAsyncScope();
         var converter = scope.ServiceProvider.GetRequiredService<IElsa3DefinitionConverter>();
-        return await converter.ConvertAsync(new Elsa3ConversionRequest(definition, isReusable, dispatchTargetInputs: dispatchTargetInputs));
+        return await converter.ConvertAsync(new Elsa3ConversionRequest(definition, isReusable, replacements, dispatchTargetInputs: dispatchTargetInputs));
     }
 
     /// <summary>The JavaScript feature's .NET-usage analysis, as a host composes it.</summary>

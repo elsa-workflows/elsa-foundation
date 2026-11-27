@@ -22,7 +22,7 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// The exceptions are the ones Jint throws for the same limits; a timeout is marked so a host function's own timeout stays
 /// its own error.
 /// </summary>
-internal sealed class EvaluationLimits(TimeSpan? timeout, int? maxStatements, long? maxMemoryBytes) : Constraint
+internal sealed class EvaluationLimits(TimeSpan? timeout, int? maxStatements, long maxMemoryBytes) : Constraint
 {
     private const string LimitMark = "Elsa.Expressions.JavaScript.EvaluationLimit";
 
@@ -79,12 +79,11 @@ internal sealed class EvaluationLimits(TimeSpan? timeout, int? maxStatements, lo
             throw exception;
         }
 
-        if (maxMemoryBytes is { } limit)
-        {
-            var used = GC.GetAllocatedBytesForCurrentThread() - _memoryBaseline - _excludedBytes;
-            if (used > limit)
-                throw new MemoryLimitExceededException($"Script has allocated {used} but is limited to {limit}");
-        }
+        // Bytes allocated, garbage included: .NET cannot tell how much one script holds (issue #5818).
+        var used = GC.GetAllocatedBytesForCurrentThread() - _memoryBaseline - _excludedBytes;
+        if (used > maxMemoryBytes)
+            throw new MemoryLimitExceededException(
+                $"Script has allocated {used} bytes but the JavaScript memory profile allows {maxMemoryBytes}");
     }
 
     // Jint resets on every call into the engine, including a host function's: the count is started by the evaluator.
