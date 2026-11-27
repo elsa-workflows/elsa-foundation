@@ -14,7 +14,7 @@ The runtime feature registers the default allow start policy. Hosts may replace 
 
 #678 persists dispatch records, retained executable dependencies, and post-commit outbox state through the runtime checkpoint transaction. The provider-backed stores preserve deterministic identities, fenced claim completion, and authenticated inspection across process restart.
 
-#679 adds successful `WaitForCompletion=true` execution. The parent wait checkpoint atomically records its non-expiring bookmark, suspended activity, Pending dispatch record, child ID output, and child-start intent. A successful child terminal checkpoint records the Completed dispatch projection and one deterministic parent-resume intent containing only policy-safe outputs. Resume delivery is performed by the global post-commit pump and retries with positive backoff until bookmark consumption is durably observable; duplicate delivery before or after consumption converges without a second logical completion. Unbounded retries emit payload-free structured warnings for operational alerting.
+#679 adds successful `WaitForCompletion=true` execution. The parent wait checkpoint atomically records its non-expiring bookmark, suspended activity, Pending dispatch record, child ID output, and child-start intent. A successful child terminal checkpoint records the Completed dispatch projection and one deterministic parent-resume intent carrying the child's committed output values (see Outputs below). Resume delivery is performed by the global post-commit pump and retries with positive backoff until bookmark consumption is durably observable; duplicate delivery before or after consumption converges without a second logical completion. Unbounded retries emit payload-free structured warnings for operational alerting.
 
 #680 completes waited child fault/cancellation propagation and parent-cancellation delivery. Terminal child evidence is projected through the same deterministic resume route, while cancel commands retain their original dispatch/child/idempotency identities and converge across duplicate or restarted delivery.
 
@@ -23,6 +23,17 @@ The runtime feature registers the default allow start policy. Hosts may replace 
 #1799 also stops a refused first commit from stranding a waited parent on the forwarded path. A start forwarded through distributed placement is acknowledged before the child runs, so the owning node's refusal never reaches the parent's dispatch. The runtime now faults such a child into existence from its start command, which gives its dispatch the child's own `Faulted` outcome through the ordinary enrichers, so the parent resumes with a child outcome rather than a delivery failure. A rule that refuses the child's content refuses that commit too, and the start then fails to `DispatchFailed` as before.
 
 #1799 stops a `Duplicate` dispatch result from counting as a delivered start on its own. `Duplicate` has two producers that mean opposite things: the start dispatcher answers it after reading the child's durable state, which is proof the child exists, while an agent answers it out of a process-local, bounded idempotency cache, which proves only that the key was seen there. A start whose refusal could not be recorded consumes its key before the refusal is reported, so claim expiry redelivers into the second kind, carrying none of it. The two are now told apart by whether a child can be seen: one that reached a child stays delivered, and one with no child to show for it is a failed delivery that retries, because the answer comes from a cache that keeps answering the same way while the evidence is read again on every attempt. Its own delivery budget then dead-letters it into `DispatchFailed`, which is how the parent gets an answer.
+
+## Outputs
+
+Spec 1245 gives the activity three outputs: `ChildWorkflowExecutionId`, `Status` and `Output`. There is no `Result` output.
+
+- `Status` is the outcome the dispatch selected: `Dispatched`, `Completed`, `Faulted`, `Cancelled` or `DispatchFailed`. Several outcomes can lead to the same node, and `Status` says which one ran.
+- `Output` holds the completed child's named outputs as one JSON object (name to value), holding the committed values unchanged. No diagnostics capture setting truncates or redacts them.
+  - It is `{}` after a faulted, cancelled or failed child, so no child data crosses (spec 100), and a member read gives `undefined`.
+  - It is absent on `Dispatched`, so a capture leaves its variable unchanged.
+  - Outputs that are sensitive, require encryption, or carry a redaction mode or a retention policy, and outputs not stored inline, are left out. That loss is declared on the `Output` contract (ADR 0046 V6). Each run that leaves one out reports the `dispatch.child-output-withheld` warning, whose `outputs` detail lists the names in ordinal order and never a value.
+- The terminal status, the allow-listed fault and cancellation diagnostics, and the child-control transport stay in the stored activity result as `Terminal`. It is not an output, but the whole-result read still reaches it.
 
 TestRun behavior and distributed two-node delivery remain owned by #682 and #683 respectively.
 

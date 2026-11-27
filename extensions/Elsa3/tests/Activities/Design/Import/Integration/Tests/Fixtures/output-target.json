@@ -1,0 +1,91 @@
+{
+  "id": "output-target-v1",
+  "definitionId": "output-target",
+  "name": "output-target",
+  "description": "Test-owned workflow: sets its declared output Decision to approved.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [
+    {
+      "type": "String",
+      "name": "Decision",
+      "displayName": "Decision"
+    }
+  ],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "output-target-root",
+    "nodeId": "output-target-root",
+    "name": "output-target-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "set-decision",
+        "nodeId": "set-decision",
+        "name": "set-decision",
+        "type": "Elsa.SetOutput",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "outputName": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Decision"
+          }
+        },
+        "outputValue": {
+          "typeName": "Object",
+          "expression": {
+            "type": "Literal",
+            "value": "approved"
+          }
+        }
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

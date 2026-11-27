@@ -38,6 +38,12 @@ internal sealed class Elsa3ConversionPlan(Elsa3ConversionRequest request, Elsa3W
     /// </summary>
     public Dictionary<string, string> MemoryAliases { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Variables an Elsa 3 ExecuteWorkflow captured its wrapped <c>Result</c> into (spec 1245 FR-010): memory id to the
+    /// capturing node's id. Value-flow lowering rewrites their reads.
+    /// </summary>
+    public Dictionary<string, string> WrappedResults { get; } = new(StringComparer.Ordinal);
+
     /// <summary>A reusable workflow's declared outputs and the synthesized graph variables that hold them.</summary>
     public List<Elsa3GraphOutputMapping> OutputMappings { get; } = [];
 

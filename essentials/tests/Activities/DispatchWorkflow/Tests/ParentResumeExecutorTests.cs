@@ -67,7 +67,8 @@ public sealed class ParentResumeExecutorTests
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.NotNull(payload);
         Assert.Equal(WorkflowDispatchStatus.DispatchFailed, payload.Result.Status);
-        Assert.Empty(payload.Result.Outputs);
+        Assert.Null(payload.Output);
+        Assert.Null(payload.WithheldOutputs);
     }
 
     [Fact]
@@ -295,7 +296,9 @@ public sealed class ParentResumeExecutorTests
                 identity.WaitBookmarkId,
                 DispatchWorkflowConstants.WaitStimulusType,
                 identity.WaitStimulusHash,
-                result),
+                result,
+                status == WorkflowDispatchStatus.Completed ? JsonDocument.Parse("{}").RootElement : null,
+                status == WorkflowDispatchStatus.Completed ? [] : null),
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         return new RuntimePostCommitIntent(
             intentId ?? identity.ParentResumeIntentId,

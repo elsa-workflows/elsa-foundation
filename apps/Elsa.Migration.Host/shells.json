@@ -1,0 +1,180 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Name": "default",
+        "Features": {
+          "Primitives": {},
+          "Serialization": {},
+          "Mediator": {},
+          "MemoryCache": {},
+          "Events": {},
+          "Tasks": {},
+          "FileSystemDistributedLocking": {
+            "LocksFolderPath": "data/locks"
+          },
+          "ApiCapabilities": {},
+          "FoundationIdentityAbstractions": {},
+          "FoundationIdentityApi": {},
+          "FoundationIdentityAspNetCoreIdentity": {
+            "IsDefault": true,
+            "AllowedReturnUrlOrigins": [
+              "http://localhost:5087",
+              "https://localhost:7028"
+            ]
+          },
+          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+            "IsDevelopmentOrDemo": true,
+            "SeedAdminUserName": "admin",
+            "SeedAdminPassword": "Password123!",
+            "SeedAdminEmail": "admin@elsa.local",
+            "SeedAdminRoleName": "administrator"
+          },
+          "FoundationIdentityOpenIddict": {
+            "IsDevelopmentOrDemo": true
+          },
+          "IdentityIamEntityFrameworkCore": {},
+          "Expressions": {},
+          "ExpressionsApi": {},
+          "JavaScriptExpressions": {
+            "TypeDescriptors": [
+              {
+                "TypeFullName": "System.DateTime"
+              },
+              {
+                "TypeFullName": "System.DateTimeOffset"
+              },
+              {
+                "TypeFullName": "System.TimeSpan"
+              },
+              {
+                "TypeFullName": "System.Guid"
+              },
+              {
+                "TypeFullName": "System.Random"
+              },
+              {
+                "TypeFullName": "System.Object"
+              },
+              {
+                "TypeFullName": "System.Text.Json.Nodes.JsonNode, System.Text.Json"
+              },
+              {
+                "TypeFullName": "System.String"
+              },
+              {
+                "TypeFullName": "System.Boolean"
+              },
+              {
+                "TypeFullName": "System.Int16"
+              },
+              {
+                "TypeFullName": "System.Int32"
+              },
+              {
+                "TypeFullName": "System.Int64"
+              },
+              {
+                "TypeFullName": "System.Decimal"
+              },
+              {
+                "TypeFullName": "System.Single"
+              },
+              {
+                "TypeFullName": "System.Double"
+              },
+              {
+                "TypeFullName": "System.Byte[]"
+              },
+              {
+                "TypeFullName": "System.IO.Stream"
+              },
+              {
+                "TypeFullName": "System.DateOnly"
+              },
+              {
+                "TypeFullName": "System.TimeOnly"
+              },
+              {
+                "TypeFullName": "System.Collections.Generic.IDictionary`2[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Object, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"
+              }
+            ]
+          },
+          "JavaScriptJintEngine": {},
+          "JavaScriptActivities": {},
+          "ActivitiesScripting": {},
+          "JavaScriptWorkflowsDesign": {},
+          "Http": {},
+          "HttpJavaScript": {},
+          "ActivitiesHttp": {},
+          "WorkflowsRuntimeHttp": {},
+          "ActivitiesRuntime": {},
+          "ActivitiesPrimitives": {},
+          "ActivitiesControlFlow": {},
+          "ActivitiesSequence": {},
+          "ActivitiesFlowchart": {},
+          "ActivitiesGraphRuntime": {},
+          "ActivitiesGraphDesign": {},
+          "ActivitiesDispatchWorkflowRuntime": {},
+          "ActivitiesDispatchWorkflowDesign": {},
+          "ActivitiesDesignApi": {},
+          "ActivitiesDesignReconciliation": {},
+          "ClrActivityReconciliation": {
+            "Options": {
+              "FolderPath": ""
+            }
+          },
+          "ActivitiesDesignEntityFrameworkCore": {},
+          "JsonActivityReconciliation": {
+            "Options": {
+              "SourceId": "elsa3-migration",
+              "FilePath": "migrated/activities/activities.json"
+            }
+          },
+          "WorkflowsDesignApi": {},
+          "WorkflowDesignValidations": {},
+          "WorkflowsDesignEntityFrameworkCore": {},
+          "JsonWorkflowReconciliation": {
+            "Options": {
+              "SourceId": "elsa3-migration",
+              "FolderPath": "migrated/workflows",
+              "PublishOnReconcile": true
+            }
+          },
+          "WorkflowsPublishing": {},
+          "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingEntityFrameworkCore": {},
+          "WorkflowsRuntimeApi": {
+            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
+            "WorkflowAlterationPayloadProtectionKeys": {
+              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          },
+          "WorkflowsRuntimeEntityFrameworkCore": {
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256,
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
+            "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
+          },
+          "WorkflowsRuntimeTriggers": {},
+          "WorkflowsRuntimeResumption": {},
+          "WorkflowsRuntimeScheduling": {},
+          "WorkflowsRuntimeRecurringTriggers": {},
+          "WorkflowsRuntimeDistributed": {},
+          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeCheckpointPersistence": {
+            "Mode": "Durable",
+            "MaxActivitiesPerCommit": 50
+          },
+          "WorkflowsRuntimeHistory": {}
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}

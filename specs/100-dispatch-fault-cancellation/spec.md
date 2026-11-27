@@ -6,6 +6,12 @@
 
 **Status**: Approved
 
+> **Partly superseded by [spec 1245](../1245-execute-workflow-awaited-dispatch/spec.md) (2026-11-27).** The safe
+> terminal result is stored as the activity's `Terminal` member, not as a `Result` output, and `Output` is `{}` after a
+> faulted, cancelled or failed child. Superseded here: FR-004, FR-008 and FR-026 where they name `Result` or output
+> capture, and the outputs lines of `contracts/dispatch-fault-cancellation.md`. The rest of this specification is
+> unchanged.
+
 **Input**: GitHub issue #680, “Handle child faults and parent-child cancellation”, under parent #674
 
 ## User Scenarios & Testing *(mandatory)*

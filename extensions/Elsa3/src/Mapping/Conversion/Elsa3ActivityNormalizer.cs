@@ -403,6 +403,9 @@ internal sealed partial class Elsa3ActivityNormalizer(
         {
             case Elsa3MemberRuleKind.Carry when rule.Kind == Elsa3MemberKind.Output:
                 Add(context, rule.Elsa4Key!, propertyName, value, result, boundBy);
+                if (captured && rule.WrapsResult &&
+                    value.GetProperty("memoryReference").GetProperty("id").GetString() is { Length: > 0 } wrappedId)
+                    context.Plan.WrappedResults[wrappedId] = Elsa3ConversionDiagnostics.NodeId(context.Activity);
                 if (captured && rule.BehaviourWarning is { } outputWarning)
                     Warn(context, outputWarning, propertyName);
                 break;
@@ -757,12 +760,13 @@ internal sealed partial class Elsa3ActivityNormalizer(
         }
 
         context.Error(OutputNotRepresentable,
-            rule.Projection is null
+            rule.LostMessage is { } message ? string.Format(System.Globalization.CultureInfo.InvariantCulture, message, propertyName)
+            : rule.Projection is null
                 ? $"Output '{propertyName}' is captured, but Elsa 4 activity '{context.Node.Resolved!.ActivityTypeKey}' has no such output."
                 : $"Output '{propertyName}' is captured; in Elsa 4 it is part of output '{rule.Projection.Split('.')[0]}' ({rule.Projection}), which a binding cannot project yet.",
-            rule.Projection is null
+            rule.LostGuidance ?? (rule.Projection is null
                 ? "Remove the capture, or rebuild the value from the outputs Elsa 4 provides."
-                : $"Capture '{rule.Projection.Split('.')[0]}' and read {rule.Projection} from it in the consuming expression.",
+                : $"Capture '{rule.Projection.Split('.')[0]}' and read {rule.Projection} from it in the consuming expression."),
             propertyName);
     }
 
@@ -1245,6 +1249,9 @@ internal sealed partial class Elsa3ActivityNormalizer(
         plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Error(plan, node, code, message, guidance));
     }
 
+    internal const string ExecuteWorkflowDurableMessage =
+        "ExecuteWorkflow becomes a durable dispatch that waits for completion, not an in-process call.";
+
     private static readonly IReadOnlyDictionary<string, string> WarningMessages = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         [FormPostNotParsed] = "Elsa 4 does not parse form posts into ParsedContent, and a text body becomes a string.",
@@ -1256,7 +1263,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         [ForZeroStepFaults] = "A For step of 0 faults in Elsa 4.",
         [BreakStopsAtParallel] = "In Elsa 4, Break does not cross a Parallel branch.",
         [ForkWaitAnyCancellation] = "Fork WaitAny becomes a Parallel with threshold 1; cancellation of the other branches may differ.",
-        [ExecuteWorkflowDurable] = "ExecuteWorkflow becomes a durable dispatch that waits for completion, not an in-process call.",
+        [ExecuteWorkflowDurable] = ExecuteWorkflowDurableMessage,
         [OutcomeUndeclared] = "The reusable workflow completes with an outcome its definition does not declare; it is declared in the converted contract.",
         [OutcomeUnreached] = "The reusable workflow declares an outcome that nothing completes with; it is left out of the converted contract.",
         [BulkDispatchCapped] = "Elsa 4 faults a bulk dispatch of more than 1,000 items, and keeps at most 16 children open at once, starting the next as one ends; Elsa 3 dispatched every child at once, with no cap.",

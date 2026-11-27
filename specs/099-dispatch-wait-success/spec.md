@@ -6,6 +6,17 @@
 
 **Status**: Approved
 
+> **Partly superseded by [spec 1245](../1245-execute-workflow-awaited-dispatch/spec.md) (2026-11-27).** A completed
+> child's outputs reach the parent as the `Output` object of committed values, read without the diagnostics capture
+> policy; protected and externally stored outputs are left out and named in a warning. The activity no longer sets a
+> `Result` output, and no redacted entries are kept. Superseded here: the child-output capture through the runtime
+> capture policy, the redacted entries kept with metadata, and the activity setting `Result` — User Story 2 scenarios
+> 2 and 3, User Story 3 and its scenario 4, User Story 4 scenario 4, FR-011, FR-012, FR-021, Key Entities, SC-004 and
+> the capture-policy assumption; the outputs and capture lines of `contracts/dispatch-wait-success.md`; and the
+> `Result` row and redacted-entry rules of `data-model.md`. FR-009 (the read uses only the child's durable
+> workflow-output channel, after merging the terminal checkpoint's output changes) and FR-013 (fail closed) stay in
+> force. The rest of this specification is unchanged.
+
 **Input**: GitHub issue #679, “Wait for a successful child and return safe outputs”, under parent #674
 
 ## User Scenarios & Testing *(mandatory)*

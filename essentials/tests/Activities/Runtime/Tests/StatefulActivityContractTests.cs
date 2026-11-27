@@ -52,6 +52,29 @@ public sealed class StatefulActivityContractTests
     }
 
     [Fact]
+    public async Task Resume_context_reports_warnings_through_the_attempts_warning_channel()
+    {
+        // Spec 1245 FR-003: a resumed step reports a run-time warning, recorded on the activity execution.
+        var sink = new RecordingWarningSink();
+        var attempt = Context("attempt-2").WithWarnings(sink);
+        var context = new ActivityResumeContext<ApprovalState, ApprovalReceived>(
+            attempt, new ApprovalState("request-42"), new ApprovalReceived(true), "registration-1", "delivery-1");
+
+        Assert.Same(sink, context.Warnings);
+        context.Warnings!.Report(new Elsa.Expressions.Core.Models.ExecutionWarning("test.warning", "A warning."));
+        Assert.Equal("test.warning", Assert.Single(sink.Warnings).Code);
+        Assert.Null(new ActivityResumeContext<ApprovalState, ApprovalReceived>(
+            Context("attempt-3"), new ApprovalState("request-42"), new ApprovalReceived(true), "registration-1", "delivery-1").Warnings);
+        await Task.CompletedTask;
+    }
+
+    private sealed class RecordingWarningSink : Elsa.Expressions.Core.Contracts.IExecutionWarningSink
+    {
+        public List<Elsa.Expressions.Core.Models.ExecutionWarning> Warnings { get; } = [];
+        public void Report(Elsa.Expressions.Core.Models.ExecutionWarning warning) => Warnings.Add(warning);
+    }
+
+    [Fact]
     public void Initial_and_resume_contexts_are_immutable_identity_only_value_contexts()
     {
         AssertRestrictedContext(typeof(ActivityExecutionContext));

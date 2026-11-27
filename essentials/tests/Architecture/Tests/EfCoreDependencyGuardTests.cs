@@ -18,7 +18,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class EfCoreDependencyGuardTests
 {
     private static readonly string[] RestoreConfigurations = ["Release", "Debug"];
-    private static readonly string[] AllowedEfConsumers = ["Elsa.Essentials.Host", "Elsa.Foundation.Host", "Elsa.Workbench.Host"];
+    private static readonly string[] AllowedEfConsumers = ["Elsa.Essentials.Host", "Elsa.Foundation.Host", "Elsa.Migration.Host", "Elsa.Workbench.Host"];
 
     /// <summary>
     /// <c>Elsa.Foundation.Host</c> carries EF Core (#2151, #2191) for its opt-in
@@ -55,6 +55,27 @@ public sealed class EfCoreDependencyGuardTests
         "Microsoft.EntityFrameworkCore.Sqlite.Core",
         "Microsoft.EntityFrameworkCore.SqlServer",
         "MySql.EntityFrameworkCore",
+        "Npgsql.EntityFrameworkCore.PostgreSQL",
+        "OpenIddict.EntityFrameworkCore",
+        "OpenIddict.EntityFrameworkCore.Models"
+    ];
+
+    /// <summary>
+    /// <c>Elsa.Migration.Host</c>, the temporary Elsa 3 migration host (spec 1236, removed by the cleanup on #5800), compiles
+    /// in the EF modules of the features it composes, the Data Protection key store and the OpenIddict token store with its
+    /// in-memory demo store. It references no EF package itself: this closure is what those projects bring. No design-time
+    /// package and no MySQL engine: no composed module selects one.
+    /// </summary>
+    private static readonly string[] AllowedMigrationHostEfPackages =
+    [
+        "Microsoft.EntityFrameworkCore",
+        "Microsoft.EntityFrameworkCore.Abstractions",
+        "Microsoft.EntityFrameworkCore.Analyzers",
+        "Microsoft.EntityFrameworkCore.InMemory",
+        "Microsoft.EntityFrameworkCore.Relational",
+        "Microsoft.EntityFrameworkCore.Sqlite",
+        "Microsoft.EntityFrameworkCore.Sqlite.Core",
+        "Microsoft.EntityFrameworkCore.SqlServer",
         "Npgsql.EntityFrameworkCore.PostgreSQL",
         "OpenIddict.EntityFrameworkCore",
         "OpenIddict.EntityFrameworkCore.Models"
@@ -147,6 +168,7 @@ public sealed class EfCoreDependencyGuardTests
     {
         "Elsa.Essentials.Host" => AllowedEssentialsHostEfPackages,
         "Elsa.Foundation.Host" => AllowedFoundationHostEfPackages,
+        "Elsa.Migration.Host" => AllowedMigrationHostEfPackages,
         "Elsa.Workbench.Host" => AllowedWorkbenchEfPackages,
         _ => throw new ArgumentOutOfRangeException(nameof(host), host, "An admitted EF consumer needs a reviewed EF closure of its own.")
     };

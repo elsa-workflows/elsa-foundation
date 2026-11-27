@@ -73,6 +73,7 @@ public class Elsa3MappingFeature : IShellFeature
         services.AddSingleton<IElsa3NodeRewrite, Elsa3LoopVariableReferencesRewrite>();
         services.AddSingleton<IElsa3NodeRewrite, Elsa3HttpTriggerResponseModeRewrite>();
         services.AddSingleton<IElsa3NodeRewrite, Elsa3ReusableOutputWriteRewrite>();
+        services.AddSingleton<IElsa3NodeRewrite, Elsa3ExecuteWorkflowAsDispatchRewrite>();
         services.AddSingleton<IElsa3NodeRewrite, Elsa3BulkDispatchChildRewrite>();
         services.AddScoped<Elsa3ActivityNormalizer>();
         services.AddScoped<Elsa3DefinitionConverter>();
