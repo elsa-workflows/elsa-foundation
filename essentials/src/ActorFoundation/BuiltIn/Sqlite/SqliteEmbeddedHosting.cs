@@ -82,7 +82,7 @@ public static partial class SqliteEmbeddedHosting
         {
             if (rootType is not null) requests?.RequireBinding(file.Path, rootType, node);
             var shipped = rootType is not null;
-            KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions) : new(file.Options);
+            KernelDb Open() => shipped ? OpenRoot(file, requests?.QualifiesPressure == true, runtime: true) : new(file.Options);
 
             int partitions;
             await using (var db = Open())
@@ -103,7 +103,9 @@ public static partial class SqliteEmbeddedHosting
                 await UseWalAsync(db, cancellationToken);
             }
 
-            var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch) { CommitSql = CommitSql.Owned };
+            var pressure = requests?.Pressure;
+            var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch)
+                { CommitSql = CommitSql.Owned, AdmissionPressure = pressure };
             if (shipped) await store.EnableRootJobsAsync(cancellationToken);
             var watchdog = new Watchdog(Defaults.Lease, endProcess);
             var watched = watchdog.Watch(store);
@@ -112,9 +114,11 @@ public static partial class SqliteEmbeddedHosting
             {
                 Partitions = partitions,
                 OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error),
-                Transport = requests
+                Transport = requests,
+                Backlog = pressure?.Backlog
             };
             var host = DurableHost.ForNode(node, watched, createActor(store), partitions, workers);
+            await store.PrimeAdmissionPressureAsync(cancellationToken);
             var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
                 beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault)
             {

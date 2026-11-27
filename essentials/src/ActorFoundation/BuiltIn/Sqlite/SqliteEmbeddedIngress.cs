@@ -53,7 +53,7 @@ public static partial class SqliteEmbeddedHosting
 
         using var file = AcquireFile(databasePath, requests: requests);
         requests?.RequireBinding(file.Path, actorType);
-        var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
+        var admission = CreateAdmission(file, window, requests);
         await admission.VerifyAsync(cancellationToken);
         return new Ingress(file.Path, actorType, window, requests, authorizeOperator);
     }
@@ -65,11 +65,25 @@ public static partial class SqliteEmbeddedHosting
             throw new ArgumentException("Invalid SQLite root actor type.", nameof(actorType));
     }
 
+    private static KernelDb OpenRoot(FileLease file, bool qualifyPressure, bool runtime) => qualifyPressure
+        ? KernelDb.ForRootDueBacklogQualification(file.Options, file.AdmissionDefinitions)
+        : runtime ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions) : KernelDb.ForSqliteRootShipped(file.Options);
+
+    private static SqliteRootAdmission CreateAdmission(FileLease file, TimeSpan window, SqliteDirectRequests? requests) =>
+        new(() => OpenRoot(file, requests?.QualifiesPressure == true, runtime: false), window, file.AdmissionDefinitions, requests?.Pressure);
+
     private sealed class Ingress(string path, string actorType, TimeSpan window, SqliteDirectRequests? requests,
         Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator) : Contract.IIngress
     {
         public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
             string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            try { return await SendCoreAsync(scope, target, id, kind, payload, options, cancellationToken); }
+            catch (RootAdmissionRefused refusal) { return refusal.Admission; }
+        }
+
+        private async ValueTask<Contract.Admission> SendCoreAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
+            string? payload, Contract.AddOptions? options, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(scope);
             ArgumentNullException.ThrowIfNull(target);
@@ -81,13 +95,13 @@ public static partial class SqliteEmbeddedHosting
                 var (actor, command, refusal) = ReadCommand(scope, target, kind, payload);
                 if (command is null) return new(Contract.AdmissionOutcome.Refused, Reason: refusal);
                 using var write = AcquireFile(path);
-                var operators = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(write.Options), window, write.AdmissionDefinitions);
+                var operators = CreateAdmission(write, window, requests);
                 return await operators.OperateAsync(scope.Tenant, actor, id, kind, command.Selection!, options?.DueAt, options?.KeepFor,
                     cancellationToken, thenDelete: command.ThenDelete);
             }
 
             using var file = AcquireFile(path);
-            var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
+            var admission = CreateAdmission(file, window, requests);
             if (target is Contract.Target.Start start)
             {
                 var spec = start.Spec;

@@ -31,6 +31,8 @@ if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile, 
 if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
 if (args is ["root-due-backlog", var backlogProvider and ("postgres" or "sqlite"), var backlogFence and ("checked" or "in-batch")])
     return await RootDueBacklogChecks.RunAsync(backlogProvider == "postgres", backlogFence == "in-batch");
+if (args is ["root-admission-pressure", var pressureProvider and ("postgres" or "sqlite"), var pressureFence and ("checked" or "in-batch")])
+    return await RootAdmissionPressureChecks.RunAsync(pressureProvider == "postgres", pressureFence == "in-batch");
 if (args is ["pg-root-operators", "admit"])
     return await PostgresRootOperatorChecks.RunAsync(null);
 if (args is ["pg-root-operators", var defaultOperatorPhase and ("read" or "resume"), var operatorA, var operatorB, var operatorC])

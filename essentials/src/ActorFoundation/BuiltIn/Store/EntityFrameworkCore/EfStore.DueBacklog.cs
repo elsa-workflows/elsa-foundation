@@ -4,6 +4,25 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
+    internal RootAdmissionPressure? AdmissionPressure { get; init; }
+
+    internal async Task PrimeAdmissionPressureAsync(CancellationToken cancellationToken)
+    {
+        if (AdmissionPressure is null) return;
+        await using var db = create();
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
+        await RefreshAdmissionPressureAsync(db, 1, cancellationToken);
+    }
+
+    private async Task RefreshAdmissionPressureAsync(KernelDb db, int nodes, CancellationToken cancellationToken)
+    {
+        if (AdmissionPressure is not { } pressure) return;
+        RequireDueBacklog(db);
+        var depths = await db.Partitions.Where(partition => partition.Backlog >= pressure.Backlog.LowWater)
+            .ToDictionaryAsync(partition => partition.Id, partition => partition.Backlog, cancellationToken);
+        pressure.Refresh(depths, nodes);
+    }
+
     private bool SupportsDueBacklog => _ordinaryRoots is { MeasuresDueBacklog: true } && OwnedCommit;
 
     bool IDueBacklogStore.MeasuresDueBacklog => SupportsDueBacklog;

@@ -156,7 +156,7 @@ public static class PostgresPreviewHosting
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
         }
-        var admission = new PostgresRootAdmission(create, window, lockOrdinaryWrites: true);
+        var admission = new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: requests?.Pressure);
         var store = new EfStore(create, postgres: true);
         return new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(cancellationToken), pageSize),
             actorType, directRequests: requests, authorizeExactOperator: authorizeOperator);
@@ -168,12 +168,18 @@ public static class PostgresPreviewHosting
     /// (<see cref="OpenFoundationAsync"/>).
     /// </summary>
     public static PostgresDirectRequests CreateRequests(Func<KernelDb> create, string node, string actorType, TimeSpan? deduplicationWindow = null)
+        => CreateRequests(create, node, actorType, deduplicationWindow, null);
+
+    internal static PostgresDirectRequests CreateRequests(Func<KernelDb> create, string node, string actorType,
+        TimeSpan? deduplicationWindow, RootAdmissionPressure? pressure)
     {
         ArgumentNullException.ThrowIfNull(create);
         PostgresRootAdmission.RequireActorType(actorType);
         var window = deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
-        return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true), new EfStore(create, postgres: true),
+        using var db = create();
+        if (db.UsesRootDueBacklog) pressure ??= RootAdmissionPressure.CreateDefault();
+        return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true, pressure: pressure), new EfStore(create, postgres: true),
             node, actorType) { DeduplicationWindow = window };
     }
 
@@ -199,7 +205,7 @@ public static class PostgresPreviewHosting
     // The node with the transport its owner answers held callers through (a check may observe it on the way).
     internal static async Task<RuntimeNode> StartAsync(Func<KernelDb> create, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options, CancellationToken cancellationToken,
-        Action<Exception>? onFault, IReplyTransport? replies)
+        Action<Exception>? onFault, IReplyTransport? replies, bool? fenceInBatch = null)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -231,9 +237,11 @@ public static class PostgresPreviewHosting
             partitions = await PostgresRootAdmission.ReadInstalledPartitionCountAsync(db, cancellationToken);
         }
 
-        var store = new EfStore(create, postgres: true);
+        var pressure = (replies as PostgresDirectRequests)?.Pressure;
+        var store = new EfStore(create, postgres: true, fenceInBatch) { AdmissionPressure = pressure };
         if (nativeJobs) await store.EnableRootJobsAsync(cancellationToken);
         var scope = store.BindWorkerNode(actor.Withholds);
+        await store.PrimeAdmissionPressureAsync(cancellationToken);
         var watchdog = new Watchdog(Defaults.Lease, endProcess);
         var watched = watchdog.Watch(store);
         var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actor, rootJobHandle: store.RootJobHandle,
@@ -242,7 +250,11 @@ public static class PostgresPreviewHosting
         // A store error a drain retried is reported as a loop error of the node made below: counted, and reported once per
         // distinct error per window, so a drain the deadline kills shows why it made no progress.
         RuntimeNode? reporter = null;
-        var workers = new WorkerOptions { Partitions = partitions, OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error) };
+        var workers = new WorkerOptions
+        {
+            Partitions = partitions, Backlog = pressure?.Backlog,
+            OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error)
+        };
         var host = DurableHost.ForNode(node, watched, adapter, partitions, replies is null ? workers : workers with { Transport = replies });
         var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
             beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault);

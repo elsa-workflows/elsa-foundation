@@ -13,6 +13,13 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
     public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
     {
+        try { return await SendCoreAsync(scope, target, id, kind, payload, options, cancellationToken); }
+        catch (RootAdmissionRefused refusal) { return refusal.Admission; }
+    }
+
+    private async ValueTask<Contract.Admission> SendCoreAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
+        string? payload, Contract.AddOptions? options, CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(id);
@@ -163,6 +170,10 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         catch (PostgresRootAdmission.OperatorReplyExpired)
         {
             return await TimeoutAsync();
+        }
+        catch (RootAdmissionRefused refusal)
+        {
+            return refusal.Reply;
         }
         finally
         {

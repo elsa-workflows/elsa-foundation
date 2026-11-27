@@ -67,7 +67,9 @@ internal sealed partial class PostgresRootAdmission
         var window = ReceiptWindow(deduplicationWindow, keepFor);
         var windowMs = (long)window.TotalMilliseconds;
         var digest = FoundationRootCreator.OperationDigest(id);
+        using var attempt = pressure?.Begin(tenant, RootAdmissionKind.Input);
         await using var db = create();
+        RequirePressureProfile(db);
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
         if (db.RequiresPinnedRootNamespace)
             await PinRootNamespaceAsync(db, cancellationToken);
@@ -128,6 +130,7 @@ internal sealed partial class PostgresRootAdmission
             return await RefuseAsync(DirectResult.Refused);
 
         var target = new InstanceRef(address.Id);
+        attempt?.Require(target.Partition);
         db.Messages.Add(new MessageEntity
         {
             Id = occurrence, InboxScope = InboxKey.FoundationOccurrenceScope, Target = target.Id, Partition = target.Partition,
@@ -136,6 +139,7 @@ internal sealed partial class PostgresRootAdmission
         });
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        attempt?.Committed();
         return DirectResult.Accepted;
 
         Task<bool> HasReceiptAsync() => db.Database.SqlQuery<bool>($"""

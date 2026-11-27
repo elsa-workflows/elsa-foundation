@@ -74,7 +74,9 @@ internal sealed partial class PostgresRootAdmission
         var window = keepFor is { } keep && keep < deduplicationWindow ? keep : deduplicationWindow;
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         var windowMs = (long)window.TotalMilliseconds;
+        using var attempt = retentionDelete ? null : pressure?.Begin(tenant, RootAdmissionPressure.Operator(kind));
         await using var db = create();
+        RequirePressureProfile(db);
         if (!db.UsesRootOperatorProtocol || kind == Kinds.Terminate && !db.UsesRootTermination) return null;
         // The standalone recovery profile admits only Recover. The composition also admits the root operator chain.
         var recover = kind == Kinds.Recover;
@@ -205,6 +207,7 @@ internal sealed partial class PostgresRootAdmission
                 return (selected || requireExactTarget) && prior != reference ? null : new(prior, true);
             }
             var actor = new InstanceRef(address.Id);
+            attempt?.Require(actor.Partition);
             var replyAddress = reply?.Address;
             var (id, header) = EncodeOperator(reference, operation, digest, address.Creation, kind, due, terminal, park,
                 park is not null ? (long)deduplicationWindow.TotalMilliseconds : null, thenDelete, retentionDelete, replyAddress);
@@ -213,6 +216,7 @@ internal sealed partial class PostgresRootAdmission
                 VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0, {replyAddress})
                 """, token);
             await tx.CommitAsync(token);
+            attempt?.Committed();
             return new(reference, false);
         }
         catch (PostgresException error) when (selected && IsUnavailableSelectedSchema(error))

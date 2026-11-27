@@ -5,7 +5,8 @@ using static Kernel.EntityFramework.RootAdmissionWire;
 
 namespace Kernel.EntityFramework;
 
-internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow, SqliteAdmissionDefinitions definitions)
+internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow, SqliteAdmissionDefinitions definitions,
+    RootAdmissionPressure? pressure = null)
 {
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record Target(string Actor, int Partition, bool HasCheckpoint, int? Status, bool Terminal, bool Pending, bool Parked);
@@ -30,13 +31,14 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         return (await StartCoreAsync(request.Tenant, request.Caller.Id, spec, null, request.KeepFor, request, token))?.Actor?.Id;
     }
 
-    private Task<Contract.Admission?> StartCoreAsync(string tenant, string operation, StartSpec spec, long? due, TimeSpan? keepFor,
+    private async Task<Contract.Admission?> StartCoreAsync(string tenant, string operation, StartSpec spec, long? due, TimeSpan? keepFor,
         HeldRootRequest? reply, CancellationToken token)
     {
         RequireCreator(operation, spec);
         var window = ReceiptWindow(deduplicationWindow, keepFor);
         var digest = FoundationRootCreator.OperationDigest(operation);
-        return WriteAsync<Contract.Admission?>(async (db, now, ct) =>
+        using var attempt = pressure?.Begin(tenant, RootAdmissionKind.Start);
+        return await WriteAsync<Contract.Admission?>(async (db, now, ct) =>
         {
             if (reply is not null && reply.Caller.Deadline <= now) return null;
             var existing = await db.Database.SqlQuery<string>($"""
@@ -48,12 +50,14 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
 
             var issuer = await ReadIssuerAsync(db, ct);
             var name = tenant + "_" + Guid.NewGuid().ToString("N");
-            var actor = InstanceRef.In(InstanceRef.Spread(name, issuer.Partitions), name);
+            var preferred = InstanceRef.Spread(name, issuer.Partitions);
+            var actor = InstanceRef.In(attempt?.Place(preferred, issuer.Partitions) ?? preferred, name);
             var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
             var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, reply?.Address);
             var (header, payload) = EncodeCreator(creator);
             if (!FitsEnvelope(header, payload, creator.ReplyTo))
                 throw new MetadataLimitExceeded(nameof(spec), EfStore.RootContentBytes);
+            attempt?.Require(actor.Partition);
 
             var until = checked(now + (long)window.TotalMilliseconds);
             var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
@@ -69,7 +73,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             await EnqueueAsync(db, actor.Id, actor.Partition, creator.InboxKey.Id, 0, creator.Kind, header, payload, due,
                 keepUntil: null, replyTo: creator.ReplyTo, token: ct);
             return new(Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(reference));
-        }, token);
+        }, token, attempt);
     }
 
     internal async Task<Contract.Admission> SendAsync(string tenant, Contract.ActorRef reference, string id, string kind, string? payload,
@@ -89,16 +93,17 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         };
     }
 
-    private Task<Contract.Admission?> SendCoreAsync(string tenant, Contract.ActorRef reference, string id, string kind, string? payload,
+    private async Task<Contract.Admission?> SendCoreAsync(string tenant, Contract.ActorRef reference, string id, string kind, string? payload,
         long? due, TimeSpan? keepFor, HeldRootRequest? reply, CancellationToken token)
     {
         if (!FoundationRootCreator.IsGeneratedReference(reference.Id) || !FoundationMetadataLimits.IsOutsideMessageId(id) ||
             !FoundationMetadataLimits.IsOrdinaryKind(kind) || !FoundationMetadataLimits.FitsContent(payload))
-            return Task.FromResult<Contract.Admission?>(new(Contract.AdmissionOutcome.Refused));
+            return new(Contract.AdmissionOutcome.Refused);
 
         var window = ReceiptWindow(deduplicationWindow, keepFor);
         var digest = FoundationRootCreator.OperationDigest(id);
-        return WriteAsync<Contract.Admission?>(async (db, now, ct) =>
+        using var attempt = pressure?.Begin(tenant, RootAdmissionKind.Input);
+        return await WriteAsync<Contract.Admission?>(async (db, now, ct) =>
         {
             var target = await ReadTargetAsync(db, tenant, reference.Id, ct);
             if (target is null)
@@ -120,6 +125,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             var address = reply?.Address;
             var (header, body, storedKind) = EncodeDirect(id, 1, kind, payload, due, held: address is not null);
             if (!FitsEnvelope(header, body, address)) return new(Contract.AdmissionOutcome.Refused);
+            attempt?.Require(target.Partition);
 
             var until = checked(now + (long)window.TotalMilliseconds);
             var occurrence = $"{reference.Id}/{digest}/{Guid.NewGuid():N}";
@@ -131,7 +137,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             await EnqueueAsync(db, target.Actor, target.Partition, occurrence, InboxKey.FoundationOccurrenceScope, storedKind,
                 header, body, due, until, address, ct);
             return new(Contract.AdmissionOutcome.Accepted, reference);
-        }, token);
+        }, token, attempt);
     }
 
     internal async ValueTask<long> ReadReplyTimeAsync(CancellationToken token)
@@ -147,10 +153,13 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         db.Database.SqlQueryRaw<long>(
             "SELECT " + SqliteCommitDialect.MillisecondClock + """ AS "Value" """).SingleAsync(token);
 
-    private async Task<T> WriteAsync<T>(Func<KernelDb, long, CancellationToken, Task<T>> write, CancellationToken token)
+    private async Task<T> WriteAsync<T>(Func<KernelDb, long, CancellationToken, Task<T>> write, CancellationToken token,
+        RootAdmissionPressure.Attempt? attempt = null)
     {
         await using var db = create();
         if (!db.UsesSqliteShippedInstall) throw new NotSupportedException("Root admission requires the SQLite shipped context.");
+        if (pressure is not null && !db.UsesRootDueBacklog)
+            throw new StoreFormatException("Admission pressure requires the due-backlog store profile.");
         await db.Database.OpenConnectionAsync(token);
         token.ThrowIfCancellationRequested();
         // Competing callers serialize before any receipt or checkpoint is read. SQLite cannot upgrade a stale read snapshot.
@@ -163,6 +172,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         var result = await write(db, now, token);
         token.ThrowIfCancellationRequested();
         await transaction.CommitAsync(token);
+        attempt?.Committed();
         return result;
     }
 
