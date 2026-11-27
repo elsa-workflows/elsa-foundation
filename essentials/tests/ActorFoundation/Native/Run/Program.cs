@@ -117,8 +117,12 @@ if (args is ["kernel-paged-event-owner-replacement", var replacementProvider and
     var replacementFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPagedEventPublicationAsync(replacementProvider, replacementFence == "in-batch", replaceOwner: true);
 if (args is ["kernel-paged-event-paused-owner", var pausedProvider and ("postgres" or "sqlite"),
-    var pausedFence and ("checked" or "in-batch"), var pausedPath])
-    return await KernelAuthoredEventChecks.RunPausedPagedEventOwnerAsync(pausedProvider, pausedFence == "in-batch", pausedPath);
+    var pausedFence and ("checked" or "in-batch"), var pausedPath, var pausedBoundary and ("first-page" or "producer")])
+    return await KernelAuthoredEventChecks.RunPausedPagedEventOwnerAsync(pausedProvider, pausedFence == "in-batch", pausedPath,
+        afterProducer: pausedBoundary == "producer");
+if (args is ["kernel-paged-protected-authority-snapshot", var snapshotProvider and ("postgres" or "sqlite"),
+    var snapshotFence and ("checked" or "in-batch")])
+    return await KernelAuthoredEventChecks.RunProtectedSnapshotAsync(snapshotProvider, snapshotFence == "in-batch");
 if (args is ["kernel-paged-event-cleanup", var cleanupProvider and ("postgres" or "sqlite")])
     return await KernelAuthoredEventChecks.RunPagedEventCleanupAsync(cleanupProvider);
 if (args is ["kernel-paged-authored-event", var pagedAuthoredProvider and ("postgres" or "sqlite"), var pagedAuthoredFence and ("checked" or "in-batch")])
