@@ -60,11 +60,10 @@ public sealed class OutputSwapTests : IDisposable
         Assert.Equal("old", File.ReadAllText(Path.Combine(_out, "report.json")));
     }
 
-    [Fact]
+    [SkippableFact]
     public void A_failed_move_in_puts_the_previous_output_back()
     {
-        if (!OperatingSystem.IsWindows())
-            return; // An open file blocks a move only on Windows.
+        Skip.IfNot(OperatingSystem.IsWindows(), "An open file blocks a move only on Windows.");
 
         Directory.CreateDirectory(Path.Combine(_out, "migrated"));
         File.WriteAllText(Path.Combine(_out, "migrated", "old.json"), "[]");
@@ -87,17 +86,46 @@ public sealed class OutputSwapTests : IDisposable
     [Fact]
     public void Begin_sweeps_stale_staging_folders_but_keeps_one_holding_previous_output()
     {
-        Directory.CreateDirectory(Path.Combine(_out, OutputSwap.StagingPrefix + "stale", "migrated"));
+        var stale = Old(Path.Combine(_out, OutputSwap.StagingPrefix + "stale"), "migrated");
+        var emptyPrevious = Old(Path.Combine(_out, OutputSwap.StagingPrefix + "empty"), ".previous");
+        var committed = Path.Combine(_out, OutputSwap.StagingPrefix + "committed");
+        Directory.CreateDirectory(Path.Combine(committed, ".previous"));
+        File.WriteAllText(Path.Combine(committed, ".previous", "report.json"), "superseded");
+        File.WriteAllBytes(Path.Combine(committed, ".committed"), []);
+        Old(committed, null);
         var stranded = Path.Combine(_out, OutputSwap.StagingPrefix + "stranded", ".previous");
         Directory.CreateDirectory(stranded);
         File.WriteAllText(Path.Combine(stranded, "report.json"), "only copy");
+        Old(Path.GetDirectoryName(stranded)!, null);
+        var young = Path.Combine(_out, OutputSwap.StagingPrefix + "live");
+        Directory.CreateDirectory(young);
 
         using (OutputSwap.Begin(_out))
         {
         }
 
-        Assert.False(Directory.Exists(Path.Combine(_out, OutputSwap.StagingPrefix + "stale")));
+        Assert.False(Directory.Exists(stale));
+        Assert.False(Directory.Exists(emptyPrevious));
+        Assert.False(Directory.Exists(committed));
         Assert.True(File.Exists(Path.Combine(stranded, "report.json")));
+        Assert.True(Directory.Exists(young));
+    }
+
+    [Fact]
+    public void Commit_twice_is_refused()
+    {
+        using var swap = OutputSwap.Begin(_out);
+        Stage(swap, "new");
+        swap.Commit();
+
+        Assert.Throws<ObjectDisposedException>(swap.Commit);
+    }
+
+    private static string Old(string folder, string? child)
+    {
+        Directory.CreateDirectory(child is null ? folder : Path.Combine(folder, child));
+        Directory.SetLastWriteTimeUtc(folder, DateTime.UtcNow.AddDays(-1));
+        return folder;
     }
 
     [Fact]

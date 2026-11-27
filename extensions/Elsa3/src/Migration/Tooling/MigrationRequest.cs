@@ -67,6 +67,11 @@ internal sealed record MigrationRequest(
         // An existing file, the export zip included, cannot be the output folder.
         if (File.Exists(OutputPath))
             return new(MigrationRefusal.Arguments, "The --out path names a file; it must be a folder.");
+        for (var parent = Path.GetDirectoryName(Path.GetFullPath(OutputPath)); !string.IsNullOrEmpty(parent); parent = Path.GetDirectoryName(parent))
+        {
+            if (File.Exists(parent))
+                return new(MigrationRefusal.Arguments, "The --out path lies inside a file; it must be a folder.");
+        }
 
         return null;
     }

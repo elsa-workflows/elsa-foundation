@@ -49,6 +49,22 @@ public sealed class MigrationRequestTests : IDisposable
     }
 
     [Fact]
+    public void An_output_path_inside_a_file_refuses()
+    {
+        var file = Path.Combine(_root, "export.zip");
+        File.WriteAllText(file, "x");
+
+        Assert.Equal(MigrationRefusal.Arguments, (Request() with { OutputPath = Path.Combine(file, "out") }).Validate()?.Reason);
+    }
+
+    [Fact]
+    public void Invalid_path_characters_refuse()
+    {
+        Assert.Equal(MigrationRefusal.Arguments, (Request() with { OutputPath = "out\0" }).Validate()?.Reason);
+        Assert.Equal(MigrationRefusal.Arguments, (Request() with { ExportPath = "exp\0" }).Validate()?.Reason);
+    }
+
+    [Fact]
     public void Validation_creates_nothing()
     {
         var output = Path.Combine(_root, "never");

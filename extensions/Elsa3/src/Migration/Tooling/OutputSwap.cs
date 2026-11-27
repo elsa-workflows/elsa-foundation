@@ -13,6 +13,10 @@ internal sealed class OutputSwap : IDisposable
     public const string MigratedName = "migrated";
     public const string StagingPrefix = ".staging-";
     private const string PreviousName = ".previous";
+    private const string CommittedMarkerName = ".committed";
+
+    /// <summary>A staging folder younger than this may belong to a run still in progress on the same output folder.</summary>
+    private static readonly TimeSpan StaleAfter = TimeSpan.FromHours(1);
 
     private readonly string _outputFolder;
     private bool _committed;
@@ -82,7 +86,7 @@ internal sealed class OutputSwap : IDisposable
                 movedIn.Add(name);
             }
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception)
         {
             // Every restore step is best effort and the rest still runs. Whatever could not be put back stays in the
             // staging folder, which is then kept, so the previous output is never deleted.
@@ -101,6 +105,10 @@ internal sealed class OutputSwap : IDisposable
         }
 
         _committed = true;
+        // The old output in .previous is superseded now. Mark the folder first, so that if deleting it fails a later run's
+        // sweep knows it holds no only-copy.
+        TryWriteMarker(Path.Combine(StagingFolder, CommittedMarkerName));
+        TryDelete(previous);
         TryDelete(StagingFolder);
     }
 
@@ -110,7 +118,7 @@ internal sealed class OutputSwap : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (!_keepStaging)
+        if (_committed || (!_keepStaging && !HoldsPreviousOutput(StagingFolder)))
             TryDelete(StagingFolder);
     }
 
@@ -118,13 +126,36 @@ internal sealed class OutputSwap : IDisposable
     /// Removes staging folders that earlier runs left behind when they were killed, unless one still holds previous output
     /// that was moved aside and never put back: that is the only copy, so it stays for the engineer to recover.
     /// </summary>
+    /// <remarks>
+    /// Only folders older than <see cref="StaleAfter"/> are swept, so a run never removes the live staging folder of another
+    /// run on the same output folder.
+    /// </remarks>
     private static void SweepStaleStaging(string outputFolder)
     {
+        var cutoff = DateTime.UtcNow - StaleAfter;
         foreach (var stale in Directory.EnumerateDirectories(outputFolder, StagingPrefix + "*"))
         {
-            var previous = Path.Combine(stale, PreviousName);
-            if (!Directory.Exists(previous) || !Directory.EnumerateFileSystemEntries(previous).Any())
+            if (Directory.GetLastWriteTimeUtc(stale) > cutoff)
+                continue;
+            if (File.Exists(Path.Combine(stale, CommittedMarkerName)) || !HoldsPreviousOutput(stale))
                 TryDelete(stale);
+        }
+    }
+
+    private static bool HoldsPreviousOutput(string stagingFolder)
+    {
+        var previous = Path.Combine(stagingFolder, PreviousName);
+        return Directory.Exists(previous) && Directory.EnumerateFileSystemEntries(previous).Any();
+    }
+
+    private static void TryWriteMarker(string path)
+    {
+        try
+        {
+            File.WriteAllBytes(path, []);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
         }
     }
 
@@ -156,7 +187,11 @@ internal sealed class OutputSwap : IDisposable
         try
         {
             if (Directory.Exists(path))
+            {
+                foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+                    File.SetAttributes(file, FileAttributes.Normal);
                 Directory.Delete(path, recursive: true);
+            }
             else if (File.Exists(path))
                 File.Delete(path);
         }
