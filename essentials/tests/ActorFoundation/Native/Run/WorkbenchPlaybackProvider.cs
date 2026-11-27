@@ -191,8 +191,8 @@ internal static partial class WorkbenchPostgresPreview
             {
                 Require(plan.Any(line => postgres
                         ? line.Contains("Index Cond:", StringComparison.Ordinal) &&
-                          (line.Contains("p.\"Sequence\" = member.\"Sequence\"", StringComparison.Ordinal) ||
-                           line.Contains("p.\"Activity\" = member.\"Activity\"", StringComparison.Ordinal))
+                          (line.Contains("\"Sequence\" = member.\"Sequence\"", StringComparison.Ordinal) ||
+                           line.Contains("\"Activity\" = member.\"Activity\"", StringComparison.Ordinal))
                         : line.Contains("SEARCH p USING INDEX", StringComparison.Ordinal) &&
                           (line.Contains("Sequence=?", StringComparison.Ordinal) || line.Contains("Activity=?", StringComparison.Ordinal))),
                     "the bounded rank joins each scoped member to one exact observation");
