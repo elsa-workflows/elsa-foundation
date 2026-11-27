@@ -27,6 +27,8 @@ public sealed partial class EfStore
                 AND ({Row("NEW")}) IS ({Row("OLD")})
                 AND json_type(coalesce(NEW."Children", '[]')) = 'array'
                 AND json_array_length(coalesce(NEW."Children", '[]')) < json_array_length(OLD."Children")
+                AND (SELECT count(DISTINCT kept.value) FROM json_each(coalesce(NEW."Children", '[]')) kept)
+                    = json_array_length(coalesce(NEW."Children", '[]'))
                 AND NOT EXISTS (SELECT 1 FROM json_each(coalesce(NEW."Children", '[]')) kept
                     WHERE NOT EXISTS (SELECT 1 FROM json_each(OLD."Children") prior WHERE prior.value = kept.value))
                 AND NOT EXISTS (SELECT 1 FROM json_each(OLD."Children") removed
@@ -76,6 +78,7 @@ public sealed partial class EfStore
                 AND json_extract({body}, '$.Child') = b."Actor" AND json_extract({body}, '$.Creation') = b."Creation"
                 AND json_type({body}, '$.Creation') = 'integer' AND json_type({body}, '$.Final') = 'true'
                 AND json_extract({body}, '$.Status') = child."Status" AND json_type({body}, '$.Status') = 'integer'
+                AND coalesce(json_type({body}, '$.Output'), 'null') IN ('text', 'null')
                 AND child."Status" IN ({(int)InstanceStatus.Finished}, {(int)InstanceStatus.Faulted}, {(int)InstanceStatus.Cancelled})
             """;
     }

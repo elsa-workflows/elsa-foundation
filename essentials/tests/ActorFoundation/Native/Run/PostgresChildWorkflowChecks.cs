@@ -365,7 +365,7 @@ internal static class PostgresChildWorkflowChecks
         }
     }
 
-    private sealed class BlockingPartner : HttpMessageHandler
+    internal sealed class BlockingPartner : HttpMessageHandler
     {
         internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource Cancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

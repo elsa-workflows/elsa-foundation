@@ -118,6 +118,7 @@ public sealed partial class EfStore
                 JOIN "Messages" m ON m."Target" = b."Actor" AND m."Partition" = b."Partition"
                 WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
                     AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."EventMatch" IS NULL
+                    /*root-child-notices*/
                     AND (NOT m."Done" OR /*kept-reasons*/)
                     AND (NOT m."Done" OR i."FoundationParkAt" IS NOT NULL)
                     AND (m."Seq", m."Id") > ({afterSeq}, {afterOccurrence})
@@ -147,8 +148,9 @@ public sealed partial class EfStore
             FROM normalized ORDER BY "Seq", "Occurrence"
             """;
         var kept = KeptReasons(db).Replace("\"FoundationKeptBy\"", "m.\"FoundationKeptBy\"", StringComparison.Ordinal).Trim();
-        var rows = await db.Database.SqlQuery<SqliteInboxProjection>(FormattableStringFactory.Create(
-            query.Format.Replace("/*kept-reasons*/", kept, StringComparison.Ordinal), query.GetArguments())).ToListAsync(token);
+        var sql = query.Format.Replace("/*kept-reasons*/", kept, StringComparison.Ordinal)
+            .Replace("/*root-child-notices*/", db.UsesRootChildren ? "AND NOT " + RootChildNoticePredicate("m") : "", StringComparison.Ordinal);
+        var rows = await db.Database.SqlQuery<SqliteInboxProjection>(FormattableStringFactory.Create(sql, query.GetArguments())).ToListAsync(token);
         return new RootInboxPage(rows.Select(Project).ToArray(), at);
 
         RootInboxEntry Project(SqliteInboxProjection row)

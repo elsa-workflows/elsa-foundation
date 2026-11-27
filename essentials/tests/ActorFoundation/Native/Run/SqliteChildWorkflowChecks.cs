@@ -33,8 +33,13 @@ internal static class SqliteChildWorkflowChecks
             .Add(Wf.Workflow("cancel-parent", Wf.Parallel("race", 1,
                 Wf.Dispatch("dispatch", "child", wait: true), Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("win"))))
             .Add(Wf.Workflow("nested-parent", Wf.Dispatch("dispatch", "parent", wait: true)))
+            .Add(Wf.Workflow("job-parent", Wf.Dispatch("dispatch", "job-child", wait: true)))
+            .Add(Wf.Workflow("job-child", Wf.Http("fetch", "https://partner.example/stuck", timeout: TimeSpan.FromMinutes(2))))
             .Add(Wf.Workflow("bulk-parent", Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("wait")));
-        var model = new Fixture(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases)]));
+        var partner = new PostgresChildWorkflowChecks.BlockingPartner();
+        using var http = new HttpClient(partner);
+        var model = new Fixture(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases,
+            new NativeExecutionOptions { Http = new NativeHttpOptions { Client = http } })]));
         var loop = new LoopOptions
         {
             BalanceEvery = TimeSpan.FromMilliseconds(100),
@@ -122,13 +127,54 @@ internal static class SqliteChildWorkflowChecks
             var (_, middle) = await ChildAsync(nestedParent);
             var (_, descendant) = await ChildAsync(middle);
             await SendAsync(middle, "park-middle", Fixture.Fault);
-            await WaitAsync(middle, row => row.ParkAt is not null);
+            var retained = await WaitAsync(middle, row => row.ParkAt is not null);
+            var target = (await reads.GetAsync(tenant, middle, token))!.Selection;
+            await SendAsync(middle, "delete-attached-park", Contract.Kinds.Delete,
+                Json.Write(new Contract.OperatorCommand(target)));
+            await WaitAsync(middle, row => row.ParkAt == retained.ParkAt && row.Revision == retained.Revision + 1);
+            await SendAsync(middle, "delete-after-terminate-attached-park", Contract.Kinds.Terminate,
+                Json.Write(new Contract.OperatorCommand(target, ThenDelete: true, ExpectedTarget: middle)));
+            await WaitAsync(middle, row => row.ParkAt == retained.ParkAt && row.Revision == retained.Revision + 2);
+            Check(true, "the SQLite owner durably refuses Delete and compound retirement of an attached Park");
             await SendAsync(nestedParent, "terminate-middle", Fixture.TerminateChild, middle.Id);
             await WaitAsync(middle, row => row is { Status: InstanceStatus.Cancelled, ParkAt: null });
             await WaitAsync(descendant, row => row.Status == InstanceStatus.Cancelled);
             await WaitAsync(nestedParent, row => row.Children is null);
             Check(true, "the parent's exact Terminate closes the parked child's lifecycle and cascades to its live descendant");
+
+            var jobParent = await StartAsync("job-parent", "job-parent");
+            var (_, jobChild) = await ChildAsync(jobParent);
+            await partner.Entered.Task.WaitAsync(token);
+            await SendAsync(jobChild, "park-job-child", Fixture.Fault);
+            var jobPark = await WaitAsync(jobChild, row => row.ParkAt is not null && row.Jobs is not null);
+            var parkSelection = (await reads.GetAsync(tenant, jobChild, token))!.Selection;
+            await SendAsync(jobChild, "terminate-job-child", Contract.Kinds.Terminate, Json.Write(new Contract.OperatorCommand(parkSelection)));
+            await WaitAsync(jobChild, row => row is { Status: InstanceStatus.Cancelled, Jobs: null, ParkAt: null });
+            await WaitAsync(jobParent, row => row.Children is null);
+            await partner.Cancelled.Task.WaitAsync(token);
+            Check(!await db.Messages.AnyAsync(row => row.Target == jobPark.Actor.Id && row.InboxScope == EfStore.RootTimedJobScope, token),
+                "selected Terminate closes the live job footprint and cancels the entered callback");
+
+            var bulkParent = await StartAsync("bulk-parent", "bulk-parent");
+            await WaitAsync(bulkParent, row => row.Status == InstanceStatus.Running);
+            await SendAsync(bulkParent, "spawn-page-overflow", Fixture.Spawn);
+            var bulk = await WaitAsync(bulkParent, row => ChildRegistry.Read(row.Children).Count > CascadeProtocol.PageLimit);
+            var lastChild = await ReferenceAsync(ChildRegistry.Read(bulk.Children)[^1]);
+            var bulkSelection = (await reads.GetAsync(tenant, bulkParent, token))!.Selection;
+            await SendAsync(bulkParent, "terminate-bulk", Contract.Kinds.Terminate, Json.Write(new Contract.OperatorCommand(bulkSelection)));
+            await WaitAsync(bulkParent, row => row is { Status: InstanceStatus.Cancelled, Children: null });
+            await WaitAsync(lastChild, row => row.Status == InstanceStatus.Cancelled);
+            Check(await db.Database.SqlQuery<long>($"""
+                SELECT count(*) AS "Value" FROM "FoundationRootChildCascades" WHERE "Reference" = {bulkParent.Id}
+                """).SingleAsync(token) == 0, "the persisted second cascade page reaches its last live child and closes the ledger");
+
+            var guardParent = await StartAsync("parent", "registry-guard");
+            var (_, guardChild) = await ChildAsync(guardParent);
+            var guardRunning = await WaitAsync(guardChild, row => row.Status == InstanceStatus.Running);
+            await SendAsync(guardParent, "end-with-child", Fixture.Finish);
+            var guardEnded = await WaitAsync(guardParent, row => row is { Status: InstanceStatus.Finished, Children: not null });
             await successor.StopAsync(token);
+            await CheckRegistryGuardAsync(guardParent, guardRunning, guardEnded);
 
             var shipped = new SqliteEmbeddedFoundation(path, "other-format", model.Type);
             var refused = false;
@@ -157,17 +203,65 @@ internal static class SqliteChildWorkflowChecks
             {
                 var parent = await WaitAsync(parentRef, row => row.Children is not null);
                 var exact = ChildRegistry.Read(parent.Children).Single();
-                var reference = await db.Database.SqlQuery<string>($"""
-                    SELECT "Reference" AS "Value" FROM "FoundationRootBirths" WHERE "Actor" = {exact.Id} AND "Tenant" = {tenant.Tenant}
-                    """).SingleAsync(token);
-                Contract.ActorRef childRef = new(reference);
+                var childRef = await ReferenceAsync(exact);
                 await WaitAsync(childRef, row => row.Status == InstanceStatus.Running);
                 return (parent, childRef);
             }
 
+            async Task<Contract.ActorRef> ReferenceAsync(CreationAddress exact) => new(await db.Database.SqlQuery<string>($"""
+                SELECT "Reference" AS "Value" FROM "FoundationRootBirths" WHERE "Actor" = {exact.Id} AND "Tenant" = {tenant.Tenant}
+                """).SingleAsync(token));
+
             async Task<EfStore.RootImage> WaitAsync(Contract.ActorRef target, Func<EfStore.RootImage, bool> ready) =>
                 (await EventuallyAsync(successor, () => store.ReadFirstRootAsync(tenant.Tenant, target.Id, token),
                     row => row is not null && ready(row)))!;
+
+            async Task CheckRegistryGuardAsync(Contract.ActorRef parent, EfStore.RootImage child, EfStore.RootImage ended)
+            {
+                await using var witness = await db.Database.BeginTransactionAsync(token);
+                var terminalRevision = child.Revision + 1;
+                Check(await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Instances" SET "Status" = {(int)InstanceStatus.Finished}, "Revision" = {terminalRevision},
+                        "FoundationWriteRevision" = {terminalRevision}, "FoundationTerminalAt" = 1,
+                        "FoundationTerminalRevision" = {terminalRevision}
+                    WHERE "Id" = {child.Actor.Id}
+                    """, token) == 1, "the negative witness names the exact child's terminal checkpoint");
+                var handle = CreationProtocol.TerminalNoticeId(child.Actor.Id, child.Actor.Creation, terminalRevision);
+                var key = parent.Id + "/child/notice/" + handle;
+                var body = new FoundationChildNotice(child.Actor.Id, InstanceStatus.Finished, null, child.Actor.Creation, Final: true);
+                (string Id, object Payload)[] invalid =
+                [
+                    (key + "0", DurableKeyJson.Write(body)),
+                    (key, DurableKeyJson.Write(body with { Final = false })),
+                    (key, body)
+                ];
+                foreach (var (id, payload) in invalid)
+                {
+                    await witness.CreateSavepointAsync("notice", token);
+                    var wire = "!kernel-child-notice/1:" + DurableKeyJson.Write(new { Id = handle, Payload = payload, Final = true });
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        INSERT INTO "Messages" ("Id","Target","Partition","InboxScope","Kind","Due","Start","Sender","Done","Seen",
+                            "Attempts","Trial","JobGeneration","Seq")
+                        VALUES ({id}, {ended.Actor.Id}, {new InstanceRef(ended.Actor.Id).Partition}, {InboxKey.FoundationOccurrenceScope},
+                            {Kinds.ChildFinished}, 0, {wire}, {child.Actor.Id}, false, 0, 0, 0, 0,
+                            (SELECT coalesce(max("Seq"),0) + 1 FROM "Messages"))
+                        """, token);
+                    var rejected = false;
+                    try
+                    {
+                        await db.Database.ExecuteSqlInterpolatedAsync($"""
+                            UPDATE "Instances" SET "Children" = NULL WHERE "Id" = {ended.Actor.Id}
+                            """, token);
+                    }
+                    catch (SqliteException error) when (error.SqliteErrorCode == 19 &&
+                        error.Message.Contains("Qualified actor checkpoint requires a qualified update", StringComparison.Ordinal)) { rejected = true; }
+                    await witness.RollbackToSavepointAsync("notice", token);
+                    await witness.ReleaseSavepointAsync("notice", token);
+                    if (!rejected) throw new InvalidOperationException("An invalid final child occurrence could shrink the terminal registry.");
+                }
+                await witness.RollbackAsync(token);
+                Check(true, "the guard refuses wrong occurrence identity, non-final content and an object in place of the encoded payload");
+            }
 
             async Task<T> EventuallyAsync<T>(SqliteEmbeddedHostedService owner, Func<Task<T>> read, Func<T, bool> match)
             {
