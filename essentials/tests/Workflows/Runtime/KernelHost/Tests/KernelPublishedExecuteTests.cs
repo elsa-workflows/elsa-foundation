@@ -846,6 +846,26 @@ public sealed partial class KernelPublishedExecuteTests
                 var scopeStore = services.GetRequiredService<IWorkflowTestScopeStore>();
                 var durableBefore = await DurableRowCountAsync();
                 var prepared = await PrepareAsync(immediate);
+                scopeAdmission.BeganHeld = async (scope, attempt, cancellation) =>
+                {
+                    Assert.Equal(prepared.Test, scope);
+                    var committed = await scopeStore.FindAsync(scope.ScopeId, cancellation);
+                    Assert.Equal(WorkflowTestRunInlineState.Pending, committed?.InlineStart);
+                    Assert.Equal(attempt, committed?.HeldInlineAttempt);
+                    throw new TimeoutException("The physical reservation committed and its acknowledgment was lost.");
+                };
+                try
+                {
+                    var lost = await DispatchAsync(prepared.Request, TimeSpan.FromSeconds(5));
+                    Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, lost.CommandDispatch.Status);
+                    Assert.Null(lost.TestRunHttpReply);
+                    var restored = await scopeStore.FindAsync(prepared.Test.ScopeId, token);
+                    Assert.Null(restored?.HeldInlineAttempt);
+                    Assert.Null(restored?.InlineStart);
+                    Assert.Equal(durableBefore, await DurableRowCountAsync());
+                }
+                finally { scopeAdmission.BeganHeld = null; }
+
                 var unqueued = await DispatchAsync(prepared.Request, TimeSpan.Zero);
                 Assert.Equal(408, unqueued.TestRunHttpReply?.StatusCode);
                 var cleared = await scopeStore.FindAsync(prepared.Test.ScopeId, token);
@@ -876,6 +896,16 @@ public sealed partial class KernelPublishedExecuteTests
                         release.TrySetResult();
                     }
                     await CheckImmediateAsync(await waiting);
+                    scopeAdmission.Settling = (_, _, _) => Task.FromException(new TimeoutException("Scope settlement is unavailable."));
+                    try
+                    {
+                        var uncertain = await StartAsync(immediate, TimeSpan.FromSeconds(5));
+                        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, uncertain.Dispatch.CommandDispatch.Status);
+                        Assert.False(uncertain.Dispatch.TestRunCompletedWithoutRecord);
+                        Assert.Null(uncertain.Dispatch.TestRunHttpReply);
+                        Assert.Equal(WorkflowTestRunInlineState.Pending, (await scopeStore.FindAsync(uncertain.Test.ScopeId, token))?.InlineStart);
+                    }
+                    finally { scopeAdmission.Settling = null; }
                 }
                 else await CheckImmediateAsync(await StartPreparedAsync(prepared, TimeSpan.FromSeconds(5)));
 
@@ -1691,6 +1721,7 @@ public sealed partial class KernelPublishedExecuteTests
     private sealed class FixtureTestScopeAdmission
     {
         public Action<WorkflowTestScope>? Began { get; set; }
+        public Func<WorkflowTestScope, Guid, CancellationToken, Task>? BeganHeld { get; set; }
         public Func<WorkflowTestScope, WorkflowTestRunInlineState, CancellationToken, Task>? Settling { get; set; }
     }
 
@@ -1718,8 +1749,13 @@ public sealed partial class KernelPublishedExecuteTests
             return await physical.SettleInlineStartAsync(scope, outcome, cancellationToken);
         }
 
-        public ValueTask<bool> BeginHeldInlineStartAsync(WorkflowTestScope scope, Guid attemptId, Func<DateTimeOffset> readClock,
-            CancellationToken cancellationToken) => physical.BeginHeldInlineStartAsync(scope, attemptId, readClock, cancellationToken);
+        public async ValueTask<bool> BeginHeldInlineStartAsync(WorkflowTestScope scope, Guid attemptId, Func<DateTimeOffset> readClock,
+            CancellationToken cancellationToken)
+        {
+            var began = await physical.BeginHeldInlineStartAsync(scope, attemptId, readClock, cancellationToken);
+            if (began && fixture.BeganHeld is { } after) await after(scope, attemptId, cancellationToken);
+            return began;
+        }
 
         public async ValueTask<bool> SettleHeldInlineStartAsync(WorkflowTestScope scope, Guid attemptId, WorkflowTestRunInlineState? outcome,
             CancellationToken cancellationToken)

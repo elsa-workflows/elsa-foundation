@@ -134,6 +134,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             if (held.Reply is not { } reply) return InlineResult(held.Start);
             if (reply.Error is not null)
                 return InlineResult(new(InlineStartDisposition.Unknown), PresentHttpReply(reply));
+            if (held.Start.Disposition == InlineStartDisposition.Unknown) return UnknownInlineResult();
             return InlineResult(held.Start, PresentHttpReply(reply with { Actor = held.Start.Actor }) with { OwnerAccepted = true });
         }
         if (inline) return InlineResult(await runtime.StartInlineTestAsync(test, spec, workflow, cancellationToken));
@@ -170,14 +171,23 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             cancellationToken.ThrowIfCancellationRequested();
             // A disconnect must not hide whether the exact reservation committed. The offer owns the next decision.
             using var reservation = new CancellationTokenSource(InlineReservationBudget, time);
+            var reserved = false;
             try
             {
                 var admissions = services.GetRequiredService<IWorkflowTestScopeAdmissionStore>();
-                return attempt is { } held
+                reserved = attempt is { } held
                     ? await admissions.BeginHeldInlineStartAsync(test, held, clock.GetUtcNow, reservation.Token)
                     : await admissions.BeginInlineStartAsync(test, clock.GetUtcNow, reservation.Token);
+                return reserved;
             }
             catch (OperationCanceledException) when (reservation.IsCancellationRequested) { return false; }
+            catch (TimeoutException) when (attempt is not null) { return false; }
+            finally
+            {
+                // A lost acknowledgment can leave this exact attempt pending even though we never offered it.
+                if (!reserved && attempt is { } unoffered)
+                    await runtime.SettleInlineTestAsync(test, null, unoffered);
+            }
         }
 
         async ValueTask<WorkflowExecutionStartDispatchResult?> CommittedDuplicateAsync(WorkflowTestScopeRecord? current)

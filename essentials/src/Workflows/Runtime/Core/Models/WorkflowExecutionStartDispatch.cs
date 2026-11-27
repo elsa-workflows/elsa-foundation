@@ -824,7 +824,7 @@ public sealed class WorkflowExecutionStartDispatchResult
 public sealed record WorkflowTestRunHttpReply(int StatusCode, string ContentType, string? Body,
     IReadOnlyDictionary<string, string> Headers)
 {
-    /// <summary>The owner answered the held Test Run even if its eventual workflow execution record is pending.</summary>
+    /// <summary>The owner answered the held Test Run after proving admission or completion.</summary>
     [JsonIgnore]
     public bool OwnerAccepted { get; init; }
 }
