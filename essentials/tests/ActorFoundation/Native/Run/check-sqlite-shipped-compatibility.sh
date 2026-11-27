@@ -5,8 +5,8 @@ runner=essentials/tests/ActorFoundation/Native/Run
 output=bin/Release/net10.0/Kernel.Native.Run.dll
 repo=$(git -C "$(dirname "$0")" -c core.fsmonitor=false rev-parse --show-toplevel)
 prior_revision=92c54ac8797af9d087a8046c28aa5e1ac5ff8a4b
-floor_revision=fad467643e13087ea77707fb41ee5c667ba4479b
-candidate_revision=$(git -C "$repo" -c core.fsmonitor=false rev-parse HEAD)
+shipped_revision=fad467643e13087ea77707fb41ee5c667ba4479b
+fixture_revision=$(git -C "$repo" -c core.fsmonitor=false rev-parse HEAD)
 logs=$(mktemp -d "${1:-${TMPDIR:-/tmp}}/kernel-sqlite-compatibility.XXXXXXXX")
 scratch=$(mktemp -d)
 owner=
@@ -24,14 +24,13 @@ build_driver() {
     local name=$1 revision=$2 source="$scratch/$1"
     mkdir "$source"
     git -C "$repo" -c core.fsmonitor=false archive "$revision" | tar -xf - -C "$source"
-    if [[ "$name" != candidate ]]; then
-        # Only the two fixture files are overlaid. The shipping provider is compiled from its pinned archive.
-        cp "$scratch/candidate/$runner/SqliteShippedCompatibilityProcess.cs" "$source/$runner/"
-        cat > "$source/$runner/Program.cs" <<'CS'
+    # Only the fixture driver and launcher are overlaid. Each shipped provider is compiled from its pinned archive.
+    git -C "$repo" -c core.fsmonitor=false show "$fixture_revision:$runner/SqliteShippedCompatibilityProcess.cs" \
+        > "$source/$runner/SqliteShippedCompatibilityProcess.cs"
+    cat > "$source/$runner/Program.cs" <<'CS'
 using Kernel.Native.Run;
-return await SqliteShippedCompatibilityProcess.RunAsync(args.Skip(1).ToArray());
+return await SqliteShippedCompatibilityProcess.RunAsync(args);
 CS
-    fi
     (cd "$source" && dotnet build "$runner" -c Release -p:RestoreLockedMode=true -p:SourceRevisionId="$revision" -maxcpucount:2) \
         > "$logs/$name-build.log" 2>&1
     local assemblies="$source/$runner/bin/Release/net10.0"
@@ -42,14 +41,13 @@ CS
 }
 
 {
-    build_driver candidate "$candidate_revision"
+    printf 'fixture %s\n' "$fixture_revision"
     build_driver prior "$prior_revision"
-    build_driver floor "$floor_revision"
+    build_driver shipped "$shipped_revision"
 } | tee "$logs/build-provenance.txt"
 
 prior="$scratch/prior/$runner/$output"
-candidate="$scratch/candidate/$runner/$output"
-floor="$scratch/floor/$runner/$output"
+candidate="$scratch/shipped/$runner/$output"
 [[ $(git -c core.fsmonitor=false hash-object "$(dirname "$prior")/Kernel.EntityFramework.dll") != \
    "$(git -c core.fsmonitor=false hash-object "$(dirname "$candidate")/Kernel.EntityFramework.dll")" ]]
 
@@ -66,12 +64,12 @@ wait_line() {
 
 probe() {
     local driver=$1 role=$2 file=$3
-    dotnet "$driver" sqlite-shipped-compatibility "$role" "$lane" "$file" "$fence"
+    dotnet "$driver" "$role" "$lane" "$file" "$fence"
 }
 
 start_owner() {
     local driver=$1 file=$2 log=$3
-    (exec dotnet "$driver" sqlite-shipped-compatibility seed "$lane" "$file" "$fence") > "$log" 2>&1 &
+    (exec dotnet "$driver" seed "$lane" "$file" "$fence") > "$log" 2>&1 &
     owner=$!
 }
 
@@ -139,11 +137,11 @@ for fence in checked in-batch; do
         printf 'ok %s prior %s refuses the closed candidate file without changing it\n' "$fence" "$role"
     done
 
-    probe "$floor" resume candidate > "$out/floor-owner.log" 2>&1
+    probe "$candidate" resume candidate > "$out/floor-owner.log" 2>&1
     grep -Fxq 'resumed exact actor at 1=3/27/1 2=2/10/0 epoch 2 with its physical journal prefix' "$out/floor-owner.log"
-    probe "$floor" projected-list candidate > "$out/floor-list-compatible.log"
-    probe "$floor" journal candidate > "$out/floor-journal-compatible.log"
-    probe "$floor" sweeper candidate > "$out/floor-sweep-compatible.log"
+    probe "$candidate" projected-list candidate > "$out/floor-list-compatible.log"
+    probe "$candidate" journal candidate > "$out/floor-journal-compatible.log"
+    probe "$candidate" sweeper candidate > "$out/floor-sweep-compatible.log"
     grep -Eq '^swept [1-9][0-9]*$' "$out/floor-sweep-compatible.log"
-    printf 'ok %s SQLite pre-GA recreation, process exclusion and tested floor %s at 3/27/1 plus 2/10/0\n' "$fence" "$floor_revision"
+    printf 'ok %s SQLite pre-GA recreation, process exclusion and tested floor %s at 3/27/1 plus 2/10/0\n' "$fence" "$shipped_revision"
 done
