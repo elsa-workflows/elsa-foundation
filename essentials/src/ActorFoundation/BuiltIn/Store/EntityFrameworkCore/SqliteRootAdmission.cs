@@ -119,8 +119,13 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         }, token, attempt);
     }
 
-    internal Task<bool> DisarmHeldStartAsync(PreparedRootStart stage, CancellationToken token) =>
-        WriteAsync((db, ct) => RootPreparedStarts.ConsumeAsync(db, stage, ct), token);
+    internal Task<(bool Expired, string? Existing)> DisarmHeldStartAsync(PreparedRootStart stage, CancellationToken token) =>
+        WriteAsync(async (db, ct) =>
+        {
+            var admission = await ReadStartAdmissionAsync(db, stage.Tenant, stage.Operation, ct);
+            await RootPreparedStarts.ConsumeAsync(db, stage, ct);
+            return (admission.Now >= stage.Deadline, admission.Reference);
+        }, token);
 
     internal Task<int> PruneHeldStartsAsync(Contract.BoundScope scope, CancellationToken token) =>
         WriteAsync((db, now, ct) => RootPreparedStarts.PruneAsync(db, scope.Tenant, now, ct), token);

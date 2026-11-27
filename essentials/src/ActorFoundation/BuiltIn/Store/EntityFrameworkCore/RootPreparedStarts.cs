@@ -19,7 +19,7 @@ internal static class RootPreparedStarts
     internal const string DeadlineColumns = """("Tenant", "Deadline", "Reference")""";
 
     internal const string Source = "/*prepared-start-source*/";
-    private const string IssuancePrefix = "held-root/1.";
+    private const string IssuancePrefix = PendingRootStart.IssuancePrefix;
     private const int MaximumIssuanceLength = 2_048;
 
     internal static PendingRootStart Offer(PreparedRootStart stage, StartSpec spec, byte[] key)

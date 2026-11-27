@@ -20,6 +20,8 @@ internal static class SqlitePreparedStartChecks
         {
             var offered = new TaskCompletionSource<PendingRootStart>(TaskCreationOptions.RunContinuationsAsynchronously);
             var refused = new TaskCompletionSource<PendingRootStart>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var waitingToLose = new TaskCompletionSource<PendingRootStart>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var lose = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var expired = new TaskCompletionSource<PendingRootStart>(TaskCreationOptions.RunContinuationsAsynchronously);
             var expiredProtection = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -55,6 +57,18 @@ internal static class SqlitePreparedStartChecks
             Require(refusalReply.RefusalReason == Contract.RefusalReason.TargetMismatch &&
                     await foundation.ConfirmPreparedStartAsync(scope, second.Actor, second.Issuance, token) == RootStartProof.PreparationDisarmed,
                 "a definitive protection refusal disarms the exact preparation without an actor birth");
+
+            var competing = CallAsync("competing-operation", "loses", 2_500);
+            if (await Task.WhenAny(competing, waitingToLose.Task).WaitAsync(token) == competing)
+                throw new InvalidOperationException("The competing request did not enter protection.");
+            var loser = await waitingToLose.Task;
+            Require((await ingress.SendAsync(scope, new Contract.Target.Start(new(ActorType, "winner")),
+                        "competing-operation", Contract.Kinds.Start, cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
+                "ordinary ingress can win the operation while the protected caller waits");
+            lose.SetResult();
+            Require(await competing is { Error: "timeout", RefusalReason: null } &&
+                    await foundation.ConfirmPreparedStartAsync(scope, loser.Actor, loser.Issuance, token) == RootStartProof.PreparationDisarmed,
+                "the refused preparation replays its live winning receipt without attaching a caller");
 
             var expiredCall = CallAsync("expired-operation", "expire", 1_500);
             if (await Task.WhenAny(expiredCall, expired.Task).WaitAsync(token) == expiredCall)
@@ -93,6 +107,12 @@ internal static class SqlitePreparedStartChecks
                 {
                     expired.SetResult(start);
                     return await expiredProtection.Task;
+                }
+                if (start.TypeData == "loses")
+                {
+                    waitingToLose.SetResult(start);
+                    await lose.Task.WaitAsync(ct);
+                    return false;
                 }
                 offered.SetResult(start);
                 await release.Task.WaitAsync(ct);

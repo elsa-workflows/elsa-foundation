@@ -156,8 +156,9 @@ public static partial class SqliteEmbeddedHosting
                 token.ThrowIfCancellationRequested();
                 if (!protectedStart)
                 {
-                    await WriteWithFileAsync(RootAdmissionKind.Start, attempt,
+                    var (expired, duplicate) = await WriteWithFileAsync(RootAdmissionKind.Start, attempt,
                         (admission, ct) => admission.DisarmHeldStartAsync(stage, ct), token);
+                    if (expired || duplicate is not null) return expired ? null : duplicate;
                     throw new RootAdmissionRefused(Contract.RefusalReason.TargetMismatch, TimeSpan.Zero);
                 }
                 token.ThrowIfCancellationRequested();
