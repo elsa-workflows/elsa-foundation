@@ -23,7 +23,8 @@ internal static partial class SqliteHostLifetimeChecks
         try
         {
             var file = Path.Combine(directory.FullName, "reads.db");
-            await InstallFoundationAsync(file, token);
+            var foundation = new SqliteEmbeddedFoundation(file, "retention-policy-reads", ActorReadsKind);
+            await foundation.InstallShippedAsync(token);
             var tenant = EmbeddedTenant.Bind(ActorReadsKind);
             var other = ContractScopes.Bind("reads-other");
             var reads = SqliteEmbeddedHosting.CreateFoundationReads(file, pageSize: 1);
@@ -146,6 +147,7 @@ internal static partial class SqliteHostLifetimeChecks
             Require(await retention.ReadRetentionQuoteAsync(tenant, ActorReadsKind, keep, expire, new("definition", "a\\u0000b"), endedAt, token) is { NewlyEligible: 0 } &&
                 await retention.ReadRetentionQuoteAsync(other, ActorReadsKind, keep, expire, cancellationToken: token) is { NewlyEligible: 0 },
                 "retention quotes use exact definition labels and tenant scope");
+            await RetentionPolicyChecks.CheckAsync(foundation, tenant, other, () => OpenFoundationDb(file), endedAt, token);
             await ExpectFoundationFailureAsync<ArgumentOutOfRangeException>(() => retention.ReadRetentionQuoteAsync(tenant, ActorReadsKind,
                 keep, expire, asOf: long.MaxValue, cancellationToken: token).AsTask(), "the retention quote refuses a future clock");
             var finished = (await reads.GetAsync(tenant, first, token))!;

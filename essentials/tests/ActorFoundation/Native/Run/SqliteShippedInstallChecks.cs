@@ -1,3 +1,4 @@
+using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
@@ -78,11 +79,17 @@ internal static class SqliteShippedInstallChecks
             var verified = new SqliteAdmissionDefinitions();
             Task VerifyOperationalFormatAsync() => EfStore.RequireSqliteRootAdmissionAsync(db, verified, token);
             await VerifyOperationalFormatAsync();
-            await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, 27), token);
+            await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, 32), token);
             await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
                 "SQLite refuses the previous shipped protocol");
             await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
                 "the warm SQLite operational check still reads the live protocol marker");
+            var tenant = ContractScopes.Bind("retention-compatibility");
+            var policy = new EfStore(() => KernelDb.ForSqliteRootRuntime(Options(), verified), postgres: false);
+            await RefusedAsync<StoreFormatException>(() => policy.ReadRootRetentionPolicyAsync(tenant, "workflow", token),
+                "the SQLite retention policy reader refuses the previous shipped protocol");
+            await RefusedAsync<StoreFormatException>(() => policy.TryApplyRootRetentionPolicyAsync(tenant, "workflow", 0, new(), 0, token),
+                "the SQLite retention policy activation refuses the previous shipped protocol");
             await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, StoreFormat.RootShipped.MessageProtocol), token);
             var marker = StoreDefinitionsRevision.Seed(db)!;
             await db.StoreVersions.Where(row => row.Id == marker.Id).ExecuteUpdateAsync(

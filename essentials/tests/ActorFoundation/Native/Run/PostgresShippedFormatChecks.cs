@@ -189,6 +189,7 @@ internal static class PostgresShippedFormatChecks
                 keep, expire, cancellationToken: stop) is { NewlyEligible: 0 } &&
                 await retention.ReadRetentionQuoteAsync(scope, "WORKFLOW", keep, expire, cancellationToken: stop) is { NewlyEligible: 0 },
                 "the PostgreSQL quote returns zero for an unmatched tenant or ordinal actor type");
+            await RetentionPolicyChecks.CheckAsync(foundation, scope, ContractScopes.Bind("other-retention-tenant"), Open, terminalAt, stop);
             var fetchedActor = fetched!.Actor.Id;
             await using (var guard = Open())
                 await PostgresRootRetirementChecks.CheckRetirementFootprintAsync(guard, fetchedActor, stop);
@@ -363,6 +364,8 @@ internal static class PostgresShippedFormatChecks
             await RefusesRevisionAsync(() => store.ReadRootActorAsync("tenant", "missing", token));
             await RefusesRevisionAsync(() => store.ReadRootActorListAsync("tenant", "", null, null, [], null, null, 1, token));
             await RefusesRevisionAsync(() => store.ReadRootRetentionQuoteAsync("tenant", "workflow", new(), new(), null, null, token));
+            await RefusesRevisionAsync(() => store.ReadRootRetentionPolicyAsync(ContractScopes.Bind("tenant"), "workflow", token));
+            await RefusesRevisionAsync(() => store.TryApplyRootRetentionPolicyAsync(ContractScopes.Bind("tenant"), "workflow", 0, new(), 0, token));
             await RefusesRevisionAsync(() => store.ReadRootJournalAsync("tenant", "missing", 1, 1, token));
             await RefusesRevisionAsync(() => store.ReadRootInboxAsync("tenant", "missing", 0, "", 1, token));
             await RefusesRevisionAsync(() => store.ReadRootWorkflowHistoryAsync("tenant", "type", null, null, null, null, null, null, 1, token));
