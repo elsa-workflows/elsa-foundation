@@ -332,8 +332,13 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         return issuer ?? throw new StoreFormatException("The root issuer is missing from the checkpoint's store schema.");
     }
 
-    private static async Task<TRow?> ReadGuardedAdmissionAsync<TRow>(KernelDb db, NpgsqlBatchCommand lookup,
-        Func<NpgsqlDataReader, TRow> read, CancellationToken token) where TRow : class
+    private static Task<TRow?> ReadGuardedAdmissionAsync<TRow>(KernelDb db, NpgsqlBatchCommand lookup,
+        Func<NpgsqlDataReader, TRow> read, CancellationToken token) where TRow : class =>
+        ReadGuardedAdmissionAsync<TRow?>(db, [lookup], async (reader, _, ct) =>
+            await reader.ReadAsync(ct) ? read(reader) : null, token);
+
+    private static async Task<TRow> ReadGuardedAdmissionAsync<TRow>(KernelDb db, IReadOnlyList<NpgsqlBatchCommand> operation,
+        Func<NpgsqlDataReader, uint, CancellationToken, Task<TRow>> read, CancellationToken token)
     {
         var current = db.Database.CurrentTransaction!;
         try
@@ -342,7 +347,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             // inserted by the transaction that held the lock. Batch the statements to keep one round trip.
             var separateLock = db.SeparateRootFormatLock;
             var marker = new NpgsqlBatchCommand(StoreDefinitionsRevision.AddPostgresStampSql("""
-                SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", /*definitions-stamp*/
+                SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", /*definitions-stamp*/, v.tableoid
                 FROM "KernelStoreVersions" v WHERE v."Id" = $1
                 """ + (separateLock ? "" : " FOR SHARE OF v"), lockDefinitions: separateLock));
             marker.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
@@ -350,24 +355,34 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             await using var batch = new NpgsqlBatch(transaction.Connection, transaction);
             if (separateLock)
             {
-                var gate = new NpgsqlBatchCommand("""SELECT 1 FROM "KernelStoreVersions" WHERE "Id" = $1 FOR SHARE""");
+                var gate = new NpgsqlBatchCommand("""SELECT tableoid FROM "KernelStoreVersions" WHERE "Id" = $1 FOR SHARE""");
                 gate.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
                 batch.BatchCommands.Add(gate);
             }
             batch.BatchCommands.Add(marker);
-            batch.BatchCommands.Add(lookup);
+            foreach (var command in operation) batch.BatchCommands.Add(command);
             if (db.Database.GetCommandTimeout() is { } timeout)
                 batch.Timeout = timeout;
             await using var reader = await batch.ExecuteReaderAsync(token);
-            if (separateLock && (!await reader.ReadAsync(token) || !await reader.NextResultAsync(token)))
-                throw new StoreFormatException("The kernel store version marker is missing.");
+            uint? lockedMarker = null;
+            if (separateLock)
+            {
+                if (!await reader.ReadAsync(token))
+                    throw new StoreFormatException("The kernel store version marker is missing.");
+                lockedMarker = reader.GetFieldValue<uint>(0);
+                if (!await reader.NextResultAsync(token))
+                    throw new StoreFormatException("The kernel store version marker is missing.");
+            }
             if (!await reader.ReadAsync(token))
                 throw new StoreFormatException("The kernel store version marker is missing.");
+            var sampledMarker = reader.GetFieldValue<uint>(4);
+            if (lockedMarker is { } oid && oid != sampledMarker)
+                throw new StoreFormatException("The kernel store version marker changed its physical table.");
             EfStore.RequireSnapshotFormat(db, reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2),
                 reader.IsDBNull(3) ? null : reader.GetString(3));
             if (!await reader.NextResultAsync(token))
                 throw new InvalidOperationException("The guarded root lookup did not return a result.");
-            return await reader.ReadAsync(token) ? read(reader) : null;
+            return await read(reader, sampledMarker, token);
         }
         catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
         {

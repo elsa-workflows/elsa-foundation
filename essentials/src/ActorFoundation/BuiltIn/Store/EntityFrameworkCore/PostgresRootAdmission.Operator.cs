@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 
@@ -338,6 +337,11 @@ internal sealed partial class PostgresRootAdmission
 
     private static async Task PinRootSourceAsync(KernelDb db, CancellationToken token)
     {
+        if (db.UsesRootParkOpening)
+        {
+            await PinRootParkSourcesAsync(db, token);
+            return;
+        }
         var namespaceQuery = new NpgsqlBatchCommand("""
             SELECT ns.nspname
             FROM "KernelStoreVersions" v
@@ -348,49 +352,6 @@ internal sealed partial class PostgresRootAdmission
         namespaceQuery.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
         var source = await ReadGuardedAdmissionAsync(db, namespaceQuery, static reader => reader.GetString(0), token)
             ?? throw new StoreFormatException("The kernel store version marker schema is unreadable.");
-        if (db.UsesRootParkOpening)
-        {
-            // Every Park set that admits operator commands, Recover or a composed one, pins their receipts too.
-            var receipts = db.UsesRootOperatorProtocol;
-            var childLedger = db.UsesRootChildren;
-            var lockTables = receipts ? ParkRecoverySources : ParkSources;
-            if (childLedger)
-                lockTables = lockTables.Replace("IN ACCESS SHARE MODE", ", \"FoundationRootChildCascades\" IN ACCESS SHARE MODE", StringComparison.Ordinal);
-            var pin = new NpgsqlBatchCommand("""
-                SELECT pg_catalog.set_config('search_path', 'pg_catalog,' || pg_catalog.quote_ident($1) || ',pg_temp', true)
-                """);
-            pin.Parameters.Add(new NpgsqlParameter<string> { TypedValue = source });
-            var validate = new NpgsqlBatchCommand("""
-                SELECT count(*) = $1
-                FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
-                    ('"Instances"'), ('"Messages"'), ('"Partitions"'), ('"Nodes"'), ('"Journal"'), ('"Subscriptions"'),
-                    ('"FoundationDirectReceipts"'), ('"FoundationActorList"'), ('"FoundationRootReceipts"'), ('"Events"'),
-                    ('"FoundationOperatorReceipts"'), ('"FoundationRootChildCascades"')) required(name)
-                JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name) AND c.relkind = 'r'
-                JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace AND ns.nspname = $2
-                WHERE ($3 OR required.name <> '"FoundationOperatorReceipts"')
-                    AND ($4 OR required.name <> '"FoundationRootChildCascades"')
-                """);
-            validate.Parameters.Add(new NpgsqlParameter<int> { TypedValue = (receipts ? 14 : 13) + (childLedger ? 1 : 0) });
-            validate.Parameters.Add(new NpgsqlParameter<string> { TypedValue = source });
-            validate.Parameters.Add(new NpgsqlParameter<bool> { TypedValue = receipts });
-            validate.Parameters.Add(new NpgsqlParameter<bool> { TypedValue = childLedger });
-
-            // Resolve the lock targets after the local search_path changes. Verify their physical schema while locked.
-            var transaction = (NpgsqlTransaction)db.Database.CurrentTransaction!.GetDbTransaction();
-            await using var batch = new NpgsqlBatch(transaction.Connection, transaction);
-            batch.BatchCommands.Add(pin);
-            batch.BatchCommands.Add(new(lockTables));
-            batch.BatchCommands.Add(validate);
-            if (db.Database.GetCommandTimeout() is { } timeout)
-                batch.Timeout = timeout;
-            await using var reader = await batch.ExecuteReaderAsync(token);
-            if (!await reader.NextResultAsync(token) || !await reader.ReadAsync(token) || !reader.GetBoolean(0))
-                throw new StoreFormatException(childLedger
-                    ? "The child profile requires its source tables in the marker schema."
-                    : "Park requires the source tables in the marker schema.");
-            return;
-        }
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             SELECT pg_catalog.set_config('search_path', 'pg_catalog,' || pg_catalog.quote_ident({source}) || ',pg_temp', true)
             """, token);
@@ -414,6 +375,57 @@ internal sealed partial class PostgresRootAdmission
             """).SingleAsync(token);
         if (!sameSchema)
             throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");
+    }
+
+    private static Task PinRootParkSourcesAsync(KernelDb db, CancellationToken token)
+    {
+        // Every Park set that admits operator commands, Recover or a composed one, pins their receipts too.
+        var receipts = db.UsesRootOperatorProtocol;
+        var childLedger = db.UsesRootChildren;
+        var lockTables = receipts ? ParkRecoverySources : ParkSources;
+        if (childLedger)
+            lockTables = lockTables.Replace("IN ACCESS SHARE MODE", ", \"FoundationRootChildCascades\" IN ACCESS SHARE MODE", StringComparison.Ordinal);
+
+        var pin = new NpgsqlBatchCommand("""
+            SELECT pg_catalog.set_config('search_path', 'pg_catalog,' || pg_catalog.quote_ident(ns.nspname) || ',pg_temp', true),
+                c.oid, c.relnamespace
+            FROM "KernelStoreVersions" v
+            JOIN pg_catalog.pg_class c ON c.oid = v.tableoid
+            JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace
+            WHERE v."Id" = $1
+            """);
+        pin.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
+        var validate = new NpgsqlBatchCommand("""
+            SELECT marker.oid, marker.relnamespace, (
+                SELECT count(*) = $1
+                FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
+                    ('"Instances"'), ('"Messages"'), ('"Partitions"'), ('"Nodes"'), ('"Journal"'), ('"Subscriptions"'),
+                    ('"FoundationDirectReceipts"'), ('"FoundationActorList"'), ('"FoundationRootReceipts"'), ('"Events"'),
+                    ('"FoundationOperatorReceipts"'), ('"FoundationRootChildCascades"')) required(name)
+                JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name) AND c.relkind = 'r'
+                    AND c.relnamespace = marker.relnamespace
+                WHERE ($2 OR required.name <> '"FoundationOperatorReceipts"')
+                    AND ($3 OR required.name <> '"FoundationRootChildCascades"'))
+            FROM pg_catalog.pg_class marker WHERE marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
+            """);
+        validate.Parameters.Add(new NpgsqlParameter<int> { TypedValue = (receipts ? 14 : 13) + (childLedger ? 1 : 0) });
+        validate.Parameters.Add(new NpgsqlParameter<bool> { TypedValue = receipts });
+        validate.Parameters.Add(new NpgsqlParameter<bool> { TypedValue = childLedger });
+
+        // Resolve lock targets after setting the local search path. The batch contains only reads and locks.
+        // Before sending any business SQL, confirm the locked relations belong to the same physical marker.
+        return ReadGuardedAdmissionAsync<bool>(db, [pin, new(lockTables), validate], async (reader, marker, ct) =>
+        {
+            if (!await reader.ReadAsync(ct) || reader.GetFieldValue<uint>(1) != marker)
+                throw new StoreFormatException("The kernel store version marker schema is unreadable.");
+            var schema = reader.GetFieldValue<uint>(2);
+            if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct) ||
+                reader.GetFieldValue<uint>(0) != marker || reader.GetFieldValue<uint>(1) != schema || !reader.GetBoolean(2))
+                throw new StoreFormatException(childLedger
+                    ? "The child profile requires its source tables in the marker schema."
+                    : "Park requires the source tables in the marker schema.");
+            return true;
+        }, token);
     }
 
     // A candidate read. A subsequent owner must recheck the command and checkpoint at its fence before applying it.
