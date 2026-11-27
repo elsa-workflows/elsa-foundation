@@ -55,7 +55,8 @@ public sealed partial class EfStore
         StartSpec start, object material, Action<InstanceRef>? wake)
     {
         if (_inlineStarts is not { } inline || !ReferenceEquals(_ordinaryRoots?.InlineIssuer, inline)) return null;
-        var owner = worker.Fences.FirstOrDefault();
+        var fences = worker.Fences;
+        var owner = AdmissionPressure is { } pressure ? pressure.PlaceInlineStart(fences) : fences.FirstOrDefault();
         if (owner is null) return null;
         var scope = inline.Scope;
         var actor = InstanceRef.In(owner.Partition, scope.Tenant + "_" + Guid.NewGuid().ToString("N"));

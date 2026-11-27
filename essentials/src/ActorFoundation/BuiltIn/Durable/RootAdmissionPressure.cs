@@ -88,6 +88,15 @@ internal sealed class RootAdmissionPressure
         return new(this, tenant, kind, lane.Wait(0) ? lane : null);
     }
 
+    internal Attempt BeginInlineStart(string tenant) => new(this, tenant, RootAdmissionKind.Start, reserved: null);
+
+    internal PartitionFence? PlaceInlineStart(IReadOnlyList<PartitionFence> owned)
+    {
+        var full = Volatile.Read(ref _full);
+        // A full partition can still execute a start that never needs a provider write.
+        return owned.FirstOrDefault(fence => !full.Contains(fence.Partition)) ?? owned.FirstOrDefault();
+    }
+
     // A standalone receiving edge has no node heartbeat. Refresh at most once per interval and continue using
     // the existing sample while the read runs. An idle edge starts no background work.
     private void ScheduleColdRead(Func<CancellationToken, Task> read)
@@ -155,22 +164,42 @@ internal sealed class RootAdmissionPressure
             RequireCapacity();
             lock (owner._sync)
             {
-                var full = _placement ?? owner._full;
-                if (kind != RootAdmissionKind.ShedLoad && (partition is { } one ? full.Contains(one) : partitions!.Any(full.Contains)))
-                    throw new RootAdmissionRefused(Contract.RefusalReason.InboxFull, owner.Backlog.SampleInterval);
-
-                var key = (tenant, kind);
-                var limits = owner.Limits(kind);
-                var now = owner._time.GetTimestamp();
-                if (!owner._buckets.TryGetValue(key, out var bucket))
-                    owner._buckets.Add(key, bucket = new(limits.Burst, now));
-                var rate = owner.Refill(bucket, limits, now);
-                var available = bucket.Tokens - bucket.Reserved;
-                if (available < 1)
-                    throw new RootAdmissionRefused(Contract.RefusalReason.RateLimited, TimeSpan.FromSeconds((1 - available) / rate));
-                bucket.Reserved++;
-                _reservation = bucket;
+                RequireBacklog(partition, partitions);
+                ReserveTenantRate();
             }
+        }
+
+        internal void RequireInlineTenantRate()
+        {
+            lock (owner._sync) ReserveTenantRate();
+        }
+
+        internal void RequireInlinePromotion(int partition)
+        {
+            RequireCapacity();
+            lock (owner._sync) RequireBacklog(partition, null);
+        }
+
+        private void RequireBacklog(int? partition, IReadOnlyCollection<int>? partitions)
+        {
+            var full = _placement ?? owner._full;
+            if (kind != RootAdmissionKind.ShedLoad && (partition is { } one ? full.Contains(one) : partitions!.Any(full.Contains)))
+                throw new RootAdmissionRefused(Contract.RefusalReason.InboxFull, owner.Backlog.SampleInterval);
+        }
+
+        private void ReserveTenantRate()
+        {
+            var key = (tenant, kind);
+            var limits = owner.Limits(kind);
+            var now = owner._time.GetTimestamp();
+            if (!owner._buckets.TryGetValue(key, out var bucket))
+                owner._buckets.Add(key, bucket = new(limits.Burst, now));
+            var rate = owner.Refill(bucket, limits, now);
+            var available = bucket.Tokens - bucket.Reserved;
+            if (available < 1)
+                throw new RootAdmissionRefused(Contract.RefusalReason.RateLimited, TimeSpan.FromSeconds((1 - available) / rate));
+            bucket.Reserved++;
+            _reservation = bucket;
         }
 
         internal void RequireCapacity()
@@ -181,8 +210,7 @@ internal sealed class RootAdmissionPressure
 
         internal void Committed()
         {
-            if (_reservation is not { } bucket) return;
-            _reservation = null;
+            if (Interlocked.Exchange(ref _reservation, null) is not { } bucket) return;
             lock (owner._sync)
             {
                 owner.Refill(bucket, owner.Limits(kind), owner._time.GetTimestamp());
@@ -193,17 +221,15 @@ internal sealed class RootAdmissionPressure
 
         internal void RolledBack()
         {
-            if (_reservation is not { } bucket) return;
-            _reservation = null;
+            if (Interlocked.Exchange(ref _reservation, null) is not { } bucket) return;
             lock (owner._sync) bucket.Reserved--;
         }
 
         public void Dispose()
         {
             var slot = Interlocked.Exchange(ref _slot, null);
-            if (slot is null) return;
             RolledBack();
-            slot.Release();
+            slot?.Release();
         }
     }
 }

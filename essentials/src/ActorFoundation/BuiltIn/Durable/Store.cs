@@ -293,7 +293,7 @@ public sealed record Committed(bool Landed, long Now, IReadOnlyList<long> Seqs)
     internal IReadOnlyList<Stored> ParkExpiries { get; init; } = [];
     internal IReadOnlyList<RetiredReply> RetiredReplies { get; init; } = [];
     internal IReadOnlySet<string>? RetentionRefusals { get; init; }
-    internal IReadOnlySet<string>? InlineRefusals { get; init; }
+    internal IReadOnlyDictionary<string, InlineRootResult>? InlineRefusals { get; init; }
     internal IReadOnlyDictionary<string, IReadOnlyList<InboxKey>>? CascadeRemovals { get; init; }
 }
 

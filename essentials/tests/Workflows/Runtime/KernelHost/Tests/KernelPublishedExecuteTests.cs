@@ -16,16 +16,20 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Authorization;
+using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.KernelApi;
+using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Kernel.Foundation.Hosting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -323,6 +327,19 @@ public sealed class KernelPublishedExecuteTests
                 Assert.Equal(initial, await DurableRowCountAsync());
                 Assert.Equal(pinTail, await pinRead.ReadOpenTailAsync(Scope, token));
 
+                var rateLimited = new KernelPublishedRunDispatcher(scopes, app.Services.GetRequiredService<KernelServing>(), Scope,
+                    shell.StartPublishedAsync, (_, _, _, _) => ValueTask.FromResult(new InlineStartOutcome(InlineStartDisposition.Unavailable)
+                    {
+                        RefusalReason = Contract.RefusalReason.RateLimited, RetryAfter = TimeSpan.FromMilliseconds(1250)
+                    }));
+                var rateReceipt = await new WorkflowExecutionStartService(rateLimited, stores.GetRequiredService<IWorkflowExecutableStore>())
+                    .ExecuteAsync(new ExecuteWorkflow(pure.Identity.ArtifactId,
+                        SourceReferenceId: WorkflowActivationReferenceIdentity.Create("publish-" + pure.Identity.DefinitionId)), token);
+                Assert.True(rateReceipt.Shed);
+                Assert.Equal("RateLimited", rateReceipt.Reason);
+                Assert.Equal(2, rateReceipt.RetryAfterSeconds);
+                Assert.Null(rateReceipt.WorkflowExecutionId);
+
                 pinBoundary.BeforeAdmission = async (source, ct) =>
                 {
                     if (source.DefinitionId != retractedInline.Identity.DefinitionId) return;
@@ -415,6 +432,8 @@ public sealed class KernelPublishedExecuteTests
                         Assert.Equal(disposition, receipt.PersistenceOutcome);
                         Assert.Equal(executable.Identity.ArtifactId, receipt.ArtifactId);
                         if (status == HttpStatusCode.GatewayTimeout) Assert.Null(response.Headers.RetryAfter);
+                        if (status == HttpStatusCode.TooManyRequests)
+                            Assert.Equal(TimeSpan.FromSeconds(receipt.RetryAfterSeconds!.Value), response.Headers.RetryAfter?.Delta);
                         return receipt;
                     }
                 }

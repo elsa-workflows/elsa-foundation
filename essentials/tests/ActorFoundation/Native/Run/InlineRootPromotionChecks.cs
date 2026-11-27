@@ -219,12 +219,23 @@ internal static class InlineRootPromotionChecks
                 var firstRevisions = new Dictionary<string, long>(StringComparer.Ordinal);
                 var childOffers = new Dictionary<string, (PendingChildBirth Offer, string RootIssuance, string Child, int Attempts)>(StringComparer.Ordinal);
                 string? refusedParent = null;
-                var physical = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned, ProtectChildBirths = ProtectChildrenAsync };
-                await physical.EnableInlinePromotionAsync(scope, (requested, material) =>
-                    requested.Model == WorkflowActorType.ActorType && permittedStarts.TryGetValue(requested.Definition, out var selected) &&
+                var rateClock = new RootAdmissionPressureChecks.RateClock();
+                var pressure = new RootAdmissionPressure(new(2, 1, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1)),
+                    ordinaryCapacity: 1, operatorCapacity: 1, ordinaryRate: new(1, 1), operatorRate: new(1, 1), rateClock);
+                var physical = new EfStore(Open, postgres, fenceInBatch)
+                    { CommitSql = CommitSql.Owned, ProtectChildBirths = ProtectChildrenAsync, AdmissionPressure = pressure };
+                var checkingPressure = false;
+                var protectionCalls = 0;
+                var requests = new InlineRootRequests(scope, WorkflowActorType.ActorType, (requested, material) =>
+                    permittedStarts.TryGetValue(requested.TypeData, out var selected) &&
                     model.MatchesInlineMaterial(material, selected.Id, selected.Definition, selected.ExecutableSelection),
                     async (offer, ct) =>
                     {
+                        if (checkingPressure)
+                        {
+                            protectionCalls++;
+                            return true;
+                        }
                         if (offer.Actor.Id == protectionDeadline)
                         {
                             try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
@@ -241,7 +252,8 @@ internal static class InlineRootPromotionChecks
                         return firstRevisions.TryGetValue(offer.Actor.Id, out var firstRevision) &&
                             RootPreparedStarts.Verify(key, scope, offer.Actor, offer.Issuance) is { } stage &&
                             stage.FirstRevision == firstRevision && await CreateCanReadPreparationAsync(offer, stage.Actor, ct);
-                    }, TimeSpan.FromHours(1), token);
+                    });
+                await requests.PrepareAsync(physical, token);
                 var ownerOptions = new WorkerOptions
                 {
                     ShortWait = TimeSpan.FromMilliseconds(1_400),
@@ -270,13 +282,19 @@ internal static class InlineRootPromotionChecks
                 await using var owner = Worker.ForNode("inline-promoting-owner", physical,
                     new ActorAdapter(physical.WorkerHeaders(firstRoots), actor, physical.RootSelfIssuer, physical.RootJobHandle,
                         rootTimedJobClock: physical.ReadRootTimedJobPublicationTimeAsync, rootTerminalOutputLimit: 1_024), ownerOptions);
+                requests.Attach(physical, owner, _ => { });
+                Check(await StartAsync("unowned-pressure", pure) is { Disposition: InlineStartDisposition.Unavailable, RefusalReason: null },
+                    "a start without an owned fence releases its unused rate reservation");
                 Check(await owner.GainAsync(0, token), "the real provider owner claims the inline partition");
-                var firstPosition = owner.PositionOf(0);
                 var originalTrace = WriteLine.Out;
                 using var trace = new StringWriter();
                 WriteLine.Out = trace;
                 try
                 {
+                    await QualifyPressureAsync();
+                    (checkpoint, firstCreator) = (null, null);
+                    trace.GetStringBuilder().Clear();
+                    var firstPosition = owner.PositionOf(0);
                     var admitted = physical.QueueInlineRoot(owner, "later-native", spec, model.CaptureInlineMaterial(workflow)) ??
                         throw new InvalidOperationException("Could not admit the local fixture turn.");
                     var reference = admitted.Reference.Id;
@@ -418,6 +436,7 @@ internal static class InlineRootPromotionChecks
                         ChildRegistry.Read(children) is [var member] && member.Id == protectedChild.Child && protectedChild.Attempts == 2 &&
                         await HasChildBirthAsync(protectedChild.Offer.Actor, token),
                         "the protected first parent checkpoint and exact child creator land atomically after an identical retry");
+                    requests.Close();
                     await owner.ReleaseAsync(token);
 
                     var cold = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
@@ -797,6 +816,88 @@ internal static class InlineRootPromotionChecks
                         SELECT EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Tenant" = {scope.Tenant}
                             AND "Reference" = {child.Id}) AS "Value"
                         """).SingleAsync(ct);
+                }
+
+                Task<InlineStartOutcome> StartAsync(string operation, Workflow selected) =>
+                    requests.StartAsync(operation, WorkflowActorType.Start(NativeExecutionModel.Start(selected, Modes.Ephemeral)),
+                        model.CaptureInlineMaterial(selected), token).AsTask();
+
+                async Task QualifyPressureAsync()
+                {
+                    checkingPressure = true;
+                    await SetBacklogAsync(pressure.Backlog.HighWater + 1);
+                    var before = await CountDurableRowsAsync();
+                    using (pressure.Begin(scope.Tenant, RootAdmissionKind.Input))
+                    {
+                        var admitted = StartAsync("volatile-through-pressure", pure);
+                        await WaitForAsync(admitted);
+                        Check(await admitted is { Disposition: InlineStartDisposition.Volatile, Actor: null, Status: Contract.ActorStatus.Finished } &&
+                            await CountDurableRowsAsync() == before && protectionCalls == 0,
+                            "the bound inline edge finishes write-free despite a full physical pressure list and occupied ordinary capacity");
+                    }
+                    Check(pressure.PlaceInlineStart([new(0, 1, 0), new(1, 1, 0)])?.Partition == 1,
+                        "placement prefers an under-water owned partition ahead of a full one");
+                    Check(await StartAsync("rate-limited-before-turn", pure) is
+                            { Disposition: InlineStartDisposition.Unavailable, RefusalReason: Contract.RefusalReason.RateLimited, RetryAfter: { } retry }
+                            && retry > TimeSpan.Zero && owner.QueuedInlineRootCount == 0 && await CountDurableRowsAsync() == before &&
+                            trace.ToString().Split("pure work", StringSplitOptions.None).Length == 2,
+                        "the same bound tenant gets a definite rate refusal and retry interval before queueing any work");
+                    await SetBacklogAsync(0);
+                    var durable = WorkflowActorType.Start(NativeExecutionModel.Start(pure));
+                    var durableStart = new StartSpec(durable.Type, durable.TypeData, durable.Input);
+                    try
+                    {
+                        if (postgres)
+                            await new PostgresRootAdmission(Open, TimeSpan.FromHours(1), pressure: pressure)
+                                .AdmitProtectedRootStartAsync(scope.Tenant, "same-tenant-durable", durableStart,
+                                    (_, _) => ValueTask.FromResult(true), token, token);
+                        else
+                            await new SqliteRootAdmission(Open, TimeSpan.FromHours(1), sqliteDefinitions, pressure)
+                                .StartAsync(scope.Tenant, "same-tenant-durable", durableStart, null, null, token);
+                        throw new InvalidOperationException("The inline and durable starts did not share their tenant rate bucket.");
+                    }
+                    catch (RootAdmissionRefused refusal) when (refusal.Admission.Reason == Contract.RefusalReason.RateLimited)
+                    {
+                        Check(await CountDurableRowsAsync() == before, "the ordinary provider admission sees the same consumed tenant start permit");
+                    }
+
+                    rateClock.Advance(TimeSpan.FromSeconds(10));
+                    await SetBacklogAsync(pressure.Backlog.HighWater + 1);
+                    var refused = StartAsync("promotion-refused-by-backlog", shortWait);
+                    await WaitForAsync(refused);
+                    Check(await refused is { Disposition: InlineStartDisposition.Refused, Actor: null,
+                            RefusalReason: Contract.RefusalReason.InboxFull, RetryAfter: null } &&
+                        await CountDurableRowsAsync() == before && protectionCalls == 0,
+                        "a needed promotion checks the exact partition before protection and refuses without a replay hint");
+
+                    rateClock.Advance(TimeSpan.FromSeconds(10));
+                    await SetBacklogAsync(0);
+                    var promoted = StartAsync("promotion-spends-one-permit", shortWait);
+                    await WaitForAsync(promoted);
+                    Check(await promoted is { Disposition: InlineStartDisposition.Committed, Actor: { } reference } &&
+                        await physical.ReadFirstRootAsync(scope.Tenant, reference.Id, token) is { Status: InstanceStatus.Running } &&
+                        protectionCalls == 1 && await StartAsync("post-promotion-rate-limit", pure) is
+                            { Disposition: InlineStartDisposition.Unavailable, RefusalReason: Contract.RefusalReason.RateLimited },
+                        "relief admits the fenced promotion with exactly one tenant permit");
+                    checkingPressure = false;
+
+                    async Task SetBacklogAsync(int depth)
+                    {
+                        await using var db = Open();
+                        await db.Partitions.Where(partition => partition.Id == 0)
+                            .ExecuteUpdateAsync(update => update.SetProperty(partition => partition.Backlog, depth), token);
+                        await physical.PrimeAdmissionPressureAsync(token);
+                    }
+
+                    async Task<long> CountDurableRowsAsync()
+                    {
+                        await using var db = Open();
+                        return await db.Database.SqlQueryRaw<long>("""
+                            SELECT (SELECT count(*) FROM "FoundationPreparedRootStarts") + (SELECT count(*) FROM "FoundationRootReceipts") +
+                                (SELECT count(*) FROM "FoundationRootBirths") + (SELECT count(*) FROM "Instances") +
+                                (SELECT count(*) FROM "Messages") + (SELECT count(*) FROM "Journal") AS "Value"
+                            """).SingleAsync(token);
+                    }
                 }
 
                 async Task WaitForAsync(Task receipt)

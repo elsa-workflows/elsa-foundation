@@ -122,8 +122,7 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
         var metadata = pressure ? new Dictionary<string, string>
         {
             [RuntimeMetadataKeys.DispatchShed] = "true",
-            [RuntimeMetadataKeys.DispatchRetryAfterSeconds] = Math.Ceiling(Math.Clamp(admission.RetryAfter?.TotalSeconds ?? 1, 1, int.MaxValue))
-                .ToString(CultureInfo.InvariantCulture)
+            [RuntimeMetadataKeys.DispatchRetryAfterSeconds] = RetrySeconds(admission.RetryAfter)
         } : null;
         return CreateResult(operationId, id, material, source, status, recordedAt, reason, metadata);
     }
@@ -136,8 +135,8 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
             InlineStartDisposition.Volatile or InlineStartDisposition.Committed when outcome.Status == ActorStatus.Faulted =>
                 (WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted, "WorkflowFaulted"),
             InlineStartDisposition.Volatile or InlineStartDisposition.Committed => (WorkflowExecutionCommandDispatchStatus.Accepted, null),
-            InlineStartDisposition.Refused => (WorkflowExecutionCommandDispatchStatus.Rejected, "InlineStartRefused"),
-            InlineStartDisposition.Unavailable => (WorkflowExecutionCommandDispatchStatus.Deferred, nameof(RefusalReason.NodeBusy)),
+            InlineStartDisposition.Refused => (WorkflowExecutionCommandDispatchStatus.Rejected, outcome.RefusalReason?.ToString() ?? "InlineStartRefused"),
+            InlineStartDisposition.Unavailable => (WorkflowExecutionCommandDispatchStatus.Deferred, outcome.RefusalReason?.ToString() ?? nameof(RefusalReason.NodeBusy)),
             InlineStartDisposition.Unknown => (WorkflowExecutionCommandDispatchStatus.Deferred, "InlineStartOutcomeUnknown"),
             _ => throw new InvalidOperationException("The Actor Foundation returned an invalid inline outcome.")
         };
@@ -152,10 +151,13 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
         if (outcome.Disposition == InlineStartDisposition.Unavailable)
         {
             metadata[RuntimeMetadataKeys.DispatchShed] = "true";
-            metadata[RuntimeMetadataKeys.DispatchRetryAfterSeconds] = "1";
+            metadata[RuntimeMetadataKeys.DispatchRetryAfterSeconds] = RetrySeconds(outcome.RetryAfter);
         }
         return CreateResult(operationId, id, material, source, status, recordedAt, reason, metadata);
     }
+
+    private static string RetrySeconds(TimeSpan? retryAfter) =>
+        Math.Ceiling(Math.Clamp(retryAfter?.TotalSeconds ?? 1, 1, int.MaxValue)).ToString(CultureInfo.InvariantCulture);
 
     private static WorkflowExecutionStartDispatchResult CreateResult(string operationId, string id, WorkflowExecutableIdentity material,
         WorkflowExecutableSourceProvenance source, WorkflowExecutionCommandDispatchStatus status, DateTimeOffset recordedAt,

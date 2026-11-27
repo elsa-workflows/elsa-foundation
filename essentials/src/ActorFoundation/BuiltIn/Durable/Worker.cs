@@ -7,7 +7,8 @@ namespace Kernel.Durable;
 public enum ReplyRelease { BeforeCommit, AfterCommit, WriteFree, EphemeralWriteFree }
 
 internal enum InlineRootDisposition { WriteFree, Committed, Refused, OwnershipLost }
-internal readonly record struct InlineRootResult(InlineRootDisposition Disposition, InstanceStatus? Status = null);
+internal readonly record struct InlineRootResult(InlineRootDisposition Disposition, InstanceStatus? Status = null,
+    Kernel.Foundation.Contracts.RefusalReason? RefusalReason = null);
 
 public sealed record WorkerOptions
 {
@@ -3452,7 +3453,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 return Outcome.Lost;
             }
             batch = batch.WithoutActorJournals(result.RetentionRefusals);
-            batch = batch.WithoutActorJournals(result.InlineRefusals);
+            batch = batch.WithoutActorJournals(result.InlineRefusals?.Keys.ToHashSet(StringComparer.Ordinal));
             lock (_turnSync)
             {
                 // A stand-down on another thread may have reset since the check above: the landed result is then nobody's.
@@ -3492,14 +3493,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var fenced = batch.Fenced.Select(f => f.Partition).ToHashSet();
             foreach (var unit in units)
             {
-                if (result.InlineRefusals?.Contains(unit.Instance) == true)
+                if (result.InlineRefusals?.TryGetValue(unit.Instance, out var inlineRefusal) == true)
                 {
                     lock (_turnSync)
                     {
                         ForgetInMemory(unit.Instance);
                         ReleaseJobRestriction(unit);
                         RemoveSlot(unit.Instance);
-                        CompleteInlineRoot(unit.Instance, new(InlineRootDisposition.Refused));
+                        CompleteInlineRoot(unit.Instance, inlineRefusal);
                     }
                     continue;
                 }

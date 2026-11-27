@@ -476,10 +476,12 @@ public sealed partial class EfStore
             batch.Seen.Count + batch.Trial.Count > 0)
             return await CommitAsync(batch with { Seen = [], Trial = [] }, new PostgresMarkPreparation(this, roots, batch), sentAt, cancellationToken);
 
-        (CommitBatch Batch, RootCheckpoints Checkpoints, IReadOnlySet<string>? InlineRefusals)? prepared;
+        using var promotions = _inlineStarts is { } inline && batch.Turns.Any(turn => turn.RootCreator is InlineRootCreatorWitness)
+            ? AdmissionPressure?.Begin(inline.Scope.Tenant, RootAdmissionKind.Start) : null;
+        (CommitBatch Batch, RootCheckpoints Checkpoints, IReadOnlyDictionary<string, InlineRootResult>? InlineRefusals)? prepared;
         try
         {
-            prepared = await PrepareWorkerBatchAsync(roots, batch, sentAt, cancellationToken);
+            prepared = await PrepareWorkerBatchAsync(roots, batch, promotions, sentAt, cancellationToken);
             if (prepared is { } pending && !await ProtectPreparedChildBirthsAsync(pending.Checkpoints, cancellationToken))
                 return new(false, 0, []);
         }
@@ -497,8 +499,8 @@ public sealed partial class EfStore
             ? committed with { InlineRefusals = work.InlineRefusals } : committed;
     }
 
-    private async Task<(CommitBatch, RootCheckpoints, IReadOnlySet<string>?)?> PrepareWorkerBatchAsync(WorkerRoots roots, CommitBatch batch, long sentAt,
-        CancellationToken cancellationToken)
+    private async Task<(CommitBatch, RootCheckpoints, IReadOnlyDictionary<string, InlineRootResult>?)?> PrepareWorkerBatchAsync(
+        WorkerRoots roots, CommitBatch batch, RootAdmissionPressure.Attempt? promotions, long sentAt, CancellationToken cancellationToken)
     {
         var byPartition = batch.Fenced.ToDictionary(f => f.Partition);
         PartitionFence FenceFor(WorkerRoot root) =>
@@ -517,7 +519,7 @@ public sealed partial class EfStore
         List<EventRow>? publications = null;
         var positions = batch.Fenced.ToDictionary(fence => fence.Partition, fence => fence.Position);
         var deferred = new HashSet<string>(StringComparer.Ordinal);
-        HashSet<string>? inlineRefusals = null;
+        Dictionary<string, InlineRootResult>? inlineRefusals = null;
         foreach (var submitted in batch.Turns)
         {
             var creator = observed is not null ? (PostgresCreatorWitness)submitted.RootCreator! : null;
@@ -528,6 +530,13 @@ public sealed partial class EfStore
                     inline.Creator.FoundationRootBinding is not { } identity || identity.Tenant != installed.Scope.Tenant ||
                     identity.Actor != turn.Instance || !byPartition.TryGetValue(inline.Creator.Target.Partition, out var fence))
                     throw RootShape();
+                try { promotions?.RequireInlinePromotion(fence.Partition); }
+                catch (RootAdmissionRefused refusal)
+                {
+                    (inlineRefusals ??= new(StringComparer.Ordinal)).Add(turn.Instance,
+                        new(InlineRootDisposition.Refused, RefusalReason: refusal.Admission.Reason));
+                    continue;
+                }
                 TimeSpan Remaining()
                 {
                     var worker = inline.LeaseRemaining();
@@ -538,7 +547,7 @@ public sealed partial class EfStore
                     installed.ReceiptWindow, installed.Protect, installed, inline, Remaining, cancellationToken);
                 if (promotion is null)
                 {
-                    (inlineRefusals ??= new(StringComparer.Ordinal)).Add(turn.Instance);
+                    (inlineRefusals ??= new(StringComparer.Ordinal)).Add(turn.Instance, new(InlineRootDisposition.Refused));
                     continue;
                 }
                 var position = ++positions[fence.Partition];

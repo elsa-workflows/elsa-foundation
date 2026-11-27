@@ -8,7 +8,14 @@ public enum InlineStartDisposition { Volatile, Committed, Refused, Unavailable, 
 
 /// <summary>A qualified inline start receipt. Only a committed start includes an actor reference.</summary>
 public readonly record struct InlineStartOutcome(InlineStartDisposition Disposition,
-    Contract.ActorRef? Actor = null, Contract.ActorStatus? Status = null);
+    Contract.ActorRef? Actor = null, Contract.ActorStatus? Status = null)
+{
+    /// <summary>The admission limit that refused this start, when applicable.</summary>
+    public Contract.RefusalReason? RefusalReason { get; init; }
+
+    /// <summary>The retry interval for a start that could not enter the owner's queue.</summary>
+    public TimeSpan? RetryAfter { get; init; }
+}
 
 /// <summary>Binds qualified inline starts to one installed owner, tenant, and host activation.</summary>
 public sealed class InlineRootRequests(Contract.BoundScope scope, string actorType,
@@ -18,10 +25,14 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
     private (EfStore Store, Worker Worker, Action<Kernel.Runtime.InstanceRef> Wake)? _owner;
     private bool _closed;
 
-    internal Task PrepareAsync(EfStore store, CancellationToken token) => store.EnableInlinePromotionAsync(scope,
-        (spec, material) => spec.Model == actorType &&
-            validate(new(spec.Model, spec.Definition, spec.Input, spec.Ephemeral, (Contract.History)spec.History), material),
-        protect, TimeSpan.FromHours(1), token);
+    internal Task PrepareAsync(EfStore store, CancellationToken token)
+    {
+        if (store.AdmissionPressure is null) throw new InvalidOperationException("Inline starts require the owner's node admission pressure.");
+        return store.EnableInlinePromotionAsync(scope,
+            (spec, material) => spec.Model == actorType &&
+                validate(new(spec.Model, spec.Definition, spec.Input, spec.Ephemeral, (Contract.History)spec.History), material),
+            protect, TimeSpan.FromHours(1), token);
+    }
 
     internal void Attach(EfStore store, Worker worker, Action<Kernel.Runtime.InstanceRef> wake)
     {
@@ -53,7 +64,18 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
         lock (_gate)
         {
             token.ThrowIfCancellationRequested();
-            pending = _owner is { } owner ? owner.Store.QueueInlineRoot(owner.Worker, operationId, trusted, material, owner.Wake) : null;
+            if (_owner is not { } owner) return new(InlineStartDisposition.Unavailable);
+            using var attempt = owner.Store.AdmissionPressure!.BeginInlineStart(scope.Tenant);
+            try { attempt.RequireInlineTenantRate(); }
+            catch (RootAdmissionRefused refusal)
+            {
+                var admission = refusal.Admission;
+                return new(InlineStartDisposition.Unavailable)
+                    { RefusalReason = admission.Reason, RetryAfter = admission.RetryAfter };
+            }
+            pending = owner.Store.QueueInlineRoot(owner.Worker, operationId, trusted, material, owner.Wake);
+            // Queued authored work spends its start permit even if it finishes without a checkpoint.
+            if (pending is not null) attempt.Committed();
         }
         if (pending is not { } admitted) return new(InlineStartDisposition.Unavailable);
 
@@ -65,7 +87,7 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
             {
                 InlineRootDisposition.WriteFree => new(InlineStartDisposition.Volatile, Status: status),
                 InlineRootDisposition.Committed => new(InlineStartDisposition.Committed, admitted.Reference, status),
-                InlineRootDisposition.Refused => new(InlineStartDisposition.Refused),
+                InlineRootDisposition.Refused => new(InlineStartDisposition.Refused) { RefusalReason = result.RefusalReason },
                 InlineRootDisposition.OwnershipLost => new(InlineStartDisposition.Unknown),
                 _ => throw new InvalidOperationException("The local owner returned an unknown start outcome.")
             };
