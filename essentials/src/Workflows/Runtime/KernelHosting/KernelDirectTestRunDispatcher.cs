@@ -120,7 +120,8 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         {
             if (!http || dispatchOptions?.TestRunHttpBudget is not { } budget)
                 return Refused("The selected Ephemeral HTTP Test Run is missing its synchronous request timeout.");
-            if (!await ReserveInlineAsync())
+            var attempt = Guid.NewGuid();
+            if (!await ReserveInlineAsync(attempt))
             {
                 var current = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, cancellationToken);
                 if (await CommittedDuplicateAsync(current) is { } duplicate) return duplicate;
@@ -129,7 +130,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
                     ? InlineResult(new(InlineStartDisposition.Volatile, Status: ActorStatus.Finished)) : UnknownInlineResult();
             }
 
-            var held = await runtime.StartInlineHeldTestAsync(test, spec, workflow, budget, cancellationToken);
+            var held = await runtime.StartInlineHeldTestAsync(test, attempt, spec, workflow, budget, cancellationToken);
             if (held.Reply is not { } reply) return InlineResult(held.Start);
             if (reply.Error is not null)
                 return InlineResult(new(InlineStartDisposition.Unknown), PresentHttpReply(reply));
@@ -164,15 +165,17 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
 
         WorkflowExecutionStartDispatchResult UnknownInlineResult() => InlineResult(new(InlineStartDisposition.Unknown));
 
-        async ValueTask<bool> ReserveInlineAsync()
+        async ValueTask<bool> ReserveInlineAsync(Guid? attempt = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             // A disconnect must not hide whether the exact reservation committed. The offer owns the next decision.
             using var reservation = new CancellationTokenSource(InlineReservationBudget, time);
             try
             {
-                return await services.GetRequiredService<IWorkflowTestScopeAdmissionStore>()
-                    .BeginInlineStartAsync(test, clock.GetUtcNow, reservation.Token);
+                var admissions = services.GetRequiredService<IWorkflowTestScopeAdmissionStore>();
+                return attempt is { } held
+                    ? await admissions.BeginHeldInlineStartAsync(test, held, clock.GetUtcNow, reservation.Token)
+                    : await admissions.BeginInlineStartAsync(test, clock.GetUtcNow, reservation.Token);
             }
             catch (OperationCanceledException) when (reservation.IsCancellationRequested) { return false; }
         }

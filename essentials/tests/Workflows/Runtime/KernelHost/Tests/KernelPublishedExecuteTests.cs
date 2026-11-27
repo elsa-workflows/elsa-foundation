@@ -843,25 +843,57 @@ public sealed partial class KernelPublishedExecuteTests
                 var services = authoring.ServiceProvider;
                 var dispatcher = services.GetRequiredService<IWorkflowDirectTestRunDispatcher>();
                 var production = app.Services.GetRequiredService<KernelRuns>();
+                var scopeStore = services.GetRequiredService<IWorkflowTestScopeStore>();
                 var durableBefore = await DurableRowCountAsync();
-                var first = await StartAsync(immediate, TimeSpan.FromSeconds(5));
-                var reply = Assert.IsType<WorkflowTestRunHttpReply>(first.Dispatch.TestRunHttpReply);
-                Assert.Equal(201, reply.StatusCode);
-                Assert.Equal("held-ephemeral-owner", reply.Body);
-                Assert.True(reply.OwnerAccepted);
+                var prepared = await PrepareAsync(immediate);
+                var unqueued = await DispatchAsync(prepared.Request, TimeSpan.Zero);
+                Assert.Equal(408, unqueued.TestRunHttpReply?.StatusCode);
+                var cleared = await scopeStore.FindAsync(prepared.Test.ScopeId, token);
+                Assert.Null(cleared?.HeldInlineAttempt);
+                Assert.Null(cleared?.InlineStart);
+                Assert.Equal(durableBefore, await DurableRowCountAsync());
+
+                if (!recordCompletion)
+                {
+                    var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    scopeAdmission.Settling = (_, state, deadline) =>
+                    {
+                        Assert.Equal(WorkflowTestRunInlineState.CompletedWithoutRecord, state);
+                        entered.TrySetResult();
+                        return release.Task.WaitAsync(deadline);
+                    };
+                    var waiting = StartPreparedAsync(prepared, TimeSpan.FromSeconds(5));
+                    try
+                    {
+                        await entered.Task.WaitAsync(TimeSpan.FromSeconds(4), token);
+                        Assert.Equal(WorkflowTestRunInlineState.Pending, (await scopeStore.FindAsync(prepared.Test.ScopeId, token))?.InlineStart);
+                        Assert.False(waiting.IsCompleted);
+                    }
+                    finally
+                    {
+                        scopeAdmission.Settling = null;
+                        release.TrySetResult();
+                    }
+                    await CheckImmediateAsync(await waiting);
+                }
+                else await CheckImmediateAsync(await StartPreparedAsync(prepared, TimeSpan.FromSeconds(5)));
+
                 if (recordCompletion)
                 {
-                    Assert.False(first.Dispatch.TestRunCompletedWithoutRecord);
-                    Assert.Equal(first.Dispatch.WorkflowExecutionId, reply.Headers["x-elsa-workflow-instance-id"]);
-                    Assert.True((await production.GetAsync(new(first.Dispatch.WorkflowExecutionId), token)).Missing);
-                    Assert.Null(await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(first.Dispatch.WorkflowExecutionId, token));
+                    pinBoundary.BeforeTestAdmission = (_, _) => ValueTask.FromException(new InvalidDataException("Refuse this exact fixture root pin."));
+                    try
+                    {
+                        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+                        var refused = await StartAsync(immediate, TimeSpan.FromSeconds(10));
+                        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(5));
+                        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Rejected, refused.Dispatch.CommandDispatch.Status);
+                        Assert.Null(refused.Dispatch.TestRunHttpReply);
+                        Assert.Equal(WorkflowTestRunInlineState.Refused, (await scopeStore.FindAsync(refused.Test.ScopeId, token))?.InlineStart);
+                    }
+                    finally { pinBoundary.BeforeTestAdmission = null; }
                     return;
                 }
-
-                Assert.True(first.Dispatch.TestRunCompletedWithoutRecord);
-                Assert.False(reply.Headers.ContainsKey("x-elsa-workflow-instance-id"));
-                await RequireNoRecordAsync(first.Test, first.Source);
-                Assert.Equal(durableBefore, await DurableRowCountAsync());
 
                 var beginning = StartAsync(blocked, TimeSpan.FromSeconds(2));
                 try
@@ -870,7 +902,7 @@ public sealed partial class KernelPublishedExecuteTests
                     var timedOut = await beginning;
                     Assert.Equal(408, timedOut.Dispatch.TestRunHttpReply?.StatusCode);
                     Assert.False(timedOut.Dispatch.TestRunHttpReply?.OwnerAccepted);
-                    var during = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(timedOut.Test.ScopeId, token);
+                    var during = await scopeStore.FindAsync(timedOut.Test.ScopeId, token);
                     Assert.Equal(WorkflowTestRunInlineState.Pending, during?.InlineStart);
                 }
                 finally { scripts.Released.TrySetResult(); }
@@ -879,27 +911,67 @@ public sealed partial class KernelPublishedExecuteTests
                 Assert.Equal(1, scripts.Calls);
                 Assert.Equal(durableBefore, await DurableRowCountAsync());
 
+                var (fenced, _, _) = await PrepareAsync(immediate);
+                var attempts = services.GetRequiredService<IWorkflowTestScopeAdmissionStore>();
+                var previous = Guid.NewGuid();
+                var current = Guid.NewGuid();
+                Assert.True(await attempts.BeginHeldInlineStartAsync(fenced, previous, () => DateTimeOffset.UtcNow, token));
+                Assert.True(await attempts.SettleHeldInlineStartAsync(fenced, previous, null, token));
+                Assert.True(await attempts.BeginHeldInlineStartAsync(fenced, current, () => DateTimeOffset.UtcNow, token));
+                Assert.False(await attempts.SettleHeldInlineStartAsync(fenced, previous, null, token));
+                Assert.False(await attempts.SettleHeldInlineStartAsync(fenced, previous, WorkflowTestRunInlineState.CompletedWithoutRecord, token));
+                Assert.Equal(current, (await scopeStore.FindAsync(fenced.ScopeId, token))?.HeldInlineAttempt);
+                Assert.True(await attempts.SettleHeldInlineStartAsync(fenced, current, null, token));
+
+                async Task CheckImmediateAsync((WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Dispatch) first)
+                {
+                    var reply = Assert.IsType<WorkflowTestRunHttpReply>(first.Dispatch.TestRunHttpReply);
+                    Assert.Equal(201, reply.StatusCode);
+                    Assert.Equal("held-ephemeral-owner", reply.Body);
+                    Assert.True(reply.OwnerAccepted);
+                    if (recordCompletion)
+                    {
+                        Assert.False(first.Dispatch.TestRunCompletedWithoutRecord);
+                        Assert.Equal(first.Dispatch.WorkflowExecutionId, reply.Headers["x-elsa-workflow-instance-id"]);
+                        Assert.True((await production.GetAsync(new(first.Dispatch.WorkflowExecutionId), token)).Missing);
+                        Assert.Null(await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(first.Dispatch.WorkflowExecutionId, token));
+                        return;
+                    }
+
+                    Assert.True(first.Dispatch.TestRunCompletedWithoutRecord);
+                    Assert.False(reply.Headers.ContainsKey("x-elsa-workflow-instance-id"));
+                    await RequireNoRecordAsync(first.Test, first.Source);
+                    Assert.Equal(durableBefore, await DurableRowCountAsync());
+                }
+
                 async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Dispatch)>
-                    StartAsync(WorkflowExecutable executable, TimeSpan budget)
+                    StartAsync(WorkflowExecutable executable, TimeSpan budget) => await StartPreparedAsync(await PrepareAsync(executable), budget);
+
+                async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Dispatch)>
+                    StartPreparedAsync((WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchRequest Request) ready,
+                        TimeSpan budget)
                 {
                     var elapsed = System.Diagnostics.Stopwatch.StartNew();
                     while (true)
                     {
-                        var stimulus = JsonSerializer.SerializeToElement(new
-                        {
-                            Path = "/held/entry", Method = "POST", Body = (string?)null,
-                            Headers = new Dictionary<string, string[]>(), Query = new Dictionary<string, string[]>(), RouteData = new Dictionary<string, string>()
-                        });
-                        var (test, source, request) = await PrepareEphemeralTestAsync(services, executable, httpStimulus: stimulus);
-                        var options = new WorkflowExecutionCommandDispatchOptions
-                        {
-                            TestRunHttpBudget = new(System.Diagnostics.Stopwatch.GetTimestamp(), budget)
-                        };
-                        var result = await dispatcher.DispatchAsync(request, WorkflowExecutableReferenceScope.TestRun, options, token);
-                        if (!result.CommandDispatch.IsShed || elapsed.Elapsed >= TimeSpan.FromSeconds(8)) return (test, source, result);
+                        var result = await DispatchAsync(ready.Request, budget);
+                        if (!result.CommandDispatch.IsShed || elapsed.Elapsed >= TimeSpan.FromSeconds(8)) return (ready.Test, ready.Source, result);
                         await Task.Delay(100, token);
                     }
                 }
+
+                async Task<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request, TimeSpan budget) =>
+                    await dispatcher.DispatchAsync(request, WorkflowExecutableReferenceScope.TestRun, new()
+                    {
+                        TestRunHttpBudget = new(System.Diagnostics.Stopwatch.GetTimestamp(), budget)
+                    }, token);
+
+                Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchRequest Request)>
+                    PrepareAsync(WorkflowExecutable executable) => PrepareEphemeralTestAsync(services, executable, httpStimulus: JsonSerializer.SerializeToElement(new
+                    {
+                        Path = "/held/entry", Method = "POST", Body = (string?)null,
+                        Headers = new Dictionary<string, string[]>(), Query = new Dictionary<string, string[]>(), RouteData = new Dictionary<string, string>()
+                    }));
 
                 async Task RequireNoRecordAsync(WorkflowTestScope test, WorkflowExecutableSourceReference source)
                 {
@@ -1644,6 +1716,16 @@ public sealed partial class KernelPublishedExecuteTests
         {
             if (fixture.Settling is { } settling) await settling(scope, outcome, cancellationToken);
             return await physical.SettleInlineStartAsync(scope, outcome, cancellationToken);
+        }
+
+        public ValueTask<bool> BeginHeldInlineStartAsync(WorkflowTestScope scope, Guid attemptId, Func<DateTimeOffset> readClock,
+            CancellationToken cancellationToken) => physical.BeginHeldInlineStartAsync(scope, attemptId, readClock, cancellationToken);
+
+        public async ValueTask<bool> SettleHeldInlineStartAsync(WorkflowTestScope scope, Guid attemptId, WorkflowTestRunInlineState? outcome,
+            CancellationToken cancellationToken)
+        {
+            if (outcome is { } definite && fixture.Settling is { } settling) await settling(scope, definite, cancellationToken);
+            return await physical.SettleHeldInlineStartAsync(scope, attemptId, outcome, cancellationToken);
         }
     }
 

@@ -197,29 +197,45 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         return unavailable;
     }
 
-    internal async ValueTask<InlineHeldStartOutcome> StartInlineHeldTestAsync(WorkflowTestScope test, StartSpec start, Workflow executable,
-        WorkflowTestRunHttpBudget budget, CancellationToken token)
+    internal async ValueTask<InlineHeldStartOutcome> StartInlineHeldTestAsync(WorkflowTestScope test, Guid attempt, StartSpec start,
+        Workflow executable, WorkflowTestRunHttpBudget budget, CancellationToken token)
     {
         if (Volatile.Read(ref _publishedInlineStarts) is not { } inline)
-            return new(await SettleInlineTestOutcomeAsync(test, new(InlineStartDisposition.Unavailable)), null);
+            return new(await SettleUnqueuedAsync(new(InlineStartDisposition.Unavailable)), null);
 
         long now;
         try { now = await storage.ReadClockAsync(token); }
         catch
         {
-            await SettleInlineTestOutcomeAsync(test, new(InlineStartDisposition.Unavailable));
+            await SettleUnqueuedAsync(new(InlineStartDisposition.Unavailable));
             throw;
         }
         var remaining = budget.Remaining;
         if (remaining <= TimeSpan.Zero)
-            return new(await SettleInlineTestOutcomeAsync(test, new(InlineStartDisposition.Unavailable)),
+            return new(await SettleUnqueuedAsync(new(InlineStartDisposition.Unavailable)),
                 new(null, null, Error: "timeout"));
         var deadline = checked(now + (long)Math.Ceiling(remaining.TotalMilliseconds));
-        return await inline.Requests.StartAdditionalHeldAsync(test.ScopeId, start, inline.Model.CaptureInlineMaterial(executable), deadline,
-            outcome => SettleInlineTestOutcomeAsync(test, outcome), token);
+        using var observation = CancellationTokenSource.CreateLinkedTokenSource(token);
+        observation.CancelAfter(remaining);
+        try
+        {
+            return await inline.Requests.StartAdditionalHeldAsync(test.ScopeId, start, inline.Model.CaptureInlineMaterial(executable), deadline,
+                outcome => SettleInlineTestOutcomeAsync(test, outcome, attempt), SettleUnqueuedAsync, observation.Token);
+        }
+        catch (OperationCanceledException) when (observation.IsCancellationRequested && !token.IsCancellationRequested)
+        {
+            return new(new(InlineStartDisposition.Unknown), new(null, null, Error: "timeout"));
+        }
+
+        async ValueTask<InlineStartOutcome> SettleUnqueuedAsync(InlineStartOutcome outcome)
+        {
+            if (outcome.Disposition != InlineStartDisposition.Unavailable)
+                return await SettleInlineTestOutcomeAsync(test, outcome, attempt);
+            return await SettleInlineTestAsync(test, null, attempt) ? outcome : new(InlineStartDisposition.Unknown);
+        }
     }
 
-    private async ValueTask<InlineStartOutcome> SettleInlineTestOutcomeAsync(WorkflowTestScope test, InlineStartOutcome outcome)
+    private async ValueTask<InlineStartOutcome> SettleInlineTestOutcomeAsync(WorkflowTestScope test, InlineStartOutcome outcome, Guid? attempt = null)
     {
         var settlement = outcome switch
         {
@@ -230,12 +246,12 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             { Disposition: InlineStartDisposition.Unavailable } => WorkflowTestRunInlineState.Unavailable,
             _ => (WorkflowTestRunInlineState?)null
         };
-        if (settlement is { } definite && !await SettleInlineTestAsync(test, definite))
+        if (settlement is { } definite && !await SettleInlineTestAsync(test, definite, attempt))
             return new(InlineStartDisposition.Unknown);
         return outcome;
     }
 
-    internal async ValueTask<bool> SettleInlineTestAsync(WorkflowTestScope test, WorkflowTestRunInlineState outcome)
+    internal async ValueTask<bool> SettleInlineTestAsync(WorkflowTestScope test, WorkflowTestRunInlineState? outcome, Guid? attempt = null)
     {
         // The exact Test Run scope is durable and can outlive the original request's service scope.
         using var budget = new CancellationTokenSource(InlineSettlementBudget, clock);
@@ -243,7 +259,9 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         {
             await using var runtime = await scopes.CreateAsyncScopeAsync(persistenceScope);
             var admissions = runtime.ServiceProvider.GetRequiredService<IWorkflowTestScopeAdmissionStore>();
-            return await admissions.SettleInlineStartAsync(test, outcome, budget.Token);
+            return attempt is { } held
+                ? await admissions.SettleHeldInlineStartAsync(test, held, outcome, budget.Token)
+                : await admissions.SettleInlineStartAsync(test, outcome!.Value, budget.Token);
         }
         catch (OperationCanceledException) when (budget.IsCancellationRequested) { return false; }
         catch (Exception error)

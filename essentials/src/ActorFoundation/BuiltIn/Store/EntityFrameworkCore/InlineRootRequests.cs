@@ -105,40 +105,69 @@ public sealed class InlineRootRequests(Contract.BoundScope scope, string actorTy
     /// <summary>Offers an isolated inline start and holds its first response through the same owner reply edge.</summary>
     /// <remarks>The accepted owner settles even if the live observer leaves. Only the qualified additional scope can use this path.</remarks>
     public async ValueTask<InlineHeldStartOutcome> StartAdditionalHeldAsync(string operationId, Contract.StartSpec start, object material,
-        long deadline, Func<InlineStartOutcome, ValueTask<InlineStartOutcome>> settle, CancellationToken token)
+        long deadline, Func<InlineStartOutcome, ValueTask<InlineStartOutcome>> settle,
+        Func<InlineStartOutcome, ValueTask<InlineStartOutcome>> settleUnqueued, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(settle);
+        ArgumentNullException.ThrowIfNull(settleUnqueued);
         HeldRootRequests? replies;
         lock (_gate) replies = _owner?.Replies;
         var offer = new InlineOffer(new(InlineStartDisposition.Unavailable));
         if (_additionalScope is not { } scope || replies is null)
         {
-            var unavailable = await settle(offer.Unqueued);
+            var unavailable = await settleUnqueued(offer.Unqueued);
             token.ThrowIfCancellationRequested();
             return new(unavailable, null);
         }
 
+        using var observer = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var refusal = new TaskCompletionSource<InlineStartOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var issued = false;
+        var enteredIssue = false;
         Contract.Reply reply;
-        try { reply = await replies.HoldInlineStartAsync(scope, operationId, deadline, IssueAsync, token); }
+        try
+        {
+            var response = replies.HoldInlineStartAsync(scope, operationId, deadline, IssueAsync, observer.Token).AsTask();
+            if (await Task.WhenAny(response, refusal.Task) == refusal.Task)
+            {
+                await observer.CancelAsync();
+                try { _ = await response; }
+                catch (OperationCanceledException) when (observer.IsCancellationRequested) { }
+                return new(await refusal.Task, null);
+            }
+            reply = await response;
+        }
         catch
         {
-            if (offer.Accepted is null) await settle(offer.Unqueued);
+            if (!enteredIssue || issued && offer.Accepted is null) await settleUnqueued(offer.Unqueued);
             throw;
         }
         if (offer.Accepted is not { } accepted)
         {
-            var unqueued = await settle(offer.Unqueued);
+            var unqueued = await settleUnqueued(offer.Unqueued);
             token.ThrowIfCancellationRequested();
             return new(unqueued, reply.Error == "timeout" ? reply : null);
         }
         var observation = accepted.Result.IsCompletedSuccessfully ? ReadOutcome(accepted.Actor, accepted.Result.Result) :
             new InlineStartOutcome(InlineStartDisposition.Unknown);
+        if (observation.Disposition is InlineStartDisposition.Volatile or InlineStartDisposition.Refused)
+            observation = await offer.Receipt!.WaitAsync(token);
+        if (refusal.Task.IsCompletedSuccessfully) return new(refusal.Task.Result, null);
         return new(observation, reply);
 
         Task<Contract.Reply?> IssueAsync(HeldRootRequest caller, CancellationToken budget)
         {
-            offer = Offer(scope, operationId, start, material, settle, budget, caller);
+            enteredIssue = true;
+            offer = Offer(scope, operationId, start, material, SettleOwnerAsync, budget, caller);
+            issued = true;
             return Task.FromResult<Contract.Reply?>(offer.Accepted is null ? new(null, null, Error: "not admitted") : null);
+        }
+
+        async ValueTask<InlineStartOutcome> SettleOwnerAsync(InlineStartOutcome outcome)
+        {
+            var settled = await settle(outcome);
+            if (outcome.Disposition == InlineStartDisposition.Refused) refusal.TrySetResult(settled);
+            return settled;
         }
     }
 
