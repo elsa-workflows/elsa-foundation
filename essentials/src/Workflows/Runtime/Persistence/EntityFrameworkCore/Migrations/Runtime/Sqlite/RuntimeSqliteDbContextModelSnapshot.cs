@@ -2220,10 +2220,20 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("1.0.0");
+
                     b.Property<long?>("Through")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("ScopeKeyHash", "TenantKeyHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_runtime_kernel_schedule_control_scan", (string)null);
                 });
