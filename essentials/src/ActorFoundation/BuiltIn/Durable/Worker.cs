@@ -2254,7 +2254,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (request.Operator is not null && !_type.AcceptsFoundationOperator(input.Row, request))
             Enqueue(Bound(CreationProtocol.Refuse(instance, input.Row, due, "OperatorUnavailable"), slot), cancellationToken);
         else if (_type.Command(input) is { } command)
-            Enqueue(Bound(command, slot), cancellationToken);
+        {
+            if (command.PrepareCommand is { } prepare)
+            {
+                command.PrepareCommand = null;
+                StartDrive(prepare);
+            }
+            else Enqueue(Bound(command, slot), cancellationToken);
+        }
         else if (due.Find(i => i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.JobFinished) is { } poison)
         {
             var previous = slot.CurrentRow;
@@ -2263,10 +2270,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         else if (slot.Row is null && spec is null)                   // no target and no start spec: dropped and journalled
             Enqueue(new TurnOutcome(instance) { Slot = slot, Consumed = due, Journal = Json.Write(due.Select(i => "dropped " + i.Message.Id)), Status = null }, cancellationToken);
-        else
+        else StartDrive();
+
+        void StartDrive(Func<CancellationToken, ValueTask<TurnOutcome>>? prepare = null)
         {
             slot.Driving = true;
-            var entered = Drive(input, cancellationToken);
+            var entered = Drive(input, cancellationToken, prepare);
             slot.EnteredTurn = slot.Driving ? entered : null;
         }
     }
@@ -2316,13 +2325,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
-    private async Task Drive(TurnInput input, CancellationToken cancellationToken)
+    private async Task Drive(TurnInput input, CancellationToken cancellationToken,
+        Func<CancellationToken, ValueTask<TurnOutcome>>? prepare = null)
     {
         var generation = _generation;
         var fence = input.Slot.TurnFence;
         var inline = input.Spec?.FoundationInlineTenant is not null || input.Row?.FoundationInlineBirth is not null;
         TurnOutcome unit;
-        try { unit = await _type.TurnAsync(input); }
+        try { unit = await (prepare is null ? _type.TurnAsync(input) : prepare(cancellationToken)); }
+        catch (Exception) when (prepare is not null)
+        {
+            // The store could not qualify the command. A new owner can reread it under a fresh fence.
+            await FailAsync([], generation, cancellationToken);
+            return;
+        }
         catch (Exception e)
         {
             lock (_turnSync)
@@ -3253,7 +3269,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             try
             {
                 StoreBatchRules.Validate(batch, ownedSets: _store.OwnedSetsAvailable, supportsJobTrialClear: _store.SupportsJobTrialClear,
-                    supportsFoundationParkResolution: true, supportsFoundationValues: true, supportsDueBacklog: _backlog is not null, supportsFoundationSelfRecalls: true);
+                    supportsFoundationParkResolution: true, supportsFoundationValues: true, supportsDueBacklog: _backlog is not null, supportsFoundationSelfRecalls: true, supportsRootTimerRearms: true);
                 StoreBatchRules.RequirePhysicalCapability(batch,_store.PhysicalRetirementAvailable);
                 if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: _store.PhysicalRetirementAvailable);
                 if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
@@ -3434,6 +3450,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationRecoveryPage = unit.FoundationRecoveryPage,
             FoundationRetry = unit.FoundationRetry,
             FoundationRecoveryTimers = unit.FoundationRecoveryTimers,
+            FoundationRootTimerRearms = unit.FoundationRootTimerRearms,
             FoundationRecoveryJobs = unit.FoundationRecoveryJobs,
             FoundationRecoverySubscriptions = unit.FoundationRecoverySubscriptions,
             FoundationCatchUpStep = unit.FoundationCatchUpStep,

@@ -9,7 +9,7 @@ namespace Kernel.Native.Run;
 
 internal static class RootSelfTimedParkChecks
 {
-    internal static async Task<int> RunAsync(bool postgres, bool fenceInBatch)
+    internal static async Task<int> RunAsync(bool postgres, bool fenceInBatch, bool rearm = false)
     {
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         var token = budget.Token;
@@ -27,8 +27,13 @@ internal static class RootSelfTimedParkChecks
                 }.ConnectionString);
 
             var definitions = new SqliteAdmissionDefinitions();
-            KernelDb Open() => postgres ? KernelDb.ForPostgresRootSelfTimedParkQualification(options.Options)
-                : KernelDb.ForSqliteRootSelfTimedParkQualification(options.Options, definitions);
+            KernelDb Open() => (postgres, rearm) switch
+            {
+                (true, false) => KernelDb.ForPostgresRootSelfTimedParkQualification(options.Options),
+                (true, true) => KernelDb.ForPostgresRootTimerRearmQualification(options.Options),
+                (false, false) => KernelDb.ForSqliteRootSelfTimedParkQualification(options.Options, definitions),
+                _ => KernelDb.ForSqliteRootTimerRearmQualification(options.Options, definitions)
+            };
             var store = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
             await using var db = Open();
             var scope = EmbeddedTenant.Bind("mixed-park");
@@ -43,12 +48,16 @@ internal static class RootSelfTimedParkChecks
             else await EfStore.InstallSqliteShippedAsync(db, 1, token);
 
             var priorProfiles = postgres
-                ? new Func<KernelDb>[] { () => KernelDb.ForPostgresRootShipped(options.Options),
+                ? new List<Func<KernelDb>> { () => KernelDb.ForPostgresRootShipped(options.Options),
                     () => KernelDb.ForPostgresRootSelfTimedQualification(options.Options) }
                 : [() => KernelDb.ForSqliteRootShipped(options.Options),
                     () => KernelDb.ForSqliteRootSelfTimedQualification(options.Options, definitions),
                     () => KernelDb.ForSqliteParkRecoveryQualification(options.Options, definitions),
                     () => KernelDb.ForSqliteParkArrivalsQualification(options.Options, definitions)];
+            if (rearm)
+                priorProfiles.Add(postgres
+                    ? () => KernelDb.ForPostgresRootSelfTimedParkQualification(options.Options)
+                    : () => KernelDb.ForSqliteRootSelfTimedParkQualification(options.Options, definitions));
             foreach (var openPrior in priorProfiles)
             {
                 await using var prior = openPrior();
@@ -60,13 +69,13 @@ internal static class RootSelfTimedParkChecks
                 }
                 catch (StoreFormatException error) when (error.Message.StartsWith("Unsupported kernel store versions.", StringComparison.Ordinal))
                 {
-                    Console.WriteLine($"ok {prior.RequiredFormat} refuses the mixed Park qualification marker");
+                    Console.WriteLine($"ok {prior.RequiredFormat} refuses {db.RequiredFormat}");
                 }
             }
 
             await store.EnableRootSelfSendsAsync(token);
             await store.EnableRootJobsAsync(token);
-            var probe = new Probe();
+            var probe = new Probe(rearm);
             var roots = postgres ? store.BindWorkerNode(probe.Withholds) : store.BindSqliteWorkerNode(probe.Withholds);
             var adapter = new ActorAdapter(new EfStore.RootHeaders(roots), probe, store.RootSelfIssuer,
                 rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync);
@@ -78,10 +87,24 @@ internal static class RootSelfTimedParkChecks
 
             EfStore.RootImage parked;
             PhysicalTimer[] before;
+            PhysicalTimer[] originals = [];
             long firstEpoch;
             await using (var owner = await OwnAsync("keeper"))
             {
-                await DriveAsync(owner, row => row.Status == InstanceStatus.Running && probe.Invocations == 1);
+                var starting = await DriveAsync(owner, row => row.Status == InstanceStatus.Running && probe.Invocations == 1);
+                if (rearm)
+                {
+                    var recipes = DurableKeyJson.Read<Contract.TimerSpec[]>(starting.State);
+                    var origin = CreationProtocol.Origin(starting.Actor.Id, 1);
+                    originals = (await TimersAsync(starting.Actor.Id)).Where(row => recipes.Skip(3)
+                        .Any(recipe => row.Id == origin + "#" + recipe.Id)).ToArray();
+                    Check(originals.Length == 2, "the committed checkpoint retains both timers' original recipes");
+                    Check(await SendAsync("drop", "drop", null, null) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                        "the fixture admits a turn that recalls a timer but retains its wait");
+                    await DriveAsync(owner, row => row.Revision > starting.Revision);
+                    var foreign = CreationProtocol.Origin(starting.Actor.Id + "-foreign", 1);
+                    probe.ForeignTimer = FoundationSelfSend.Issue(store.RootSelfIssuer!.Handle, foreign, 1, 0, recipes[3].Due);
+                }
                 parked = await DriveAsync(owner, row => row.Status == InstanceStatus.Faulted);
                 Check(await SendAsync("outside", "outside", null, null) is { Outcome: Contract.AdmissionOutcome.Accepted },
                     "the parked root accepts a direct arrival beside its private timer");
@@ -89,11 +112,26 @@ internal static class RootSelfTimedParkChecks
                 before = await TimersAsync(parked.Actor.Id);
                 Check(before.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed && row.Done) == 1 &&
                       before.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived && row.Done) == 1 &&
-                      before.Count(row => row.KeptBy is null && !row.Done) == 1 &&
-                      probe.Arrivals == 0 && probe.Invocations == 1 &&
+                      before.Count(row => row.KeptBy is null && !row.Done) == (rearm ? 2 : 1) &&
+                      probe.Arrivals.Count == 0 && probe.Invocations == 1 &&
                       JobRegistry.Read(parked.Jobs) is [{ Generation: 0 }],
                     "Park keeps the poison and matured timer with distinct reasons, and preserves the future timer and live job");
                 firstEpoch = owner.Epoch;
+            }
+
+            if (rearm)
+            {
+                // Install the ordinary Done footprint while no owner can have the timer buffered.
+                var settled = originals[1].Id;
+                Check(await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Done" = {true}
+                    WHERE "Target" = {parked.Actor.Id} AND "Id" = {settled} AND "InboxScope" = {EfStore.RootSelfScope}
+                        AND "EventMatch" IS NULL AND NOT "Done"
+                    """, token) == 1, "the fixture leaves an ordinary Done timer in the store");
+                before = await TimersAsync(parked.Actor.Id);
+                Check(before.Single(row => row.Id == settled) is { Done: true, KeptBy: null } &&
+                      before.All(row => row.Id != originals[0].Id),
+                    "the Park includes both a missing and an ordinarily Done timer in its saved recipes");
             }
 
             var parkedView = (await reads.GetAsync(scope, root, token))!;
@@ -107,21 +145,43 @@ internal static class RootSelfTimedParkChecks
             Check(refused.Status == InstanceStatus.Faulted && refused.ParkAt == parked.ParkAt &&
                   refused.Jobs == parked.Jobs && (await TimersAsync(parked.Actor.Id)).SequenceEqual(before) &&
                   (await store.ReadJournalOfAsync(0, parked.Actor.Id, 0, token))[^1].Entries.Contains("\"Reason\":\"plan\"", StringComparison.Ordinal),
-                "a changed recipe leaves every timer envelope, the Park and the job registration intact");
+                "an invalid recipe leaves every timer envelope, the Park and the job registration intact");
             probe.ChangeRecipe = false;
+            if (rearm)
+            {
+                probe.ChangeDonePayload = true;
+                Check(await RecoverAsync("changed-done-body", selection) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                    "the provider admits a Recover carrying an authentic timer handle with a changed saved body");
+                var mismatch = await DriveAsync(successor, row => row.Revision > refused.Revision);
+                Check(mismatch.Status == InstanceStatus.Faulted && mismatch.ParkAt == parked.ParkAt &&
+                      mismatch.Jobs == parked.Jobs && (await TimersAsync(parked.Actor.Id)).SequenceEqual(before) &&
+                      (await store.ReadJournalOfAsync(0, parked.Actor.Id, 0, token))[^1].Entries.Contains("\"Reason\":\"plan\"", StringComparison.Ordinal),
+                    "a Done body mismatch settles as a plan refusal under the current owner");
+                probe.ChangeDonePayload = false;
+            }
             Check(await RecoverAsync("recover", selection) is { Outcome: Contract.AdmissionOutcome.Accepted },
                 "the same Park accepts a fresh exact Recover");
             var recovered = await DriveAsync(successor, row => row.Status == InstanceStatus.Running);
             var released = await TimersAsync(parked.Actor.Id);
-            Check(recovered.Jobs == parked.Jobs && recovered.NextJobGeneration == parked.NextJobGeneration && released.Length == 2 &&
+            Check(recovered.Jobs == parked.Jobs && recovered.NextJobGeneration == parked.NextJobGeneration &&
+                  released.Length == (rearm ? 4 : 2) &&
                   released.Any(row => row == before.Single(timer => !timer.Done)) &&
                   released.Any(row => row == before.Single(timer => timer.KeptBy == (short)ParkKeepReason.Arrived)
                         with { Done = false, KeptBy = null, Released = 1 }) && probe.PoisonCalls == 1,
                 "Recover restores the matured timer with its original sequence and due time, leaves the future timer and clears the poison");
-            await DriveAsync(successor, _ => probe.Arrivals == 2 && probe.Invocations == 2);
+            if (rearm)
+                Check(originals.All(original => released.Single(row => row.Id == original.Id) is { Done: false, KeptBy: null, Released: null } row &&
+                            row.Due == original.Due && row.Seq > before.Max(timer => timer.Seq)),
+                    "Recover re-arms both exact keys at their saved due times using fresh sequences behind the released cohort");
+            var expectedArrivals = rearm ? 4 : 2;
+            await DriveAsync(successor, _ => probe.Arrivals.Count == expectedArrivals && probe.Invocations == 2);
+            if (rearm)
+                Check(probe.Arrivals.Take(2).ToHashSet(StringComparer.Ordinal).SetEquals(["arrival", "outside"]) &&
+                      probe.Arrivals.Skip(2).SequenceEqual(["missing", "done"]),
+                    "the released cohort reaches the successor before either newly re-armed timer");
             probe.Release.TrySetResult();
             var finished = await DriveAsync(successor, row => row.Status == InstanceStatus.Finished);
-            Check(probe.Arrivals == 2 && probe.PoisonCalls == 1 && probe.Results == 1 &&
+            Check(probe.Arrivals.Count == expectedArrivals && probe.PoisonCalls == 1 && probe.Results == 1 &&
                   (await TimersAsync(parked.Actor.Id)).Length == 0 &&
                   !await db.Messages.AnyAsync(row => row.Target == finished.Actor.Id && row.InboxScope == EfStore.RootTimedJobScope, token),
                 "the successor delivers the mixed arrivals and one timed result, and recalls the remaining timer");
@@ -170,14 +230,16 @@ internal static class RootSelfTimedParkChecks
 
     private sealed record PhysicalTimer(string Id, long Seq, long Due, bool Done, short? KeptBy, long? Released);
 
-    private sealed class Probe : Contract.IActorType
+    private sealed class Probe(bool rearm) : Contract.IActorType
     {
         internal const string ActorType = "self-timed-park";
         private const string ExactPayload = "with null\0 and unmatched \ud800";
         private volatile int _invocations;
         internal bool ChangeRecipe { get; set; }
+        internal string? ForeignTimer { get; set; }
+        internal bool ChangeDonePayload { get; set; }
         internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal int Arrivals { get; private set; }
+        internal List<string> Arrivals { get; } = [];
         internal int PoisonCalls { get; private set; }
         internal int Results { get; private set; }
         internal int Invocations => _invocations;
@@ -189,7 +251,12 @@ internal static class RootSelfTimedParkChecks
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state)
         {
             var timers = DurableKeyJson.Read<Contract.TimerSpec[]>(state);
-            if (ChangeRecipe) timers[0] = timers[0] with { Due = timers[0].Due + 1 };
+            if (ChangeRecipe)
+            {
+                if (ForeignTimer is { } foreign) timers[3] = timers[3] with { Id = foreign };
+                else timers[0] = timers[0] with { Due = timers[0].Due + 1 };
+            }
+            if (ChangeDonePayload) timers[4] = timers[4] with { Payload = "changed" };
             return new(timers, [new("work", null)], []);
         }
 
@@ -207,17 +274,27 @@ internal static class RootSelfTimedParkChecks
                 {
                     case Contract.Kinds.Start:
                         turn.StartJob("work", timeout: TimeSpan.FromSeconds(20));
-                        turn.State = DurableKeyJson.Write(new[] { Timer("poison", 850), Timer("arrival", 1800), Timer("future", 30_000) });
+                        var timers = new List<Contract.TimerSpec>
+                        {
+                            Timer("poison", rearm ? 2500 : 850), Timer("arrival", rearm ? 4000 : 1800), Timer("future", 30_000)
+                        };
+                        if (rearm) timers.AddRange([Timer("missing", 3000), Timer("done", 6000)]);
+                        turn.State = DurableKeyJson.Write(timers);
+                        break;
+                    case "drop":
+                        turn.Recall(DurableKeyJson.Read<Contract.TimerSpec[]>(turn.State!)[3].Id);
                         break;
                     case "poison":
                         PoisonCalls++;
                         throw new InvalidOperationException("the timer poisoned its turn");
                     case "arrival":
+                    case "missing":
+                    case "done":
                         Check(input.Payload == ExactPayload, "the restored timer retains its exact split or escaped payload");
-                        Arrivals++;
+                        Arrivals.Add(input.Kind);
                         break;
                     case "outside":
-                        Arrivals++;
+                        Arrivals.Add(input.Kind);
                         break;
                     case Contract.Kinds.JobFinished:
                         Results++;

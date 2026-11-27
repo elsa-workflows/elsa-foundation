@@ -101,6 +101,8 @@ public sealed partial class EfStore
             arrived.Any(row => row.Scope != InboxKey.FoundationOccurrenceScope &&
                 (!db.UsesRootPrivateParkInputs || row.Scope != RootSelfScope)) ||
             KeptSetDigest(kept.Select(row => row.Facts)) != facts.KeptDigest)) return false;
+        if (!await BindRootTimerRearmsAsync(db, root, turn.JournalRevision, turn.SelfIssuer, turn.Rearms, facts.RestorableTimers, token))
+            return false;
         var envelope = command with { Operator = command.Operator with { RootParkFacts = null } };
         if (!await SettleSqliteRootInputsAsync(db, root.Reference, new(root.Actor, 1), [command.InboxKey], [envelope],
                 turn.WithheldInputs || prior.Clearing is not null, token, parked: turn.Prior == InstanceStatus.Faulted,

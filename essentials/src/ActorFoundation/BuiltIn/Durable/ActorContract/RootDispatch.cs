@@ -68,23 +68,34 @@ internal sealed partial class ActorAdapter
     {
         var message = recover.Message;
         var facts = message.Operator!.RootParkFacts!;
+        var rearms = new List<Durable.ParkTimerRecipe>();
         var reason = message.Target.Id != row.Id || row.Creation != 1 ? "target"
             : row is not { Status: Durable.InstanceStatus.Faulted, Retired: false, Suspended: false } ||
                 facts.Mark != message.Operator.RootParkMark ? "selection"
             : facts.Clearing is not null ? "clearing"
             : roots?.KeepsPrivateParkInputs == true && !facts.FitsPage ? "page"
-            : !CanRecoverRootWaits(row, facts) ? "plan" : !facts.FitsPage ? "page" : null;
-        var revision = checked(row.Revision + 1);
-        var next = reason is null ? row with
-            { Status = Durable.InstanceStatus.Running, Fault = null, Jobs = facts.KeepsRegisteredJob ? row.Jobs : null, Revision = revision }
-            : row with { Revision = revision };
-        return new(input.Actor)
+            : !CanRecoverRootWaits(row, facts, rearms) ? "plan" : !facts.FitsPage ? "page" : null;
+        var proposed = Outcome(reason, reason is null && rearms.Count != 0 ? rearms.ToArray() : null);
+        if (proposed.FoundationRootTimerRearms is { } recipes && issueSelf?.CheckTimerRearms is { } check)
+            proposed.PrepareCommand = async token =>
+                await check(row.Id, message.Target.Partition, recipes, token) ? proposed : Outcome("plan", null);
+        return proposed;
+
+        Durable.TurnOutcome Outcome(string? refusal, Durable.ParkTimerRecipe[]? recipes)
         {
-            Expected = row.Revision, Row = next, Revision = revision, Status = next.Status, Consumed = [recover],
-            Journal = reason is null
-                ? Durable.Json.Write(new { Outcome = "recovered", Operation = message.Id, Restored = facts.Arrived, Cleared = facts.Consumed, AlreadyRearmed = 0 })
-                : Durable.Json.Write(new { Outcome = "refused", Operation = message.Id, Reason = reason })
-        };
+            var revision = checked(row.Revision + 1);
+            var next = refusal is null ? row with
+                { Status = Durable.InstanceStatus.Running, Fault = null, Jobs = facts.KeepsRegisteredJob ? row.Jobs : null, Revision = revision }
+                : row with { Revision = revision };
+            return new(input.Actor)
+            {
+                Expected = row.Revision, Row = next, Revision = revision, Status = next.Status, Consumed = [recover],
+                FoundationRootTimerRearms = recipes,
+                Journal = refusal is null
+                    ? Durable.Json.Write(new { Outcome = "recovered", Operation = message.Id, Restored = facts.Arrived, Cleared = facts.Consumed, AlreadyRearmed = 0 })
+                    : Durable.Json.Write(new { Outcome = "refused", Operation = message.Id, Reason = refusal })
+            };
+        }
     }
 
     // S5a: a composed Park set delivers an operator command to a parked root. A Park keeps the row's Suspended flag
@@ -233,13 +244,13 @@ internal sealed partial class ActorAdapter
         return refused;
     }
 
-    private bool CanRecoverRootWaits(Durable.InstanceRow row, Durable.FoundationRootParkFacts facts)
+    private bool CanRecoverRootWaits(Durable.InstanceRow row, Durable.FoundationRootParkFacts facts, List<Durable.ParkTimerRecipe> rearms)
     {
         if (row.Jobs != facts.RecoverableJobRegistry) return false;
         try
         {
             var plan = actor.RestoreWaits(RootHeader(row), row.State);
-            if (plan.Subscriptions.Count != 0 || !CanRecoverTimers(row, facts, plan.Timers, plan.Jobs.Count, out var timerBytes))
+            if (plan.Subscriptions.Count != 0 || !CanRecoverTimers(row, facts, plan.Timers, plan.Jobs.Count, rearms, out var timerBytes))
                 return false;
             var registered = Durable.JobRegistry.Read(row.Jobs);
             return registered.Count == 0 ? plan.Jobs.Count == 0 :
@@ -251,7 +262,7 @@ internal sealed partial class ActorAdapter
     }
 
     private bool CanRecoverTimers(Durable.InstanceRow row, Durable.FoundationRootParkFacts facts,
-        IReadOnlyList<Contract.TimerSpec> timers, int jobs, out long bytes)
+        IReadOnlyList<Contract.TimerSpec> timers, int jobs, List<Durable.ParkTimerRecipe> rearms, out long bytes)
     {
         bytes = 0;
         if (timers.Count == 0) return true;
@@ -263,12 +274,26 @@ internal sealed partial class ActorAdapter
         var names = new HashSet<string>(StringComparer.Ordinal);
         foreach (var timer in timers)
         {
-            if (!names.Add(timer.Id) || !saved.TryGetValue(timer.Id, out var proof)) return false;
+            if (timer.Id is null || timer.Kind is null || !names.Add(timer.Id)) return false;
             var envelope = Durable.FoundationSelfSend.Create(row.Id, row.Creation, timer.Id, timer.Kind, timer.Payload, timer.Due);
-            if (!Durable.FoundationMetadataLimits.FitsComposed(envelope) ||
-                proof.Envelope != Durable.FoundationRootParkTimer.Digest(envelope))
+            if (!Durable.FoundationSelfSend.IsSelfInput(envelope, row.Id, row.Creation) ||
+                !Durable.FoundationMetadataLimits.FitsComposed(envelope))
                 return false;
-            bytes += Durable.InMemoryStore.RestoreWaitAllowance + proof.Bytes;
+            if (saved.TryGetValue(timer.Id, out var proof))
+            {
+                if (proof.Envelope != Durable.FoundationRootParkTimer.Digest(envelope)) return false;
+                bytes += Durable.InMemoryStore.RestoreWaitAllowance + proof.Bytes;
+            }
+            else
+            {
+                if (issueSelf is not { RearmsTimers: true } issuer ||
+                    !Durable.FoundationSelfSend.HasTimerTag(issuer.Handle, Durable.CreationProtocol.Origin(row.Id, row.Creation), timer.Id))
+                    return false;
+                var recipe = new Durable.ParkTimerRecipe(timer.Id, timer.Kind, timer.Payload, timer.Due);
+                bytes += Durable.FoundationRootParkTimer.RearmBytes(recipe);
+                rearms.Add(recipe);
+            }
+            if (bytes > Durable.InMemoryStore.MaxRestoreBytes) return false;
         }
         return true;
     }

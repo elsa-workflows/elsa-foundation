@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 
 namespace Kernel.Durable;
@@ -17,8 +16,7 @@ public sealed partial class InMemoryStore
     private const byte RearmedTimer = 2;
     private const int TimerDispositionEntryBytes = 33;
 
-    private bool TimerHandleMatches(string origin, string id) => CryptographicOperations.FixedTimeEquals(
-        Convert.FromHexString(id.AsSpan(33)), Convert.FromHexString(FoundationSelfSend.TimerTag(MessageHandle, origin, id[1..33])));
+    private bool TimerHandleMatches(string origin, string id) => FoundationSelfSend.HasTimerTag(MessageHandle, origin, id);
 
     internal ParkTimerOpen? PlanFoundationTimers(InstanceRow row, ParkRecoveryMode mode, IReadOnlyList<ParkTimerRecipe> recipes, ParkRetryOpen? retry = null)
     {

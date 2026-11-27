@@ -3,8 +3,10 @@ using System.Security.Cryptography;
 
 namespace Kernel.Durable;
 
-internal sealed record FoundationSelfIssuer(Func<string, string> Handle, bool SupportsTimers, bool DistinguishesTimers = false)
+internal sealed record FoundationSelfIssuer(Func<string, string> Handle, bool SupportsTimers, bool DistinguishesTimers = false,
+    Func<string, int, IReadOnlyList<ParkTimerRecipe>, CancellationToken, ValueTask<bool>>? CheckTimerRearms = null)
 {
+    internal bool RearmsTimers => CheckTimerRearms is not null;
     internal bool Allows(long? due) => due is null || SupportsTimers;
 }
 
@@ -33,6 +35,10 @@ internal static class FoundationSelfSend
     // The tag lets recovery verify a timer belongs to this creation even after the input has been consumed.
     internal static string TimerTag(Func<string, string> handle, string origin, string nonce) =>
         handle(origin + "#timer:" + nonce)[1..33];
+
+    internal static bool HasTimerTag(Func<string, string> handle, string origin, string id) =>
+        IsHandle(id) && CryptographicOperations.FixedTimeEquals(Convert.FromHexString(id.AsSpan(33)),
+            Convert.FromHexString(TimerTag(handle, origin, id[1..33])));
 
     internal static bool IsHandle(string id) => id.Length == 65 && id[0] == '~' && id.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEF") < 0;
 

@@ -79,6 +79,15 @@ internal sealed record FoundationRootParkTimer(string Id, long Sequence, ParkKee
 {
     internal static string Digest(Message timer) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
         DurableKeyJson.CodeUnits(DurableKeyJson.Write(new { timer.Id, timer.Kind, timer.Due, timer.Payload }))));
+
+    // The SQLite wire holds escaped text in base64. PostgreSQL splits it into a compact byte column.
+    internal static long RearmBytes(ParkTimerRecipe recipe)
+    {
+        if (recipe.Payload is not { } payload) return InMemoryStore.RestoreWaitAllowance;
+        long size = System.Text.Encoding.UTF8.GetByteCount(payload);
+        if (payload.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(payload)) size = (size + 2) / 3 * 4;
+        return InMemoryStore.RestoreWaitAllowance + size;
+    }
 }
 
 internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arrived, int Consumed, bool FitsPage, string KeptDigest)

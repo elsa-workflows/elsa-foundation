@@ -52,6 +52,8 @@ if (args is ["root-self-timed-union", var unionProvider and ("postgres" or "sqli
     return await RootSelfTimedUnionChecks.RunAsync(unionProvider == "postgres", unionFence == "in-batch");
 if (args is ["root-self-timed-park", var parkUnionProvider and ("postgres" or "sqlite"), var parkUnionFence and ("checked" or "in-batch")])
     return await RootSelfTimedParkChecks.RunAsync(parkUnionProvider == "postgres", parkUnionFence == "in-batch");
+if (args is ["root-timer-rearm", var rearmProvider and ("postgres" or "sqlite"), var rearmFence and ("checked" or "in-batch")])
+    return await RootSelfTimedParkChecks.RunAsync(rearmProvider == "postgres", rearmFence == "in-batch", rearm: true);
 if (args is ["sqlite-root-timed-jobs", var sqliteJobFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunTimedJobsAsync(sqliteJobFence == "in-batch");
 if (args is ["sqlite-root-held-replies", var sqliteReplyFence and ("checked" or "in-batch")])

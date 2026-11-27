@@ -253,6 +253,8 @@ public sealed class TurnOutcome(string instance)
     internal ParkRecoveryPage? FoundationRecoveryPage;
     internal ParkRetryOpen? FoundationRetry;
     internal ParkTimerOpen? FoundationRecoveryTimers;
+    internal ParkTimerRecipe[]? FoundationRootTimerRearms;
+    internal Func<CancellationToken, ValueTask<TurnOutcome>>? PrepareCommand;
     internal ParkJobOpen? FoundationRecoveryJobs;
     internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions;
     internal InboxKey? FoundationCatchUpStep;

@@ -382,14 +382,19 @@ public sealed partial class EfStore
     private async Task<PreparedRoot?> PrepareRootParkRecoverAsync(WorkerRoot root, TurnCommit turn, CancellationToken token)
     {
         var command = turn.FoundationRootOperator!;
+        var rearms = turn.FoundationRootTimerRearms;
         if (turn.Row is not { FoundationDispatchHeader: { } header } row || turn.Expected is not { } expected || turn.Journal is null ||
             command.Operator is not { RootParkMark: { } mark, RootParkWindow: >= 0, RootParkFacts: { } facts } || turn.Done is not [var key] ||
             key != command.InboxKey || !root.Owns(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
             turn.Consumed.Count + turn.Sent.Count + turn.Subscribed.Count + turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
             turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
-                turn.Journal, Held: turn.Held) { FoundationRootOperator = command })
+                turn.Journal, Held: turn.Held) { FoundationRootOperator = command, FoundationRootTimerRearms = rearms })
             throw RootShape();
         var recovered = !turn.Journal.StartsWith("""{"Outcome":"refused",""", StringComparison.Ordinal);
+        if (rearms is not null && (!recovered || RootSelfIssuer is not { RearmsTimers: true } ||
+            rearms.Length is 0 or > InMemoryStore.MaxRestoreWaits || facts.RestorableTimers is null ||
+            rearms.Sum(FoundationRootParkTimer.RearmBytes) > InMemoryStore.MaxRestoreBytes))
+            throw RootShape();
         if (recovered ? row.Status != InstanceStatus.Running || facts.Mark != mark || !facts.FitsPage || turn.Journal != Json.Write(
                 new { Outcome = "recovered", Operation = command.Id, Restored = facts.Arrived, Cleared = facts.Consumed, AlreadyRearmed = 0 })
             : !new[] { "target", "selection", "clearing", "plan", "page" }.Any(reason => turn.Journal == Json.Write(new { Outcome = "refused", Operation = command.Id, Reason = reason })))
@@ -410,7 +415,7 @@ public sealed partial class EfStore
         return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
             new RootParkRecover(root, expected, command, recovered, current.Status,
                 current.Status == InstanceStatus.Running && (current.Suspended || AuthoredWithholding(root, current)),
-                RootSelfIssuer));
+                RootSelfIssuer, rearms ?? []));
     }
 
     private sealed record LockedRecover(long? At, long? Revision, long Generation, string? Fault, byte[] StateDigest, byte[] HeaderDigest,
@@ -419,7 +424,7 @@ public sealed partial class EfStore
     // One fenced commit: the root becomes Running with its Park mark cleared, the arrivals return to the inbox as the
     // next generation's cohort, and the fault input stays settled. A refusal moves only the revision and settles the command.
     private sealed record RootParkRecover(WorkerRoot Root, long Expected, Message Command, bool Recovered, InstanceStatus Prior,
-        bool WithheldInputs, FoundationSelfIssuer? SelfIssuer)
+        bool WithheldInputs, FoundationSelfIssuer? SelfIssuer, IReadOnlyList<ParkTimerRecipe> Rearms)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
@@ -461,6 +466,8 @@ public sealed partial class EfStore
                 : new RecoverableRootJob();
             if (footprint is not { } job || Recovered && (job.KeepsRegistration != facts.KeepsRegisteredJob ||
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed) + (job.ConsumedId is null ? 0 : 1) != facts.Consumed)) return false;
+            if (!await BindRootTimerRearmsAsync(db, Root, JournalRevision, SelfIssuer, Rearms, facts.RestorableTimers, token))
+                return false;
             var envelope = Command with { Operator = Command.Operator with { RootParkFacts = null } };
             if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [envelope], SelfIssuer,
                 WithheldInputs || db.UsesRootComposedParkRecovery && facts.Clearing is not null, token,

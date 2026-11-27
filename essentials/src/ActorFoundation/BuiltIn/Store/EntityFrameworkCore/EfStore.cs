@@ -168,6 +168,7 @@ public class KernelDb : DbContext
     internal bool UsesRootParkRecovery => Has(RootCapabilities.ParkRecovery);
     internal bool UsesRootDueBacklog => Has(RootCapabilities.DueBacklog);
     internal bool UsesRootPrivateParkInputs => UsesRootSelfProtocol && UsesRootParkArrivals && UsesRootComposedParkRecovery;
+    internal bool UsesRootTimerRearm => UsesRootPrivateParkInputs && RequiredFormat == StoreFormat.RootTimerRearmQualification;
     internal bool UsesRootComposedParkRecovery =>
         UsesRootParkRecovery && (Capabilities & RootProfiles.ParkCompositionBase) == RootProfiles.ParkCompositionBase;
     // A composed set with Park and Termination (S5a, #4229): an operator command reaches a parked root, passes its withheld
@@ -189,6 +190,11 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootSelfTimedParkQualification, RootProfiles.SelfTimedParkQualification);
     internal static KernelDb ForSqliteRootSelfTimedParkQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
         new(options, StoreFormat.RootSelfTimedParkQualification, RootProfiles.SelfTimedParkQualification, sqliteShippedInstall: true,
+            sqliteRuntimeDefinitions: definitions);
+    internal static KernelDb ForPostgresRootTimerRearmQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootTimerRearmQualification, RootProfiles.SelfTimedParkQualification);
+    internal static KernelDb ForSqliteRootTimerRearmQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
+        new(options, StoreFormat.RootTimerRearmQualification, RootProfiles.SelfTimedParkQualification, sqliteShippedInstall: true,
             sqliteRuntimeDefinitions: definitions);
     internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options) =>
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true);

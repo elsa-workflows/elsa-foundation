@@ -12,7 +12,8 @@ public sealed partial class EfStore
     private const string RootSelfWire = "!foundation-self/1";
     private const string RootSelfTimerWire = "!foundation-self-timer/1";
     private sealed record RootSelfHeader(long Revision, int Ordinal, string Kind,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? Due = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? Due = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] bool Rearmed = false);
     private string RootInboxSource => !postgres || _ordinaryRoots is null || RootSelfIssuer is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
     internal FoundationSelfIssuer? RootSelfIssuer { get; private set; }
 
@@ -27,7 +28,8 @@ public sealed partial class EfStore
         {
             await RequireSqliteOperationalFormatAsync(db, token);
             var key = await SqliteRootAdmission.ReadRootIssuerKeyAsync(db, token);
-            RootSelfIssuer = new(seed => FoundationSelfSend.Handle(key, seed), db.UsesRootTimers, db.UsesRootPrivateParkInputs);
+            RootSelfIssuer = new(seed => FoundationSelfSend.Handle(key, seed), db.UsesRootTimers, db.UsesRootPrivateParkInputs,
+                db.UsesRootTimerRearm ? CheckRootTimerRearmsAsync : null);
             return;
         }
         await RequireStoreVersionsAsync(db, token);
@@ -39,7 +41,8 @@ public sealed partial class EfStore
             FROM "FoundationRootIssuer"
             """).SingleAsync(token);
         if (!install.Installed) await new PostgresRootAdmission(create, TimeSpan.Zero).InstallAsync(token);
-        RootSelfIssuer = new(seed => FoundationSelfSend.Handle(install.Key, seed), db.UsesRootTimers, db.UsesRootPrivateParkInputs);
+        RootSelfIssuer = new(seed => FoundationSelfSend.Handle(install.Key, seed), db.UsesRootTimers, db.UsesRootPrivateParkInputs,
+            db.UsesRootTimerRearm ? CheckRootTimerRearmsAsync : null);
     }
 
     // The ordinary writer transports an exceptional payload as base64. Only the compact bytea is stored.
@@ -99,15 +102,21 @@ public sealed partial class EfStore
     {
         if (RootSelfIssuer is null || !RootSelfIssuer.Allows(m.Due) || !FoundationSelfSend.IsSelfInput(m, actor, 1) ||
             m.Id != FoundationSelfSend.Issue(RootSelfIssuer.Handle, CreationProtocol.Origin(actor, 1), revision, ordinal, m.Due)) throw RootShape();
+        return EncodeRootSelfEnvelope(RootSelfIssuer, m, new(revision, ordinal, m.Kind, m.Due));
+    }
+
+    private static Message EncodeRootSelfEnvelope(FoundationSelfIssuer issuer, Message message, RootSelfHeader envelope)
+    {
         // Leave ordinary payloads verbatim, including embedded newlines. A missing separator encodes null.
-        var escaped = m.Payload is not null && (m.Payload.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(m.Payload));
-        var header = (escaped ? "B" : "T") + DurableKeyJson.Write(new RootSelfHeader(revision, ordinal, m.Kind, m.Due));
-        if (!FoundationMetadataLimits.FitsContent(m.Payload) || Encoding.UTF8.GetByteCount(header) > 24 * 1024)
+        var escaped = message.Payload is not null && (message.Payload.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(message.Payload));
+        var header = (escaped ? "B" : "T") + DurableKeyJson.Write(envelope);
+        if (!FoundationMetadataLimits.FitsContent(message.Payload) || Encoding.UTF8.GetByteCount(header) > 24 * 1024)
             throw new StoreException(Failure.Definite, "Encoded self input exceeds the root row budget.");
-        var content = escaped ? Convert.ToBase64String(RootSelfContent.Encode(m.Payload!)) : m.Payload;
+        var content = escaped ? Convert.ToBase64String(RootSelfContent.Encode(message.Payload!)) : message.Payload;
         var body = content is null ? header : string.Concat(header, "\n", content);
         // The existing writer returns the insert's sequence for same-owner handover.
-        return new Message(m.InboxKey.Id, m.Target, SelfWire(RootSelfIssuer, m.Due), body, m.Sender, Due: m.Due).WithInboxScope(RootSelfScope);
+        return new Message(message.InboxKey.Id, message.Target, SelfWire(issuer, message.Due), body, message.Sender, Due: message.Due)
+            .WithInboxScope(RootSelfScope);
     }
 
     private static Message DecodeRootSelf(MessageEntity row, FoundationSelfIssuer? issue)
@@ -122,11 +131,15 @@ public sealed partial class EfStore
         var body = DurableKeyJson.Read<RootSelfHeader>(header[1..]);
         var payload = cut < 0 ? null : row.Payload[(cut + 1)..];
         if (header[0] == 'B') payload = RootSelfContent.Decode(Convert.FromBase64String(payload ?? throw RootShape()));
-        if (!issue.Allows(body.Due) || row.Due != (body.Due ?? 0) || row.Kind != SelfWire(issue, body.Due)) throw RootShape();
-        var id = FoundationSelfSend.Issue(issue.Handle, CreationProtocol.Origin(actor, 1), body.Revision, body.Ordinal, body.Due);
+        if (!issue.Allows(body.Due) || row.Due != (body.Due ?? 0) || row.Kind != SelfWire(issue, body.Due) ||
+            body.Revision < 1 || body.Ordinal < 0 || !FoundationMetadataLimits.IsOrdinaryKind(body.Kind)) throw RootShape();
+        var origin = CreationProtocol.Origin(actor, 1);
+        var id = body.Rearmed ? row.Id[(origin.Length + 1)..] :
+            FoundationSelfSend.Issue(issue.Handle, origin, body.Revision, body.Ordinal, body.Due);
+        if (body.Rearmed && (!issue.RearmsTimers || body.Ordinal != 0 || body.Due is null ||
+            !FoundationSelfSend.HasTimerTag(issue.Handle, origin, id))) throw RootShape();
         var message = FoundationSelfSend.Create(actor, 1, id, body.Kind, payload, body.Due);
-        if (body.Revision < 1 || body.Ordinal < 0 || !FoundationMetadataLimits.IsOrdinaryKind(body.Kind) ||
-            message.InboxKey.Id != row.Id) throw RootShape();
+        if (message.InboxKey.Id != row.Id) throw RootShape();
         return message;
     }
 

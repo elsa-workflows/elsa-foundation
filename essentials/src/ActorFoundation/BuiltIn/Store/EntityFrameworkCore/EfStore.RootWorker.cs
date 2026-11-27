@@ -412,6 +412,8 @@ public sealed partial class EfStore
 
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
+        if (turn.FoundationRootTimerRearms is not null && turn.FoundationRootOperator?.Kind != Kinds.Recover)
+            throw RootShape();
         if (!postgres && (turn.FoundationKept is not null && !turn.OpensPark && _ordinaryRoots?.KeepsParkArrivals != true ||
             turn.FoundationRootOperator is { Kind: not (Kinds.Terminate or Kinds.Delete) } sqliteOperator &&
             (sqliteOperator.Kind != Kinds.Recover || _ordinaryRoots?.RecoversPark != true)))
