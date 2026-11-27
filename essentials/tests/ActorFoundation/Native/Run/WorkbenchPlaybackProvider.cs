@@ -1,6 +1,6 @@
 using System.Data.Common;
-using Microsoft.Data.Sqlite;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
 using Kernel.Foundation.Postgres;
@@ -28,8 +28,19 @@ internal static partial class WorkbenchPostgresPreview
         Require(first is { Availability: ActorPlaybackAvailability.Available, Count: > 0 }, "the retained provider has indexed authored activity");
         if (descendants)
         {
-            await using var plans = Open();
-            await RequirePlaybackScopeIndexesAsync(plans, postgres, token);
+            using var observed = JsonDocument.Parse(first!.Items[0].Observation);
+            var rootActivity = observed.RootElement.GetProperty("Frame").GetString()!;
+            var ranked = new ActorPlaybackQuery(2, 2, null, rootActivity, first.UpperSequence, first.RetainedAfterSequence)
+                { IncludeDescendants = true };
+            var observer = new PlaybackScopePlanObserver(postgres);
+            var intercepted = new DbContextOptionsBuilder<KernelDb>(options).AddInterceptors(observer).Options;
+            var monitored = new EfStore(() => OpenPlayback(intercepted, postgres, definitions, descendants), postgres);
+            var rankedPage = await monitored.ReadRootPlaybackAsync("default", run, ranked, token);
+            Require(rankedPage is { Availability: ActorPlaybackAvailability.Available, SelectedPosition: 2 } &&
+                rankedPage.Items.Any(item => item.Position == 2) && observer.Checked == 3,
+                "the actual bounded scoped queries seek a nonzero frozen rank in a retained published run");
+            if (postgres)
+                await RefusePlaybackProjectorDriftAsync(Open, run, ranked, token);
         }
         if (postgres)
             await RefusePlaybackNamespaceReplacementAsync(options, run, descendants, token);
@@ -137,38 +148,99 @@ internal static partial class WorkbenchPostgresPreview
         static void Escalate(string message) => throw new InvalidOperationException(message);
     }
 
-    private static async Task RequirePlaybackScopeIndexesAsync(KernelDb db, bool postgres, CancellationToken token)
+    private sealed class PlaybackScopePlanObserver(bool postgres) : DbCommandInterceptor
     {
-        await db.Database.OpenConnectionAsync(token);
-        await using var command = db.Database.GetDbConnection().CreateCommand();
-        const string actor = """
-            FROM "FoundationJournalPlaybackScopes" WHERE "Partition" = 1 AND "Actor" = 'qualification'
-            """;
-        (string Sql, string Name, string SqliteKey)[] seeks =
-        [
-            ($"""
-                SELECT "Ordinal" {actor} AND "Scope" = 'f1' AND "Ordinal" BETWEEN 1 AND 3 ORDER BY "Ordinal" LIMIT 4
-                """, "kernel_playback_scope_rank", "Ordinal>? AND Ordinal<?"),
-            ($"""
-                SELECT "Ordinal" {actor} AND "Scope" = 'f1' AND "Sequence" BETWEEN 1 AND 9 ORDER BY "Sequence" DESC LIMIT 1
-                """, "kernel_playback_scope_sequence", "Sequence>? AND Sequence<?"),
-            ($"""
-                SELECT "Sequence" {actor} AND "Known" = 0 AND "Sequence" BETWEEN 1 AND 9 ORDER BY "Sequence" LIMIT 1
-                """, "kernel_playback_scope_unknown", "kernel_playback_scope_unknown")
-        ];
-        foreach (var seek in seeks)
+        internal int Checked { get; private set; }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            command.CommandText = (postgres ? "EXPLAIN (COSTS OFF) " : "EXPLAIN QUERY PLAN ") + seek.Sql;
-            await using var reader = await command.ExecuteReaderAsync(token);
-            var seekIndex = false;
-            while (await reader.ReadAsync(token))
+            (string Name, string SqliteKey) expected = command.CommandText switch
             {
-                var line = reader.GetString(postgres ? 0 : 3);
-                seekIndex |= line.Contains(postgres ? seek.Name : seek.SqliteKey, StringComparison.Ordinal);
-                Require(!line.Contains(postgres ? "Seq Scan" : "TEMP B-TREE", StringComparison.Ordinal),
-                    $"{seek.Name} uses an ordered range without scanning or sorting the scoped relation");
+                var sql when sql.Contains("/* playback scoped rank */", StringComparison.Ordinal) =>
+                    ("kernel_playback_scope_rank", "Ordinal>? AND Ordinal<?"),
+                var sql when sql.Contains("/* playback scoped retained bound */", StringComparison.Ordinal) =>
+                    ("kernel_playback_scope_sequence", "Sequence>? AND Sequence<?"),
+                var sql when sql.Contains("/* playback scoped ancestry */", StringComparison.Ordinal) =>
+                    ("kernel_playback_scope_unknown", "kernel_playback_scope_unknown"),
+                _ => default
+            };
+            if (expected.Name is null) return result;
+
+            await using var explain = command.Connection!.CreateCommand();
+            explain.Transaction = command.Transaction;
+            explain.CommandText = (postgres ? "EXPLAIN (COSTS OFF) " : "EXPLAIN QUERY PLAN ") + command.CommandText;
+            foreach (DbParameter parameter in command.Parameters)
+            {
+                var copy = explain.CreateParameter();
+                copy.ParameterName = parameter.ParameterName;
+                copy.Value = parameter.Value;
+                copy.DbType = parameter.DbType;
+                explain.Parameters.Add(copy);
             }
-            Require(seekIndex, $"{seek.Name} is selected for its bounded lookup");
+
+            var plan = new List<string>();
+            await using var reader = await explain.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+                plan.Add(reader.GetString(postgres ? 0 : 3));
+            var index = postgres ? expected.Name : expected.SqliteKey;
+            Require(plan.Any(line => line.Contains(index, StringComparison.Ordinal)) &&
+                !plan.Any(line => line.Contains(postgres ? "Seq Scan" : "TEMP B-TREE", StringComparison.Ordinal)),
+                $"the actual scoped query uses {expected.Name} for an ordered range ({string.Join(" | ", plan)})");
+            Checked++;
+            return result;
+        }
+    }
+
+    private static async Task RefusePlaybackProjectorDriftAsync(Func<KernelDb> open, string run, ActorPlaybackQuery query, CancellationToken token)
+    {
+        await using var observer = open();
+        await observer.Database.ExecuteSqlRawAsync("""
+            DROP TRIGGER kernel_project_root_playback_scopes ON "FoundationSequencedJournal";
+            CREATE FUNCTION kernel_project_root_playback() RETURNS trigger LANGUAGE plpgsql AS $fn$
+            BEGIN
+                RETURN NULL;
+            END
+            $fn$;
+            CREATE TRIGGER kernel_project_root_playback AFTER INSERT ON "FoundationSequencedJournal"
+                FOR EACH ROW EXECUTE FUNCTION kernel_project_root_playback();
+            """, token);
+        try
+        {
+            var reads = new EfStore(open, postgres: true);
+            try
+            {
+                await reads.ReadRootPlaybackAsync("default", run, query, token);
+                throw new InvalidOperationException("A frozen descendant window accepted a restored legacy projector.");
+            }
+            catch (StoreFormatException)
+            {
+                Require(true, "frozen descendant Playback refuses a restored legacy projector even with its marker and scope rows intact");
+            }
+
+            const string node = "playback-projector-drift";
+            var actor = new PlaybackObservationProbe();
+            var requests = PostgresPreviewHosting.CreateRequests(open, node, actor.Type);
+            await using var owner = new PostgresPreviewHostedService(open, node, actor,
+                message => throw new InvalidOperationException(message), requests: requests);
+            try
+            {
+                await owner.StartAsync(token);
+                throw new InvalidOperationException("The owner allowed a restored legacy playback projector.");
+            }
+            catch (StoreFormatException error) when (error.Message == "The installed playback projection is incomplete.")
+            {
+                Require(true, "the direct PostgreSQL owner rejects projector drift before starting a node");
+            }
+        }
+        finally
+        {
+            await observer.Database.ExecuteSqlRawAsync("""
+                DROP TRIGGER kernel_project_root_playback ON "FoundationSequencedJournal";
+                DROP FUNCTION kernel_project_root_playback();
+                CREATE TRIGGER kernel_project_root_playback_scopes AFTER INSERT ON "FoundationSequencedJournal"
+                    FOR EACH ROW EXECUTE FUNCTION kernel_project_root_playback_scopes();
+                """, token);
         }
     }
 

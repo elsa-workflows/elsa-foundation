@@ -84,9 +84,13 @@ public sealed partial class EfStore
                         WHERE idx.indrelid = scopes.oid AND idx.indisvalid AND idx.indisready AND index_name.relname IN
                         ('{PlaybackScopeKey}', '{PlaybackScopeRank}', '{PlaybackScopeSequence}',
                          '{PlaybackScopeMemberIndex}', '{PlaybackUnknownScopeIndex}')) = 5)
+        AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger legacy
+            WHERE legacy.tgrelid = stamp.tgrelid AND legacy.tgname = '{PlaybackTrigger}'
+                AND legacy.tgenabled IN ('O', 'A'))
         """;
 
     private const string ScopedPlaybackRowsSql = """
+        /* playback scoped rank */
         SELECT p."Activity", member."Ordinal", member."Sequence", p."Revision", p."CommitOrdinal", p."Observation", p."RecordedAt"
         FROM "FoundationJournalPlaybackScopes" member JOIN "FoundationJournalPlayback" p
           ON p."Partition" = member."Partition" AND p."Actor" = member."Actor"
@@ -104,6 +108,7 @@ public sealed partial class EfStore
                 ORDER BY "Sequence" {{direction}} LIMIT 1
                 """, root.Partition, root.Actor, root.RetainedAfter, upper)
             : FormattableStringFactory.Create($$"""
+                /* playback scoped retained bound */
                 SELECT "Ordinal" FROM "FoundationJournalPlaybackScopes"
                 WHERE "Partition" = {0} AND "Actor" = {1} AND "Scope" = {2} AND "Sequence" > {3} AND "Sequence" <= {4}
                 ORDER BY "Sequence" {{direction}} LIMIT 1

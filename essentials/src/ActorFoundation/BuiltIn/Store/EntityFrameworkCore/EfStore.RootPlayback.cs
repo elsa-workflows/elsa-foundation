@@ -13,6 +13,9 @@ public sealed partial class EfStore
     private const string PlaybackName = "FoundationJournalPlayback";
     private const string PlaybackInvalidName = "FoundationJournalPlaybackInvalid";
     private const string PlaybackTrigger = "kernel_project_root_playback";
+    private const string PlaybackScopesTrigger = "kernel_project_root_playback_scopes";
+
+    private static string PlaybackProjector(bool descendants) => descendants ? PlaybackScopesTrigger : PlaybackTrigger;
     private static string PostgresPlaybackSource(bool descendants) => $"""
         pg_catalog.concat_ws('/', {PostgresPlaybackSourceRelations}{(descendants
             ? $", pg_catalog.to_regclass('\"{PlaybackScopesName}\"')::oid" : "")})
@@ -141,7 +144,7 @@ public sealed partial class EfStore
         CREATE TABLE "{PlaybackInvalidName}" ({PlaybackInvalidColumns("bigint", """text COLLATE "C" """)});
         CREATE INDEX kernel_playback_commit ON "{PlaybackName}" ("Partition", "Position");
         {(descendants ? PostgresPlaybackScopes : "")}
-        CREATE FUNCTION {PlaybackTrigger}() RETURNS trigger LANGUAGE plpgsql AS $fn$
+        CREATE FUNCTION {PlaybackProjector(descendants)}() RETURNS trigger LANGUAGE plpgsql AS $fn$
         BEGIN
             {PlaybackInsert(PostgresPlaybackObservations)};
             {PlaybackInvalidInsert(PostgresPlaybackObservations)};
@@ -149,8 +152,8 @@ public sealed partial class EfStore
             RETURN NULL;
         END
         $fn$;
-        CREATE TRIGGER {PlaybackTrigger} AFTER INSERT ON "{SequencedJournalName}"
-            FOR EACH ROW EXECUTE FUNCTION {PlaybackTrigger}();
+        CREATE TRIGGER {PlaybackProjector(descendants)} AFTER INSERT ON "{SequencedJournalName}"
+            FOR EACH ROW EXECUTE FUNCTION {PlaybackProjector(descendants)}();
         """;
 
     private static IEnumerable<SqliteDefinition> SqlitePlaybackDefinitions(bool descendants)
@@ -160,8 +163,8 @@ public sealed partial class EfStore
         yield return Index("kernel_playback_commit", PlaybackName, """("Partition", "Position")""");
         if (descendants)
             foreach (var definition in SqlitePlaybackScopes()) yield return definition;
-        yield return new("trigger", PlaybackTrigger, SequencedJournalName, $"""
-            CREATE TRIGGER {PlaybackTrigger} AFTER INSERT ON "{SequencedJournalName}"
+        yield return new("trigger", PlaybackProjector(descendants), SequencedJournalName, $"""
+            CREATE TRIGGER {PlaybackProjector(descendants)} AFTER INSERT ON "{SequencedJournalName}"
             BEGIN
                 {PlaybackInsert(SqlitePlaybackObservations)};
                 {PlaybackInvalidInsert(SqlitePlaybackObservations)};{(descendants ? $"\n{SqlitePlaybackScopeInsert};" : "")}
@@ -176,7 +179,7 @@ public sealed partial class EfStore
             JOIN pg_catalog.pg_class invalid ON invalid.oid = pg_catalog.to_regclass('"{PlaybackInvalidName}"')
                 AND invalid.relnamespace = format.relnamespace AND invalid.relkind = 'r'
             JOIN pg_catalog.pg_trigger stamp ON stamp.tgrelid = pg_catalog.to_regclass('"{SequencedJournalName}"')
-                AND stamp.tgname = '{PlaybackTrigger}' AND stamp.tgenabled IN ('O', 'A')
+                AND stamp.tgname = '{PlaybackProjector(descendants)}' AND stamp.tgenabled IN ('O', 'A')
                 AND stamp.tgtype = 5 AND NOT stamp.tgisinternal
             JOIN pg_catalog.pg_proc implementation ON implementation.oid = stamp.tgfoid
                 AND implementation.proname = stamp.tgname AND implementation.pronamespace = format.relnamespace
@@ -184,7 +187,7 @@ public sealed partial class EfStore
             {(descendants ? PostgresPlaybackScopeReady : "")})
         """;
 
-    private static async Task RequirePostgresPlaybackAsync(KernelDb db, CancellationToken token)
+    internal static async Task RequirePostgresPlaybackAsync(KernelDb db, CancellationToken token)
     {
         var check = FormattableStringFactory.Create($$"""
             SELECT {{PostgresPlaybackReady("marker.tableoid", db.UsesRootPlaybackDescendants)}} AS "Value"
@@ -301,6 +304,7 @@ public sealed partial class EfStore
                 }
 
                 var unknown = await ReadRowsAsync<PlaybackInvalid>($"""
+                    /* playback scoped ancestry */
                     SELECT "Sequence" FROM "FoundationJournalPlaybackScopes"
                     WHERE "Partition" = {root.Partition} AND "Actor" = {root.Actor} AND "Known" = 0
                         AND "Sequence" > {root.RetainedAfter} AND "Sequence" <= {upper}

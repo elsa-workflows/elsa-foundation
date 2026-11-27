@@ -316,6 +316,7 @@ public static class PostgresPreviewHosting
                     : "Only a store with held replies answers held callers.");
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             if (db.UsesRootSequencedJournal) await EfStore.RequirePostgresSequencedJournalAsync(db, cancellationToken);
+            if (db.UsesRootPlaybackDescendants) await EfStore.RequirePostgresPlaybackAsync(db, cancellationToken);
             partitions = await PostgresRootAdmission.ReadInstalledPartitionCountAsync(db, cancellationToken);
         }
 
