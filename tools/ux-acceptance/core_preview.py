@@ -34,18 +34,21 @@ command, host, clean_environment, free_port, prepare_host, source_state = (
 SUITE = 'core-preview'
 # The kernel journeys run once, on the desktop: they qualify the kernel path, not the appearance matrix.
 PROJECT = 'desktop-light'
+PARK_RECOVERY_JOURNEY = 'Studio recovers the selected parked workflow'
 CAPTURES = {
     'core preview stack is ready': ['reference'],
     'Studio opens the committed kernel activity timeline': ['activity-timeline', 'activity-selection', 'history-paused',
                                                            'history-catch-up', 'history-committed'],
     'kernel HTTP response opens the committed run': ['kernel-http-result', 'kernel-http-run', 'kernel-http-refusal'],
+    PARK_RECOVERY_JOURNEY: ['parked-run', 'park-recovery-stale', 'park-recovered', 'park-run-completed'],
 }
 EVIDENCE = {
     'core preview stack is ready': ['core-preview-smoke.json'],
     'Studio opens the committed kernel activity timeline': ['activity-timeline.json'],
     'kernel HTTP response opens the committed run': ['kernel-http.json'],
+    PARK_RECOVERY_JOURNEY: ['park-recovery.json'],
 }
-JOURNEYS = set(CAPTURES)
+JOURNEYS = set(CAPTURES) - {PARK_RECOVERY_JOURNEY}
 # The tenant the Workbench's kernel edge starts workflows in, and its reads list from.
 # The seeded administrator's tenant: the kernel's runs are visible to Studio only in the tenant the host binds.
 TENANT = 'default'
@@ -64,7 +67,7 @@ KERNEL_PACKAGES = (
 
 def inventory(journeys=None):
     selected = JOURNEYS if journeys is None else set(journeys)
-    if not selected or not selected <= JOURNEYS:
+    if not selected or not selected <= CAPTURES.keys():
         raise ValueError('Unknown or empty Core Preview journey inventory')
     return {(PROJECT, title) for title in selected}
 
@@ -336,6 +339,8 @@ def verdict(report, artifacts, journeys=None):
 
 
 def run(output, journey=None, provider='postgres', history_authority=False, *, installed_foundation_host=None):
+    if journey == PARK_RECOVERY_JOURNEY and not installed_foundation_host:
+        raise ValueError('Park recovery requires an installed Foundation stage with the qualification evaluator.')
     output.mkdir(parents=True, exist_ok=False)
     sha, dirty = source_state(ROOT)
     selected = [journey] if journey else None
@@ -412,7 +417,8 @@ def run(output, journey=None, provider='postgres', history_authority=False, *, i
                         browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', UX_ACCEPTANCE_SUITE=SUITE, ELSA_STUDIO_URL=studio_url,
                                            ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url, UX_HTTP_STUB_URL=stub.url,
                                            UX_CORE_PREVIEW_TENANT=TENANT, UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha,
-                                           UX_CORE_PREVIEW_HISTORY_AUTHORITY=str(int(history_authority)))
+                                           UX_CORE_PREVIEW_HISTORY_AUTHORITY=str(int(history_authority)),
+                                           UX_CORE_PREVIEW_PARK_RECOVERY=str(int(journey == PARK_RECOVERY_JOURNEY)))
                         browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
                         if journey:
                             browser_command.extend(['--grep', r'(?:^|\s)' + re.escape(journey) + '$'])
@@ -458,7 +464,7 @@ if __name__ == '__main__':
     parser.add_argument('--provider', choices=['postgres', 'sqlite'], default='postgres', help='Owned kernel store (default: postgres)')
     backend_shape = parser.add_mutually_exclusive_group()
     backend_shape.add_argument('--history-authority', action='store_true', help='Enable private IAM grant changes on the source-built Workbench')
-    parser.add_argument('--journey', choices=sorted(JOURNEYS), help='Run one journey; the report certifies only that journey')
+    parser.add_argument('--journey', choices=sorted(CAPTURES), help='Run one journey; the report certifies only that journey')
     backend_shape.add_argument('--installed-foundation-host', type=Path, help='Staged Foundation host output with Nuplane feed and shell configuration')
     args = parser.parse_args()
 

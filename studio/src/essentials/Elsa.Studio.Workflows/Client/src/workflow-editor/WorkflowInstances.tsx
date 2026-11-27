@@ -68,6 +68,7 @@ import { CompensationScopeDesigner, type CompensationOperatorControls } from "..
 import { compensationStepsSlotId } from "../compensationScope";
 import { deriveCompensationRuntime, type CompensationJournalSource, type CompensationScopeRuntime } from "../compensationRuntime";
 import { useCompensationJournals, useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "./useOperatorActions";
+import { RunParkRecovery } from "./RunParkRecovery";
 import { canReviewDefinition, IncidentNextStep, useDefinitionReviewAccess, type DefinitionAccessObservation } from "./IncidentNextStep";
 import { writeRunSelection } from "./runSelectionUrl";
 import { readRunHistoryLocation as readTimelineLocation, writeRunHistoryLocation, type RunHistoryLocation as RunTimelineLocation } from "./run-history/historyLocation";
@@ -2272,6 +2273,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
           }]} /> : null}
         </div>
         {operator.status}
+        <RunParkRecovery key={workflowExecutionId} context={context} workflowExecutionId={workflowExecutionId}
+          inspect={observation.canInteract && currentData?.details.instance.status === "Faulted"} refreshRun={refreshRun} />
       </div>
       {operator.dialog}
       {state === "ready" && data && !timelineDocked ? <div className="wf-canvas-tabs wf-run-primary-views">

@@ -1,9 +1,12 @@
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Api.AspNetCore;
+using Elsa.Api.Capabilities.Contracts;
+using Elsa.Api.Capabilities.Models;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Runtime.Api.Authorization;
+using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Foundation.Contracts;
 using Microsoft.AspNetCore.Builder;
@@ -16,7 +19,7 @@ namespace Elsa.Workflows.Runtime.KernelApi;
 internal sealed class KernelParkRecovery(KernelRunReader runs, KernelRuns foundation, KernelOperatorIngress operators,
     NormalizedPrincipalValidator principals, IPermissionAuthorizationService authorization, TimeProvider clock)
 {
-    private const string Route = "runtime/workflows/instances/{workflowExecutionId}/recovery";
+    internal const string Route = "runtime/workflows/instances/{workflowExecutionId}/recovery";
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(5);
     private readonly TimeProvider _clock = clock;
 
@@ -98,4 +101,13 @@ internal sealed class KernelParkRecovery(KernelRunReader runs, KernelRuns founda
         var permission = new PermissionEvaluationContext(caller.Principal, WorkflowRuntimePermissions.WorkflowRuntimeManage, caller.Tenant, run.State);
         return (await authorization.AuthorizeAsync(permission, token)).Succeeded ? view : null;
     }
+}
+
+internal sealed class KernelParkRecoveryCapabilitySource : IApiCapabilitySource
+{
+    public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>([
+            new(RuntimeApiCapabilities.CapabilityId, 1,
+                [new("workflow-instance-recovery", KernelParkRecovery.Route, templated: true)],
+                $"{WorkflowsRuntimeKernelApiFeature.FeatureName}.Recovery")]);
 }
