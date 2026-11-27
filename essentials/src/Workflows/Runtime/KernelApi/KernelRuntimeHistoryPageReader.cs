@@ -82,6 +82,7 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
             snapshot.ScannedThroughSequence < position.AfterSequence || snapshot.ScannedThroughSequence > snapshot.UpperSequence ||
             snapshot.Items.Count > query.Limit || snapshot.RetainedFromSequence < 0 ||
             snapshot.RetainedFromSequence > snapshot.UpperSequence ||
+            snapshot.RetainedFromSequence == 0 && snapshot.UpperSequence > 0 ||
             snapshot.ScannedThroughSequence == position.AfterSequence && snapshot.ScannedThroughSequence < snapshot.UpperSequence)
             return Invalid(readAt);
 
@@ -94,9 +95,9 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
         {
             foreach (var entry in snapshot.Items)
             {
+                var expectedOrdinal = entry.Revision == revision && ordinal is { } priorOrdinal ? (long)priorOrdinal + 1 : 0;
                 if (entry.Sequence != previous + 1 || entry.Sequence > snapshot.ScannedThroughSequence ||
-                    entry.Revision <= 0 || entry.Revision < revision || entry.CommitOrdinal < 0 ||
-                    entry.Revision == revision && entry.CommitOrdinal <= ordinal)
+                    entry.Revision <= 0 || entry.Revision < revision || entry.CommitOrdinal != expectedOrdinal)
                     return Invalid(readAt);
                 previous = entry.Sequence;
                 revision = entry.Revision;

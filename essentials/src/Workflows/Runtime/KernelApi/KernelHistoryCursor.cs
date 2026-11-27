@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -37,6 +38,6 @@ internal sealed class KernelHistoryCursor(IDataProtectionProvider protection)
         Prefix + _protector.Protect(JsonSerializer.Serialize(new Ticket(Binding(query, tenant, artifact), position)));
 
     private static string Binding(RuntimeHistoryQuery query, string tenant, string artifact) => RuntimeHistoryIdentity.CreateBinding(
-        [tenant, artifact, query.WorkflowExecutionId, query.AccessBinding, query.ActivityExecutionId, query.IncludeDescendants ? "1" : "0",
-            query.BookmarkId, query.Category?.ToString(), query.Name, query.Search]);
+        [tenant, artifact, query.WorkflowExecutionId, query.Limit.ToString(CultureInfo.InvariantCulture), query.AccessBinding,
+            query.ActivityExecutionId, query.IncludeDescendants ? "1" : "0", query.BookmarkId, query.Category?.ToString(), query.Name, query.Search]);
 }

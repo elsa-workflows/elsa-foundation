@@ -213,15 +213,20 @@ public sealed class KernelRunListTests
         var completed = Assert.Single(live.Items);
         Assert.Equal(("ActivityCompleted", 7L), (completed.Name, completed.Sequence));
         Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(typed.Now), completed.OccurredAt);
+        var liveAfterFrozen = await endpoint.HandleAsync(request with { Cursor = frozen.CatchUpToken }, CancellationToken.None);
+        Assert.Equal(completed.HistoryEventId, Assert.Single(liveAfterFrozen.Items).HistoryEventId);
         await Assert.ThrowsAsync<ArgumentException>(() => endpoint.HandleAsync(
             request with { Cursor = first.CatchUpToken, ActivityExecutionId = "different" }, CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentException>(() => endpoint.HandleAsync(
             request with { Cursor = first.CatchUpToken, WorkflowExecutionId = "run-2" }, CancellationToken.None));
+        foreach (var token in new[] { first.NextContinuationToken, first.CatchUpToken })
+            await Assert.ThrowsAsync<ArgumentException>(() => endpoint.HandleAsync(
+                request with { Cursor = token, Limit = 5 }, CancellationToken.None));
 
         using var foreign = Shell(reads, PersistenceAccessContext.Scoped(new PersistenceScope("foreign")));
         using var foreignScope = foreign.CreateScope();
         Assert.Null(await foreignScope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>().ReadAsync(request));
-        Assert.Equal(3, reads.SequenceReads);
+        Assert.Equal(4, reads.SequenceReads);
 
         var browse = scope.ServiceProvider.GetRequiredService<IActivityExecutionBrowseSource>();
         var run = (await browse.FindWorkflowAsync("run-1", CancellationToken.None))!;
@@ -256,12 +261,15 @@ public sealed class KernelRunListTests
         Assert.Equal("f1", Assert.Single(timeline.Page.Items).Execution.ActivityExecutionId);
     }
 
-    [Fact]
-    public async Task Standard_history_rejects_a_reused_commit_ordinal_on_a_frozen_page()
+    [Theory]
+    [InlineData(1, 0)]
+    [InlineData(1, 2)]
+    [InlineData(2, 1)]
+    public async Task Standard_history_requires_a_consecutive_commit_ordinal_on_a_frozen_page(long revision, int ordinal)
     {
         var reads = new Reads(Views)
         {
-            Sequence = [new(1, 1, 0, HistoryStart, 1_200), new(2, 1, 0, HistoryStart, 1_200)]
+            Sequence = [new(1, 1, 0, HistoryStart, 1_200), new(2, revision, ordinal, HistoryStart, 1_200)]
         };
         using var shell = Shell(reads, HostTenant);
         using var scope = shell.CreateScope();
@@ -272,6 +280,22 @@ public sealed class KernelRunListTests
         Assert.NotNull(first.NextContinuationToken);
         AssertInvalidHistoryPage(Assert.IsType<RuntimeHistoryPageView>(
             await history.ReadAsync(request with { Cursor = first.NextContinuationToken })));
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    public async Task Standard_history_requires_a_valid_first_retained_sequence(long retainedFrom, int ordinal)
+    {
+        var reads = new Reads(Views)
+        {
+            Sequence = [new(1, 1, ordinal, HistoryStart, 1_200)],
+            SequencePage = page => page with { RetainedFromSequence = retainedFrom }
+        };
+        using var shell = Shell(reads, HostTenant);
+        using var scope = shell.CreateScope();
+        var history = scope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>();
+        AssertInvalidHistoryPage(Assert.IsType<RuntimeHistoryPageView>(await history.ReadAsync(new("run-1"))));
     }
 
     [Theory]
@@ -566,9 +590,12 @@ public sealed class KernelRunListTests
     }
 
     [Fact]
-    public async Task Details_fall_back_only_to_authorized_legacy_authoring_test_runs()
+    public async Task Run_inspection_falls_back_only_to_authorized_legacy_authoring_test_runs()
     {
-        var reads = new Reads(Views[0], Views[0] with { Header = Views[0].Header with { Ref = new ActorRef("schedule"), Type = "schedule" } });
+        var reads = new Reads(Views[0], Views[0] with { Header = Views[0].Header with { Ref = new ActorRef("schedule"), Type = "schedule" } })
+        {
+            Sequence = []
+        };
         var management = new ManageAccess();
         using var shell = Shell(reads, HostTenant, operatorAccess: management);
         var legacy = shell.GetRequiredService<IWorkflowExecutionStateStore>();
@@ -589,6 +616,9 @@ public sealed class KernelRunListTests
         Assert.False(preserved.ActivitiesDeferred);
         var browse = scope.ServiceProvider.GetRequiredService<IActivityExecutionBrowseSource>();
         var point = scope.ServiceProvider.GetRequiredService<IActivityExecutionInspectionService>();
+        var history = scope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>();
+        var historyPage = Assert.IsType<RuntimeHistoryPageView>(await history.ReadAsync(new("test")));
+        Assert.Equal("This host does not provide run history.", historyPage.Coverage.Limitation);
         var test = (await browse.FindWorkflowAsync("test", CancellationToken.None))!;
         var activity = Assert.Single((await test.BrowseAsync(new("test", 10), null, CancellationToken.None))!.Page.Items);
         Assert.Equal("legacy-activity", activity.Execution.ActivityExecutionId);
@@ -599,8 +629,10 @@ public sealed class KernelRunListTests
             Assert.Null(await service.GetAsync(new(id), CancellationToken.None));
             Assert.Null(await browse.FindWorkflowAsync(id, CancellationToken.None));
             Assert.Null(await point.GetAsync(new(id, "legacy-activity"), CancellationToken.None));
+            Assert.Null(await history.ReadAsync(new(id)));
         }
         Assert.Empty(reads.Tails);
+        Assert.Equal(0, reads.SequenceReads);
         Assert.Equal(["test"], management.Checks);
 
         var authorization = new InspectionAccess(structure: false, values: true);

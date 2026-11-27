@@ -20,27 +20,17 @@ public static partial class SqliteEmbeddedHosting
     {
         public bool SupportsSequencedJournal => qualificationFormat == StoreFormat.RootSequencedJournalQualification;
 
-        public async ValueTask<Contract.ActorSequencedJournalPage?> ReadSequencedJournalAsync(Contract.BoundScope scope,
-            Contract.ActorRef actor, long afterSequence, long? upperSequence, int limit, CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                return await ReadAsync(reads => reads.ReadSequencedJournalAsync(scope, actor, afterSequence, upperSequence,
-                    limit, cancellationToken), cancellationToken);
-            }
-            catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                throw new TimeoutException("The SQLite sequenced journal could not acquire its read lock.", error);
-            }
-        }
+        public ValueTask<Contract.ActorSequencedJournalPage?> ReadSequencedJournalAsync(Contract.BoundScope scope,
+            Contract.ActorRef actor, long afterSequence, long? upperSequence, int limit, CancellationToken cancellationToken = default) =>
+            ReadAsync(reads => reads.ReadSequencedJournalAsync(scope, actor, afterSequence, upperSequence, limit, cancellationToken),
+                cancellationToken, normalizeLockTimeout: true);
 
         public ValueTask<Contract.ActorTerminalOutput?> ReadTerminalOutputAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             long endedAt, bool includeValues, CancellationToken cancellationToken = default) =>
             ReadAsync(reads => reads.ReadTerminalOutputAsync(scope, actor, endedAt, includeValues, cancellationToken), cancellationToken);
 
         public ValueTask<Contract.ActorView?> GetAsync(Contract.BoundScope scope, Contract.ActorRef actor, CancellationToken cancellationToken = default) =>
-            ReadAsync(reads => reads.GetAsync(scope, actor, cancellationToken), cancellationToken);
+            ReadAsync(reads => reads.GetAsync(scope, actor, cancellationToken), cancellationToken, normalizeLockTimeout: SupportsSequencedJournal);
 
         public ValueTask<Contract.Page<Contract.DeliveryView>> InboxAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
@@ -54,16 +44,25 @@ public static partial class SqliteEmbeddedHosting
             Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
             ReadAsync(reads => reads.TailAsync(scope, actor, from, cancellationToken), cancellationToken);
 
-        private async ValueTask<T> ReadAsync<T>(Func<GeneratedRootReads, ValueTask<T>> read, CancellationToken token)
+        private async ValueTask<T> ReadAsync<T>(Func<GeneratedRootReads, ValueTask<T>> read, CancellationToken token,
+            bool normalizeLockTimeout = false)
         {
             token.ThrowIfCancellationRequested();
-            using var file = AcquireFile(path);
-            KernelDb Open() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
-            await using var db = Open();
-            await EfStore.RequireSqliteRootAdmissionAsync(db, file.AdmissionDefinitions, token);
-            var cursor = await SqliteRootAdmission.ReadSelectionCursorAsync(db, token);
-            var store = new EfStore(Open, postgres: false, fenceInBatch: true);
-            return await read(new GeneratedRootReads(store, cursor, pageSize, provider: "sqlite"));
+            try
+            {
+                using var file = AcquireFile(path);
+                KernelDb Open() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
+                await using var db = Open();
+                await EfStore.RequireSqliteRootAdmissionAsync(db, file.AdmissionDefinitions, token);
+                var cursor = await SqliteRootAdmission.ReadSelectionCursorAsync(db, token);
+                var store = new EfStore(Open, postgres: false, fenceInBatch: true);
+                return await read(new GeneratedRootReads(store, cursor, pageSize, provider: "sqlite"));
+            }
+            catch (SqliteException error) when (normalizeLockTimeout && error.SqliteErrorCode is 5 or 6)
+            {
+                token.ThrowIfCancellationRequested();
+                throw new TimeoutException("The SQLite reader could not acquire its read lock.", error);
+            }
         }
     }
 }
