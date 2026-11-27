@@ -175,6 +175,7 @@ public class KernelDb : DbContext
     internal bool UsesRootLiveEventWaits => Has(RootCapabilities.LiveEventWaits);
     internal bool UsesRootAuthoredEvents => Has(RootCapabilities.AuthoredEvents);
     internal bool UsesRootEventStarts => Has(RootCapabilities.EventStarts);
+    internal bool UsesRootEventStartReceipts => Has(RootCapabilities.EventStartReceipts);
     internal bool UsesRootRetentionPolicy => Has(RootCapabilities.RetentionPolicy);
     internal bool UsesRootPlayback => Has(RootCapabilities.Playback);
     internal bool UsesRootPlaybackDescendants => Has(RootCapabilities.PlaybackDescendants);
@@ -208,6 +209,8 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootPlaybackDescendantsQualification, RootProfiles.PlaybackDescendantsQualification);
     internal static KernelDb ForPostgresRootEventStartsQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootEventStartsQualification, RootProfiles.EventStartsQualification);
+    internal static KernelDb ForPostgresRootEventStartReceiptsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootEventStartReceiptsQualification, RootProfiles.EventStartReceiptsQualification);
     internal static KernelDb ForPostgresRootAuthoredEventsQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootAuthoredEventsQualification, RootProfiles.AuthoredEventsQualification);
     internal static KernelDb ForPostgresRootLiveEventQualification(DbContextOptions<KernelDb> options) =>
@@ -260,6 +263,9 @@ public class KernelDb : DbContext
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootEventStartsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.EventStartsQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootEventStartReceiptsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.EventStartReceiptsQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootAuthoredEventsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.AuthoredEventsQualification,

@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Kernel.Foundation.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -11,6 +12,10 @@ namespace Kernel.EntityFramework;
 public sealed record EventStartRegistration(string Node, string Key, string ActivationId, string SourceReferenceId, string ArtifactId,
     string ExecutableSelection, Contract.StartSpec Template)
 {
+    /// <summary>The authored durable mode. An absent value uses Balanced.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Mode { get; init; }
+
     /// <summary>Checks the registration's storage bounds before its upstream publication becomes authoritative.</summary>
     public static void ValidatePublication(string slot, IReadOnlyList<EventStartRegistration> registrations) =>
         RootEventStarts.ValidatePublication(slot, registrations);
@@ -29,6 +34,9 @@ public interface IEventStartAdmissions
     Task<Contract.Admission> AdmitAsync(string target, Func<EventStartTarget, Contract.StartSpec> start, ProtectRootStartAsync protect,
         CancellationToken cancellationToken);
     Task<bool> ConfirmDrainedAsync(string slot, long revision, CancellationToken cancellationToken);
+
+    /// <summary>Prunes one bounded page of settled receipts past the supported replay window.</summary>
+    Task<int> PruneSettledAsync(CancellationToken cancellationToken) => Task.FromResult(0);
 }
 
 /// <summary>Provider-owned registrations and accepted event starts. Removing a registration leaves its selected targets intact.</summary>
@@ -43,7 +51,10 @@ internal static partial class RootEventStarts
     internal const string MatchColumns = """("Tenant", "Key", "Slot", "Node")""";
     internal const string PendingColumns = """("Tenant", "Id") WHERE "Reference" IS NULL""";
     internal const string SlotPendingColumns = """("Tenant", "Slot", "Revision") WHERE "Reference" IS NULL""";
+    internal const string ReceiptIndex = "IX_FoundationEventStartTargets_Receipt";
+    internal const string ReceiptColumns = """("Tenant", "ReceiptUntil", "Id") WHERE "Reference" IS NOT NULL""";
     internal const string Source = "/*event-start-source*/";
+    private const long ReplayWindowMilliseconds = 60 * 60 * 1000;
     private const int PageSize = 64;
 
     internal static string SlotColumns(bool sqlite)
@@ -67,15 +78,16 @@ internal static partial class RootEventStarts
             """;
     }
 
-    internal static string TargetColumns(bool sqlite)
+    internal static string TargetColumns(bool sqlite, bool retainsReceipts)
     {
         var (text, number) = Types(sqlite);
+        var receiptColumn = retainsReceipts ? $""" "ReceiptUntil" {number} NOT NULL CHECK ("ReceiptUntil" >= 0), """ : "";
         return $"""
             "Tenant" {text} NOT NULL, "Id" {text} NOT NULL, "Slot" {text} NOT NULL, "Node" {text} NOT NULL,
             "Revision" {number} NOT NULL CHECK ("Revision" > 0),
             "Key" {text} NOT NULL, "EventId" {text} NOT NULL, "Authority" {text}, "Payload" {text},
             "Reference" {text} UNIQUE REFERENCES "FoundationRootBirths" ("Reference"),
-            "Intent" {text}, "BirthFingerprint" {text}, PRIMARY KEY ("Tenant", "Id"),
+            "Intent" {text}, "BirthFingerprint" {text}, {receiptColumn}PRIMARY KEY ("Tenant", "Id"),
             CHECK (("Reference" IS NULL AND "Authority" IS NOT NULL AND "Intent" IS NULL AND "BirthFingerprint" IS NULL)
                 OR ("Reference" IS NOT NULL AND "Authority" IS NULL AND "Payload" IS NULL AND "Intent" IS NOT NULL AND "BirthFingerprint" IS NOT NULL))
             """;
@@ -99,6 +111,8 @@ internal static partial class RootEventStarts
         RequireTransaction(db, bind);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(revision);
         var rows = EncodePublication(slot, registrations, tenant);
+        if (!db.UsesRootEventStartReceipts && registrations.Any(registration => registration.Mode is not null))
+            throw new ArgumentException("The selected Event profile does not store authored persistence modes.");
         var envelope = JsonSerializer.Serialize(rows);
         var fingerprint = FoundationRootCreator.OperationDigest(envelope);
 
@@ -187,7 +201,7 @@ internal static partial class RootEventStarts
         return rows;
     }
 
-    internal static async Task<(int Count, long Bytes)> CaptureAsync(KernelDb db, EventRow publication, int available, long availableBytes,
+    internal static async Task<(int Count, long Bytes)> CaptureAsync(KernelDb db, EventRow publication, long publicationUntil, int available, long availableBytes,
         Func<FormattableString, FormattableString>? bind, CancellationToken token)
     {
         RequireTransaction(db, bind);
@@ -228,16 +242,20 @@ internal static partial class RootEventStarts
                     json_extract(value, '$.Revision') AS "Revision", json_extract(value, '$.Id') AS "Id" FROM json_each({0})) selected
                 """;
         var payload = bind is not null ? "{4}::text" : "{4}";
+        var receiptColumn = db.UsesRootEventStartReceipts ? """, "ReceiptUntil" """ : "";
+        var receiptValue = db.UsesRootEventStartReceipts ? ", {5}" : "";
         var insert = FormattableStringFactory.Create($$"""
             WITH source AS MATERIALIZED (/*event-start-source*/)
-            INSERT INTO "FoundationEventStartTargets" ("Tenant", "Id", "Slot", "Node", "Revision", "Key", "EventId", "Authority", "Payload")
-            SELECT r."Tenant", selected."Id", r."Slot", r."Node", selected."Revision", r."Key", {3}, r."Authority", {{payload}}
+            INSERT INTO "FoundationEventStartTargets" ("Tenant", "Id", "Slot", "Node", "Revision", "Key", "EventId", "Authority", "Payload"{{receiptColumn}})
+            SELECT r."Tenant", selected."Id", r."Slot", r."Node", selected."Revision", r."Key", {3}, r."Authority", {{payload}}{{receiptValue}}
             FROM {{table}} JOIN "FoundationEventStartRegistrations" r
                 ON r."Tenant" = {1} AND r."Slot" = selected."Slot" AND r."Node" = selected."Node" AND r."Key" = {2}
             JOIN "FoundationEventStartSlots" slots ON slots."Tenant" = r."Tenant" AND slots."Slot" = r."Slot"
                 AND slots."Revision" = selected."Revision"
             WHERE (SELECT "SourceReady" FROM source)
-            """, identities, tenant, publication.Key, publication.Id, packedPayload!);
+            """, db.UsesRootEventStartReceipts
+                ? [identities, tenant, publication.Key, publication.Id, packedPayload!, publicationUntil]
+                : [identities, tenant, publication.Key, publication.Id, packedPayload!]);
         if (await db.Database.ExecuteSqlInterpolatedAsync(Bind(insert, bind), token) != matches.Count) throw SourceChanged();
         return (matches.Count, bytes);
     }
@@ -339,17 +357,53 @@ internal static partial class RootEventStarts
         Func<FormattableString, FormattableString>? bind, CancellationToken token)
     {
         var intent = Intent(spec);
-        if (await db.Database.ExecuteSqlInterpolatedAsync(Bind($"""
+        FormattableString query = $"""
             WITH source AS MATERIALIZED (/*event-start-source*/)
             UPDATE "FoundationEventStartTargets"
             SET "Reference" = {stage.Reference}, "Intent" = {intent}, "BirthFingerprint" = {stage.Fingerprint},
-                "Authority" = NULL, "Payload" = NULL
+                "Authority" = NULL, "Payload" = NULL /*event-start-receipt*/
             WHERE "Tenant" = {tenant} AND "Id" = {id} AND "Reference" IS NULL AND (SELECT "SourceReady" FROM source)
                 AND EXISTS (SELECT 1 FROM "FoundationRootBirths" b WHERE b."Tenant" = {tenant} AND b."Reference" = {stage.Reference}
                     AND b."Actor" = {stage.Actor} AND b."Partition" = {stage.Partition} AND b."Creation" = 1
                     AND b."Creator" = {"root:" + stage.Actor} AND b."Fingerprint" = {stage.Fingerprint})
-            """, bind), token) != 1) throw SourceChanged();
+            """;
+        var deadline = "";
+        if (db.UsesRootEventStartReceipts)
+        {
+            var maximum = bind is null ? "max" : "greatest";
+            deadline = FormattableString.Invariant($""", "ReceiptUntil" = {maximum}("ReceiptUntil", {Clock(bind)} + {ReplayWindowMilliseconds})""");
+        }
+        query = FormattableStringFactory.Create(query.Format.Replace("/*event-start-receipt*/", deadline, StringComparison.Ordinal), query.GetArguments());
+        if (await db.Database.ExecuteSqlInterpolatedAsync(Bind(query, bind), token) != 1) throw SourceChanged();
     }
+
+    internal static Task<int> PruneSettledAsync(KernelDb db, string tenant,
+        Func<FormattableString, FormattableString>? bind, CancellationToken token)
+    {
+        RequireTransaction(db, bind);
+        if (!db.UsesRootEventStartReceipts) return Task.FromResult(0);
+
+        // A target's ID is bound to its publisher's origin, checkpoint revision and effect ordinal.
+        // Capture ran in that fenced checkpoint, so even after its publication receipt expires a later turn
+        // cannot recreate this entitlement. Missing targets are refused, including under the final birth lock.
+        FormattableString query = $"""
+            WITH source AS MATERIALIZED (/*event-start-source*/),
+                cutoff AS MATERIALIZED (SELECT /*event-start-clock*/ AS "Now"),
+                expired AS MATERIALIZED (
+                    SELECT "Id" FROM "FoundationEventStartTargets"
+                    WHERE "Tenant" = {tenant} AND "Reference" IS NOT NULL AND "ReceiptUntil" < (SELECT "Now" FROM cutoff)
+                        AND (SELECT "SourceReady" FROM source)
+                    ORDER BY "ReceiptUntil", "Id" LIMIT {PageSize}
+                )
+            DELETE FROM "FoundationEventStartTargets"
+            WHERE "Tenant" = {tenant} AND "Reference" IS NOT NULL AND "Id" IN (SELECT "Id" FROM expired)
+            """;
+        query = FormattableStringFactory.Create(query.Format.Replace("/*event-start-clock*/", Clock(bind), StringComparison.Ordinal), query.GetArguments());
+        return db.Database.ExecuteSqlInterpolatedAsync(Bind(query, bind), token);
+    }
+
+    private static string Clock(Func<FormattableString, FormattableString>? bind) =>
+        bind is null ? "/*sqlite-root-clock*/" : "floor(extract(epoch from clock_timestamp()) * 1000)::bigint";
 
     internal static async Task<Contract.Admission> RelayAsync(string target, Func<EventStartTarget, Contract.StartSpec> start,
         Func<CancellationToken, Task<(EventStartTarget? Pending, string? Settled)>> read,
@@ -414,7 +468,7 @@ internal static partial class RootEventStarts
         if (!registration.Key.StartsWith("event:", StringComparison.Ordinal) || registration.Key.Length == "event:".Length ||
             !FoundationMetadataLimits.FitsLiveWaitName(registration.Key) ||
             !FoundationMetadataLimits.FitsContent(registration.ExecutableSelection, FoundationMetadataLimits.TypeDataBytes) ||
-            string.IsNullOrEmpty(registration.ExecutableSelection) ||
+            string.IsNullOrEmpty(registration.ExecutableSelection) || registration.Mode is not (null or "Durable") ||
             registration.Template is not { Input: null, Ephemeral: false } template || !Enum.IsDefined(template.History) ||
             !FoundationMetadataLimits.FitsName(template.Type) ||
             !FoundationMetadataLimits.FitsContent(template.TypeData, FoundationMetadataLimits.TypeDataBytes))
@@ -433,6 +487,6 @@ internal static partial class RootEventStarts
     }
 
     private static FormattableString Bind(FormattableString query, Func<FormattableString, FormattableString>? bind) =>
-        bind?.Invoke(query) ?? FormattableStringFactory.Create(
-            query.Format.Replace(Source, """SELECT true AS "SourceReady" """, StringComparison.Ordinal), query.GetArguments());
+        bind?.Invoke(query) ?? EfStore.UseSqliteRootClock(FormattableStringFactory.Create(
+            query.Format.Replace(Source, """SELECT true AS "SourceReady" """, StringComparison.Ordinal), query.GetArguments()));
 }

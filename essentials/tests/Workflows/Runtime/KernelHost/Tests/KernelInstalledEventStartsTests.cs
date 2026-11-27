@@ -76,8 +76,9 @@ public sealed class KernelInstalledEventStartsTests
                 new NpgsqlConnectionStringBuilder(runtime).Database);
             var provider = postgres ? "PostgreSql" : "Sqlite";
             var path = directory is null ? null : Path.Combine(directory.FullName, "foundation.db");
-            var first = Subscriber(flowchart: true);
+            var first = Subscriber(flowchart: true, mode: PersistenceMode.Durable);
             var replacement = Subscriber(flowchart: false);
+            var ephemeral = Subscriber(flowchart: true, mode: PersistenceMode.Ephemeral, definition: "ephemeral-event-subscriber");
             var producer = Producer("producer-old", "old");
             var nextProducer = Producer("producer-new", null);
             var wrongName = Producer("producer-wrong-case", "ignored", eventName: "changed");
@@ -99,12 +100,17 @@ public sealed class KernelInstalledEventStartsTests
                     await firstApp.StartAsync(token);
                     original = await PublishAsync(services, first, 0, null);
                     Assert.True(original.Succeeded, original.Failure?.Message);
+                    var unsupported = await PublishAsync(services, ephemeral, 0, null);
+                    Assert.False(unsupported.Succeeded);
+                    Assert.Null(unsupported.Slot.ActiveActivationId);
+                    Assert.Contains("Balanced or Durable persistence", unsupported.Failure!.Message, StringComparison.Ordinal);
                     foreach (var emitter in new[] { producer, nextProducer, wrongName })
                         Assert.True((await PublishAsync(services, emitter, 0, null)).Succeeded);
                     await ExecuteAsync(firstApp, producer);
                     var port = firstApp.Services.GetRequiredService<KernelShellStorage>().BindEventStarts(Tenant);
                     await UntilAsync(async () => (await port.ListAsync(null, token)) is
-                        [{ Revision: var revision, Registration.ArtifactId: "subscriber-flowchart" }] && revision == original.Slot.Revision);
+                        [{ Revision: var revision, Registration: { ArtifactId: "subscriber-flowchart", Mode: "Durable" } }] &&
+                        revision == original.Slot.Revision);
                     await using var read = await services.CreateAsyncScopeAsync(Persistence);
                     Assert.Null(await read.ServiceProvider.GetRequiredService<IRuntimeKernelEventPublicationStore>()
                         .FindAsync(Scope with { TenantId = "different" }, original.Slot.SlotId, original.Slot.Revision, token));
@@ -134,6 +140,7 @@ public sealed class KernelInstalledEventStartsTests
             }
 
             gate.Hold = false;
+            gate.DefaultMode = PersistenceMode.Durable;
             await using (var restarted = OpenShell())
             {
                 var restartedShell = restarted.Services.GetRequiredService<KernelShellRuntime>();
@@ -165,6 +172,11 @@ public sealed class KernelInstalledEventStartsTests
                             if (actor.Header.Status != Contract.ActorStatus.Finished) return false;
                             var output = await runs.ReadTerminalOutputAsync(actor.Header.Ref, actor.Header.EndedAt!.Value, true, token);
                             if (output?.Values is not { } json) return false;
+                            var journal = await runs.ReadSequencedJournalAsync(actor.Header.Ref, 0, null, 100, token);
+                            var eventRevision = Assert.Single(journal!.Items.Where(item => Completed(item, "start"))).Revision;
+                            var outputRevision = Assert.Single(journal.Items.Where(item => Completed(item, "seen"))).Revision;
+                            if (run.Workflow == first.Identity.ArtifactId) Assert.True(outputRevision > eventRevision);
+                            else Assert.Equal(eventRevision, outputRevision);
                             Assert.True(seen.TryAdd(run.Workflow, JsonNode.Parse(json)!["seen"]?.GetValue<string>()), "duplicate subscriber birth");
                         }
                         if (seen.Count < 2) return false;
@@ -232,6 +244,8 @@ public sealed class KernelInstalledEventStartsTests
                 services.AddSingleton<IWorkflowExecutableStartPolicy, FixturePolicy>();
                 services.AddSingleton<IWellKnownTypeRegistry, FixtureTypes>();
                 services.AddWorkflowRuntime();
+                services.RemoveAll<PersistenceModeOptions>();
+                services.AddSingleton(new PersistenceModeOptions { Mode = gate.DefaultMode });
                 services.AddRuntimeEntityFrameworkCore(new()
                 {
                     Provider = provider, ConnectionString = runtime,
@@ -242,11 +256,11 @@ public sealed class KernelInstalledEventStartsTests
                 services.AddScoped<UnpublishPublicationSlotRequestHandler>();
                 var api = new WorkflowsRuntimeApiFeature();
                 api.ConfigureServices(services);
-                var storage = KernelShellStorage.CreateEventStartsQualification(provider, path, foundation);
+                var storage = KernelShellStorage.CreateEventStartReceiptsQualification(provider, path, foundation);
                 new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(services, storage, protectChildExecutables: true);
                 services.Replace(ServiceDescriptor.Singleton(sp => new KernelEventPublicationRelay(sp.GetRequiredService<IServiceScopeFactory>(), Scope,
                     Tenant, sp.GetRequiredService<KernelServing>().Capabilities, () => new PausableAdmissions(storage.BindEventStarts(Tenant), gate),
-                    TimeProvider.System, sp.GetRequiredService<ILogger<KernelEventPublicationRelay>>())));
+                    TimeProvider.System, sp.GetRequiredService<ILogger<KernelEventPublicationRelay>>(), retainsReceipts: true)));
                 new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
                 api.PostConfigureServices(services);
                 var app = builder.Build();
@@ -293,7 +307,7 @@ public sealed class KernelInstalledEventStartsTests
         finally { directory?.Delete(recursive: true); }
     }
 
-    private static WorkflowExecutable Subscriber(bool flowchart)
+    private static WorkflowExecutable Subscriber(bool flowchart, PersistenceMode? mode = null, string definition = Definition)
     {
         var start = Node("start", Types.Event, [Literal("EventName", "Changed", "String")]);
         var output = SetOutput("seen", "seen", Result("value", "start", "Payload"));
@@ -303,7 +317,20 @@ public sealed class KernelInstalledEventStartsTests
                 startNodeId = "start",
                 connections = new[] { new { source = new { nodeId = "start", port = "Done" }, target = new { nodeId = "seen" } } }
             }), slots: [Slot("Flowchart.Activities", start, output)]) : Sequence("sequence", start, output);
-        return ExecutableOf(flowchart ? "subscriber-flowchart" : "subscriber-native", Definition, root);
+        var model = ExecutableOf(mode == PersistenceMode.Ephemeral ? "subscriber-ephemeral" : flowchart ? "subscriber-flowchart" : "subscriber-native",
+            definition, root);
+        return new(model.Identity, model.RootActivity, model.ResumeTargets, model.CreatedAt, model.CompatibilityMetadata,
+            model.InputContract, model.Dependencies, model.RuntimeRequirements, model.StorageDriverRequirements, model.IncidentStrategy,
+            persistenceMode: mode);
+    }
+
+    private static bool Completed(Contract.SequencedJournalEntry entry, string node)
+    {
+        if (entry.Entry is null) return false;
+        using var document = JsonDocument.Parse(entry.Entry);
+        var row = document.RootElement;
+        return row.ValueKind == JsonValueKind.Object && row.TryGetProperty("NativeStructure", out _) &&
+            row.GetProperty("Kind").GetInt32() == 3 && row.GetProperty("Node").GetString() == node;
     }
 
     private static WorkflowExecutable Producer(string artifact, string? payload, string eventName = "Changed") =>
@@ -313,6 +340,7 @@ public sealed class KernelInstalledEventStartsTests
     private sealed class RelayGate
     {
         internal volatile bool Hold;
+        internal PersistenceMode DefaultMode = PersistenceMode.Balanced;
         internal long? InterruptRevision;
         internal bool FailBeforeCommit;
     }
@@ -341,6 +369,8 @@ public sealed class KernelInstalledEventStartsTests
             CancellationToken token) => gate.Hold
             ? Task.FromResult(new Contract.Admission(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.NodeBusy))
             : inner.AdmitAsync(target, start, protect, token);
+
+        public Task<int> PruneSettledAsync(CancellationToken cancellationToken) => inner.PruneSettledAsync(cancellationToken);
 
         public Task<bool> ConfirmDrainedAsync(string slot, long revision, CancellationToken token) => inner.ConfirmDrainedAsync(slot, revision, token);
     }

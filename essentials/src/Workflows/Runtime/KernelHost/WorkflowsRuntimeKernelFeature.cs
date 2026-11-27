@@ -94,7 +94,10 @@ public class WorkflowsRuntimeKernelFeature : IShellFeature, IPostConfigureShellS
             provider.GetService<ILogger<KernelActivationCoordinator>>(),
             provider.GetService<IPersistenceAccessContextAccessor>())
         {
-            EventPublications = provider.GetService<IKernelEventPublicationRegistration>()
+            EventPublications = provider.GetService<IKernelEventPublicationRegistration>(),
+            EventPersistenceModes = provider.GetService<IKernelEventPublicationRegistration>() is { SupportsDurableMode: true }
+                ? provider.GetRequiredService<IRuntimePersistenceModeResolver>()
+                : null
         });
     }
 

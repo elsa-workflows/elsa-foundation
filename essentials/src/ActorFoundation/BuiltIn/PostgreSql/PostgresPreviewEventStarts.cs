@@ -16,6 +16,14 @@ public static partial class PostgresPreviewHosting
     public static Task InstallEventStartsQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default) =>
         InstallPreviewFormatAsync(() => CreateEventStartsQualificationContext(options), cancellationToken);
 
+    /// <summary>Selects the dedicated Event receipt-retention qualification format.</summary>
+    public static KernelDb CreateEventStartReceiptsQualificationContext(DbContextOptions<KernelDb> options) =>
+        KernelDb.ForPostgresRootEventStartReceiptsQualification(options);
+
+    /// <summary>Installs or verifies a dedicated Event receipt-retention database.</summary>
+    public static Task InstallEventStartReceiptsQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default) =>
+        InstallPreviewFormatAsync(() => CreateEventStartReceiptsQualificationContext(options), cancellationToken);
+
     /// <summary>Binds trusted Event registration and relay to the selected qualification database and tenant.</summary>
     public static IEventStartAdmissions BindEventStarts(Func<KernelDb> create, Contract.BoundScope scope)
     {
@@ -35,6 +43,9 @@ public static partial class PostgresPreviewHosting
         public Task<Contract.Admission> AdmitAsync(string target, Func<EventStartTarget, Contract.StartSpec> start,
             ProtectRootStartAsync protect, CancellationToken cancellationToken) =>
             admission.AdmitEventStartAsync(tenant, target, start, protect, cancellationToken);
+
+        public Task<int> PruneSettledAsync(CancellationToken cancellationToken) =>
+            admission.PruneSettledEventStartsAsync(tenant, cancellationToken);
 
         public Task<bool> ConfirmDrainedAsync(string slot, long revision, CancellationToken cancellationToken) =>
             admission.ConfirmEventStartRegistrationDrainedAsync(tenant, slot, revision, cancellationToken);

@@ -54,6 +54,7 @@ public sealed class KernelActivationCoordinator(
     private readonly ActivationChannelOptions _channels = channels ?? new();
     private readonly IReadOnlyCollection<IWorkflowTriggerIndexObserver> _observers = triggerObservers?.ToArray() ?? [];
     internal IKernelEventPublicationRegistration? EventPublications { get; init; }
+    internal IRuntimePersistenceModeResolver? EventPersistenceModes { get; init; }
 
     public bool RequiresInactiveAcknowledgment => EventPublications is not null;
 
@@ -183,9 +184,15 @@ public sealed class KernelActivationCoordinator(
 
         try
         {
+            var mode = EventPublications is { SupportsDurableMode: true } &&
+                plan.Served?.Workflow is { } native && NativeStartTriggers.StartEvents(native).Any()
+                ? EventPersistenceModes!.Resolve(command.Executable)
+                : (PersistenceMode?)null;
+            if (mode is not (null or PersistenceMode.Balanced or PersistenceMode.Durable))
+                throw new InvalidOperationException("An authored Event start requires Balanced or Durable persistence.");
             var events = EventPublications is null
                 ? []
-                : KernelEventClaims.Create(plan, command.Executable.Identity, command.ActivationId, reference.CreatedAt);
+                : KernelEventClaims.Create(plan, command.Executable.Identity, command.ActivationId, reference.CreatedAt, mode);
             EventPublications?.Validate(plan, command, reference, events);
             await PrepareProjectionsAsync(command.ActivationId,
                 [.. ScheduleClaims(plan, command.Executable.Identity, command.ActivationId, reference.CreatedAt), .. events],

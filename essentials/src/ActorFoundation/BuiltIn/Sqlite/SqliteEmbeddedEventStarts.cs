@@ -11,6 +11,14 @@ public sealed partial class SqliteEmbeddedFoundation
         ProtectRootStartAsync protectRootStart) =>
         new(databasePath, node, actorType, StoreFormat.RootEventStartsQualification, protectRootStart);
 
+    /// <summary>Composes the dedicated Event receipt-retention profile.</summary>
+    public static SqliteEmbeddedFoundation ForEventStartReceiptsQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootEventStartReceiptsQualification, protectRootStart);
+    }
+
     /// <summary>Binds trusted Event registration and relay to the selected file and tenant.</summary>
     public IEventStartAdmissions BindEventStarts(Contract.BoundScope scope) => new BoundEventStarts(EventStarts, scope);
 
@@ -25,6 +33,9 @@ public sealed partial class SqliteEmbeddedFoundation
         public Task<Contract.Admission> AdmitAsync(string target, Func<EventStartTarget, Contract.StartSpec> start,
             ProtectRootStartAsync protect, CancellationToken cancellationToken) =>
             requests.AdmitEventStartAsync(scope, target, start, protect, cancellationToken);
+
+        public Task<int> PruneSettledAsync(CancellationToken cancellationToken) =>
+            requests.PruneSettledEventStartsAsync(scope, cancellationToken);
 
         public Task<bool> ConfirmDrainedAsync(string slot, long revision, CancellationToken cancellationToken) =>
             requests.ConfirmEventStartRegistrationDrainedAsync(scope, slot, revision, cancellationToken);

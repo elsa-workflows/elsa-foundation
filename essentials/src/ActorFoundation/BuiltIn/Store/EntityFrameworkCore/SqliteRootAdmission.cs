@@ -191,6 +191,9 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             return (admission.Now >= stage.Deadline, admission.Reference);
         }, token);
 
+    internal Task<int> PruneSettledEventStartsAsync(string tenant, CancellationToken token) =>
+        WriteAsync((db, _, ct) => RootEventStarts.PruneSettledAsync(db, tenant, bind: null, ct), token);
+
     internal Task<int> PruneHeldStartsAsync(Contract.BoundScope scope, CancellationToken token) =>
         WriteAsync((db, now, ct) => RootPreparedStarts.PruneAsync(db, scope.Tenant, now, ct), token);
 

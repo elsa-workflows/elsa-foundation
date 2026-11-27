@@ -19,9 +19,10 @@ internal static partial class KernelAuthoredEventChecks
         Func<Contract.BoundScope, string?, CancellationToken, Task<IReadOnlyList<EventStartTarget>>> List,
         Func<Contract.BoundScope, string, Func<EventStartTarget, Contract.StartSpec>, ProtectRootStartAsync, CancellationToken, Task<Contract.Admission>> Start,
         Func<Contract.BoundScope, string, long, CancellationToken, Task<bool>> Drained,
-        Func<Contract.BoundScope, Contract.ActorRef, string, CancellationToken, Task<RootStartProof>> Proof);
+        Func<Contract.BoundScope, Contract.ActorRef, string, CancellationToken, Task<RootStartProof>> Proof,
+        Func<Contract.BoundScope, CancellationToken, Task<int>> Prune);
 
-    internal static async Task<int> RunStartsAsync(string provider, bool inBatch)
+    internal static async Task<int> RunStartsAsync(string provider, bool inBatch, bool retainReceipts = false)
     {
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var token = stop.Token;
@@ -48,7 +49,7 @@ internal static partial class KernelAuthoredEventChecks
         try
         {
             var (open, ingress, reads, owner, eventPort) = await OpenAsync(model, provider, Path.Combine(directory.FullName, "store.db"),
-                inBatch, token, eventStarts: true);
+                inBatch, token, eventStarts: true, retainReceipts);
             await using var owned = owner;
             var events = eventPort ?? throw new InvalidOperationException("The event start port is missing.");
             Check(await events.Apply(scope, slot, 5, [old], token) == EventRegistrationResult.Applied &&
@@ -66,6 +67,25 @@ internal static partial class KernelAuthoredEventChecks
                   await events.Apply(scope, slot, 6, [next], token) == EventRegistrationResult.Duplicate &&
                   !await events.Drained(scope, slot, 5, token),
                 "replacement linearizes at the provider revision and keeps accepted predecessor work pinned");
+            if (retainReceipts)
+            {
+                await using var db = open();
+                var capturedDeadline = await db.Database.SqlQuery<bool>($"""
+                    SELECT t."ReceiptUntil" = e."KeepUntil" AS "Value"
+                    FROM "FoundationEventStartTargets" t
+                    JOIN "Events" e ON e."Id" = t."EventId" AND e."Key" = t."Key"
+                    WHERE t."Tenant" = {scope.Tenant} AND t."Id" = {selectedOld.Id}
+                    """).SingleAsync(token);
+                Check(capturedDeadline, "the selected target keeps the publisher's exact accepted receipt deadline");
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "FoundationEventStartTargets" SET "ReceiptUntil" = 1
+                    WHERE "Tenant" = {scope.Tenant} AND "Id" = {selectedOld.Id}
+                    """, token);
+                Check(await events.Prune(scope, token) == 0 &&
+                    (await events.List(scope, null, token)).Single() == selectedOld &&
+                    !await events.Drained(scope, slot, 5, token),
+                    "an elapsed publisher deadline cannot delete pending work or release its previous publication");
+            }
             await PublishAsync("next-publisher");
             var pending = await events.List(scope, null, token);
             Check(pending.Count == 2 && pending.Any(item => item == selectedOld),
@@ -150,6 +170,23 @@ internal static partial class KernelAuthoredEventChecks
                 (await events.Start(scope, selectedOld.Id, Unexpected, UnexpectedProtect, token)) is
                     { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: { } duplicate } && duplicate == actor,
                 "retirement and ordinary receipt expiry preserve the exact target receipt without re-composing or pinning a new birth");
+            if (retainReceipts)
+            {
+                Check(await events.Prune(scope, token) == 0, "the late settlement opens a fresh physical replay window");
+                await using var db = open();
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "FoundationEventStartTargets" SET "ReceiptUntil" = 1
+                    WHERE "Tenant" = {scope.Tenant} AND "Id" = {selectedOld.Id}
+                    """, token);
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    DELETE FROM "Events" WHERE "Id" = {selectedOld.EventId}
+                    """, token);
+                Check(await events.Prune(other, token) == 0 && await events.Prune(scope, token) == 1 &&
+                      await events.Prune(scope, token) == 0 &&
+                      (await events.Start(scope, selectedOld.Id, Unexpected, UnexpectedProtect, token)).Reason == Contract.RefusalReason.TargetMismatch &&
+                      await events.Proof(scope, actor, priorPin.Issuance, token) == RootStartProof.BirthRetired,
+                    "expired receipt pruning is scoped, preserves the retired birth, and cannot reissue the missing target");
+            }
             Check(await events.Apply(scope, slot, 7, [], token) == EventRegistrationResult.Applied,
                 "unpublish installs a newer tombstone");
             await PublishAsync("first-publisher");

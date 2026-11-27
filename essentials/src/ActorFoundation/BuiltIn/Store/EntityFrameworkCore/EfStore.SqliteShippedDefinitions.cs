@@ -331,7 +331,9 @@ public sealed partial class EfStore
             yield return Table(RootEventStarts.Slots, RootEventStarts.SlotColumns(sqlite: true));
             yield return Table(RootEventStarts.Registrations, RootEventStarts.RegistrationColumns(sqlite: true));
             yield return Index(RootEventStarts.MatchIndex, RootEventStarts.Registrations, RootEventStarts.MatchColumns);
-            yield return Table(RootEventStarts.Targets, RootEventStarts.TargetColumns(sqlite: true));
+            yield return Table(RootEventStarts.Targets, RootEventStarts.TargetColumns(sqlite: true, db.UsesRootEventStartReceipts));
+            if (db.UsesRootEventStartReceipts)
+                yield return Index(RootEventStarts.ReceiptIndex, RootEventStarts.Targets, RootEventStarts.ReceiptColumns);
             yield return Index(RootEventStarts.PendingIndex, RootEventStarts.Targets, RootEventStarts.PendingColumns);
             yield return Index(RootEventStarts.SlotPendingIndex, RootEventStarts.Targets, RootEventStarts.SlotPendingColumns);
         }

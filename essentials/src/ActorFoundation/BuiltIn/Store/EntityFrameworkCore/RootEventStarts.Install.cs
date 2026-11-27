@@ -6,13 +6,16 @@ internal static partial class RootEventStarts
 {
     internal static async Task InstallPostgresAsync(KernelDb db, CancellationToken token)
     {
+        var receipts = db.UsesRootEventStartReceipts;
+        var receiptIndex = receipts ? $"""CREATE INDEX IF NOT EXISTS "{ReceiptIndex}" ON "{Targets}" {ReceiptColumns};""" : "";
         await db.Database.ExecuteSqlRawAsync($"""
             CREATE TABLE IF NOT EXISTS "{Slots}" ({SlotColumns(sqlite: false)});
             CREATE TABLE IF NOT EXISTS "{Registrations}" ({RegistrationColumns(sqlite: false)});
             CREATE INDEX IF NOT EXISTS "{MatchIndex}" ON "{Registrations}" {MatchColumns};
-            CREATE TABLE IF NOT EXISTS "{Targets}" ({TargetColumns(sqlite: false)});
+            CREATE TABLE IF NOT EXISTS "{Targets}" ({TargetColumns(sqlite: false, receipts)});
             CREATE INDEX IF NOT EXISTS "{PendingIndex}" ON "{Targets}" {PendingColumns};
             CREATE INDEX IF NOT EXISTS "{SlotPendingIndex}" ON "{Targets}" {SlotPendingColumns};
+            {receiptIndex}
             """, token);
         var transaction = db.Database.CurrentTransaction ?? throw new InvalidOperationException("Installing event starts requires the install transaction.");
         const string savepoint = "kernel_event_start_definitions";
@@ -20,14 +23,16 @@ internal static partial class RootEventStarts
         var slots = "kernel_event_slots_" + suffix;
         var registrations = "kernel_event_regs_" + suffix;
         var targets = "kernel_event_targets_" + suffix;
+        var compareReceipts = receipts ? $"""CREATE INDEX "{targets}_r" ON "{targets}" {ReceiptColumns};""" : "";
         await transaction.CreateSavepointAsync(savepoint, token);
         await db.Database.ExecuteSqlRawAsync($"""
             CREATE TABLE "{slots}" ({SlotColumns(sqlite: false)});
             CREATE TABLE "{registrations}" ({RegistrationColumns(sqlite: false)});
             CREATE INDEX "{registrations}_m" ON "{registrations}" {MatchColumns};
-            CREATE TABLE "{targets}" ({TargetColumns(sqlite: false)});
+            CREATE TABLE "{targets}" ({TargetColumns(sqlite: false, receipts)});
             CREATE INDEX "{targets}_p" ON "{targets}" {PendingColumns};
             CREATE INDEX "{targets}_s" ON "{targets}" {SlotPendingColumns};
+            {compareReceipts}
             """, token);
 
         var same = await db.Database.SqlQuery<bool>($"""

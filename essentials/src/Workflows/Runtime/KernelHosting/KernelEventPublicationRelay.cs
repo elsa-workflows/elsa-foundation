@@ -17,7 +17,7 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 
 /// <summary>Reconciles committed Runtime publication generations and their provider-selected starts.</summary>
 internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, TriggerScope scope, BoundScope actors,
-    KernelHostCapabilities capabilities, Func<IEventStartAdmissions> bind, TimeProvider clock, ILogger<KernelEventPublicationRelay> logger)
+    KernelHostCapabilities capabilities, Func<IEventStartAdmissions> bind, TimeProvider clock, ILogger<KernelEventPublicationRelay> logger, bool retainsReceipts = false)
     : IKernelEventPublicationRegistration
 {
     private const int RuntimePageSize = 16;
@@ -27,12 +27,17 @@ internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, T
     private (string Slot, long Revision)? _drainAfter;
     private string? _targetAfter;
 
+    public bool SupportsDurableMode => retainsReceipts;
+
     public void Validate(KernelServingPlan plan, WorkflowActivationCommand command, WorkflowExecutableSourceReference reference,
         IReadOnlyList<WorkflowTriggerBinding> claims)
     {
         if (claims.Count == 0 || plan.Served is not { Workflow: { } workflow }) return;
         var source = new RuntimeKernelEventSource(command.ActivationId, reference.SourceReferenceId, reference.SourceKind, reference.SourceId,
-            reference.SourceVersion, command.Executable.Identity);
+            reference.SourceVersion, command.Executable.Identity)
+        {
+            Mode = claims[0].Metadata.ContainsKey(RuntimeKernelEventPublication.ModeMetadata) ? PersistenceMode.Durable : null
+        };
         var value = new RuntimeKernelEventPublication(new(scope.Persistence, reference.TenantId), plan.SlotId, command.SlotName,
             command.Executable.Identity.DefinitionId, checked(command.ExpectedRevision + 1), source,
             claims.Select(claim => new RuntimeKernelEventEntry(claim.ExecutableNodeId,
@@ -82,9 +87,16 @@ internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, T
                 await MaintainAsync(ApplyPageAsync, token);
                 await MaintainAsync(RelayPageAsync, token);
                 await MaintainAsync(DrainPageAsync, token);
+                if (retainsReceipts) await MaintainAsync(PruneReceiptsAsync, token);
             } while (await timer.WaitForNextTickAsync(token));
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+
+        async Task PruneReceiptsAsync(CancellationToken operation)
+        {
+            var provider = bind();
+            while (await provider.PruneSettledAsync(operation) != 0) operation.ThrowIfCancellationRequested();
+        }
 
         async Task ApplyPageAsync(CancellationToken operation)
         {
@@ -187,7 +199,15 @@ internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, T
             if (!nodes.TryGetValue(entry.Node, out var node) || KernelEventClaims.Name(node) != entry.Name)
                 throw new InvalidDataException("The immutable Event executable does not match the registered Event name.");
             return new EventStartRegistration(entry.Node, "event:" + entry.Name, source.ActivationId, source.ReferenceId,
-                workflow.Id, selection, template);
+                workflow.Id, selection, template)
+            {
+                Mode = source.Mode switch
+                {
+                    null or PersistenceMode.Balanced => null,
+                    PersistenceMode.Durable => nameof(PersistenceMode.Durable),
+                    _ => throw new InvalidDataException("The selected Event publication does not have a durable persistence mode.")
+                }
+            };
         }).ToArray();
     }
 
@@ -198,7 +218,8 @@ internal sealed class KernelEventPublicationRelay(IServiceScopeFactory scopes, T
             // Validate the provider's JSON and keep its raw bytes when embedding it in the Native start.
             using var json = JsonDocument.Parse(payload);
         }
-        return "{\"Mode\":\"Balanced\",\"Input\":null,\"TriggerNode\":" + JsonSerializer.Serialize(target.Registration.Node) +
+        return "{\"Mode\":" + JsonSerializer.Serialize(target.Registration.Mode ?? Modes.Balanced) +
+            ",\"Input\":null,\"TriggerNode\":" + JsonSerializer.Serialize(target.Registration.Node) +
             ",\"Trigger\":" + (target.Payload ?? "null") + "}";
     }
 

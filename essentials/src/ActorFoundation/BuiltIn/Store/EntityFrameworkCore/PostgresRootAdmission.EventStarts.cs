@@ -35,6 +35,9 @@ internal sealed partial class PostgresRootAdmission
     internal Task<bool> ConfirmEventStartRegistrationDrainedAsync(string tenant, string slot, long revision, CancellationToken token) =>
         ReadEventStartsAsync((db, bind) => RootEventStarts.ConfirmDrainedAsync(db, tenant, slot, revision, bind, token), token);
 
+    internal Task<int> PruneSettledEventStartsAsync(string tenant, CancellationToken token) =>
+        ReadEventStartsAsync((db, bind) => RootEventStarts.PruneSettledAsync(db, tenant, bind, token), token);
+
     private async Task<T> ReadEventStartsAsync<T>(Func<KernelDb, Func<FormattableString, FormattableString>, Task<T>> read,
         CancellationToken token)
     {

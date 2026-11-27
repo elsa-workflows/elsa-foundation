@@ -74,7 +74,10 @@ internal sealed class EfRuntimeKernelEventPublicationStore(RuntimeDbContext cont
         {
             var artifact = bindings[0];
             owner = new(source.ActivationId!, source.SourceReferenceId, source.SourceKind, source.SourceId, source.SourceVersion,
-                new(source.ArtifactId, source.DefinitionId, source.DefinitionVersionId, source.ArtifactVersion, artifact.ArtifactHash));
+                new(source.ArtifactId, source.DefinitionId, source.DefinitionVersionId, source.ArtifactVersion, artifact.ArtifactHash))
+            {
+                Mode = artifact.Metadata.GetValueOrDefault(RuntimeKernelEventPublication.ModeMetadata) is null ? null : PersistenceMode.Durable
+            };
         }
         var publication = new RuntimeKernelEventPublication(scope, slot.SlotId, slot.SlotName, slot.WorkflowDefinitionId, slot.Revision, owner, entries);
         var content = RuntimeArtifactJson.Serialize(publication);
@@ -150,6 +153,7 @@ internal sealed class EfRuntimeKernelEventPublicationStore(RuntimeDbContext cont
             throw new InvalidDataException("The Event registration does not have the authoritative publication source.");
 
         var hash = bindings[0].ArtifactHash;
+        var mode = bindings[0].Metadata.GetValueOrDefault(RuntimeKernelEventPublication.ModeMetadata);
         var nodes = new HashSet<string>(StringComparer.Ordinal);
         var entries = new List<RuntimeKernelEventEntry>();
         foreach (var binding in bindings.OrderBy(binding => binding.ExecutableNodeId, StringComparer.Ordinal))
@@ -159,7 +163,9 @@ internal sealed class EfRuntimeKernelEventPublicationStore(RuntimeDbContext cont
                 binding.ArtifactId != source.ArtifactId || binding.ArtifactVersion != source.ArtifactVersion || binding.ArtifactHash != hash ||
                 binding.StimulusHash != RuntimeKernelEventPublication.ReservationKey(slot.SlotId, binding.ExecutableNodeId) ||
                 binding.Metadata is null || !binding.Metadata.TryGetValue(RuntimeKernelEventPublication.EventNameMetadata, out var name) ||
-                string.IsNullOrWhiteSpace(name) || !nodes.Add(binding.ExecutableNodeId))
+                string.IsNullOrWhiteSpace(name) || !nodes.Add(binding.ExecutableNodeId) ||
+                mode is not (null or nameof(PersistenceMode.Durable)) ||
+                binding.Metadata.GetValueOrDefault(RuntimeKernelEventPublication.ModeMetadata) != mode)
                 throw new InvalidDataException("The staged Event binding does not match its authored publication node.");
             entries.Add(new(binding.ExecutableNodeId, name));
         }

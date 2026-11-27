@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.StandaloneTriggers;
@@ -7,7 +8,12 @@ public sealed record RuntimeKernelEventEntry(string Node, string Name);
 
 /// <summary>The immutable source and material of an Event registration.</summary>
 public sealed record RuntimeKernelEventSource(string ActivationId, string ReferenceId, string Kind, string SourceId,
-    string? SourceVersion, WorkflowExecutableIdentity Executable);
+    string? SourceVersion, WorkflowExecutableIdentity Executable)
+{
+    /// <summary>The resolved durable persistence mode. Absent values use Balanced.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PersistenceMode? Mode { get; init; }
+}
 
 /// <summary>One scoped slot revision awaiting or retaining its provider registration.</summary>
 public sealed record RuntimeKernelEventPublication(TriggerScope Scope, string SlotId, string SlotName, string DefinitionId,
@@ -15,6 +21,7 @@ public sealed record RuntimeKernelEventPublication(TriggerScope Scope, string Sl
 {
     public const string ReservationType = "kernel-event-publication-v1";
     public const string EventNameMetadata = "event-name";
+    public const string ModeMetadata = "event-mode";
 
     /// <summary>Gives each slot and node its own claim; a stimulus may fan out across these claims.</summary>
     public static string ReservationKey(string slotId, string node) => WorkflowTriggerBinding.BuildId(ReservationType, slotId, node);

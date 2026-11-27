@@ -8,6 +8,7 @@ namespace Elsa.Workflows.Runtime.KernelHost;
 
 internal interface IKernelEventPublicationRegistration
 {
+    bool SupportsDurableMode { get; }
     void Validate(KernelServingPlan plan, WorkflowActivationCommand command, WorkflowExecutableSourceReference reference,
         IReadOnlyList<WorkflowTriggerBinding> claims);
 
@@ -18,17 +19,19 @@ internal interface IKernelEventPublicationRegistration
 internal static class KernelEventClaims
 {
     internal static WorkflowTriggerBinding[] Create(KernelServingPlan plan, WorkflowExecutableIdentity identity, string activationId,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt, PersistenceMode? mode)
     {
         if (plan.Served is not { Workflow: { } workflow }) return [];
         return NativeStartTriggers.StartEvents(workflow).Select(node =>
         {
             var name = Name(node);
             var key = RuntimeKernelEventPublication.ReservationKey(plan.SlotId, node.Id);
+            var metadata = new Dictionary<string, string> { [RuntimeKernelEventPublication.EventNameMetadata] = name };
+            if (mode == PersistenceMode.Durable) metadata.Add(RuntimeKernelEventPublication.ModeMetadata, nameof(PersistenceMode.Durable));
             return new WorkflowTriggerBinding(WorkflowTriggerBinding.BuildId(activationId, identity.ArtifactId, node.Id, key),
                 identity.ArtifactId, identity.DefinitionId, identity.ArtifactVersion, identity.ArtifactHash,
                 node.Id, RuntimeKernelEventPublication.ReservationType, key, null,
-                new Dictionary<string, string> { [RuntimeKernelEventPublication.EventNameMetadata] = name },
+                metadata,
                 createdAt, activationId, plan.SlotId, TriggerCardinality.ReservationOnly, IsActive: false);
         }).ToArray();
     }
