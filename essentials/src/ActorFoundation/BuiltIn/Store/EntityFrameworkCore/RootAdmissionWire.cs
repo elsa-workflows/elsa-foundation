@@ -23,9 +23,13 @@ internal static class RootAdmissionWire
     internal const string DirectPrefix = "!kernel-direct/1:";
     internal const string HeldDirectPrefix = "!kernel-held-direct/1:";
     internal const string AuthoredEventDirectPrefix = "!kernel-authored-event/1:";
+    internal const string PublicEventDirectPrefix = "!kernel-public-event/1:";
 
     internal static string AuthoredEventOccurrence(string reference, string id, string wait) =>
         $"{reference}/{FoundationRootCreator.OperationDigest(id)}/{FoundationRootCreator.OperationDigest(wait)}";
+
+    internal static string PublicEventOccurrence(string reference, string publication, string id, string wait) =>
+        AuthoredEventOccurrence(reference, DurableKeyJson.Write(new[] { publication, id }), wait);
 
     internal sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput, bool ExplicitZeroDue = false);
     internal sealed record StoredEventWait(string Key, string Wait);
@@ -35,6 +39,9 @@ internal static class RootAdmissionWire
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public StoredEventWait? EventWait { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? EventOccurrence { get; init; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public StoredScheduleControl? ScheduleControl { get; init; }
@@ -68,13 +75,14 @@ internal static class RootAdmissionWire
 
     internal static (string Header, string? Payload, string Kind) EncodeDirect(string id, long creation, string kind, string? payload,
         long? due, bool held, StoredEventWait? eventWait = null, StoredScheduleControl? scheduleControl = null,
-        bool authoredEvent = false)
+        bool authoredEvent = false, string? eventOccurrence = null)
     {
         var escaped = RequiresEnvelope(payload);
         var escapedKind = kind.Contains('\0') ? kind : null;
-        var prefix = authoredEvent ? AuthoredEventDirectPrefix : held ? HeldDirectPrefix : DirectPrefix;
+        var prefix = eventOccurrence is not null ? PublicEventDirectPrefix : authoredEvent ? AuthoredEventDirectPrefix :
+            held ? HeldDirectPrefix : DirectPrefix;
         var header = new StoredDirect(id, creation, escaped, due == 0, escapedKind)
-            { EventWait = eventWait, ScheduleControl = scheduleControl };
+            { EventWait = eventWait, ScheduleControl = scheduleControl, EventOccurrence = eventOccurrence };
         return (prefix + DurableKeyJson.Write(header),
             escaped ? DurableKeyJson.Write(payload!) : payload, escapedKind is null ? kind : "input");
     }

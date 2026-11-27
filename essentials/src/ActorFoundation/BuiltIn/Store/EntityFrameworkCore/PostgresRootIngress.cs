@@ -24,6 +24,8 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(kind);
+        if (target is Contract.Target.Event publish && admission.SupportsPublicEvents())
+            return await admission.PublishPublicEventAsync(scope.Tenant, publish.CorrelationKey, id, payload, options, cancellationToken);
         if (Contract.Kinds.IsCommand(kind))
         {
             cancellationToken.ThrowIfCancellationRequested();

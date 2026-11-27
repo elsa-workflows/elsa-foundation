@@ -347,6 +347,7 @@ public sealed partial class EfStore
         {
             yield return Table(RootPublicEventStarts.Registrations, RootPublicEventStarts.RegistrationColumns(sqlite: true));
             yield return Table(RootPublicEventStarts.Targets, RootPublicEventStarts.TargetColumns(sqlite: true));
+            yield return Table(RootPublicEventPublications.Table, RootPublicEventPublications.Columns(sqlite: true));
         }
         yield return Table("FoundationRootReceipts", """
             "Tenant" TEXT NOT NULL,

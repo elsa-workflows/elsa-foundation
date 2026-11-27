@@ -6,7 +6,7 @@ using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
 
-internal static class RootEventAdmission
+internal static partial class RootEventAdmission
 {
     private sealed record WaitTarget(bool SourceReady, string? Actor, string? Reference, int? Partition, string? Wait);
     private sealed record ReceiptState(bool SourceReady, bool Duplicate);
@@ -149,6 +149,8 @@ internal static class RootEventAdmission
                     bindPostgresSource, token);
                 count += captured.Count;
                 bytes += captured.Bytes;
+                if (captured.Count != 0)
+                    await RootPublicEventStarts.DispatchAsync(db, publication.FoundationTenant!, occurrence, until, bindPostgresSource, token);
             }
             var receipt = await db.Database.ExecuteSqlInterpolatedAsync(BindSource($"""
                 WITH source AS MATERIALIZED (/*event-source*/)

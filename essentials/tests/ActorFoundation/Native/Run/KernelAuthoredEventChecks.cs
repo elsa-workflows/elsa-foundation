@@ -181,7 +181,7 @@ internal static partial class KernelAuthoredEventChecks
 
     private static async Task<(Func<KernelDb> Open, Contract.IIngress Ingress, Contract.IActorReads Reads,
         IAsyncDisposable Owner, EventStartPort? Events)>
-        OpenAsync(PublicWorkflow model, string provider, string path, bool inBatch, CancellationToken token, bool eventStarts = false,
+        OpenAsync(Contract.IActorType model, string provider, string path, bool inBatch, CancellationToken token, bool eventStarts = false,
             bool retainReceipts = false, bool orderedScan = false, bool publicStarts = false)
     {
         const string node = "authored-event-owner";

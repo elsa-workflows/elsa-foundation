@@ -17,9 +17,10 @@ internal sealed partial class PostgresRootAdmission
             """, cancellationToken);
 
     internal static bool IsStoredDirect(string? value) => value?.StartsWith(DirectPrefix, StringComparison.Ordinal) == true ||
-        IsHeldDirect(value) || IsAuthoredEvent(value);
+        IsHeldDirect(value) || IsAuthoredEvent(value) || IsPublicEvent(value);
 
     private static bool IsAuthoredEvent(string? value) => value?.StartsWith(AuthoredEventDirectPrefix, StringComparison.Ordinal) == true;
+    private static bool IsPublicEvent(string? value) => value?.StartsWith(PublicEventDirectPrefix, StringComparison.Ordinal) == true;
     private static bool IsHeldDirect(string? value) => value?.StartsWith(HeldDirectPrefix, StringComparison.Ordinal) == true;
 
     internal enum DirectResult { Accepted, Duplicate, Refused, MissingTarget, Expired }
@@ -295,7 +296,7 @@ internal sealed partial class PostgresRootAdmission
                 AND m."EventMatch" IS NULL AND NOT m."Done" AND m."Id" NOT LIKE 'operator/%' ORDER BY m."Seq"
             """).AsNoTracking().ToListAsync(cancellationToken);
         return rows.Select(row => DecodeDirect(row, reference, db.UsesRootReplyProtocol, db.UsesRootLiveEventWaits, db.UsesRootScheduleControls,
-            db.UsesRootAuthoredEvents)).ToArray();
+            db.UsesRootAuthoredEvents, db.UsesRootPublicEventStarts)).ToArray();
     }
 
     internal static bool MatchesDirectOccurrence(string reference, string operation, string occurrence, bool retentionDelete = false)
@@ -314,18 +315,21 @@ internal sealed partial class PostgresRootAdmission
     }
 
     internal static Message DecodeDirect(MessageEntity row, string reference, bool replies = false, bool liveEventWaits = false,
-        bool scheduleControls = false, bool authoredEvents = false)
+        bool scheduleControls = false, bool authoredEvents = false, bool publicEvents = false)
     {
         var held = IsHeldDirect(row.Start);
         var authoredEvent = IsAuthoredEvent(row.Start);
+        var publicEvent = IsPublicEvent(row.Start);
         if (authoredEvent && !authoredEvents)
             throw new StoreException(Failure.Definite, "Unsupported authored root event delivery.");
+        if (publicEvent && !publicEvents)
+            throw new StoreException(Failure.Definite, "Unsupported public root event delivery.");
         if (held != (row.ReplyTo is not null) || held &&
             (!replies || ReplyTo.Parse(row.ReplyTo!) is not { Node.Length: > 0, Request.Length: > 0, Deadline: > 0 }))
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public reply route.");
         if (row.JobGeneration != 0)
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
-        var header = ReadDirectHeader(row.Start, reference, row.Id, authoredEvent);
+        var header = ReadDirectHeader(row.Start, reference, row.Id, authoredEvent, publicEvent);
         var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;
         var kind = header.EscapedKind ?? row.Kind;
         if (header.ScheduleControl is { } control)
@@ -336,10 +340,10 @@ internal sealed partial class PostgresRootAdmission
             RootScheduleControls.RequireIntent(control, header.Operation, kind, payload);
         }
         EventMatch? match = null;
-        if (kind == Kinds.Event || header.EventWait is not null || authoredEvent)
+        if (kind == Kinds.Event || header.EventWait is not null || authoredEvent || publicEvent)
         {
             var separator = header.EventWait?.Key?.IndexOf('_') ?? -1;
-            if (!liveEventWaits || !held && !authoredEvent || kind != Kinds.Event || row.Sender is not null || row.Due != 0 ||
+            if (!liveEventWaits || !held && !authoredEvent && !publicEvent || kind != Kinds.Event || row.Sender is not null || row.Due != 0 ||
                 header.ExplicitZeroDue || row.KeepUntil is null || header.EventWait is not { Key: { } key, Wait: { } wait } ||
                 header.ScheduleControl is not null || row.InboxScope != InboxKey.FoundationOccurrenceScope || row.EventMatch is not null ||
                 separator is not (> 0 and <= 64) ||
@@ -355,16 +359,20 @@ internal sealed partial class PostgresRootAdmission
             }.WithInboxScope(row.InboxScope);
     }
 
-    private static StoredDirect ReadDirectHeader(string? wire, string reference, string occurrence, bool authoredEvent)
+    private static StoredDirect ReadDirectHeader(string? wire, string reference, string occurrence, bool authoredEvent, bool publicEvent)
     {
         if (!IsStoredDirect(wire))
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
-        var prefix = authoredEvent ? AuthoredEventDirectPrefix : IsHeldDirect(wire) ? HeldDirectPrefix : DirectPrefix;
+        var prefix = publicEvent ? PublicEventDirectPrefix : authoredEvent ? AuthoredEventDirectPrefix :
+            IsHeldDirect(wire) ? HeldDirectPrefix : DirectPrefix;
         var header = DurableKeyJson.Read<StoredDirect>(wire![prefix.Length..]);
-        if (header is not { Creation: 1 } || !(authoredEvent
-                ? header.Operation is { } id && FoundationSelfSend.IsHandle(id) &&
-                    header.EventWait?.Wait is { } wait && occurrence == AuthoredEventOccurrence(reference, id, wait)
-                : MatchesDirectOccurrence(reference, header.Operation, occurrence)))
+        if (header is not { Creation: 1 } || !(publicEvent
+                ? FoundationRootCreator.IsGeneratedReference(header.EventOccurrence) && header.EventWait?.Wait is { } publicWait &&
+                    header.Operation is { } eventId && occurrence == PublicEventOccurrence(reference, header.EventOccurrence!, eventId, publicWait)
+                : header.EventOccurrence is null && (authoredEvent
+                    ? header.Operation is { } id && FoundationSelfSend.IsHandle(id) &&
+                        header.EventWait?.Wait is { } wait && occurrence == AuthoredEventOccurrence(reference, id, wait)
+                    : MatchesDirectOccurrence(reference, header.Operation, occurrence))))
             throw new StoreException(Failure.Definite, "Public input occurrence differs from its admitted identity.");
         return header;
     }
@@ -376,9 +384,12 @@ internal sealed partial class PostgresRootAdmission
         if (held != hasReply || held && !db.UsesRootReplyProtocol)
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public reply route.");
         var authoredEvent = IsAuthoredEvent(wire);
+        var publicEvent = IsPublicEvent(wire);
         if (authoredEvent && !db.UsesRootAuthoredEvents)
             throw new StoreException(Failure.Definite, "Unsupported authored root event delivery.");
-        var header = ReadDirectHeader(wire, reference, occurrence, authoredEvent);
+        if (publicEvent && !db.UsesRootPublicEventStarts)
+            throw new StoreException(Failure.Definite, "Unsupported public root event delivery.");
+        var header = ReadDirectHeader(wire, reference, occurrence, authoredEvent, publicEvent);
         if (header.ScheduleControl is not null && !db.UsesRootScheduleControls)
             throw new StoreException(Failure.Definite, "Unsupported trusted schedule control envelope.");
         return (header.Operation, header.EscapedKind ?? kind, due != 0 || header.ExplicitZeroDue ? due : null);
