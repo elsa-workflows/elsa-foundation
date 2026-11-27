@@ -24,6 +24,24 @@ public interface IScheduleActors
     ValueTask StopAsync(string key, long revision, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Selects the Runtime publication transaction as the source of schedule controls.
+/// The shell's reconciler applies the committed controls to the managed Actor Foundation schedule owner.
+/// </summary>
+public sealed class RuntimeManagedScheduleActors : IScheduleActors
+{
+    public bool RequiresPublicationClaims => true;
+
+    public ValueTask RegisterRunAsync(string startKey, Models.WorkflowStart? run, CancellationToken cancellationToken = default) => RejectDirectControl();
+
+    public ValueTask SetAsync(string key, long revision, RecurringSchedule schedule, string startKey,
+        CancellationToken cancellationToken = default) => RejectDirectControl();
+
+    public ValueTask StopAsync(string key, long revision, CancellationToken cancellationToken = default) => RejectDirectControl();
+
+    private static ValueTask RejectDirectControl() => ValueTask.FromException(
+        new InvalidOperationException("Managed schedule controls must come from the Runtime publication transaction."));
+}
+
 /// <summary>The schedule actors on the host's ingress, in one bound scope (<see cref="ScheduleActor"/>).</summary>
 public sealed class IngressScheduleActors(IIngress ingress, BoundScope scope, ICronCalendar? calendar = null) : IScheduleActors
 {
