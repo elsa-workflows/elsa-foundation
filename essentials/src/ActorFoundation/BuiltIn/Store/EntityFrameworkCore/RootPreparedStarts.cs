@@ -22,6 +22,24 @@ internal static class RootPreparedStarts
     private const string IssuancePrefix = PendingRootStart.IssuancePrefix;
     private const int MaximumIssuanceLength = 2_048;
 
+    internal static async Task<bool> ProtectAsync(ProtectRootStartAsync protect, PendingRootStart offer, CancellationToken token)
+    {
+        // A synchronous callback must not tie up an admission slot past the held deadline.
+        var work = Task.Run(async () => await protect(offer, token), token);
+        try
+        {
+            var outcome = await work.WaitAsync(token);
+            token.ThrowIfCancellationRequested();
+            return outcome;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            _ = work.ContinueWith(static task => _ = task.Exception, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            throw;
+        }
+    }
+
     internal static PendingRootStart Offer(PreparedRootStart stage, StartSpec spec, byte[] key)
     {
         if (!Valid(stage, key)) throw new InvalidOperationException("Held root preparation has an invalid identity.");

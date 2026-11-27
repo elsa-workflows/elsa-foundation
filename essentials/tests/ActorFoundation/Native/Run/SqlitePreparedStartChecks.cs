@@ -106,7 +106,7 @@ internal static class SqlitePreparedStartChecks
                 if (start.TypeData == "expire")
                 {
                     expired.SetResult(start);
-                    return await expiredProtection.Task;
+                    return expiredProtection.Task.GetAwaiter().GetResult();
                 }
                 if (start.TypeData == "loses")
                 {

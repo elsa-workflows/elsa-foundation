@@ -31,16 +31,7 @@ internal sealed partial class PostgresRootAdmission
         if (plan is null) return duplicate;
 
         // PrepareAsync has committed and disposed its connection and locks. The host may use another database.
-        var protection = protectRootStart(plan.Offer, token).AsTask();
-        bool protectedStart;
-        try { protectedStart = await protection.WaitAsync(token); }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
-            _ = protection.ContinueWith(static task => _ = task.Exception,
-                CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-            throw;
-        }
-        token.ThrowIfCancellationRequested();
+        var protectedStart = await RootPreparedStarts.ProtectAsync(protectRootStart, plan.Offer, token);
 
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
