@@ -11,7 +11,7 @@ namespace Kernel.Foundation.Postgres;
 /// </summary>
 public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IActorReads, Contract.IActorTerminalOutputReads,
     Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads,
-    Contract.IActorRetentionReads, Contract.IActorRetentionPolicies
+    Contract.IActorRetentionReads, Contract.IActorRetentionPolicies, ICommittedRootStateReads
 {
     private readonly PostgresRootAdmission admission;
     private readonly PostgresRootReads reads;
@@ -100,6 +100,10 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
 
     public ValueTask<Contract.ActorView?> GetAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         CancellationToken cancellationToken = default) => reads.GetAsync(scope, actor, cancellationToken);
+
+    ValueTask<(string TypeData, string? State, Contract.ActorStatus Status)?> ICommittedRootStateReads.ReadCommittedStateAsync(
+        Contract.BoundScope scope, Contract.ActorRef actor, CancellationToken cancellationToken) =>
+        reads.ReadCommittedStateAsync(scope, actor, cancellationToken);
 
     public ValueTask<Contract.Page<Contract.JournalEntry>> TailAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>

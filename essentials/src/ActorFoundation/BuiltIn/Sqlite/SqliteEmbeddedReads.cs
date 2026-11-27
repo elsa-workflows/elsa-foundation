@@ -43,7 +43,7 @@ public static partial class SqliteEmbeddedHosting
 
     private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat)
         : Contract.IActorReads, Contract.IActorTerminalOutputReads, Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads,
-          Contract.IActorRetentionReads
+          Contract.IActorRetentionReads, ICommittedRootStateReads
     {
         public bool SupportsSequencedJournal => qualificationFormat is null
             ? TakesSequencedJournal
@@ -82,6 +82,10 @@ public static partial class SqliteEmbeddedHosting
 
         public ValueTask<Contract.ActorView?> GetAsync(Contract.BoundScope scope, Contract.ActorRef actor, CancellationToken cancellationToken = default) =>
             ReadAsync(reads => reads.GetAsync(scope, actor, cancellationToken), cancellationToken, normalizeLockTimeout: SupportsSequencedJournal);
+
+        public ValueTask<(string TypeData, string? State, Contract.ActorStatus Status)?> ReadCommittedStateAsync(
+            Contract.BoundScope scope, Contract.ActorRef actor, CancellationToken cancellationToken) =>
+            ReadAsync(reads => reads.ReadCommittedStateAsync(scope, actor, cancellationToken), cancellationToken, normalizeLockTimeout: true);
 
         public ValueTask<Contract.Page<Contract.DeliveryView>> InboxAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>

@@ -46,7 +46,11 @@ public enum NativeFlaw
 }
 
 /// <summary>An HTTP start gives its trigger as the turn's ambient value instead (the kernel's Ambient: never stored).</summary>
-public sealed record NativeStart(string Mode = Modes.Balanced, JsonObject? Input = null, string? TriggerNode = null, JsonNode? Trigger = null);
+public sealed record NativeStart(string Mode = Modes.Balanced, JsonObject? Input = null, string? TriggerNode = null, JsonNode? Trigger = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool SelectedTestTrigger { get; init; }
+}
 
 public sealed record TimerFired(string Wait);
 
@@ -169,6 +173,8 @@ public sealed partial class NativeState
     public Dictionary<string, JsonNode?> Results { get; set; } = new(StringComparer.Ordinal);
     public string? TriggerNode { get; set; }
     public JsonNode? Trigger { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool SelectedTestTrigger { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, InvocationInbox>? Inboxes { get; set; }
 }
@@ -285,6 +291,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 foreach (var (name, value) in _wf.Variables) _s.Variables[name] = value?.DeepClone();
                 if (start.Input is { } input) _s.Variables["input"] = input.DeepClone();
                 (_s.TriggerNode, _s.Trigger) = (start.TriggerNode, start.Trigger ?? turn.Ambient as JsonNode);
+                _s.SelectedTestTrigger = start.SelectedTestTrigger && turn.TestScopeId is not null;
                 _s.Agenda.Add(new Work { Frame = NewId("f"), Node = _wf.Root.Id });
                 break;
             }
@@ -460,9 +467,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 break;
             case IStateful stateful:
             {
-                var delivery = _s.TriggerNode == node.Id && _s.Trigger is not null;
+                var delivery = PendingTrigger == node.Id;
                 var trigger = delivery ? _s.Trigger : null;
-                if (delivery) (_s.TriggerNode, _s.Trigger) = (null, null);
+                if (delivery) (_s.TriggerNode, _s.Trigger, _s.SelectedTestTrigger) = (null, null, false);
                 var context = Context(frame);
                 Apply(frame, await InvokeAuthored(frame, () => stateful.StartAsync(context, delivery, trigger)));
                 break;
@@ -851,7 +858,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         [.. _s.Frames.Values.Where(f => f.Parent == frame).Select(f => (f.Id, f.Tag)), .. _s.Agenda.Where(w => !w.Resume && !w.Gone && w.Parent == frame).Select(w => (w.Frame, w.Tag))];
 
     /// <summary>The node whose start trigger is still to be delivered, if any.</summary>
-    internal string? PendingTrigger => _s.Trigger is null ? null : _s.TriggerNode;
+    internal string? PendingTrigger => _s.Trigger is not null || _s.SelectedTestTrigger ? _s.TriggerNode : null;
 
     internal IReadOnlyList<string> Running(string frame) =>
         [.. _s.Frames.Values.Where(f => f.Parent == frame).Select(f => f.Id), .. _s.Agenda.Where(w => !w.Resume && !w.Gone && w.Parent == frame).Select(w => w.Frame)];

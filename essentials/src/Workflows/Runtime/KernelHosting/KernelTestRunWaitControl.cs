@@ -88,7 +88,7 @@ internal sealed class KernelTestRunWaitControl(KernelTestRuns tests, KernelShell
     {
         if (scope.IsExpired(time.GetUtcNow()) || (scope.TenantId ?? PersistenceScope.DefaultValue) != persistence.Value)
             return null;
-        if (await runtime.ReadAsync(token) is not GeneratedRootReads reads ||
+        if (await runtime.ReadAsync(token) is not ICommittedRootStateReads reads ||
             await reads.ReadCommittedStateAsync(tests.Reads.Tenant, actor, token) is not { State: { } state } checkpoint ||
             WorkflowActor.DescribeStart(WorkflowActor.ActorType, checkpoint.TypeData) is not { Model: NativeExecutionModel.ModelKey, TestStart: { } selected } ||
             selected.ScopeId != scope.ScopeId || selected.Tenant != scope.TenantId ||

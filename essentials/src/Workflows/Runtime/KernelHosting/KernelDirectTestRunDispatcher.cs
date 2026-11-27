@@ -23,7 +23,7 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
     private static readonly TimeSpan StopBudget = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(100);
 
-    public bool SupportsTrigger(string driverId) => driverId is "Elsa.Event" or "Elsa.HttpEndpoint";
+    public bool SupportsTrigger(string driverId) => driverId is "Elsa.Event" or "Elsa.HttpEndpoint" or "Elsa.Timer" or "Elsa.Cron";
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.TestRun,
@@ -68,7 +68,8 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
         Workflow workflow;
         try
         {
-            workflow = NativeExecutableMapper.Map(executable, serving.Capabilities with { Children = false }, source.DefinitionId);
+            // Fire once runs on the selected test root and creates no recurring schedule.
+            workflow = NativeExecutableMapper.Map(executable, serving.Capabilities with { Children = false, Schedules = true }, source.DefinitionId);
         }
         catch (NativeMappingRefusedException error)
         {
@@ -87,7 +88,16 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             catch (HttpFieldsException error) { return Refused(error.Message); }
         }
         else if (triggered && !NativeStartTriggers.StartEvents(workflow).Any(node => node.Id == request.TriggerNodeId))
-            return Refused("The selected node is not a startable HTTP or named-event trigger in this executable.");
+        {
+            try
+            {
+                var schedule = NativeSchedules.ForPublications([workflow], CronosCalendar.Error).All
+                    .SingleOrDefault(item => item.Node == request.TriggerNodeId);
+                if (schedule is null) return Refused("The selected node is not a start trigger in this executable.");
+                stimulus = JsonValue.Create(schedule.Key);
+            }
+            catch (NativeScheduleException error) { return Refused(error.Message); }
+        }
         var subject = request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-kind") == "persisted-user"
             ? request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-id") : null;
         var selection = new WorkflowTestStart(test.ScopeId, test.ExpiresAt, test.TenantId, test.Partition.Value,
@@ -95,6 +105,9 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             source.ArtifactVersion, KernelPublishedRunDispatcher.SourceDigest(source), subject);
         var native = NativeExecutionModel.Start(workflow.Id, mode.ToString(), input, request.TriggerNodeId, stimulus, workflow.Definition)
             with { ExecutableSelection = workflow.ExecutableSelection };
+        if (triggered && stimulus is null)
+            native = native with { Input = JsonSerializer.Serialize(new NativeStart(mode.ToString(), input, request.TriggerNodeId)
+                { SelectedTestTrigger = true }) };
         var spec = WorkflowActor.Start(native, null, selection);
         if (http && request.TriggerMetadata.GetValueOrDefault("http:responseMode") == "Sync")
         {

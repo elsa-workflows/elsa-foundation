@@ -6,6 +6,12 @@ using Bookmark = Kernel.Durable.FoundationJournalPaging.Bookmark;
 
 namespace Kernel.EntityFramework;
 
+internal interface ICommittedRootStateReads
+{
+    ValueTask<(string TypeData, string? State, ActorStatus Status)?> ReadCommittedStateAsync(BoundScope scope,
+        ActorRef actor, CancellationToken cancellationToken);
+}
+
 internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, int pageSize, string provider)
     : IActorReads, IActorTerminalOutputReads, IActorSequencedJournalReads, IActorPlaybackReads,
       IActorRetentionReads
