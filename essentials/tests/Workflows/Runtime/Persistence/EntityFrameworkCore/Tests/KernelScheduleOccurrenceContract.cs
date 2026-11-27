@@ -32,6 +32,7 @@ internal static class KernelScheduleOccurrenceContract
         var bindings = new EfWorkflowTriggerBindingStore(context, access);
         var authority = new EfWorkflowActivationAuthority(context, access);
         var activationSwitch = new EfWorkflowActivationSwitch(authority, bindings, references, access, clock);
+        var controls = new EfRuntimeKernelScheduleControlStore(context, access);
         var store = Store(context, access, clock);
         ValueTask<bool> AcceptAsync(RuntimeKernelScheduleOccurrence offer, DateTimeOffset? scheduleNow = null) =>
             store.TryAcceptAsync(offer, _ => ValueTask.FromResult(scheduleNow ?? clock.GetUtcNow()));
@@ -45,26 +46,41 @@ internal static class KernelScheduleOccurrenceContract
                 new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(),
                 incidentStrategy: IncidentStrategyBuiltIns.FaultReference));
 
-        async Task PublishAsync(WorkflowExecutableIdentity identity, string activation, long expectedRevision)
+        async Task PrepareAsync(WorkflowExecutableIdentity identity, string activation, string name, string trigger = node, string? overrideKey = null)
         {
-            var slot = WorkflowActivationSlotIdentity.Create(identity.DefinitionId, slotName);
-            var key = RuntimeKernelScheduleOccurrence.ReservationKey(scheduleKey);
+            var slot = WorkflowActivationSlotIdentity.Create(identity.DefinitionId, name);
+            var logicalKey = $"schedule:{identity.DefinitionId}:{trigger}";
+            var key = RuntimeKernelScheduleOccurrence.ReservationKey(logicalKey);
             await references.SaveAsync(new(WorkflowActivationReferenceIdentity.Create(activation), identity.ArtifactId,
                 "definition", identity.DefinitionId, identity.ArtifactVersion, identity.DefinitionId, identity.DefinitionVersionId,
                 identity.ArtifactVersion, Now, Now, WorkflowExecutableReferenceScope.Published,
                 ActivationId: activation, SlotId: slot, TenantId: scope.TenantId));
             await bindings.PrepareActivationAsync(activation,
-                [new(WorkflowTriggerBinding.BuildId(activation, identity.ArtifactId, node, key), identity.ArtifactId,
-                    identity.DefinitionId, identity.ArtifactVersion, identity.ArtifactHash, node,
-                    RuntimeKernelScheduleOccurrence.ReservationType, key, null, new Dictionary<string, string>(), Now,
+                [new(WorkflowTriggerBinding.BuildId(activation, identity.ArtifactId, trigger, key), identity.ArtifactId,
+                    identity.DefinitionId, identity.ArtifactVersion, identity.ArtifactHash, trigger,
+                    RuntimeKernelScheduleOccurrence.ReservationType, key, null,
+                    new Dictionary<string, string> { [RuntimeKernelScheduleControl.ScheduleKeyMetadata] = overrideKey ?? logicalKey }, Now,
                     activation, slot, TriggerCardinality.ReservationOnly, false)]);
-            Assert.True((await activationSwitch.TryActivateAsync(new(identity.DefinitionId, slotName, activation,
-                WorkflowActivationSource.Publishing, expectedRevision, Now))).Succeeded);
         }
+
+        async Task<WorkflowActivationSlot> PublishAsync(WorkflowExecutableIdentity identity, string activation, long expectedRevision)
+        {
+            await PrepareAsync(identity, activation, slotName);
+            var transition = await activationSwitch.TryActivateAsync(Request(activation, slotName, expectedRevision));
+            Assert.True(transition.Succeeded);
+            return transition.Slot;
+        }
+
+        WorkflowActivationSlotRequest Request(string activation, string slot, long revision) =>
+            new(first.DefinitionId, slot, activation, WorkflowActivationSource.Publishing, revision, Now);
 
         var original = new RuntimeKernelScheduleOccurrence(scope, scheduleKey, new string('A', 64), slotName,
             "schedule-a", 1, 1, "timer-a", Now, Now.AddMinutes(1), first, node, "{\"version\":1}");
         await PublishAsync(first, original.ActivationId, 0);
+        var exact = Assert.IsType<RuntimeKernelScheduleControl>(await controls.FindAsync(scope, scheduleKey));
+        Assert.Equal(new(scope, scheduleKey, first.DefinitionId, node, 1,
+            new(WorkflowActivationSlotIdentity.Create(first.DefinitionId, slotName), slotName, original.ActivationId, 1,
+                WorkflowActivationReferenceIdentity.Create(original.ActivationId), first)), exact);
         Assert.False(await AcceptAsync(original with { Due = Now.AddSeconds(1) }));
         var clockReads = 0;
         Assert.False(await store.TryAcceptAsync(original, _ => ValueTask.FromResult(++clockReads == 3 ? original.AcceptBefore : Now)));
@@ -82,7 +98,15 @@ internal static class KernelScheduleOccurrenceContract
         start.SetResult();
         Assert.All(await Task.WhenAll(contenderTask, AcceptAsync(original).AsTask()), accepted => Assert.True(accepted));
         Assert.Single(await store.ListPendingAsync(scope, null, 2));
-        await PublishAsync(second, "schedule-b", 1);
+        var secondSlot = await PublishAsync(second, "schedule-b", 1);
+        var secondControl = Assert.IsType<RuntimeKernelScheduleControl>(await controls.FindAsync(scope, scheduleKey));
+        Assert.Equal(2, secondControl.Revision);
+        Assert.Equal(second, secondControl.Owner?.Executable);
+        var preparedSchedules = new EfRecurringTriggerScheduleStore(context, access, new Codec());
+        await preparedSchedules.PrepareActivationAsync("schedule-b", []);
+        var repairing = new EfWorkflowActivationSwitch(authority, bindings, references, access, clock, preparedSchedules);
+        Assert.True(await repairing.TryRepairAsync(secondSlot, []));
+        Assert.Equal(secondControl, await controls.FindAsync(scope, scheduleKey));
         Assert.False(await AcceptAsync(original with { ArmGeneration = 2, TimerDeliveryId = "stale-timer" }));
         await Assert.ThrowsAsync<InvalidDataException>(() => AcceptAsync(original with { PinnedStart = "{\"version\":2}" }).AsTask());
 
@@ -110,9 +134,70 @@ internal static class KernelScheduleOccurrenceContract
         Assert.False(await AcceptAsync(replacement with { ArmGeneration = 5, TimerDeliveryId = "inactive-binding" }));
         await bindings.SaveAsync(binding);
 
+        await PrepareAsync(first, "malformed-claim", "Malformed", overrideKey: "another-definition");
+        await Assert.ThrowsAsync<InvalidDataException>(() => activationSwitch.TryActivateAsync(Request("malformed-claim", "Malformed", 0)).AsTask());
+        Assert.Null(await authority.FindAsync(first.DefinitionId, "Malformed"));
+        Assert.Equal(secondControl, await controls.FindAsync(scope, scheduleKey));
+
+        await PrepareAsync(first, "lower-green", "Green");
+        await PrepareAsync(second, "lower-other", "Other");
+        var conflict = await Assert.ThrowsAsync<TriggerOperationException>(() => activationSwitch.TryActivateAsync(Request("lower-green", "Green", 0)).AsTask());
+        Assert.Equal("route-conflict", conflict.Code);
+        Assert.Equal(secondControl, await controls.FindAsync(scope, scheduleKey));
+
         Assert.True((await activationSwitch.TryDeactivateAsync(new(first.DefinitionId, slotName,
             WorkflowActivationSource.Publishing, 2, Now), [])).Succeeded);
+        var released = secondControl with { Revision = 3, Owner = null };
+        Assert.Equal(released, await controls.FindAsync(scope, scheduleKey));
+        Assert.Equal(released, Assert.Single((await controls.ListAsync(scope, null, 1)).Items));
+        var staleRelease = await activationSwitch.TryDeactivateAsync(new(first.DefinitionId, slotName, WorkflowActivationSource.Publishing, 2, Now), []);
+        Assert.False(staleRelease.Succeeded);
+        Assert.Equal(released, await controls.FindAsync(scope, scheduleKey));
+
+        var begin = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        async Task<WorkflowActivationSlot?> ContendAsync(string slot, string activation)
+        {
+            await using var contenderDb = open();
+            var contenderSwitch = new EfWorkflowActivationSwitch(new EfWorkflowActivationAuthority(contenderDb, access),
+                new EfWorkflowTriggerBindingStore(contenderDb, access), new EfWorkflowExecutableSourceReferenceStore(contenderDb, access, new Codec(), clock), access, clock);
+            await begin.Task;
+            try
+            {
+                var result = await contenderSwitch.TryActivateAsync(Request(activation, slot, 0));
+                return result.Succeeded ? result.Slot : throw new InvalidOperationException("The contender did not have its expected slot revision.");
+            }
+            catch (TriggerOperationException error) when (error.Code == "route-conflict") { return null; }
+        }
+        var attempts = new[] { ContendAsync("Green", "lower-green"), ContendAsync("Other", "lower-other") };
+        begin.SetResult();
+        var winningSlot = Assert.Single((await Task.WhenAll(attempts)).OfType<WorkflowActivationSlot>());
+        Assert.Equal(1, winningSlot.Revision);
+        var reclaimed = Assert.IsType<RuntimeKernelScheduleControl>(await controls.FindAsync(scope, scheduleKey));
+        Assert.Equal(4, reclaimed.Revision);
+        Assert.Equal(winningSlot.SlotId, reclaimed.Owner?.SlotId);
+        Assert.Equal(winningSlot.ActiveActivationId, reclaimed.Owner?.ActivationId);
+        Assert.Equal(1, reclaimed.Owner?.PublicationRevision);
+        Assert.False((await activationSwitch.TryDeactivateAsync(new(first.DefinitionId, slotName,
+            WorkflowActivationSource.Publishing, 2, Now), [])).Succeeded);
+        Assert.Equal(reclaimed, await controls.FindAsync(scope, scheduleKey));
+
+        // An unrelated node advances its own revision and uses the same scoped paging path.
+        await PrepareAsync(first, "separate-node", "Separate", "another-node");
+        Assert.True((await activationSwitch.TryActivateAsync(Request("separate-node", "Separate", 0))).Succeeded);
         clock.Advance(TimeSpan.FromMinutes(2));
+        var controlReads = new EfRuntimeKernelScheduleControlStore(restarted, access);
+        var desiredFirst = await controlReads.ListAsync(scope, null, 1);
+        var desiredSecond = await controlReads.ListAsync(scope, Assert.IsType<string>(desiredFirst.Next), 1);
+        Assert.Null(desiredSecond.Next);
+        Assert.Contains(reclaimed, desiredFirst.Items.Concat(desiredSecond.Items));
+        Assert.Contains(desiredFirst.Items.Concat(desiredSecond.Items), control => control.TriggerNode == "another-node" && control.Revision == 1);
+        Assert.Empty((await controlReads.ListAsync(scope with { TenantId = null }, null, 1)).Items);
+        Assert.Null(await controlReads.FindAsync(scope with { TenantId = null }, scheduleKey));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            controlReads.ListAsync(scope with { TenantId = "another-tenant" }, null, 1).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            controlReads.ListAsync(scope with { Persistence = new("a-different-runtime") }, null, 1).AsTask());
+
         var actorReference = new string('B', 64);
         await relay.MarkMaterializedAsync(original, actorReference);
         await relay.MarkMaterializedAsync(original, actorReference);
