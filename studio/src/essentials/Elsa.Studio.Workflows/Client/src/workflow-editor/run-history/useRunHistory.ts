@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "../../api/capabilities";
-import { getWorkflowHistoryPage, getWorkflowHistoryStream, RuntimeHistoryIdentityError, RuntimeHistoryStreamError, supportsWorkflowHistory,
-  supportsWorkflowHistoryStream } from "../../api/runtimeHistory";
+import { getWorkflowHistoryPage, getWorkflowHistoryStream, RuntimeHistoryIdentityError, RuntimeHistoryStreamError, supportsWorkflowHistory } from "../../api/runtimeHistory";
 import type { RuntimeHistoryEvent, RuntimeHistoryPage, RuntimeHistoryRequest } from "../../runtimeHistoryTypes";
 import { runtimeValueContextId } from "../RuntimeValueEvidence";
 
@@ -140,7 +139,7 @@ export function useRunHistory(context: StudioEndpointContext, workflowExecutionI
         if (!previous && !await supportsWorkflowHistory(context)) throw new ApiCapabilityUnavailableError("elsa.api.runtime", "workflow-history-page");
         const query = { ...requestRef.current, limit: requestRef.current.limit ?? 100, continuationToken: cursor };
         let useStream = kind === "poll" && previous?.page.coverage.policyId === "kernel-activity-journal-v1"
-          && unavailableStream.current !== key && await supportsWorkflowHistoryStream(context);
+          && unavailableStream.current !== key && !!context.http?.requestResponse;
         if (useStream && previous) {
           let window = previous;
           try {

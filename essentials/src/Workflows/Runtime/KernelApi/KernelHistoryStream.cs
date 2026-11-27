@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -52,10 +53,15 @@ internal static class KernelHistoryStream
             return;
         }
 
+        if (history is not KernelRuntimeHistoryPageReader kernelHistory)
+        {
+            response.StatusCode = StatusCodes.Status501NotImplemented;
+            return;
+        }
+
         try
         {
-            var first = await ReadAuthorizedAsync(request);
-            if (first.Page is not null && await CurrentStatusAsync() is { } initialRefusal) first = new(null, initialRefusal);
+            var first = await ReadAsync(kernelHistory, request, CurrentStatusAsync, token);
             if (first.Status is { } status)
             {
                 response.StatusCode = status;
@@ -77,21 +83,14 @@ internal static class KernelHistoryStream
 
                 // Each page opens its own bounded committed read and checks the current access binding.
                 // Advance through scanned-but-filtered entries too. Idle probes do not send a new bookmark.
-                var next = await ReadAuthorizedAsync(request with { Cursor = cursor });
+                var next = await ReadAsync(kernelHistory, request with { Cursor = cursor }, CurrentStatusAsync, token);
                 if (next.Page is not { } current)
                 {
                     await WriteAsync(next);
                     return;
                 }
                 if (current.ScannedThroughSequence != page.ScannedThroughSequence || current.Items.Count != 0)
-                {
-                    if (await CurrentStatusAsync() is { } revoked)
-                    {
-                        await WriteAsync(new(null, revoked));
-                        return;
-                    }
                     await WriteAsync(next);
-                }
                 page = current;
             }
         }
@@ -104,19 +103,16 @@ internal static class KernelHistoryStream
             }
         }
 
-        async Task<KernelHistoryStreamFrame> ReadAuthorizedAsync(GetRuntimeHistory requested) =>
-            await CurrentStatusAsync() is { } denied ? new(null, denied) : await ReadAsync(history, requested, token);
-
-        async Task<int?> CurrentStatusAsync()
+        async Task<int?> CurrentStatusAsync(WorkflowExecutionState workflow)
         {
-            // The incoming authenticated principal is the request ceiling. After headers begin its
-            // granted claims are stale, so resolve persisted permission again before reading and releasing data.
+            // Use the route's original resource for its grant and the authorized run for structure.
+            // The reader invokes this before journal access and again against the verified run before disclosure.
             await using var scope = context.RequestServices.CreateAsyncScope();
             var current = scope.ServiceProvider.GetRequiredService<ICurrentSubjectPermissionAuthorizer>();
             var routeGrant = await current.AuthorizeAsync(new(tenant, subject, WorkflowRuntimePermissions.WorkflowRuntimeRead, context), token);
             if (routeGrant.Status != CurrentSubjectPermissionStatus.Granted) return Refusal(routeGrant.Status);
             var structureGrant = await current.AuthorizeAsync(new(tenant, subject,
-                HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission), token);
+                HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission, workflow), token);
             return structureGrant.Status == CurrentSubjectPermissionStatus.Granted ? null : Refusal(structureGrant.Status);
         }
 
@@ -131,12 +127,13 @@ internal static class KernelHistoryStream
     private static int Refusal(CurrentSubjectPermissionStatus status) => status == CurrentSubjectPermissionStatus.Unsupported
         ? StatusCodes.Status501NotImplemented : StatusCodes.Status403Forbidden;
 
-    private static async Task<KernelHistoryStreamFrame> ReadAsync(IRuntimeHistoryPageReader history,
-        GetRuntimeHistory request, CancellationToken token)
+    private static async Task<KernelHistoryStreamFrame> ReadAsync(KernelRuntimeHistoryPageReader history,
+        GetRuntimeHistory request, Func<WorkflowExecutionState, Task<int?>> currentPermission, CancellationToken token)
     {
         try
         {
-            var page = await history.ReadAsync(request, token);
+            var (page, refusal) = await history.ReadPageAsync(request, currentPermission, token);
+            if (refusal is { } status) return new(null, status);
             return page switch
             {
                 null => new(null, StatusCodes.Status404NotFound),

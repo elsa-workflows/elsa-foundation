@@ -268,7 +268,7 @@ def overlay(backend, studio_url, history_authority=False):
         settings['Qualification'] = {
             'Principals': [{'subject': 'core-history-reader', 'tenant': TENANT, 'username': 'core-history-reader',
                             'password': 'Password123!', 'exactDirectPermissions': grants}],
-            'GrantProfiles': {'history-no-route': retained},
+            'GrantProfiles': {'history-reader': grants, 'history-no-route': retained},
         }
     (backend / 'appsettings.json').write_text(json.dumps(settings))
     shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))

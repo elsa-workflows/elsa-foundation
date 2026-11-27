@@ -1,5 +1,5 @@
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { capabilityIds, hasCapabilityLink, resolveCapabilityLink } from "./capabilities";
+import { ApiCapabilityUnavailableError, capabilityIds, hasCapabilityLink, invalidateApiCapabilityCache, resolveCapabilityLink } from "./capabilities";
 import type { RuntimeHistoryBookmark, RuntimeHistoryBookmarkDetails, RuntimeHistoryBookmarkPage, RuntimeHistoryBookmarkRequest,
   RuntimeHistoryCoverage, RuntimeHistoryEvent, RuntimeHistoryEventDetails, RuntimeHistoryPage, RuntimeHistoryRequest } from "../runtimeHistoryTypes";
 
@@ -7,10 +7,6 @@ export class RuntimeHistoryIdentityError extends Error {}
 
 export function supportsWorkflowHistory(context: StudioEndpointContext) {
   return hasCapabilityLink(context, capabilityIds.runtime, "workflow-history-page");
-}
-
-export async function supportsWorkflowHistoryStream(context: StudioEndpointContext) {
-  return !!context.http.requestResponse && await hasCapabilityLink(context, capabilityIds.runtime, "workflow-history-live");
 }
 
 export class RuntimeHistoryStreamError extends Error {
@@ -50,11 +46,18 @@ export async function* getWorkflowHistoryStream(context: StudioEndpointContext, 
   const streamSignal = controller.signal;
   let reader: ReadableStreamDefaultReader<string> | undefined;
   try {
-    const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-history-live", { workflowExecutionId });
-    streamSignal.throwIfAborted();
-    const response = await context.http.requestResponse!(`${path}?${queryString(request)}`, {
+    let path: string;
+    try {
+      path = await awaitHistoryStream(streamSignal,
+        () => resolveCapabilityLink(context, capabilityIds.runtime, "workflow-history-live", { workflowExecutionId }));
+    } catch (error) {
+      if (streamSignal.aborted && !signal.aborted) invalidateApiCapabilityCache(context);
+      if (error instanceof ApiCapabilityUnavailableError) throw new RuntimeHistoryStreamError(501);
+      throw error;
+    }
+    const response = await awaitHistoryStream(streamSignal, () => context.http.requestResponse!(`${path}?${queryString(request)}`, {
       headers: { Accept: "application/x-ndjson" }, cache: "no-store", signal: streamSignal
-    });
+    }), lateResponse => { void lateResponse.body?.cancel().catch(() => undefined); });
     if (!response.ok) throw new RuntimeHistoryStreamError(response.status);
     if (response.headers.get("content-type")?.split(";")[0] !== "application/x-ndjson" || !response.body)
       throw new RuntimeHistoryIdentityError("The committed history stream has an unexpected response type.");
@@ -62,7 +65,7 @@ export async function* getWorkflowHistoryStream(context: StudioEndpointContext, 
     reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = "";
     while (true) {
-      const chunk = await reader.read();
+      const chunk = await awaitHistoryStream(streamSignal, () => reader!.read());
       if (chunk.done) break;
       buffer += chunk.value;
       for (let newline = buffer.indexOf("\n"); newline >= 0; newline = buffer.indexOf("\n")) {
@@ -86,6 +89,23 @@ export async function* getWorkflowHistoryStream(context: StudioEndpointContext, 
       reader.releaseLock();
     }
   }
+}
+
+function awaitHistoryStream<T>(signal: AbortSignal, operation: () => Promise<T>, discard?: (value: T) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    // Some authenticated transports wait for token acquisition before passing the signal to fetch.
+    void Promise.resolve().then(() => { signal.throwIfAborted(); return operation(); }).then(value => {
+      signal.removeEventListener("abort", abort);
+      if (signal.aborted) discard?.(value);
+      else resolve(value);
+    }, error => {
+      signal.removeEventListener("abort", abort);
+      reject(error);
+    });
+  });
 }
 
 function validateHistoryPage(page: RuntimeHistoryPage, workflowExecutionId: string, request: RuntimeHistoryRequest) {

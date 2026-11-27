@@ -3,15 +3,29 @@ using CShells.DependencyInjection;
 using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Modularity.Api.Authorization;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>Finite operations on the real ports of an owned, disposable qualification host.</summary>
 internal static class HistoryQualificationControls
 {
+    internal static void Register(IServiceCollection services)
+    {
+        services.AddSingleton<RunDenial>();
+        services.AddScoped<IPermissionResourceHandler, SnapshotRunPolicy>();
+    }
+
     internal static void MapEndpoints(IEndpointRouteBuilder endpoints, IShellRegistry registry)
     {
+        endpoints.MapPost("/__qualification/history/{workflowExecutionId}/deny-live-inspection",
+                (string workflowExecutionId, RunDenial denial) =>
+                    workflowExecutionId.Length == 64 && denial.Select(workflowExecutionId) ? Results.NoContent() : Results.BadRequest())
+            .WithHostOwner("Elsa.Workbench")
+            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+            .RequirePermission(ModuleManagementPermissionKeys.Manage);
         endpoints.MapPost("/__qualification/history/{workflowExecutionId}/purge",
                 (string workflowExecutionId, HttpContext http, CancellationToken token) =>
                     PurgeAsync(registry, workflowExecutionId, http, token))
@@ -47,5 +61,28 @@ internal static class HistoryQualificationControls
             purgedThrough = purgedThrough.ToString(CultureInfo.InvariantCulture),
             afterLastSequence = after?.LastSequence.ToString(CultureInfo.InvariantCulture),
             afterPurgedThrough = after?.PurgedThroughSequence.ToString(CultureInfo.InvariantCulture) });
+    }
+    private sealed class RunDenial
+    {
+        private string? denied;
+        internal string? Selected => Volatile.Read(ref denied);
+        internal bool Select(string run) => Interlocked.CompareExchange(ref denied, run, null) is null;
+    }
+
+    // An already-open request retains its original policy snapshot. A fresh permission decision
+    // can only detect the later denial with the exact execution as its resource.
+    private sealed class SnapshotRunPolicy(RunDenial denial) : IPermissionResourceHandler
+    {
+        private readonly string? selected = denial.Selected;
+
+        public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            return ValueTask.FromResult<PermissionEvaluationResult?>(selected is not null &&
+                context.Permission == HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission &&
+                context.Resource is WorkflowExecutionState workflow && workflow.WorkflowExecutionId == selected &&
+                context.Principal.HasClaim(IdentityClaimTypes.UserId, "core-history-reader")
+                ? PermissionEvaluationResult.Denied("The qualification subject cannot inspect this run.") : null);
+        }
     }
 }

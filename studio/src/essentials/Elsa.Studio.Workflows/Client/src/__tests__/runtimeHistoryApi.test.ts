@@ -109,3 +109,52 @@ it("times out a stalled history body and can reconnect with the last confirmed b
     vi.useRealTimers();
   }
 });
+
+it("retries an authenticated history link acquisition that ignored cancellation", async () => {
+  vi.useFakeTimers();
+  try {
+    const live = { rel: "workflow-history-live", href: "runtime/workflows/instances/{workflowExecutionId}/history/live" };
+    const { context, getJson } = setup(null, [live]);
+    getJson.mockReset().mockImplementationOnce(() => new Promise(() => {}))
+      .mockResolvedValue({ capabilities: [{ id: "elsa.api.runtime", contractVersion: "1", links: [live] }] });
+    context.http.requestResponse = vi.fn(async () => new Response("", { headers: { "content-type": "application/x-ndjson" } }));
+    const request = { continuationToken: "same-bookmark" };
+    const signal = new AbortController().signal;
+    const waiting = expect(getWorkflowHistoryStream(context, "run", request, signal).next()).rejects.toMatchObject({ name: "TimeoutError" });
+    await vi.advanceTimersByTimeAsync(35_000);
+    await waiting;
+    expect(context.http.requestResponse).not.toHaveBeenCalled();
+    const retry = getWorkflowHistoryStream(context, "run", request, signal);
+    await expect(retry.next()).resolves.toMatchObject({ done: true });
+    expect(getJson).toHaveBeenCalledTimes(2);
+    expect(context.http.requestResponse).toHaveBeenCalledWith(expect.stringContaining("cursor=same-bookmark"), expect.anything());
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("bounds a stalled authentication transport before headers and disposes its late response", async () => {
+  vi.useFakeTimers();
+  try {
+    const { context } = setup(null, [{ rel: "workflow-history-live", href: "runtime/workflows/instances/{workflowExecutionId}/history/live" }]);
+    let complete!: (response: Response) => void;
+    let authSignal!: AbortSignal;
+    const cancelled = vi.fn();
+    context.http.requestResponse = vi.fn().mockImplementationOnce((_url, options: RequestInit) => {
+      authSignal = options.signal!;
+      return new Promise<Response>(resolve => { complete = resolve; });
+    }).mockImplementation(async () => new Response("", { headers: { "content-type": "application/x-ndjson" } }));
+    const request = { continuationToken: "confirmed-bookmark" };
+    const signal = new AbortController().signal;
+    const waiting = expect(getWorkflowHistoryStream(context, "run", request, signal).next()).rejects.toMatchObject({ name: "TimeoutError" });
+    await vi.advanceTimersByTimeAsync(35_000);
+    await waiting;
+    expect(authSignal.aborted).toBe(true);
+    complete(new Response(new ReadableStream({ cancel: cancelled }), { headers: { "content-type": "application/x-ndjson" } }));
+    await expect(getWorkflowHistoryStream(context, "run", request, signal).next()).resolves.toMatchObject({ done: true });
+    expect(cancelled).toHaveBeenCalledOnce();
+    expect(context.http.requestResponse).toHaveBeenNthCalledWith(2, expect.stringContaining("cursor=confirmed-bookmark"), expect.anything());
+  } finally {
+    vi.useRealTimers();
+  }
+});

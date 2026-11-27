@@ -166,7 +166,7 @@ export async function corePreviewActivityTimelineJourney(page: Page, info: TestI
   await capture(page, info, "history-committed");
 
   const revocation = process.env.UX_CORE_PREVIEW_HISTORY_AUTHORITY === "1"
-    ? await verifyLiveHistoryRevocation(page, stack.backend, route, resumeRoute) : undefined;
+    ? await verifyLiveHistoryRevocation(page, stack.backend, route, resumeRoute, runId!) : undefined;
   await receipt(info, "activity-timeline.json", { runId, publication: workflow.version.id, timeline: evidence,
     history: { prefix: first, resumedCursor: streamCursor(reconnected), tail, committedIds, revocation } });
 }
