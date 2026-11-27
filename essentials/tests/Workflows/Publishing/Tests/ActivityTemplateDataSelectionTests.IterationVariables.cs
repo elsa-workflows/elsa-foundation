@@ -96,7 +96,7 @@ public sealed partial class ActivityTemplateDataSelectionTests
     {
         var loop = new ExecutableNode("loop", "loop", "native", "1", new("native", "1", JsonSerializer.SerializeToElement(new { })),
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
-            structure: new("loop", "1", JsonSerializer.SerializeToElement(new Dictionary<string, object> { ["iterationValues"] = new[] { "" } })));
+            structure: new("loop", "1", JsonSerializer.SerializeToElement(new Dictionary<string, object> { [CompiledStructureFields.IterationValues] = new[] { "" } })));
 
         var rejected = Assert.Throws<ActivityDataSelectionRejectedException>(() => ActivityTemplatePlacer.DescribeDataSelectionFacts(Parent("root", loop), []));
         Assert.Equal("ActivityDataSelection/VariableDeclarationUnavailable", Assert.Single(rejected.Findings).Type);

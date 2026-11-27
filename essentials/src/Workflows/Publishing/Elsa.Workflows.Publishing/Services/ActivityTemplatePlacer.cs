@@ -177,13 +177,17 @@ public sealed class ActivityTemplatePlacer(
             while (parentId is not null)
             {
                 var parent = authored[parentId];
-                var keys = structures.ProjectScopedVariables(parent.Node).Select(variable => variable.ReferenceKey).ToArray();
+                var scopedKeys = structures.ProjectScopedVariables(parent.Node).Select(variable => variable.ReferenceKey).ToArray();
+                // A loop ancestor's iteration values (#5849) are declared by the loop node like its scoped variables.
+                var iterationKeys = structures.ProjectIterationVariables(parent.Node).Select(variable => variable.ReferenceKey).ToArray();
+                var keys = scopedKeys.Concat(iterationKeys).ToArray();
                 if (keys.Length != 0)
                 {
                     if (!overlays.TryGetValue(parentId, out var candidates) || candidates.Length != 1)
                         throw Rejected(parentId, "ActivityDataSelection/VariableDeclarationUnavailable", "The native scope has no exact compiled occurrence.");
-                    var compiledKeys = ReadCompiledVariableKeys(candidates[0].Structure?.Payload, parentId);
-                    if (!SameKeys(keys, compiledKeys))
+                    var payload = candidates[0].Structure?.Payload;
+                    if (!SameKeys(scopedKeys, ReadCompiledVariableKeys(payload, parentId)) ||
+                        !SameKeys(iterationKeys, ReadCompiledIterationValues(payload, parentId)))
                         throw Rejected(parentId, "ActivityDataSelection/VariableDeclarationMismatch", "The compiled native scope does not preserve its actual declarations.");
                     if (declarations.TryGetValue(parentId, out var existing) && !SameKeys(keys, existing))
                         throw Rejected(parentId, "ActivityDataSelection/VariableScopeAmbiguous", "The native scope collides with another declaration owner.");
@@ -325,9 +329,12 @@ public sealed class ActivityTemplatePlacer(
         }
     }
 
-    private static IReadOnlyCollection<string> ReadCompiledIterationValues(ExecutableNode node)
+    private static IReadOnlyCollection<string> ReadCompiledIterationValues(ExecutableNode node) =>
+        ReadCompiledIterationValues(node.Structure?.Payload, node.AuthoredActivityId);
+
+    private static IReadOnlyCollection<string> ReadCompiledIterationValues(JsonElement? payload, string origin)
     {
-        if (node.Structure?.Payload is not { ValueKind: JsonValueKind.Object } structure ||
+        if (payload is not { ValueKind: JsonValueKind.Object } structure ||
             !structure.TryGetProperty(CompiledStructureFields.IterationValues, out var value))
             return [];
         try
@@ -338,7 +345,7 @@ public sealed class ActivityTemplatePlacer(
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException)
         {
-            throw Rejected(node.AuthoredActivityId, "ActivityDataSelection/VariableDeclarationUnavailable", "The compiled iteration values do not match their owned contract.");
+            throw Rejected(origin, "ActivityDataSelection/VariableDeclarationUnavailable", "The compiled iteration values do not match their owned contract.");
         }
     }
 

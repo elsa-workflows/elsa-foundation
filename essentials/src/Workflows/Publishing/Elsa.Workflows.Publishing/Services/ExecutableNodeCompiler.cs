@@ -1086,8 +1086,6 @@ public sealed class ExecutableNodeCompiler(
 
         if (structure.Payload.ValueKind != JsonValueKind.Object)
             throw new ArgumentException($"Activity node '{nodeId}' has a non-object executable structure payload.");
-        if (structure.Payload.TryGetProperty(CompiledStructureFields.IterationValues, out _))
-            throw new ArgumentException($"Activity node '{nodeId}' structure '{structure.Kind}' writes the Publishing-owned field '{CompiledStructureFields.IterationValues}'.");
         var hasVariables = structure.Payload.TryGetProperty("variables", out var variables) && variables.ValueKind != JsonValueKind.Null;
         var iterationValues = activityStructureService.ProjectIterationVariables(activity).Select(value => value.ReferenceKey).ToArray();
         if (!hasVariables && iterationValues.Length == 0)
