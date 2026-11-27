@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
+using static Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeKernelScheduleControl;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeOperationalStoreSupport;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -59,10 +60,10 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
                 throw new TriggerOperationException("route-conflict", "Another published workflow owns this schedule.");
             if (pending.Remove(row.Id, out var replacement))
             {
-                if (current.Scope != replacement.Scope || current.ScheduleKey != replacement.ScheduleKey ||
+                if (CanonicalScope(current.Scope) != CanonicalScope(replacement.Scope) || current.ScheduleKey != replacement.ScheduleKey ||
                     current.DefinitionId != replacement.DefinitionId || current.TriggerNode != replacement.TriggerNode)
                     throw InvalidControl();
-                if (current.Owner != replacement.Owner)
+                if (current.Owner != replacement.Owner || current.Scope != replacement.Scope)
                 {
                     if (current.Owner is { } prior && prior.PublicationRevision >= replacement.Owner!.PublicationRevision)
                         throw InvalidControl();
@@ -134,7 +135,7 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
     private static RuntimeKernelScheduleControl ReadScoped(RuntimeKernelScheduleControlEntity row, TriggerScope scope)
     {
         var control = Read(row, scope.Persistence);
-        return control.Scope == scope ? control : throw InvalidControl();
+        return CanonicalScope(control.Scope) == CanonicalScope(scope) ? control : throw InvalidControl();
     }
 
     private static RuntimeKernelScheduleControl Read(RuntimeKernelScheduleControlEntity row, PersistenceScope physicalScope)
@@ -159,10 +160,10 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
 
     private static string LogicalKey(string definition, string node) => $"schedule:{definition}:{node}";
 
-    private static string TenantHash(TriggerScope scope) => Hash(JsonSerializer.Serialize(scope.TenantId));
+    private static string TenantHash(TriggerScope scope) => Hash(JsonSerializer.Serialize(CanonicalScope(scope).TenantId));
 
     private static string Identity(TriggerScope scope, string key) =>
-        CompositeId(scope.Persistence.Value, "kernel-schedule-control-v1", JsonSerializer.Serialize(scope.TenantId), key);
+        CompositeId(scope.Persistence.Value, "kernel-schedule-control-v1", JsonSerializer.Serialize(CanonicalScope(scope).TenantId), key);
 
     private static InvalidDataException InvalidControl() => new("A schedule control differs from its physical identity or authority.");
 }

@@ -38,13 +38,7 @@ internal static class KernelScheduleOccurrenceContract
             store.TryAcceptAsync(offer, _ => ValueTask.FromResult(scheduleNow ?? clock.GetUtcNow()));
         var first = new WorkflowExecutableIdentity("first-material", "material-producer", "material-v1", "1", "first-hash");
         var second = first with { ArtifactId = "replacement-material", DefinitionVersionId = "material-v2", ArtifactHash = "replacement-hash" };
-        foreach (var identity in new[] { first, second })
-            await artifacts.SaveAsync(new(identity,
-                new ExecutableNode(node, "authored", "test/activity", "1.0.0",
-                    new RuntimeActivityDescriptor("test", "1.0.0", JsonSerializer.SerializeToElement(new { })),
-                    new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
-                new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(),
-                incidentStrategy: IncidentStrategyBuiltIns.FaultReference));
+        foreach (var identity in new[] { first, second }) await artifacts.SaveAsync(Executable(identity, node));
 
         async Task PrepareAsync(WorkflowExecutableIdentity identity, string activation, string name, string trigger = node, string? overrideKey = null)
         {
@@ -206,7 +200,73 @@ internal static class KernelScheduleOccurrenceContract
         Assert.True(await store.TryAcceptAsync(original, _ => throw new InvalidOperationException("Replays need no schedule clock.")));
         Assert.Equal(new[] { first.ArtifactId, second.ArtifactId }, (await relay.ListPinnedExecutableArtifactIdsAsync()).Order(StringComparer.Ordinal));
         Assert.Equal(3, await context.KernelScheduleOccurrences.CountAsync());
+        await CheckDefaultAliasHandoffAsync(open);
     }
+
+    private static async Task CheckDefaultAliasHandoffAsync(Func<RuntimeDbContext> open)
+    {
+        const string defaultTenant = PersistenceScope.DefaultValue;
+        const string definition = "default-alias-timer";
+        const string node = "timer";
+        const string slotName = "Blue";
+        const string key = "schedule:default-alias-timer:timer";
+        var unqualified = new TriggerScope(new(defaultTenant), null);
+        var named = unqualified with { TenantId = defaultTenant };
+        var access = new Accessor(unqualified.Persistence);
+        var clock = new FakeTimeProvider(Now);
+        var identity = new WorkflowExecutableIdentity("default-alias-artifact", definition, "v1", "1", "default-alias-hash");
+        var slot = WorkflowActivationSlotIdentity.Create(definition, slotName);
+        var claim = RuntimeKernelScheduleOccurrence.ReservationKey(key);
+        await using var context = open();
+        var artifacts = new EfWorkflowExecutableStore(context, access);
+        var references = new EfWorkflowExecutableSourceReferenceStore(context, access, new Codec(), clock);
+        var bindings = new EfWorkflowTriggerBindingStore(context, access);
+        var authority = new EfWorkflowActivationAuthority(context, access);
+        var activationSwitch = new EfWorkflowActivationSwitch(authority, bindings, references, access, clock);
+        var claims = new EfIngressReservationStore(context, access);
+        await artifacts.SaveAsync(Executable(identity, node));
+
+        var physicalScope = EfRuntimeOperationalStoreSupport.Hash(defaultTenant);
+        string? rowId = null;
+        var aliases = new[] { unqualified, named, unqualified };
+        for (var i = 0; i < aliases.Length; i++)
+        {
+            var exact = aliases[i];
+            var activation = $"default-alias-{i + 1}";
+            var sourceReferenceId = WorkflowActivationReferenceIdentity.Create(activation);
+            await references.SaveAsync(new(sourceReferenceId, identity.ArtifactId, "definition", definition, identity.ArtifactVersion,
+                definition, identity.DefinitionVersionId, identity.ArtifactVersion, Now, Now, WorkflowExecutableReferenceScope.Published,
+                ActivationId: activation, SlotId: slot, TenantId: exact.TenantId));
+            await bindings.PrepareActivationAsync(activation,
+                [new(WorkflowTriggerBinding.BuildId(activation, identity.ArtifactId, node, claim), identity.ArtifactId,
+                    definition, identity.ArtifactVersion, identity.ArtifactHash, node, RuntimeKernelScheduleOccurrence.ReservationType,
+                    claim, null, new Dictionary<string, string> { [RuntimeKernelScheduleControl.ScheduleKeyMetadata] = key }, Now,
+                    activation, slot, TriggerCardinality.ReservationOnly, false)]);
+            Assert.True((await activationSwitch.TryActivateAsync(new(definition, slotName, activation,
+                WorkflowActivationSource.Publishing, i, Now))).Succeeded);
+
+            await using var restarted = open();
+            var reader = new EfRuntimeKernelScheduleControlStore(restarted, access);
+            var expected = new RuntimeKernelScheduleControl(exact, key, definition, node, i + 1,
+                new(slot, slotName, activation, i + 1, sourceReferenceId, identity));
+            Assert.Equal(expected, await reader.FindAsync(unqualified, key));
+            Assert.Equal(expected, await reader.FindAsync(named, key));
+            Assert.Equal(expected, Assert.Single((await reader.ListAsync(unqualified, null, 1)).Items));
+            Assert.Equal(expected, Assert.Single((await reader.ListAsync(named, null, 1)).Items));
+            var physicalId = await restarted.KernelScheduleControls.Where(row => row.ScopeKeyHash == physicalScope).Select(row => row.Id).SingleAsync();
+            rowId ??= physicalId;
+            Assert.Equal(rowId, physicalId);
+            Assert.NotNull(await claims.FindAsync(exact, RuntimeKernelScheduleOccurrence.ReservationType, claim));
+            Assert.Null(await claims.FindAsync(exact.TenantId is null ? named : unqualified, RuntimeKernelScheduleOccurrence.ReservationType, claim));
+        }
+    }
+
+    private static WorkflowExecutable Executable(WorkflowExecutableIdentity identity, string node) => new(identity,
+        new ExecutableNode(node, "authored", "test/activity", "1.0.0",
+            new RuntimeActivityDescriptor("test", "1.0.0", JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
+        new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(),
+        incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static EfRuntimeKernelScheduleOccurrenceStore Store(RuntimeDbContext context, Accessor access, TimeProvider clock)
     {
