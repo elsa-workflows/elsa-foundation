@@ -39,15 +39,14 @@ internal static partial class KernelAuthoredEventChecks
                 var live = await ingress.SendAsync(scope, new Contract.Target.Start(new(model.Type, "live-waiter", "fixture")),
                     "waiter", Contract.Kinds.Start, cancellationToken: token);
                 Check(live is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "the fixture has a durable live waiter");
-                await UntilAsync(async () =>
-                {
-                    await using var db = open();
-                    return await db.Subscriptions.AnyAsync(item => item.Key == scope.Tenant + "_" + PublicEventActor.Key && item.Wait == "live", token);
-                });
+                await using (var db = open())
+                    while (!await db.Subscriptions.AnyAsync(item => item.Key == scope.Tenant + "_" + PublicEventActor.Key &&
+                        item.Wait == "live", token))
+                        await Task.Delay(25, token);
 
                 var liveReply = await RequestAsync(PublicEventActor.Key, "live", "live item");
                 Check(liveReply is { Status: Contract.ActorStatus.Finished, Error: null }, "the Event host still holds replies from exact live waits");
-                var details = await reads.GetAsync(scope, live.Actor!, token);
+                var details = await reads.GetAsync(scope, live.Actor!.Value, token);
                 Check(details is not null && DurableKeyJson.Read<string[]>(details.Header.TypeData) is [_, PublicEventActor.Key, "live", "live item", "live"],
                     "the live waiter received the exact outside Event even when generic starts were closed");
             }
