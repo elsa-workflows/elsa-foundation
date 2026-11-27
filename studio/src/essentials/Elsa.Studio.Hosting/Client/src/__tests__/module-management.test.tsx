@@ -572,6 +572,31 @@ describe("module management page", () => {
     await unmount();
   });
 
+  it("preserves version ranges and directory settings when editing only trust", async () => {
+    const fetchMock = mockFetch();
+    const registry = studioRegistry();
+    const includePatterns = ["Elsa.Example [1.0.0, 2.0.0)"];
+    const directory = { watch: false, debounceWindow: "00:00:08" };
+    const { container, unmount } = await renderPackageFeedsPage(stubApi({
+      hostGetJson: async () => ({
+        ...registry,
+        feeds: [{ ...registry.feeds[0], includeAll: false, includePatterns, directory }]
+      })
+    }));
+    const edit = container.querySelector<HTMLButtonElement>("[aria-label='Edit studio-local-packages']")!;
+    flushSync(() => edit.click());
+    const form = document.querySelector<HTMLFormElement>("form[role=dialog]")!;
+    flushSync(() => form.querySelector<HTMLInputElement>("[name=trust]")!.click());
+    flushSync(() => form.requestSubmit());
+    await flushPromises();
+
+    const write = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(JSON.parse(String(write?.[1]?.body))).toMatchObject({
+      trust: "Trusted", includeAll: false, includePatterns, directory
+    });
+    await unmount();
+  });
+
   it("confirms before deleting a package feed and calls the delete API when confirmed", async () => {
     const fetchMock = mockFetch();
     const confirm = vi.fn<ElsaStudioModuleApi["dialogs"]["confirm"]>(async () => true);

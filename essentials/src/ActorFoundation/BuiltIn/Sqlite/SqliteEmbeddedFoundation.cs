@@ -150,6 +150,9 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     public Task<Contract.IIngress> OpenIngressAsync(CancellationToken cancellationToken = default) =>
         SqliteEmbeddedHosting.OpenFoundationWithRequestsAsync(InstalledPath, actorType, requests.Value, cancellationToken);
 
+    /// <summary>Binds one-way protected starts to this installed SQLite file and the host's selected tenant.</summary>
+    public IProtectedRootStarts BindProtectedRootStarts(Contract.BoundScope scope) => requests.Value.BindProtectedRootStarts(scope);
+
     /// <summary>Confirms an exact protected held start under the installed root source.</summary>
     public Task<RootStartProof> ConfirmPreparedStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
         CancellationToken cancellationToken = default) =>

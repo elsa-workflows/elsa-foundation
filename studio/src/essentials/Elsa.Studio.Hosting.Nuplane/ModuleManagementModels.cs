@@ -74,7 +74,10 @@ internal sealed record ModuleManagementRegistryFeed(
     string? DirectoryPath,
     bool IncludeAll,
     IReadOnlyList<string> IncludePatterns,
-    ModuleManagementDirectoryFeedSettings Directory);
+    ModuleManagementDirectoryFeedSettings Directory)
+{
+    public string? Trust { get; init; }
+}
 
 /// <summary>A feed write request. The credential is accepted only here, on the way into the stored configuration.</summary>
 internal sealed record ModuleManagementFeed(
@@ -84,7 +87,10 @@ internal sealed record ModuleManagementFeed(
     string? Credentials,
     bool IncludeAll,
     IReadOnlyList<string> IncludePatterns,
-    ModuleManagementDirectoryFeedSettings Directory);
+    ModuleManagementDirectoryFeedSettings Directory)
+{
+    public string? Trust { get; init; }
+}
 
 internal sealed record ModuleManagementDirectoryFeedSettings(bool Watch, string DebounceWindow);
 

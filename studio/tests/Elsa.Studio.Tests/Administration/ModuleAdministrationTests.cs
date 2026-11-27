@@ -55,7 +55,7 @@ public sealed class ModuleAdministrationTests
     {
         await using var host = await AdministrationHost.StartAsync(nativeStore: profile != "ordinary", configureNuplane: nuplane =>
         {
-            if (profile == "ordinary") nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); });
+            if (profile == "ordinary") nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Trust = Nuplane.Abstractions.FeedTrustLevel.Trusted; feed.Watch = false; feed.IncludeAll(); });
         });
         PackageAssetTests.Pack(host, "1.0.0", "payload", oversizedNuspec: profile == "oversized");
         await PackageAssetTests.Reconcile(host);
@@ -388,6 +388,70 @@ public sealed class ModuleAdministrationTests
         using var registry = await host.Client.GetAsync(Prefix + "/registry");
         registry.EnsureSuccessStatusCode();
         Assert.DoesNotContain(credential, await registry.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Feed_trust_is_explicit_and_only_inherited_for_the_same_address()
+    {
+        await using var host = await AdministrationHost.StartAsync();
+        var source = Feed("candidate", "one");
+        source["trust"] = "Trusted";
+        using (var create = await host.Client.PostAsJsonAsync(Prefix + "/feeds", source))
+            create.EnsureSuccessStatusCode();
+
+        using (var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/candidate", Feed("candidate", "one")))
+            edit.EnsureSuccessStatusCode();
+        using (var registry = await host.Client.GetAsync(Prefix + "/registry"))
+        {
+            var feeds = JsonNode.Parse(await registry.Content.ReadAsStringAsync())!["feeds"]!.AsArray();
+            Assert.Equal("Trusted", (string?)Assert.Single(feeds)!["trust"]);
+        }
+
+        using (var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/candidate", Feed("candidate", "two")))
+            edit.EnsureSuccessStatusCode();
+        using var updated = await host.Client.GetAsync(Prefix + "/registry");
+        var updatedFeeds = JsonNode.Parse(await updated.Content.ReadAsStringAsync())!["feeds"]!.AsArray();
+        Assert.Equal("Untrusted", (string?)Assert.Single(updatedFeeds)!["trust"]);
+
+        var invalidSource = Feed("invalid", "three");
+        invalidSource["trust"] = "1";
+        using var invalid = await host.Client.PostAsJsonAsync(Prefix + "/feeds", invalidSource);
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_feed_with_package_trust_overrides_cannot_change_address_or_be_deleted()
+    {
+        await using var host = await AdministrationHost.StartAsync(
+            nuplane => nuplane.Services.Configure<Nuplane.Feeds.Configuration.FeedResolutionOptions>(options =>
+                options.TrustOverrides.Add(new() { FeedName = "candidate", PackageId = "Elsa.Example", Reason = "Fixture approval" })),
+            beforeStudio: builder => File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"),
+                """{"Nuplane":{"Setup":{"Feeds":[{"Name":"candidate","DirectoryPath":"one","Trust":"Untrusted","Directory":{"Watch":false}}]}}}"""));
+
+        using var same = await host.Client.PutAsJsonAsync(Prefix + "/feeds/candidate", Feed("candidate", "one"));
+        same.EnsureSuccessStatusCode();
+
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/candidate", Feed("candidate", "two"));
+        Assert.Equal(HttpStatusCode.Conflict, edit.StatusCode);
+        using var delete = await host.Client.DeleteAsync(Prefix + "/feeds/candidate");
+        Assert.Equal(HttpStatusCode.Conflict, delete.StatusCode);
+    }
+
+    [Fact]
+    public async Task Feed_address_changes_check_pending_overrides_in_the_management_file()
+    {
+        const string original = """{"Nuplane":{"Setup":{"Feeds":[{"Name":"candidate","DirectoryPath":"one","Trust":"Untrusted","Directory":{"Watch":false}}]}}}""";
+        await using var host = await AdministrationHost.StartAsync(beforeStudio: builder =>
+            File.WriteAllText(Path.Combine(builder.Environment.ContentRootPath, "nuplane-management.json"), original));
+        var file = Path.Combine(host.Root, "nuplane-management.json");
+        var document = JsonNode.Parse(original)!;
+        document["Nuplane"]!["FeedResolution"] = JsonNode.Parse(
+            """{"TrustOverrides":[{"FeedName":"candidate","PackageId":"Elsa.Example","Reason":"Fixture approval"}]}""");
+        await File.WriteAllTextAsync(file, document.ToJsonString());
+
+        using var edit = await host.Client.PutAsJsonAsync(Prefix + "/feeds/candidate", Feed("candidate", "two"));
+        Assert.Equal(HttpStatusCode.Conflict, edit.StatusCode);
+        Assert.Equal("one", JsonNode.Parse(await File.ReadAllTextAsync(file))!["Nuplane"]!["Setup"]!["Feeds"]![0]!["DirectoryPath"]!.GetValue<string>());
     }
 
     [Fact]

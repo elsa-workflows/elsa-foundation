@@ -181,7 +181,7 @@ public sealed class PackageAssetTests
     public async Task Changed_package_asset_ignores_the_previous_install_date_during_revalidation()
     {
         await using var host = await AdministrationHost.StartAsync(nuplane =>
-            nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Watch = false; feed.IncludeAll(); }));
+            nuplane.AddDirectoryFeed("ordinary", "feed", feed => { feed.Trust = Nuplane.Abstractions.FeedTrustLevel.Trusted; feed.Watch = false; feed.IncludeAll(); }));
         var archiveTimestamp = DateTimeOffset.UtcNow.AddDays(-1);
         Pack(host, "1.0.0", "first", assetTimestamp: archiveTimestamp);
         await Reconcile(host);
