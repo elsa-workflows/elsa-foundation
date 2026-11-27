@@ -72,7 +72,7 @@ public sealed partial class EfStore
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 DELETE FROM "Subscriptions" WHERE "Instance" = {root.Actor} AND "Partition" = {root.Partition}
                 """, token);
-        return await VerifySqliteParkProjectionAsync(db, root.Tenant, root.Reference, openRevision, park.EncodedFault, token) &&
+        return await VerifyRootParkProjectionAsync(db, root.Tenant, root.Reference, openRevision, park.EncodedFault, token) &&
             (park.ChildEffects is null || await park.ChildEffects.BindAsync(db, root.Tenant, token));
     }
 
@@ -83,10 +83,4 @@ public sealed partial class EfStore
             AND "Id" IN (SELECT value FROM json_each({Json.Write(ids)})) AND NOT "Done" AND "FoundationKeptBy" IS NULL
         """, token) == ids.Length;
 
-    private static Task<bool> VerifySqliteParkProjectionAsync(KernelDb db, string tenant, string reference, long revision,
-        string fault, CancellationToken token) => db.Database.SqlQuery<bool>($"""
-        SELECT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {tenant} AND "Reference" = {reference}
-            AND "Status" = {(int)InstanceStatus.Faulted} AND "ParkRevision" = {revision} AND "ParkFault" = {fault}
-            AND "ParkAt" > 0 AND "EndedAt" IS NULL AND "TerminalRevision" IS NULL) AS "Value"
-        """).SingleAsync(token);
 }

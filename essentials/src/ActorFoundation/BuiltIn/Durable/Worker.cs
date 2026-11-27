@@ -3581,6 +3581,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _type.RevisitsHeld(row.Model, row, stimulus)
             ? unit.Slot!.Inbox.Where(i => i.Held && i.Durable && !i.Taken && i.InboxOrder < stimulus.InboxOrder).Select(i => i.Message.InboxKey).ToArray()
             : null;
+        var promotion = PendingPromotion(unit);
+        var inlinePark = promotion is not null && unit.OpensPark && unit.Slot is { Unwritten: true, Row: { } checkpoint } &&
+            unit.Consumed.Count != 0 && unit.Consumed.TrueForAll(delivery => !delivery.Durable && delivery.Original is null)
+            ? new InlineParkWitness(checkpoint, unit.Consumed.Select(delivery => delivery.Message).ToArray()) : null;
         return new TurnCommit(unit.Instance, unit.Row, unit.Expected,
             Has(Flaw.KeepConsumedMessages) ? [] : [.. consumed, .. settled, .. cancelled],
             Has(Flaw.KeepConsumedMessages) ? [] : done.ToList(),
@@ -3588,9 +3592,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
             unit.Held.Where(i => i.Durable && conversions?.ContainsKey(i) != true).Select(i => i.Message.InboxKey).ToList(), unit.Delete)
         {
             FoundationHeader = unit.FoundationHeader,
-            RootCreator = PendingPromotion(unit) ?? (unit is { Expected: null, OpensPark: false } &&
+            RootCreator = promotion ?? (unit is { Expected: null, OpensPark: false } &&
                 unit.Consumed is [{ Durable: true, RootCreator: { } witness } source] && ReferenceEquals(source.Message, witness.Envelope)
                 ? witness : null),
+            FoundationInlinePark = inlinePark,
             FoundationRootOperator = unit.Consumed is [var qualified] && qualified.Message.Operator is { } command &&
                 (command.RootHeldReply || unit.Row?.FoundationDispatchHeader is not null ||
                     unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null })

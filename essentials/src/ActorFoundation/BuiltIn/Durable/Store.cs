@@ -61,6 +61,7 @@ public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, 
 internal abstract record RootCreatorWitness(Message Envelope);
 internal sealed record InlineRootCreatorWitness(object Issuer, Message Creator, Func<TimeSpan> LeaseRemaining)
     : RootCreatorWitness(Creator);
+internal sealed record InlineParkWitness(InstanceRow Checkpoint, IReadOnlyList<Message> Inputs);
 
 /// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
 public sealed record SubscriptionRow(
@@ -184,6 +185,7 @@ public sealed record TurnCommit(
 {
     internal FoundationHeaderChange? FoundationHeader { get; init; }
     internal RootCreatorWitness? RootCreator { get; init; }
+    internal InlineParkWitness? FoundationInlinePark { get; init; }
     // The qualified writer compares the exact envelope the owner dispatched with the locked occurrence.
     internal Message? FoundationRootOperator { get; init; }
     internal Message? FoundationRootRefusedInput { get; init; }

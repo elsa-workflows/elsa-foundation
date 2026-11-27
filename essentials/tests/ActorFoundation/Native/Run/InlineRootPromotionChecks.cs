@@ -173,8 +173,11 @@ internal static class InlineRootPromotionChecks
                 var parent = new Workflow("inline-parent", Wf.Sequence("run", Wf.Delay("short", 60),
                     Wf.Dispatch("dispatch", selectedChild.Id, wait: true), Wf.SetOutput("parent", "result", Binding.Result("dispatch", "Output.value"))))
                     { ExecutableSelection = "private-125-parent" };
+                var parkWorkflow = new Workflow("inline-park", Wf.Sequence("run", Wf.WriteLine("once", "before inline Park"), Wf.Delay("failed-timer", 90),
+                    Wf.Node<FailAfterLocalTimer>("trigger-failure"), Wf.WriteLine("after", "after inline Park")))
+                    { ExecutableSelection = "private-125-park" };
                 var registry = new WorkflowRegistry().Add(workflow).Add(shortWait).Add(pure).Add(longTimer).Add(earlyTimers).Add(timedJob).Add(terminal)
-                    .Add(parent).Add(selectedChild);
+                    .Add(parent).Add(selectedChild).Add(parkWorkflow);
                 var model = new NativeExecutionModel(registry, new NativeExecutionOptions { UseStructuralJournal = true });
                 var actor = new WorkflowActorType([model]);
                 var spec = WorkflowActorType.Start(NativeExecutionModel.Start(workflow, Modes.Ephemeral));
@@ -357,6 +360,7 @@ internal static class InlineRootPromotionChecks
                         !await HasChildBirthAsync(childOffers[refusedParent].Offer.Actor, token),
                         "definitive host refusal prevents the parent checkpoint and child birth together");
 
+                    var parkedRun = await QualifyParkAsync();
                     var early = await QualifyEarlierTimerAsync();
                     var parentRun = QueueExpected("accepted-child", parent, 2);
                     await WaitForAsync(parentRun.Outcome);
@@ -369,7 +373,8 @@ internal static class InlineRootPromotionChecks
                     await owner.ReleaseAsync(token);
 
                     var cold = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
-                    var coldModel = new NativeExecutionModel(new WorkflowRegistry().Add(workflow).Add(longTimer).Add(earlyTimers).Add(parent).Add(selectedChild),
+                    var coldModel = new NativeExecutionModel(new WorkflowRegistry().Add(workflow).Add(longTimer).Add(earlyTimers)
+                        .Add(parent).Add(selectedChild).Add(parkWorkflow),
                         new NativeExecutionOptions { UseStructuralJournal = true });
                     var coldActor = new WorkflowActorType([coldModel]);
                     await cold.EnableRootSelfSendsAsync(token);
@@ -421,6 +426,7 @@ internal static class InlineRootPromotionChecks
                         await cold.ReadRootTerminalOutputAsync(scope.Tenant, parentRun.Reference.Id, parentEnd, true, token) is { Values: not null } childOutput &&
                         System.Text.Encoding.UTF8.GetString(childOutput.Values).Contains("selected inline child", StringComparison.Ordinal),
                         "a fresh owner resolves the exact selected child and resumes the parent without replaying its creator");
+                    await RecoverParkAsync(coldOwner, cold, parkedRun);
                     await coldOwner.ReleaseAsync(token);
 
                     var shortLease = TimeSpan.FromMilliseconds(1_200);
@@ -488,6 +494,66 @@ internal static class InlineRootPromotionChecks
                         await physical.ReadFirstRootAsync(scope.Tenant, queued.Reference.Id, token) is { Revision: 2 },
                         "flush promotes the pending timer under its original authored revision and the checkpoint's first durable revision");
                     return queued.Reference;
+                }
+
+                async Task<Contract.ActorRef> QualifyParkAsync()
+                {
+                    unwrittenRevision = 0;
+                    var queued = QueueExpected("park-after-volatile-work", parkWorkflow, 2);
+                    await WaitUnwrittenAsync(1);
+                    Check(await physical.ReadFirstRootAsync(scope.Tenant, queued.Reference.Id, token) is null,
+                        "the exact pre-failure Native state has not been written");
+                    await WaitForAsync(queued.Outcome);
+                    var disposition = await queued.Outcome;
+                    var parked = await physical.ReadFirstRootAsync(scope.Tenant, queued.Reference.Id, token);
+                    Check(disposition == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Faulted) &&
+                        parked is { Status: InstanceStatus.Faulted, Revision: 2, ParkAt: > 0, TerminalAt: null } &&
+                        await physical.ReadRootActorAsync(scope.Tenant, queued.Reference.Id, token) is { Item.ParkRevision: 2 },
+                        $"the first physical checkpoint is the selected Park ({disposition}, row status {parked?.Status})");
+                    var actor = parked!.Actor.Id;
+                    await using var db = Open();
+                    var kept = await db.Database.SqlQuery<bool>($"""
+                        SELECT (SELECT count(*) = 1 FROM "Messages" WHERE "Target" = {actor})
+                            AND EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {actor} AND "Done"
+                                AND "InboxScope" = {EfStore.RootSelfScope} AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived})
+                            AND EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Reference" = {queued.Reference.Id} AND "FirstRevision" = 2)
+                            AND (SELECT count(*) = 1 FROM "Journal" WHERE "Instance" = {actor} AND "Revision" = 2) AS "Value"
+                        """).SingleAsync(token);
+                    Check(kept && await physical.ReadRootSequencedJournalAsync(scope.Tenant, queued.Reference.Id, 0, null, 64, token) is
+                            { CapturedFromStart: true } history && history.Items.All(entry => entry.Revision == 2) &&
+                        trace.ToString().Split("before inline Park", StringSplitOptions.None).Length == 2,
+                        "Park keeps the exact failed local timer and committed history without a replay creator or pseudo revision");
+                    return queued.Reference;
+                }
+
+                async Task RecoverParkAsync(Worker successor, EfStore backend, Contract.ActorRef parked)
+                {
+                    var (projected, _) = await backend.ReadRootActorAsync(scope.Tenant, parked.Id, token) ??
+                        throw new InvalidOperationException("The committed Park is missing.");
+                    var window = TimeSpan.FromHours(1);
+                    var pg = postgres ? new PostgresRootAdmission(Open, window) : null;
+                    await using var db = Open();
+                    var cursor = pg is not null ? await pg.OpenJournalCursorAsync(token) : await SqliteRootAdmission.ReadSelectionCursorAsync(db, token);
+                    var selection = PostgresRootSelection.SealPark(cursor, scope.Tenant, parked.Id, projected.ParkRevision!.Value, projected.ParkAt!.Value);
+                    FailAfterLocalTimer.Allow = true;
+                    var admitted = pg is not null
+                        ? await pg.AdmitRootOperatorAsync(scope.Tenant, parked.Id, "recover-inline-park", Kinds.Recover, null, null, token, selection) is not null
+                        : (await new SqliteRootAdmission(Open, window, sqliteDefinitions).OperateAsync(scope.Tenant, parked, "recover-inline-park",
+                            Kinds.Recover, selection, null, null, token)).Outcome == Contract.AdmissionOutcome.Accepted;
+                    Check(admitted, "the cold store accepts Recover for the exact Park selection");
+                    var physicalActor = await backend.ReadFirstRootAsync(scope.Tenant, parked.Id, token);
+                    await successor.WokenAsync(new InstanceRef(physicalActor!.Actor.Id), token);
+                    EfStore.RootImage? current;
+                    do
+                    {
+                        await successor.RunAsync(token);
+                        await Task.Delay(5, token);
+                        current = await backend.ReadFirstRootAsync(scope.Tenant, parked.Id, token);
+                    } while (current?.Status != InstanceStatus.Finished);
+                    Check(current is { ParkAt: null, Revision: >= 4 } && FailAfterLocalTimer.Entries == 2 &&
+                        trace.ToString().Split("before inline Park", StringSplitOptions.None).Length == 2 &&
+                        trace.ToString().Split("after inline Park", StringSplitOptions.None).Length == 2,
+                        "cold Recover retries the one failed timer and never replays the earlier Native work");
                 }
 
                 async Task WaitForFinishAsync(Worker selected, EfStore backend, string reference)
@@ -616,6 +682,22 @@ internal static class InlineRootPromotionChecks
             await Release.Task.WaitAsync(context.CancellationToken);
             return Complete();
         }
+    }
+
+    public sealed class FailAfterLocalTimer : CompositeActivity
+    {
+        internal static bool Allow;
+        internal static int Entries;
+
+        protected override void Execute(CompositeContext context)
+        {
+            Interlocked.Increment(ref Entries);
+            if (!Allow) throw new InvalidOperationException("The Native timer continuation could not execute.");
+            context.Complete();
+        }
+
+        protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
+            throw new InvalidOperationException("This activity does not start any children.");
     }
 
     private static void Check(bool result, string description)

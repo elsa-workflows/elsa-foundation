@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Kernel.Foundation.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -81,10 +82,11 @@ public sealed partial class EfStore
             turn.Instance != binding.Actor || birth != (binding.Tenant, creator.InboxKey) ||
             receiptWindow <= TimeSpan.Zero)
             throw RootShape();
-        var ended = row.Status is InstanceStatus.Finished or InstanceStatus.Faulted;
+        var parked = turn.FoundationInlinePark is not null;
+        var ended = !parked && row.Status is (InstanceStatus.Finished or InstanceStatus.Faulted);
         await using (var profile = create())
             if (!profile.UsesRootInlinePromotion &&
-                (row.Revision != 1 || ended || turn.Sent.Count != 0 || turn.FoundationRootChildSends is not null)) throw RootShape();
+                (row.Revision != 1 || ended || parked || turn.Sent.Count != 0 || turn.FoundationRootChildSends is not null)) throw RootShape();
 
         var fingerprint = CreationProtocol.Fingerprint(spec, creator.Kind, creator.Payload)!;
         var root = new WorkerRoot(binding.Tenant, binding.Reference, binding.Actor, fence.Partition, fingerprint);
@@ -94,23 +96,27 @@ public sealed partial class EfStore
         var attached = children?.Starts.Where(child => child.Creator.Start!.Parent is not null)
             .Select(child => new CreationAddress(child.Creator.Target.Id, 1)) ?? [];
         var supported = new TurnCommit(row.Id, row, null, turn.Consumed, turn.Done, turn.Sent,
-            turn.Subscribed, turn.Unsubscribed, turn.Journal, Unsubscribe: ended, Held: turn.Held)
+            turn.Subscribed, turn.Unsubscribed, turn.Journal, Unsubscribe: ended || parked, Held: turn.Held)
         {
             FoundationHeader = header,
+            OpensPark = parked,
+            FoundationInlinePark = turn.FoundationInlinePark,
+            FoundationKept = parked && turn.FoundationKept is { Count: 0 } ? turn.FoundationKept : null,
             FoundationRootChildSends = turn.FoundationRootChildSends,
             FoundationTerminalOutput = row.Status == InstanceStatus.Finished ? turn.FoundationTerminalOutput : null
         };
         var expected = new InstanceRow(binding.Actor, spec.Model, spec.Definition, row.Status,
-            row.State, row.Revision, Parent: null, Jobs: RootJobsEnabled ? row.Jobs : null, History: spec.History, Children: children?.Children,
+            row.State, row.Revision, Parent: null, Fault: parked ? row.Fault : null, Jobs: RootJobsEnabled ? row.Jobs : null,
+            History: spec.History, Children: children?.Children,
             StateVersion: row.StateVersion, Creation: 1, StartIntent: fingerprint)
         {
             FoundationInlineBirth = birth, FoundationInlineHeader = row.FoundationInlineHeader,
             FoundationNullState = row.FoundationNullState, FoundationDispatchHeader = row.FoundationDispatchHeader,
             NextJobGeneration = row.NextJobGeneration
         };
-        if (turn != supported || row != expected || row.Status != InstanceStatus.Running && !ended ||
+        if (turn != supported || row != expected || row.Status != InstanceStatus.Running && !ended && !parked ||
             children is { Notice: not null } || !ChildRegistry.Read(row.Children).SequenceEqual(attached) ||
-            row.Status == InstanceStatus.Faulted && !RootTimedJobSettlementEnabled ||
+            row.Status == InstanceStatus.Faulted && !parked && !RootTimedJobSettlementEnabled ||
             !RootJobsEnabled && row.NextJobGeneration is not (null or 0) ||
             ended && (turn.Sent.Count != 0 || turn.Subscribed.Count != 0 || row.Jobs is not null) ||
             turn.Consumed.Count + turn.Done.Count + turn.Unsubscribed.Count + (turn.Held?.Count ?? 0) != 0 ||
@@ -121,11 +127,12 @@ public sealed partial class EfStore
             throw RootShape();
         if (children is { Starts.Length: > 0, PendingBirths: null }) return null;
 
+        var park = turn.FoundationInlinePark is { } parkWitness ? LowerInlinePark(root, turn, row, parkWitness, witness) : null;
         var sends = EncodeRootFirstSends(root, row, turn, promotingInline: true);
         var first = WithRootChildEffects(PrepareFirstRoot(binding.Tenant, binding.Reference, creator, fence,
             row.FoundationNullState ? null : row.State, row.StateVersion, header.TypeData, header.Labels, turn.Journal,
-            jobState: row.NextJobGeneration is null ? null : new RootJobState(row.Jobs, row.NextJobGeneration),
-            status: row.Status, terminalGrowth: dispatch.TerminalGrowth, revision: row.Revision), children, null);
+            jobState: row.NextJobGeneration is null ? null : new RootJobState(row.Jobs, row.NextJobGeneration), status: row.Status,
+            terminalGrowth: dispatch.TerminalGrowth, creatorFault: park is null ? null : row.Fault, revision: row.Revision), children, null);
         var journal = RootEventWaits.Lower(root, turn, first.JournalTurn! with { Sent = sends });
         PreparedRootStart stage;
         PendingRootStart offer;
@@ -161,7 +168,7 @@ public sealed partial class EfStore
         if (leaseRemaining() <= TimeSpan.Zero) return null;
         var checkpoint = new InlineRootCheckpoint((FirstRootCheckpoint)first.Checkpoint, scope, stage, offer.Issuance,
             source, (long)receiptWindow.TotalMilliseconds, 0, turn.Journal, fence.Epoch, witness?.LeaseRemaining,
-            turn.FoundationTerminalOutput is { } output ? new RootTerminalOutputCheckpoint(root, row.Revision, output) : null);
+            turn.FoundationTerminalOutput is { } output ? new RootTerminalOutputCheckpoint(root, row.Revision, output) : null, park);
         return new(journal, checkpoint);
 
         async ValueTask<bool> ProtectChildrenAsync(RootChildEffects effects, CancellationToken ct)
@@ -208,9 +215,26 @@ public sealed partial class EfStore
         }
     }
 
+    private sealed record InlineParkOpening(Message Input, Message Wire, FoundationSelfIssuer Issuer);
+
+    private InlineParkOpening LowerInlinePark(WorkerRoot root, TurnCommit turn, InstanceRow row, InlineParkWitness park,
+        InlineRootCreatorWitness? witness)
+    {
+        if (witness is null || _ordinaryRoots?.KeepsPrivateParkInputs != true || RootSelfIssuer is not { } issuer ||
+            turn is not { FoundationKept.Count: 0, FoundationRootChildSends: null, Subscribed.Count: 0, Sent.Count: 0 } ||
+            row is not { Status: InstanceStatus.Faulted, Fault: { } fault } ||
+            park.Checkpoint is not { Status: InstanceStatus.Running, Revision: > 0, Suspended: false, Jobs: null,
+                Children: null, FoundationDispatchHeader: not null } before ||
+            row != (before with { Status = InstanceStatus.Faulted, Revision = checked(before.Revision + 1), Fault = fault }) ||
+            park.Inputs is not [var failed] || !FoundationSelfSend.IsSelfInput(failed, root.Actor, 1))
+            throw RootShape();
+
+        return new(failed, EncodeRootSends(root, before, [failed], promotingInline: true).Single(), issuer);
+    }
+
     private sealed record InlineRootCheckpoint(FirstRootCheckpoint First, Contract.BoundScope Scope, PreparedRootStart Stage, string Issuance,
         (uint Marker, uint Namespace, long Table)? Postgres, long ReceiptWindow, long Position, string Journal, long Epoch,
-        Func<TimeSpan>? LeaseRemaining, RootTerminalOutputCheckpoint? Output)
+        Func<TimeSpan>? LeaseRemaining, RootTerminalOutputCheckpoint? Output, InlineParkOpening? Park)
         : QualifiedRootCheckpoint(First.JournalRevision)
     {
         internal override bool WritesJournal(string actor) => actor == Stage.Actor;
@@ -220,7 +244,7 @@ public sealed partial class EfStore
         {
             if (LeaseRemaining?.Invoke() <= TimeSpan.Zero) return false;
             var origin = await PinInlineRootSourceAsync(db, token);
-            if (origin.Postgres != Postgres ||
+            if (origin.Postgres != Postgres || Park is not null && (!db.UsesRootInlinePromotion || !db.RecordsRootParkRevision) ||
                 (Stage.FirstRevision ?? 1) != JournalRevision ||
                 RootPreparedStarts.Verify(origin.Key, Scope, new(Stage.Reference), Issuance) != Stage)
                 return false;
@@ -237,23 +261,54 @@ public sealed partial class EfStore
                 FROM source WHERE "SourceReady"
                 """, origin.Bind), token);
             if (journaled != 1) return false;
-            var ended = First.Row.Status != InstanceStatus.Running;
+            var ended = Park is null && First.Row.Status != InstanceStatus.Running;
             var updated = await db.Database.ExecuteSqlInterpolatedAsync(RootPreparedStarts.Bind(db, $"""
                 WITH source AS MATERIALIZED (/*prepared-start-source*/)
                 UPDATE /*prepared-only*/"Instances" SET "FoundationReference" = {Stage.Reference}, "FoundationTenant" = {Stage.Tenant},
                     "FoundationHeader" = {First.Header}, "FoundationStateWire" = {First.Wire},
-                    "FoundationWriteRevision" = {Stage.FirstRevision}, "FoundationTerminalRevision" = {(ended ? JournalRevision : (long?)null)},
+                    "FoundationWriteRevision" = {Stage.FirstRevision},
+                    "FoundationTerminalRevision" = {(ended ? JournalRevision : (long?)null)},
                     "FoundationTerminalAt" = {(ended ? now : (long?)null)},
+                    "FoundationParkAt" = {(Park is null ? (long?)null : now)},
+                    "FoundationParkRevision" = {(Park is null ? (long?)null : JournalRevision)},
                     "State" = {RootStatePrefix(db)} || "State"
-                WHERE "Id" = {Stage.Actor} AND "Partition" = {Stage.Partition} AND "Revision" = {JournalRevision}
+                WHERE "Id" = {Stage.Actor} AND "Partition" = {Stage.Partition} AND "Revision" = {First.JournalRevision}
                     AND "Status" = {(int)First.Row.Status} AND "FoundationReference" IS NULL
-                    AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Stage.Actor}))
+                    AND (NOT {ended || Park is not null} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Stage.Actor}))
                     AND (SELECT "SourceReady" FROM source)
                 """, origin.Bind), token);
             return updated == 1 && (Output is null || await Output.BindCheckpointAsync(db, token)) &&
                 (First.ChildEffects is null || await First.ChildEffects.BindAsync(db, Stage.Tenant, token)) &&
+                (Park is null || await BindParkAsync(db, origin, Park, now, token)) &&
                 await ReadInlineClockAsync(db, token) < Math.Min(Stage.Deadline, currentLease) &&
                 !(LeaseRemaining?.Invoke() <= TimeSpan.Zero);
+        }
+
+        private async Task<bool> BindParkAsync(KernelDb db, InlineRootSource source, InlineParkOpening park, long at, CancellationToken token)
+        {
+            // The checkpoint holds the previous sealed model state. The exact failed occurrence
+            // was never durably consumed, so ordinary Recover releases it as an arrived input.
+            var input = park.Wire;
+            var inserted = await db.Database.ExecuteSqlInterpolatedAsync(RootPreparedStarts.Bind(db, RootChildDialectQuery(db, $"""
+                WITH source AS MATERIALIZED (/*prepared-start-source*/)
+                INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Kind", "Payload", "Sender",
+                    "Due", "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy"/*seq-column*/)
+                SELECT {input.InboxKey.Id}, {input.InboxScope}, {input.Target.Id}, {input.Target.Partition}, {input.Kind}, {input.Payload},
+                    {input.Sender}, {input.Due ?? 0}, true, 0, 0, 0, 0, {(short)ParkKeepReason.Arrived}/*seq*/
+                FROM source WHERE "SourceReady" AND {input.Due ?? 0} <= {at}
+                """), source.Bind), token);
+            if (inserted != 1) return false;
+            var relation = db.UsesSqliteRootRuntime ? "\"Messages\"" : PostgresPrivateInboxView;
+            FormattableString read = $"""
+                SELECT * FROM /*inline-park-inputs*/ WHERE "Target" = {Stage.Actor} AND "Partition" = {Stage.Partition}
+                    AND "InboxScope" = {input.InboxScope} AND "Id" = {input.InboxKey.Id}
+                    AND "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived} AND "Trial" = 0
+                """;
+            var kept = await db.Messages.FromSqlInterpolated(FormattableStringFactory.Create(
+                read.Format.Replace("/*inline-park-inputs*/", relation, StringComparison.Ordinal), read.GetArguments()))
+                .AsNoTracking().SingleOrDefaultAsync(token);
+            return kept is not null && DecodeRootInput(db, kept, Stage.Reference, park.Issuer, timed: false) == park.Input &&
+                await VerifyRootParkProjectionAsync(db, Stage.Tenant, Stage.Reference, JournalRevision, First.Row.Fault!, token);
         }
     }
 

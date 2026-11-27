@@ -256,6 +256,13 @@ public sealed partial class EfStore
         };
     }
 
+    private static Task<bool> VerifyRootParkProjectionAsync(KernelDb db, string tenant, string reference, long revision,
+        string fault, CancellationToken token) => db.Database.SqlQuery<bool>($"""
+        SELECT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {tenant} AND "Reference" = {reference}
+            AND "Status" = {(int)InstanceStatus.Faulted} AND "ParkRevision" = {revision} AND "ParkFault" = {fault}
+            AND "ParkAt" > 0 AND "EndedAt" IS NULL AND "TerminalRevision" IS NULL) AS "Value"
+        """).SingleAsync(token);
+
     private static bool ParkInputsMatch(IEnumerable<Message> decoded, IEnumerable<Message> expected) =>
         decoded.OrderBy(input => input.InboxKey.Id, StringComparer.Ordinal)
             .SequenceEqual(expected.OrderBy(input => input.InboxKey.Id, StringComparer.Ordinal));
