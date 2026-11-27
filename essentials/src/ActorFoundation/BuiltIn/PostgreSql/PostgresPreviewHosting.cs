@@ -410,7 +410,7 @@ public static partial class PostgresPreviewHosting
                 throw new NotSupportedException(replies is null
                     ? "A store with held replies needs the reply transport its callers wait on."
                     : "Only a store with held replies answers held callers.");
-            (replies as PostgresDirectRequests)?.RequireKeyBinding(create, actor.Type, db.UsesRootKeyedStarts);
+            requestEdge?.RequireKeyBinding(create, actor.Type, db.UsesRootKeyedStarts);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             await PostgresRootAdmission.RequirePublicEventHostAsync(db, new(actor.Type, requestEdge?.ProtectsRootStarts == true),
                 cancellationToken);
@@ -421,7 +421,7 @@ public static partial class PostgresPreviewHosting
             await PostgresRootAdmission.BindScheduleOwnerAsync(db, auxiliaryActor?.Type, cancellationToken);
         }
 
-        var pressure = (replies as PostgresDirectRequests)?.Pressure;
+        var pressure = requestEdge?.Pressure;
         var store = new EfStore(create, postgres: true, fenceInBatch: fenceInBatch)
             { AdmissionPressure = pressure, ProtectChildBirths = protectChildBirths };
         if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
@@ -440,7 +440,7 @@ public static partial class PostgresPreviewHosting
         // distinct error per window, so a drain the deadline kills shows why it made no progress.
         RuntimeNode? reporter = null;
         var publicEvents = publicEventMaintenance ? new PostgresRootAdmission(create, TimeSpan.Zero) : null;
-        var edge = liveReplyRelay ? replies as PostgresDirectRequests : null;
+        var edge = liveReplyRelay ? requestEdge : null;
         var relay = edge is null ? null : await edge.OpenLiveRepliesAsync(create,
             error => Volatile.Read(ref reporter)?.RecordLoopError(error), cancellationToken);
         var workers = new WorkerOptions
