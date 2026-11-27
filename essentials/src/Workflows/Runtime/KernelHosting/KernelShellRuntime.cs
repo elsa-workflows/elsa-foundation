@@ -52,13 +52,10 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         });
         (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window);
         await _owner.StartAsync(token);
-        if (retention.Enabled)
-        {
-            var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
-            var worker = new KernelRetentionWorker(pass, tenant,
-                token => retention.InitializeAsync(Foundation.Reads, token), retention.Unavailable, logs.CreateLogger<KernelRetentionWorker>());
-            _retention = Task.Run(() => worker.RunAsync(_retentionStop.Token));
-        }
+        var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
+        var worker = new KernelRetentionWorker(pass, tenant,
+            token => retention.InitializeAsync(Foundation.Reads, token), retention.Unavailable, logs.CreateLogger<KernelRetentionWorker>());
+        _retention = Task.Run(() => worker.RunAsync(_retentionStop.Token));
     }
 
     public async Task StopAsync(CancellationToken token)

@@ -119,7 +119,8 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             })
             .WithOwner(FeatureName)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeManage);
+            .RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeManage)
+            .WithName("GetKernelWorkflowRetention");
 
         var http = endpoints.ServiceProvider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value;
         endpoints.Map(HttpBasePath(http) + "/{**path}", static (HttpContext context) =>
