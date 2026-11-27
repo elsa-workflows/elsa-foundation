@@ -103,7 +103,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaContent(RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily, typeof(RuntimeKernelScheduleOccurrenceEntity),
     nameof(RuntimeKernelScheduleOccurrenceEntity.ContentJson))]
 [assembly: EfSchemaFamily(RuntimeKernelScheduleControlEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelScheduleControlEfModule.SchemaVersion,
-    Entities = [typeof(RuntimeKernelScheduleControlEntity)])]
+    Entities = [typeof(RuntimeKernelScheduleControlEntity), typeof(RuntimeKernelScheduleControlScanEntity)])]
 [assembly: EfSchemaContent(RuntimeKernelScheduleControlEfModule.SchemaFamily, typeof(RuntimeKernelScheduleControlEntity),
     nameof(RuntimeKernelScheduleControlEntity.ContentJson))]
 [assembly: EfSchemaFamily(RuntimeKernelExecutablePinEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelExecutablePinEfModule.SchemaVersion,

@@ -215,7 +215,11 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     }
 
     private static InstanceInfo Instance(ActorHeader header, WorkflowHeader workflow) =>
-        new(header.Ref, header.Tenant, workflow.Model, workflow.Workflow, header.Parent);
+        new(header.Ref, header.Tenant, workflow.Model, workflow.Workflow, header.Parent)
+        {
+            Definition = workflow.Definition,
+            ExecutableSelection = workflow.ExecutableSelection
+        };
 
     private static string? SerializeValue(object? value) => value is null ? null : JsonSerializer.Serialize(value, value.GetType());
 

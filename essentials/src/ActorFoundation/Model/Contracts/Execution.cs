@@ -48,4 +48,12 @@ public interface ISimpleModelMigration
 {
     /// <returns>A value-free refusal code, or null when the checkpoint is compatible.</returns>
     string? ValidateMigration(InstanceInfo source, object state, string target);
+
+    /// <summary>Saves the validated target's executable identity with the migrated checkpoint when the source selects one.</summary>
+    /// <returns>A value-free refusal code, or null when the checkpoint is compatible.</returns>
+    string? ValidateMigration(InstanceInfo source, object state, string target, out string? targetExecutableSelection)
+    {
+        targetExecutableSelection = null;
+        return source.ExecutableSelection is null ? ValidateMigration(source, state, target) : "DefinitionUnavailable";
+    }
 }

@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Elsa.ActorFoundation.Hosting;
 using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -11,6 +13,7 @@ using Kernel.EntityFramework;
 using Kernel.Foundation.Hosting;
 using Kernel.Foundation.Postgres;
 using Kernel.Foundation.Sqlite;
+using Kernel.Native;
 using KernelWorkflowActor = Kernel.WorkflowActor.WorkflowActor;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -18,16 +21,29 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Xunit;
 using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
 using Contract = Kernel.Foundation.Contracts;
 
-namespace Kernel.Native.Run;
+namespace Elsa.Workflows.Runtime.KernelHost.Tests;
 
-internal static class KernelShellChildExecutableChecks
+public sealed class KernelShellChildExecutableTests
 {
     private static readonly PersistenceScope Scope = new(PersistenceScope.DefaultValue);
 
-    internal static async Task<int> RunAsync(bool postgres)
+    [Fact]
+    public Task Sqlite_shell_pins_the_canonical_material_of_a_child() => RunAsync(postgres: false);
+
+    [SkippableFact]
+    public Task PostgreSql_shell_pins_the_canonical_material_of_a_child()
+    {
+        Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("KERNEL_CHILD_RUNTIME_POSTGRES")),
+            "Requires dedicated Foundation and Runtime PostgreSQL databases.");
+        return RunAsync(postgres: true);
+    }
+
+    private static async Task RunAsync(bool postgres)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(65));
         var token = deadline.Token;
@@ -43,16 +59,20 @@ internal static class KernelShellChildExecutableChecks
                 Check(new NpgsqlConnectionStringBuilder(foundation).Database != new NpgsqlConnectionStringBuilder(runtime).Database,
                     "Foundation and Runtime use independent databases");
             await RunAsync(provider, foundation, runtime, path, token);
-            return 0;
         }
         finally { directory?.Delete(recursive: true); }
     }
 
     private static async Task RunAsync(string provider, string? foundation, string runtime, string? path, CancellationToken token)
     {
-        var child = ExecutableOf("protected-child-v1", "protected-child", Sequence("root",
+        var material = ExecutableOf("protected-child-v1", "original-source", Sequence("root",
             Node("wait", Types.Event, [Literal("EventName", "release-protected-child"), Literal("CanStartWorkflow", false, "Boolean")]),
             WriteLine("finished", Literal("text", "child continued from the stored executable"))));
+        // A later publication can reuse the canonical behavior under a different logical source.
+        var child = new WorkflowExecutable(material.Identity with
+        {
+            DefinitionId = "protected-child", DefinitionVersionId = "protected-child-v2", ArtifactVersion = "2"
+        }, material.RootActivity, material.ResumeTargets, material.CreatedAt, material.CompatibilityMetadata, material.IncidentStrategy);
         var parent = ExecutableOf("dispatch-parent-v1", "dispatch-parent", Sequence("root",
             Node("http", Types.HttpEndpoint, [Literal("Path", "dispatch-parent"), Literal("SupportedMethods", new[] { "POST" }),
                 Literal("CanStartWorkflow", true, "Boolean")]),
@@ -66,7 +86,11 @@ internal static class KernelShellChildExecutableChecks
             await using var childScope = await publisher.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Scope);
             var services = childScope.ServiceProvider;
             await services.GetRequiredService<RuntimeDbContext>().Database.MigrateAsync(token);
+            await services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(material, token);
             foreach (var executable in definitions) await PublishAsync(services, executable);
+            var selected = publisher.GetRequiredService<KernelServing>().Slots.Single(slot => slot.DefinitionId == child.Identity.DefinitionId).Workflow;
+            Check(selected.Definition == child.Identity.DefinitionId && selected.ExecutableSelection == JsonSerializer.Serialize(material.Identity),
+                "the live publication serves the canonical stored material under its own logical definition");
         }
 
         Contract.ActorRef childRef;
@@ -102,9 +126,11 @@ internal static class KernelShellChildExecutableChecks
                 }, item => item is not null, token);
                 childRef = new(pin!.ActorReference);
                 var reads = await shell.ReadAsync(token);
-                await WaitAsync(() => reads.GetAsync(scope, childRef, token), item => item?.Header.Status == Contract.ActorStatus.Running, token);
-                Check(pin.Executable == child.Identity && pin.Tenant == scope.Tenant,
-                    "the installed child owner retained the exact selected artifact and tenant through the Runtime pin store");
+                var waiting = await WaitAsync(() => reads.GetAsync(scope, childRef, token),
+                    item => item?.Header.Status == Contract.ActorStatus.Running, token);
+                Check(pin.Executable == material.Identity && pin.Tenant == scope.Tenant &&
+                    waiting!.Header.Labels.GetValueOrDefault("definition") == child.Identity.DefinitionId,
+                    "the installed child retains the canonical material and the selected logical definition");
 
                 var slot = await runtimeServices.GetRequiredService<IWorkflowActivationAuthority>().FindAsync(child.Identity.DefinitionId,
                     KernelServing.DefaultSlotName, token);
@@ -131,19 +157,24 @@ internal static class KernelShellChildExecutableChecks
             await new StartKernelShell(shell).InitializeAsync(token);
             try
             {
-                Check(!services.GetRequiredService<KernelServing>().Registry.Contains(child.Identity.ArtifactId),
+                var registry = services.GetRequiredService<KernelServing>().Registry;
+                Check(!registry.Contains(child.Identity.ArtifactId),
                     "the cold installed owner does not serve the unpublished artifact");
+                registry.Add(new Workflow(child.Identity.ArtifactId, Wf.WriteLine("unrelated", "replacement"),
+                    definition: child.Identity.DefinitionId) { ExecutableSelection = "unrelated material" });
                 var reads = await shell.ReadAsync(token);
                 var ingress = await shell.IngressAsync(token);
                 var release = await ingress.SendAsync(scope, new Contract.Target.Ref(childRef), "continue-protected-child",
-                    NativeKinds.Resume, Json.Write(new ResumeStimulus("release-protected-child")), cancellationToken: token);
+                    NativeKinds.Resume, JsonSerializer.Serialize(new ResumeStimulus("release-protected-child")), cancellationToken: token);
                 Check(release.Outcome == Contract.AdmissionOutcome.Accepted, "the exact committed child accepted its resume after restart");
                 var terminal = await WaitAsync(() => reads.GetAsync(scope, childRef, token),
                     item => item?.Header.Status == Contract.ActorStatus.Finished, token);
+                Check(registry.Get(child.Identity.ArtifactId).ExecutableSelection == JsonSerializer.Serialize(material.Identity),
+                    "the cold owner replaced the stale same-ID plan with the exact retained executable before resuming");
                 await WaitAsync(() => reads.GetAsync(scope, parentRef, token), item => item?.Header.Status == Contract.ActorStatus.Finished, token);
                 var operators = await OpenOperatorsAsync();
                 var retired = await operators.SendAsync(scope, new Contract.Target.Ref(childRef), "retire-protected-child", Contract.Kinds.Delete,
-                    Json.Write(new Contract.OperatorCommand(terminal!.Selection)), cancellationToken: token);
+                    JsonSerializer.Serialize(new Contract.OperatorCommand(terminal!.Selection)), cancellationToken: token);
                 Check(retired.Outcome == Contract.AdmissionOutcome.Accepted, "the selected Delete admitted the exact terminal child");
                 await WaitAsync(() => reads.GetAsync(scope, childRef, token), item => item is null, token);
 

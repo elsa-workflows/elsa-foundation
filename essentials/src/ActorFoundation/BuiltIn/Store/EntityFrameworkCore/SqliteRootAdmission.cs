@@ -12,6 +12,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record StartAdmission(long Now, string? Reference, byte[]? Key, int? Partitions);
     private sealed record Target(string Actor, int Partition, bool HasCheckpoint, int? Status, bool Terminal, bool Pending, bool Parked, string? Header);
+    private sealed class PreparedReplyExpired : Exception;
 
     internal Task<int> VerifyAsync(CancellationToken token) => WriteAsync(async (db, _, ct) =>
     {
@@ -31,7 +32,11 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         RootAdmissionPressure.Attempt? reserved = null, PreparedRootStart? prepared = null)
     {
         if (!request.IsOpen) throw new ArgumentException("A held SQLite start requires an open caller bound to its tenant.", nameof(request));
-        return (await StartCoreAsync(request.Tenant, request.Caller.Id, spec, null, request.KeepFor, request, token, reserved, prepared))?.Actor?.Id;
+        try
+        {
+            return (await StartCoreAsync(request.Tenant, request.Caller.Id, spec, null, request.KeepFor, request, token, reserved, prepared))?.Actor?.Id;
+        }
+        catch (PreparedReplyExpired) { return null; }
     }
 
     private async Task<Contract.Admission?> StartCoreAsync(string tenant, string operation, StartSpec spec, long? due, TimeSpan? keepFor,
@@ -49,7 +54,11 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             if (reply is not null && reply.Caller.Deadline <= now) return null;
             if (admission.Reference is { } existing)
             {
-                if (prepared is not null) await RootPreparedStarts.ConsumeAsync(db, prepared, ct);
+                if (prepared is not null)
+                {
+                    await RootPreparedStarts.ConsumeAsync(db, prepared, ct);
+                    await RequireBeforePreparedDeadlineAsync(db, prepared, ct);
+                }
                 return new(Contract.AdmissionOutcome.Duplicate, new Contract.ActorRef(existing));
             }
 
@@ -83,6 +92,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
                 """, ct));
             await EnqueueAsync(db, actor.Id, actor.Partition, creator.InboxKey.Id, 0, creator.Kind, header, payload, due,
                 keepUntil: null, replyTo: creator.ReplyTo, token: ct);
+            if (prepared is not null) await RequireBeforePreparedDeadlineAsync(db, prepared, ct);
             return new(Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(reference));
         }, token, attempt);
     }
@@ -243,6 +253,12 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     private static Task<long> ReadClockAsync(KernelDb db, CancellationToken token) =>
         db.Database.SqlQueryRaw<long>(
             "SELECT " + SqliteCommitDialect.MillisecondClock + """ AS "Value" """).SingleAsync(token);
+
+    private static async Task RequireBeforePreparedDeadlineAsync(KernelDb db, PreparedRootStart prepared, CancellationToken token)
+    {
+        // Unwind the transaction so expiry cannot commit the prepared-stage deletion, birth, receipt or enqueue.
+        if (await ReadClockAsync(db, token) >= prepared.Deadline) throw new PreparedReplyExpired();
+    }
 
     private Task<T> WriteAsync<T>(Func<KernelDb, long, CancellationToken, Task<T>> write, CancellationToken token,
         RootAdmissionPressure.Attempt? attempt = null) =>

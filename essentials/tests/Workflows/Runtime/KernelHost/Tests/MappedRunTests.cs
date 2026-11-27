@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -56,6 +57,104 @@ public sealed class MappedRunTests
     }
 
     private static ExecutableNode StructureTestsGraph() => MappingStructureTests.Graph("approve", out _);
+
+    [Fact]
+    public async Task A_selected_turn_reloads_its_exact_plan_and_keeps_it_when_the_registry_changes_again()
+    {
+        var selected = ExactPlan("selected", "expected");
+        var replacement = ExactPlan("replacement", "wrong");
+        var child = Native.Wf.Workflow("child", Native.Wf.Sequence("empty"));
+        var registry = new Native.WorkflowRegistry().Add(replacement);
+        var loads = new List<string>();
+        var model = new Native.NativeExecutionModel(registry, new Native.NativeExecutionOptions
+        {
+            ResolveWorkflow = (id, _) =>
+            {
+                loads.Add(id);
+                return ValueTask.FromResult<Native.Workflow?>(selected);
+            },
+            ServedWorkflow = _ =>
+            {
+                registry.Add(replacement);
+                return Native.ServedDefinition.FromWorkflow(child);
+            }
+        });
+
+        var finished = await NativeTurn.StartAsync(model, selected);
+
+        Assert.Equal([selected.Id], loads);
+        Assert.Single(finished.Children);
+        Assert.Same(replacement, registry.Get(selected.Id));
+        Assert.Equal("expected", finished.Output?["value"]?.GetValue<string>());
+
+        static Native.Workflow ExactPlan(string selection, string output) => new("same-id", Native.Wf.Sequence("root",
+            Native.Wf.Dispatch("dispatch", "child", wait: false), Native.Wf.SetOutput("output", "value", output)))
+            { ExecutableSelection = selection };
+    }
+
+    [Fact]
+    public async Task A_same_id_resolver_result_cannot_run_a_different_selected_executable()
+    {
+        var selected = new Native.Workflow("artifact", Native.Wf.WriteLine("out", "selected")) { ExecutableSelection = "selected" };
+        var replacement = new Native.Workflow(selected.Id, Native.Wf.WriteLine("out", "different")) { ExecutableSelection = "different" };
+        var registry = new Native.WorkflowRegistry();
+        var model = new Native.NativeExecutionModel(registry, new Native.NativeExecutionOptions
+        {
+            ResolveWorkflow = (_, _) => ValueTask.FromResult<Native.Workflow?>(replacement)
+        });
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => NativeTurn.StartAsync(model, selected));
+
+        Assert.Equal("The exact executable selected for this workflow is unavailable.", error.Message);
+        Assert.False(registry.Contains(selected.Id));
+    }
+
+    [Fact]
+    public async Task A_background_job_reloads_the_identity_in_its_retained_recipe()
+    {
+        var selected = new Native.Workflow("artifact", Native.Wf.Call("call", "expected")) { ExecutableSelection = "selected" };
+        var replacement = new Native.Workflow(selected.Id, Native.Wf.Call("wrong-node", "wrong")) { ExecutableSelection = "different" };
+        var first = await NativeTurn.StartAsync(selected);
+        var recipe = Assert.Single(first.Native.Waits).Value.Job!;
+        var args = JsonSerializer.Deserialize<Native.BackgroundArgs>(recipe.Arguments!)!;
+        Assert.Equal(selected.ExecutableSelection, args.ExecutableSelection);
+        var job = new BackgroundJob(first.Instance.Ref, recipe.Key, recipe.Arguments);
+        var registry = new Native.WorkflowRegistry().Add(replacement);
+        var model = new Native.NativeExecutionModel(registry, new Native.NativeExecutionOptions
+        {
+            ResolveWorkflow = (_, _) => ValueTask.FromResult<Native.Workflow?>(selected)
+        });
+
+        var result = Assert.IsType<Native.BackgroundResult>(await model.ExecuteJobAsync(job, CancellationToken.None));
+
+        Assert.Equal("answer of expected", result.Result?.GetValue<string>());
+        Assert.Same(selected, registry.Get(selected.Id));
+    }
+
+    private sealed record BackgroundJob(Contract.ActorRef Actor, string Key, string? Arguments) : Contract.IJob
+    {
+        public string AttemptId => "attempt";
+        public int AttemptNumber => 1;
+        public long? Deadline => null;
+    }
+
+    [Fact]
+    public async Task A_migration_uses_the_selected_runs_logical_definition_after_cold_material_resolution()
+    {
+        var source = new Native.Workflow("before", Native.Wf.Event("wait", "ready"), definition: "logical")
+            { ExecutableSelection = "first-material" };
+        var canonical = new Native.Workflow(source.Id, source.Root, definition: "original-source")
+            { ExecutableSelection = source.ExecutableSelection };
+        var target = new Native.Workflow("after", Native.Wf.Event("wait", "ready"), definition: source.Definition)
+            { ExecutableSelection = "second-material" };
+        var turn = await NativeTurn.StartAsync(source);
+        var model = new Native.NativeExecutionModel(new Native.WorkflowRegistry().Add(canonical).Add(target));
+
+        var refusal = model.ValidateMigration(turn.Instance with { Definition = source.Definition }, turn.State, target.Id, out var selection);
+
+        Assert.Null(refusal);
+        Assert.Equal(target.ExecutableSelection, selection);
+    }
 
     [Theory]
     [InlineData(false)]

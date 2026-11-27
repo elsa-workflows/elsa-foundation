@@ -1,7 +1,12 @@
+using System.Data.Common;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
+using Kernel.EntityFramework;
 using Kernel.Foundation.Hosting;
 using Kernel.Foundation.Sqlite;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
@@ -26,9 +31,10 @@ internal static class SqlitePreparedStartChecks
             var expiredProtection = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var calls = 0;
-            var foundation = SqliteEmbeddedFoundation.ForPreparedStartsQualification(
-                Path.Combine(folder.FullName, "held.db"), "prepared-start-owner", ActorType, ProtectAsync);
+            var path = Path.Combine(folder.FullName, "held.db");
+            var foundation = SqliteEmbeddedFoundation.ForPreparedStartsQualification(path, "prepared-start-owner", ActorType, ProtectAsync);
             await foundation.InstallShippedAsync(token);
+            await CheckDeadlineAfterEnqueueAsync(path, foundation, scope, token);
             var ingress = await foundation.OpenIngressAsync(token);
             await using var owner = foundation.CreateHostedServiceWithAuxiliaryActor(new TerminalActor(), new Kernel.WorkflowActor.ScheduleActor(),
                 reason => throw new InvalidOperationException(reason), _ => TimeSpan.FromMilliseconds(1), fenceInBatch: fenceInBatch);
@@ -127,6 +133,55 @@ internal static class SqlitePreparedStartChecks
             }
         }
         finally { folder.Delete(recursive: true); }
+    }
+
+    private static async Task CheckDeadlineAfterEnqueueAsync(string path, SqliteEmbeddedFoundation foundation, Contract.BoundScope scope,
+        CancellationToken token)
+    {
+        var deadline = await foundation.ReadClockAsync(token) + 2_000;
+        var pause = new WaitForEnqueueDeadline(deadline);
+        var options = new DbContextOptionsBuilder<KernelDb>()
+            .UseSqlite(new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true, Pooling = false }.ToString())
+            .AddInterceptors(pause).Options;
+        KernelDb Open() => KernelDb.ForSqliteRootShipped(options, StoreFormat.RootPreparedStartsQualification);
+        var admission = new SqliteRootAdmission(Open, TimeSpan.FromHours(1), new());
+        var caller = new Requests().OpenBound("deadline-during-enqueue", deadline, scope.Tenant, null);
+        var request = new HeldRootRequest(scope.Tenant, "prepared-start-owner", caller, ReleaseBeforeCommit: false, KeepFor: null);
+        var spec = new StartSpec(ActorType, "deadline");
+        var prepared = await admission.PrepareHeldStartAsync(request, spec, null, token);
+        var stage = prepared.Stage ?? throw new InvalidOperationException("The deadline witness did not prepare an exact root.");
+        var offer = prepared.Offer ?? throw new InvalidOperationException("The deadline witness did not issue a protection offer.");
+        var result = await admission.StartRequestAsync(request, spec, token, prepared: stage);
+        await using var db = Open();
+        var rolledBack = await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM "FoundationPreparedRootStarts" WHERE "Reference" = {stage.Reference})
+                AND NOT EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Reference" = {stage.Reference})
+                AND NOT EXISTS (SELECT 1 FROM "FoundationRootReceipts" WHERE "Operation" = {stage.Operation})
+                AND NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {stage.Actor}) AS "Value"
+            """).SingleAsync(token);
+        Require(result is null && pause.Reached && rolledBack,
+            "a protected held start crossing the SQLite deadline after enqueue rolls back the birth, receipt, creator and stage consumption");
+        Require(await foundation.ConfirmPreparedStartAsync(scope, offer.Actor, offer.Issuance, token) == RootStartProof.PreparationDisarmed,
+            "the expired preparation can subsequently be disarmed and durably proved absent");
+    }
+
+    private sealed class WaitForEnqueueDeadline(long deadline) : DbCommandInterceptor
+    {
+        internal bool Reached { get; private set; }
+
+        public override async ValueTask<int> NonQueryExecutedAsync(DbCommand command, CommandExecutedEventData eventData, int result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!command.CommandText.TrimStart().StartsWith("INSERT INTO \"Messages\"", StringComparison.Ordinal))
+                return result;
+            await using var clock = command.Connection!.CreateCommand();
+            clock.Transaction = command.Transaction;
+            clock.CommandText = "SELECT " + SqliteCommitDialect.MillisecondClock;
+            while ((long)(await clock.ExecuteScalarAsync(cancellationToken))! < deadline)
+                await Task.Delay(15, cancellationToken);
+            Reached = true;
+            return result;
+        }
     }
 
     private static void Require(bool result, string description)

@@ -34,7 +34,10 @@ internal sealed class RuntimeKernelScheduleControlScanEntityConfiguration : IEnt
         builder.Property(row => row.ScopeKeyHash).HasMaxLength(64);
         builder.Property(row => row.TenantKeyHash).HasMaxLength(64);
         builder.Property(row => row.AfterId).HasMaxLength(64);
+        builder.Property(row => row.SchemaVersion).HasMaxLength(32).IsRequired()
+            .HasDefaultValue(RuntimeKernelScheduleControlEfModule.SchemaVersion);
         builder.Property(row => row.LastOrdinal).IsConcurrencyToken();
         builder.Property(row => row.Pass).IsConcurrencyToken();
+        builder.Property(row => row.SchemaVersion).IsConcurrencyToken();
     }
 }
