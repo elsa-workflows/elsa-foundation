@@ -262,7 +262,7 @@ public sealed class WorkflowExecutableExportEndpointTests
     {
         // Both filename segments come from stored data and land in a header this handler writes by hand. A
         // definition id carrying a quote, a path separator or a newline would otherwise be echoed onto the wire.
-        var closure = Fixture.Closure(definitionId: "../../etc/pa/"ss wd\r\nX-Injected: 1", artifactVersion: "1.0.0-rc.1");
+        var closure = Fixture.Closure(definitionId: "../../etc/pa\"ss wd\r\nX-Injected: 1", artifactVersion: "1.0.0-rc.1");
         await using var host = await StartAsync(new StubClosureFactory(closure));
 
         using var response = await ExportAsync(host, VersionId);
