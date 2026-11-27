@@ -275,7 +275,8 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol,
             [RootCapabilities.TimerRearm] = RootProfiles.ParkCompositionBase | RootCapabilities.Timers | RootCapabilities.ParkRecovery,
             [RootCapabilities.TerminalOutput] = RootCapabilities.TerminalSelection | RootCapabilities.Retention,
-            [RootCapabilities.SequencedJournal] = RootCapabilities.Retention
+            [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
+            [RootCapabilities.LiveEventWaits] = RootCapabilities.ReplyProtocol | RootCapabilities.ParkRecovery
         };
         Check(RootProfiles.Prerequisites.Count == expectedEdges.Count &&
             expectedEdges.All(edge => RootProfiles.Prerequisites.TryGetValue(edge.Key, out var needs) && needs == edge.Value),

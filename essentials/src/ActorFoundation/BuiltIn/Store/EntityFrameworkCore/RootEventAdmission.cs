@@ -13,9 +13,21 @@ internal static class RootEventAdmission
 
     internal static bool IsValid(HeldRootRequest request, string key, string? payload) =>
         request.IsOpen && FoundationMetadataLimits.IsOutsideMessageId(request.Caller.Id) &&
-        FitsWaitKey(key) && FoundationMetadataLimits.FitsContent(payload, FoundationMetadataLimits.EventContentBytes);
+        FoundationMetadataLimits.FitsLiveWaitName(key) && FoundationMetadataLimits.FitsContent(payload, FoundationMetadataLimits.EventContentBytes);
 
-    internal static bool FitsWaitKey(string key) => FoundationMetadataLimits.FitsName(key) && !key.Contains('\0');
+    // All registrations and publications of a qualified key enter the same transaction order. The sorted lock IDs
+    // also give a multi-wait checkpoint one acquisition order even if two keys share a hash.
+    internal static Task LockPostgresKeysAsync(KernelDb db, string[] keys, CancellationToken token) =>
+        db.Database.ExecuteSqlInterpolatedAsync($"""
+            SELECT pg_catalog.pg_advisory_xact_lock(ordered.lock_id)
+            FROM (SELECT DISTINCT pg_catalog.hashtextextended(key COLLATE "C", 625728219) AS lock_id
+                FROM unnest({keys}::text[]) AS waits(key)) ordered
+            ORDER BY ordered.lock_id
+            """, token);
+
+    internal static Task<long> ReadPostgresClockAsync(KernelDb db, CancellationToken token) => db.Database.SqlQueryRaw<long>("""
+        SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value"
+        """).SingleAsync(token);
 
     internal static async Task<HeldRootAdmission> PublishAsync(KernelDb db, HeldRootRequest request, string key,
         string? payload, long now, TimeSpan window, RootAdmissionPressure.Attempt? attempt, CancellationToken token,
@@ -53,13 +65,12 @@ internal static class RootEventAdmission
         RequireSource(waits[0].SourceReady);
         if (waits is [{ Actor: null }]) return HeldRootAdmission.NoWaiter;
         if (waits.Count > FoundationMetadataLimits.MaxTurnSends) throw FanoutFull();
-        var until = checked(now + (long)window.TotalMilliseconds);
         var messages = new List<MessageEntity>(waits.Count);
         var address = request.Address;
         long bytes = 0;
         foreach (var wait in waits)
         {
-            if (!FitsWaitKey(wait.Wait!)) throw new StoreFormatException("A committed event wait has an invalid identity.");
+            if (!FoundationMetadataLimits.FitsLiveWaitName(wait.Wait!)) throw new StoreFormatException("A committed event wait has an invalid identity.");
             var (header, body, kind) = EncodeDirect(id, 1, Kinds.Event, payload, null, held: true, new(qualified, wait.Wait!));
             if (!FitsEnvelope(header, body, address)) return HeldRootAdmission.Refused;
             bytes += Encoding.UTF8.GetByteCount(header) + Encoding.UTF8.GetByteCount(address) + (body is null ? 0 : Encoding.UTF8.GetByteCount(body));
@@ -68,10 +79,17 @@ internal static class RootEventAdmission
             {
                 Id = $"{wait.Reference}/{digest}/{Guid.NewGuid():N}", InboxScope = InboxKey.FoundationOccurrenceScope,
                 Target = wait.Actor!, Partition = wait.Partition!.Value, Kind = kind, Start = header, Payload = body,
-                KeepUntil = until, ReplyTo = address
+                ReplyTo = address
             });
         }
         attempt?.Require(waits.Select(wait => wait.Partition!.Value).Distinct().ToArray());
+        if (postgres) now = await ReadPostgresClockAsync(db, token);
+        if (request.Caller.Deadline <= now)
+        {
+            attempt?.RolledBack();
+            return HeldRootAdmission.Expired;
+        }
+        var until = checked(now + (long)window.TotalMilliseconds);
 
         // A held publication stores an idempotency receipt only. The payload belongs to the matches that exist now.
         var receipt = await db.Database.ExecuteSqlInterpolatedAsync(BindSource($"""
@@ -105,7 +123,7 @@ internal static class RootEventAdmission
         else
             foreach (var message in messages)
                 await SqliteRootAdmission.EnqueueAsync(db, message.Target, message.Partition, message.Id, message.InboxScope,
-                    message.Kind, message.Start!, message.Payload, null, message.KeepUntil, message.ReplyTo, token);
+                    message.Kind, message.Start!, message.Payload, null, until, message.ReplyTo, token);
 
         return HeldRootAdmission.Accepted;
 

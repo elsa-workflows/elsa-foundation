@@ -10,7 +10,7 @@ public sealed partial class EfStore
             if (submitted.Subscribed.Concat(submitted.Unsubscribed).Any(wait =>
                 wait.Creation != 1 || wait.Instance != root.Actor || wait.FoundationTenant != root.Tenant ||
                 wait.Start is not null || wait.FoundationKeepsEvents || !wait.Key.StartsWith(prefix, StringComparison.Ordinal) ||
-                !RootEventAdmission.FitsWaitKey(wait.Key[prefix.Length..]) || !RootEventAdmission.FitsWaitKey(wait.Wait)))
+                !FoundationMetadataLimits.FitsLiveWaitName(wait.Key[prefix.Length..]) || !FoundationMetadataLimits.FitsLiveWaitName(wait.Wait)))
                 throw RootShape();
 
             // The bound generated-root address embeds its partition and cannot be reused. Pass only the physical

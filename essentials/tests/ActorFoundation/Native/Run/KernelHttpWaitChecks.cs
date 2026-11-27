@@ -1,4 +1,5 @@
 using System.Net;
+using System.Data.Common;
 using Elsa.ActorFoundation.TestSupport;
 using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.KernelHosting;
@@ -11,6 +12,7 @@ using Kernel.Runtime.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Contract = Kernel.Foundation.Contracts;
 using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
@@ -97,6 +99,7 @@ internal static class KernelHttpWaitChecks
                 await AwaitViewAsync(first, view => view.Header.Status == Contract.ActorStatus.Finished);
                 await AwaitViewAsync(second, view => view.Header.Status == Contract.ActorStatus.Finished);
                 Require(true, "both committed waits on one resolved key receive the held publication");
+                if (fixture.EventRace is { } race) await CheckEventOrderAsync(race);
             }
         }
         finally
@@ -144,7 +147,7 @@ internal static class KernelHttpWaitChecks
             Require((await PublishAsync(ContractScopes.Bind("other-tenant"))).Error == "no waiter" &&
                 await fixture.EventCount(token) == before && await StateAsync(reference) == Contract.ActorStatus.Running,
                 "another tenant cannot publish to the committed wait or leave a receipt");
-            Require(await fixture.Ingress.SendAsync(scope, new Contract.Target.Ref(reference), "park-request", ParkProbe.Fault, cancellationToken: token)
+            Require(await fixture.Ingress.SendAsync(scope, new Contract.Target.Ref(reference), "park-request", ParkProbe.InvalidWait, cancellationToken: token)
                 is { Outcome: Contract.AdmissionOutcome.Accepted }, "the actor admits the fixture's faulting input");
             var parked = await AwaitViewAsync(reference, view => view.Park is not null);
             Require((await PublishAsync(scope)).Error == "no waiter" && await fixture.EventCount(token) == before,
@@ -161,15 +164,50 @@ internal static class KernelHttpWaitChecks
             Require(await fixture.EventCount(token) == before + 1, "only the successfully matched request retains an event receipt");
 
             async Task<Contract.Reply> PublishAsync(Contract.BoundScope tenant) => await fixture.Ingress.RequestAsync(tenant,
-                new Contract.Target.Event(wait.Key), operation, Contract.Kinds.Event, wait.Payload, null,
+                new Contract.Target.Event(wait.Key), operation, Contract.Kinds.Terminate, wait.Payload, null,
                 new(null, await fixture.Clock(token) + 5_000), token);
+        }
+
+        async Task CheckEventOrderAsync(PostgresEventRace race)
+        {
+            const string order = "registration-race";
+            const string operation = "one-held-operation";
+            var reference = await StartAsync("native", order);
+            var route = $"/native/orders/{order}/cancel";
+            var wait = KernelHttpEdge.Wait(serving, KernelHttpEdge.Route(serving, "POST", route)!, new HttpRequest("POST", route, null))!;
+            var before = await fixture.EventCount(token);
+            race.PauseNextMatch();
+            var first = PublishAsync(5_000);
+            Task<Contract.ActorRef> later;
+            try
+            {
+                await race.EnteringMatch.Task.WaitAsync(token);
+                race.ObserveNextKeyLock();
+                later = StartAsync("native", order);
+                var pid = await race.EnteringKeyLock.Task.WaitAsync(TimeSpan.FromSeconds(4), token);
+                while (!await race.IsBlockedAsync(pid, token)) await Task.Delay(15, token);
+                Require(!later.IsCompleted, "the new wait cannot commit while a publication owns the key's transaction lock");
+            }
+            finally { race.ContinueMatch.TrySetResult(); }
+            Require(await first is { Channel: "response", Error: null }, "the publication reaches the original committed wait");
+            var registeredLater = await later;
+            await AwaitViewAsync(reference, view => view.Header.Status == Contract.ActorStatus.Finished);
+            Require(await PublishAsync(500) is { Error: "timeout" } && await fixture.EventCount(token) == before + 1 &&
+                await StateAsync(registeredLater) == Contract.ActorStatus.Running,
+                "the replay sees the receipt without publishing to the wait that committed later");
+            using var resumed = await PostAsync("native", order, "cancel");
+            Require(resumed.IsSuccessStatusCode, "a new publication reaches the later registered wait");
+
+            async Task<Contract.Reply> PublishAsync(long waitFor) => await fixture.Ingress.RequestAsync(scope,
+                new Contract.Target.Event(wait.Key), operation, Contract.Kinds.Event, wait.Payload, null,
+                new(null, await fixture.Clock(token) + waitFor), token);
         }
 
     }
 
     private sealed record WaitFixture(IAsyncDisposable Owner, Contract.IIngress Ingress, Contract.IActorReads Reads,
         Func<CancellationToken, ValueTask<long>> Clock, Func<CancellationToken, Task<int>> EventCount,
-        Func<bool> NoPendingCallers, Func<Task>? Pump = null);
+        Func<bool> NoPendingCallers, Func<Task>? Pump = null, PostgresEventRace? EventRace = null);
 
     private static async Task<WaitFixture> OpenAsync(string? provider, bool inBatch, bool shipped, PublicWorkflow model, string? path, CancellationToken token)
     {
@@ -183,9 +221,17 @@ internal static class KernelHttpWaitChecks
 
         if (provider == "postgres")
         {
+            var race = new PostgresEventRace();
             var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
-                throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.")).Options;
+                throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.")).AddInterceptors(race).Options;
             KernelDb Open() => shipped ? KernelDb.ForPostgresRootShipped(options) : KernelDb.ForPostgresRootLiveEventQualification(options);
+            race.IsBlockedAsync = async (pid, ct) =>
+            {
+                await using var db = Open();
+                return await db.Database.SqlQuery<bool>($"""
+                    SELECT cardinality(pg_catalog.pg_blocking_pids({pid})) > 0 AS "Value"
+                    """).SingleAsync(ct);
+            };
             await using var database = Open();
             Require(await PostgresFixtureDatabase.IsEmptyAsync(database, token), "the PostgreSQL event fixture uses a dedicated empty database");
             var cold = new EfStore(Open, postgres: true);
@@ -196,7 +242,8 @@ internal static class KernelHttpWaitChecks
                 requests, cancellationToken: token);
             var owner = await PostgresPreviewHosting.StartAsync(Open, node, new ParkProbe(model), EndProcess, loop, token, Console.Error.WriteLine,
                 (IReplyTransport)requests, fenceInBatch: inBatch);
-            return new(owner, foundation, foundation, requests.ReadClockAsync, ct => EventCountAsync(Open, ct), () => requests.Pending.All.Count == 0);
+            return new(owner, foundation, foundation, requests.ReadClockAsync, ct => EventCountAsync(Open, ct),
+                () => requests.Pending.All.Count == 0, EventRace: race);
         }
 
         if (provider == "sqlite")
@@ -254,6 +301,38 @@ internal static class KernelHttpWaitChecks
         public void Dispose() => directory.Delete(recursive: true);
     }
 
+    private sealed class PostgresEventRace : DbCommandInterceptor
+    {
+        private int _pause;
+        private int _observe;
+        internal TaskCompletionSource EnteringMatch { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource ContinueMatch { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource<int> EnteringKeyLock { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal Func<int, CancellationToken, Task<bool>> IsBlockedAsync { get; set; } = null!;
+
+        internal void PauseNextMatch() => Volatile.Write(ref _pause, 1);
+        internal void ObserveNextKeyLock() => Volatile.Write(ref _observe, 1);
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData data,
+            InterceptionResult<int> result, CancellationToken token = default)
+        {
+            if (command.CommandText.Contains("pg_advisory_xact_lock", StringComparison.Ordinal) && Interlocked.Exchange(ref _observe, 0) == 1)
+                EnteringKeyLock.TrySetResult(((Npgsql.NpgsqlConnection)command.Connection!).ProcessID);
+            return ValueTask.FromResult(result);
+        }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData data,
+            InterceptionResult<DbDataReader> result, CancellationToken token = default)
+        {
+            if (command.CommandText.Contains("matches AS MATERIALIZED", StringComparison.Ordinal) && Interlocked.Exchange(ref _pause, 0) == 1)
+            {
+                EnteringMatch.TrySetResult();
+                await ContinueMatch.Task.WaitAsync(token);
+            }
+            return result;
+        }
+    }
+
     private static Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding[] EndpointInputs(string path, bool start) =>
         [Literal("Path", path, "String"), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", start, "Boolean")];
 
@@ -272,7 +351,7 @@ internal static class KernelHttpWaitChecks
 
     private sealed class ParkProbe(PublicWorkflow model) : Contract.IActorType
     {
-        internal const string Fault = "fixture-http-park";
+        internal const string InvalidWait = "fixture-invalid-live-wait";
         public string Type => model.Type;
         public bool Withholds(Contract.ActorHeader header) => model.Withholds(header);
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token) => model.ExecuteJobAsync(job, token);
@@ -280,8 +359,11 @@ internal static class KernelHttpWaitChecks
         public long TerminalGrowth(Contract.ActorHeader header, string state) => model.TerminalGrowth(header, state);
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => model.ProtectsDeletion(header, state, now);
 
-        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken token) => turn.Inbox.Any(input => input.Kind == Fault)
-            ? ValueTask.FromException(new InvalidOperationException(Fault))
-            : model.TurnAsync(turn, token);
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken token)
+        {
+            if (turn.Inbox.Any(input => input.Kind == InvalidWait))
+                turn.Subscribe("invalid\0key", "fixture");
+            return model.TurnAsync(turn, token);
+        }
     }
 }

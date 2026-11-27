@@ -282,7 +282,7 @@ internal sealed partial class ActorAdapter
                 foreach (var subscription in plan.Subscriptions)
                 {
                     if (subscription.Keep || subscription.Key is null || subscription.Wait is null ||
-                        !Durable.FoundationMetadataLimits.FitsName(subscription.Key) || !Durable.FoundationMetadataLimits.FitsName(subscription.Wait) ||
+                        !Durable.FoundationMetadataLimits.FitsLiveWaitName(subscription.Key) || !Durable.FoundationMetadataLimits.FitsLiveWaitName(subscription.Wait) ||
                         !distinct.Add((subscription.Key, subscription.Wait))) return false;
                     subscriptions.Add(new(header.Tenant + "_" + subscription.Key, row.Id, subscription.Wait, Creation: row.Creation)
                         { FoundationTenant = header.Tenant });

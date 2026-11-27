@@ -54,9 +54,8 @@ internal sealed partial class PostgresRootAdmission
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
         var pin = await PinRootNamespaceAsync(db, loadIssuer: false, token) ??
             throw new StoreFormatException("Live event requests require the pinned root source.");
-        var now = await db.Database.SqlQueryRaw<long>("""
-            SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value"
-            """).SingleAsync(token);
+        await RootEventAdmission.LockPostgresKeysAsync(db, [request.Tenant + "_" + key], token);
+        var now = await RootEventAdmission.ReadPostgresClockAsync(db, token);
         var result = await RootEventAdmission.PublishAsync(db, request, key, payload, now, window, attempt, token,
             query => WithAdmissionSource(query, pin, "/*event-source*/", 5,
                 """('"Events"'), ('"Subscriptions"'), ('"FoundationRootBirths"'), ('"Instances"'), ('"Messages"')"""));
@@ -307,10 +306,11 @@ internal sealed partial class PostgresRootAdmission
         EventMatch? match = null;
         if (kind == Kinds.Event || header.EventWait is not null)
         {
+            var separator = header.EventWait?.Key?.IndexOf('_') ?? -1;
             if (!liveEventWaits || !held || kind != Kinds.Event || row.Sender is not null || row.Due != 0 ||
                 header.ExplicitZeroDue || row.KeepUntil is null || header.EventWait is not { Key: { } key, Wait: { } wait } ||
-                key.IndexOf('_') is not (> 0 and <= 64) || !FoundationMetadataLimits.FitsName(key[(key.IndexOf('_') + 1)..]) ||
-                !FoundationMetadataLimits.FitsName(wait))
+                separator is not (> 0 and <= 64) ||
+                !FoundationMetadataLimits.FitsLiveWaitName(key[(separator + 1)..]) || !FoundationMetadataLimits.FitsLiveWaitName(wait))
                 throw new StoreException(Failure.Definite, "Invalid held root event delivery.");
             match = new(key, header.Operation, row.Target, wait, header.Creation);
         }
