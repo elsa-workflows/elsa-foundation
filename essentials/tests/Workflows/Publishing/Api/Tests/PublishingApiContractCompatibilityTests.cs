@@ -68,6 +68,7 @@ public sealed class PublishingApiContractCompatibilityTests
         // #1407 adds the nullable Descriptor init property to trigger conflicts, preserving the positional contract.
         // Published activity-version Test Runs add only the nullable SourceVersionId init property to ActivityDraftTestRunView
         // on the legacy surface; the version start and idempotency-lookup requests join the complete surface only.
+        // #6002 adds ReservedVersion to activity preflight. It is omitted for ordinary activity drafts.
         var legacyTypes = ContractTypes.Where(type => type != typeof(ActivityPublishingDiagnosticView) &&
                                                        type != typeof(ActivityPublishingProblemDetails) &&
                                                        type != typeof(ExpressionPublicationValidationDiagnosticView) &&
@@ -79,11 +80,10 @@ public sealed class PublishingApiContractCompatibilityTests
         var legacyHash = PublicShapeHash(legacyTypes);
         var actualHash = PublicShapeHash(ContractTypes);
         Assert.True(
-            legacyHash == "0d4281529fdec4fa791bdc3d9b2d9ce0a8586574028d4059c5f0f706551bc064",
+            legacyHash == "70e782abe584b7d23f1d051a464e9880301201e74b84cff3c8db406e48482f4a",
             $"The Publishing API legacy public-shape hash changed to {legacyHash}; complete surface {actualHash}.");
         Assert.True(
-            // #3922 adds only null-omitted AuthoredPath to the modern located diagnostic; legacy surface above is unchanged.
-            actualHash == "4fc3edafa3dbb52f9eaf9262a15878009f3dec9e4a08ecfa25ee84dfa8dfb961",
+            actualHash == "d3a171994b69f1bc7723240bec9d6859c1b84f04f29b6ae16d66a7cbcc56792d",
             $"The Publishing API public-shape hash changed to {actualHash}.");
     }
 
