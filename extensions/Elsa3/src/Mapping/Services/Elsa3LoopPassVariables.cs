@@ -85,8 +85,9 @@ internal static class Elsa3LoopPassVariables
             .Where(node => !ReferenceEquals(node, owner) && PassVariable(plan, node, name) is not null && !path.Contains(node))
             .ToArray();
 
-        // An inner loop that declares the name overwrites the block the read would find.
-        if (others.FirstOrDefault(node => IsDescendant(plan, node, owner)) is { } inner)
+        // An inner loop that declares the name overwrites the block the read would find, unless the read always runs before
+        // that loop's passes in the owner's pass (in the inner loop's own inputs, or ahead of it in a sequence).
+        if (others.FirstOrDefault(node => IsDescendant(plan, node, owner) && !RunsBefore(plan, read, node, owner)) is { } inner)
             return Ambiguous(name, $"loop '{NodeId(inner)}' in loop '{NodeId(owner)}''s body also declares '{name}' and overwrites the same Elsa 3 variable");
 
         var variableId = $"{char.ToLowerInvariant(name[0])}{name[1..]}Variable";
@@ -108,7 +109,15 @@ internal static class Elsa3LoopPassVariables
 
         var verdicts = locations.Select(location => (location.Writer, Wins: PassWins(plan, read, path, location.Container, location.Fresh, name))).ToArray();
         if (verdicts.All(verdict => !verdict.Wins))
-            return Elsa3PassRead.None(name);
+        {
+            // A container inside the loop's body hides the pass from every reader. A variable further up hides it only from a
+            // JavaScript lookup by memory block before the workflow suspends: Liquid, and JavaScript after a resume (which
+            // restores the pass's variable into the body's own scope), read the pass value.
+            var body = Body(plan, top);
+            return path.Any(scope => IsContainer(scope) && IsDescendant(plan, scope, top) && !ReferenceEquals(scope, body) && Declares(plan, scope, name))
+                ? Elsa3PassRead.None(name)
+                : Ambiguous(name, $"a variable named '{name}' hides it from a JavaScript lookup until the workflow suspends, while Liquid and a JavaScript read after a resume read loop '{NodeId(owner)}''s pass value");
+        }
 
         // The block the read finds is written by every loop that reaches it: one in the owner's body, or one that may run
         // alongside the read, changes the value under it. A reusable workflow runs inline, and a loop inside it is one too.
@@ -193,7 +202,7 @@ internal static class Elsa3LoopPassVariables
     /// </summary>
     private static (Elsa3Activity? Container, bool Fresh) Location(Elsa3ConversionPlan plan, Elsa3Activity loop)
     {
-        var body = plan.Nodes.Values.FirstOrDefault(node => ReferenceEquals(node.Parent, loop))?.Node;
+        var body = Body(plan, loop);
         if (body is not null && IsContainer(body))
             return (body, true);
         return (Ancestors(plan, loop).FirstOrDefault(IsContainer), false);
@@ -251,16 +260,66 @@ internal static class Elsa3LoopPassVariables
         {
             foreach (var target in connections.Where(connection => connection.Source?.Activity == current).Select(connection => connection.Target?.Activity))
             {
-                if (target is null || !seen.Add(target))
-                    continue;
                 if (StringComparer.Ordinal.Equals(target, to))
                     return true;
+                if (target is null || !seen.Add(target))
+                    continue;
                 pending.Enqueue(target);
             }
         }
 
         return false;
     }
+
+    /// <summary>
+    /// Whether <paramref name="read"/> runs before <paramref name="loop"/>'s passes, within each pass of
+    /// <paramref name="owner"/>: the read is the loop's own input, or comes ahead of it in a <c>Sequence</c> or along a
+    /// <c>Flowchart</c>'s connections, and nothing between them and the owner runs them again in the same pass.
+    /// </summary>
+    private static bool RunsBefore(Elsa3ConversionPlan plan, Elsa3Activity read, Elsa3Activity loop, Elsa3Activity owner)
+    {
+        if (ReferenceEquals(read, loop))
+            return !MayRepeat(plan, loop, owner);
+
+        var readChain = new[] { read }.Concat(Ancestors(plan, read)).ToList();
+        var loopChain = new[] { loop }.Concat(Ancestors(plan, loop)).ToList();
+        var common = readChain.FirstOrDefault(node => loopChain.Contains(node));
+        if (common is null || ReferenceEquals(common, read) || ReferenceEquals(common, loop))
+            return false;
+
+        var readBranch = readChain[readChain.IndexOf(common) - 1];
+        var loopBranch = loopChain[loopChain.IndexOf(common) - 1];
+        var ordered = common.Type switch
+        {
+            "Elsa.Sequence" => common.Activities?.IndexOf(readBranch) < common.Activities?.IndexOf(loopBranch),
+            "Elsa.Flowchart" => Reaches(common, readBranch.Id, loopBranch.Id) && !Reaches(common, loopBranch.Id, readBranch.Id),
+            _ => false,
+        };
+        return ordered && !MayRepeat(plan, readBranch, owner);
+    }
+
+    /// <summary>Whether something between <paramref name="node"/> and <paramref name="owner"/> may run it twice in one pass.</summary>
+    private static bool MayRepeat(Elsa3ConversionPlan plan, Elsa3Activity node, Elsa3Activity owner)
+    {
+        var child = node;
+        foreach (var ancestor in Ancestors(plan, node))
+        {
+            if (ReferenceEquals(ancestor, owner))
+                return false;
+            if (ancestor.Type is "Elsa.While" or "Elsa.DoWhile" or "Elsa.For" or "Elsa.ForEach" or "Elsa.ParallelForEach" ||
+                ancestor.Type == "Elsa.Flowchart" && Reaches(ancestor, child.Id, child.Id))
+                return true;
+            child = ancestor;
+        }
+
+        return true;
+    }
+
+    private static Elsa3Activity? Body(Elsa3ConversionPlan plan, Elsa3Activity loop) =>
+        plan.Nodes.Values.FirstOrDefault(node => ReferenceEquals(node.Parent, loop))?.Node;
+
+    private static bool Declares(Elsa3ConversionPlan plan, Elsa3Activity scope, string name) =>
+        ContainerVariables(plan, scope).Any(variable => StringComparer.Ordinal.Equals(variable.Name, name));
 
     private static Elsa3PassRead Ambiguous(string name, string reason) => new(Elsa3PassReadKind.Ambiguous, name, Reason: reason);
 

@@ -126,6 +126,45 @@ public sealed class Elsa3LoopPassVariableReadTests
     }
 
     [Fact]
+    public async Task An_inner_loops_items_read_the_outer_pass()
+    {
+        // The inner loop's items are evaluated before its passes overwrite the outer CurrentValue.
+        var inner = Activity("inner", "Elsa.ForEach", ("items", Expression("JavaScript", "getVariable('CurrentValue').lines", "Object")));
+        inner.AdditionalProperties["body"] = Port(Activity("inner-node", "Elsa.WriteLine", ("text", Literal("acme"))));
+
+        var result = await ConvertAsync(Sequence("root", ForEach("orders", Sequence("body", inner))));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var items = ReadExpression(result, "inner", "Collection");
+        var parameter = Assert.IsType<VariableExpressionParameterBinding>(Assert.Single(items.Parameters).Value);
+        Assert.Equal(("orders", "currentItem"), (parameter.DeclaringScopeNodeId, parameter.VariableKey));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_read_ahead_of_an_inner_loop_reads_the_outer_pass(bool flowchart)
+    {
+        var inner = For("inner", Activity("inner-node", "Elsa.WriteLine", ("text", Literal("acme"))));
+        Elsa3Activity body;
+        if (flowchart)
+        {
+            var read = Read("getVariable('CurrentValue')");
+            read.CustomProperties = new Elsa3ActivityCustomProperties { CanStartWorkflow = true };
+            body = Activity("body", "Elsa.Flowchart");
+            body.Activities = [read, inner];
+            body.Connections = [Connect("node", "Done", "inner")];
+        }
+        else
+            body = Sequence("body", Read("getVariable('CurrentValue')"), inner);
+
+        var result = await ConvertAsync(Sequence("root", ForEach("orders", body)));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        AssertReadsLoop(result, "orders", "currentItem");
+    }
+
+    [Fact]
     public async Task A_read_after_an_inner_loop_that_declares_the_name_is_refused()
     {
         // Elsa 3's inner For overwrites the outer pass's CurrentValue, so the read after it saw the inner index.
@@ -139,10 +178,10 @@ public sealed class Elsa3LoopPassVariableReadTests
     }
 
     [Fact]
-    public async Task An_enclosing_containers_variable_hides_the_pass_of_a_body_that_is_no_container()
+    public async Task An_enclosing_containers_variable_that_hides_the_pass_only_until_a_resume_is_refused()
     {
-        // The pass's variable lands in the enclosing Sequence after that Sequence's own CurrentValue, which Elsa 3 finds
-        // first: today's handling applies, and the read never binds to the loop.
+        // The pass's variable lands in the enclosing Sequence after that Sequence's own CurrentValue, which a JavaScript
+        // lookup finds first; Liquid, and JavaScript after a resume, read the pass value instead.
         var root = Sequence("root", ForEach("loop", Read("getVariable('CurrentValue')")));
         root.AdditionalProperties["variables"] = JsonSerializer.SerializeToElement(new[] { new { id = "acme-root-value", name = "CurrentValue", typeName = "String" } });
 
@@ -150,7 +189,7 @@ public sealed class Elsa3LoopPassVariableReadTests
 
         Assert.False(result.Succeeded);
         Assert.Contains(result.Diagnostics, diagnostic =>
-            diagnostic.Code == Elsa3ImportDiagnosticCodes.DanglingReference && diagnostic.Message.Contains("'CurrentValue'", StringComparison.Ordinal));
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'CurrentValue'", StringComparison.Ordinal));
     }
 
     [Fact]
