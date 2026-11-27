@@ -9,10 +9,12 @@ namespace Kernel.Native.Run;
 
 internal static class SqliteShippedInstallChecks
 {
+    private const int SqliteError = 1;
     private const int CheckConstraint = 275;
     private const int ForeignKeyConstraint = 787;
     private const int TriggerConstraint = 1811;
     private const int DataTypeConstraint = 3091;
+    private const string IncreasingJournalRevisions = "Sequenced journal requires increasing revisions";
 
     internal static async Task<int> RunAsync()
     {
@@ -364,12 +366,11 @@ internal static class SqliteShippedInstallChecks
 
         var unavailable = FoundationRootParkFacts.ProtectionRefusal("123");
         var copies = Enumerable.Repeat(unavailable, FoundationRootParkFacts.MaxProtectionRefusals - 1).ToArray();
-        await RequireEarlyStopRefusedAsync([copies], "duplicate refusal rows in one revision");
+        await RequireEarlyStopRefusedAsync([copies], "repeated attempts to write refusal rows at one revision");
         (string Entry, string Shape)[] invalidRefusals =
         [
             ("""{"Outcome":"refused","Operation":"123","Reason":"unavailable","Extra":true}""", "an extra refusal field"),
-            ("""{"Outcome":"refused","Operation":123,"Reason":"unavailable"}""", "a numeric operation in place of its text ID"),
-            ("""{"Outcome":"refused","Operation":"123","Reason":"unavailable", """, "malformed refusal JSON")
+            ("""{"Outcome":"refused","Operation":123,"Reason":"unavailable"}""", "a numeric operation in place of its text ID")
         ];
         foreach (var (entry, shape) in invalidRefusals)
         {
@@ -377,6 +378,8 @@ internal static class SqliteShippedInstallChecks
             prior.Add([entry]);
             await RequireEarlyStopRefusedAsync(prior, shape);
         }
+        await RequireEarlyStopRefusedAsync(Enumerable.Repeat(new[] { unavailable }, FoundationRootParkFacts.MaxProtectionRefusals - 2).ToArray(),
+            "a rejected malformed refusal", malformed: """{"Outcome":"refused","Operation":"123","Reason":"unavailable", """);
         await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
             UPDATE "Instances" SET "Revision" = 4, "FoundationWriteRevision" = 4, "FoundationParkCleared" = 2,
                 "FoundationParkClearingKind" = 'kernel.terminate' WHERE "Id" = 'projected'
@@ -414,15 +417,22 @@ internal static class SqliteShippedInstallChecks
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
             await JournalAsync("mixed", revision: 2, terminated);
+            await RefusedAsync<SqliteException>(() => JournalAsync("mixed", revision: 2, discarded),
+                "the sequenced journal refuses a second outcome at the paired revision", sqliteMessage: IncreasingJournalRevisions);
+            Require(await EndParkAsync("mixed", 2, InstanceStatus.Cancelled) == 1,
+                "the terminated outcome still admits the matching checkpoint update after rejecting the duplicate");
+            await write.RollbackAsync(token);
+        }
+        await using (var write = await db.Database.BeginTransactionAsync(token))
+        {
             await JournalAsync("mixed", revision: 2, discarded);
-            Require(await EndParkAsync("mixed", 2, InstanceStatus.Cancelled) == 1, "the terminated outcome admits the matching checkpoint update");
-            await RefusedAsync<SqliteException>(() => write.CommitAsync(token),
-                "the paired revision cannot commit an additional protected outcome with the wrong terminal disposition", ForeignKeyConstraint);
+            await RefusedAsync<SqliteException>(() => EndParkAsync("mixed", 2, InstanceStatus.Cancelled),
+                "a protected discard cannot authorize a Cancelled checkpoint");
             await write.RollbackAsync(token);
         }
         Require(!await db.Journal.AnyAsync(entry => entry.Instance == "mixed" && entry.Revision == 2, token)
             && await ReadProjectionAsync("mixed") is { Status: InstanceStatus.Faulted, ParkAt: not null, TerminalRevision: null },
-            "a failed outcome commit preserves the parked checkpoint, projection, and earlier journal");
+            "rolling back the outcome checks preserves the parked checkpoint, projection, and earlier journal");
 
         await using (var write = await db.Database.BeginTransactionAsync(token))
         {
@@ -484,18 +494,24 @@ internal static class SqliteShippedInstallChecks
             WHERE "Id" = {id}
             """, token);
 
-        async Task RequireEarlyStopRefusedAsync(IReadOnlyList<string[]> prior, string shape)
+        async Task RequireEarlyStopRefusedAsync(IReadOnlyList<string[]> prior, string shape, string? malformed = null)
         {
             var revision = 4;
             await using var write = await db.Database.BeginTransactionAsync(token);
             foreach (var group in prior)
             {
-                foreach (var refusal in group) await JournalAsync("projected", revision, refusal);
+                await JournalAsync("projected", revision, group[0]);
+                foreach (var duplicate in group.Skip(1))
+                    await RefusedAsync<SqliteException>(() => JournalAsync("projected", revision, duplicate),
+                        "the sequenced journal refuses a duplicate refusal at one revision", sqliteMessage: IncreasingJournalRevisions);
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision} WHERE "Id" = 'projected'
                     """, token);
                 revision++;
             }
+            if (malformed is not null)
+                await RefusedAsync<SqliteException>(() => JournalAsync("projected", revision, malformed),
+                    "the sequenced journal refuses malformed refusal JSON", sqliteCode: SqliteError, sqliteMessage: "malformed JSON");
             await JournalAsync("projected", revision, stopped);
             await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "Revision" = {revision}, "FoundationWriteRevision" = {revision}, "FoundationParkClearing" = NULL,
@@ -582,10 +598,12 @@ internal static class SqliteShippedInstallChecks
     private sealed record ActorProjection(InstanceStatus Status, long? EndedAt, long? TerminalRevision, string Header,
         string Type, string Labels, long? ParkAt, string? ParkFault, long? ParkRevision);
 
-    private static async Task RefusedAsync<T>(Func<Task> action, string witness, int sqliteCode = TriggerConstraint) where T : Exception
+    private static async Task RefusedAsync<T>(Func<Task> action, string witness, int sqliteCode = TriggerConstraint, string? sqliteMessage = null)
+        where T : Exception
     {
         try { await action(); }
-        catch (T error) when (error is not SqliteException sqlite || sqlite.SqliteExtendedErrorCode == sqliteCode)
+        catch (T error) when (error is not SqliteException sqlite || sqlite.SqliteExtendedErrorCode == sqliteCode &&
+            (sqliteMessage is null || sqlite.Message.Contains(sqliteMessage, StringComparison.Ordinal)))
         {
             Require(true, witness);
             return;
