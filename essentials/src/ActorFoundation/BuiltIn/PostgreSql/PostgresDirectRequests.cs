@@ -19,6 +19,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
 {
     private readonly PostgresRootAdmission admission;
     private readonly HeldRootRequests edge;
+    private readonly string? _startType;
     private PostgresReplyRelay? _liveReplies;
 
     internal PostgresDirectRequests(PostgresRootAdmission admission, EfStore store, string node, string? startType = null)
@@ -26,6 +27,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
         if (startType is not null) PostgresRootAdmission.RequireActorType(startType);
         this.admission = admission;
+        _startType = startType;
         Node = node;
         edge = new(new Admission(admission, store), node, startType);
     }
@@ -41,6 +43,12 @@ public sealed class PostgresDirectRequests : IReplyTransport
 
     internal Requests Pending => edge.Pending;
     internal RootAdmissionPressure? Pressure => admission.Pressure;
+
+    internal void RequireScheduleBinding(Func<KernelDb> create, string actorType)
+    {
+        if (!admission.UsesDatabaseFactory(create) || _startType != actorType)
+            throw new ArgumentException("Schedule occurrences and held requests must use the same PostgreSQL store factory and primary actor type.");
+    }
 
     internal ValueTask<bool> ReceiveAsync(string destination, Reply reply, CancellationToken stop) =>
         edge.ReceiveAsync(destination, reply, stop);

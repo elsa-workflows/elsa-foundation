@@ -193,6 +193,16 @@ internal static class RootScheduleInventoryChecks
         var bound = EmbeddedTenant.Bind(tenant);
         if (postgres)
         {
+            var shared = PostgresPreviewHosting.CreateRequests(open, "scheduled-occurrence-relay", pinned.Model);
+            await PostgresPreviewHosting.OpenScheduleOccurrencesAsync(open, bound, pinned.Model, ScheduleActor.ActorType, shared, token);
+            try
+            {
+                await PostgresPreviewHosting.OpenScheduleOccurrencesAsync(() => open(), bound, pinned.Model,
+                    ScheduleActor.ActorType, shared, token);
+                throw new InvalidOperationException("The relay accepted another database factory's held requests.");
+            }
+            catch (ArgumentException) { Console.WriteLine("ok the PostgreSQL relay enforces the shared request binding"); }
+
             var pressure = RootAdmissionPressure.CreateDefault().Backlog.HighWater + 1;
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Partitions" SET "Backlog" = "Backlog" + {pressure}
