@@ -22,7 +22,7 @@ internal static class ShippedWriteBudget
     private const int Samples = 3;
     private const string Node = "shipped-write-budget";
 
-    internal static async Task<int> RunAsync(bool postgres, bool inBatch)
+    internal static async Task<int> RunAsync(bool postgres, bool inBatch, bool requireBudget)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         var token = timeout.Token;
@@ -200,7 +200,7 @@ internal static class ShippedWriteBudget
             var budget = postgres ? 16 : 32;
             Console.WriteLine($"{Samples} warm samples: maximum {count} {(postgres ? "wire round trips" : "SQLite provider calls")}, " +
                 $"budget {budget} ({(count <= budget ? "met" : "missed")}).");
-            return 0;
+            return requireBudget && count > budget ? 1 : 0;
         }
         finally
         {

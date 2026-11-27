@@ -155,8 +155,10 @@ if (args is ["pg-write-budget", var budgetWriter and ("owned" or "ef"), var budg
     return await PostgresWriteBudget.RunAsync(budgetWriter == "owned" ? CommitSql.Owned : CommitSql.EntityFramework,
         budgetFence == "in-batch", budgetOptions.Length != 0);
 if (args is ["shipped-write-budget", var shippedBudgetProvider and ("postgres" or "sqlite"),
-    var shippedBudgetFence and ("checked" or "in-batch")])
-    return await ShippedWriteBudget.RunAsync(shippedBudgetProvider == "postgres", shippedBudgetFence == "in-batch");
+    var shippedBudgetFence and ("checked" or "in-batch"), .. var shippedBudgetOptions] &&
+    shippedBudgetOptions is [] or ["--require-budget"])
+    return await ShippedWriteBudget.RunAsync(shippedBudgetProvider == "postgres", shippedBudgetFence == "in-batch",
+        requireBudget: shippedBudgetOptions.Length != 0);
 if (args is ["pg-root-value-check", var valueFence and ("checked" or "in-batch"), "birth"])
     return await PostgresRootValueChecks.RunAsync(valueFence == "in-batch", null);
 if (args is ["pg-root-value-check", var valueRestartFence and ("checked" or "in-batch"), "restart", var valueActor, var valueEpoch] &&
@@ -337,7 +339,8 @@ if (args is ["cost", "postgres", var connection])
     return failures;
 }
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
-Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | pg-write-budget <owned|ef> <checked|in-batch> [--require-budget] | memory [runs] | pg-runtime-cluster [partitions] [wake]");
+Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | pg-write-budget <owned|ef> <checked|in-batch> [--require-budget] | " +
+    "shipped-write-budget <sqlite|postgres> <checked|in-batch> [--require-budget] | memory [runs] | pg-runtime-cluster [partitions] [wake]");
 return 2;
 
 internal static class Cost
