@@ -70,17 +70,15 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
     public void ConfigureServices(IServiceCollection services)
     {
         ConfigureSharedServices(services, BasePath, SyncRequestTimeout);
+        services.AddApiCapabilitySource<HttpWorkflowEndpointsCapabilitySource>();
         services.AddScoped<HttpEndpointMiddleware>();
+        services.AddScoped<HttpTestRunIngressMiddleware>();
+        AddStandaloneHttpIngress(services);
     }
 
     internal static void ConfigureSharedServices(IServiceCollection services, string basePath, TimeSpan syncRequestTimeout)
     {
         services.AddHttpContextAccessor();
-        services.TryAddScoped<HttpTriggerSourceContext>();
-        services.TryAddScoped<IStandaloneTriggerSourceContext<StandaloneHttpTriggerSource>>(provider => provider.GetRequiredService<HttpTriggerSourceContext>());
-        services.AddStandaloneTriggerIngress<StandaloneHttpTriggerSource>(StandaloneHttpTriggerSource.Descriptor);
-        services.TryAddScoped<StandaloneHttpTriggerMiddleware>();
-        services.AddApiCapabilitySource<HttpWorkflowEndpointsCapabilitySource>();
         services.Configure<HttpEndpointOptions>(options => options.BasePath = basePath);
         services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = syncRequestTimeout);
         services.Configure<HttpRoutePublicationOptions>(options => options.BasePath = basePath);
@@ -125,13 +123,20 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, HttpEndpointTriggerStimulusProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ITestRunTriggerDriver, HttpTestRunDriver>());
 
-        services.AddScoped<HttpTestRunIngressMiddleware>();
 
         // Request-owned synchronous response services. The activity returns a typed instruction inside its
         // isolated attempt scope; delivery reads the committed completion only after the inline drain returns.
         // The sink remains the scoped marker for a custom response that already started during dispatch.
         services.AddScoped<SyncHttpResponseSink>();
         services.AddScoped<HttpResponseInstructionDelivery>();
+    }
+
+    internal static void AddStandaloneHttpIngress(IServiceCollection services)
+    {
+        services.TryAddScoped<HttpTriggerSourceContext>();
+        services.TryAddScoped<IStandaloneTriggerSourceContext<StandaloneHttpTriggerSource>>(provider => provider.GetRequiredService<HttpTriggerSourceContext>());
+        services.AddStandaloneTriggerIngress<StandaloneHttpTriggerSource>(StandaloneHttpTriggerSource.Descriptor);
+        services.TryAddScoped<StandaloneHttpTriggerMiddleware>();
     }
 
     /// <summary>
@@ -153,9 +158,11 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
         app.UseMiddleware<HttpEndpointMiddleware>();
     }
 
-    internal static void UseSharedMiddleware(IApplicationBuilder app)
+    internal static void UseSharedMiddleware(IApplicationBuilder app, bool mountTestRuns = true, bool mountStandalone = true)
     {
-        app.UseMiddleware<HttpTestRunIngressMiddleware>();
-        app.UseMiddleware<StandaloneHttpTriggerMiddleware>();
+        if (mountTestRuns)
+            app.UseMiddleware<HttpTestRunIngressMiddleware>();
+        if (mountStandalone)
+            app.UseMiddleware<StandaloneHttpTriggerMiddleware>();
     }
 }

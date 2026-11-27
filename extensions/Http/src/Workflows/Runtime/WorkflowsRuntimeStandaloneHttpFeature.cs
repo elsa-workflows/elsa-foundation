@@ -38,6 +38,7 @@ public sealed class WorkflowsRuntimeStandaloneHttpFeature : IShellFeature, IPost
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddSingleton<StandaloneWorkflowHttpRouteProjection>();
         WorkflowsRuntimeHttpFeature.ConfigureSharedServices(services, FaultHandlerType, AuthorizationHandlerType,
             RouteTableConvergenceIntervalSeconds, RouteTableConvergenceMaxBackoffSeconds);
         services.AddScoped<IHttpEndpointRoutesResolver>(provider => new HttpEndpointRoutesResolver(null, null,

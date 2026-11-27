@@ -123,6 +123,12 @@ public sealed class ActivitiesHttpFeatureTests
 
         feature.ConfigureServices(services);
         feature.PostConfigureServices(services);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(HttpTestRunIngressMiddleware));
+        services.AddSingleton<ITestRunTargetStore, UnusedTestRunTargetStore>();
+        services.AddSingleton<IWorkflowTestScopeStore, UnusedTestScopeStore>();
+        services.AddSingleton<ITestRunTargetDispatcher, UnusedTestRunTargetDispatcher>();
+        services.AddSingleton<IWorkflowExecutionPartitionAccessor, TestPartitionAccessor>();
+        feature.PostConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
         var settings = provider.GetRequiredService<WorkflowHttpEndpointSettings>();
