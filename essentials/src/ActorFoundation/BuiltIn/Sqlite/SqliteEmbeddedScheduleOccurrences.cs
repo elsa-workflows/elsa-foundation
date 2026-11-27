@@ -20,18 +20,37 @@ public sealed partial class SqliteEmbeddedFoundation
     private sealed class ScheduleOccurrenceAdmissions(string databasePath, Contract.BoundScope scope, string workflowType,
         string scheduleActorType, SqliteEmbeddedHosting.SqliteDirectRequests requests) : Contract.IScheduleOccurrenceAdmissions
     {
-        public ValueTask<Contract.Admission> AdmitAsync(Contract.AcceptedScheduleOccurrence occurrence, Contract.StartSpec workflow,
-            CancellationToken cancellationToken = default) =>
-            SqliteEmbeddedHosting.AdmitScheduledOccurrenceAsync(databasePath, scope, workflowType, scheduleActorType, requests,
-                RootScheduleOccurrence.FromContract(occurrence), RootScheduleOccurrence.WorkflowStart(workflow, workflowType), cancellationToken);
+        public async ValueTask<Contract.Admission> AdmitAsync(Contract.AcceptedScheduleOccurrence occurrence, Contract.StartSpec workflow,
+            CancellationToken cancellationToken = default)
+        {
+            var selected = RootScheduleOccurrence.FromContract(occurrence);
+            var start = RootScheduleOccurrence.WorkflowStart(workflow, workflowType);
+            try
+            {
+                return await WithStoreAsync(admission => admission.AdmitScheduledOccurrenceAsync(scope.Tenant, selected, start, cancellationToken),
+                    cancellationToken);
+            }
+            catch (RootAdmissionRefused refusal) { return refusal.Admission; }
+        }
+
+        public ValueTask<bool> ConfirmRetiredAsync(Contract.AcceptedScheduleOccurrence occurrence, Contract.StartSpec workflow,
+            Contract.ActorRef actor, CancellationToken cancellationToken = default)
+        {
+            var selected = RootScheduleOccurrence.FromContract(occurrence);
+            var start = RootScheduleOccurrence.WorkflowStart(workflow, workflowType);
+            return WithStoreAsync(admission => admission.IsScheduledOccurrenceRetiredAsync(scope.Tenant, selected, start, actor.Id,
+                cancellationToken, requireLineage: true), cancellationToken);
+        }
+
+        private ValueTask<T> WithStoreAsync<T>(Func<SqliteRootAdmission, Task<T>> operation, CancellationToken token) =>
+            SqliteEmbeddedHosting.WithScheduleOccurrenceStoreAsync(databasePath, workflowType, scheduleActorType, requests, operation, token);
     }
 }
 
 public static partial class SqliteEmbeddedHosting
 {
-    internal static async ValueTask<Contract.Admission> AdmitScheduledOccurrenceAsync(string databasePath, Contract.BoundScope scope,
-        string workflowType, string scheduleActorType, SqliteDirectRequests requests, RootScheduleOccurrence occurrence,
-        StartSpec workflow, CancellationToken cancellationToken)
+    internal static async ValueTask<T> WithScheduleOccurrenceStoreAsync<T>(string databasePath, string workflowType,
+        string scheduleActorType, SqliteDirectRequests requests, Func<SqliteRootAdmission, Task<T>> operation, CancellationToken cancellationToken)
     {
         try
         {
@@ -39,13 +58,12 @@ public static partial class SqliteEmbeddedHosting
             requests.RequireBinding(file.Path, workflowType);
             var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options, requests.QualificationFormat),
                 requests.DeduplicationWindow, file.AdmissionDefinitions, requests.Pressure, scheduleActorType);
-            return await admission.AdmitScheduledOccurrenceAsync(scope.Tenant, occurrence, workflow, cancellationToken);
+            return await operation(admission);
         }
-        catch (RootAdmissionRefused refusal) { return refusal.Admission; }
         catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            throw new TimeoutException("SQLite occurrence admission could not acquire its write lock.", error);
+            throw new TimeoutException("SQLite occurrence access could not acquire its store lock.", error);
         }
     }
 }
