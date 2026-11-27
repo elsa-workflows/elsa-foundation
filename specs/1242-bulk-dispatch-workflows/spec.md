@@ -413,7 +413,8 @@ and on-completed-callbacks suites pass.
   child at once. It points to batching with a sequential `ForEach` over batches.
 - **FR-020a**: A conversion where an activity inside a converted `ChildCompleted` or `ChildFaulted` branch writes a
   variable declared outside the bulk node MUST raise behaviour warning `ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE`.
-  - Every converted write targets a workflow variable, so this applies to every branch write.
+  - An Elsa 3 composite inside a branch, for example a `Flowchart` or `Sequence`, can declare its own variables. Writes
+    to those are declared inside the bulk node, are not outer writes, and raise no warning.
   - Writes in the correlation function or the static `Input` are already refused as input expressions
     (`ForbiddenCapability`). The generated `Dispatch` child has no output capture. Guidance: Elsa 3 ran
   the branches one at a time, and Elsa 4 runs them concurrently, so a shared counter or list can lose updates. Record
