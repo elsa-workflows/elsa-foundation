@@ -192,7 +192,7 @@ internal static class RootScheduleInventoryChecks
         var occurrence = new RootScheduleOccurrence(timer, reference, 1, "~timer-a", 1000);
         var pinned = new StartSpec("workflow", """{"Workflow":"version-a"}""", Input: "original");
         var foundation = postgres ? null : SqliteEmbeddedFoundation.ForScheduleQualification(db.Database.GetDbConnection().DataSource,
-            "scheduled-occurrence-relay", pinned.Model);
+            "scheduled-occurrence-relay", pinned.Model, trackLineage: db.UsesRootScheduleLineage);
         if (foundation is not null) await foundation.InstallShippedAsync(token);
         var bound = EmbeddedTenant.Bind(tenant);
         if (postgres)
@@ -393,7 +393,7 @@ internal static class RootScheduleInventoryChecks
             catch (StoreFormatException error) when (error.Message.Contains("PostgreSQL schedule lineage", StringComparison.Ordinal)) { }
             try
             {
-                await AdmitAsync(tenant, occurrence with { ArmGeneration = 4 }, pinned);
+                await AdmitAsync(occurrence with { ArmGeneration = 4 }, pinned);
                 throw new InvalidOperationException("Occurrence admission accepted " + mutation + ".");
             }
             catch (StoreFormatException error) when (error.Message.Contains("PostgreSQL schedule lineage", StringComparison.Ordinal)) { }

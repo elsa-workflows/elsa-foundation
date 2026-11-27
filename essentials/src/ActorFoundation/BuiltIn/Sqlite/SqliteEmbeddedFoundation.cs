@@ -40,8 +40,9 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     public static SqliteEmbeddedFoundation ForPlaybackDescendantsQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootPlaybackDescendantsQualification);
 
-    internal static SqliteEmbeddedFoundation ForScheduleQualification(string databasePath, string node, string actorType) =>
-        new(databasePath, node, actorType, StoreFormat.RootScheduleSettlementQualification);
+    internal static SqliteEmbeddedFoundation ForScheduleQualification(string databasePath, string node, string actorType,
+        bool trackLineage = false) => new(databasePath, node, actorType,
+            trackLineage ? StoreFormat.RootScheduleLineageQualification : StoreFormat.RootScheduleSettlementQualification);
 
     /// <summary>Composes the dedicated preview format for qualifying trusted schedule controls.</summary>
     public static SqliteEmbeddedFoundation ForScheduleControlsQualification(string databasePath, string node, string actorType) =>
