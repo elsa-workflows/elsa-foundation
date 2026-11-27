@@ -73,8 +73,8 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
         reads.ReadRetentionPolicyAsync(scope, actorType, cancellationToken);
 
     ValueTask<Contract.ActorRetentionPolicyChange> Contract.IActorRetentionPolicies.TryApplyRetentionPolicyAsync(
-        Contract.BoundScope scope, long expectedRevision, Contract.ActorRetentionWindows proposed, long maximumReviewedNewlyEligible,
-        CancellationToken cancellationToken) =>
+        Contract.BoundScope scope, long expectedRevision, Contract.ActorRetentionWindows proposed, long automaticNewlyEligibleLimit,
+        string? confirmation, CancellationToken cancellationToken) =>
         reads.TryApplyRetentionPolicyAsync(scope, actorType, expectedRevision, proposed, automaticNewlyEligibleLimit, confirmation, cancellationToken);
 
     ValueTask<Contract.ActorRetentionQuote> Contract.IActorRetentionReads.ReadRetentionQuoteAsync(Contract.BoundScope scope,

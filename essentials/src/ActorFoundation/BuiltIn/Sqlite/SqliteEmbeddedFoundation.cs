@@ -98,8 +98,8 @@ public sealed class SqliteEmbeddedFoundation : Contract.IActorRetentionPolicies
             store => store.ReadRootRetentionPolicyAsync(scope, actorType, cancellationToken), cancellationToken);
 
     ValueTask<Contract.ActorRetentionPolicyChange> Contract.IActorRetentionPolicies.TryApplyRetentionPolicyAsync(
-        Contract.BoundScope scope, long expectedRevision, Contract.ActorRetentionWindows proposed, long maximumReviewedNewlyEligible,
-        CancellationToken cancellationToken) =>
+        Contract.BoundScope scope, long expectedRevision, Contract.ActorRetentionWindows proposed, long automaticNewlyEligibleLimit,
+        string? confirmation, CancellationToken cancellationToken) =>
         SqliteEmbeddedHosting.RunRetentionPolicyAsync(InstalledPath, qualificationFormat,
             store => store.TryApplyRootRetentionPolicyAsync(scope, actorType, expectedRevision, proposed, automaticNewlyEligibleLimit, confirmation, cancellationToken),
             cancellationToken);

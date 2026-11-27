@@ -12,8 +12,9 @@ internal static class RetentionPolicyChecks
         var keep = new Contract.ActorRetentionWindows();
         var expire = keep with { Finished = TimeSpan.Zero };
         var defaultPolicy = new Contract.ActorRetentionPolicy(0, keep);
-        Task<Contract.ActorRetentionPolicyChange> ApplyAsync(long revision, Contract.ActorRetentionWindows windows, long maximum) =>
-            policies.TryApplyRetentionPolicyAsync(tenant, revision, windows, maximum, cancellationToken: token).AsTask();
+        Task<Contract.ActorRetentionPolicyChange> ApplyAsync(long revision, Contract.ActorRetentionWindows windows, long maximum,
+            string? confirmation = null) =>
+            policies.TryApplyRetentionPolicyAsync(tenant, revision, windows, maximum, confirmation, token).AsTask();
 
         Require(await policies.ReadRetentionPolicyAsync(tenant, token) == defaultPolicy &&
             await policies.ReadRetentionPolicyAsync(other, token) == defaultPolicy,
@@ -22,12 +23,16 @@ internal static class RetentionPolicyChecks
             { Outcome: Contract.ActorRetentionPolicyChangeOutcome.Unchanged, Quote.NewlyEligible: 0 } unchanged &&
             unchanged.Current == defaultPolicy && unchanged.Quote.AsOf >= terminalAt,
             "an unchanged retention policy returns the provider clock without advancing the revision");
-        Require(await ApplyAsync(0, expire, 0) is
-            { Outcome: Contract.ActorRetentionPolicyChangeOutcome.OverLimit, Quote.NewlyEligible: 1 } overLimit &&
+        var overLimit = await ApplyAsync(0, expire, 0);
+        Require(overLimit is { Outcome: Contract.ActorRetentionPolicyChangeOutcome.OverLimit, Quote.NewlyEligible: 1, Confirmation.Length: > 0 } &&
             overLimit.Quote.AsOf >= terminalAt && overLimit.Current == defaultPolicy && await policies.ReadRetentionPolicyAsync(tenant, token) == defaultPolicy,
-            "the activation transaction evaluates committed actors afresh and preserves policy when impact exceeds the reviewed count");
+            "the activation transaction seals the fresh count and preserves policy when impact exceeds the reviewed count");
+        var receipt = overLimit.Confirmation!;
+        var damaged = (receipt[0] == 'A' ? "B" : "A") + receipt[1..];
+        Require((await ApplyAsync(0, expire, 0, damaged)).Outcome == Contract.ActorRetentionPolicyChangeOutcome.OverLimit,
+            "the activation transaction refuses a modified receipt");
 
-        var concurrent = await Task.WhenAll(ApplyAsync(0, expire, 1), ApplyAsync(0, expire, 1));
+        var concurrent = await Task.WhenAll(ApplyAsync(0, expire, 0, receipt), ApplyAsync(0, expire, 0, receipt));
         Require(concurrent.Count(change => change.Outcome == Contract.ActorRetentionPolicyChangeOutcome.Applied) == 1 &&
             concurrent.Count(change => change.Outcome == Contract.ActorRetentionPolicyChangeOutcome.Stale) == 1 &&
             concurrent.All(change => change.Current == new Contract.ActorRetentionPolicy(1, expire)) &&
@@ -48,6 +53,10 @@ internal static class RetentionPolicyChecks
         Require(await ApplyAsync(1, expire, 1) is
             { Outcome: Contract.ActorRetentionPolicyChangeOutcome.Stale, Current.Revision: 2, Quote.NewlyEligible: 1 },
             "a stale finite policy request quotes its new impact against the current indefinite windows");
+
+        Require(await ApplyAsync(2, expire, 0, receipt) is
+            { Outcome: Contract.ActorRetentionPolicyChangeOutcome.OverLimit, Current.Revision: 2, Quote.NewlyEligible: 1 },
+            "the store rejects the previously confirmed receipt after a subsequent revision");
 
         await using var db = open();
         // Restore once both operations below have refused the committed tamper.
