@@ -31,22 +31,34 @@ internal sealed partial class PostgresRootAdmission
         if (plan is null) return duplicate;
 
         // PrepareAsync has committed and disposed its connection and locks. The host may use another database.
-        var protectedStart = await protectRootStart(plan.Offer, token).AsTask().WaitAsync(token);
+        var protection = protectRootStart(plan.Offer, token).AsTask();
+        bool protectedStart;
+        try { protectedStart = await protection.WaitAsync(token); }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            _ = protection.ContinueWith(static task => _ = task.Exception,
+                CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            throw;
+        }
         token.ThrowIfCancellationRequested();
 
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
         var (pin, source) = await PinPreparedStartSourceAsync(db, loadIssuer: false, token);
         if (source != plan.Source) throw new StoreFormatException("The held root preparation's physical source changed before admission.");
-        if (!await IsBeforeDeadlineAsync(db, reply.Deadline, token)) return null;
+        var stage = plan.Stage;
         if (!protectedStart)
         {
+            await RootPreparedStarts.ConsumeAsync(db, stage, token, query => BindPreparedStart(query, pin, source.Table, deadline: null));
             var winner = await ReadStartReceiptAsync(db, pin, tenant, digest, liveOnly: true, token);
+            var open = await IsBeforeDeadlineAsync(db, reply.Deadline, token);
+            await transaction.CommitAsync(token);
+            if (!open) return null;
             if (winner is not null) return new(winner, true);
             throw new RootAdmissionRefused(Contract.RefusalReason.TargetMismatch, TimeSpan.Zero);
         }
 
-        var stage = plan.Stage;
+        if (!await IsBeforeDeadlineAsync(db, reply.Deadline, token)) return null;
         if (!await RootPreparedStarts.ConsumeAsync(db, stage, token, query => BindPreparedStart(query, pin, source.Table, stage.Deadline)))
         {
             var winner = await ReadStartReceiptAsync(db, pin, tenant, digest, liveOnly: true, token);

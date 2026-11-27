@@ -21,6 +21,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
     private readonly PostgresRootAdmission admission;
     private readonly HeldRootRequests edge;
     private readonly string? _startType;
+    private readonly bool _protectsRootStarts;
     private PostgresReplyRelay? _liveReplies;
 
     internal PostgresDirectRequests(PostgresRootAdmission admission, EfStore store, string node, string? startType = null,
@@ -30,6 +31,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
         if (startType is not null) PostgresRootAdmission.RequireActorType(startType);
         this.admission = admission;
         _startType = startType;
+        _protectsRootStarts = protectRootStart is not null;
         Node = node;
         edge = new(new Admission(admission, store, protectRootStart), node, startType);
     }
@@ -50,6 +52,12 @@ public sealed class PostgresDirectRequests : IReplyTransport
     {
         if (!admission.UsesDatabaseFactory(create) || _startType != actorType)
             throw new ArgumentException("Schedule occurrences and held requests must use the same PostgreSQL store factory and primary actor type.");
+    }
+
+    internal void RequireRootStartProtectionBinding(Func<KernelDb> create, string actorType)
+    {
+        if (_protectsRootStarts && (!admission.UsesDatabaseFactory(create) || _startType != actorType))
+            throw new ArgumentException("Protected held starts must use the same PostgreSQL store factory and primary actor type.");
     }
 
     internal ValueTask<bool> ReceiveAsync(string destination, Reply reply, CancellationToken stop) =>
