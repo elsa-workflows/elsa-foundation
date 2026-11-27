@@ -19,7 +19,7 @@ internal sealed partial class Burst
                 Label(frame, NativeLabels.InstanceName, name.Value);
                 return true;
             case Kernel.Native.Finish finish:
-                turn.Record($"c:{frame.Id}:{frame.Node}");
+                turn.RecordFrameOutcome(NativeJournalKind.Completed, frame);
                 turn.Record($"finish:{frame.Node}:{finish.Outcome}");
                 Finish();
                 return true;

@@ -10,15 +10,25 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
+/// <summary>Serves the standard history page from the shell's selected run store.</summary>
+public interface IRuntimeHistoryPageReader
+{
+    /// <summary>Returns a page after authorizing the exact run, or null when the run is unavailable to this caller.</summary>
+    Task<RuntimeHistoryPageView?> ReadAsync(GetRuntimeHistory request, CancellationToken cancellationToken = default);
+}
+
 /// <summary>Reauthorizes every history read before touching the scoped provider or resolving an exact target.</summary>
 public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore workflows,
     IActivityInspectionContextAsync authorization, TimeProvider time, IRuntimeHistoryStore? history = null,
     IBookmarkStateStore? bookmarks = null, IActivityExecutionStateStore? activities = null,
-    ILogger<RuntimeHistoryInspectionService>? logger = null)
+    ILogger<RuntimeHistoryInspectionService>? logger = null) : IRuntimeHistoryPageReader
 {
     // Supplied by API composition and resolved only after authorization/read. Optional capture-owner
     // outages must not hide readable retained evidence or eagerly activate writers on denied reads.
     internal Func<RuntimeHistoryCapturePolicy, bool>? CaptureAvailability { get; init; }
+
+    async Task<RuntimeHistoryPageView?> IRuntimeHistoryPageReader.ReadAsync(GetRuntimeHistory request, CancellationToken cancellationToken) =>
+        await ReadAsync(request, cancellationToken);
 
     public async Task<RuntimeHistoryPageView> ReadAsync(GetRuntimeHistory request, CancellationToken token = default)
     {

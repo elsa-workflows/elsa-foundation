@@ -7,7 +7,7 @@ using Models = Kernel.Model.Contracts;
 namespace Kernel.Native;
 
 internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? outbound, long? endedAt = null,
-    Func<string, string?>? definitionOf = null) : INativeTurn
+    Func<string, string?>? definitionOf = null, bool structuralJournal = false) : INativeTurn
 {
     private HashSet<string>? _timerHandles;
 
@@ -58,7 +58,26 @@ internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? ou
     public void Publish(string key, string? payload, TimeSpan keep) => turn.Publish(key, payload, keep);
     public void Emit(string channel, object? item) => turn.Emit(channel, item);
     public void Record(string entry) => turn.Record(entry);
-    public void RecordFrameStart(Frame frame) => Record($"b:{frame.Id}:{frame.Node}:{frame.Parent}");
+    internal void RecordClock()
+    {
+        if (structuralJournal) turn.Record(NativeStructuralJournal.Create(NativeJournalKind.Turn, Now));
+        else Record(FormattableString.Invariant($"t:{Now}"));
+    }
+    public void RecordFrameScheduled(string frame, int attempt)
+    {
+        if (structuralJournal) turn.Record(NativeStructuralJournal.Create(NativeJournalKind.Scheduled, Now, frame));
+        else Record($"a:{frame}:{attempt}");
+    }
+    public void RecordFrameStart(Frame frame)
+    {
+        if (structuralJournal) turn.Record(NativeStructuralJournal.Create(NativeJournalKind.Started, Now, frame.Id, frame.Node, frame.Parent));
+        else Record($"b:{frame.Id}:{frame.Node}:{frame.Parent}");
+    }
+    public void RecordFrameOutcome(NativeJournalKind kind, Frame frame)
+    {
+        if (structuralJournal) turn.Record(NativeStructuralJournal.Create(kind, Now, frame.Id, frame.Node, frame.Parent));
+        else Record($"{INativeTurn.OutcomeCode(kind)}:{frame.Id}:{frame.Node}");
+    }
     public void SetStatus(Contract.ActorStatus status, string? subStatus, JsonNode? output) => turn.SetStatus(status, subStatus, output);
     public void SetLabel(string name, string? value) => turn.SetLabel(name, value);
     public string EffectKey(string node, string iteration, int attempt) => Models.EffectKey.For(Actor.Id, node, iteration, attempt);
