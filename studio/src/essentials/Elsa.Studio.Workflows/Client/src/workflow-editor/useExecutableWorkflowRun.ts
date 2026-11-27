@@ -53,12 +53,32 @@ export async function resolvePublishedDefinitionRunTarget(
   return candidates[0]?.target ?? null;
 }
 
-export function notifyPublishedRunStarted(name: string, result: WorkflowExecutableRunResponse): void {
+function describePublishedRun(name: string, result: WorkflowExecutableRunResponse): {
+  level: "success" | "error" | "info";
+  title: string;
+  summary: string;
+} {
+  if (result.persistenceOutcome === "Volatile" && result.actorStatus === "Finished")
+    return { level: "success", title: "Run completed in memory", summary: `${name} completed in memory` };
+
+  if (result.persistenceOutcome === "Committed") {
+    switch (result.actorStatus) {
+      case "Finished": return { level: "success", title: "Run completed", summary: `${name} completed` };
+      case "Faulted": return { level: "error", title: "Run faulted", summary: `${name} faulted` };
+      case "Cancelled": return { level: "info", title: "Run cancelled", summary: `${name} was cancelled` };
+    }
+  }
+
+  return { level: "success", title: "Run started", summary: `Started ${name}` };
+}
+
+export function notifyPublishedRunOutcome(name: string, result: WorkflowExecutableRunResponse): void {
   const workflowExecutionId = readExecutableRunWorkflowExecutionId(result);
+  const { level, title, summary } = describePublishedRun(name, result);
   getNotifications().notify({
-    level: "success",
-    title: "Run started",
-    message: `Started ${name}.`,
+    level,
+    title,
+    message: `${summary}.`,
     ...(workflowExecutionId ? {
       link: {
         label: "Open run",
@@ -101,7 +121,7 @@ export function createExecutableWorkflowRunFeedback({ setStatus, setLastRun, set
     },
     onStarted: (target: ExecutableWorkflowRunTarget, result: WorkflowExecutableRunResponse) => {
       setLastRun({ artifactId: target.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result) });
-      setStatus(`Started ${target.artifactId}`);
+      setStatus(describePublishedRun(target.artifactId, result).summary);
     },
     onError: (error: unknown) => setError(formatExecutableRunError(error))
   };

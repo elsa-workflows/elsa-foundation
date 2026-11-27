@@ -4,7 +4,7 @@ import type { WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatExecutableRunError } from "./executableRunHelpers";
 import { getNotifications, useNotificationGuard } from "./notifications";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
-import { notifyPublishedRunStarted, resolvePublishedDefinitionRunTarget, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
+import { notifyPublishedRunOutcome, resolvePublishedDefinitionRunTarget, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
 
 export function WorkflowDefinitionRunAction({ context, definition, requestId, runInputEditors }: {
   context: StudioEndpointContext;
@@ -19,7 +19,7 @@ export function WorkflowDefinitionRunAction({ context, definition, requestId, ru
     onDispatchStart: () => undefined,
     onStarted: (_target, result) => {
       const feedback = pendingRunFeedback.current;
-      if (feedback.canNotify?.()) notifyPublishedRunStarted(feedback.name, result);
+      if (feedback.canNotify?.()) notifyPublishedRunOutcome(feedback.name, result);
     },
     onError: error => {
       const feedback = pendingRunFeedback.current;

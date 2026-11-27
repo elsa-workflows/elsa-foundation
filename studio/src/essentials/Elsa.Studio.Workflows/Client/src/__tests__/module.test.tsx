@@ -429,11 +429,27 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("loads the published definition run action on demand", async () => {
+  it.each([
+    {
+      label: "legacy start",
+      dispatch: { workflowExecutionId: "wfexec-published-run" },
+      feedback: { level: "success", title: "Run started", message: "Started Hello World." }
+    },
+    {
+      label: "write-free completion",
+      dispatch: { workflowExecutionId: null, persistenceOutcome: "Volatile", actorStatus: "Finished" },
+      feedback: { level: "success", title: "Run completed in memory", message: "Hello World completed in memory." }
+    },
+    {
+      label: "committed fault",
+      dispatch: { workflowExecutionId: "wfexec-faulted", persistenceOutcome: "Committed", actorStatus: "Faulted" },
+      feedback: { level: "error", title: "Run faulted", message: "Hello World faulted." }
+    }
+  ])("loads the published definition run action on demand and reports $label", async ({ dispatch, feedback }) => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/runtime/workflows/executables/artifact-current/execute") && init?.method === "POST") {
-        return response({ workflowExecutionId: "wfexec-published-run" });
+        return response(dispatch);
       }
       if (url.includes("/runtime/workflows/executables")) return response([
         executable({
@@ -464,11 +480,12 @@ describe("workflows module", () => {
         "https://server.example/runtime/workflows/executables/artifact-current/execute",
         expect.objectContaining({ method: "POST" })
       ));
-      await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
-        level: "success",
-        title: "Run started",
-        message: "Started Hello World."
-      })));
+      await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(dispatch.workflowExecutionId
+        ? expect.objectContaining({
+          ...feedback,
+          link: { label: "Open run", path: expect.stringContaining(`/workflows/instances/${dispatch.workflowExecutionId}`) }
+        })
+        : feedback));
     } finally {
       await unmount();
     }

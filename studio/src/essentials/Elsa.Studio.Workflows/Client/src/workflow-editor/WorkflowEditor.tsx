@@ -102,7 +102,7 @@ import { createValidationActivityLabels, humanizeValidationErrors } from "../val
 import { parseValidationErrorPath } from "../validationDiagnostics";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
-import { notifyPublishedRunStarted, resolvePublishedDefinitionRunTarget, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
+import { notifyPublishedRunOutcome, resolvePublishedDefinitionRunTarget, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
 import { LazyWorkflowTestDrivePanel } from "./lazyTestDriveUi";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { useDraftHistory } from "./useDraftHistory";
@@ -442,7 +442,7 @@ export function WorkflowEditor({
     context,
     onDispatchStart: () => { setStatus(""); setError(""); },
     onStarted: (_target, result) => {
-      if (publishedRunNotification.current?.()) notifyPublishedRunStarted(details?.definition.name ?? "workflow", result);
+      if (publishedRunNotification.current?.()) notifyPublishedRunOutcome(details?.definition.name ?? "workflow", result);
     },
     onError: error => {
       if (publishedRunNotification.current?.()) setError(formatExecutableRunError(error));
