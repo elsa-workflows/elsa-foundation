@@ -27,6 +27,9 @@ public static partial class SqliteEmbeddedHosting
     /// <summary>Whether the shipped format records a sequenced workflow journal.</summary>
     public static bool TakesSequencedJournal => RootProfiles.Shipped.HasFlag(RootCapabilities.SequencedJournal);
 
+    /// <summary>Whether the shipped profile can register and deliver live HTTP waits.</summary>
+    public static bool TakesHttpWaits => RootProfiles.Shipped.HasFlag(RootCapabilities.LiveEventWaits);
+
     /// <summary>Installs or verifies a dedicated shipped SQLite file for one Embedded owner.</summary>
     /// <remarks>The parent directory must exist. An existing file must be empty or carry this build's shipped definitions.</remarks>
     public static Task InstallShippedAsync(string databasePath, CancellationToken cancellationToken = default) =>

@@ -57,6 +57,8 @@ if (args is ["pg-live-remote-http"]) return await PostgresLiveRemoteHttpChecks.R
 if (args is ["kernel-http-waits"]) return await KernelHttpWaitChecks.RunAsync();
 if (args is ["kernel-http-waits", var httpWaitProvider and ("postgres" or "sqlite"), var httpWaitFence and ("checked" or "in-batch")])
     return await KernelHttpWaitChecks.RunAsync(httpWaitProvider, httpWaitFence == "in-batch");
+if (args is ["kernel-http-waits", var shippedHttpProvider and ("postgres" or "sqlite"), var shippedHttpFence and ("checked" or "in-batch"), "shipped"])
+    return await KernelHttpWaitChecks.RunAsync(shippedHttpProvider, shippedHttpFence == "in-batch", shipped: true);
 if (args is ["root-due-backlog", var backlogProvider and ("postgres" or "sqlite"), var backlogFence and ("checked" or "in-batch")])
     return await RootDueBacklogChecks.RunAsync(backlogProvider == "postgres", backlogFence == "in-batch");
 if (args is ["root-admission-pressure", var pressureProvider and ("postgres" or "sqlite"), var pressureFence and ("checked" or "in-batch")])

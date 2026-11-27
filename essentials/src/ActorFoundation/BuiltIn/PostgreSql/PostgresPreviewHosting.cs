@@ -156,6 +156,14 @@ public static class PostgresPreviewHosting
         return db.UsesRootSequencedJournal;
     }
 
+    /// <summary>Whether the selected profile can register and deliver live HTTP waits.</summary>
+    public static bool TakesHttpWaits(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootLiveEventWaits;
+    }
+
     /// <summary>
     /// Opens the Foundation's ingress and reads on an installed PostgreSQL Core Preview store, for the configured actor type.
     /// With <paramref name="requests"/> (<see cref="CreateRequests"/>), on a store with held replies (<c>ReplyProtocol</c>),

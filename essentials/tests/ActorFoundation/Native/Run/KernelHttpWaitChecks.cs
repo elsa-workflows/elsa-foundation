@@ -20,7 +20,7 @@ namespace Kernel.Native.Run;
 
 internal static class KernelHttpWaitChecks
 {
-    internal static async Task<int> RunAsync(string? provider = null, bool inBatch = true)
+    internal static async Task<int> RunAsync(string? provider = null, bool inBatch = true, bool shipped = false)
     {
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         var token = stop.Token;
@@ -45,7 +45,7 @@ internal static class KernelHttpWaitChecks
         var scope = ContractScopes.Bind("kernel-http-waits");
         var model = new PublicWorkflow([new NativeExecutionModel(serving.Registry)]);
         using var temporary = provider == "sqlite" ? new TemporaryDatabase() : null;
-        var fixture = await OpenAsync(provider, inBatch, model, temporary?.Path, token);
+        var fixture = await OpenAsync(provider, inBatch, shipped, model, temporary?.Path, token);
         await using var owner = fixture.Owner;
         var reads = fixture.Reads;
 
@@ -171,7 +171,7 @@ internal static class KernelHttpWaitChecks
         Func<CancellationToken, ValueTask<long>> Clock, Func<CancellationToken, Task<int>> EventCount,
         Func<bool> NoPendingCallers, Func<Task>? Pump = null);
 
-    private static async Task<WaitFixture> OpenAsync(string? provider, bool inBatch, PublicWorkflow model, string? path, CancellationToken token)
+    private static async Task<WaitFixture> OpenAsync(string? provider, bool inBatch, bool shipped, PublicWorkflow model, string? path, CancellationToken token)
     {
         const string node = "http-wait-owner";
         var loop = new LoopOptions
@@ -185,7 +185,7 @@ internal static class KernelHttpWaitChecks
         {
             var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
                 throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.")).Options;
-            KernelDb Open() => KernelDb.ForPostgresRootLiveEventQualification(options);
+            KernelDb Open() => shipped ? KernelDb.ForPostgresRootShipped(options) : KernelDb.ForPostgresRootLiveEventQualification(options);
             await using var database = Open();
             Require(await PostgresFixtureDatabase.IsEmptyAsync(database, token), "the PostgreSQL event fixture uses a dedicated empty database");
             var cold = new EfStore(Open, postgres: true);
@@ -201,14 +201,15 @@ internal static class KernelHttpWaitChecks
 
         if (provider == "sqlite")
         {
-            var foundation = SqliteEmbeddedFoundation.ForLiveEventQualification(path!, node, model.Type);
+            var foundation = shipped ? new SqliteEmbeddedFoundation(path!, node, model.Type) :
+                SqliteEmbeddedFoundation.ForLiveEventQualification(path!, node, model.Type);
             await foundation.InstallShippedAsync(token);
             var owner = foundation.CreateHostedService(new ParkProbe(model), EndProcess, loop, inBatch);
             await owner.StartAsync(token);
             var ingress = await foundation.OpenIngressWithOperatorsAsync(Authorize, token);
             var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
                 { DataSource = path, Pooling = false }.ConnectionString).Options;
-            KernelDb Open() => KernelDb.ForSqliteRootShipped(options, StoreFormat.RootLiveEventQualification);
+            KernelDb Open() => KernelDb.ForSqliteRootShipped(options, shipped ? null : StoreFormat.RootLiveEventQualification);
             return new(owner, ingress, foundation.CreateReads(), foundation.ReadClockAsync, ct => EventCountAsync(Open, ct), () => true);
         }
 

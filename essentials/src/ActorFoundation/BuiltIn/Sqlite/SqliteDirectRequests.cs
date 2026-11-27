@@ -108,7 +108,8 @@ public static partial class SqliteEmbeddedHosting
 
         private sealed class Admission(SqliteDirectRequests owner, string path, TimeSpan window) : IHeldRootAdmission
         {
-            public bool SupportsEvents => owner.QualificationFormat == StoreFormat.RootLiveEventQualification;
+            public bool SupportsEvents => owner.QualificationFormat is { } format
+                ? format == StoreFormat.RootLiveEventQualification : TakesHttpWaits;
 
             public Task<HeldRootAdmission> PublishAsync(HeldRootRequest request, string key, string? payload, CancellationToken token) =>
                 WriteAsync(request.Tenant, RootAdmissionKind.Input, (admission, attempt, ct) =>

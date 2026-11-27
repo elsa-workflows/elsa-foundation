@@ -53,7 +53,8 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(storage);
         services.AddSingleton(new ShellRestartRequirement(FeatureName));
         services.AddSingleton(new KernelServing(capabilities: new KernelHostCapabilities(
-            Schedules: false, Timers: storage.TakesTimers, Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends, HttpWaits: false),
+            Schedules: false, Timers: storage.TakesTimers, Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends,
+            HttpWaits: storage.TakesHttpWaits),
             publicationScope: persistenceScope));
         services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),
@@ -86,7 +87,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
                 context.RequestServices.GetRequiredService<KernelHttpRequestHandler>().HandleAsync(context))
             .WithOwner(FeatureName)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .AllowPublic("kernel workflow HTTP endpoints", "Starts a published workflow on its configured HTTP route and returns its response.");
+            .AllowPublic("kernel workflow HTTP endpoints", "Starts or resumes a published workflow on its configured HTTP route and returns its response.");
     }
 
     internal static string HttpBasePath(HttpEndpointOptions options)
