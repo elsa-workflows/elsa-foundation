@@ -14,11 +14,11 @@ short worktree path (MSB3030).
 
 ## Phase 1: Setup
 
-- [ ] T001 **Blocking.** Confirm a coordinator main sync has reached the initiative branch and brought
+- [X] T001 **Blocking.** Confirm a coordinator main sync has reached the initiative branch and brought
   `Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore` (`AddOpenIddictEntityFrameworkCoreStore`) with it (R-7).
   If it hasn't, stop and ask the coordinator. Don't copy or move store code. After the sync, use the guard lists and
   Workbench paths as they are then (`apps/Elsa.Workbench.Host` on main).
-- [ ] T002 Create the project and its test project:
+- [X] T002 Create the project and its test project:
   - `apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj`: `Microsoft.NET.Sdk.Web`, `IsPackable` false, a
     `UserSecretsId`, `<RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>`, and a
     `Properties/launchSettings.json` with `ASPNETCORE_ENVIRONMENT=Development` and one fixed local URL not used by
@@ -37,17 +37,17 @@ short worktree path (MSB3030).
 
 ## Phase 2: Foundational (the host)
 
-- [ ] T003 Derive the composition (R-4):
+- [X] T003 Derive the composition (R-4):
   - For each candidate, record the suite, template, Studio need or `required by <feature>` that justifies it. Read the
     S-15 acceptance definitions and Elsa 4 templates in `extensions/Elsa3/tests/JTest/`, and each feature's `DependsOn`.
   - Settle R-4's "to confirm" items, and drop every candidate without a reason.
   - Write the result to `apps/Elsa.Migration.Host/shells.json`, and the reasons to
     `composition-reasons.json` next to it (feature name → reason).
   - Add a project reference for every composed feature's project, and nothing else beyond hosting (FR-003).
-- [ ] T004 Admit the host in `EfCoreDependencyGuardTests` once T003's references are final: its name in
+- [X] T004 Admit the host in `EfCoreDependencyGuardTests` once T003's references are final: its name in
   `AllowedEfConsumers`, its reviewed package array (computed from the host's restore graph), and an arm in
   `ReviewedEfPackages` (R-9). Run the guard.
-- [ ] T005 Write `MigrationHost.CreateBuilder(string[] args)`, `MigrationHost.Build(WebApplicationBuilder builder)` and
+- [X] T005 Write `MigrationHost.CreateBuilder(string[] args)`, `MigrationHost.Build(WebApplicationBuilder builder)` and
   a `Program.cs` that calls both (R-2). Start from main's `apps/Elsa.Essentials.Host/Program.cs`, and name in the PR
   each piece dropped and why. Include:
   - the configuration order of R-3 (`shells.Local.json` and user secrets re-added above the shells files);
@@ -64,7 +64,7 @@ short worktree path (MSB3030).
 
   Mark the project temporary: a `<Description>` and the README's first line name #5800 as the issue whose cleanup
   removes it (FR-001, Q12).
-- [ ] T006 Write `appsettings.json` and the settings in `shells.json` (R-6):
+- [X] T006 Write `appsettings.json` and the settings in `shells.json` (R-6):
   - `ConnectionStrings:Elsa` set to `Data Source=data/elsa.db`, with the migration policy left at its default `AutoMigrate`
     (`Elsa:Persistence:EntityFramework:Migrate:Policy` unset);
   - development identity with the seeded administrator (the OpenIddict store is in memory in development mode);
@@ -84,7 +84,7 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 
 ## Phase 3: User Story 1 - Run my migrated workflows (P1)
 
-- [ ] T007 [US1] Host tests through `MigrationHost.CreateBuilder`, `UseTestServer` and `MigrationHost.Build`, with
+- [X] T007 [US1] Host tests through `MigrationHost.CreateBuilder`, `UseTestServer` and `MigrationHost.Build`, with
   `--environment=Development` and `--contentRoot` set, each on a temporary data folder and migrated folder (R-5):
   - scenario 1: the sample is published and answers;
   - scenario 2: an activities file holds a composite with an activity dependency, a workflow uses it, both load, and
@@ -93,7 +93,7 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
   - scenario 5: an unknown feature means the host refuses to start, naming it;
   - scenario 6: a missing workflows folder means the host refuses to start, naming it; so does a missing activities
     file.
-- [ ] T008 [US1] Check by hand with the quickstart, and record the steps and results in the PR:
+- [X] T008 [US1] Check by hand with the quickstart, and record the steps and results in the PR:
   - scenario 3: a feature from a project reference the engineer adds to the host project, listed in
     `shells.Local.json`;
   - SC-002: from a fresh clone, run a workflow from another `migrated/` folder by setting only the two folder settings
@@ -101,7 +101,7 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 
 ## Phase 4: User Story 3 - See which features my workflows need (P2)
 
-- [ ] T009 [P] [US3] Host tests (R-5):
+- [X] T009 [P] [US3] Host tests (R-5):
   - every feature in `shells.json` has an entry in `composition-reasons.json`, and every entry names a composed
     feature; either failure names the feature (no test reads the README, framework §2.23.2);
   - every listed feature resolves, and a test fails naming any that doesn't;
@@ -111,13 +111,18 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 
 ## Phase 5: User Story 4 - Studio (P3)
 
-- [ ] T010 [US4] Start the repository's Studio host against the migration host. Sign in, open a definition, edit an
+- [X] T010 [US4] Start the repository's Studio host against the migration host. Sign in, open a definition, edit an
   expression, publish, and see the host run the new version. Record it in the PR, with the Studio host used and any
   Studio module that expects a capability the host doesn't advertise (R-8). Name that Studio host in the README.
+  **Done 2026-11-27 (PR #6031), with one block:** sign-in and the definitions list work (US4 scenario 1). Scenario 2 is
+  blocked outside this host: Studio opens a definition through its current draft and a reconciled definition has none
+  ("This workflow definition has no current draft"). The README says so and how to change a migrated workflow instead.
 
 ## Phase 6: User Story 2 - JTest acceptance (P1)
 
-- [ ] T011 [US2] Wait for all three:
+- [ ] T011 [US2] **Follow-up, not this PR:** the acceptance run is S-15's final run on this host (spec 1235, PR #5662),
+  once the 1237 CLI's `inventory` exists; spec status is `Implemented` for the host itself (coordinator, 2026-11-27).
+  Wait for all three:
   - the CLI's `inventory` command (spec 1237);
   - the merged S-15 acceptance with a Workbench run on the head under test;
   - T007.
@@ -136,7 +141,7 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 
 ## Phase 7: Polish
 
-- [ ] T014 [P] Finish the host's README:
+- [X] T014 [P] Finish the host's README:
   - "temporary local migration tool, don't deploy; removed by the cleanup on #5800" (FR-001, FR-006), and that running the built assembly outside `dotnet run` needs
     `ASPNETCORE_ENVIRONMENT=Development`;
   - the two folder settings and where to set them (FR-011, R-3);
@@ -148,9 +153,11 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
   - a pointer to #5800 for the GA composition.
 
   Link the README from the migration docs that spec 1238 owns, if they exist by then.
-- [ ] T015 [P] Confirm FR-017 (no file under the Workbench host or its settings changed, and the S-15 Workbench run is
+- [X] T015 [P] Confirm FR-017 (no file under the Workbench host or its settings changed, and the S-15 Workbench run is
   unchanged) and FR-016 (no JTest project or step in `tools/ci/test-tiers.json` or the CI workflows).
-- [ ] T016 Set this spec's status to `Implemented` in the finishing PR.
+- [X] T016 Set this spec's status to `Implemented` in the finishing PR.
+- [X] T017 (added in implementation) Fix enum input defaults and options failing publication by name (R-12):
+  `JsonConversionContract.Read`, its unit tests, `docs/serialization.md` and the 1207 conversion contract.
 
 ## Dependencies
 

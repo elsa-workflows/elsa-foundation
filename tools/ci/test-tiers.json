@@ -342,6 +342,11 @@
       "medianMinutes": 0.01
     },
     {
+      "project": "essentials/tests/Migration/Host/Tests/Elsa.Migration.Host.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
       "project": "essentials/tests/Mediator/Tests/Elsa.Mediator.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.0
@@ -961,6 +966,7 @@
           "essentials/tests/Primitives/Tests/Elsa.Primitives.Tests.csproj",
           "essentials/tests/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj",
           "essentials/tests/Mediator/Tests/Elsa.Mediator.Tests.csproj",
+          "essentials/tests/Migration/Host/Tests/Elsa.Migration.Host.Tests.csproj",
           "essentials/tests/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj",
           "essentials/tests/Events/Tests/Elsa.Events.Tests.csproj",
           "extensions/ConsoleStream/tests/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj",
