@@ -296,6 +296,9 @@ internal static class RootScheduleInventoryChecks
             () => RetiredAsync(nextOccurrence, nextActor.Id), token);
         Require(!await RetiredAsync(nextOccurrence, first.Actor.Value.Id),
             "retirement proof is tied to the exact occurrence birth");
+        if (!db.UsesRootScheduleLineage)
+            Require(!await relay.ConfirmRetiredAsync(Wire(nextOccurrence), new(pinned.Model, pinned.Definition, pinned.Input), nextActor, token),
+                "a profile that can prove only the root cannot release a hosted occurrence");
         var messageCount = await db.Messages.CountAsync(token);
         var retiredReplay = await AdmitAsync(nextOccurrence, pinned);
         Require(retiredReplay is { Outcome: Contract.AdmissionOutcome.Duplicate } && retiredReplay.Actor == nextActor &&
@@ -379,9 +382,14 @@ internal static class RootScheduleInventoryChecks
         static Contract.AcceptedScheduleOccurrence Wire(RootScheduleOccurrence item) =>
             new(item.Schedule.Definition, item.Schedule.Key, new(item.ScheduleReference), item.ArmGeneration, item.TimerDelivery, item.Due);
 
-        Task<bool> RetiredAsync(RootScheduleOccurrence item, string actorReference) => postgres
-            ? pg.IsScheduledOccurrenceRetiredAsync(tenant, item, pinned, actorReference, token)
-            : sqlite.IsScheduledOccurrenceRetiredAsync(tenant, item, pinned, actorReference, token);
+        Task<bool> RetiredAsync(RootScheduleOccurrence item, string actorReference)
+        {
+            if (db.UsesRootScheduleLineage)
+                return relay.ConfirmRetiredAsync(Wire(item), new(pinned.Model, pinned.Definition, pinned.Input),
+                    new(actorReference), token).AsTask();
+            return postgres ? pg.IsScheduledOccurrenceRetiredAsync(tenant, item, pinned, actorReference, token)
+                : sqlite.IsScheduledOccurrenceRetiredAsync(tenant, item, pinned, actorReference, token);
+        }
 
         async Task RequireUnsafeDefinitionRefusalAsync(string mutation, Task<bool>? pendingProof = null)
         {

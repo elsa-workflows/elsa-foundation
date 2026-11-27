@@ -52,5 +52,10 @@ public static partial class PostgresPreviewHosting
             }
             catch (RootAdmissionRefused refusal) { return refusal.Admission; }
         }
+
+        public ValueTask<bool> ConfirmRetiredAsync(Contract.AcceptedScheduleOccurrence occurrence, Contract.StartSpec workflow,
+            Contract.ActorRef actor, CancellationToken cancellationToken = default) =>
+            new(admission.IsScheduledOccurrenceRetiredAsync(scope.Tenant, RootScheduleOccurrence.FromContract(occurrence),
+                RootScheduleOccurrence.WorkflowStart(workflow, workflowType), actor.Id, cancellationToken, requireLineage: true));
     }
 }

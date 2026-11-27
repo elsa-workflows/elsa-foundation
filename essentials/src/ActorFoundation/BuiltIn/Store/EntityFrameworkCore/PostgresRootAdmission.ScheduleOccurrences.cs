@@ -13,12 +13,13 @@ internal sealed partial class PostgresRootAdmission
     }
 
     internal async Task<bool> IsScheduledOccurrenceRetiredAsync(string tenant, RootScheduleOccurrence occurrence, StartSpec pinnedWorkflow,
-        string actorReference, CancellationToken token)
+        string actorReference, CancellationToken token, bool requireLineage = false)
     {
         occurrence.Validate();
         RequireCreator(occurrence.CreatorOperation, pinnedWorkflow);
         await using var db = create();
         if (!db.UsesRootScheduleSettlement) throw new NotSupportedException("The profile does not confirm scheduled workflow retirement.");
+        if (requireLineage && !db.UsesRootScheduleLineage) return false;
         // Read the catalog after taking the lineage DDL lock. The final statement observes the birth, tombstone and
         // cohort in one snapshot, so it does not use a snapshot opened before a concurrent DDL transaction finished.
         await using var transaction = await db.Database.BeginTransactionAsync(db.UsesRootScheduleLineage

@@ -7,13 +7,14 @@ namespace Kernel.EntityFramework;
 internal sealed partial class SqliteRootAdmission
 {
     internal Task<bool> IsScheduledOccurrenceRetiredAsync(string tenant, RootScheduleOccurrence occurrence, StartSpec pinnedWorkflow,
-        string actorReference, CancellationToken token)
+        string actorReference, CancellationToken token, bool requireLineage = false)
     {
         occurrence.Validate();
         RequireCreator(occurrence.CreatorOperation, pinnedWorkflow);
         return InAdmissionTransactionAsync(async (db, ct) =>
         {
             if (!db.UsesRootScheduleSettlement) throw new NotSupportedException("The profile does not confirm scheduled workflow retirement.");
+            if (requireLineage && !db.UsesRootScheduleLineage) return false;
             var issuer = await ReadIssuerAsync(db, ct);
             var birth = ScheduledWorkflowBirth.Create(tenant, occurrence, pinnedWorkflow, issuer.Key, issuer.Partitions);
             return birth.Reference == actorReference && await birth.IsRetiredAsync(db, tenant, ct);
