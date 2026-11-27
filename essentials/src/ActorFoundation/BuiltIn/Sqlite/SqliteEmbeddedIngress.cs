@@ -15,10 +15,22 @@ public static partial class SqliteEmbeddedHosting
         CancellationToken cancellationToken = default) =>
         OpenFoundationCoreAsync(databasePath, actorType, requests, requests.DeduplicationWindow, cancellationToken);
 
+    /// <summary>
+    /// Opens ingress with operator commands on an installed SQLite shipped store. The host authorizes each command
+    /// against its bound scope and exact actor reference.
+    /// </summary>
+    public static Task<Contract.IIngress> OpenFoundationWithOperatorsAsync(string databasePath, string actorType,
+        Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorizeOperator, TimeSpan? deduplicationWindow = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(authorizeOperator);
+        return OpenFoundationCoreAsync(databasePath, actorType, null, deduplicationWindow, cancellationToken, authorizeOperator);
+    }
+
     internal static Task<Contract.IIngress> OpenFoundationWithOperatorsAsync(string databasePath, string actorType,
-        Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorizeOperator, SqliteDirectRequests? requests = null,
+        Func<Contract.BoundScope, Contract.ActorRef, string, bool> authorizeOperator, SqliteDirectRequests requests,
         CancellationToken cancellationToken = default) =>
-        OpenFoundationCoreAsync(databasePath, actorType, requests, requests?.DeduplicationWindow, cancellationToken, authorizeOperator);
+        OpenFoundationCoreAsync(databasePath, actorType, requests, requests.DeduplicationWindow, cancellationToken, authorizeOperator);
 
     internal static async ValueTask<Contract.Admission> AdmitRetentionDeleteAsync(string databasePath, Contract.BoundScope scope,
         Contract.ActorRef actor, string selection, TimeSpan deduplicationWindow, CancellationToken token)
@@ -109,6 +121,8 @@ public static partial class SqliteEmbeddedHosting
             ArgumentNullException.ThrowIfNull(scope);
             ArgumentNullException.ThrowIfNull(request);
             cancellationToken.ThrowIfCancellationRequested();
+            if (kind == Contract.Kinds.Recover)
+                return ValueTask.FromResult(new Contract.Reply(null, null, Error: "missing"));
             if (request.Inline || request.ReleaseBeforeCommit || request.Ambient is not null)
                 return ValueTask.FromResult(new Contract.Reply(null, null, Error: "invalid operator request"));
             if (add?.DueAt is not null)
@@ -126,7 +140,7 @@ public static partial class SqliteEmbeddedHosting
         private (Contract.ActorRef Actor, Contract.OperatorCommand? Command, Contract.RefusalReason? Refusal) ReadCommand(
             Contract.BoundScope scope, Contract.Target target, string kind, string? payload)
         {
-            if (kind is not (Contract.Kinds.Terminate or Contract.Kinds.Delete) || target is not Contract.Target.Ref exact ||
+            if (kind is not (Contract.Kinds.Terminate or Contract.Kinds.Delete or Contract.Kinds.Recover) || target is not Contract.Target.Ref exact ||
                 !FoundationRootCreator.IsGeneratedReference(exact.Actor.Id) || authorizeOperator?.Invoke(scope, exact.Actor, kind) != true ||
                 payload is not { Length: > 0 and <= 2_048 })
                 return default;

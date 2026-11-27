@@ -21,6 +21,7 @@ public sealed partial class EfStore
                 CHECK ("FoundationReleasedBy" IS NULL OR ("FoundationReleasedBy" > 0 AND "InboxScope" = -4));
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_Released" ON "Messages" ("Partition", "Target", "FoundationReleasedBy", "Seq")
                 WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationReleasedBy" IS NOT NULL;
+            /*recovery-kept-index*/
             /*composed-waiting-index*/
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootJournal_Outcome" ON "Journal" ("Partition", "Instance", "Revision")
                 WHERE {RootOutcomeEntry};
@@ -48,6 +49,9 @@ public sealed partial class EfStore
                     CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_LiveJob" ON "Messages" {LiveRootJobIndex};
                     {PostgresParkLiveJobGuards()}
                     """ : "", StringComparison.Ordinal)
+            .Replace("/*recovery-kept-index*/", $"""
+                CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_RecoveryKept" ON "Messages" {RecoveryKeptIndex};
+                """, StringComparison.Ordinal)
             .Replace("/*composed-waiting-index*/", db.UsesRootComposedParkRecovery ? $"""
                 CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_CohortGroups" ON "Messages" ("Partition", "Seen", "Due", "Seq")
                     INCLUDE ("Target")
@@ -82,7 +86,11 @@ public sealed partial class EfStore
                 AND EXISTS (SELECT 1 FROM unnest({4}::text[], {5}::bigint[]) AS withheld("Actor", "Revision")
                     WHERE withheld."Actor" = i."Id" AND withheld."Revision" = i."Revision"))
             """ : "";
-        return $"""AND (i."FoundationParkAt" IS NOT NULL {withheld} OR {NoEarlierReleasedCohort})""";
+        return $"""
+            AND (i."FoundationParkAt" IS NOT NULL
+                OR (i."Suspended" AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" LIKE 'operator/%')
+                {withheld} OR {NoEarlierReleasedCohort})
+            """;
     }
 
     private sealed record CohortSample(long Epoch, long Through = -1, long ReadyThrough = 0, long Seen = 0,
@@ -221,6 +229,50 @@ public sealed partial class EfStore
             ORDER BY k."Seq", k."Id" COLLATE "C" {(limit < int.MaxValue ? $"LIMIT {limit}" : "")} {(lockRows ? "FOR UPDATE" : "")}
             """, actor, partition).ToListAsync(token);
 
+    // The arrival quote can stop at its limit without scanning pending rows or the consumed reason.
+    private const string RecoveryKeptIndex = """
+        ("Partition", "Target" COLLATE "C", "FoundationKeptBy", "Seq", "Id" COLLATE "C")
+        WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" IN (0, 1)
+        """;
+
+    private sealed record PostgresRecoveryRow(bool Fits, string? Id, short? KeptBy, string? Digest, string? Envelope, long? Bytes);
+
+    // Quote at most one page plus its overflow row before opening any arrival body. Consumed inputs are cleared
+    // rather than released, so only their metadata is included in the recovery proof.
+    private static async Task<(bool Fits, List<KeptRow> Kept)> ReadPostgresRecoveryRowsAsync(
+        KernelDb db, string actor, int partition, bool lockRows, CancellationToken token)
+    {
+        const string filter = """
+            k."Target" COLLATE "C" = {0} AND k."Partition" = {1} AND k."InboxScope" = -4 AND k."EventMatch" IS NULL AND k."Done"
+            """;
+        var arrived = $"""k."FoundationKeptBy" = {(short)ParkKeepReason.Arrived}""";
+        var rows = await db.Database.SqlQueryRaw<PostgresRecoveryRow>($"""
+            WITH arrivals AS MATERIALIZED (
+                SELECT {KeptBytes} AS "Bytes"
+                FROM "Messages" k WHERE {filter} AND {arrived}
+                ORDER BY k."Seq", k."Id" COLLATE "C" LIMIT {InMemoryStore.ParkPageLimit + 1}
+            ), quote AS MATERIALIZED (
+                SELECT count(*) <= {InMemoryStore.ParkPageLimit}
+                    AND (count(*) <= 1 OR sum("Bytes") <= {ParkRecoveryCredit.LimitBytes}) AS "Fits"
+                FROM arrivals
+            ), kept AS MATERIALIZED (
+                SELECT k."Id", k."Seq", k."FoundationKeptBy" AS "KeptBy",
+                    CASE WHEN {arrived} THEN {KeptDigest}
+                        ELSE encode(sha256(convert_to(ROW(k."Seq", k."Kind", k."Due", k."KeepUntil")::text, 'UTF8')), 'hex') END AS "Digest",
+                    CASE WHEN {arrived} THEN {KeptEnvelopeDigest} ELSE '' END AS "Envelope",
+                    CASE WHEN {arrived} THEN {KeptBytes} ELSE 0 END AS "Bytes"
+                FROM "Messages" k WHERE (SELECT "Fits" FROM quote) AND {filter}
+                    AND k."FoundationKeptBy" IN ({(short)ParkKeepReason.Consumed}, {(short)ParkKeepReason.Arrived})
+                {(lockRows ? "FOR UPDATE OF k" : "")}
+            )
+            SELECT quote."Fits", kept."Id", kept."KeptBy", kept."Digest", kept."Envelope", kept."Bytes"
+            FROM quote LEFT JOIN kept ON true
+            ORDER BY kept."Seq", kept."Id" COLLATE "C"
+            """, actor, partition).ToListAsync(token);
+        return (rows[0].Fits, rows.Where(row => row.Id is not null).Select(row =>
+            new KeptRow(row.Id!, row.KeptBy!.Value, row.Digest!, row.Envelope!, row.Bytes!.Value)).ToList());
+    }
+
     // Each field is framed by its UTF-8 length, so no id can run into the next row.
     private static string KeptSetDigest(IEnumerable<KeptRow> kept)
     {
@@ -265,20 +317,27 @@ public sealed partial class EfStore
                     {clearing}, "Jobs", {jobPin} AS "ParkJobResult", {livePin} AS "ParkLiveJob" FROM "Instances"
                 WHERE "Id" = {"{0}"} AND "Partition" = {"{1}"} AND NOT "Retired"
                 """, message.Target.Id, message.Target.Partition).SingleOrDefaultAsync(token);
-            // A clearing's control reads only the next page and one more row: nothing is kept while a clearing is open.
-            var limit = command.RootParkClear ? InMemoryStore.ParkPageLimit + 1 : int.MaxValue;
-            var kept = db.UsesSqliteRootRuntime
-                ? (message.Kind == Kinds.Recover
+            var recover = message.Kind == Kinds.Recover;
+            var quoteFits = true;
+            List<KeptRow> kept;
+            if (db.UsesSqliteRootRuntime)
+            {
+                kept = (recover
                     ? await ReadSqliteRecoveryRowsAsync(db, message.Target.Id, message.Target.Partition, null, token)
                     : await ReadSqliteKeptAsync(db, message.Target.Id, message.Target.Partition, !command.RootParkClear, token))
-                .Select(row => row.Facts).ToList()
-                : await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token, limit);
-            // A page restores at most 170 rows and 4 MiB of stored rows, and always has room for its first restored row.
-            // A recover charges only restored (Arrived) rows, since the cleared fault input is never restored. A Terminate
-            // or a Delete (S5b-3b), clears every kept row, so it charges them all.
-            var charged = message.Kind is Kinds.Terminate or Kinds.Delete ? kept.ToArray() : kept.Where(row => row.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
+                    .Select(row => row.Facts).ToList();
+            }
+            else if (recover)
+                (quoteFits, kept) = await ReadPostgresRecoveryRowsAsync(db, message.Target.Id, message.Target.Partition, false, token);
+            else
+            {
+                // While the clearing is open, its next control reads one page and its overflow row.
+                var limit = command.RootParkClear ? InMemoryStore.ParkPageLimit + 1 : int.MaxValue;
+                kept = await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token, limit);
+            }
+            var charged = recover ? kept.Where(row => row.KeptBy == (short)ParkKeepReason.Arrived).ToArray() : kept.ToArray();
             var page = PageLength(charged);
-            var fits = page == charged.Length;
+            var fits = quoteFits && page == charged.Length;
             var refusals = fits && command.RootParkClear && message.Kind == Kinds.Delete && park?.Clearing == message.Id
                 ? await ReadParkProtectionRefusalsAsync(db, message.Target.Id, message.Target.Partition, message.Id, long.MaxValue, token) : 0;
             // Check the registered footprint even if the arrivals exceed one page, so a valid plan is refused for page size.
@@ -314,7 +373,7 @@ public sealed partial class EfStore
             throw RootShape();
 
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
-        if (current?.Revision != expected || current.Suspended ||
+        if (current?.Revision != expected || recovered && current.Suspended ||
             current.Status != (recovered ? InstanceStatus.Faulted : row.Status)) return null;
         var next = WorkerRow(root, current) with
         {
@@ -327,7 +386,7 @@ public sealed partial class EfStore
             throw RootShape();
         return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
             new RootParkRecover(root, expected, command, recovered, current.Status,
-                current.Status == InstanceStatus.Running && AuthoredWithholding(root, current)));
+                current.Status == InstanceStatus.Running && (current.Suspended || AuthoredWithholding(root, current))));
     }
 
     private sealed record LockedRecover(long? At, long? Revision, long Generation, string? Fault, byte[] StateDigest, byte[] HeaderDigest,
@@ -352,8 +411,8 @@ public sealed partial class EfStore
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
-                WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND NOT i."Suspended"
-                    AND i."Status" = {(int)Prior} AND i."Revision" = {Expected}
+                WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired"
+                    AND (NOT {Recovered} OR NOT i."Suspended") AND i."Status" = {(int)Prior} AND i."Revision" = {Expected}
                     AND (NOT {Recovered} OR i."Jobs" IS NOT DISTINCT FROM {facts.RecoverableJobRegistry}::text /*clearing*/)
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
@@ -362,9 +421,14 @@ public sealed partial class EfStore
                 query.Format.Replace("/*clearing*/", db.UsesRootComposedParkRecovery ? """AND i."FoundationParkClearing" IS NULL""" : "",
                     StringComparison.Ordinal), query.GetArguments()))).ToListAsync(token);
             if (locked is not [var prior] || (prior.At is null) != (Prior == InstanceStatus.Running)) return false;
-            var kept = Recovered ? await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token) : [];
-            if (Recovered && (facts.Mark != new FoundationParkMark(prior.Revision ?? 0, prior.At ?? 0) || KeptSetDigest(kept) != facts.KeptDigest))
-                return false;
+            List<KeptRow> kept = [];
+            if (Recovered)
+            {
+                var read = await ReadPostgresRecoveryRowsAsync(db, Root.Actor, Root.Partition, true, token);
+                kept = read.Kept;
+                if (!read.Fits || facts.Mark != new FoundationParkMark(prior.Revision ?? 0, prior.At ?? 0) ||
+                    KeptSetDigest(kept) != facts.KeptDigest) return false;
+            }
             var footprint = Recovered
                 ? await ReadRecoverableRootJobAsync(db, Root.Actor, Root.Partition, facts.RecoverableJobRegistry, prior.ParkJobResult,
                     prior.ParkLiveJob, token)

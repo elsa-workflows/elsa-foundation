@@ -134,7 +134,7 @@ public class KernelDb : DbContext
         new(options, format, RootProfiles.CapabilitiesOf(format));
 
     // A capability set under a format number no profile ships, for database-backed composition guards only: a qualification
-    // set, or the shipped format 25's set under a guard's own number. Its format must be unshipped, so that its marker is
+    // set, or the shipped capability set under a guard's own number. Its format must be unshipped, so that its marker is
     // refused by every shipped profile, and the set must hold every prerequisite of its members.
     internal static KernelDb ForUnshippedComposition(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) =>
         RootProfiles.Formats.ContainsKey(format)
@@ -165,9 +165,10 @@ public class KernelDb : DbContext
     internal bool UsesRootParkInspection => Has(RootCapabilities.ParkInspection);
     internal bool UsesRootParkArrivals => Has(RootCapabilities.ParkArrivals);
     internal bool UsesRootParkRecovery => Has(RootCapabilities.ParkRecovery);
-    internal bool UsesRootComposedParkRecovery => UsesRootParkRecovery && (Capabilities & RootProfiles.Shipped) == RootProfiles.Shipped;
+    internal bool UsesRootComposedParkRecovery =>
+        UsesRootParkRecovery && (Capabilities & RootProfiles.ParkCompositionBase) == RootProfiles.ParkCompositionBase;
     // A composed set with Park and Termination (S5a, #4229): an operator command reaches a parked root, passes its withheld
-    // inputs and is refused there with a journalled reason. Of the shipped formats only RootShipped (format 25) carries both;
+    // inputs and is refused there with a journalled reason. The shipped root format carries both;
     // the qualification profiles 5, 11-17 and 19-22 carry one at most and keep their paths.
     internal bool UsesRootParkedOperators => UsesRootParkOpening && UsesRootTermination;
     // S5b: a Park records its opening revision with Park arrivals and in every parked-operator set, so its Park selection
@@ -181,10 +182,10 @@ public class KernelDb : DbContext
     internal static KernelDb ForSqliteRootRuntime(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
     internal static KernelDb ForSqliteParkArrivalsQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions? definitions = null) =>
-        new(options, StoreFormat.SqliteParkArrivalsQualification, RootProfiles.Shipped | RootCapabilities.ParkArrivals,
+        new(options, StoreFormat.SqliteParkArrivalsQualification, RootProfiles.ParkCompositionBase | RootCapabilities.ParkArrivals,
             sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
     internal static KernelDb ForSqliteParkRecoveryQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions? definitions = null) =>
-        new(options, StoreFormat.SqliteParkRecoveryQualification, RootProfiles.Shipped | RootProfiles.Formats[StoreFormat.RootParkRecovery],
+        new(options, StoreFormat.SqliteParkRecoveryQualification, RootProfiles.ParkCompositionBase | RootProfiles.Formats[StoreFormat.RootParkRecovery],
             sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);

@@ -207,15 +207,16 @@ internal static class PostgresRootComposedInstallChecks
         // and the recovery columns it added roll back. (The narrower set already records the Park revision, S5b-1.)
         async Task NarrowerInstallRefused()
         {
+            var narrowCapabilities = capabilities & ~(RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery);
             await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + NarrowSchema, stop);
             var narrow = new DbContextOptionsBuilder<KernelDb>()
                 .UseNpgsql(new NpgsqlConnectionStringBuilder(connection) { SearchPath = NarrowSchema }.ConnectionString).Options;
-            await using (var created = KernelDb.ForUnshippedComposition(narrow, Composed, capabilities))
+            await using (var created = KernelDb.ForUnshippedComposition(narrow, Composed, narrowCapabilities))
                 await created.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(stop);
-            await new EfStore(() => KernelDb.ForUnshippedComposition(narrow, Composed, capabilities), postgres: true).CreateAsync(1);
-            await new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed, capabilities), TimeSpan.FromHours(1)).InstallAsync(stop);
+            await new EfStore(() => KernelDb.ForUnshippedComposition(narrow, Composed, narrowCapabilities), postgres: true).CreateAsync(1);
+            await new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed, narrowCapabilities), TimeSpan.FromHours(1)).InstallAsync(stop);
             var wider = new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed,
-                capabilities | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery), TimeSpan.FromHours(1));
+                narrowCapabilities | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery), TimeSpan.FromHours(1));
             try
             {
                 await wider.InstallAsync(stop);
@@ -228,17 +229,17 @@ internal static class PostgresRootComposedInstallChecks
                 Check(error.Message.Contains("IX_FoundationRootInbox_Inspectable", StringComparison.Ordinal),
                     "a wider install over a narrower one is refused for its inspectable index predicate");
             }
-            await using (var check = KernelDb.ForUnshippedComposition(narrow, Composed, capabilities))
+            await using (var check = KernelDb.ForUnshippedComposition(narrow, Composed, narrowCapabilities))
                 Check(await check.Database.SqlQueryRaw<bool>("""
                     SELECT to_regclass('"Instances"') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
                         WHERE attrelid = to_regclass('"Instances"') AND attname = 'FoundationParkGeneration') AS "Value"
                     """).SingleAsync(stop), "the refused install rolls back the columns it added");
-            await new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed, capabilities), TimeSpan.FromHours(1)).InstallAsync(stop);
+            await new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed, narrowCapabilities), TimeSpan.FromHours(1)).InstallAsync(stop);
             Check(true, "the narrower set still reinstalls over its own definitions");
 
             // The same set reinstalling over a UNIQUE copy of its inspectable index, then over an invalid one, is refused.
-            var same = new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed, capabilities), TimeSpan.FromHours(1));
-            await using var tamper = KernelDb.ForUnshippedComposition(narrow, Composed, capabilities);
+            var same = new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed, narrowCapabilities), TimeSpan.FromHours(1));
+            await using var tamper = KernelDb.ForUnshippedComposition(narrow, Composed, narrowCapabilities);
             var definition = await tamper.Database.SqlQueryRaw<string>("""
                 SELECT pg_catalog.pg_get_indexdef(to_regclass('"IX_FoundationRootInbox_Inspectable"')) AS "Value"
                 """).SingleAsync(stop);

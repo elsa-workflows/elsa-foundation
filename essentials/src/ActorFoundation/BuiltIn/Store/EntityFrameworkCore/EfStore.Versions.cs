@@ -60,7 +60,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
     // A change to an engine's definitions advances its own StoreDefinitionsRevision.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 25 };
+    internal static StoreFormat RootShipped => Current with { MessageProtocol = 26 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -108,25 +108,17 @@ internal static class RootProfiles
     private const RootCapabilities ParkInspection = RootCapabilities.ParkOpening | RootCapabilities.ParkInspection;
 
     /// <summary>
-    /// The shipped format's capabilities (S7, brought forward on 25 November with what is qualified together today): the
-    /// format 17 operator chain (terminate, delete, terminate-then-delete, retention, held operator replies), jobs with
-    /// timed settlement, direct held replies, and Park opening and inspection, with workflow history in its pinned namespace.
-    /// Each capability left out joins through the composition path once it is qualified with these:
-    /// <list type="number">
-    /// <item>Park recovery, release 1 scope and the first to join: every set with it admits Recover and no other operator
-    /// command (S5a), so it cannot sit beside Terminate and Delete yet.</item>
-    /// <item>Park arrivals: S5a qualifies them as a separate behaviour set, with their own admission of inputs to a parked root.</item>
-    /// <item>Self-sends and timers (protocols 3 and 4) and values by reference (8): no composed set with them is qualified.</item>
-    /// <item>Untimed-only jobs (6): the poll reads either the timed or the untimed job scope, and the timed scope runs untimed jobs.</item>
-    /// <item>Timed-job issuance (7): a qualification profile of its own, superseded by timed settlement.</item>
-    /// </list>
-    /// Self-sends and timers do not compose with timed jobs yet: the root writer encodes a turn's sends as timed-job sends
-    /// when the profile settles timed jobs, so a Delay's self-send is refused (S6, the input-scope union).
+    /// The operator, timed job and held-reply capabilities that the composed Park profiles build on.
+    /// </summary>
+    internal const RootCapabilities ParkCompositionBase = Retention | RootCapabilities.OperatorReplies | TimedJobSettlement |
+        RootCapabilities.TimedJobPreview | RootCapabilities.ReplyProtocol | ParkInspection;
+
+    /// <summary>
+    /// The shared shipped format includes ordinary Park arrivals and one-page Resume alongside the operator chain.
     /// The growth rule: each widening of this set takes a new protocol number, and a database installed with an older set
     /// is refused. Before GA a preview database is recreated; after GA a widening migrates, with a rollback floor (K12).
     /// </summary>
-    internal const RootCapabilities Shipped = Retention | RootCapabilities.OperatorReplies | TimedJobSettlement |
-        RootCapabilities.TimedJobPreview | RootCapabilities.ReplyProtocol | ParkInspection;
+    internal const RootCapabilities Shipped = ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
 
     // Each format and the closed capability set its profile carries.
     internal static IReadOnlyDictionary<StoreFormat, RootCapabilities> Formats { get; } = new Dictionary<StoreFormat, RootCapabilities>
@@ -361,8 +353,8 @@ internal static class StoreDefinitionsRevision
     private const int PostgreSql = 1;
     private const int Sqlite = 2;
     private const int LegacyPostgreSqlRevision = 1;
-    private const int PostgreSqlRevision = 4;
-    private const int SqliteRevision = 8;
+    private const int PostgreSqlRevision = 5;
+    private const int SqliteRevision = 9;
     private const int SqliteParkRecoverRevision = 5;
 
     internal static StoreVersionEntity? Seed(KernelDb db)
