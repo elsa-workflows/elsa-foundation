@@ -95,6 +95,8 @@ if (args is ["kernel-public-event-replies", var replyEventProvider and ("postgre
     return await KernelAuthoredEventChecks.RunPublicEventRepliesAsync(replyEventProvider, replyEventFence == "in-batch");
 if (args is ["kernel-public-event-remote-reply", var remoteEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunRemotePublicEventReplyAsync(remoteEventFence == "in-batch");
+if (args is ["kernel-protected-event-remote-observer"])
+    return await KernelAuthoredEventChecks.RunRemotePublicEventReplyAsync(inBatch: true, protectedObserver: true);
 if (args is ["kernel-public-event-starts", var publicEventProvider and ("postgres" or "sqlite"), var publicEventFence and ("checked" or "in-batch")])
     return await KernelAuthoredEventChecks.RunPublicStartsAsync(publicEventProvider, publicEventFence == "in-batch");
 if (args is ["kernel-public-event-host", var eventHostProvider and ("postgres" or "sqlite"),

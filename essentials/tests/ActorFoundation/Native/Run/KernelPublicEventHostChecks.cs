@@ -23,7 +23,10 @@ internal static partial class KernelAuthoredEventChecks
         {
             var frames = new TaskCompletionSource<Reply>(TaskCreationOptions.RunContinuationsAsynchronously);
             var (open, ingress, reads, owner, _, restart) = await OpenAsync(model, provider, path, inBatch, token, publicEventHost: host,
-                observeReplies: observeReplies ? transport => new EventReplyObserver(transport, frames) : null);
+                observeReplies: observeReplies ? transport => new EventReplyObserver(transport, reply =>
+                {
+                    if (reply.Status is not null) frames.TrySetResult(reply);
+                }) : null);
             await using (owner)
             {
                 const string startKey = "outside-start";
@@ -113,11 +116,11 @@ internal static partial class KernelAuthoredEventChecks
         finally { directory.Delete(recursive: true); }
     }
 
-    private sealed class EventReplyObserver(IReplyTransport edge, TaskCompletionSource<Reply> frames) : IReplyTransport
+    private sealed class EventReplyObserver(IReplyTransport edge, Action<Reply>? observe = null) : IReplyTransport
     {
         public void Send(string node, Reply reply)
         {
-            if (reply.Status is not null) frames.TrySetResult(reply);
+            observe?.Invoke(reply);
             edge.Send(node, reply);
         }
     }
