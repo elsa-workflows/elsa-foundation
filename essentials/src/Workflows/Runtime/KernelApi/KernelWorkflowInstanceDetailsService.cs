@@ -53,7 +53,7 @@ internal sealed class KernelWorkflowInstanceDetailsService(
 
         var names = JsonSerializer.Deserialize<string[]>(output.Names) ?? [];
         var placeholder = canInspectSensitive && output.Omitted
-            ? new WorkflowOutputView(null, true, "The workflow output exceeds the retained value limit.", at)
+            ? new WorkflowOutputView(null, true, "The retained workflow output is unavailable.", at)
             : WorkflowOutputView.Redacted(at);
         return names.ToDictionary(name => name, _ => placeholder, StringComparer.Ordinal);
     }

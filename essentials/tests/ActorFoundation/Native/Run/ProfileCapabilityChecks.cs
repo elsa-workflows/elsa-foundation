@@ -206,12 +206,12 @@ internal static class ProfileCapabilityChecks
             "protocol 113 qualifies terminal output alongside the S6 timers with separate definition stamps");
         using var sharedPostgres = KernelDb.ForPostgresRootShipped(options);
         using var sharedSqlite = KernelDb.ForSqliteRootShipped(sqliteOptions);
-        Check(sharedPostgres.RequiredFormat == new StoreFormat(3, 29, 1) && sharedSqlite.RequiredFormat == sharedPostgres.RequiredFormat &&
+        Check(sharedPostgres.RequiredFormat == StoreFormat.RootShipped && sharedSqlite.RequiredFormat == StoreFormat.RootShipped &&
             sharedPostgres.Capabilities == (s6TerminalOutput.Capabilities | RootCapabilities.DueBacklog) &&
             sharedSqlite.Capabilities == sharedPostgres.Capabilities &&
-            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, MessageProtocol: 8, JournalCodec: 0 } &&
-            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, MessageProtocol: 12, JournalCodec: 0 },
-            "shared protocol 29 composes admission pressure and terminal output under distinct provider definitions");
+            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, JournalCodec: 0 },
+            "the shipped format composes admission pressure and terminal output under distinct provider definitions");
         mapped |= backlog.Capabilities | terminalOutput.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
