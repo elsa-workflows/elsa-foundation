@@ -148,21 +148,19 @@ internal static partial class RootEventAdmission
             }
             if (occurrence is not null)
             {
-                if (until > now && !FitsRetainedEventPayload(publication.Payload))
+                if (!FitsRetainedEventPayload(publication.Payload))
                     throw new RootPublicEventStarts.FanoutExceeded("The retained event exceeds the root delivery envelope limit.");
                 var captured = await RootPublicEventStarts.CaptureAsync(db, publication.FoundationTenant!, publication.Key, publication.Id,
                     occurrence, publication.Payload, FoundationMetadataLimits.MaxTurnSends - count, FoundationMetadataLimits.MessageContentBytes - bytes,
                     bindPostgresSource, token);
                 count += captured.Count;
                 bytes += captured.Bytes;
-                if (captured.Count != 0 || until > now)
-                    await RootPublicEventPublications.RememberAuthoredAsync(db, publication, occurrence, now, until, bindPostgresSource, token);
+                await RootPublicEventPublications.RememberAuthoredAsync(db, publication, occurrence, now, until, bindPostgresSource, token);
                 if (captured.Count != 0)
                     await RootPublicEventStarts.DispatchAsync(db, publication.FoundationTenant!, occurrence, until, bindPostgresSource, token,
-                        rememberDelivery: until > now);
-                if (until > now)
-                    await RootPublicEventLiveWaits.RememberPublishedAsync(db, occurrence, messages.Select(message => message.Id).ToArray(),
-                        bindPostgresSource, token);
+                        rememberDelivery: true);
+                await RootPublicEventLiveWaits.RememberPublishedAsync(db, occurrence, messages.Select(message => message.Id).ToArray(),
+                    bindPostgresSource, token);
             }
             var receipt = await db.Database.ExecuteSqlInterpolatedAsync(BindSource($"""
                 WITH source AS MATERIALIZED (/*event-source*/)

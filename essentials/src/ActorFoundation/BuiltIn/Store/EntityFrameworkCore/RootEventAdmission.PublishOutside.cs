@@ -46,10 +46,10 @@ internal static partial class RootEventAdmission
 
         var incarnation = Guid.NewGuid();
         var occurrence = FoundationRootCreator.OperationDigest(DurableKeyJson.Write(new[] { "outside", qualified, incarnation.ToString("N") }));
-        var retentionMilliseconds = (long)retention.TotalMilliseconds;
-        long? keepThrough = retentionMilliseconds == 0 ? null : checked(now + retentionMilliseconds);
+        // A one-way publication has a keep deadline even with a zero window. Only a held Event is live-only.
+        long? keepThrough = caller is null ? checked(now + (long)retention.TotalMilliseconds) : null;
         var receiptThrough = checked(now + (long)receiptWindow.TotalMilliseconds);
-        var keepInputsThrough = caller is null ? keepThrough ?? now : receiptThrough;
+        var keepInputsThrough = keepThrough ?? receiptThrough;
         var waits = await ReadWaitsAsync(db, tenant, qualified, BindLive, bind is not null, token);
         if (waits.Count > FoundationMetadataLimits.MaxTurnSends) throw FanoutFull();
         var recipients = caller is null ? null : waits.Select(wait => wait.Actor!).Distinct(StringComparer.Ordinal)
