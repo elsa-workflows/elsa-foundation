@@ -157,8 +157,9 @@ public sealed class KernelPublishedExecuteTests
             PostgresConnectionString = foundation
         };
         if (directTests)
-            kernelHosting.ConfigureServices(builder.Services, KernelShellStorage.Create(provider, kernelHosting.SqlitePath, foundation),
-                protectChildExecutables: true, directTestRunQualification: true);
+            kernelHosting.ConfigureServices(builder.Services,
+                KernelShellStorage.CreateDirectTestRunQualification(provider, kernelHosting.SqlitePath, foundation),
+                protectChildExecutables: true);
         else
             kernelHosting.ConfigureServices(builder.Services);
         new WorkflowsRuntimeKernelFeature().PostConfigureServices(builder.Services);

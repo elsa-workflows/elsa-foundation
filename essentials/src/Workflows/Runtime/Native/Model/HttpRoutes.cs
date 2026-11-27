@@ -137,14 +137,15 @@ public sealed class HttpRoutes
     // loop that comes back to it would wait there on the start route's own key, and no request could reach that wait.
     // A graph the engine refuses has no entry; its run faults on its own.
     /// <summary>Where a run begins: the root, the first child of a root Sequence, or an entry of a root Flowchart (<see cref="Flowchart.IsEntry"/>).</summary>
-    internal static IEnumerable<Node> StartsOf(Node root)
+    internal static IEnumerable<Node> StartsOf(Node root, Func<Node, Node, bool>? flowchartEntry = null)
     {
         if (root.Children.Count == 0) return [root];
         if (root.Type == typeof(Sequence)) return [root.Children[0]];
         if (root.Type != typeof(Flowchart)) return [root];
         try { _ = Flowchart.GraphOf(root); }
         catch (Exception refused) when (refused is FlowchartExecutionException or ArgumentException) { return []; }
-        return root.Children.Where(child => Flowchart.IsEntry(root, child));
+        flowchartEntry ??= Flowchart.IsEntry;
+        return root.Children.Where(child => flowchartEntry(root, child));
     }
 
     private static string Method(Node node) => node.Inputs.GetValueOrDefault("Method") is LiteralBinding { Value: { } m } ? m.GetValue<string>() : "POST";
