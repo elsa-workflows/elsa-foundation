@@ -13,6 +13,7 @@ using Elsa.Http.Core.Options;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -74,6 +75,11 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
         services.Configure<HttpEndpointOptions>(options => options.BasePath = BasePath);
         services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = SyncRequestTimeout);
         services.Configure<HttpRoutePublicationOptions>(options => options.BasePath = BasePath);
+        services.TryAddSingleton(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value;
+            return new WorkflowHttpEndpointSettings(options.BasePath, options.SyncRequestTimeout, options.MaxRequestBodyBytes);
+        });
 
         services.AddHttpClient(HttpActivityConstants.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(sp =>

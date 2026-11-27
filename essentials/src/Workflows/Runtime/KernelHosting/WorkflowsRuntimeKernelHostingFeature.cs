@@ -3,7 +3,6 @@ using CShells;
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using CShells.Lifecycle;
-using Elsa.Activities.Http.Options;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
@@ -22,7 +21,6 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
@@ -87,7 +85,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(sp =>
         {
             var runtime = sp.GetRequiredService<KernelShellRuntime>();
-            var http = sp.GetRequiredService<IOptions<HttpEndpointOptions>>().Value;
+            var http = sp.GetRequiredService<WorkflowHttpEndpointSettings>();
             var shellPath = sp.GetRequiredService<ShellSettings>().GetConfigurationRoot()["WebRouting:Path"]?.Trim().Trim('/');
             var basePath = HttpBasePath(http);
             var requestBasePath = string.IsNullOrEmpty(shellPath) ? basePath : "/" + shellPath + basePath;
@@ -138,7 +136,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             .RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeManage)
             .WithName("GetKernelWorkflowRetention");
 
-        var http = endpoints.ServiceProvider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value;
+        var http = endpoints.ServiceProvider.GetRequiredService<WorkflowHttpEndpointSettings>();
         endpoints.Map(HttpBasePath(http) + "/{**path}", static (HttpContext context) =>
                 context.RequestServices.GetRequiredService<KernelHttpRequestHandler>().HandleAsync(context))
             .WithOwner(FeatureName)
@@ -146,7 +144,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             .AllowPublic("kernel workflow HTTP endpoints", "Starts or resumes a published workflow on its configured HTTP route and returns its response.");
     }
 
-    internal static string HttpBasePath(HttpEndpointOptions options)
+    internal static string HttpBasePath(WorkflowHttpEndpointSettings options)
     {
         var basePath = "/" + options.BasePath.Trim().Trim('/');
         if (basePath == "/" || basePath.IndexOfAny(['?', '#', '%', '{', '}']) >= 0)

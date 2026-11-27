@@ -1,6 +1,5 @@
 using System.Text.Json.Nodes;
 using CShells.Lifecycle;
-using Elsa.Activities.Http.Options;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -12,7 +11,6 @@ using Kernel.WorkflowActor;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
@@ -147,7 +145,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     }
 }
 
-internal sealed class PrepareKernelShell(IShell shell, IShellRegistry registry, IOptions<HttpEndpointOptions> http,
+internal sealed class PrepareKernelShell(IShell shell, IShellRegistry registry, WorkflowHttpEndpointSettings http,
     ILogger<PrepareKernelShell> logger) : IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken)
@@ -160,7 +158,7 @@ internal sealed class PrepareKernelShell(IShell shell, IShellRegistry registry, 
             logger.LogWarning("Kernel hosting requires a host restart to replace the active shell {ShellName}.", defaultShell);
             throw new InvalidOperationException("Kernel hosting requires a host restart to replace the active shell.");
         }
-        _ = WorkflowsRuntimeKernelHostingFeature.HttpBasePath(http.Value);
+        _ = WorkflowsRuntimeKernelHostingFeature.HttpBasePath(http);
         return Task.CompletedTask;
     }
 }
