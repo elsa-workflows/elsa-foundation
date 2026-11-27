@@ -143,6 +143,16 @@ public sealed record OwnedLease(IReadOnlyList<PartitionFence> Taken, long Now);
 
 public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 
+// An optional owner read can project bounded ordinal lookups with the inbox page. A null
+// projection leaves the regular load path responsible for resolving the actual requests.
+internal interface IOwnerPollLookups
+{
+    const int MaximumActors = 8;
+    bool CanPollLookups { get; }
+    ValueTask<(Polled Poll, IReadOnlyList<ActorLookup>? Lookups)> PollLookupsAsync(IReadOnlyCollection<PartitionFence> fences,
+        TimeSpan horizon, int limit, Func<Polled, string[]> selectLookups, CancellationToken cancellationToken);
+}
+
 /// <summary>A partition the node heartbeat found owned by its node, at the epoch the store has for it.</summary>
 public sealed record OwnedEpoch(int Partition, long Epoch);
 
