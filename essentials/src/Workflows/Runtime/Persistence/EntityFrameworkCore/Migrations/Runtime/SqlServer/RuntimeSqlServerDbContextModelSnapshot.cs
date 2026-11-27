@@ -2210,6 +2210,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "TenantKeyHash", "ActorReference", "AcceptedAtUtcTicks", "Id")
                         .HasDatabaseName("IX_KernelScheduleOccurrence_Pending");
 
+                    b.HasIndex("ScopeKeyHash", "TenantKeyHash", "RetiredAtUtcTicks", "AcceptedAtUtcTicks", "Id")
+                        .HasDatabaseName("IX_KernelScheduleOccurrence_Open");
+
                     b.ToTable("elsa_runtime_kernel_schedule_occurrence", (string)null);
                 });
 
