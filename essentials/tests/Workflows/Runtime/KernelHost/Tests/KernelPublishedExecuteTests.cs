@@ -188,7 +188,22 @@ public sealed class KernelPublishedExecuteTests
             Assert.Equal(HttpStatusCode.Forbidden, forbiddenDelete.StatusCode);
             using var foreignDelete = await DeleteAsync(completed, manage: true, tenant: "another-tenant");
             Assert.Equal(HttpStatusCode.NotFound, foreignDelete.StatusCode);
+            using var aliasDelete = await DeleteAsync(completed, manage: true, tenantAlias: "another-tenant");
+            Assert.Equal(HttpStatusCode.NotFound, aliasDelete.StatusCode);
+            using var mismatchedDelete = await DeleteAsync(completed, manage: true, tenant: "default", tenantAlias: "another-tenant");
+            Assert.Equal(HttpStatusCode.NotFound, mismatchedDelete.StatusCode);
             Assert.NotNull(await reads.GetAsync(bound, new(completed), token));
+            if (directory is not null)
+            {
+                var connection = new SqliteConnectionStringBuilder { DataSource = Path.Combine(directory, "foundation.db"), Pooling = false };
+                await using var locked = new SqliteConnection(connection.ToString());
+                await locked.OpenAsync(token);
+                await using var write = locked.BeginTransaction(deferred: false);
+                using var busy = await DeleteAsync(completed, manage: true);
+                Assert.Equal(HttpStatusCode.Conflict, busy.StatusCode);
+                await write.RollbackAsync(token);
+                Assert.NotNull(await reads.GetAsync(bound, new(completed), token));
+            }
             await VerifyDeletedAsync(completed);
 
             var delayed = await StartWaitingAsync();
@@ -223,11 +238,13 @@ public sealed class KernelPublishedExecuteTests
                 Assert.Null(await reads.GetAsync(bound, new(run), token));
             }
 
-            async Task<HttpResponseMessage> DeleteAsync(string run, bool manage, string? tenant = null, string subject = "accepted")
+            async Task<HttpResponseMessage> DeleteAsync(string run, bool manage, string? tenant = null, string subject = "accepted",
+                string? tenantAlias = null)
             {
                 using var request = new HttpRequestMessage(HttpMethod.Delete, $"/runtime/workflows/instances/{run}");
                 request.Headers.Add("X-Fixture-Subject", subject);
                 if (manage) request.Headers.Add("X-Fixture-Manage", "yes");
+                if (tenantAlias is not null) request.Headers.Add("X-Fixture-Tenant-Alias", tenantAlias);
                 if (tenant is not null) request.Headers.Add("X-Fixture-Tenant", tenant);
                 return await http.SendAsync(request, token);
             }
@@ -308,6 +325,7 @@ public sealed class KernelPublishedExecuteTests
             };
             if (Request.Headers.ContainsKey("X-Fixture-Manage")) claims.Add(new(IdentityClaimTypes.Permission, "workflows/runtime:manage"));
             if (Request.Headers.TryGetValue("X-Fixture-Tenant", out var tenant)) claims.Add(new(IdentityClaimTypes.TenantId, tenant.ToString()));
+            if (Request.Headers.TryGetValue("X-Fixture-Tenant-Alias", out var alias)) claims.Add(new("tenant_id", alias.ToString()));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name)), Scheme.Name)));
         }
     }

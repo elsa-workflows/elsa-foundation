@@ -37,9 +37,11 @@ internal sealed class KernelWorkflowInstanceDeletionService(
         if (httpContext.HttpContext is not { } context || !principals.TryGetNormalizedPrincipal(context.User, out var principal))
             throw new RuntimeResourceMissingSignal();
 
-        var claims = principal.FindAll(IdentityClaimTypes.TenantId).Take(2).ToArray();
-        var tenant = claims switch { [] => null, [var single] when !string.IsNullOrWhiteSpace(single.Value) => single.Value, _ => "" };
-        if (tenant == "") throw new RuntimeResourceMissingSignal();
+        var canonicalTenant = SingleTenantClaim(principal, IdentityClaimTypes.TenantId);
+        var legacyTenant = SingleTenantClaim(principal, "tenant_id");
+        if (canonicalTenant is not null && legacyTenant is not null && canonicalTenant != legacyTenant)
+            throw new RuntimeResourceMissingSignal();
+        var tenant = canonicalTenant ?? legacyTenant;
 
         using var deadline = new CancellationTokenSource(DeletionBudget, clock);
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
@@ -100,6 +102,14 @@ internal sealed class KernelWorkflowInstanceDeletionService(
 
         throw Changed();
     }
+
+    private static string? SingleTenantClaim(ClaimsPrincipal principal, string claimType) =>
+        principal.FindAll(claimType).Take(2).ToArray() switch
+        {
+            [] => null,
+            [var only] when !string.IsNullOrWhiteSpace(only.Value) => only.Value,
+            _ => throw new RuntimeResourceMissingSignal()
+        };
 
     private static RuntimeRunDeletionRejectedSignal Changed() => new(StatusCodes.Status409Conflict,
         "The run changed before deletion. Refresh its status and retry deletion.");
