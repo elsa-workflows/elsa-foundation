@@ -68,15 +68,16 @@ internal static class RootPublicEventLiveWaits
         foreach (var group in waits.GroupBy(w => w.FoundationTenant!).OrderBy(g => g.Key, StringComparer.Ordinal))
         {
             var retainedFrom = await RootPublicEventPublications.RetentionThresholdAsync(db, group.Key, now, bind, token);
+            // Record the key's high-water ordinal by index. The owner applies eligibility in its later bounded catch-up steps.
             var packed = Json.Write(group.Select(w => new { w.Key, w.Instance, w.Wait, registration = Guid.NewGuid().ToString("N") }));
             FormattableString query = $"""
                 WITH source AS MATERIALIZED (/*public-event-start-source*/), proposed AS (/*waits*/)
                 INSERT INTO "FoundationPublicEventLiveWaits"
                     ("Tenant", "Key", "Instance", "Wait", "Registration", "RetainFrom", "CatchAfter", "CatchThrough")
                 SELECT {group.Key}, s."Key", s."Instance", s."Wait", w."Registration", {retainedFrom}, 0,
-                    coalesce((SELECT max(p."Ordinal") FROM "FoundationPublicEventPublications" p
-                        WHERE p."Tenant" = {group.Key} AND p."Key" = s."Key" AND p."KeepUntil" >= {retainedFrom}
-                            AND p."CleanupAt" = p."KeepUntil"), 0)
+                    coalesce((SELECT p."Ordinal" FROM "FoundationPublicEventPublications" p
+                        WHERE p."Tenant" = {group.Key} AND p."Key" = s."Key"
+                        ORDER BY p."Ordinal" DESC LIMIT 1), 0)
                 FROM source, proposed w JOIN "Subscriptions" s
                     ON s."Key" = w."Key" AND s."Instance" = w."Instance" AND s."Wait" = w."Wait"
                 JOIN "Instances" i ON i."Id" = s."Instance" AND i."Partition" = s."Partition"
