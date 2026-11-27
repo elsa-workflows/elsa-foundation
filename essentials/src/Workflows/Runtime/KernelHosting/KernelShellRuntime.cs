@@ -108,10 +108,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async Task StopAsync(CancellationToken token)
     {
-        Volatile.Write(ref _publishedStarts, null);
-        Volatile.Write(ref _testStarts, null);
-        var inline = Interlocked.Exchange(ref _publishedInlineStarts, null)?.Requests;
-        inline?.Close();
+        var inline = CloseAdmissions();
         using var maintenanceDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         maintenanceDeadline.CancelAfter(MaintenanceStopBudget);
         try { await StopMaintenanceAsync(maintenanceDeadline.Token); }
@@ -120,6 +117,16 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             if (_owner is not null) await _owner.StopAsync(token);
             if (inline is not null) await inline.DrainSettlementsAsync(token);
         }
+    }
+
+    private InlineRootRequests? CloseAdmissions()
+    {
+        Volatile.Write(ref _publishedStarts, null);
+        Volatile.Write(ref _testStarts, null);
+        // Keep the closed edge so disposal can rejoin its settlements after an interrupted stop.
+        var inline = Volatile.Read(ref _publishedInlineStarts)?.Requests;
+        inline?.Close();
+        return inline;
     }
 
     private async Task<bool> StopMaintenanceAsync(CancellationToken token)
@@ -280,10 +287,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async ValueTask DisposeAsync()
     {
-        Volatile.Write(ref _publishedStarts, null);
-        Volatile.Write(ref _testStarts, null);
-        var inline = Interlocked.Exchange(ref _publishedInlineStarts, null)?.Requests;
-        inline?.Close();
+        var inline = CloseAdmissions();
         using var stop = new CancellationTokenSource(MaintenanceStopBudget);
         try
         {
@@ -294,13 +298,25 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             try
             {
                 if (_lifetime is not null) await _lifetime.DisposeAsync();
-                if (inline is not null)
-                {
-                    using var drain = new CancellationTokenSource(InlineSettlementBudget, clock);
-                    await inline.DrainSettlementsAsync(drain.Token);
-                }
             }
-            finally { _client?.Dispose(); }
+            finally
+            {
+                try
+                {
+                    if (inline is not null) await DrainInlineSettlementsAsync(inline);
+                }
+                finally { _client?.Dispose(); }
+            }
+        }
+    }
+
+    private async Task DrainInlineSettlementsAsync(InlineRootRequests inline)
+    {
+        using var drain = new CancellationTokenSource(InlineSettlementBudget, clock);
+        try { await inline.DrainSettlementsAsync(drain.Token); }
+        catch (OperationCanceledException) when (drain.IsCancellationRequested)
+        {
+            logs.CreateLogger<KernelShellRuntime>().LogWarning("Inline Test Run settlements did not finish within the shell's disposal deadline.");
         }
     }
 

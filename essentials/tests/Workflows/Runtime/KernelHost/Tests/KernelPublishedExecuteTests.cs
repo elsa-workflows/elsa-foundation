@@ -314,6 +314,7 @@ public sealed partial class KernelPublishedExecuteTests
                     await VerifyEphemeralCancellationBeforeOfferAsync(uncertain);
                     await VerifyEphemeralCancellationAsync(uncertain);
                     await VerifyEphemeralTestAsync(slow, expectActor: true);
+                    await VerifyInterruptedStopRejoinsSettlementsAsync(pure);
                 }
                 return;
             }
@@ -957,6 +958,46 @@ public sealed partial class KernelPublishedExecuteTests
                 Assert.Equal(before, await DurableRowCountAsync());
             }
 
+            async Task VerifyInterruptedStopRejoinsSettlementsAsync(WorkflowExecutable executable)
+            {
+                var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                Task<WorkflowExecutionStartDispatchResult> started;
+                Task rejoined;
+                await using var authoring = await scopes.CreateAsyncScopeAsync(Scope);
+                var services = authoring.ServiceProvider;
+                var (test, _, request) = await PrepareEphemeralTestAsync(services, executable);
+                scopeAdmission.Settling = (scope, outcome, budget) =>
+                {
+                    Assert.Equal(test.ScopeId, scope.ScopeId);
+                    Assert.Equal(WorkflowTestRunInlineState.CompletedWithoutRecord, outcome);
+                    entered.TrySetResult();
+                    return release.Task.WaitAsync(budget);
+                };
+                try
+                {
+                    started = services.GetRequiredService<IWorkflowDirectTestRunDispatcher>()
+                        .DispatchAsync(request, WorkflowExecutableReferenceScope.TestRun, cancellationToken: token).AsTask();
+                    await entered.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
+                    using var interrupted = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                    await Assert.ThrowsAnyAsync<OperationCanceledException>(() => shell.StopAsync(interrupted.Token));
+                    rejoined = shell.StopAsync(token);
+                    await Assert.ThrowsAsync<TimeoutException>(() => rejoined.WaitAsync(TimeSpan.FromMilliseconds(100), token));
+                }
+                finally
+                {
+                    scopeAdmission.Settling = null;
+                    release.TrySetResult();
+                }
+
+                await rejoined;
+                Assert.True((await started).TestRunCompletedWithoutRecord);
+                await using var recovered = await scopes.CreateAsyncScopeAsync(Scope);
+                var durable = await recovered.ServiceProvider.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, token);
+                Assert.Equal(WorkflowTestRunInlineState.CompletedWithoutRecord, durable?.InlineStart);
+                Assert.Null(durable?.IsolatedActor);
+            }
+
             async Task<(WorkflowTestScope Test, WorkflowExecutableSourceReference Source, WorkflowExecutionStartDispatchResult Receipt)>
                 SubmitEphemeralTestAsync(IServiceProvider author, WorkflowExecutable executable)
             {
@@ -1251,6 +1292,7 @@ public sealed partial class KernelPublishedExecuteTests
     private sealed class FixtureTestScopeAdmission
     {
         public Action<WorkflowTestScope>? Began { get; set; }
+        public Func<WorkflowTestScope, WorkflowTestRunInlineState, CancellationToken, Task>? Settling { get; set; }
     }
 
     private sealed class ObservedTestScopeAdmission(IWorkflowTestScopeAdmissionStore physical, FixtureTestScopeAdmission fixture)
@@ -1270,8 +1312,12 @@ public sealed partial class KernelPublishedExecuteTests
             return began;
         }
 
-        public ValueTask<bool> SettleInlineStartAsync(WorkflowTestScope scope, WorkflowTestRunInlineState outcome,
-            CancellationToken cancellationToken) => physical.SettleInlineStartAsync(scope, outcome, cancellationToken);
+        public async ValueTask<bool> SettleInlineStartAsync(WorkflowTestScope scope, WorkflowTestRunInlineState outcome,
+            CancellationToken cancellationToken)
+        {
+            if (fixture.Settling is { } settling) await settling(scope, outcome, cancellationToken);
+            return await physical.SettleInlineStartAsync(scope, outcome, cancellationToken);
+        }
     }
 
     private sealed class PinBoundary
