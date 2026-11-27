@@ -12,9 +12,11 @@ internal sealed class OutputSwap : IDisposable
     public const string ReportHtmlName = "report.html";
     public const string MigratedName = "migrated";
     public const string StagingPrefix = ".staging-";
+    private const string PreviousName = ".previous";
 
     private readonly string _outputFolder;
     private bool _committed;
+    private bool _keepStaging;
 
     private OutputSwap(string outputFolder, string stagingFolder)
     {
@@ -32,6 +34,7 @@ internal sealed class OutputSwap : IDisposable
 
         var output = Path.GetFullPath(outputFolder);
         Directory.CreateDirectory(output);
+        SweepStaleStaging(output);
         var staging = Path.Combine(output, StagingPrefix + Guid.NewGuid().ToString("N"));
         var info = Directory.CreateDirectory(staging);
         if (OperatingSystem.IsWindows())
@@ -48,20 +51,22 @@ internal sealed class OutputSwap : IDisposable
     {
         ObjectDisposedException.ThrowIf(_committed, this);
 
-        var names = new[] { MigratedName, ReportHtmlName, ReportJsonName };
-        foreach (var name in names)
+        // Moved in with report.json last, and aside with report.json first: a consumer never sees a report.json without
+        // the migrated/ and report.html it belongs to.
+        var moveInOrder = new[] { MigratedName, ReportHtmlName, ReportJsonName };
+        foreach (var name in moveInOrder)
         {
             if (!Exists(Path.Combine(StagingFolder, name)))
                 throw new InvalidOperationException($"The staged output has no '{name}'.");
         }
 
-        var previous = Path.Combine(StagingFolder, ".previous");
+        var previous = Path.Combine(StagingFolder, PreviousName);
         Directory.CreateDirectory(previous);
         var movedAside = new List<string>();
         var movedIn = new List<string>();
         try
         {
-            foreach (var name in names)
+            foreach (var name in moveInOrder.Reverse())
             {
                 var target = Path.Combine(_outputFolder, name);
                 if (Exists(target))
@@ -71,19 +76,27 @@ internal sealed class OutputSwap : IDisposable
                 }
             }
 
-            // report.json last: a consumer that sees the new report sees the new migrated/ and report.html with it.
-            foreach (var name in names)
+            foreach (var name in moveInOrder)
             {
                 Move(Path.Combine(StagingFolder, name), Path.Combine(_outputFolder, name));
                 movedIn.Add(name);
             }
         }
-        catch
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            // Every restore step is best effort and the rest still runs. Whatever could not be put back stays in the
+            // staging folder, which is then kept, so the previous output is never deleted.
             foreach (var name in movedIn)
                 TryDelete(Path.Combine(_outputFolder, name));
-            foreach (var name in movedAside)
-                Move(Path.Combine(previous, name), Path.Combine(_outputFolder, name));
+            var notRestored = movedAside.Where(name => !TryMove(Path.Combine(previous, name), Path.Combine(_outputFolder, name))).ToArray();
+            if (notRestored.Length > 0)
+            {
+                _keepStaging = true;
+                throw new IOException(
+                    $"The output could not be replaced, and the previous {string.Join(", ", notRestored)} could not be put back; " +
+                    $"they are kept in '{previous}'.", exception);
+            }
+
             throw;
         }
 
@@ -91,8 +104,42 @@ internal sealed class OutputSwap : IDisposable
         TryDelete(StagingFolder);
     }
 
-    /// <summary>Removes the staging folder; after a failed or abandoned run the previous output stays as it was.</summary>
-    public void Dispose() => TryDelete(StagingFolder);
+    /// <summary>
+    /// Removes the staging folder; after a failed or abandoned run the previous output stays as it was. A staging folder
+    /// that holds previous output a failed rollback could not put back is kept.
+    /// </summary>
+    public void Dispose()
+    {
+        if (!_keepStaging)
+            TryDelete(StagingFolder);
+    }
+
+    /// <summary>
+    /// Removes staging folders that earlier runs left behind when they were killed, unless one still holds previous output
+    /// that was moved aside and never put back: that is the only copy, so it stays for the engineer to recover.
+    /// </summary>
+    private static void SweepStaleStaging(string outputFolder)
+    {
+        foreach (var stale in Directory.EnumerateDirectories(outputFolder, StagingPrefix + "*"))
+        {
+            var previous = Path.Combine(stale, PreviousName);
+            if (!Directory.Exists(previous) || !Directory.EnumerateFileSystemEntries(previous).Any())
+                TryDelete(stale);
+        }
+    }
+
+    private static bool TryMove(string source, string destination)
+    {
+        try
+        {
+            Move(source, destination);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     private static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
 

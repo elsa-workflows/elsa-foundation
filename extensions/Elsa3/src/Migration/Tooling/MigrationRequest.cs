@@ -60,16 +60,13 @@ internal sealed record MigrationRequest(
             return new(MigrationRefusal.Arguments, "The --out folder must not be empty.");
         if (string.IsNullOrWhiteSpace(ToolVersion))
             return new(MigrationRefusal.Arguments, "The tool version is missing.");
+        if (ExportPath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            return new(MigrationRefusal.Arguments, "The export path is not a valid path.");
         if (OutputPath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
             return new(MigrationRefusal.Arguments, "The --out folder is not a valid path.");
+        // An existing file, the export zip included, cannot be the output folder.
         if (File.Exists(OutputPath))
             return new(MigrationRefusal.Arguments, "The --out path names a file; it must be a folder.");
-
-        var export = Path.TrimEndingDirectorySeparator(Path.GetFullPath(ExportPath));
-        var output = Path.TrimEndingDirectorySeparator(Path.GetFullPath(OutputPath));
-        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        if (File.Exists(export) && string.Equals(export, output, comparison))
-            return new(MigrationRefusal.Arguments, "The --out folder must not be the export zip.");
 
         return null;
     }

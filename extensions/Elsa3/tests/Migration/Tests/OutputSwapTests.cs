@@ -61,6 +61,46 @@ public sealed class OutputSwapTests : IDisposable
     }
 
     [Fact]
+    public void A_failed_move_in_puts_the_previous_output_back()
+    {
+        if (!OperatingSystem.IsWindows())
+            return; // An open file blocks a move only on Windows.
+
+        Directory.CreateDirectory(Path.Combine(_out, "migrated"));
+        File.WriteAllText(Path.Combine(_out, "migrated", "old.json"), "[]");
+        File.WriteAllText(Path.Combine(_out, "report.json"), "old");
+        File.WriteAllText(Path.Combine(_out, "report.html"), "old");
+
+        using (var swap = OutputSwap.Begin(_out))
+        {
+            Stage(swap, "new");
+            using (new FileStream(Path.Combine(swap.StagingFolder, "report.json"), FileMode.Open, FileAccess.Read, FileShare.None))
+                Assert.ThrowsAny<IOException>(swap.Commit);
+        }
+
+        Assert.Equal("old", File.ReadAllText(Path.Combine(_out, "report.json")));
+        Assert.Equal("old", File.ReadAllText(Path.Combine(_out, "report.html")));
+        Assert.True(File.Exists(Path.Combine(_out, "migrated", "old.json")));
+        Assert.Empty(Directory.EnumerateDirectories(_out, OutputSwap.StagingPrefix + "*"));
+    }
+
+    [Fact]
+    public void Begin_sweeps_stale_staging_folders_but_keeps_one_holding_previous_output()
+    {
+        Directory.CreateDirectory(Path.Combine(_out, OutputSwap.StagingPrefix + "stale", "migrated"));
+        var stranded = Path.Combine(_out, OutputSwap.StagingPrefix + "stranded", ".previous");
+        Directory.CreateDirectory(stranded);
+        File.WriteAllText(Path.Combine(stranded, "report.json"), "only copy");
+
+        using (OutputSwap.Begin(_out))
+        {
+        }
+
+        Assert.False(Directory.Exists(Path.Combine(_out, OutputSwap.StagingPrefix + "stale")));
+        Assert.True(File.Exists(Path.Combine(stranded, "report.json")));
+    }
+
+    [Fact]
     public void Begin_creates_a_missing_output_folder()
     {
         using (var swap = OutputSwap.Begin(_out))
