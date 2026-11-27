@@ -18,7 +18,8 @@ using Admission = Kernel.Foundation.Contracts.Admission;
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
-    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention, TimeProvider clock, bool protectChildExecutables = false) : IAsyncDisposable
+    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention, TimeProvider clock, bool protectChildExecutables = false,
+    KernelEventPublicationRelay? events = null) : IAsyncDisposable
 {
     private static readonly TimeSpan MaintenanceStopBudget = TimeSpan.FromSeconds(1);
 
@@ -41,6 +42,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         var schedules = await CreateScheduleWorkerAsync(token);
         if (protection is not null) await protection.RequireAsync(token);
         await ServePublicationsAsync(token);
+        if (events is not null) await events.RestoreAsync(token);
 
         _client = NativeHttpOptions.CreateClient();
         var expressions = new PortableNativeExpressions(() =>
@@ -55,6 +57,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             Expressions = expressions,
             SelfSends = serving.Capabilities.SelfSends,
             UseStructuralJournal = Foundation.Reads is IActorSequencedJournalReads { SupportsSequencedJournal: true },
+            AuthoredEventStarts = storage.TakesEventStarts,
             ServedWorkflow = serving.ServedWorkflow,
             ResolveWorkflow = ResolveWorkflowAsync
         });
@@ -72,6 +75,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         List<Task> maintenance = [Task.Run(() => worker.RunAsync(maintenanceToken))];
         if (schedules is { } managed) maintenance.Add(Task.Run(() => managed.Worker.RunAsync(maintenanceToken)));
         if (protection is not null) maintenance.Add(Task.Run(() => protection.RunAsync(maintenanceToken)));
+        if (events is not null) maintenance.Add(Task.Run(() => events.RunAsync(protection!, maintenanceToken)));
         _maintenance = Task.WhenAll(maintenance);
     }
 

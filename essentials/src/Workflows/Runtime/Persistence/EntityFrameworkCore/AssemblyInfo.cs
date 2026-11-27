@@ -124,3 +124,8 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryOccurrenceEntity), nameof(RuntimeHistoryOccurrenceEntity.ContentJson))]
 [assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryOccurrenceMembershipEntity), nameof(RuntimeHistoryOccurrenceMembershipEntity.ContentJson))]
 [assembly: EfSchemaContent(RuntimeHistoryEfModule.SchemaFamily, typeof(RuntimeHistoryOccurrenceCounterEntity), nameof(RuntimeHistoryOccurrenceCounterEntity.ContentJson))]
+
+[assembly: EfSchemaFamily(RuntimeKernelEventPublicationEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelEventPublicationEfModule.SchemaVersion,
+    Entities = [typeof(RuntimeKernelEventPublicationEntity)])]
+[assembly: EfSchemaContent(RuntimeKernelEventPublicationEfModule.SchemaFamily, typeof(RuntimeKernelEventPublicationEntity),
+    nameof(RuntimeKernelEventPublicationEntity.ContentJson))]

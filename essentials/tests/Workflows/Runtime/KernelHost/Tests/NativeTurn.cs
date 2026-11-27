@@ -28,9 +28,11 @@ internal sealed class NativeTurn : Models.ITurn
         StartAsync(new NativeExecutionModel(new WorkflowRegistry().Add(workflow), options), workflow, input);
 
     /// <summary>A start of <paramref name="workflow"/> on <paramref name="model"/>, whose registry holds it.</summary>
-    public static async Task<NativeTurn> StartAsync(NativeExecutionModel model, Workflow workflow, JsonObject? input = null)
+    public static async Task<NativeTurn> StartAsync(NativeExecutionModel model, Workflow workflow, JsonObject? input = null,
+        string mode = Modes.Balanced, string? triggerNode = null, JsonNode? trigger = null)
     {
-        var start = NativeExecutionModel.Start(workflow, Modes.Balanced, input);
+        var start = NativeExecutionModel.Start(workflow.Id, mode, input, triggerNode, trigger, workflow.Definition)
+            with { ExecutableSelection = workflow.ExecutableSelection };
         var instance = new Models.InstanceInfo(new Contract.ActorRef("instance-1"), "tenant", NativeExecutionModel.ModelKey, start.Workflow, null)
         {
             ExecutableSelection = start.ExecutableSelection
