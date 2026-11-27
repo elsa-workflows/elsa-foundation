@@ -182,8 +182,10 @@ internal static partial class KernelAuthoredEventChecks
     private static async Task<(Func<KernelDb> Open, Contract.IIngress Ingress, Contract.IActorReads Reads,
         IAsyncDisposable Owner, EventStartPort? Events, Func<CancellationToken, Task<IAsyncDisposable>> Restart)>
         OpenAsync(Contract.IActorType model, string provider, string path, bool inBatch, CancellationToken token, bool eventStarts = false,
-            bool retainReceipts = false, bool orderedScan = false, bool publicStarts = false, RootPublicEventHost? publicEventHost = null)
+            bool retainReceipts = false, bool orderedScan = false, bool publicStarts = false,
+            Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator = null, RootPublicEventHost? publicEventHost = null)
     {
+        if (eventStarts) authorizeOperator ??= Authorize;
         const string node = "authored-event-owner";
         var loop = new LoopOptions
         {
@@ -211,7 +213,8 @@ internal static partial class KernelAuthoredEventChecks
                 retainReceipts ? StoreFormat.RootEventStartReceiptsQualification :
                 eventStarts ? StoreFormat.RootEventStartsQualification : StoreFormat.RootAuthoredEventsQualification);
             var owner = await StartAsync(token);
-            var ingress = eventStarts ? await sqlite.OpenIngressWithOperatorsAsync(Authorize, token) : await sqlite.OpenIngressAsync(token);
+            var ingress = authorizeOperator is null ? await sqlite.OpenIngressAsync(token) :
+                await sqlite.OpenIngressWithOperatorsAsync(authorizeOperator, token);
             var events = eventStarts ? new EventStartPort(sqlite.EventStarts.ApplyEventStartsAsync, sqlite.EventStarts.ListEventStartsAsync,
                 sqlite.EventStarts.AdmitEventStartAsync, sqlite.EventStarts.ConfirmEventStartRegistrationDrainedAsync,
                 sqlite.ConfirmPreparedStartAsync, sqlite.EventStarts.PruneSettledEventStartsAsync,
@@ -242,9 +245,9 @@ internal static partial class KernelAuthoredEventChecks
         var requests = publicEventHost?.ProtectsStarts == true
             ? PostgresPreviewHosting.CreateRequestsWithRootStartProtection(OpenPostgres, node, model.Type, Protect)
             : PostgresPreviewHosting.CreateRequests(OpenPostgres, node, model.Type);
-        var foundation = eventStarts
-            ? await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenPostgres, model.Type, Authorize, requests, cancellationToken: token)
-            : await PostgresPreviewHosting.OpenFoundationAsync(OpenPostgres, model.Type, requests, cancellationToken: token);
+        var foundation = authorizeOperator is null
+            ? await PostgresPreviewHosting.OpenFoundationAsync(OpenPostgres, model.Type, requests, cancellationToken: token)
+            : await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenPostgres, model.Type, authorizeOperator, requests, cancellationToken: token);
         var hosted = await StartPostgresAsync(token);
         var admission = new PostgresRootAdmission(OpenPostgres, TimeSpan.FromHours(1));
         var port = eventStarts ? new EventStartPort(
