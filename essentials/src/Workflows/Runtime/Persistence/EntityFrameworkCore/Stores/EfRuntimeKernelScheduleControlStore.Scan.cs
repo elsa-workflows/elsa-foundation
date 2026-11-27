@@ -35,6 +35,9 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore
                 state = new() { ScopeKeyHash = first.ScopeKeyHash, TenantKeyHash = first.TenantKeyHash };
                 db.KernelScheduleControlScans.Add(state);
             }
+            else
+                EfSchemaVersion.EnsureReadable(RuntimeKernelScheduleControlEfModule.Chain, state.SchemaVersion);
+            StampScanState(db, state);
             foreach (var row in added)
                 row.InsertionOrdinal = state.LastOrdinal = checked(state.LastOrdinal + 1);
             await db.SaveChangesAsync(token);
@@ -50,6 +53,8 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore
         var scopeHash = Hash(scope.Persistence.Value);
         var tenantHash = TenantHash(scope);
         var state = await ScanState(context, scopeHash, tenantHash).AsNoTracking().SingleOrDefaultAsync(cancellationToken);
+        if (state is not null)
+            EfSchemaVersion.EnsureReadable(RuntimeKernelScheduleControlEfModule.Chain, state.SchemaVersion);
         var pass = state?.Through is not null ? Position(state) : await OpenScanAsync(controls, scopeHash, tenantHash, cancellationToken);
         if (pass is null) return null;
 
@@ -75,9 +80,12 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore
         var through = next is null ? (long?)null : pass.Through;
         var afterOrdinal = next?.Ordinal ?? 0;
         var afterId = next?.Id;
+        var writeVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleControlEfModule.SchemaFamily,
+            RuntimeKernelScheduleControlEfModule.SchemaVersion, pass.SchemaVersion);
         var count = await ScanState(context, Hash(scope.Persistence.Value), TenantHash(scope)).Where(state => state.Pass == pass.Pass &&
-                state.Through == pass.Through && state.AfterOrdinal == pass.AfterOrdinal && state.AfterId == pass.AfterId)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(state => state.Through, through)
+                state.Through == pass.Through && state.AfterOrdinal == pass.AfterOrdinal && state.AfterId == pass.AfterId &&
+                state.SchemaVersion == pass.SchemaVersion)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(state => state.SchemaVersion, writeVersion).SetProperty(state => state.Through, through)
                 .SetProperty(state => state.AfterOrdinal, afterOrdinal).SetProperty(state => state.AfterId, afterId), cancellationToken);
         return count == 1;
     }
@@ -91,6 +99,8 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore
             token.ThrowIfCancellationRequested();
             await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
             var state = await ScanState(context, scopeHash, tenantHash).SingleOrDefaultAsync(token);
+            if (state is not null)
+                EfSchemaVersion.EnsureReadable(RuntimeKernelScheduleControlEfModule.Chain, state.SchemaVersion);
             if (state is null)
             {
                 if (!await controls.AnyAsync(token)) return (ScanPosition?)null;
@@ -104,6 +114,7 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore
                 return current;
             }
 
+            StampScanState(context, state);
             state.Pass = checked(state.Pass + 1);
             state.Through = state.LastOrdinal;
             var position = Position(state);
@@ -120,10 +131,14 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore
         if (state.Pass <= 0 || state.Through is not { } through || through < 0 || through > state.LastOrdinal ||
             state.AfterOrdinal < 0 || state.AfterOrdinal > through || state.AfterId is null && state.AfterOrdinal != 0)
             throw new InvalidDataException("The persisted schedule scan position is invalid.");
-        return new(state.Pass, through, state.AfterOrdinal, state.AfterId);
+        return new(state.Pass, through, state.AfterOrdinal, state.AfterId, state.SchemaVersion);
     }
 
-    private sealed record ScanPosition(long Pass, long Through, long AfterOrdinal, string? AfterId);
+    private static void StampScanState(RuntimeDbContext db, RuntimeKernelScheduleControlScanEntity state) =>
+        state.SchemaVersion = RuntimeSchemaWriteVersion.For(db, RuntimeKernelScheduleControlEfModule.SchemaFamily,
+            RuntimeKernelScheduleControlEfModule.SchemaVersion, state.SchemaVersion);
+
+    private sealed record ScanPosition(long Pass, long Through, long AfterOrdinal, string? AfterId, string SchemaVersion);
     private sealed record ScanPage(TriggerScope Scope, IReadOnlyList<RuntimeKernelScheduleControl> Items, ScanPosition Position,
         (long Ordinal, string Id)? Next) : IRuntimeKernelScheduleControlScanPage
     {

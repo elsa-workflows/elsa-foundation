@@ -1,5 +1,6 @@
 using System.Data.Common;
 using System.Text.Json;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -34,7 +35,18 @@ internal static partial class KernelScheduleOccurrenceContract
                 VALUES ({id}, {scopeHash}, {tenantHash}, {json}, '1.0.0', {control.Revision})
                 """);
         }
+        var unstampedScan = context.Database.GetMigrations().Single(id => id.EndsWith("_KernelScheduleControlOrder", StringComparison.Ordinal));
+        await context.GetService<IMigrator>().MigrateAsync(unstampedScan);
+        var scanScope = Hash(ControlTenant);
+        var scanTenant = Hash(JsonSerializer.Serialize(ControlTenant));
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "elsa_runtime_kernel_schedule_control_scan" ("ScopeKeyHash", "TenantKeyHash", "LastOrdinal", "Pass", "AfterOrdinal")
+            VALUES ({scanScope}, {scanTenant}, 0, 1, 0)
+            """);
         await context.Database.MigrateAsync();
+        var migrated = await context.KernelScheduleControlScans.AsNoTracking().SingleAsync();
+        Assert.Equal("1.0.0", migrated.SchemaVersion);
+        Assert.Equal(1, migrated.Pass);
     }
 
     private static async Task CheckControlScanAsync(Func<RuntimeDbContext> open, Func<IInterceptor, RuntimeDbContext> intercepted)
@@ -98,6 +110,11 @@ internal static partial class KernelScheduleOccurrenceContract
         Assert.All(physical, row => Assert.Equal("1.0.0", row.SchemaVersion));
         await CheckContendersAsync(rollBack: false, previousOrdinal: 5);
         await CheckContendersAsync(rollBack: true, previousOrdinal: 7);
+        var staleVersion = Assert.IsAssignableFrom<IRuntimeKernelScheduleControlScanPage>(await reader.ReadScanPageAsync(scope, 32));
+        await restarted.KernelScheduleControlScans.Where(row => row.ScopeKeyHash == scopeHash)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.SchemaVersion, "9.0.0"));
+        Assert.False(await reader.TryAdvanceScanAsync(scope, staleVersion));
+        await Assert.ThrowsAsync<EfSchemaVersionSkewException>(async () => await reader.ReadScanPageAsync(scope, 32));
 
         async Task<string> PublishAsync(string definition)
         {

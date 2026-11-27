@@ -44,7 +44,7 @@ public sealed partial class RuntimeModelMigrationTests
             }
             var after = await LegacyRows(connection);
             foreach (var (table, digest) in before) Assert.Equal(digest, after[table]);
-            Assert.Equal(before.Count + 19, after.Count);
+            Assert.Equal(before.Count + 20, after.Count);
             Assert.Contains("UserTasks", after.Keys); Assert.Contains("UserTaskForms", after.Keys);
             Assert.Contains(RuntimeModelStateEfModule.StateTable, after.Keys);
             Assert.Contains(RuntimeModelStateEfModule.InputTable, after.Keys);
@@ -53,7 +53,8 @@ public sealed partial class RuntimeModelMigrationTests
             var upgradedHistory = await History(connection);
             Assert.Equal(history, upgradedHistory.Take(history.Length));
             Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "OutboxClaimDeliveredAt", "StandaloneTriggers", "RunHistoryTimeline", "TimerHistoryOwnership",
-                "KernelScheduleOccurrences", "KernelScheduleControls", "KernelScheduleOccurrenceRetirement", "KernelExecutablePins", "KernelScheduleControlOrder"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
+                "KernelScheduleOccurrences", "KernelScheduleControls", "KernelScheduleOccurrenceRetirement", "KernelExecutablePins",
+                "KernelScheduleControlOrder", "KernelScheduleControlScanStamp"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
             await using (var absentTimerHistory = connection.CreateCommand())
             {
                 absentTimerHistory.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeOperationalStateEfModule.DurableTimerTableName}\" WHERE HistoryRevision != 0 OR HistoryPending != 0 OR HistoryRetired != 0";
