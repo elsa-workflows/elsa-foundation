@@ -72,15 +72,23 @@ internal static class SqliteShippedInstallChecks
                 UPDATE "FoundationRootIssuer" SET "Key" = 'abcdefghijklmnopqrstuvwxyzabcdef'
                 """, token), "SQLite requires a BLOB issuer key", DataTypeConstraint);
             var versions = db.StoreVersions.Where(row => row.Id == StoreVersionEntity.MarkerId);
+
+            var verified = new SqliteAdmissionDefinitions();
+            Task VerifyOperationalFormatAsync() => EfStore.RequireSqliteRootAdmissionAsync(db, verified, token);
+            await VerifyOperationalFormatAsync();
             await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, 27), token);
             await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
                 "SQLite refuses the previous shipped protocol");
+            await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
+                "the warm SQLite operational check still reads the live protocol marker");
             await versions.ExecuteUpdateAsync(row => row.SetProperty(x => x.MessageProtocol, StoreFormat.RootShipped.MessageProtocol), token);
             var marker = StoreDefinitionsRevision.Seed(db)!;
             await db.StoreVersions.Where(row => row.Id == marker.Id).ExecuteUpdateAsync(
                 row => row.SetProperty(x => x.MessageProtocol, marker.MessageProtocol - 1), token);
             await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
                 "SQLite refuses the previous install-only definitions revision");
+            await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
+                "the warm SQLite operational check still reads the live definitions revision");
             await db.StoreVersions.Where(row => row.Id == marker.Id).ExecuteUpdateAsync(
                 row => row.SetProperty(x => x.MessageProtocol, marker.MessageProtocol + 1), token);
             await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
@@ -108,14 +116,20 @@ internal static class SqliteShippedInstallChecks
             await db.Database.ExecuteSqlRawAsync("PRAGMA ignore_check_constraints = ON", token);
             await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
                 "SQLite refuses installation with CHECK constraints disabled");
+            await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
+                "the warm SQLite operational check refuses disabled CHECK constraints");
             await db.Database.ExecuteSqlRawAsync("PRAGMA ignore_check_constraints = OFF", token);
             await db.Database.ExecuteSqlRawAsync("""CREATE TEMP TABLE "Instances" ("Id" TEXT)""", token);
             await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
                 "SQLite refuses temporary objects that can shadow the main schema");
+            await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
+                "the warm SQLite operational check still refuses temporary objects");
             await db.Database.ExecuteSqlRawAsync("""DROP TABLE temp."Instances" """, token);
             await db.Database.ExecuteSqlRawAsync("""ATTACH DATABASE ':memory:' AS unexpected""", token);
             await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
                 "SQLite refuses an attached database");
+            await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
+                "the warm SQLite operational check still refuses an attachment");
             await db.Database.ExecuteSqlRawAsync("DETACH DATABASE unexpected", token);
             await db.Database.ExecuteSqlRawAsync("DROP TRIGGER kernel_physical_retirement", token);
             await db.Database.ExecuteSqlRawAsync("""
@@ -123,6 +137,8 @@ internal static class SqliteShippedInstallChecks
                 """, token);
             await RefusedAsync<StoreFormatException>(() => EfStore.InstallSqliteShippedAsync(db, 2, token),
                 "SQLite refuses a trigger whose name is intact and whose body changed");
+            await RefusedAsync<StoreFormatException>(VerifyOperationalFormatAsync,
+                "a SQLite schema change forces the warm operational check to read the full catalog");
             return 0;
 
             Task<byte[]> IssuerKeyAsync() => db.Database.SqlQueryRaw<byte[]>("""

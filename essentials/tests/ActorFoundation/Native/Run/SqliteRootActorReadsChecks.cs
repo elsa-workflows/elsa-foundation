@@ -1,8 +1,12 @@
+using System.Data.Common;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Sqlite;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
@@ -31,6 +35,15 @@ internal static partial class SqliteHostLifetimeChecks
             var escaped = await AdmitAsync(tenant, "escaped", "escaped");
             var parked = await AdmitAsync(tenant, "parked", "park");
             var hidden = await AdmitAsync(other, "hidden", "nul");
+            await reader.EnableRootSelfSendsAsync(token);
+            await reader.EnableRootJobsAsync(token);
+            reader.BindSqliteWorkerNode();
+            var pending = await CheckCreatorRollbackAsync(file, tenant.Tenant, first, fenceInBatch, token);
+            Require((await reader.LoadAsync([pending, pending], token)).Count == 0,
+                "the batched SQLite load recognizes an admitted birth before its first checkpoint");
+            await ExpectFoundationFailureAsync<NotSupportedException>(
+                () => reader.LoadAsync([pending, InstanceRef.In(0, "unadmitted").Id], token).AsTask(),
+                "the batched SQLite load refuses a requested actor without an admitted birth");
             await using var host = SqliteEmbeddedHostedService.ForFoundation(file, ActorReadsKind, new ActorReadsProbe(),
                 reason => throw new InvalidOperationException(reason), Loops, fenceInBatch);
             await host.StartAsync(token);
@@ -40,6 +53,12 @@ internal static partial class SqliteHostLifetimeChecks
             Require(await ingress.SendAsync(tenant, new Contract.Target.Ref(parked), "poison", "fail", cancellationToken: token) is
                 { Outcome: Contract.AdmissionOutcome.Accepted }, "the actor read fixture admits the Park-causing input");
             await WaitForRootAsync(reader, tenant.Tenant, parked, 2, token);
+            var parkedImage = (await reader.ReadFirstRootAsync(tenant.Tenant, parked.Id, token))!;
+            var loaded = await reader.LoadAsync([parkedImage.Actor.Id, pending, parkedImage.Actor.Id], token);
+            Require(loaded is [{ Status: InstanceStatus.Faulted, Revision: 2 } faulted, { Status: InstanceStatus.Running, Revision: 1 } running] &&
+                faulted.Id == parkedImage.Actor.Id && faulted.FoundationDispatchHeader?.Reference == parked.Id &&
+                running.Id == pending && running.FoundationDispatchHeader?.Reference == first.Id,
+                "one batched SQLite load restores exact Parked and Running roots in distinct request order");
 
             var unrestricted = new Contract.ActorQuery(Type: ActorReadsKind);
             var page = await reads.ListAsync(tenant, unrestricted, cancellationToken: token);
@@ -115,8 +134,9 @@ internal static partial class SqliteHostLifetimeChecks
                 { Outcome: Contract.AdmissionOutcome.Accepted }, "the SQLite actor reader supplies the exact terminal selection for retirement");
             while (await reads.GetAsync(tenant, first, token) is not null) await Task.Delay(25, token);
             Require((await ListAsync(tenant, unrestricted)).All(row => row.Header.Ref != first) &&
-                await reads.TailAsync(tenant, first, last, token) is { Items.Count: 0, AsOf: > 0 },
-                "retirement removes the actor from lists and observations of its former journal");
+                await reads.TailAsync(tenant, first, last, token) is { Items.Count: 0, AsOf: > 0 } &&
+                (await reader.LoadAsync([pending], token)).Count == 0,
+                "retirement removes the actor from lists, journal observations and worker loads");
             await host.StopAsync(token);
             Require(host.LastError is null, "the SQLite read fixture owner stops cleanly");
             return 0;
@@ -138,6 +158,68 @@ internal static partial class SqliteHostLifetimeChecks
             }
         }
         finally { directory.Delete(recursive: true); }
+    }
+
+    private static async Task<string> CheckCreatorRollbackAsync(string file, string tenant, Contract.ActorRef actor,
+        bool fenceInBatch, CancellationToken token)
+    {
+        await using var db = OpenFoundationDb(file);
+        var admitted = await db.Messages.FromSqlInterpolated($"""
+            SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b ON b."Creator" = m."Id"
+                AND b."Actor" = m."Target" AND b."Partition" = m."Partition"
+            WHERE b."Tenant" = {tenant} AND b."Reference" = {actor.Id} AND m."InboxScope" = 0 AND NOT m."Done"
+            """).AsNoTracking().SingleAsync(token);
+        var creator = PostgresRootAdmission.DecodeCreator(admitted);
+        var start = creator.Start!;
+        var drift = new CreatorRouteDrift(admitted.Target);
+        var definitions = new SqliteAdmissionDefinitions();
+        var store = new EfStore(() => OpenFoundationDb(file, definitions, drift), postgres: false, fenceInBatch);
+        await store.EnableRootSelfSendsAsync(token);
+        await store.EnableRootJobsAsync(token);
+        store.BindSqliteWorkerNode();
+
+        var leaseTime = TimeSpan.FromSeconds(10);
+        var lease = await store.TakeAsync(admitted.Partition, "creator-bind-probe", leaseTime, token)
+            ?? throw new InvalidOperationException("The creator-bind probe did not take its fence.");
+        var header = new FoundationHeaderChange(start.Definition, new Dictionary<string, string>());
+        var row = new InstanceRow(creator.Target.Id, start.Model, start.Definition, InstanceStatus.Running, "null", 1, null,
+            History: start.History, StateVersion: 1, Creation: 1, StartIntent: CreationProtocol.Fingerprint(start, creator.Kind, creator.Payload))
+        {
+            NextJobGeneration = 0,
+            FoundationDispatchHeader = new(tenant, actor.Id, header)
+        };
+        var turn = new TurnCommit(row.Id, row, null, [creator.InboxKey], [], [], [], [], "[]") { FoundationHeader = header };
+        var batch = new CommitBatch(admitted.Partition, lease.Epoch, lease.Position, leaseTime, false, [turn], [], []);
+        var refused = await store.CommitAsync(batch, token);
+        Require(drift.Altered && !refused.Landed &&
+            await db.Messages.AnyAsync(row => row.Id == admitted.Id && row.InboxScope == 0 && !row.Done && row.ReplyTo == admitted.ReplyTo, token) &&
+            !await db.Instances.AnyAsync(row => row.Id == admitted.Target, token) &&
+            !await db.Journal.AnyAsync(row => row.Instance == admitted.Target, token) &&
+            await db.Partitions.Where(row => row.Id == admitted.Partition).Select(row => row.Position).SingleAsync(token) == lease.Position,
+            "a changed creator envelope rolls back the fenced delete, checkpoint and journal and keeps the creator pending");
+        await store.ReleaseAsync(admitted.Partition, lease.Epoch, token);
+        return admitted.Target;
+    }
+
+    private sealed class CreatorRouteDrift(string actor) : DbCommandInterceptor
+    {
+        internal bool Altered { get; private set; }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (!command.CommandText.Contains("""DELETE FROM "Messages" AS m""", StringComparison.Ordinal)) return result;
+
+            // The fingerprint does not include the live route. Change it after prepare, inside the fenced transaction,
+            // so the returned creator reaches the full envelope comparison.
+            using var change = ((SqliteConnection)command.Connection!).CreateCommand();
+            change.Transaction = (SqliteTransaction)command.Transaction!;
+            change.CommandText = """UPDATE "Messages" SET "ReplyTo" = $route WHERE "Target" = $actor AND "InboxScope" = 0""";
+            change.Parameters.AddWithValue("$actor", actor);
+            change.Parameters.AddWithValue("$route", ReplyTo.Of("creator-bind-probe", "another-registration", long.MaxValue));
+            Altered = await change.ExecuteNonQueryAsync(cancellationToken) == 1;
+            return result;
+        }
     }
 
     private sealed class ActorReadsProbe : Contract.IActorType
