@@ -1,3 +1,5 @@
+using System.Data;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -42,16 +44,19 @@ public sealed partial class EfStore
         await using var db = create();
         if (root is not null) await CheckRootBeforeWriteAsync(root, db, cancellationToken);
         db.Database.AutoSavepointsEnabled = false;
+        // An already-open connection can have a caller's active reader, which prevents unregistering a temporary function.
+        var inlineSqliteFormat = db.Database.IsSqlite() && !db.UsesSqliteShippedInstall &&
+            db.RequiredFormat == StoreFormat.Current && db.Database.GetDbConnection().State == ConnectionState.Closed;
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        await RequireSqliteOperationalFormatAsync(db, cancellationToken);
+        if (!inlineSqliteFormat) await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
             await PinRootNamespaceForCommitAsync(db, cancellationToken);
         var commands = new List<OwnedCommand>();
         var c = new OwnedCommand(dialect) { HasFence = true };
+        if (inlineSqliteFormat) c.Statement(SqliteOwnedFormat.Check, Expect.Skip);
         var window = batch.Window;
-        // Statement 1: the fence, before any other row is touched (E9: the partition rows are locked first, k of them in
-        // ascending partition id). Checked, it is a round trip of its own and nothing else is sent until it held; in the
-        // batch, it is the first statement of the one command.
+        // The fence is the first write (E9: the partition rows are locked first, k of them in ascending partition id).
+        // The checked mode sends other writes after the fence holds. The in-batch mode sends them with the fence.
         var fences = Fenced(batch);
         dialect.Fence(c, fences, window, Unfenced, FenceIgnoresCount);
         // An owned batch, one fence or several: each turn writes its own partition's rows and journal, each mark takes the
@@ -169,7 +174,9 @@ public sealed partial class EfStore
         var (now, seqs) = (0L, new List<long>());
         foreach (var command in commands)
         {
-            var result = await RunAsync(db, dialect, command, cancellationToken);
+            Ran result;
+            using (var sqliteFormat = inlineSqliteFormat && command.HasFence ? new SqliteOwnedFormat(db) : null)
+                result = await RunAsync(db, dialect, command, cancellationToken, sqliteFormat);
             if (!result.Landed)
             {
                 // A count that did not match while every fence held, in an owned batch with bound keys: a key outside the
@@ -245,7 +252,8 @@ public sealed partial class EfStore
     private readonly record struct Ran(bool Landed, bool FenceHeld, long Now, List<long> Seqs);
 
     /// <summary>Runs one command and reads its result sets in order. Not landed when a count did not match.</summary>
-    private async Task<Ran> RunAsync(KernelDb db, CommitDialect dialect, OwnedCommand command, CancellationToken cancellationToken)
+    private async Task<Ran> RunAsync(KernelDb db, CommitDialect dialect, OwnedCommand command, CancellationToken cancellationToken,
+        SqliteOwnedFormat? sqliteFormat = null)
     {
         var builder = db.GetService<IRelationalCommandBuilderFactory>().Create().Append(dialect.Prelude).Append(command.Text.ToString());
         var values = new Dictionary<string, object?>();
@@ -274,6 +282,16 @@ public sealed partial class EfStore
             }
             if (landed) while (await data.NextResultAsync(cancellationToken)) { }
         }
+        catch (SqliteException) when (sqliteFormat?.Refusal is not null)
+        {
+            landed = false;
+            throw sqliteFormat.Refusal;
+        }
+        catch (SqliteException error) when (sqliteFormat is not null && MissingVersionTable(error))
+        {
+            landed = false;
+            throw new StoreFormatException("The kernel store version marker table is missing.", error);
+        }
         catch (Exception e) when (dialect.NotLanded(e)) { (landed, held) = (false, dialect.FenceHeldAfter(e) ?? held); }
         finally
         {
@@ -284,6 +302,41 @@ public sealed partial class EfStore
                 catch (System.Data.Common.DbException) when (!landed) { }
         }
         return new(landed, held, now, seqs);
+    }
+
+    private sealed class SqliteOwnedFormat : IDisposable
+    {
+        private const string Function = "kernel_require_owned_format";
+        internal static readonly string Check = $"""
+            SELECT {Function}(COUNT(*), MIN("StoreSchema"), MIN("MessageProtocol"), MIN("JournalCodec"))
+            FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
+            """;
+
+        private readonly SqliteConnection connection;
+        internal Exception? Refusal { get; private set; }
+
+        internal SqliteOwnedFormat(KernelDb db)
+        {
+            connection = (SqliteConnection)db.Database.GetDbConnection();
+            // The in-batch check aborts inside SQLite before the driver can step the fence or a later write.
+            connection.CreateFunction<long, int?, int?, int?, int>(Function, (count, schema, protocol, codec) =>
+            {
+                if (count > 1)
+                {
+                    Refusal = new InvalidOperationException("The kernel store contains more than one version marker.");
+                    throw Refusal;
+                }
+                try { RequireSnapshotFormat(db, schema, protocol, codec, definitionStamp: null); }
+                catch (StoreFormatException refusal)
+                {
+                    Refusal = refusal;
+                    throw;
+                }
+                return 1;
+            });
+        }
+
+        public void Dispose() => connection.CreateFunction<long, int?, int?, int?, int>(Function, null);
     }
 
     // ---- K1: the set operations over an owned set of virtual partitions, each one statement (PARTITIONS.md) --------------
