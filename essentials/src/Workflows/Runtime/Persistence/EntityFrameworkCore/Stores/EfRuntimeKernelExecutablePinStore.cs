@@ -38,10 +38,15 @@ internal sealed partial class EfRuntimeKernelExecutablePinStore(RuntimeDbContext
             throw new NotSupportedException("Kernel executable pins require one clean Runtime transaction over the selected material store.");
 
         return await Writes.RunAsync(context, TryWriteAsync,
-            error => throw new InvalidOperationException("The Runtime executable pin batch changed concurrently.", error), cancellationToken);
+            error =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new TimeoutException("The Runtime executable pin batch exceeded its write retry budget.", error);
+            }, cancellationToken);
 
         async ValueTask<bool> TryWriteAsync()
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var initial = await ReadBatchAsync(desired, cancellationToken);
             if (initial.Released) return false;
             if (initial.Missing.Count == 0) return true;

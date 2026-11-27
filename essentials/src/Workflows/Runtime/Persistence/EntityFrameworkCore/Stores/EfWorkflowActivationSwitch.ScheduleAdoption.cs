@@ -41,8 +41,8 @@ public sealed partial class EfWorkflowActivationSwitch
                 throw new InvalidDataException("Schedule adoption requires an exact tenant on publications outside the default scope.");
             var controls = EfRuntimeKernelScheduleControlStore.Describe(new(persistence, source.TenantId), slot, source, desired);
             var executable = await new EfWorkflowExecutableStore(_context, _accessContextAccessor).FindAsync(source.ArtifactId, cancellationToken);
-            if (executable is null || controls.Any(control => control.Owner!.Executable != executable.Identity ||
-                    !executable.NodesById.ContainsKey(control.TriggerNode)))
+            if (executable is null || controls.Any(control => control.Owner!.Executable.ArtifactId != executable.Identity.ArtifactId ||
+                    control.Owner.Executable.ArtifactHash != executable.Identity.ArtifactHash || !executable.NodesById.ContainsKey(control.TriggerNode)))
                 throw new InvalidDataException("The schedule claims differ from the selected immutable executable.");
 
             // An old workflow pump can already hold a cursor when this transaction begins. It needs an explicit

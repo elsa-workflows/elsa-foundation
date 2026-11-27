@@ -46,6 +46,7 @@ public sealed class KernelScheduleReconciliationTests
             new(slotId, "Green", "publication", 1, sourceId, executable.Identity));
         var stop = active with { Scope = Unqualified, Owner = null, Revision = 3 };
         var foreign = stop with { Scope = new(new("foreign"), "foreign") };
+        // Existing persisted deliveries keep their original token-less start.
         var pinned = Actor.Start(Native.NativeExecutionModel.Start("artifact", triggerNode: "trigger",
             trigger: System.Text.Json.Nodes.JsonValue.Create(Key), definition: "definition"));
         var older = Offer(Unqualified, 5);

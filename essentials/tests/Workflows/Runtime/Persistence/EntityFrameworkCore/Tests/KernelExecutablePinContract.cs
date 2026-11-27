@@ -1,5 +1,7 @@
+using System.Data.Common;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -9,7 +11,9 @@ using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +26,28 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 internal static class KernelExecutablePinContract
 {
+    private sealed class PinCommands : DbCommandInterceptor
+    {
+        public bool Capture { get; set; }
+        public int BusyPinReads { get; set; }
+        public List<string> Pages { get; } = [];
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData data,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("FROM \"RuntimeKernelExecutablePins\"", StringComparison.Ordinal))
+            {
+                if (BusyPinReads > 0)
+                {
+                    BusyPinReads--;
+                    throw new SqliteException("Test pin read encountered SQLITE_BUSY.", 5);
+                }
+                if (Capture) Pages.Add(command.CommandText);
+            }
+            return ValueTask.FromResult(result);
+        }
+    }
+
     internal static async Task RunAsync(string provider, string connectionString, string scope = "kernel-pin-tenant")
     {
         var now = new DateTimeOffset(2026, 11, 27, 1, 0, 0, TimeSpan.Zero);
@@ -39,6 +65,11 @@ internal static class KernelExecutablePinContract
             Provider = provider, ConnectionString = connectionString, CacheWorkflowExecutables = true,
             RecoveryContinuationSigningKey = new string('r', 64), HierarchyCursorSigningKey = new string('h', 64)
         });
+        var queries = new PinCommands();
+        if (provider == "Sqlite")
+            services.ConfigureDbContext<RuntimeSqliteDbContext>(options => options.AddInterceptors(queries));
+        else
+            services.ConfigureDbContext<RuntimePostgreSqlDbContext>(options => options.AddInterceptors(queries));
         services.Configure<WorkflowExecutableGarbageCollectionOptions>(options => options.ArtifactCreationGracePeriod = TimeSpan.Zero);
         await using var app = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await using var writerScope = app.CreateAsyncScope();
@@ -54,6 +85,14 @@ internal static class KernelExecutablePinContract
         var first = new RuntimeKernelExecutablePin(tenant, tenant.Value, "actor-one", selected.Identity, "issued-one");
         var second = first with { ActorReference = "actor-two", Issuance = "issued-two" };
         await Assert.ThrowsAsync<InvalidOperationException>(() => pins.TryPinAsync([first with { Tenant = "other-tenant" }]).AsTask());
+        if (provider == "Sqlite")
+        {
+            queries.BusyPinReads = EfWriteRetry.DefaultMaxAttempts;
+            var exhausted = await Assert.ThrowsAsync<TimeoutException>(() => pins.TryPinAsync([first]).AsTask());
+            Assert.Equal(5, Assert.IsType<SqliteException>(exhausted.InnerException).SqliteErrorCode);
+            Assert.Equal(0, queries.BusyPinReads);
+            Assert.Empty(await pins.ListPinnedExecutableArtifactIdsAsync());
+        }
 
         await Assert.ThrowsAsync<WorkflowExecutableDependencyGraphException>(() =>
             pins.TryPinAsync([first, second with { Executable = selected.Identity with { ArtifactHash = "different-hash" } }]).AsTask());
@@ -199,6 +238,26 @@ internal static class KernelExecutablePinContract
 
             await using var restarted = app.CreateAsyncScope();
             var resumed = restarted.ServiceProvider.GetRequiredService<IRuntimeKernelExecutablePinScanStore>();
+            queries.Capture = true;
+            var crossing = (await resumed.ReadScanPageAsync(tenant, 2))!;
+            queries.Capture = false;
+            Assert.Collection(queries.Pages,
+                prefix =>
+                {
+                    Assert.Contains("\"InsertionOrdinal\" = 0", prefix);
+                    Assert.Contains("\"Id\" >", prefix);
+                    Assert.Matches("""ORDER BY "?\w+"?\."ReleasedAtUtcTicks",""", prefix);
+                    Assert.DoesNotContain("CASE", prefix);
+                    Assert.DoesNotContain(" OR ", prefix);
+                },
+                positive =>
+                {
+                    Assert.Contains("\"InsertionOrdinal\" >", positive);
+                    Assert.Matches("""ORDER BY "?\w+"?\."ReleasedAtUtcTicks",""", positive);
+                    Assert.DoesNotContain(" OR ", positive);
+                });
+            Assert.Equal(new[] { legacy.Single(pin => pin != failed), newer[0] }, crossing.Items);
+            Assert.True(crossing.HasMore);
             foreach (var member in legacy.Where(pin => pin != failed).Concat(newer))
             {
                 var page = (await resumed.ReadScanPageAsync(tenant, 1))!;

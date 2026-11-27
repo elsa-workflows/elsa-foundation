@@ -10,6 +10,11 @@ public interface IRuntimeKernelExecutablePinScanPage
 }
 
 /// <summary>Visits the open pins in a finite, restartable pass under their ordinary persistence scope.</summary>
+/// <remarks>
+/// Stop predecessor pin writers and apply the Runtime migrations before enabling this scan. Existing pins share
+/// a fixed starting ordinal, and upgraded writers allocate a positive ordinal in the transaction that adds each pin.
+/// The preceding packaged preview kept executable protection disabled.
+/// </remarks>
 public interface IRuntimeKernelExecutablePinScanStore
 {
     /// <summary>Reads the next page from a pass whose inclusive insertion boundary was fixed when it opened.</summary>
