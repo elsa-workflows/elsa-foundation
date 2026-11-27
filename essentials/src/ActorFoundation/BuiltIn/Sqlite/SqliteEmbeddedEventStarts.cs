@@ -27,6 +27,14 @@ public sealed partial class SqliteEmbeddedFoundation
         return new(databasePath, node, actorType, StoreFormat.RootEventStartScanQualification, protectRootStart);
     }
 
+    /// <summary>Composes the private profile for qualifying inline promotion and ordered Event delivery together.</summary>
+    public static SqliteEmbeddedFoundation ForSharedActivationQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootSharedActivationQualification, protectRootStart);
+    }
+
     /// <summary>Binds trusted Event registration and relay to the selected file and tenant.</summary>
     public IEventStartAdmissions BindEventStarts(Contract.BoundScope scope) => new BoundEventStarts(EventStarts, scope);
 

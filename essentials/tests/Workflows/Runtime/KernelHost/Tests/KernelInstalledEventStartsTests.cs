@@ -14,6 +14,7 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -62,7 +63,18 @@ public sealed class KernelInstalledEventStartsTests
         return RunAsync(true);
     }
 
-    private static async Task RunAsync(bool postgres)
+    [Fact]
+    public Task Sqlite_commits_an_Ephemeral_publisher_and_its_first_Event_together() => RunAsync(false, combined: true);
+
+    [SkippableFact]
+    public Task Postgres_commits_an_Ephemeral_publisher_and_its_first_Event_together()
+    {
+        Skip.If(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(FoundationDatabase)) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RuntimeDatabase)), "Requires two dedicated PostgreSQL databases.");
+        return RunAsync(true, combined: true);
+    }
+
+    private static async Task RunAsync(bool postgres, bool combined = false)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(55));
         var token = deadline.Token;
@@ -80,7 +92,7 @@ public sealed class KernelInstalledEventStartsTests
             var replacement = Subscriber(flowchart: false);
             var ephemeral = Subscriber(flowchart: true, mode: PersistenceMode.Ephemeral, definition: "ephemeral-event-subscriber");
             var producer = Producer("producer-old", "old");
-            var nextProducer = Producer("producer-new", null);
+            var nextProducer = Producer("producer-new", null, mode: combined ? PersistenceMode.Ephemeral : null);
             var wrongName = Producer("producer-wrong-case", "ignored", eventName: "changed");
             var gate = new RelayGate { Hold = true };
             PublicationActivationResult original;
@@ -312,7 +324,8 @@ public sealed class KernelInstalledEventStartsTests
                 services.AddScoped<UnpublishPublicationSlotRequestHandler>();
                 var api = new WorkflowsRuntimeApiFeature();
                 api.ConfigureServices(services);
-                var storage = KernelShellStorage.CreateEventStartScanQualification(provider, path, foundation);
+                var storage = combined ? KernelShellStorage.CreateSharedActivationQualification(provider, path, foundation)
+                    : KernelShellStorage.CreateEventStartScanQualification(provider, path, foundation);
                 new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(services, storage, protectChildExecutables: true);
                 services.Replace(ServiceDescriptor.Singleton(sp => new KernelEventPublicationRelay(sp.GetRequiredService<IServiceScopeFactory>(), Scope,
                     Tenant, sp.GetRequiredService<KernelServing>().Capabilities, () => new PausableAdmissions(storage.BindEventStarts(Tenant), gate),
@@ -348,11 +361,40 @@ public sealed class KernelInstalledEventStartsTests
             {
                 var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
                 using var http = new HttpClient { BaseAddress = new(address) };
-                using var request = new HttpRequestMessage(HttpMethod.Post, $"/runtime/workflows/executables/{executable.Identity.ArtifactId}/execute")
-                    { Content = JsonContent.Create(new { }) };
-                request.Headers.Add("X-Fixture-Subject", "accepted");
-                using var response = await http.SendAsync(request, token);
-                Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(token));
+                var inline = executable.PersistenceMode == PersistenceMode.Ephemeral;
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                while (true)
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Post, $"/runtime/workflows/executables/{executable.Identity.ArtifactId}/execute")
+                        { Content = JsonContent.Create(new { }) };
+                    request.Headers.Add("X-Fixture-Subject", "accepted");
+                    using var response = await http.SendAsync(request, token);
+                    if (!inline)
+                    {
+                        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(token));
+                        return;
+                    }
+                    var receipt = await response.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token);
+                    Assert.NotNull(receipt);
+                    if (response.StatusCode == HttpStatusCode.TooManyRequests && receipt.PersistenceOutcome == "Unavailable" &&
+                        System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(8))
+                    {
+                        await Task.Delay(100, token);
+                        continue;
+                    }
+                    Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(token));
+                    Assert.Equal("Committed", receipt.PersistenceOutcome);
+                    Assert.NotNull(receipt.WorkflowExecutionId);
+                    var runs = app.Services.GetRequiredService<KernelRuns>();
+                    await UntilAsync(async () =>
+                    {
+                        await foreach (var (actor, run) in runs.ListAsync(executable.Identity.DefinitionId, token))
+                            if (run.Workflow == executable.Identity.ArtifactId && actor.Header.Status == Contract.ActorStatus.Finished)
+                                return true;
+                        return false;
+                    });
+                    return;
+                }
             }
 
             async Task UntilAsync(Func<Task<bool>> condition)
@@ -389,9 +431,14 @@ public sealed class KernelInstalledEventStartsTests
             row.GetProperty("Kind").GetInt32() == 3 && row.GetProperty("Node").GetString() == node;
     }
 
-    private static WorkflowExecutable Producer(string artifact, string? payload, string eventName = "Changed") =>
-        ExecutableOf(artifact, artifact, Node("emit", "Elsa.Activities.Primitives.Activities.PublishEvent",
+    private static WorkflowExecutable Producer(string artifact, string? payload, string eventName = "Changed", PersistenceMode? mode = null)
+    {
+        var model = ExecutableOf(artifact, artifact, Node("emit", "Elsa.Activities.Primitives.Activities.PublishEvent",
             [Literal("EventName", eventName, "String"), Literal("Payload", payload)]));
+        return mode is null ? model : new(model.Identity, model.RootActivity, model.ResumeTargets, model.CreatedAt,
+            model.CompatibilityMetadata, model.InputContract, model.Dependencies, model.RuntimeRequirements,
+            model.StorageDriverRequirements, model.IncidentStrategy, persistenceMode: mode);
+    }
 
     private sealed class RelayGate
     {

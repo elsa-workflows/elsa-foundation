@@ -32,6 +32,14 @@ public static partial class PostgresPreviewHosting
     public static Task InstallEventStartScanQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default) =>
         InstallPreviewFormatAsync(() => CreateEventStartScanQualificationContext(options), cancellationToken);
 
+    /// <summary>Selects the private profile for qualifying inline promotion and ordered Event delivery together.</summary>
+    public static KernelDb CreateSharedActivationQualificationContext(DbContextOptions<KernelDb> options) =>
+        KernelDb.ForPostgresRootSharedActivationQualification(options);
+
+    /// <summary>Installs or verifies the dedicated combined qualification database.</summary>
+    public static Task InstallSharedActivationQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default) =>
+        InstallPreviewFormatAsync(() => CreateSharedActivationQualificationContext(options), cancellationToken);
+
     /// <summary>Binds trusted Event registration and relay to the selected qualification database and tenant.</summary>
     public static IEventStartAdmissions BindEventStarts(Func<KernelDb> create, Contract.BoundScope scope, PostgresDirectRequests? requests = null)
     {

@@ -117,6 +117,7 @@ public sealed partial class EfStore
             FoundationInlineJob = turn.FoundationInlineJob,
             FoundationKept = parked && turn.FoundationKept is { Count: 0 } ? turn.FoundationKept : null,
             FoundationRootChildSends = turn.FoundationRootChildSends,
+            FoundationRootPublications = turn.FoundationRootPublications,
             FoundationTerminalOutput = row.Status == InstanceStatus.Finished ? turn.FoundationTerminalOutput : null
         };
         var expected = new InstanceRow(binding.Actor, spec.Model, spec.Definition, row.Status,
@@ -140,6 +141,14 @@ public sealed partial class EfStore
             dispatch.Header.Labels.Any(label => header.Labels.GetValueOrDefault(label.Key) != label.Value))
             throw RootShape();
         if (children is { Starts.Length: > 0, PendingBirths: null }) return null;
+
+        List<EventRow>? publications = null;
+        if (turn.FoundationRootPublications is { } authored)
+        {
+            if (installed is null || witness is null || _ordinaryRoots?.PublishesAuthoredEvents != true || RootSelfIssuer is not { } issuer)
+                throw RootShape();
+            RootEventWaits.CollectPublications(root, turn, authored, issuer, publications = []);
+        }
 
         var park = turn.FoundationInlinePark is { } parkWitness ? LowerInlinePark(root, turn, row, parkWitness, witness) : null;
         var capturedJob = turn.FoundationInlineJob;
@@ -187,7 +196,7 @@ public sealed partial class EfStore
         var checkpoint = new InlineRootCheckpoint((FirstRootCheckpoint)first.Checkpoint, scope, stage, offer.Issuance,
             source, (long)receiptWindow.TotalMilliseconds, 0, turn.Journal, fence.Epoch, witness?.LeaseRemaining,
             turn.FoundationTerminalOutput is { } output ? new RootTerminalOutputCheckpoint(root, row.Revision, output) : null, park,
-            capturedJob);
+            capturedJob, publications ?? []);
         return new(journal, checkpoint);
 
         async ValueTask<bool> ProtectChildrenAsync(RootChildEffects effects, CancellationToken ct)
@@ -287,7 +296,8 @@ public sealed partial class EfStore
 
     private sealed record InlineRootCheckpoint(FirstRootCheckpoint First, Contract.BoundScope Scope, PreparedRootStart Stage, string Issuance,
         (uint Marker, uint Namespace, long Table)? Postgres, long ReceiptWindow, long Position, string Journal, long Epoch,
-        Func<TimeSpan>? LeaseRemaining, RootTerminalOutputCheckpoint? Output, InlineParkOpening? Park, InlineJobWinner? Job)
+        Func<TimeSpan>? LeaseRemaining, RootTerminalOutputCheckpoint? Output, InlineParkOpening? Park, InlineJobWinner? Job,
+        IReadOnlyList<EventRow> Publications)
         : QualifiedRootCheckpoint(First.JournalRevision)
     {
         internal override bool WritesJournal(string actor) => actor == Stage.Actor;
