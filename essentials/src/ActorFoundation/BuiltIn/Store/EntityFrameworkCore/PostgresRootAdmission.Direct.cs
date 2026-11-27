@@ -82,6 +82,11 @@ internal sealed partial class PostgresRootAdmission
             ? await GuardedRootAddressAsync(db, tenant, reference, cancellationToken)
             : await RootAddressAsync(db, tenant, reference, cancellationToken);
         if (address is null) return await RefuseAsync(DirectResult.MissingTarget);
+        if (attempt?.IsBusy == true)
+        {
+            if (await HasReceiptAsync()) return await DuplicateAsync();
+            attempt.RequireCapacity();
+        }
         var status = await AdmissionStatusAsync(db, address, tenant, reference, cancellationToken, requireCheckpoint: reply is not null);
         if (status is null)
         {

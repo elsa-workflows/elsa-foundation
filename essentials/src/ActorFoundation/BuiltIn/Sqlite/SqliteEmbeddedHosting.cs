@@ -213,6 +213,7 @@ public static partial class SqliteEmbeddedHosting
         internal SqliteDirectRequests? ReplyEdge { get; set; }
         internal int ReplyUsers { get; set; }
         internal SemaphoreSlim ReplyWrites { get; } = new(1);
+        internal SemaphoreSlim ReplyOperatorWrites { get; } = new(1);
 
         internal void RequireReplyEdge(SqliteDirectRequests? requested)
         {
@@ -228,6 +229,7 @@ public static partial class SqliteEmbeddedHosting
         internal DbContextOptions<KernelDb> Options => Current.Options;
         internal SqliteAdmissionDefinitions AdmissionDefinitions => Current.AdmissionDefinitions;
         internal SemaphoreSlim ReplyWrites => Current.ReplyWrites;
+        internal SemaphoreSlim ReplyOperatorWrites => Current.ReplyOperatorWrites;
         private ActiveFile Current => _file ?? throw new ObjectDisposedException(nameof(FileLease));
 
         public void Dispose()
@@ -249,6 +251,7 @@ public static partial class SqliteEmbeddedHosting
                 finally
                 {
                     held.ReplyWrites.Dispose();
+                    held.ReplyOperatorWrites.Dispose();
                     held.Lock.Dispose();
                 }
             }

@@ -25,19 +25,21 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     internal async Task<Contract.Admission> StartAsync(string tenant, string operation, StartSpec spec, long? due, TimeSpan? keepFor,
         CancellationToken token) => (await StartCoreAsync(tenant, operation, spec, due, keepFor, null, token))!;
 
-    internal async Task<string?> StartRequestAsync(HeldRootRequest request, StartSpec spec, CancellationToken token)
+    internal async Task<string?> StartRequestAsync(HeldRootRequest request, StartSpec spec, CancellationToken token,
+        RootAdmissionPressure.Attempt? reserved = null)
     {
         if (!request.IsOpen) throw new ArgumentException("A held SQLite start requires an open caller bound to its tenant.", nameof(request));
-        return (await StartCoreAsync(request.Tenant, request.Caller.Id, spec, null, request.KeepFor, request, token))?.Actor?.Id;
+        return (await StartCoreAsync(request.Tenant, request.Caller.Id, spec, null, request.KeepFor, request, token, reserved))?.Actor?.Id;
     }
 
     private async Task<Contract.Admission?> StartCoreAsync(string tenant, string operation, StartSpec spec, long? due, TimeSpan? keepFor,
-        HeldRootRequest? reply, CancellationToken token)
+        HeldRootRequest? reply, CancellationToken token, RootAdmissionPressure.Attempt? reserved = null)
     {
         RequireCreator(operation, spec);
         var window = ReceiptWindow(deduplicationWindow, keepFor);
         var digest = FoundationRootCreator.OperationDigest(operation);
-        using var attempt = pressure?.Begin(tenant, RootAdmissionKind.Start);
+        using var localAttempt = reserved is null ? pressure?.Begin(tenant, RootAdmissionKind.Start) : null;
+        var attempt = reserved ?? localAttempt;
         return await WriteAsync<Contract.Admission?>(async (db, now, ct) =>
         {
             if (reply is not null && reply.Caller.Deadline <= now) return null;
@@ -82,10 +84,10 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         (await SendCoreAsync(tenant, reference, id, kind, payload, due, keepFor, null, token))!;
 
     internal async Task<HeldRootAdmission> SendRequestAsync(HeldRootRequest request, string reference, string kind, string? payload,
-        CancellationToken token)
+        CancellationToken token, RootAdmissionPressure.Attempt? reserved = null)
     {
         if (!request.IsOpen) return HeldRootAdmission.Refused;
-        return (await SendCoreAsync(request.Tenant, new(reference), request.Caller.Id, kind, payload, null, request.KeepFor, request, token))?.Outcome switch
+        return (await SendCoreAsync(request.Tenant, new(reference), request.Caller.Id, kind, payload, null, request.KeepFor, request, token, reserved))?.Outcome switch
         {
             Contract.AdmissionOutcome.Accepted => HeldRootAdmission.Accepted,
             Contract.AdmissionOutcome.Duplicate => HeldRootAdmission.Duplicate,
@@ -95,7 +97,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     }
 
     private async Task<Contract.Admission?> SendCoreAsync(string tenant, Contract.ActorRef reference, string id, string kind, string? payload,
-        long? due, TimeSpan? keepFor, HeldRootRequest? reply, CancellationToken token)
+        long? due, TimeSpan? keepFor, HeldRootRequest? reply, CancellationToken token, RootAdmissionPressure.Attempt? reserved = null)
     {
         if (!FoundationRootCreator.IsGeneratedReference(reference.Id) || !FoundationMetadataLimits.IsOutsideMessageId(id) ||
             !FoundationMetadataLimits.IsOrdinaryKind(kind) || !FoundationMetadataLimits.FitsContent(payload))
@@ -103,7 +105,8 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
 
         var window = ReceiptWindow(deduplicationWindow, keepFor);
         var digest = FoundationRootCreator.OperationDigest(id);
-        using var attempt = pressure?.Begin(tenant, RootAdmissionKind.Input);
+        using var localAttempt = reserved is null ? pressure?.Begin(tenant, RootAdmissionKind.Input) : null;
+        var attempt = reserved ?? localAttempt;
         return await WriteAsync<Contract.Admission?>(async (db, now, ct) =>
         {
             var target = await ReadTargetAsync(db, tenant, reference.Id, ct);

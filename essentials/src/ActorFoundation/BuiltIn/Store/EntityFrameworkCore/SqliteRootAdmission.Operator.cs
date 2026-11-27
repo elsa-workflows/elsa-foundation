@@ -15,7 +15,7 @@ internal sealed partial class SqliteRootAdmission
 
     internal async Task<Contract.Admission> OperateAsync(string tenant, Contract.ActorRef reference, string operation, string kind,
         string selection, long? due, TimeSpan? keepFor, CancellationToken token, bool thenDelete = false, bool retentionDelete = false,
-        HeldRootRequest? reply = null)
+        HeldRootRequest? reply = null, RootAdmissionPressure.Attempt? reserved = null)
     {
         if (!FoundationRootCreator.IsGeneratedReference(reference.Id) || !retentionDelete && !FoundationMetadataLimits.IsOutsideMessageId(operation) ||
             kind is not (Kinds.Terminate or Kinds.Delete or Kinds.Recover) || thenDelete && kind != Kinds.Terminate || retentionDelete && kind != Kinds.Delete)
@@ -29,7 +29,8 @@ internal sealed partial class SqliteRootAdmission
         if (reply is not null && (!reply.IsOpen || reply.Tenant != tenant || due is not null || retentionDelete ||
             !PostgresRootAdmission.ValidOperatorReply(replyAddress!, reply.Caller.Deadline)))
             return new(Contract.AdmissionOutcome.Refused);
-        using var attempt = retentionDelete ? null : pressure?.Begin(tenant, RootAdmissionPressure.Operator(kind));
+        using var localAttempt = retentionDelete || reserved is not null ? null : pressure?.Begin(tenant, RootAdmissionPressure.Operator(kind));
+        var attempt = reserved ?? localAttempt;
         return await WriteAsync<Contract.Admission>(async (db, now, ct) =>
         {
             if (recover && !db.UsesRootParkRecovery) return new(Contract.AdmissionOutcome.Refused);
@@ -93,12 +94,12 @@ internal sealed partial class SqliteRootAdmission
     }
 
     internal async Task<Contract.Admission?> OperateHeldAsync(Contract.ActorRef reference, string kind, Contract.OperatorCommand command,
-        HeldRootRequest request, CancellationToken token)
+        HeldRootRequest request, CancellationToken token, RootAdmissionPressure.Attempt? reserved = null)
     {
         try
         {
             return await OperateAsync(request.Tenant, reference, request.Caller.Id, kind, command.Selection!, null, request.KeepFor,
-                token, thenDelete: command.ThenDelete, reply: request);
+                token, thenDelete: command.ThenDelete, reply: request, reserved: reserved);
         }
         catch (PostgresRootAdmission.OperatorReplyExpired) { return null; }
     }

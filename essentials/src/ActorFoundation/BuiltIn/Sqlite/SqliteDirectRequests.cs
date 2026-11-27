@@ -115,15 +115,18 @@ public static partial class SqliteEmbeddedHosting
             }
 
             public Task<string?> StartAsync(HeldRootRequest request, StartSpec spec, CancellationToken token) =>
-                WriteAsync((admission, ct) => admission.StartRequestAsync(request, spec, ct), token);
+                WriteAsync(request.Tenant, RootAdmissionKind.Start, (admission, attempt, ct) =>
+                    admission.StartRequestAsync(request, spec, ct, attempt), token);
 
             public Task<HeldRootAdmission> SendAsync(HeldRootRequest request, string reference, string kind, string? payload,
                 CancellationToken token) =>
-                WriteAsync((admission, ct) => admission.SendRequestAsync(request, reference, kind, payload, ct), token);
+                WriteAsync(request.Tenant, RootAdmissionKind.Input, (admission, attempt, ct) =>
+                    admission.SendRequestAsync(request, reference, kind, payload, ct, attempt), token);
 
             internal Task<Contract.Admission?> OperateAsync(Contract.ActorRef actor, string kind, Contract.OperatorCommand command,
                 HeldRootRequest request, CancellationToken token) =>
-                WriteAsync((admission, ct) => admission.OperateHeldAsync(actor, kind, command, request, ct), token);
+                WriteAsync(request.Tenant, RootAdmissionPressure.Operator(kind), (admission, attempt, ct) =>
+                    admission.OperateHeldAsync(actor, kind, command, request, ct, attempt), token);
 
             public async ValueTask<Contract.ActorStatus?> ReadStatusAsync(string tenant, string reference, CancellationToken token)
             {
@@ -141,24 +144,29 @@ public static partial class SqliteEmbeddedHosting
             private SqliteRootAdmission ForFile(FileLease file) =>
                 new(() => OpenRoot(file, owner.QualifiesPressure, runtime: false), window, file.AdmissionDefinitions, owner.Pressure);
 
-            private async Task<T> WriteAsync<T>(Func<SqliteRootAdmission, CancellationToken, Task<T>> admit, CancellationToken token)
+            private async Task<T> WriteAsync<T>(string tenant, RootAdmissionKind kind,
+                Func<SqliteRootAdmission, RootAdmissionPressure.Attempt?, CancellationToken, Task<T>> admit, CancellationToken token)
             {
                 // SQLite waits synchronously for BEGIN IMMEDIATE. Keep the caller's wait cancellable and give the
                 // background operation its own leases so it can roll back after the caller has gone.
                 var write = Task.Run(async () =>
                 {
+                    using var attempt = owner.Pressure?.Begin(tenant, kind);
                     while (true)
                     {
                         token.ThrowIfCancellationRequested();
                         try
                         {
                             using var file = AcquireFile(path, requests: owner);
-                            await file.ReplyWrites.WaitAsync(token);
-                            try { return await admit(ForFile(file), token); }
-                            finally { file.ReplyWrites.Release(); }
+                            if (attempt?.IsBusy == true) return await admit(ForFile(file), attempt, token);
+                            var lane = attempt is not null && kind == RootAdmissionKind.ShedLoad ? file.ReplyOperatorWrites : file.ReplyWrites;
+                            await lane.WaitAsync(token);
+                            try { return await admit(ForFile(file), attempt, token); }
+                            finally { lane.Release(); }
                         }
                         catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
                         {
+                            attempt?.RolledBack();
                             await Task.Delay(25, token); // SQLITE_BUSY or SQLITE_LOCKED, with the original deadline.
                         }
                     }

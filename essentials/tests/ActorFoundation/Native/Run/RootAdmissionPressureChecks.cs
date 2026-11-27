@@ -14,7 +14,8 @@ internal static class RootAdmissionPressureChecks
 {
     internal static async Task<int> RunAsync(bool postgres, bool inBatch)
     {
-        CheckExpiredRefund();
+        CheckExpiredRefund(refresh: true);
+        CheckExpiredRefund(refresh: false);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var token = timeout.Token;
         var directory = Directory.CreateTempSubdirectory("root-admission-pressure-");
@@ -104,26 +105,38 @@ internal static class RootAdmissionPressureChecks
             Check(await ingress.RequestAsync(scope, Start("serve"), "retry-start", Contract.Kinds.Start, null, null,
                 new(null, deadline), token) is { RefusalReason: Contract.RefusalReason.InboxFull, RetryAfter: not null, Actor: null },
                 "held starts preserve the structured pressure refusal");
+            if (postgres)
+            {
+                await using var blockedDb = Open();
+                await using var blockerWrite = await blockedDb.Database.BeginTransactionAsync(token);
+                await blockedDb.Database.ExecuteSqlInterpolatedAsync($"""
+                    SELECT 1 FROM "Instances" WHERE "FoundationReference" = {live.Id} FOR UPDATE
+                    """, token);
+                var first = CallAsync(target, "stalled-send", "work");
+                await CheckConcurrentBusyAsync(target, "busy-held-send", "work", first);
+                await blockerWrite.RollbackAsync(token);
+                Check(await first is { RefusalReason: Contract.RefusalReason.InboxFull }, "the first PostgreSQL caller observes pressure after its checkpoint is free");
+            }
+            else
+            {
+                await using var writer = new SqliteConnection(new SqliteConnectionStringBuilder
+                    { DataSource = path, ForeignKeys = true, Pooling = false }.ToString());
+                await writer.OpenAsync(token);
+                await using var blockerWrite = writer.BeginTransaction(deferred: false);
+                var first = CallAsync(Start("serve"), "stalled-start", Contract.Kinds.Start);
+                await CheckConcurrentBusyAsync(Start("serve"), "busy-held-start", Contract.Kinds.Start, first);
+                var duplicate = await Task.Run(async () => await ingress.SendAsync(scope, Start("hold"), "withhold", Contract.Kinds.Start,
+                    cancellationToken: token), token).WaitAsync(TimeSpan.FromSeconds(2), token);
+                Check(duplicate is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: { } existing } && existing == blocker,
+                    "an established start replays while the first SQLite held admission still waits for the writer");
+                await blockerWrite.RollbackAsync(token);
+                Check(await first is { RefusalReason: Contract.RefusalReason.InboxFull }, "the first SQLite caller observes pressure after the writer is free");
+            }
+
             using (pressure.Begin(scope.Tenant, RootAdmissionKind.Input))
             {
                 Check(await ingress.SendAsync(scope, target, "busy", "work", cancellationToken: token) is
                     { Reason: Contract.RefusalReason.NodeBusy, RetryAfter: not null }, "ordinary in-flight saturation returns NodeBusy");
-                if (!postgres)
-                {
-                    await using var writer = new SqliteConnection(new SqliteConnectionStringBuilder
-                        { DataSource = path, ForeignKeys = true, Pooling = false }.ToString());
-                    await writer.OpenAsync(token);
-                    await using var blockerWrite = writer.BeginTransaction(deferred: false);
-                    var busyDeadline = DateTimeOffset.UtcNow.AddSeconds(10).ToUnixTimeMilliseconds();
-                    var refused = await ingress.RequestAsync(scope, Start("serve"), "busy-start", Contract.Kinds.Start, null, null,
-                        new(null, busyDeadline), token).AsTask().WaitAsync(TimeSpan.FromSeconds(2), token);
-                    var duplicate = await Task.Run(async () => await ingress.SendAsync(scope, Start("hold"), "withhold", Contract.Kinds.Start,
-                        cancellationToken: token), token).WaitAsync(TimeSpan.FromSeconds(2), token);
-                    Check(refused is { RefusalReason: Contract.RefusalReason.NodeBusy, RetryAfter: not null } &&
-                        duplicate is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: { } existing } && existing == blocker,
-                        "a busy SQLite attempt refuses or replays while a different transaction still owns the writer");
-                    await blockerWrite.RollbackAsync(token);
-                }
                 var view = (await reads.GetAsync(scope, blocker, token))!;
                 var command = new Contract.OperatorCommand(view.Selection, ExpectedTarget: blocker);
                 Check(await ingress.SendAsync(scope, blocked, "relieve", Contract.Kinds.Terminate, Json.Write(command), cancellationToken: token) is
@@ -167,6 +180,23 @@ internal static class RootAdmissionPressureChecks
                 return false;
             }
 
+            Task<Contract.Reply> CallAsync(Contract.Target destination, string id, string kind) =>
+                ingress.RequestAsync(scope, destination, id, kind, null, null,
+                    new(null, DateTimeOffset.UtcNow.AddSeconds(10).ToUnixTimeMilliseconds()), token).AsTask();
+
+            async Task CheckConcurrentBusyAsync(Contract.Target destination, string id, string kind, Task<Contract.Reply> first)
+            {
+                await UntilAsync(() =>
+                {
+                    if (first.IsCompleted) throw new InvalidOperationException("The first held admission must still be waiting.");
+                    using var observe = pressure.Begin(scope.Tenant, RootAdmissionKind.Input);
+                    return Task.FromResult(observe.IsBusy);
+                });
+                var refusal = await CallAsync(destination, id, kind).WaitAsync(TimeSpan.FromSeconds(2), token);
+                Check(refusal is { RefusalReason: Contract.RefusalReason.NodeBusy, RetryAfter: not null } && !first.IsCompleted,
+                    "a second held caller returns NodeBusy while the first admission waits on a physical database lock");
+            }
+
             async Task UntilAsync(Func<Task<bool>> condition)
             {
                 while (!await condition()) await Task.Delay(25, token);
@@ -181,7 +211,7 @@ internal static class RootAdmissionPressureChecks
         Console.WriteLine("ok " + description);
     }
 
-    private static void CheckExpiredRefund()
+    private static void CheckExpiredRefund(bool refresh)
     {
         var clock = new RateClock();
         var pressure = new RootAdmissionPressure(new(2, 1, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1)),
@@ -189,7 +219,7 @@ internal static class RootAdmissionPressureChecks
         using var stalled = pressure.Begin("one", RootAdmissionKind.Input);
         stalled.Require(0);
         clock.Advance(TimeSpan.FromSeconds(2));
-        pressure.Refresh(new Dictionary<int, int>(), nodes: 1);
+        if (refresh) pressure.Refresh(new Dictionary<int, int>(), nodes: 1);
         using (var admitted = pressure.Begin("one", RootAdmissionKind.Input))
         {
             admitted.Require(0);
@@ -200,7 +230,7 @@ internal static class RootAdmissionPressureChecks
         try { next.Require(0); }
         catch (RootAdmissionRefused refusal) when (refusal.Admission.Reason == Contract.RefusalReason.RateLimited)
         {
-            Console.WriteLine("ok a rolled back stale debit cannot refund into a replacement tenant bucket");
+            Console.WriteLine("ok a stale debit cannot refund a bucket replaced by " + (refresh ? "refresh" : "refill"));
             return;
         }
         throw new InvalidOperationException("The stale rollback refilled a different bucket.");

@@ -122,7 +122,7 @@ internal sealed class RootAdmissionPressure
                     : limits.Burst;
                 if (tokens < 1)
                     throw new RootAdmissionRefused(Contract.RefusalReason.RateLimited, TimeSpan.FromSeconds((1 - tokens) / rate));
-                if (bucket is null) owner._buckets.Add(key, bucket = new(tokens, now));
+                if (bucket is null || tokens >= limits.Burst) owner._buckets[key] = bucket = new(tokens, now);
                 bucket.Tokens = tokens - 1;
                 bucket.At = now;
                 _debited = bucket;
@@ -137,20 +137,24 @@ internal sealed class RootAdmissionPressure
 
         internal void Committed() => _debited = null;
 
+        internal void RolledBack()
+        {
+            if (_debited is not { } charged) return;
+            _debited = null;
+            lock (owner._sync)
+            {
+                var key = (tenant, kind);
+                // Refresh or full refill can retire this bucket while its provider transaction is still open.
+                if (owner._buckets.TryGetValue(key, out var bucket) && ReferenceEquals(bucket, charged))
+                    bucket.Tokens = Math.Min(owner.Limits(kind).Burst, bucket.Tokens + 1);
+            }
+        }
+
         public void Dispose()
         {
             var slot = Interlocked.Exchange(ref _slot, null);
             if (slot is null) return;
-            if (_debited is { } charged)
-            {
-                lock (owner._sync)
-                {
-                    var key = (tenant, kind);
-                    // An idle refresh can retire this bucket while its provider transaction is still open.
-                    if (owner._buckets.TryGetValue(key, out var bucket) && ReferenceEquals(bucket, charged))
-                        bucket.Tokens = Math.Min(owner.Limits(kind).Burst, bucket.Tokens + 1);
-                }
-            }
+            RolledBack();
             slot.Release();
         }
     }

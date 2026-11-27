@@ -124,7 +124,7 @@ internal sealed partial class PostgresRootAdmission
             else
                 await EfStore.RequireStoreVersionsAsync(db, token);
             // Serialize only held admissions for the same birth. NO KEY UPDATE remains compatible with receipt FKs.
-            var address = reply is null ? await RootAddressAsync(db, tenant, reference, token) :
+            var address = reply is null || attempt?.IsBusy == true ? await RootAddressAsync(db, tenant, reference, token) :
                 await db.Database.SqlQuery<CreationAddress>($"""
                     SELECT "Actor" AS "Id", "Creation" FROM "FoundationRootBirths"
                     WHERE "Tenant" = {tenant} AND "Reference" = {reference} FOR NO KEY UPDATE
@@ -140,15 +140,6 @@ internal sealed partial class PostgresRootAdmission
             }
             var digest = FoundationRootCreator.OperationDigest(operation);
 
-            // Lock the selected checkpoint before reading its receipt. If the command already
-            // ended this actor, the receipt committed before the owner could consume it.
-            var exactTerminal = terminal is not null && await LocksRootDeleteSelectionAsync(db, address, tenant, reference, terminal, token);
-            // S5b-2: a Terminate, or a Delete, that names the Park is refused while its Park is being cleared.
-            var exactPark = park is not null && await LocksRootParkSelectionAsync(db, address, tenant, reference, park, recover, token) &&
-                (recover && !db.UsesRootComposedParkRecovery || !await ClearsRootParkAsync(db, address, token));
-            var selectedStatus = selected && !deletion && park is null
-                ? await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: true)
-                : null;
             Task<string?> LiveReceiptAsync() => db.Database.SqlQuery<string>($"""
                 SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts"
                 WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
@@ -159,6 +150,21 @@ internal sealed partial class PostgresRootAdmission
                 await tx.CommitAsync(token);
                 return (selected || requireExactTarget) && prior != reference ? null : new(prior, true);
             }
+            if (attempt?.IsBusy == true)
+            {
+                if (await LiveReceiptAsync() is { } winner) return await ReplayAsync(winner);
+                attempt.RequireCapacity();
+            }
+
+            // Lock the selected checkpoint before reading its receipt. If the command already
+            // ended this actor, the receipt committed before the owner could consume it.
+            var exactTerminal = terminal is not null && await LocksRootDeleteSelectionAsync(db, address, tenant, reference, terminal, token);
+            // S5b-2: a Terminate, or a Delete, that names the Park is refused while its Park is being cleared.
+            var exactPark = park is not null && await LocksRootParkSelectionAsync(db, address, tenant, reference, park, recover, token) &&
+                (recover && !db.UsesRootComposedParkRecovery || !await ClearsRootParkAsync(db, address, token));
+            var selectedStatus = selected && !deletion && park is null
+                ? await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: true)
+                : null;
             var prior = await LiveReceiptAsync();
             if (prior is not null) return await ReplayAsync(prior);
             if (!deletion && park is null)
