@@ -8,7 +8,9 @@ public sealed partial class EfStore
 {
     // A private physical envelope, scoped to issued rows. The application kind is carried inside.
     internal const long RootSelfScope = -5; // provider storage only; the Worker receives InboxKey.Issued (-1)
+    private const string PostgresPrivateInboxView = "\"FoundationRootMessages\"";
     private const string RootSelfWire = "!foundation-self/1";
+    private const string RootSelfTimerWire = "!foundation-self-timer/1";
     private sealed record RootSelfHeader(long Revision, int Ordinal, string Kind,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? Due = null);
     private string RootInboxSource => !postgres || _ordinaryRoots is null || RootSelfIssuer is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
@@ -25,7 +27,7 @@ public sealed partial class EfStore
         {
             await RequireSqliteOperationalFormatAsync(db, token);
             var key = await SqliteRootAdmission.ReadRootIssuerKeyAsync(db, token);
-            RootSelfIssuer = new(seed => FoundationSelfSend.Handle(key, seed), db.UsesRootTimers);
+            RootSelfIssuer = new(seed => FoundationSelfSend.Handle(key, seed), db.UsesRootTimers, db.UsesRootPrivateParkInputs);
             return;
         }
         await RequireStoreVersionsAsync(db, token);
@@ -37,7 +39,7 @@ public sealed partial class EfStore
             FROM "FoundationRootIssuer"
             """).SingleAsync(token);
         if (!install.Installed) await new PostgresRootAdmission(create, TimeSpan.Zero).InstallAsync(token);
-        RootSelfIssuer = new(seed => FoundationSelfSend.Handle(install.Key, seed), db.UsesRootTimers);
+        RootSelfIssuer = new(seed => FoundationSelfSend.Handle(install.Key, seed), db.UsesRootTimers, db.UsesRootPrivateParkInputs);
     }
 
     // The ordinary writer transports an exceptional payload as base64. Only the compact bytea is stored.
@@ -53,6 +55,7 @@ public sealed partial class EfStore
             """).SingleAsync(token))
             throw SplitEventPayload();
 
+        var parkColumns = db.UsesRootPrivateParkInputs ? """, "FoundationKeptBy", "FoundationReleasedBy" """ : "";
         await db.Database.ExecuteSqlRawAsync($"""
             CREATE OR REPLACE FUNCTION kernel_root_self_insert_v3() RETURNS trigger LANGUAGE plpgsql AS $fn$
             DECLARE head text := split_part(NEW."Payload", chr(10), 1);
@@ -69,9 +72,13 @@ public sealed partial class EfStore
             SELECT "Id", "InboxScope", "EventMatch", "Seq", "Partition", "Target", "Kind", "Start", "Sender", "Due",
                    "Seen", "Trial", "Attempts", "KeepUntil", "Done", "ReplyTo",
                    CASE WHEN "FoundationSelfContent" IS NULL THEN "Payload"
-                        ELSE "Payload" || chr(10) || encode("FoundationSelfContent", 'base64') END AS "Payload", "JobGeneration"
+                        ELSE "Payload" || chr(10) || encode("FoundationSelfContent", 'base64') END AS "Payload", "JobGeneration"{parkColumns}
               FROM "Messages";
             """, token);
+        if (db.UsesRootPrivateParkInputs)
+            await db.Database.ExecuteSqlRawAsync($"""
+                CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_ParkTimers" ON "Messages" {ParkTimerIndex};
+                """, token);
     }
 
     private static StoreFormatException SplitEventPayload() => new(
@@ -100,13 +107,13 @@ public sealed partial class EfStore
         var content = escaped ? Convert.ToBase64String(RootSelfContent.Encode(m.Payload!)) : m.Payload;
         var body = content is null ? header : string.Concat(header, "\n", content);
         // The existing writer returns the insert's sequence for same-owner handover.
-        return new Message(m.InboxKey.Id, m.Target, RootSelfWire, body, m.Sender, Due: m.Due).WithInboxScope(RootSelfScope);
+        return new Message(m.InboxKey.Id, m.Target, SelfWire(RootSelfIssuer, m.Due), body, m.Sender, Due: m.Due).WithInboxScope(RootSelfScope);
     }
 
     private static Message DecodeRootSelf(MessageEntity row, FoundationSelfIssuer? issue)
     {
         var actor = row.InboxScope == RootSelfScope && row.EventMatch is null ? SelfActor(InboxKey.Issued(row.Id)) : null;
-        if (issue is null || row.JobGeneration != 0 || actor != row.Target || row.Sender != actor || row.Kind != RootSelfWire ||
+        if (issue is null || row.JobGeneration != 0 || actor != row.Target || row.Sender != actor ||
             row.Payload is null || row.Start is not null || row.KeepUntil is not null || row.ReplyTo is not null)
             throw RootShape();
         var cut = row.Payload.IndexOf('\n');
@@ -115,11 +122,14 @@ public sealed partial class EfStore
         var body = DurableKeyJson.Read<RootSelfHeader>(header[1..]);
         var payload = cut < 0 ? null : row.Payload[(cut + 1)..];
         if (header[0] == 'B') payload = RootSelfContent.Decode(Convert.FromBase64String(payload ?? throw RootShape()));
-        if (!issue.Allows(body.Due) || row.Due != (body.Due ?? 0)) throw RootShape();
+        if (!issue.Allows(body.Due) || row.Due != (body.Due ?? 0) || row.Kind != SelfWire(issue, body.Due)) throw RootShape();
         var id = FoundationSelfSend.Issue(issue.Handle, CreationProtocol.Origin(actor, 1), body.Revision, body.Ordinal, body.Due);
         var message = FoundationSelfSend.Create(actor, 1, id, body.Kind, payload, body.Due);
         if (body.Revision < 1 || body.Ordinal < 0 || !FoundationMetadataLimits.IsOrdinaryKind(body.Kind) ||
             message.InboxKey.Id != row.Id) throw RootShape();
         return message;
     }
+
+    private static string SelfWire(FoundationSelfIssuer issue, long? due) =>
+        issue.DistinguishesTimers && due is not null ? RootSelfTimerWire : RootSelfWire;
 }

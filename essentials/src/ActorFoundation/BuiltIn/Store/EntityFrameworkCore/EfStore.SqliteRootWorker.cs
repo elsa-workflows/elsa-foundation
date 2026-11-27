@@ -40,8 +40,8 @@ public sealed partial class EfStore
                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition"
                     AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
                     AND NOT i."Retired" AND (i."FoundationParkAt" IS NULL OR
-                        m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND (m."Id" GLOB 'operator/*'
-                            {(includeParkArrivals ? """OR (i."FoundationParkClearing" IS NULL AND m."ReplyTo" IS NULL)""" : "")}))
+                        m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" GLOB 'operator/*'
+                        {(includeParkArrivals ? """OR (m."InboxScope" IN (/*park-input-scopes*/) AND i."FoundationParkClearing" IS NULL AND m."ReplyTo" IS NULL)""" : "")})
                     {cohort})
             AND (m."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("m.", recovery)}))))
         """;
@@ -203,7 +203,8 @@ public sealed partial class EfStore
                 DELETE FROM "Messages" WHERE "InboxScope" = {RootSelfScope}
                     AND "Id" IN (SELECT value FROM json_each({Json.Write(recalls)}))
                     AND "Target" = {actor.Id} AND "Sender" = {actor.Id} AND "Partition" = {home}
-                    AND "Kind" = {RootSelfWire} AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
+                        AND ("Kind" = {RootSelfWire} OR {db.UsesRootPrivateParkInputs} AND "Kind" = {RootSelfTimerWire})
+                        AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
                 """, token);
         if (turn.SettledJobs is { Length: > 0 } jobIds && !await DeleteRootTimedRowsAsync(db, actor, jobIds, token)) return false;
 
@@ -230,9 +231,10 @@ public sealed partial class EfStore
             key.Scope != InboxKey.FoundationOccurrenceScope && (issue is null || SelfActor(key) != actor.Id))) return false;
         if (expected.Count == 0) return true;
         var home = new InstanceRef(actor.Id).Partition;
+        var includePrivate = issue is not null || db.UsesRootPrivateParkInputs && parked && !suspended;
         FormattableString ready = $"""
             SELECT m.* FROM "Messages" m WHERE "Target" = {actor.Id} AND "Partition" = {home}
-                AND ("InboxScope" = {InboxKey.FoundationOccurrenceScope} OR {issue is not null} AND "InboxScope" = {RootSelfScope})
+                AND ("InboxScope" = {InboxKey.FoundationOccurrenceScope} OR {includePrivate} AND "InboxScope" = {RootSelfScope})
                 AND "EventMatch" IS NULL AND NOT "Done"
                 AND "Due" <= /*sqlite-root-clock*/ AND (NOT {suspended} OR "Id" GLOB 'operator/*')
                 AND (NOT {parked && db.UsesRootParkArrivals} OR "ReplyTo" IS NULL OR "Id" GLOB 'operator/*')
@@ -240,11 +242,13 @@ public sealed partial class EfStore
             ORDER BY "Seq" LIMIT {expected.Count}
             """;
         var cohort = db.UsesRootParkRecovery && !parked && !suspended
-            ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter})"""
+            ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter(db)})"""
             : "";
         var eligible = WithSqliteOperatorPredicate(db, UseSqliteRootClock(FormattableStringFactory.Create(
             ready.Format.Replace("/*released-cohort*/", cohort, StringComparison.Ordinal), ready.GetArguments())));
         var rows = await db.Messages.FromSqlInterpolated(eligible).AsNoTracking().ToListAsync(token);
+        if (issue is null && rows.Any(row => row.InboxScope == RootSelfScope))
+            return false;
         var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(message => message.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;

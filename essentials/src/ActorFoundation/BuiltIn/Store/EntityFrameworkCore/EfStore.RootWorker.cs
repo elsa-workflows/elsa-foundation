@@ -31,6 +31,7 @@ public sealed partial class EfStore
         internal bool RequiresCommittedTerminal { get; set; }
         internal bool KeepsParkInputs { get; set; }
         internal bool KeepsParkArrivals { get; set; }
+        internal bool KeepsPrivateParkInputs { get; set; }
         internal bool RecoversPark { get; set; }
         internal bool MeasuresDueBacklog { get; set; }
         internal bool RefusesParkedOperators { get; set; }
@@ -66,6 +67,7 @@ public sealed partial class EfStore
         public bool RequiresCommittedTerminal => roots.RequiresCommittedTerminal;
         public bool KeepsParkInputs => roots.KeepsParkInputs;
         public bool KeepsParkArrivals => roots.KeepsParkArrivals;
+        public bool KeepsPrivateParkInputs => roots.KeepsPrivateParkInputs;
         public bool RecoversPark => roots.RecoversPark;
         public bool RefusesParkedOperators => roots.RefusesParkedOperators;
         public bool SettlesEndedMailbox => roots.SettlesEndedMailbox;
@@ -126,6 +128,7 @@ public sealed partial class EfStore
             scope.RequiresCommittedTerminal = db.UsesRootRetirement;
             scope.KeepsParkInputs = db.UsesRootParkOpening;
             scope.KeepsParkArrivals = db.UsesRootParkArrivals;
+            scope.KeepsPrivateParkInputs = db.UsesRootPrivateParkInputs;
             scope.RecoversPark = db.UsesRootParkRecovery;
             scope.MeasuresDueBacklog = db.UsesRootDueBacklog;
             scope.RefusesParkedOperators = db.UsesRootParkedOperators;

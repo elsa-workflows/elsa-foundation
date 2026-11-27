@@ -58,6 +58,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootDueBacklogQualification => Current with { MessageProtocol = 110 };
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
+    internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
 
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
@@ -126,6 +127,8 @@ internal static class RootProfiles
     /// is refused. Before GA a preview database is recreated; after GA a widening migrates, with a rollback floor (K12).
     /// </summary>
     internal const RootCapabilities Shipped = ParkCompositionBase | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery;
+
+    internal const RootCapabilities SelfTimedParkQualification = Shipped | RootCapabilities.SelfProtocol | RootCapabilities.Timers;
 
     // Each format and the closed capability set its profile carries.
     internal static IReadOnlyDictionary<StoreFormat, RootCapabilities> Formats { get; } = new Dictionary<StoreFormat, RootCapabilities>
@@ -370,7 +373,7 @@ internal static class StoreDefinitionsRevision
     {
         var sqliteQualification = db.UsesSqliteShippedInstall &&
             (db.RequiredFormat == StoreFormat.SqliteParkArrivalsQualification || db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification ||
-                db.RequiredFormat == StoreFormat.RootSelfTimedQualification);
+                db.RequiredFormat == StoreFormat.RootSelfTimedQualification || db.RequiredFormat == StoreFormat.RootSelfTimedParkQualification);
         if (db.RequiredFormat != StoreFormat.RootShipped && !sqliteQualification && !db.UsesRootDueBacklog) return null;
         var sqlite = db.Database.IsSqlite();
         return new StoreVersionEntity

@@ -75,10 +75,17 @@ internal sealed record FoundationTerminalStamp(long Revision, long At);
 
 internal sealed record FoundationParkMark(long Revision, long At);
 
+internal sealed record FoundationRootParkTimer(string Id, long Sequence, ParkKeepReason? KeptBy, long Bytes, string Envelope)
+{
+    internal static string Digest(Message timer) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+        DurableKeyJson.CodeUnits(DurableKeyJson.Write(new { timer.Id, timer.Kind, timer.Due, timer.Payload }))));
+}
+
 internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arrived, int Consumed, bool FitsPage, string KeptDigest)
 {
     internal string? RecoverableJobRegistry { get; init; }
     internal bool KeepsRegisteredJob { get; init; }
+    internal string? RestorableTimers { get; init; }
 
     // S5b: the row holds jobs, children, custom handles or subscriptions, which a parked Terminate cannot dispose of yet.
     internal bool Outstanding { get; init; }

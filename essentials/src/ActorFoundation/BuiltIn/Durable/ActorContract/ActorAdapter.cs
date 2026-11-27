@@ -109,9 +109,11 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     private bool CanKeepRootParkArrival(Durable.InstanceRow row, Durable.Delivery delivery) =>
         roots?.KeepsParkArrivals == true && IsRootParked(row) && delivery.Durable &&
-        delivery.Message.Target.Id == row.Id && CapturesParkArrival(delivery) && delivery.Message is
+        delivery.Message.Target.Id == row.Id && CapturesParkArrival(delivery) &&
+        (delivery.Message is
         { InboxScope: Durable.InboxKey.FoundationOccurrenceScope, TargetCreation: 1, EventMatch: null, ActorAuthored: false,
-            Sender: null, Operator: null, StorageId: not null, ReplyTo: null };
+            Sender: null, Operator: null, StorageId: not null, ReplyTo: null } ||
+        roots.KeepsPrivateParkInputs && issueSelf is not null && Durable.FoundationSelfSend.IsSelfInput(delivery.Message, row.Id, row.Creation));
 
     private static bool CapturesParkArrival(Durable.Delivery delivery) => !delivery.Message.IsControl && !delivery.IsWorkerJobCompletion;
 

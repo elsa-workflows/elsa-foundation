@@ -518,13 +518,7 @@ public sealed partial class EfStore
                 !await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
                     suspended: !db.UsesRootParkArrivals || prior.ClearingKind is not null, token, includePrivateInputs: false, parked: true)) return false;
             var window = Command.Operator!.RootParkWindow!.Value;
-            var cleared = page.Select(row => row.Id).ToArray();
-            if (await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Messages" SET "FoundationKeptBy" = NULL, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL,
-                    "KeepUntil" = floor(extract(epoch from transaction_timestamp()) * 1000)::bigint + {window}
-                WHERE "Id" = ANY({cleared}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
-                    AND "InboxScope" = -4 AND "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" IS NOT NULL
-                """, token) != cleared.Length) return false;
+            if (!await ClearPostgresParkRowsAsync(db, Root, page, window, token)) return false;
             var total = checked(Cleared + page.Length);
             // S5b-3b: a protected Delete's end keeps the row Faulted and its Suspended flag.
             var discards = Ends && Command.Kind == Kinds.Delete;
@@ -565,6 +559,7 @@ public sealed partial class EfStore
                         floor(extract(epoch from transaction_timestamp()) * 1000)::bigint + {window}, false, 0, 0, 0)
                     """, token);
             }
+            if (!await VerifyClearedPostgresParkRowsAsync(db, Root, page, window, token)) return false;
             return await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
                         AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision}
@@ -577,10 +572,6 @@ public sealed partial class EfStore
                         AND "FoundationTerminalRevision" IS NOT DISTINCT FROM {(Ends ? JournalRevision : null)}::bigint
                         AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
                         AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest})
-                    AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({cleared}) AND "Target" = {Root.Actor}
-                        AND "Partition" = {Root.Partition} AND "InboxScope" = -4 AND "Done" AND "FoundationKeptBy" IS NULL
-                        AND "Payload" IS NULL AND "Start" IS NULL AND "ReplyTo" IS NULL
-                        AND "KeepUntil" = floor(extract(epoch from transaction_timestamp()) * 1000)::bigint + {window}) = {cleared.Length}
                     AND (NOT {db.UsesRootParkInspection} OR EXISTS (SELECT 1 FROM "FoundationActorList"
                         WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference}
                             AND "Status" = {(int)status}

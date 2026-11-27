@@ -13,7 +13,8 @@ public sealed partial class EfStore
         var scope = released is null ? $"""
                 AND m."Done" AND m."FoundationKeptBy" = {(short)ParkKeepReason.Arrived}
                 """ : $"""
-                AND NOT m."Done" AND m."FoundationKeptBy" IS NULL AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                AND NOT m."Done" AND m."FoundationKeptBy" IS NULL
+                AND m."InboxScope" IN ({ParkInputScopes(db)})
                 AND m."FoundationReleasedBy" IS NOT NULL AND m."FoundationReleasedBy" = {"{2}"}
                 """;
         var discarded = released is null ? $"""
@@ -52,7 +53,7 @@ public sealed partial class EfStore
         await foreach (var row in rows.AsAsyncEnumerable().WithCancellation(token))
         {
             var digest = Hash(row);
-            kept.Add(new(row.Id, row.InboxScope, new(row.Id, row.KeptBy, digest, Hash(row with { KeepUntil = null }), row.Bytes)));
+            kept.Add(new(row.Id, row.InboxScope, new(row.Id, row.InboxScope, row.KeptBy, digest, Hash(row with { KeepUntil = null }), row.Bytes)));
             if (row.KeptBy != (short)ParkKeepReason.Arrived) continue;
             bytes += row.Bytes;
             if (++charged > InMemoryStore.ParkPageLimit || charged > 1 && bytes > ParkRecoveryCredit.LimitBytes) break;
@@ -86,6 +87,8 @@ public sealed partial class EfStore
         if (prior is null || (prior.At is null) != (turn.Prior == InstanceStatus.Running)) return false;
         var kept = turn.Recovered ? await ReadSqliteRecoveryRowsAsync(db, root.Actor, root.Partition, null, token) : [];
         var arrived = kept.Where(row => row.Facts.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
+        if (turn.Recovered && await ReadRootParkTimersAsync(db, root.Actor, root.Partition, turn.SelfIssuer,
+                lockRows: false, token) != facts.RestorableTimers) return false;
         var footprint = turn.Recovered
             ? await ReadRecoverableRootJobAsync(db, root.Actor, root.Partition, facts.RecoverableJobRegistry, prior.ParkJobResult,
                 prior.ParkLiveJob, token)
@@ -94,11 +97,14 @@ public sealed partial class EfStore
         if (footprint is not { } job || turn.Recovered && (job.KeepsRegistration != facts.KeepsRegisteredJob ||
             (job.ConsumedId is null ? keptJobs.Length != 0 : keptJobs is not [var keptJob] || keptJob.Id != job.ConsumedId))) return false;
         if (turn.Recovered && (facts.Mark != new FoundationParkMark(prior.Revision ?? 0, prior.At ?? 0) ||
-            PageLength(arrived.Select(row => row.Facts)) != arrived.Length || arrived.Any(row => row.Scope != InboxKey.FoundationOccurrenceScope) ||
+            PageLength(arrived.Select(row => row.Facts)) != arrived.Length ||
+            arrived.Any(row => row.Scope != InboxKey.FoundationOccurrenceScope &&
+                (!db.UsesRootPrivateParkInputs || row.Scope != RootSelfScope)) ||
             KeptSetDigest(kept.Select(row => row.Facts)) != facts.KeptDigest)) return false;
         var envelope = command with { Operator = command.Operator with { RootParkFacts = null } };
         if (!await SettleSqliteRootInputsAsync(db, root.Reference, new(root.Actor, 1), [command.InboxKey], [envelope],
-                turn.WithheldInputs || prior.Clearing is not null, token, parked: turn.Prior == InstanceStatus.Faulted))
+                turn.WithheldInputs || prior.Clearing is not null, token, parked: turn.Prior == InstanceStatus.Faulted,
+                issue: turn.SelfIssuer))
             return false;
 
         if (!await BindRecoverableRootJobAsync(db, root.Actor, root.Partition, job, token)) return false;
@@ -119,19 +125,25 @@ public sealed partial class EfStore
         if (!turn.Recovered) return true;
 
         var until = checked(await ReadSqliteParkClockAsync(db, token) + command.Operator.RootParkWindow!.Value);
-        if (await db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE "Messages" SET "Done" = 0, "FoundationKeptBy" = NULL, "Seen" = 0, "Trial" = 0, "Attempts" = 0,
-                "FoundationReleasedBy" = {generation}, "KeepUntil" = {until}
-            WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition} AND "EventMatch" IS NULL AND "Done"
-                AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived}
-            """, token) != arrived.Length ||
-            !await ClearSqliteParkRowsAsync(db, root, kept.Where(row => row.Facts.KeptBy == (short)ParkKeepReason.Consumed &&
+        foreach (var scope in arrived.GroupBy(row => row.Scope))
+        {
+            var ids = Json.Write(scope.Select(row => row.Id).ToArray());
+            long? keepUntil = scope.Key == RootSelfScope ? null : until;
+            if (await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Messages" SET "Done" = 0, "FoundationKeptBy" = NULL, "Seen" = 0, "Trial" = 0, "Attempts" = 0,
+                    "FoundationReleasedBy" = {generation}, "KeepUntil" = {keepUntil}
+                WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition} AND "EventMatch" IS NULL AND "Done"
+                    AND "InboxScope" = {scope.Key} AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived}
+                    AND "Id" IN (SELECT value FROM json_each({ids}))
+                """, token) != scope.Count()) return false;
+        }
+        if (!await ClearSqliteParkRowsAsync(db, root, kept.Where(row => row.Facts.KeptBy == (short)ParkKeepReason.Consumed &&
                 row.Scope != RootTimedJobScope).ToArray(), until, token))
             return false;
-        await db.Database.ExecuteSqlInterpolatedAsync($"""
+        await db.Database.ExecuteSqlInterpolatedAsync(WithParkInputScopeParameters(db, $"""
             UPDATE "Messages" SET "Seen" = 0 WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition}
-                AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done" AND "Seen" <> 0
-            """, token);
+                AND "InboxScope" IN (/*park-input-scopes*/) AND "EventMatch" IS NULL AND NOT "Done" AND "Seen" <> 0
+            """), token);
         var restored = await ReadSqliteRecoveryRowsAsync(db, root.Actor, root.Partition, generation, token);
         var registry = facts.KeepsRegisteredJob ? facts.RecoverableJobRegistry : null;
         return restored.Select(row => row.Facts.Envelope).SequenceEqual(arrived.Select(row => row.Facts.Envelope)) &&

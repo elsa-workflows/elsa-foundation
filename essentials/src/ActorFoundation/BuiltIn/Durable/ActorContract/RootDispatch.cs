@@ -12,6 +12,7 @@ internal interface IRootDispatchHeaders
     bool RequiresCommittedTerminal { get; }
     bool KeepsParkInputs { get; }
     bool KeepsParkArrivals { get; }
+    bool KeepsPrivateParkInputs { get; }
     bool RecoversPark { get; }
     bool RefusesParkedOperators { get; }
     bool SettlesEndedMailbox { get; }
@@ -71,6 +72,7 @@ internal sealed partial class ActorAdapter
             : row is not { Status: Durable.InstanceStatus.Faulted, Retired: false, Suspended: false } ||
                 facts.Mark != message.Operator.RootParkMark ? "selection"
             : facts.Clearing is not null ? "clearing"
+            : roots?.KeepsPrivateParkInputs == true && !facts.FitsPage ? "page"
             : !CanRecoverRootWaits(row, facts) ? "plan" : !facts.FitsPage ? "page" : null;
         var revision = checked(row.Revision + 1);
         var next = reason is null ? row with
@@ -237,14 +239,38 @@ internal sealed partial class ActorAdapter
         try
         {
             var plan = actor.RestoreWaits(RootHeader(row), row.State);
-            if (plan is not { Timers.Count: 0, Subscriptions.Count: 0 }) return false;
+            if (plan.Subscriptions.Count != 0 || !CanRecoverTimers(row, facts, plan.Timers, plan.Jobs.Count, out var timerBytes))
+                return false;
             var registered = Durable.JobRegistry.Read(row.Jobs);
             return registered.Count == 0 ? plan.Jobs.Count == 0 :
                 registered is [var job] && plan.Jobs is [var recipe] && job.Key == recipe.Key &&
                 job.Generation >= 0 && job.Generation < (row.NextJobGeneration ?? 1) &&
-                Durable.InMemoryStore.FitsSingleParkJobRecipe(row, new(recipe.Key, recipe.Arguments, recipe.Deadline));
+                Durable.InMemoryStore.FitsSingleParkJobRecipe(row, new(recipe.Key, recipe.Arguments, recipe.Deadline), timerBytes);
         }
         catch (Exception) { return false; }
+    }
+
+    private bool CanRecoverTimers(Durable.InstanceRow row, Durable.FoundationRootParkFacts facts,
+        IReadOnlyList<Contract.TimerSpec> timers, int jobs, out long bytes)
+    {
+        bytes = 0;
+        if (timers.Count == 0) return true;
+        if (roots?.KeepsPrivateParkInputs != true || facts.RestorableTimers is null ||
+            timers.Count > Durable.InMemoryStore.MaxRestoreWaits - jobs) return false;
+
+        var saved = Durable.DurableKeyJson.Read<Durable.FoundationRootParkTimer[]>(facts.RestorableTimers)
+            .ToDictionary(timer => timer.Id, StringComparer.Ordinal);
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var timer in timers)
+        {
+            if (!names.Add(timer.Id) || !saved.TryGetValue(timer.Id, out var proof)) return false;
+            var envelope = Durable.FoundationSelfSend.Create(row.Id, row.Creation, timer.Id, timer.Kind, timer.Payload, timer.Due);
+            if (!Durable.FoundationMetadataLimits.FitsComposed(envelope) ||
+                proof.Envelope != Durable.FoundationRootParkTimer.Digest(envelope))
+                return false;
+            bytes += Durable.InMemoryStore.RestoreWaitAllowance + proof.Bytes;
+        }
+        return true;
     }
 
     private Durable.TurnOutcome? SettleRootDeletion(Durable.TurnInput input)

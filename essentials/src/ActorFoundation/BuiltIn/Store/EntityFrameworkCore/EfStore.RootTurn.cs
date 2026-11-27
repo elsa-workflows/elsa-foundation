@@ -72,7 +72,8 @@ public sealed partial class EfStore
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     DELETE FROM "Messages" WHERE "InboxScope" = {RootSelfScope} AND "Id" = ANY({Recalls})
                         AND "Target" = {Current.Actor.Id} AND "Sender" = {Current.Actor.Id} AND "Partition" = {home}
-                        AND "Kind" = {RootSelfWire} AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
+                        AND ("Kind" = {RootSelfWire} OR {db.UsesRootPrivateParkInputs} AND "Kind" = {RootSelfTimerWire})
+                        AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
                     """, cancellationToken);
             }
             if (SettledJobs is { Length: > 0 } && !await DeleteRootTimedRowsAsync(db, Current.Actor, SettledJobs, cancellationToken))
@@ -109,19 +110,22 @@ public sealed partial class EfStore
                 expectedEnvelopes, suspended, cancellationToken, parked, includePrivateInputs ? issue : null);
 
         var home = new InstanceRef(actor.Id).Partition;
-        var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
+        var source = issue is null ? "\"Messages\"" : PostgresPrivateInboxView;
+        var includePrivate = includePrivateInputs || db.UsesRootPrivateParkInputs && parked && !suspended;
         var operatorOnly = suspended ? """AND "Id" LIKE 'operator/%'""" : "";
         var parkArrivals = parked && db.UsesRootComposedParkRecovery ? """AND ("ReplyTo" IS NULL OR "Id" LIKE 'operator/%')""" : "";
         // The settled prefix follows the poll's order, which puts a pending released cohort first.
         var cohort = db.UsesRootParkRecovery && !(db.UsesRootComposedParkRecovery && (parked || suspended))
-            ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter})""" : "";
+            ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter(db)})""" : "";
         var rows = await db.Messages.FromSqlRaw($$"""
             SELECT * FROM {{source}} m WHERE "Target" = {0} AND "Partition" = {1}
                 AND ("InboxScope" = {2} OR {5} AND "InboxScope" = {3}) AND "EventMatch" IS NULL
                 AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}} {{operatorOnly}} {{parkArrivals}} {{cohort}}
             ORDER BY "Seq" LIMIT {4} FOR UPDATE OF m
-            """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count, includePrivateInputs).AsNoTracking().ToListAsync(cancellationToken);
+            """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count, includePrivate).AsNoTracking().ToListAsync(cancellationToken);
         if (!db.UsesRootOperatorProtocol && rows.Any(row => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))))
+            return false;
+        if (issue is null && rows.Any(row => row.InboxScope == RootSelfScope))
             return false;
         var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(m => m.TargetCreation != actor.Creation) ||

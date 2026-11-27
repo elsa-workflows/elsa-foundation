@@ -50,6 +50,8 @@ if (args is ["pg-root-terminal-envelope", "owned", var pgTerminalFence and ("che
 if (args is ["sqlite-root-ingress"]) return await SqliteRootIngressChecks.RunAsync();
 if (args is ["root-self-timed-union", var unionProvider and ("postgres" or "sqlite"), var unionFence and ("checked" or "in-batch")])
     return await RootSelfTimedUnionChecks.RunAsync(unionProvider == "postgres", unionFence == "in-batch");
+if (args is ["root-self-timed-park", var parkUnionProvider and ("postgres" or "sqlite"), var parkUnionFence and ("checked" or "in-batch")])
+    return await RootSelfTimedParkChecks.RunAsync(parkUnionProvider == "postgres", parkUnionFence == "in-batch");
 if (args is ["sqlite-root-timed-jobs", var sqliteJobFence and ("checked" or "in-batch")])
     return await SqliteHostLifetimeChecks.RunTimedJobsAsync(sqliteJobFence == "in-batch");
 if (args is ["sqlite-root-held-replies", var sqliteReplyFence and ("checked" or "in-batch")])

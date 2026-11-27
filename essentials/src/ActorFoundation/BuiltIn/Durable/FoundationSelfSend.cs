@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 
 namespace Kernel.Durable;
 
-internal sealed record FoundationSelfIssuer(Func<string, string> Handle, bool SupportsTimers)
+internal sealed record FoundationSelfIssuer(Func<string, string> Handle, bool SupportsTimers, bool DistinguishesTimers = false)
 {
     internal bool Allows(long? due) => due is null || SupportsTimers;
 }
