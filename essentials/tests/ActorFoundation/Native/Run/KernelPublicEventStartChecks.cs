@@ -295,16 +295,23 @@ internal static partial class KernelAuthoredEventChecks
             async Task CheckPublicationClockAsync()
             {
                 var clockScope = ContractScopes.Bind("public-event-clock");
+                var zeroScope = ContractScopes.Bind("public-event-zero");
+                const string outsideZero = "outside-zero";
+                const string authoredZero = "authored-zero";
+                var zeroOutsideKey = zeroScope.Tenant + "_" + outsideZero;
+                var zeroAuthoredKey = zeroScope.Tenant + "_" + authoredZero;
+                var qualifiedHeldKey = scope.Tenant + "_" + heldKey;
                 var retention = new Contract.AddOptions(KeepFor: TimeSpan.FromMinutes(1));
                 var anchor = await ReadClockAsync();
                 var sweptUntil = anchor + 100;
                 var retainedUntil = anchor + 200;
                 await ingress.SendAsync(clockScope, new Contract.Target.Event("swept"), "swept", "ignored", "first", retention, token);
                 await ingress.SendAsync(clockScope, new Contract.Target.Event("retained"), "retained", "ignored", "second", retention, token);
-                var withoutRetention = await ingress.SendAsync(clockScope, new Contract.Target.Event("receipt-only"), "receipt-only",
-                    Contract.Kinds.Suspend, null, cancellationToken: token);
-                Check(withoutRetention.Outcome == Contract.AdmissionOutcome.Accepted,
-                    "outside Event ignores operator message kinds even with no body");
+                await ingress.SetStartAsync(zeroScope, outsideZero, "initial", replacement, token);
+                var zero = await ingress.SendAsync(zeroScope, new Contract.Target.Event(outsideZero), outsideZero,
+                    Contract.Kinds.Suspend, "outside zero payload", cancellationToken: token);
+                Check(zero.Outcome == Contract.AdmissionOutcome.Accepted,
+                    "outside Event ignores operator message kinds");
 
                 await using var db = open();
                 await using var transaction = await db.Database.BeginTransactionAsync(token);
@@ -316,7 +323,7 @@ internal static partial class KernelAuthoredEventChecks
                         """).SingleAsync(token);
                     bind = await PostgresRootAdmission.PinAuthoredEventSourceAsync(db, checked((uint)marker), token);
                     await RootEventAdmission.LockPostgresKeysAsync(db,
-                        [Qualify("swept"), Qualify("retained"), Qualify("receipt-only"), scope.Tenant + "_" + key], token);
+                        [Qualify("swept"), Qualify("retained"), zeroOutsideKey, zeroAuthoredKey, qualifiedHeldKey, scope.Tenant + "_" + key], token);
                 }
 
                 var previous = await RootPublicEventPublications.ReadReplayAsync(db, scope.Tenant, scope.Tenant + "_" + key, "event\0id",
@@ -329,9 +336,39 @@ internal static partial class KernelAuthoredEventChecks
                 Check(olderPayload, "superseding a receipt leaves its independent retained payload intact");
                 var heldOnly = await db.Database.SqlQuery<bool>($"""
                     SELECT "KeepUntil" IS NULL AND "Payload" IS NULL AND "ReceiptUntil" > {anchor} AS "Value"
-                    FROM "FoundationPublicEventPublications" WHERE "Tenant" = {scope.Tenant} AND "Key" = {scope.Tenant + "_" + heldKey}
+                    FROM "FoundationPublicEventPublications" WHERE "Tenant" = {scope.Tenant} AND "Key" = {qualifiedHeldKey}
                     """).SingleAsync(token);
                 Check(heldOnly, "held KeepFor zero preserves the ordinary replay window and never retains Event material");
+
+                var zeroAt = await db.Database.SqlQuery<long?>($"""
+                    SELECT "KeepUntil" AS "Value" FROM "FoundationPublicEventPublications"
+                    WHERE "Tenant" = {zeroScope.Tenant} AND "Key" = {zeroOutsideKey}
+                    """).SingleAsync(token) ?? throw new InvalidOperationException("An ordinary zero-window Event has a keep deadline.");
+                await RootPublicEventStarts.SetAsync(db, zeroScope.Tenant, zeroAuthoredKey, "initial", replacement, zeroAt, bind, token);
+                await RootEventAdmission.PublishAuthoredAsync(db,
+                    [new EventRow(zeroAuthoredKey, "~authored-zero", "authored zero payload", 0) { FoundationTenant = zeroScope.Tenant }],
+                    zeroAt, bind, token);
+                var recorded = await db.Database.SqlQuery<bool>($"""
+                    SELECT count(*) = 2 AS "Value"
+                    FROM "FoundationPublicEventPublications" p JOIN "FoundationPublicEventLiveReceipts" r ON r."Occurrence" = p."Occurrence"
+                    WHERE p."Tenant" = {zeroScope.Tenant} AND p."KeepUntil" = {zeroAt}
+                        AND ((p."Key" = {zeroOutsideKey} AND p."Payload" = {DurableKeyJson.Write("outside zero payload")})
+                            OR (p."Key" = {zeroAuthoredKey} AND p."Payload" = {DurableKeyJson.Write("authored zero payload")}))
+                    """).SingleAsync(token);
+                Check(recorded, "outside and authored zero-window Events retain their exact deadlines, payloads and immediate match receipts");
+
+                await VerifyZeroCatchUpAsync(zeroOutsideKey, zeroAt - 1, "outside zero payload");
+                await VerifyZeroCatchUpAsync(zeroAuthoredKey, zeroAt, "authored zero payload");
+                // Exercise the held row at the same low horizon without the earlier fixture's swept events.
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "FoundationPublicEventHorizons" SET "Through" = 0 WHERE "Tenant" = {scope.Tenant}
+                    """, token);
+                await RootPublicEventStarts.SetAsync(db, scope.Tenant, qualifiedHeldKey, "after-held-zero", replacement, zeroAt - 1000, bind, token);
+                var heldExcluded = await db.Database.SqlQuery<bool>($"""
+                    SELECT "CatchThrough" = 0 AS "Value" FROM "FoundationPublicEventStarts"
+                    WHERE "Tenant" = {scope.Tenant} AND "Key" = {qualifiedHeldKey} AND "Wait" = 'after-held-zero'
+                    """).SingleAsync(token);
+                Check(heldExcluded, "a held zero-window Event remains receipt-only even on a clock backstep");
 
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     UPDATE "FoundationPublicEventPublications"
@@ -345,23 +382,41 @@ internal static partial class KernelAuthoredEventChecks
                     """).SingleAsync(token);
                 Check(await RootPublicEventPublications.CleanupAsync(db, new(true, clockScope.Tenant, Qualify("swept"), swept),
                     anchor + 500, bind, token), "the bounded sweep closes only the selected retained publication");
-                foreach (var candidate in new[] { "swept", "retained", "receipt-only" })
+                foreach (var candidate in new[] { "swept", "retained" })
                     await RootPublicEventStarts.SetAsync(db, clockScope.Tenant, Qualify(candidate), "after-backstep", replacement, retainedUntil, bind, token);
 
                 var keepsExactSelection = await db.Database.SqlQuery<bool>($"""
                     SELECT EXISTS (SELECT 1 FROM "FoundationPublicEventHorizons" WHERE "Tenant" = {clockScope.Tenant}
                             AND "Through" = {sweptUntil})
                         AND (SELECT count(*) FROM "FoundationPublicEventStarts" WHERE "Tenant" = {clockScope.Tenant}
-                            AND "Wait" = 'after-backstep' AND "RetainFrom" = {retainedUntil}) = 3
+                            AND "Wait" = 'after-backstep' AND "RetainFrom" = {retainedUntil}) = 2
                         AND EXISTS (SELECT 1 FROM "FoundationPublicEventStarts" WHERE "Tenant" = {clockScope.Tenant}
                             AND "Key" = {Qualify("retained")} AND "CatchThrough" > 0)
                         AND NOT EXISTS (SELECT 1 FROM "FoundationPublicEventStarts" WHERE "Tenant" = {clockScope.Tenant}
-                            AND "Key" IN ({Qualify("swept")}, {Qualify("receipt-only")}) AND "CatchThrough" <> 0) AS "Value"
+                            AND "Key" = {Qualify("swept")} AND "CatchThrough" <> 0) AS "Value"
                     """).SingleAsync(token);
                 Check(keepsExactSelection, "sweep advances only to the actual retention deadline, including equal eligible material after a backstep");
                 await transaction.RollbackAsync(token);
 
                 string Qualify(string candidate) => clockScope.Tenant + "_" + candidate;
+
+                async Task VerifyZeroCatchUpAsync(string qualified, long registeringAt, string payload)
+                {
+                    const string wait = "after-zero";
+                    await RootPublicEventStarts.SetAsync(db, zeroScope.Tenant, qualified, wait, replacement, registeringAt, bind, token);
+                    var registration = await db.Database.SqlQuery<string>($"""
+                        SELECT "Incarnation" AS "Value" FROM "FoundationPublicEventStarts"
+                        WHERE "Tenant" = {zeroScope.Tenant} AND "Key" = {qualified} AND "Wait" = {wait}
+                        """).SingleAsync(token);
+                    Check(await RootPublicEventStarts.CatchUpAsync(db, new(true, zeroScope.Tenant, qualified, wait, registration), bind, token),
+                        "an eligible zero-window Event has durable catch-up work");
+                    var matched = await db.Database.SqlQuery<bool>($"""
+                        SELECT count(*) = 1 AS "Value" FROM "FoundationPublicEventTargets"
+                        WHERE "Tenant" = {zeroScope.Tenant} AND "Key" = {qualified} AND "Registration" = {registration}
+                            AND "Payload" = {DurableKeyJson.Write(payload)} AND "Reference" IS NOT NULL
+                        """).SingleAsync(token);
+                    Check(matched, "a zero-window Event delivers its original payload once at equality or after a clock backstep");
+                }
             }
 
             async Task CheckReinstallationAsync()

@@ -91,7 +91,7 @@ internal static partial class RootPublicEventPublications
     internal static async Task RememberAuthoredAsync(KernelDb db, EventRow publication, string occurrence, long now, long until,
         Func<FormattableString, FormattableString>? bind, CancellationToken token) =>
         await InsertAsync(db, publication.FoundationTenant!, publication.Key, publication.Id, occurrence, Guid.NewGuid(), occurrence,
-            publication.Payload, now, receiveThrough: null, until > now ? until : null, sql => RootPublicEventStarts.Bind(sql, bind), token);
+            publication.Payload, now, receiveThrough: null, until, sql => RootPublicEventStarts.Bind(sql, bind), token);
 
     // The database clock may move backward after cleanup. New registrations take a stable tenant watermark,
     // while a previously covered publication retains its registration's original threshold.
