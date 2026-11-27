@@ -22,6 +22,20 @@ public sealed class KernelRuns
     /// <summary>The tenant the host's foundation binds.</summary>
     public BoundScope Tenant { get; }
 
+    /// <summary>Reads the committed workflow run with this exact reference. A non-workflow actor still occupies the reference.</summary>
+    public async ValueTask<(bool Missing, (ActorView View, Kernel.WorkflowActor.WorkflowRunHeader Run)? Run)> GetAsync(ActorRef actor,
+        CancellationToken cancellationToken = default)
+    {
+        var reads = await _reads(cancellationToken);
+        var view = await reads.GetAsync(Tenant, actor, cancellationToken);
+        if (view is null)
+            return (true, null);
+        if (view.Header.Ref != actor || view.Header.Tenant != Tenant.Tenant ||
+            Kernel.WorkflowActor.WorkflowActor.DescribeRun(view.Header) is not { } run)
+            return (false, null);
+        return (false, (view, run));
+    }
+
     /// <summary>
     /// The workflow runs of the host's tenant, one page after another until the last, filtered by definition when one is
     /// given. Each is the actor's view and what its header says about the run (<see cref="Kernel.WorkflowActor.WorkflowActor.DescribeRun"/>).

@@ -43,3 +43,22 @@ rollback floor (K12).
 An engine advances its definitions revision when its installed functions, triggers, or stored framing change.
 The shared format advances when the supported capabilities grow. Code refers to the current shared format through
 `StoreFormat.RootShipped`.
+
+## PostgreSQL operations
+
+Install into a dedicated database and keep the owner, request ingress and reads on the same installed format. Run setup
+before the owners start. Keep PostgreSQL's durability settings, including `fsync`, `synchronous_commit` and
+`full_page_writes`, enabled. The installer leaves server and table tuning to the deployment.
+
+After an owner exits, its open transaction can still hold the partition row after the lease expires. Check
+`client_connection_check_interval` on the actual PostgreSQL owner session. The prototype's TLS fixture observed an
+enabled connection check abort a blocked query after PostgreSQL detected the lost socket and release the row lock.
+Measure network-partition recovery separately with the deployment's TCP keepalive settings.
+[Owner-exit evidence](https://github.com/elsa-workflows/elsa-foundation/blob/549b116bbc44a5e3e8123d22953d7f810624fdc6/prototypes/kernel-model/ENGINES.md#postgresql-process-exit-while-holding-a-fence)
+
+Start with default table settings. Under representative sustained and burst load, compare inbox backlog with WAL per
+commit, checkpoint activity, dead tuples and HOT-update share. Watch the age of open transactions and replication slot
+lag when vacuum falls behind. Tune the vacuum cadence or fill factor on a staging copy and measure the change in retained
+size, tail latency and recovery time before carrying it into production. The earlier fill-factor measurement used a
+prototype schema and short runs.
+[Measurement method and tuning trade-offs](https://github.com/elsa-workflows/elsa-foundation/blob/549b116bbc44a5e3e8123d22953d7f810624fdc6/prototypes/kernel-model/POSTGRES.md#tuning-guidance)

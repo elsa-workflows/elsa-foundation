@@ -10,6 +10,10 @@ internal static class KernelRunStates
     /// <summary>The start of a run whose start is unknown.</summary>
     internal static readonly DateTimeOffset UnknownStart = DateTimeOffset.UnixEpoch;
 
+    internal static bool CanReadTenant(PersistenceAccessContext? access, BoundScope tenant) =>
+        access is { AccessPolicy: PersistenceAccessPolicy.Ordinary, AcrossScopes: false, Scope.Value: { } scope } &&
+        string.Equals(scope, tenant.Tenant, StringComparison.Ordinal);
+
     /// <summary>
     /// The execution state of a kernel run: its actor reference as the execution id; the executable it pins, from the
     /// executable store when it holds the artifact (an artifact identity of the run's workflow and definition otherwise);
