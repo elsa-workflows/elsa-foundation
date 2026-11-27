@@ -94,8 +94,7 @@ public sealed class KernelPublishedExecuteTests
         builder.Services.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal)
             { "KernelExecuteFixture" });
         builder.Services.AddAuthorization();
-        var policy = new FixturePolicy();
-        builder.Services.AddSingleton<IWorkflowExecutableStartPolicy>(policy);
+        builder.Services.AddSingleton<IWorkflowExecutableStartPolicy, FixturePolicy>();
         builder.Services.AddSingleton<IWellKnownTypeRegistry, FixtureTypes>();
         builder.Services.AddWorkflowRuntime();
         builder.Services.AddRuntimeEntityFrameworkCore(new()
@@ -103,6 +102,11 @@ public sealed class KernelPublishedExecuteTests
             Provider = provider, ConnectionString = runtime,
             RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
         });
+        var pinBoundary = new PinBoundary();
+        var pinDescriptor = builder.Services.Last(item => item.ServiceType == typeof(IRuntimeKernelExecutablePinStore));
+        builder.Services.Remove(pinDescriptor);
+        builder.Services.AddScoped<IRuntimeKernelExecutablePinStore>(services => new FixturePins(
+            (IRuntimeKernelExecutablePinStore)ActivatorUtilities.CreateInstance(services, pinDescriptor.ImplementationType!), pinBoundary));
         var api = new WorkflowsRuntimeApiFeature();
         api.ConfigureServices(builder.Services);
         new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(builder.Services, KernelShellStorage.CreatePreparedStartsQualification(provider,
@@ -141,15 +145,18 @@ public sealed class KernelPublishedExecuteTests
             using var denied = await ExecuteAsync(alias.Identity.ArtifactId, new { sourceReferenceId = target }, subject: "deny");
             Assert.True(denied.StatusCode == HttpStatusCode.InternalServerError,
                 $"Expected Execute policy failure, got {denied.StatusCode}: {await denied.Content.ReadAsStringAsync(token)}");
-            policy.BeforeAdmission = async cancellationToken =>
+            pinBoundary.BeforeAdmission = async (source, cancellationToken) =>
             {
+                if (source.DefinitionId != sibling.Identity.DefinitionId) return;
                 await using var retracting = await scopes.CreateAsyncScopeAsync(Scope);
                 var coordinator = retracting.ServiceProvider.GetRequiredService<IWorkflowActivationCoordinator>();
                 Assert.True((await coordinator.DeactivateAsync(new(sibling, "default", WorkflowActivationSource.Publishing, 1), cancellationToken)).Succeeded);
+                pinBoundary.Retracted = true;
             };
             using var stale = await ExecuteAsync(sibling.Identity.ArtifactId,
                 new { sourceReferenceId = WorkflowActivationReferenceIdentity.Create("publish-native-sibling") }, subject: "retract");
             Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+            Assert.True(pinBoundary.Retracted);
             var bound = EmbeddedTenant.Bind(Scope.Value);
             var reads = await shell.ReadAsync(token);
             Assert.Empty((await reads.ListAsync(bound, new(), cancellationToken: token)).Items);
@@ -194,6 +201,9 @@ public sealed class KernelPublishedExecuteTests
                 var selection = Assert.IsType<KernelExecutableSelection>(KernelExecutableSelection.Read(view.Header.Type, view.Header.TypeData));
                 Assert.Equal(source.Identity.DefinitionId, selection.Definition);
                 Assert.Equal(material, selection.Executable);
+                var run = Kernel.WorkflowActor.WorkflowActor.DescribeRun(view.Header);
+                Assert.Equal("accepted", run?.PublishedStart?.SubjectId);
+                Assert.Equal(receipt.SourceReferenceId, run?.PublishedStart?.SourceReferenceId);
                 var output = await Assert.IsAssignableFrom<Contract.IActorTerminalOutputReads>(reads).ReadTerminalOutputAsync(bound, actor,
                     view.Header.EndedAt!.Value, includeValues: true, cancellationToken: token);
                 using var document = JsonDocument.Parse(output!.Values!);
@@ -240,17 +250,41 @@ public sealed class KernelPublishedExecuteTests
 
     private sealed class FixturePolicy : IWorkflowExecutableStartPolicy
     {
-        public Func<CancellationToken, ValueTask>? BeforeAdmission { get; set; }
-
-        public async ValueTask<WorkflowExecutableStartDecision> EvaluateAsync(WorkflowExecutableStartPolicyContext context, CancellationToken cancellationToken)
+        public ValueTask<WorkflowExecutableStartDecision> EvaluateAsync(WorkflowExecutableStartPolicyContext context, CancellationToken cancellationToken)
         {
             Assert.Equal(WorkflowRunKind.PublishedRun, context.RunKind);
             Assert.Equal(WorkflowExecutableStartAuthorityKind.LiveReference, context.AuthorityKind);
             Assert.Equal(Scope.Value, context.Partition?.Value);
             var subject = context.Authority.Metadata["elsa.identity.subject-id"];
-            if (subject == "retract") await BeforeAdmission!(cancellationToken);
-            return subject == "deny" ? WorkflowExecutableStartDecision.Deny("denied", "Denied by fixture") : WorkflowExecutableStartDecision.Allow();
+            return ValueTask.FromResult(subject == "deny" ? WorkflowExecutableStartDecision.Deny("denied", "Denied by fixture") :
+                WorkflowExecutableStartDecision.Allow());
         }
+    }
+
+    private sealed class PinBoundary
+    {
+        public Func<WorkflowExecutableSourceReference, CancellationToken, ValueTask>? BeforeAdmission { get; set; }
+        public bool Retracted { get; set; }
+    }
+
+    private sealed class FixturePins(IRuntimeKernelExecutablePinStore inner, PinBoundary boundary) : IRuntimeKernelExecutablePinStore
+    {
+        public async ValueTask<bool> TryPinPublishedAsync(RuntimeKernelExecutablePin pin, WorkflowActivationSlot slot,
+            WorkflowExecutableSourceReference source, CancellationToken token)
+        {
+            if (boundary.BeforeAdmission is { } before) await before(source, token);
+            return await inner.TryPinPublishedAsync(pin, slot, source, token);
+        }
+
+        public ValueTask<bool> TryPinAsync(IReadOnlyCollection<RuntimeKernelExecutablePin> pins, CancellationToken token) => inner.TryPinAsync(pins, token);
+        public ValueTask<string?> ReadOpenTailAsync(PersistenceScope scope, CancellationToken token) => inner.ReadOpenTailAsync(scope, token);
+        public ValueTask<RuntimeKernelExecutablePinPage> ListOpenAsync(PersistenceScope scope, string? after, string through, int limit,
+            CancellationToken token) => inner.ListOpenAsync(scope, after, through, limit, token);
+        public ValueTask<bool> TryReleaseAsync(RuntimeKernelExecutablePin pin,
+            Func<RuntimeKernelExecutablePin, CancellationToken, ValueTask<RuntimeKernelExecutablePinProof>> confirmAsync,
+            CancellationToken token) => inner.TryReleaseAsync(pin, confirmAsync, token);
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken token) =>
+            inner.ListPinnedExecutableArtifactIdsAsync(token);
     }
 
     private sealed class FixtureTypes : IWellKnownTypeRegistry

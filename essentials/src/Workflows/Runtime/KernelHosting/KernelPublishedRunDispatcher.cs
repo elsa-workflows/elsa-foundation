@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -51,16 +52,26 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
         var input = new JsonObject();
         foreach (var (name, value) in inputs) input.Add(name, JsonNode.Parse(value.GetRawText()));
         var mode = services.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(executable);
-        var spec = WorkflowActor.Start(NativeExecutionModel.Start(published.Workflow, mode.ToString(), input));
 
         // Recheck after policy and input work, using the physical publication ledger as well as the served slot.
         var selected = await sources.ResolvePublishedAsync(request.ArtifactId, request.SourceSelection, persistence, cancellationToken);
         if (!WorkflowExecutableSourceReferenceComparer.SameSnapshot(source, selected) || await ReadServedAsync(selected) != published)
             throw Rejected();
 
+        var subjectId = request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-kind") == "persisted-user"
+            ? request.Authority.Metadata.GetValueOrDefault("elsa.identity.subject-id") : null;
+        var publication = new WorkflowPublishedStart(source.SourceReferenceId, source.SourceKind, source.SourceId, source.SourceVersion,
+            source.DefinitionVersionId, source.ArtifactVersion, published.ActivationId, published.SlotId, published.SlotName,
+            published.Revision, SourceDigest(source), subjectId);
+        var spec = WorkflowActor.Start(NativeExecutionModel.Start(published.Workflow, mode.ToString(), input), publication);
+
         var operationId = Guid.NewGuid().ToString("N");
+        var provenance = WorkflowExecutableSourceProvenance.From(source);
+        if (mode == PersistenceMode.Ephemeral)
+            return Result(operationId, executable.Identity, provenance, new(AdmissionOutcome.Refused), clock.GetUtcNow(),
+                "EphemeralPublishedStartUnavailable");
         var receipt = await start(operationId, spec, cancellationToken);
-        return Result(operationId, executable.Identity, WorkflowExecutableSourceProvenance.From(source), receipt, clock.GetUtcNow());
+        return Result(operationId, executable.Identity, provenance, receipt, clock.GetUtcNow());
 
         async ValueTask<KernelServedSlot> ReadServedAsync(WorkflowExecutableSourceReference reference)
         {
@@ -83,8 +94,11 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
             WorkflowExecutableReferenceRejectionReason.NoLiveReference);
     }
 
+    internal static string SourceDigest(WorkflowExecutableSourceReference source) =>
+        Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(source)));
+
     private static WorkflowExecutionStartDispatchResult Result(string operationId, WorkflowExecutableIdentity material,
-        WorkflowExecutableSourceProvenance source, Admission admission, DateTimeOffset recordedAt)
+        WorkflowExecutableSourceProvenance source, Admission admission, DateTimeOffset recordedAt, string? refusal = null)
     {
         var pressure = admission is { Outcome: AdmissionOutcome.Refused,
             Reason: RefusalReason.RateLimited or RefusalReason.NodeBusy or RefusalReason.InboxFull };
@@ -96,7 +110,7 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
                 WorkflowExecutionCommandDispatchStatus.Rejected, operationId),
             _ => throw new InvalidOperationException("The Actor Foundation returned an invalid start receipt.")
         };
-        var reason = admission.Outcome == AdmissionOutcome.Refused ? admission.Reason?.ToString() ?? "StartRefused" : null;
+        var reason = admission.Outcome == AdmissionOutcome.Refused ? refusal ?? admission.Reason?.ToString() ?? "StartRefused" : null;
         var metadata = pressure ? new Dictionary<string, string>
         {
             [RuntimeMetadataKeys.DispatchShed] = "true",
