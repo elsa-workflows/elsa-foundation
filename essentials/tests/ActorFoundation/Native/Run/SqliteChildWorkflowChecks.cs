@@ -24,6 +24,7 @@ internal static class SqliteChildWorkflowChecks
         KernelDb Open() => KernelDb.ForSqliteRootRuntime(options, definitions, StoreFormat.SqliteRootChildrenQualification);
         var store = new EfStore(Open, postgres: false, fenceInBatch: fenceInBatch);
         var tenant = EmbeddedTenant.Bind("workflow-children");
+        const string creatorFaultChild = "creator-fault-child";
         var aliases = new WorkflowRegistry()
             .Add(Wf.Workflow("child", Wf.Sequence("child-sequence",
                 Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("gate"), Wf.SetOutput("return", "child-value", "from-child"))))
@@ -33,13 +34,15 @@ internal static class SqliteChildWorkflowChecks
             .Add(Wf.Workflow("cancel-parent", Wf.Parallel("race", 1,
                 Wf.Dispatch("dispatch", "child", wait: true), Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("win"))))
             .Add(Wf.Workflow("nested-parent", Wf.Dispatch("dispatch", "parent", wait: true)))
+            .Add(Wf.Workflow("creator-fault-parent", Wf.Dispatch("dispatch", creatorFaultChild, wait: true)))
+            .Add(Wf.Workflow(creatorFaultChild, Wf.SetOutput("finish", "child-value", "unused")))
             .Add(Wf.Workflow("job-parent", Wf.Dispatch("dispatch", "job-child", wait: true)))
             .Add(Wf.Workflow("job-child", Wf.Http("fetch", "https://partner.example/stuck", timeout: TimeSpan.FromMinutes(2))))
             .Add(Wf.Workflow("bulk-parent", Wf.Node<PostgresChildWorkflowChecks.ReleaseChild>("wait")));
         var partner = new PostgresChildWorkflowChecks.BlockingPartner();
         using var http = new HttpClient(partner);
         var model = new Fixture(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases,
-            new NativeExecutionOptions { Http = new NativeHttpOptions { Client = http } })]));
+            new NativeExecutionOptions { Http = new NativeHttpOptions { Client = http } })]), creatorFaultChild);
         var loop = new LoopOptions
         {
             BalanceEvery = TimeSpan.FromMilliseconds(100),
@@ -154,6 +157,21 @@ internal static class SqliteChildWorkflowChecks
             await partner.Cancelled.Task.WaitAsync(token);
             Check(!await db.Messages.AnyAsync(row => row.Target == jobPark.Actor.Id && row.InboxScope == EfStore.RootTimedJobScope, token),
                 "selected Terminate closes the live job footprint and cancels the entered callback");
+
+            var earlyParent = await StartAsync("creator-fault-parent", "creator-fault-parent");
+            var earlyRegistered = await WaitAsync(earlyParent, row => row.Children is not null);
+            var earlyChildRef = await ReferenceAsync(ChildRegistry.Read(earlyRegistered.Children).Single());
+            var earlyChild = await WaitAsync(earlyChildRef, row => row is { Revision: 1, ParkAt: not null });
+            var earlyNotice = await WaitAsync(earlyParent, row => row.Revision == 2);
+            Check(earlyChild.Parent == earlyRegistered.Actor.Id && earlyNotice is { Status: InstanceStatus.Running, Children: not null } &&
+                await db.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM "Messages"
+                        WHERE "Target" = {earlyChild.Actor.Id} AND "InboxScope" = 0 AND "Done"
+                            AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}) AS "Value"
+                    """).SingleAsync(token), "a fault in the child's creator turn retains its creator and commits a non-final parent notice");
+            await SendAsync(earlyParent, "terminate-faulted-creator", Fixture.TerminateChild, earlyChildRef.Id);
+            await WaitAsync(earlyChildRef, row => row is { Status: InstanceStatus.Cancelled, ParkAt: null });
+            await WaitAsync(earlyParent, row => row.Children is null);
 
             var bulkParent = await StartAsync("bulk-parent", "bulk-parent");
             await WaitAsync(bulkParent, row => row.Status == InstanceStatus.Running);

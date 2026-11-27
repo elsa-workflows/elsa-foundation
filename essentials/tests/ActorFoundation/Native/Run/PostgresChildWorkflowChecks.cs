@@ -327,7 +327,7 @@ internal static class PostgresChildWorkflowChecks
         return 0;
     }
 
-    internal sealed class ChildFixtureActor(Contract.IActorType workflow) : Contract.IActorType
+    internal sealed class ChildFixtureActor(Contract.IActorType workflow, string? parkOnStart = null) : Contract.IActorType
     {
         internal const string ArmFault = "arm-child-fault";
         internal const string Fault = "fault-child";
@@ -342,6 +342,9 @@ internal static class PostgresChildWorkflowChecks
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token) => workflow.ExecuteJobAsync(job, token);
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken token)
         {
+            if (parkOnStart is not null && turn.StartSettings is not null &&
+                WorkflowActor.WorkflowActor.DescribeRun(turn.Header)?.Workflow == parkOnStart)
+                throw new InvalidOperationException(Fault);
             if (turn.Inbox.Any(message => message.Kind == Fault)) throw new InvalidOperationException(Fault);
             if (turn.Inbox.Any(message => message.Kind == Finish))
             {
