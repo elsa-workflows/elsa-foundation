@@ -100,7 +100,9 @@ public sealed partial class EfStore
             PageLength(arrived.Select(row => row.Facts)) != arrived.Length ||
             arrived.Any(row => row.Scope != InboxKey.FoundationOccurrenceScope &&
                 (!db.UsesRootPrivateParkInputs || row.Scope != RootSelfScope)) ||
-            KeptSetDigest(kept.Select(row => row.Facts)) != facts.KeptDigest)) return false;
+            KeptSetDigest(kept.Select(row => row.Facts)) != facts.KeptDigest ||
+            facts.InlineRetry != await ReadInlineRetryAsync(db, root.Actor, root.Partition, kept.Select(row => row.Facts).ToArray(), turn.SelfIssuer, token)))
+            return false;
         if (!await BindRootTimerRearmsAsync(db, root, turn.JournalRevision, turn.SelfIssuer, turn.Rearms, facts.RestorableTimers, token))
             return false;
         var envelope = command with { Operator = command.Operator with { RootParkFacts = null } };

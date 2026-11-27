@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;
@@ -176,8 +177,10 @@ internal static class InlineRootPromotionChecks
                 var parkWorkflow = new Workflow("inline-park", Wf.Sequence("run", Wf.WriteLine("once", "before inline Park"), Wf.Delay("failed-timer", 90),
                     Wf.Node<FailAfterLocalTimer>("trigger-failure"), Wf.WriteLine("after", "after inline Park")))
                     { ExecutableSelection = "private-125-park" };
+                var initialParkWorkflow = new Workflow("inline-park-first", Wf.Sequence("run", Wf.Node<FailInitialTurn>("first-failure"),
+                    Wf.SetOutput("result", "input", Binding.Var("input", "marker")))) { ExecutableSelection = "private-125-initial-park" };
                 var registry = new WorkflowRegistry().Add(workflow).Add(shortWait).Add(pure).Add(longTimer).Add(earlyTimers).Add(timedJob).Add(terminal)
-                    .Add(parent).Add(selectedChild).Add(parkWorkflow);
+                    .Add(parent).Add(selectedChild).Add(parkWorkflow).Add(initialParkWorkflow);
                 var model = new NativeExecutionModel(registry, new NativeExecutionOptions { UseStructuralJournal = true });
                 var actor = new WorkflowActorType([model]);
                 var spec = WorkflowActorType.Start(NativeExecutionModel.Start(workflow, Modes.Ephemeral));
@@ -361,6 +364,13 @@ internal static class InlineRootPromotionChecks
                         "definitive host refusal prevents the parent checkpoint and child birth together");
 
                     var parkedRun = await QualifyParkAsync();
+                    var initialPark = Queue("park-before-first-checkpoint", initialParkWorkflow, values: new() { ["marker"] = "original initial input" });
+                    firstRevisions.Add(initialPark.Reference.Id, 1);
+                    await WaitForAsync(initialPark.Outcome);
+                    Check(await initialPark.Outcome == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Faulted) &&
+                        await physical.ReadFirstRootAsync(scope.Tenant, initialPark.Reference.Id, token) is
+                            { Status: InstanceStatus.Faulted, Revision: 1, ParkAt: > 0, State: null, TerminalAt: null } && FailInitialTurn.Entries == 1,
+                        "a first-turn fault commits one null-state Park under the protected material pin");
                     var early = await QualifyEarlierTimerAsync();
                     var parentRun = QueueExpected("accepted-child", parent, 2);
                     await WaitForAsync(parentRun.Outcome);
@@ -374,7 +384,7 @@ internal static class InlineRootPromotionChecks
 
                     var cold = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
                     var coldModel = new NativeExecutionModel(new WorkflowRegistry().Add(workflow).Add(longTimer).Add(earlyTimers)
-                        .Add(parent).Add(selectedChild).Add(parkWorkflow),
+                        .Add(parent).Add(selectedChild).Add(parkWorkflow).Add(initialParkWorkflow),
                         new NativeExecutionOptions { UseStructuralJournal = true });
                     var coldActor = new WorkflowActorType([coldModel]);
                     await cold.EnableRootSelfSendsAsync(token);
@@ -427,6 +437,7 @@ internal static class InlineRootPromotionChecks
                         System.Text.Encoding.UTF8.GetString(childOutput.Values).Contains("selected inline child", StringComparison.Ordinal),
                         "a fresh owner resolves the exact selected child and resumes the parent without replaying its creator");
                     await RecoverParkAsync(coldOwner, cold, parkedRun);
+                    await RecoverInitialParkAsync(coldOwner, cold, initialPark.Reference);
                     await coldOwner.ReleaseAsync(token);
 
                     var shortLease = TimeSpan.FromMilliseconds(1_200);
@@ -447,8 +458,8 @@ internal static class InlineRootPromotionChecks
                 }
                 finally { WriteLine.Out = originalTrace; }
 
-                (Contract.ActorRef Reference, Task<InlineRootResult> Outcome) Queue(string operation, Workflow selected, Worker? target = null) =>
-                    physical.QueueInlineRoot(target ?? owner, operation, WorkflowActorType.Start(NativeExecutionModel.Start(selected, Modes.Ephemeral)),
+                (Contract.ActorRef Reference, Task<InlineRootResult> Outcome) Queue(string operation, Workflow selected, Worker? target = null, JsonObject? values = null) =>
+                    physical.QueueInlineRoot(target ?? owner, operation, WorkflowActorType.Start(NativeExecutionModel.Start(selected, Modes.Ephemeral, values)),
                         model.CaptureInlineMaterial(selected)) ?? throw new InvalidOperationException("Could not queue an inline workflow.");
 
                 (Contract.ActorRef Reference, Task<InlineRootResult> Outcome) QueueExpected(string operation, Workflow selected, long revision)
@@ -528,21 +539,8 @@ internal static class InlineRootPromotionChecks
 
                 async Task RecoverParkAsync(Worker successor, EfStore backend, Contract.ActorRef parked)
                 {
-                    var (projected, _) = await backend.ReadRootActorAsync(scope.Tenant, parked.Id, token) ??
-                        throw new InvalidOperationException("The committed Park is missing.");
-                    var window = TimeSpan.FromHours(1);
-                    var pg = postgres ? new PostgresRootAdmission(Open, window) : null;
-                    await using var db = Open();
-                    var cursor = pg is not null ? await pg.OpenJournalCursorAsync(token) : await SqliteRootAdmission.ReadSelectionCursorAsync(db, token);
-                    var selection = PostgresRootSelection.SealPark(cursor, scope.Tenant, parked.Id, projected.ParkRevision!.Value, projected.ParkAt!.Value);
                     FailAfterLocalTimer.Allow = true;
-                    var admitted = pg is not null
-                        ? await pg.AdmitRootOperatorAsync(scope.Tenant, parked.Id, "recover-inline-park", Kinds.Recover, null, null, token, selection) is not null
-                        : (await new SqliteRootAdmission(Open, window, sqliteDefinitions).OperateAsync(scope.Tenant, parked, "recover-inline-park",
-                            Kinds.Recover, selection, null, null, token)).Outcome == Contract.AdmissionOutcome.Accepted;
-                    Check(admitted, "the cold store accepts Recover for the exact Park selection");
-                    var physicalActor = await backend.ReadFirstRootAsync(scope.Tenant, parked.Id, token);
-                    await successor.WokenAsync(new InstanceRef(physicalActor!.Actor.Id), token);
+                    await AdmitRecoveryAsync(successor, backend, parked, "recover-inline-park");
                     EfStore.RootImage? current;
                     do
                     {
@@ -554,6 +552,77 @@ internal static class InlineRootPromotionChecks
                         trace.ToString().Split("before inline Park", StringSplitOptions.None).Length == 2 &&
                         trace.ToString().Split("after inline Park", StringSplitOptions.None).Length == 2,
                         "cold Recover retries the one failed timer and never replays the earlier Native work");
+                }
+
+                async Task RecoverInitialParkAsync(Worker successor, EfStore backend, Contract.ActorRef parked)
+                {
+                    var initial = await backend.ReadFirstRootAsync(scope.Tenant, parked.Id, token) ??
+                        throw new InvalidOperationException("The initial Park is missing.");
+                    var key = FoundationInlineRetry.Key(backend.RootSelfIssuer!, initial.Actor.Id);
+                    await using var db = Open();
+                    var content = await db.Messages.AsNoTracking().SingleAsync(row => row.Target == initial.Actor.Id &&
+                        row.InboxScope == EfStore.RootSelfScope && row.Id == key.Id, token);
+                    var wrong = content.Payload!.Replace("original initial input", "different initial input", StringComparison.Ordinal);
+                    Check(wrong != content.Payload && await ChangeRetryAsync(content.Payload, wrong) == 1,
+                        "the fixture changes only the retained retry body behind its original identity");
+                    await AdmitRecoveryAsync(successor, backend, parked, "recover-initial-wrong-body");
+                    EfStore.RootImage? current;
+                    do
+                    {
+                        await successor.RunAsync(token);
+                        await Task.Delay(5, token);
+                        current = await backend.ReadFirstRootAsync(scope.Tenant, parked.Id, token);
+                    } while (current?.Revision < 2);
+                    Check(current is { Revision: 2, Status: InstanceStatus.Faulted, ParkAt: > 0, State: null } && FailInitialTurn.Entries == 1 &&
+                        await backend.ReadRootActorAsync(scope.Tenant, parked.Id, token) is { Item.ParkRevision: 1 } &&
+                        await ChangeRetryAsync(wrong, content.Payload) == 1,
+                        "the changed initial body refuses Recover without entering the model or changing its Park mark");
+
+                    await AdmitRecoveryAsync(successor, backend, parked, "recover-initial-still-failing");
+                    do
+                    {
+                        await successor.RunAsync(token);
+                        await Task.Delay(5, token);
+                        current = await backend.ReadFirstRootAsync(scope.Tenant, parked.Id, token);
+                    } while (current is not { Status: InstanceStatus.Faulted, Revision: >= 4 });
+                    Check(current is { Revision: 4, ParkAt: > 0, State: null } && FailInitialTurn.Entries == 2,
+                        "a failed explicit retry opens a new exact Park and keeps the initial input recoverable");
+
+                    FailInitialTurn.Allow = true;
+                    await AdmitRecoveryAsync(successor, backend, parked, "recover-initial-ready");
+                    do
+                    {
+                        await successor.RunAsync(token);
+                        await Task.Delay(5, token);
+                        current = await backend.ReadFirstRootAsync(scope.Tenant, parked.Id, token);
+                    } while (current?.Status != InstanceStatus.Finished);
+                    Check(current is { Revision: 6, ParkAt: null, TerminalAt: { } ended } && FailInitialTurn.Entries == 3 &&
+                        await backend.ReadRootTerminalOutputAsync(scope.Tenant, parked.Id, ended, true, token) is { Values: not null } output &&
+                        System.Text.Encoding.UTF8.GetString(output.Values).Contains("original initial input", StringComparison.Ordinal),
+                        "cold Recover re-enters the original uncommitted start with the exact input and same actor identity");
+
+                    Task<int> ChangeRetryAsync(string? expected, string? replacement) => db.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "Messages" SET "Payload" = {replacement} WHERE "Target" = {initial.Actor.Id}
+                            AND "InboxScope" = {EfStore.RootSelfScope} AND "Id" = {key.Id} AND "Payload" = {expected}
+                        """, token);
+                }
+
+                async Task AdmitRecoveryAsync(Worker successor, EfStore backend, Contract.ActorRef parked, string operation)
+                {
+                    var (projected, _) = await backend.ReadRootActorAsync(scope.Tenant, parked.Id, token) ??
+                        throw new InvalidOperationException("The committed Park is missing.");
+                    var window = TimeSpan.FromHours(1);
+                    var pg = postgres ? new PostgresRootAdmission(Open, window) : null;
+                    await using var db = Open();
+                    var cursor = pg is not null ? await pg.OpenJournalCursorAsync(token) : await SqliteRootAdmission.ReadSelectionCursorAsync(db, token);
+                    var selection = PostgresRootSelection.SealPark(cursor, scope.Tenant, parked.Id, projected.ParkRevision!.Value, projected.ParkAt!.Value);
+                    var admitted = pg is not null
+                        ? await pg.AdmitRootOperatorAsync(scope.Tenant, parked.Id, operation, Kinds.Recover, null, null, token, selection) is not null
+                        : (await new SqliteRootAdmission(Open, window, sqliteDefinitions).OperateAsync(scope.Tenant, parked, operation,
+                            Kinds.Recover, selection, null, null, token)).Outcome == Contract.AdmissionOutcome.Accepted;
+                    Check(admitted, "the cold store accepts Recover for the exact Park selection");
+                    var physicalActor = await backend.ReadFirstRootAsync(scope.Tenant, parked.Id, token);
+                    await successor.WokenAsync(new InstanceRef(physicalActor!.Actor.Id), token);
                 }
 
                 async Task WaitForFinishAsync(Worker selected, EfStore backend, string reference)
@@ -693,6 +762,22 @@ internal static class InlineRootPromotionChecks
         {
             Interlocked.Increment(ref Entries);
             if (!Allow) throw new InvalidOperationException("The Native timer continuation could not execute.");
+            context.Complete();
+        }
+
+        protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
+            throw new InvalidOperationException("This activity does not start any children.");
+    }
+
+    public sealed class FailInitialTurn : CompositeActivity
+    {
+        internal static bool Allow;
+        internal static int Entries;
+
+        protected override void Execute(CompositeContext context)
+        {
+            Interlocked.Increment(ref Entries);
+            if (!Allow) throw new InvalidOperationException("The Native first turn could not execute.");
             context.Complete();
         }
 

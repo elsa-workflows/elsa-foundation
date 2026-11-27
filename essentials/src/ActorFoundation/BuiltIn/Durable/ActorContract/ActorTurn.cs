@@ -353,6 +353,9 @@ internal sealed partial class ActorAdapter
 
         private Contract.Message Project(Durable.Message message)
         {
+            if (_roots?.RecoversInlineInitialRoots == true && _issueSelf is { } issuer &&
+                Durable.FoundationInlineRetry.Matches(issuer, _row, message))
+                return new(message.Id, Contract.Kinds.Start, message.Payload);
             var sender = message.Sender == _row.Id && message.SenderCreation == _row.Creation ? Header.Ref
                 : message.Sender is { } source && SenderReference(source, message.SenderCreation) is { } reference
                     ? new Contract.ActorRef(reference) : (Contract.ActorRef?)null;

@@ -92,6 +92,7 @@ internal sealed record FoundationRootParkTimer(string Id, long Sequence, ParkKee
 
 internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arrived, int Consumed, bool FitsPage, string KeptDigest)
 {
+    internal Message? InlineRetry { get; init; }
     internal string? RecoverableJobRegistry { get; init; }
     internal bool KeepsRegisteredJob { get; init; }
     internal string? RestorableTimers { get; init; }

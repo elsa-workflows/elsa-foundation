@@ -12,6 +12,7 @@ internal interface IRootDispatchHeaders
     Func<Durable.StartSpec, object, bool>? ValidateInlineMaterial => null;
     object? InlineIssuer => null;
     bool SupportsInlineStarts => ValidateInlineMaterial is not null;
+    bool RecoversInlineInitialRoots => false;
     bool SupportsChildren => false;
     Func<string, string>? ChildMessageHandle => null;
     string? ChildReference(string tenant, Durable.CreationAddress address) => null;
@@ -272,6 +273,8 @@ internal sealed partial class ActorAdapter
         List<Durable.ParkTimerRecipe> rearms, List<Durable.SubscriptionRow> subscriptions)
     {
         if (row.Jobs != facts.RecoverableJobRegistry) return false;
+        if (roots?.RecoversInlineInitialRoots == true && row is { FoundationNullState: true, Parent: null })
+            return facts.InlineRetry is { } retry && issueSelf is { } issuer && Durable.FoundationInlineRetry.Matches(issuer, row, retry);
         try
         {
             var header = RootHeader(row);

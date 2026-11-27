@@ -45,6 +45,7 @@ public sealed partial class EfStore
         internal bool RefusesParkedOperators { get; set; }
         internal Func<StartSpec, object, bool>? ValidateInlineMaterial { get; set; }
         internal object? InlineIssuer { get; set; }
+        internal bool RecoversInlineInitialRoots { get; set; }
         internal bool SettlesEndedMailbox { get; init; }
         internal Func<Contract.ActorHeader, bool>? AuthoredWithholds { get; init; }
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
@@ -91,6 +92,7 @@ public sealed partial class EfStore
         public bool SettlesEndedMailbox => roots.SettlesEndedMailbox;
         public Func<StartSpec, object, bool>? ValidateInlineMaterial => roots.ValidateInlineMaterial;
         public object? InlineIssuer => roots.InlineIssuer;
+        public bool RecoversInlineInitialRoots => roots.RecoversInlineInitialRoots;
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
             throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
@@ -153,6 +155,7 @@ public sealed partial class EfStore
             scope.KeepsParkArrivals = db.UsesRootParkArrivals;
             scope.KeepsPrivateParkInputs = db.UsesRootPrivateParkInputs;
             scope.RecoversPark = db.UsesRootParkRecovery;
+            scope.RecoversInlineInitialRoots = db.UsesRootInlinePromotion;
             scope.TakesLiveEventWaits = db.UsesRootLiveEventWaits;
             scope.PublishesAuthoredEvents = db.UsesRootAuthoredEvents;
             if (scope.PublishesAuthoredEvents && RootSelfIssuer is null)

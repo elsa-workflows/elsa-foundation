@@ -130,6 +130,8 @@ public sealed class KernelPublishedExecuteTests
                 SetOutput("output", "message", Literal("value", "flowchart finished")))])));
         var retractedInline = Ephemeral(ExecutableOf("inline-retracted", "inline-retracted", Sequence("sequence",
             Node("delay", Types.Delay, [Literal("Duration", "00:00:06", "TimeSpan")]))));
+        var initialFault = Ephemeral(ExecutableOf("inline-initial-fault", "inline-initial-fault", Sequence("sequence",
+            SetOutput("first-output", "message", Expression("value", "JavaScript", "'recovered'", "String")))));
         var uncertain = Ephemeral(ExecutableOf("inline-uncertain", "inline-uncertain", Sequence("sequence",
             Node("blocked-script", Types.RunJavaScript, [Literal("Script", "return 1;", "String")]))));
 
@@ -206,7 +208,7 @@ public sealed class KernelPublishedExecuteTests
         await PublishAsync(pure, "default");
         if (inline)
         {
-            foreach (var candidate in new[] { slow, retractedInline, uncertain })
+            foreach (var candidate in new[] { slow, retractedInline, initialFault, uncertain })
             {
                 await materials.SaveAsync(candidate, token);
                 await PublishAsync(candidate, "default");
@@ -341,7 +343,12 @@ public sealed class KernelPublishedExecuteTests
                 var row = Assert.IsType<Contract.ActorView>(await read.GetAsync(scope, actor, token));
                 Assert.Equal(promoted.SourceReferenceId, Kernel.WorkflowActor.WorkflowActor.DescribeRun(row.Header)?.PublishedStart?.SourceReferenceId);
                 using (var response = await ReadRunAsync(actor.Id))
+                {
                     Assert.True(response.StatusCode == HttpStatusCode.OK, $"Committed run read returned {response.StatusCode}: {await response.Content.ReadAsStringAsync(token)}");
+                    var details = Assert.IsType<WorkflowInstanceDetailsView>(await response.Content.ReadFromJsonAsync<WorkflowInstanceDetailsView>(token));
+                    Assert.Equal(nameof(PersistenceMode.Ephemeral), details.PersistenceMode);
+                    Assert.Equal("boundary-level", details.InspectionGranularity);
+                }
                 Assert.Contains(slow.Identity.ArtifactId, await pinRead.ListPinnedExecutableArtifactIdsAsync(token));
                 while ((row = (await read.GetAsync(scope, actor, token))!).Header.Status == Contract.ActorStatus.Running)
                     await Task.Delay(25, token);
@@ -350,6 +357,13 @@ public sealed class KernelPublishedExecuteTests
                     row.Header.EndedAt!.Value, includeValues: true, cancellationToken: token);
                 using var output = JsonDocument.Parse(Assert.IsType<byte[]>(data?.Values));
                 Assert.Equal("flowchart finished", output.RootElement.GetProperty("message").GetString());
+
+                var parked = await InlineAsync(initialFault, HttpStatusCode.OK, "Committed");
+                Assert.Equal("Faulted", parked.ActorStatus);
+                Assert.Equal(nameof(WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted), parked.CommandDispatchStatus);
+                var parkedActor = new Contract.ActorRef(Assert.IsType<string>(parked.WorkflowExecutionId));
+                Assert.True(await read.GetAsync(scope, parkedActor, token) is { Header: { Status: Contract.ActorStatus.Faulted, EndedAt: null } });
+                Assert.Contains(initialFault.Identity.ArtifactId, await pinRead.ListPinnedExecutableArtifactIdsAsync(token));
 
                 try
                 {

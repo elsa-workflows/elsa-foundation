@@ -54,7 +54,7 @@ public sealed partial class EfStore
     internal (Contract.ActorRef Reference, Task<InlineRootResult> Outcome)? QueueInlineRoot(Worker worker, string operationId,
         StartSpec start, object material, Action<InstanceRef>? wake)
     {
-        if (_inlineStarts is not { } inline || _ordinaryRoots?.InlineIssuer != inline) return null;
+        if (_inlineStarts is not { } inline || !ReferenceEquals(_ordinaryRoots?.InlineIssuer, inline)) return null;
         var owner = worker.Fences.FirstOrDefault();
         if (owner is null) return null;
         var scope = inline.Scope;
@@ -234,11 +234,22 @@ public sealed partial class EfStore
     {
         if (witness is null || _ordinaryRoots?.KeepsPrivateParkInputs != true || RootSelfIssuer is not { } issuer ||
             turn is not { FoundationKept.Count: 0, FoundationRootChildSends: null, Subscribed.Count: 0, Sent.Count: 0 } ||
-            row is not { Status: InstanceStatus.Faulted, Fault: { } fault } ||
-            park.Checkpoint is not { Status: InstanceStatus.Running, Revision: > 0, Suspended: false, Jobs: null,
+            row is not { Status: InstanceStatus.Faulted, Fault: { } fault } || park.Inputs is not [var failed])
+            throw RootShape();
+        if (park.Checkpoint is null)
+        {
+            if (row is not { Revision: 1, FoundationNullState: true, Jobs: null, Children: null } ||
+                row.StartIntent != root.Fingerprint || !ReferenceEquals(failed, witness.Creator) ||
+                turn.FoundationHeader is not { Labels.Count: 0 } header || header.TypeData != row.Definition)
+                throw RootShape();
+            var retry = FoundationInlineRetry.Create(issuer, failed);
+            if (!FoundationInlineRetry.Matches(issuer, row, retry)) throw RootShape();
+            return new(retry, EncodeRootSelf(root.Actor, 1, FoundationInlineRetry.Ordinal, retry), issuer);
+        }
+        if (park.Checkpoint is not { Status: InstanceStatus.Running, Revision: > 0, Suspended: false, Jobs: null,
                 Children: null, FoundationDispatchHeader: not null } before ||
             row != (before with { Status = InstanceStatus.Faulted, Revision = checked(before.Revision + 1), Fault = fault }) ||
-            park.Inputs is not [var failed] || !FoundationSelfSend.IsSelfInput(failed, root.Actor, 1))
+            !FoundationSelfSend.IsSelfInput(failed, root.Actor, 1))
             throw RootShape();
 
         return new(failed, EncodeRootSends(root, before, [failed], promotingInline: true).Single(), issuer);
@@ -298,8 +309,8 @@ public sealed partial class EfStore
 
         private async Task<bool> BindParkAsync(KernelDb db, InlineRootSource source, InlineParkOpening park, long at, CancellationToken token)
         {
-            // The checkpoint holds the previous sealed model state. The exact failed occurrence
-            // was never durably consumed, so ordinary Recover releases it as an arrived input.
+            // The checkpoint holds the previous sealed model state or an exact, unentered restart recipe.
+            // Both occurrences were never durably consumed. Recover releases them as arrived inputs.
             var input = park.Wire;
             var inserted = await db.Database.ExecuteSqlInterpolatedAsync(RootPreparedStarts.Bind(db, RootChildDialectQuery(db, $"""
                 WITH source AS MATERIALIZED (/*prepared-start-source*/)

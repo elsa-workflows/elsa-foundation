@@ -576,6 +576,19 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             ? Durable.Json.Write((object[])[.. entries, "parked"])
             : Durable.Json.Write(new[] { "parked" });
         result.FoundationHeader = next.FoundationInlineHeader ?? (row is null ? InitialHeader(next.Definition) : null);
+        if (roots is { RecoversInlineInitialRoots: true })
+        {
+            if (row is null && taken is [{ Durable: false, Message: { FoundationRootBinding: { } binding } }]
+                && next.FoundationInlineBirth is not null)
+                result.Row = next with
+                {
+                    FoundationDispatchHeader = new(binding.Tenant, binding.Reference, result.FoundationHeader!),
+                    NextJobGeneration = rootJobHandle is null ? null : 0
+                };
+            else if (row is not null && issueSelf is { } issuer && taken is [{ Durable: true, Message: var retry }] &&
+                Durable.FoundationInlineRetry.Matches(issuer, row, retry))
+                result.FoundationKeep = Durable.ParkKeepReason.Arrived;
+        }
         if (row?.ParkRecovery is { } recovery)
         {
             result.Cancelled.Add(recovery.Control);

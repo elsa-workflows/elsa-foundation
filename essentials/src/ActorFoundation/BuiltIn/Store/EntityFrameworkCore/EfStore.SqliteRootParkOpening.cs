@@ -6,7 +6,7 @@ public sealed partial class EfStore
 {
     private static async Task<bool> BindSqliteParkOpeningAsync(KernelDb db, RootParkOpening park, CancellationToken token)
     {
-        if (park.Opening ? park.Reason != ParkKeepReason.Consumed : !db.UsesRootParkArrivals) return false;
+        if (park.Opening ? park.Reason != ParkKeepReason.Consumed && !park.RetriesInitialTurn : !db.UsesRootParkArrivals) return false;
         var root = park.Root;
         var recorded = park.Inputs is [{ FoundationJobResult: true }];
         var at = await db.Database.SqlQueryRaw<long>($"SELECT {SqliteCommitDialect.MillisecondClock} AS \"Value\"").SingleAsync(token);

@@ -63,10 +63,8 @@ internal static class RootPreparedStarts
 
     // Ordinary ingress cannot submit this reserved id or win a protected operation's receipt.
     internal static string OneWayOperation(string operation) => "~prepared-start/1:" + FoundationRootCreator.OperationDigest(operation);
-    private const string InlinePrefix = "~inline-start/1:";
-    internal static string InlineOperation(string operation) => InlinePrefix + FoundationRootCreator.OperationDigest(operation);
-    internal static bool IsInlineOperation(string operation) =>
-        operation.StartsWith(InlinePrefix, StringComparison.Ordinal) && FoundationRootCreator.IsGeneratedReference(operation[InlinePrefix.Length..]);
+    internal static string InlineOperation(string operation) => FoundationInlineRetry.Operation(operation);
+    internal static bool IsInlineOperation(string operation) => FoundationInlineRetry.IsOperation(operation);
 
     internal static async Task<bool> ProtectAsync(ProtectRootStartAsync protect, PendingRootStart offer, CancellationToken token)
     {

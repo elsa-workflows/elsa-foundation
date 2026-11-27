@@ -3582,9 +3582,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             ? unit.Slot!.Inbox.Where(i => i.Held && i.Durable && !i.Taken && i.InboxOrder < stimulus.InboxOrder).Select(i => i.Message.InboxKey).ToArray()
             : null;
         var promotion = PendingPromotion(unit);
-        var inlinePark = promotion is not null && unit.OpensPark && unit.Slot is { Unwritten: true, Row: { } checkpoint } &&
-            unit.Consumed.Count != 0 && unit.Consumed.TrueForAll(delivery => !delivery.Durable && delivery.Original is null)
-            ? new InlineParkWitness(checkpoint, unit.Consumed.Select(delivery => delivery.Message).ToArray()) : null;
+        var inlinePark = promotion is InlineRootCreatorWitness creator && unit.OpensPark && unit.Slot is { } parked &&
+            unit.Consumed.Count != 0 && unit.Consumed.TrueForAll(delivery => !delivery.Durable && delivery.Original is null) &&
+            (parked is { Unwritten: true, Row: not null } || parked.Row is null && unit.Consumed is [var initial] &&
+                ReferenceEquals(initial.Message, creator.Creator))
+            ? new InlineParkWitness(parked.Row, unit.Consumed.Select(delivery => delivery.Message).ToArray()) : null;
         return new TurnCommit(unit.Instance, unit.Row, unit.Expected,
             Has(Flaw.KeepConsumedMessages) ? [] : [.. consumed, .. settled, .. cancelled],
             Has(Flaw.KeepConsumedMessages) ? [] : done.ToList(),

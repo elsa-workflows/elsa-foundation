@@ -15,7 +15,9 @@ public sealed partial class EfStore
         CancellationToken cancellationToken)
     {
         var opening = turn.OpensPark;
-        var reason = turn.Journal is null ? ParkKeepReason.Arrived : ParkKeepReason.Consumed;
+        var retry = _ordinaryRoots?.RecoversInlineInitialRoots == true && RootSelfIssuer is { } inlineIssuer &&
+            turn.Row is { } initial && turn.FoundationRootParkInputs is [var retryInput] && FoundationInlineRetry.Matches(inlineIssuer, initial, retryInput);
+        var reason = turn.Journal is null || retry ? ParkKeepReason.Arrived : ParkKeepReason.Consumed;
         var repark = !opening && reason == ParkKeepReason.Consumed;
         // S5a: a composed Park set opens the Park without the operator command whose own turn failed. The command keeps its
         // row and FIFO place, unmarked, so the owner polls it again on the parked root.
@@ -29,7 +31,7 @@ public sealed partial class EfStore
         // A Park keeps the row's Suspended flag, as the in-memory reference does. Only a composed set with operators can
         // suspend a root, so only there can a Park open or continue on a suspended one.
         if (turn.Row is not { Status: InstanceStatus.Faulted, Fault: { } fault } row || row.Suspended && !parkedOperators ||
-            turn.Expected is not > 0 || opening && reason != ParkKeepReason.Consumed || turn.Done.Count == 0 && !split ||
+            turn.Expected is not > 0 || opening && !retry && reason != ParkKeepReason.Consumed || turn.Done.Count == 0 && !split ||
             turn.FoundationKept is not { } kept || kept.Count != turn.Done.Count ||
             turn.FoundationRootParkInputs is not { } envelopes || !SameInputs(envelopes, turn.Done) ||
             (!recorded && envelopes.Any(input => input.InboxKey.Scope != InboxKey.FoundationOccurrenceScope &&
@@ -66,7 +68,8 @@ public sealed partial class EfStore
             (!opening || childEffects is not { Starts.Length: 0, Inputs.Length: 0, Notice: not null })) throw RootShape();
         var journal = turn.Journal is null ? null : new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal);
         return new(journal, new RootParkOpening(root, current.Revision, opening, reason, DurableKeyJson.Write(fault), envelopes, returned,
-            row.Suspended, current.Jobs, current.NextJobGeneration, row.Model, RootSelfIssuer) { ChildEffects = childEffects });
+            row.Suspended, current.Jobs, current.NextJobGeneration, row.Model, RootSelfIssuer)
+            { ChildEffects = childEffects, RetriesInitialTurn = retry });
     }
 
     private static TurnCommit WithoutOperators(TurnCommit turn)
@@ -99,10 +102,12 @@ public sealed partial class EfStore
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal RootChildEffects? ChildEffects { get; init; }
+        internal bool RetriesInitialTurn { get; init; }
 
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
-            if (!db.UsesRootParkOpening || !Opening && !db.UsesRootParkArrivals) return false;
+            if (!db.UsesRootParkOpening || !Opening && !db.UsesRootParkArrivals || RetriesInitialTurn && !db.UsesRootInlinePromotion)
+                return false;
             if (db.UsesSqliteRootRuntime) return await BindSqliteParkOpeningAsync(db, this, cancellationToken);
             var recorded = Inputs is [{ FoundationJobResult: true }];
             if (recorded && (!Opening || !db.UsesRootTimedJobSettlement)) return false;
@@ -114,6 +119,7 @@ public sealed partial class EfStore
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
+                    AND (NOT {RetriesInitialTurn} OR b."Fingerprint" = {Root.Fingerprint})
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired"
                     AND i."Suspended" = {Suspended} AND i."Status" = {(int)priorStatus} AND i."Revision" = {Expected}
                     AND (i."FoundationParkAt" IS NULL) = {Opening} /*no-clearing*/
