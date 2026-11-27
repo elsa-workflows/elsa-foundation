@@ -50,6 +50,23 @@ public static partial class SqliteEmbeddedHosting
         }
     }
 
+    internal static async ValueTask<Contract.ScheduleControlResult> ApplyScheduleControlAsync(string path, StoreFormat? format,
+        string tenant, string scheduleActorType, ScheduleControlIntent intent, CancellationToken token)
+    {
+        try
+        {
+            using var file = AcquireFile(path);
+            var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options, format), TimeSpan.Zero,
+                file.AdmissionDefinitions, scheduleActorType: scheduleActorType);
+            return await admission.ApplyScheduleControlAsync(tenant, intent, token);
+        }
+        catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
+        {
+            token.ThrowIfCancellationRequested();
+            throw new TimeoutException("SQLite schedule control could not acquire its write lock.", error);
+        }
+    }
+
     private static async Task<Contract.IIngress> OpenFoundationCoreAsync(string databasePath, string actorType, SqliteDirectRequests? requests,
         TimeSpan? deduplicationWindow, CancellationToken cancellationToken,
         Func<Contract.BoundScope, Contract.ActorRef, string, bool>? authorizeOperator = null)
