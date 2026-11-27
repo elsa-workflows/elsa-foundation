@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -85,6 +86,20 @@ internal static class KernelExecutablePinContract
         await Assert.ThrowsAsync<InvalidOperationException>(() => roots.ReadOpenTailAsync(new("other-scope")).AsTask());
         Assert.Equal(1, (await collector.SweepAsync()).DeletedArtifactCount);
         Assert.Null(await material.FindAsync(orphan.Identity.ArtifactId));
+        Assert.NotNull(await material.FindAsync(selected.Identity.ArtifactId));
+        Assert.NotNull(await material.FindAsync(dependency.Identity.ArtifactId));
+
+        var manualOrphan = Artifact("manual-collector-orphan");
+        await material.SaveAsync(manualOrphan);
+        var servicesForCollection = reopened.ServiceProvider;
+        var manualCollector = new WorkflowExecutableReferenceGarbageCollector(
+            servicesForCollection.GetRequiredService<IWorkflowExecutableStore>(),
+            servicesForCollection.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
+            servicesForCollection.GetRequiredService<IWorkflowExecutionStateStore>(),
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
+            clock, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
+        Assert.Equal(1, (await manualCollector.SweepAsync()).DeletedArtifactCount);
+        Assert.Null(await material.FindAsync(manualOrphan.Identity.ArtifactId));
         Assert.NotNull(await material.FindAsync(selected.Identity.ArtifactId));
         Assert.NotNull(await material.FindAsync(dependency.Identity.ArtifactId));
 

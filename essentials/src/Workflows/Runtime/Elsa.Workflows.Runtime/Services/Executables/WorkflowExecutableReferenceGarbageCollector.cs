@@ -565,10 +565,15 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         roots.AddRange(await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         if (_workflowDispatchRootStore is not null)
             roots.AddRange(await _workflowDispatchRootStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
-        if (KernelScheduleRoots is not null)
-            roots.AddRange(await KernelScheduleRoots.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
-        if (KernelExecutablePins is not null)
-            roots.AddRange(await KernelExecutablePins.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
+        if (_executableStore.GetMaterialStore() is IRuntimeKernelExecutableRetentionMaterial physical)
+            roots.AddRange(await physical.ListPinnedKernelExecutableIdsAsync(cancellationToken));
+        else
+        {
+            if (KernelScheduleRoots is not null)
+                roots.AddRange(await KernelScheduleRoots.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
+            if (KernelExecutablePins is not null)
+                roots.AddRange(await KernelExecutablePins.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
+        }
         return roots;
     }
 

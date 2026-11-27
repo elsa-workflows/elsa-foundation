@@ -89,7 +89,7 @@ internal sealed class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context
     }
 
     public async ValueTask<string?> ReadOpenTailAsync(PersistenceScope scope, CancellationToken cancellationToken = default) =>
-        await OpenPins(Bind(scope)).OrderByDescending(row => row.Id).Select(row => row.Id).FirstOrDefaultAsync(cancellationToken);
+        await OpenPins(context, Bind(scope)).OrderByDescending(row => row.Id).Select(row => row.Id).FirstOrDefaultAsync(cancellationToken);
 
     public async ValueTask<RuntimeKernelExecutablePinPage> ListOpenAsync(PersistenceScope scope, string? after, string through, int limit,
         CancellationToken cancellationToken = default)
@@ -98,18 +98,21 @@ internal sealed class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context
         RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
         RequireCursor(through, nameof(through));
         if (after is not null) RequireCursor(after, nameof(after));
-        var query = OpenPins(scope).Where(row => string.Compare(row.Id, through) <= 0);
+        var query = OpenPins(context, scope).Where(row => string.Compare(row.Id, through) <= 0);
         if (after is not null) query = query.Where(row => string.Compare(row.Id, after) > 0);
         var rows = await query.OrderBy(row => row.Id).Take(limit + 1).ToArrayAsync(cancellationToken);
         return new(rows.Take(limit).Select(row => ReadOpen(row, scope)).ToArray(), rows.Length > limit ? rows[limit - 1].Id : null);
     }
 
-    public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+        ReadPinnedExecutableIdsAsync(context, Bind(), cancellationToken);
+
+    internal static async ValueTask<IReadOnlyCollection<string>> ReadPinnedExecutableIdsAsync(RuntimeDbContext context,
+        PersistenceScope scope, CancellationToken cancellationToken)
     {
-        var scope = Bind();
         var roots = new HashSet<string>(StringComparer.Ordinal);
         // Read a single rowset so concurrent inserts cannot keep extending the GC pass.
-        await foreach (var row in OpenPins(scope).AsAsyncEnumerable().WithCancellation(cancellationToken))
+        await foreach (var row in OpenPins(context, scope).AsAsyncEnumerable().WithCancellation(cancellationToken))
             roots.Add(ReadOpen(row, scope).Executable.ArtifactId);
         return roots;
     }
@@ -166,7 +169,7 @@ internal sealed class EfRuntimeKernelExecutablePinStore(RuntimeDbContext context
         return (released, missing);
     }
 
-    private IQueryable<RuntimeKernelExecutablePinEntity> OpenPins(PersistenceScope scope)
+    private static IQueryable<RuntimeKernelExecutablePinEntity> OpenPins(RuntimeDbContext context, PersistenceScope scope)
     {
         var scopeHash = Hash(scope.Value);
         return context.KernelExecutablePins.AsNoTracking().Where(row => row.ScopeKeyHash == scopeHash && row.ReleasedAtUtcTicks == null);

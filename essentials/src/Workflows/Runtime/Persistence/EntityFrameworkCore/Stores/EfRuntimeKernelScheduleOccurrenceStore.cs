@@ -259,24 +259,20 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
         return source;
     }
 
-    public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+        ReadPinnedExecutableIdsAsync(context, RequireScope(access), cancellationToken);
+
+    internal static async ValueTask<IReadOnlyCollection<string>> ReadPinnedExecutableIdsAsync(RuntimeDbContext context,
+        string scope, CancellationToken cancellationToken)
     {
-        var scope = RequireScope(access);
         var scopeKey = Encode(scope);
         var scopeHash = Hash(scope);
         var roots = new HashSet<string>(StringComparer.Ordinal);
-        string? after = null;
-        const int pageSize = 100;
-        while (true)
-        {
-            var query = context.KernelScheduleOccurrences.AsNoTracking().Where(row =>
-                (row.ScopeKeyHash == scopeHash || row.ScopeKey == scopeKey) && row.RetiredAtUtcTicks == null);
-            if (after is not null) query = query.Where(row => string.Compare(row.Id, after) > 0);
-            var page = await query.OrderBy(row => row.Id).Take(pageSize).ToArrayAsync(cancellationToken);
-            foreach (var row in page) roots.Add(Read(row, scope).Executable.ArtifactId);
-            if (page.Length < pageSize) return roots;
-            after = page[^1].Id;
-        }
+        var query = context.KernelScheduleOccurrences.AsNoTracking().Where(row =>
+            (row.ScopeKeyHash == scopeHash || row.ScopeKey == scopeKey) && row.RetiredAtUtcTicks == null);
+        await foreach (var row in query.AsAsyncEnumerable().WithCancellation(cancellationToken))
+            roots.Add(Read(row, scope).Executable.ArtifactId);
+        return roots;
     }
 
     private static RuntimeKernelScheduleOccurrence Read(RuntimeKernelScheduleOccurrenceEntity row, string scope)
