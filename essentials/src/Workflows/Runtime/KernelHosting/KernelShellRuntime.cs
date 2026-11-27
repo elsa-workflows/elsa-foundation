@@ -1,0 +1,125 @@
+using System.Text.Json.Nodes;
+using CShells.Lifecycle;
+using Elsa.Activities.Http.Options;
+using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.KernelHost;
+using Kernel.Foundation.Contracts;
+using Kernel.Native;
+using Kernel.WorkflowActor;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace Elsa.Workflows.Runtime.KernelHosting;
+
+internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
+    ILoggerFactory logs) : IAsyncDisposable
+{
+    private IHostedService? _owner;
+    private IAsyncDisposable? _lifetime;
+    private HttpClient? _client;
+    private (IIngress Ingress, IActorReads Reads)? _foundation;
+
+    public async Task StartAsync(CancellationToken token)
+    {
+        await storage.InstallAsync(token);
+        _foundation = await storage.OpenAsync(token);
+        await ServePublicationsAsync(token);
+
+        _client = NativeHttpOptions.CreateClient();
+        var expressions = new PortableNativeExpressions(() =>
+        {
+            var scope = scopes.CreateAsyncScope();
+            return (scope.ServiceProvider, scope);
+        });
+        var model = new NativeExecutionModel(serving.Registry, new NativeExecutionOptions
+        {
+            Scripts = new ScopedScripts(scopes),
+            Http = new NativeHttpOptions { Client = _client },
+            Expressions = expressions,
+            SelfSends = serving.Capabilities.SelfSends,
+            ServedWorkflow = serving.ServedWorkflow,
+            ResolveWorkflow = ResolveWorkflowAsync
+        });
+        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs);
+        await _owner.StartAsync(token);
+    }
+
+    public Task StopAsync(CancellationToken token) => _owner?.StopAsync(token) ?? Task.CompletedTask;
+
+    public ValueTask<IIngress> IngressAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Ingress);
+
+    public ValueTask<IActorReads> ReadAsync(CancellationToken token) => ValueTask.FromResult(Foundation.Reads);
+
+    private (IIngress Ingress, IActorReads Reads) Foundation => _foundation ??
+        throw new InvalidOperationException("The kernel shell has not opened its Actor Foundation.");
+
+    private async Task ServePublicationsAsync(CancellationToken token)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        if (scope.ServiceProvider.GetRequiredService<IWorkflowActivationCoordinator>() is not KernelActivationCoordinator coordinator)
+            throw new InvalidOperationException("The kernel shell requires the kernel publication coordinator.");
+        var results = await coordinator.ServeActiveSlotsAsync(token);
+        var failures = results.Where(result => !result.Succeeded).ToArray();
+        var logger = logs.CreateLogger<KernelShellRuntime>();
+        foreach (var result in failures)
+            logger.LogError("Definition {DefinitionId} slot {SlotName} did not resume serving on the kernel: {Diagnostic}",
+                result.Slot.WorkflowDefinitionId, result.Slot.SlotName, result.Diagnostic);
+        if (failures.Length > 0)
+            throw new InvalidOperationException("The kernel shell could not serve all active publications. See the host log for the affected slots.");
+    }
+
+    private async ValueTask<Workflow?> ResolveWorkflowAsync(string artifactId, CancellationToken token)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        return await NativeExecutableMapper.MapStoredAsync(scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>(), artifactId, token);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_lifetime is not null)
+            await _lifetime.DisposeAsync();
+        _client?.Dispose();
+    }
+
+    private sealed class ScopedScripts(IServiceScopeFactory scopes) : INativeScripts
+    {
+        public async ValueTask<JsonNode?> EvaluateAsync(string script, JsonObject arguments,
+            CancellationToken cancellationToken)
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            var evaluator = scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>();
+            return await new JintNativeScripts(evaluator).EvaluateAsync(script, arguments, cancellationToken);
+        }
+    }
+}
+
+internal sealed class PrepareKernelShell(IShell shell, IShellRegistry registry, IOptions<HttpEndpointOptions> http,
+    ILogger<PrepareKernelShell> logger) : IShellInitializer
+{
+    public Task InitializeAsync(CancellationToken cancellationToken)
+    {
+        const string defaultShell = "default";
+        if (!StringComparer.Ordinal.Equals(shell.Descriptor.Name, defaultShell))
+            throw new InvalidOperationException("Kernel hosting is available on the default shell only.");
+        if (registry.GetActive(defaultShell) is { } active && active.Descriptor.Generation != shell.Descriptor.Generation)
+        {
+            logger.LogWarning("Kernel hosting requires a host restart to replace the active shell {ShellName}.", defaultShell);
+            throw new InvalidOperationException("Kernel hosting requires a host restart to replace the active shell.");
+        }
+        _ = WorkflowsRuntimeKernelHostingFeature.HttpBasePath(http.Value);
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class StartKernelShell(KernelShellRuntime runtime) : IShellInitializer
+{
+    public Task InitializeAsync(CancellationToken cancellationToken) => runtime.StartAsync(cancellationToken);
+}
+
+internal sealed class StopKernelShell(KernelShellRuntime runtime) : IShellTerminator
+{
+    public Task TerminateAsync(CancellationToken cancellationToken) => runtime.StopAsync(cancellationToken);
+}

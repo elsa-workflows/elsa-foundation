@@ -7,6 +7,7 @@ using Elsa.Expressions.JavaScript;
 using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Expressions.Liquid;
 using Elsa.Workbench.CorePreview;
+using Elsa.Workflows.Runtime.KernelHosting;
 using Kernel.Native;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -39,12 +40,18 @@ public sealed class PortableNativeExpressionsTests
     }
 
     [Fact]
-    public void Only_the_variables_a_source_names_are_passed_and_a_computed_access_passes_all()
+    public async Task Only_the_variables_a_source_names_are_passed_and_a_computed_access_passes_all()
     {
         var visible = new Dictionary<string, JsonNode?> { ["count"] = 5, ["keepGoing"] = true, ["unrelated"] = new string('x', 100_000) };
-        Assert.Equal(["count", "keepGoing"], AmbientVariables.Referenced("variables.count > 0 && getKeepGoing()", visible)!.Keys.Order());
-        Assert.Null(AmbientVariables.Referenced("1 + 1", visible));
-        Assert.Equal(3, AmbientVariables.Referenced("variables[name]", visible)!.Count);
+        var evaluator = new RecordingEvaluator();
+        await using var provider = new ServiceCollection().AddSingleton<IPortableExpressionEvaluator>(evaluator).BuildServiceProvider();
+        await using var session = new PortableNativeExpressions(() => (provider, new Lifetime())).Open(CancellationToken.None);
+        session.Evaluate(new HostExpression("JavaScript", "variables.count > 0 && getKeepGoing()", "Object", null), None, visible);
+        Assert.Equal(["count", "keepGoing"], evaluator.AmbientVariables!.Keys.Order());
+        session.Evaluate(new HostExpression("JavaScript", "1 + 1", "Object", null), None, visible);
+        Assert.Empty(evaluator.AmbientVariables!);
+        session.Evaluate(new HostExpression("JavaScript", "variables[name]", "Object", null), None, visible);
+        Assert.Equal(3, evaluator.AmbientVariables!.Count);
     }
 
     [Fact]
@@ -175,6 +182,17 @@ public sealed class PortableNativeExpressionsTests
         {
             Disposed = true;
             if (inner is not null) await inner.DisposeAsync();
+        }
+    }
+
+    private sealed class RecordingEvaluator : IPortableExpressionEvaluator
+    {
+        public IReadOnlyDictionary<string, JsonElement>? AmbientVariables { get; private set; }
+
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request)
+        {
+            AmbientVariables = request.AmbientVariables;
+            return ValueTask.FromResult(JsonSerializer.SerializeToElement<object?>(null));
         }
     }
 

@@ -1,0 +1,7 @@
+# Workflow kernel hosting
+
+The `WorkflowsRuntimeKernelHosting` feature serves the Foundation host's default shell on the built-in Actor Foundation. Add `Elsa.Workflows.Runtime.KernelHosting`, `Elsa.Workflows.Runtime.KernelHost` and `Elsa.Workflows.Runtime.KernelApi` as package roots in the deployment's Nuplane feed, then add `WorkflowsRuntimeKernelHosting` to the default shell. The feature catalog discovers shell features from package roots. Keep the existing design, publication, executable and trigger binding features enabled. The package depends on the shell's workflow runtime API, workflow HTTP activities and Jint engine. The Foundation host loads it from the feed.
+
+Set `Provider` to `SQLite` or `PostgreSQL`. Set `SqlitePath` to an absolute path on a local volume for SQLite. Set `PostgresConnectionString` through deployment configuration for PostgreSQL. Use a dedicated database for either provider. The opt-in serves one tenant and one process. Restart the host when changing kernel configuration. The kernel shell checks for an existing active generation before installing or opening its store.
+
+The existing workflow HTTP options supply the route mount, timeout and maximum request size. Published Native and Flowchart workflows can start through their HTTP routes. The normal run list reads the kernel. Unavailable capabilities, including schedule actors and child workflows in this composition, are refused when their workflows are published.

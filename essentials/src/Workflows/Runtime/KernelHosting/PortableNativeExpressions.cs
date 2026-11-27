@@ -5,8 +5,9 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Kernel.Native;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Workbench.CorePreview;
+namespace Elsa.Workflows.Runtime.KernelHosting;
 
 /// <summary>
 /// Host-evaluated expressions on the kernel host (owner decision of 25 November): each one runs on the shell's
@@ -15,11 +16,12 @@ namespace Elsa.Workbench.CorePreview;
 /// literal parameters; JavaScript also sees the visible variables its source names, as the old core passes them. An
 /// evaluation that does not complete synchronously faults, since a turn evaluates bindings synchronously. A shell that is
 /// not active, or that is going away, makes the evaluator unavailable: the turn rolls back and keeps its messages, so
-/// Recover runs it again, rather than committing a fault (the Core Preview starts only once the shell is active).
+/// Recover runs it again without first committing a failed expression result.
 /// Release 1's kernel runs on the default shell only, and host expressions use that shell's JavaScript limits.
 /// </summary>
-internal sealed class PortableNativeExpressions(Func<(IServiceProvider Services, IAsyncDisposable Lifetime)> open) : INativeExpressions
+public sealed class PortableNativeExpressions(Func<(IServiceProvider Services, IAsyncDisposable Lifetime)> open) : INativeExpressions
 {
+    /// <inheritdoc />
     public INativeExpressionSession Open(CancellationToken cancellationToken)
     {
         var (services, lifetime) = open();

@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Publishing.Releases.Runtime.Core;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -169,7 +170,7 @@ public sealed class FeatureCompositionTests
     private static IReadOnlyList<Composition> Compositions(IReadOnlyList<Type> features)
     {
         if (Alternatives.Length == 0)
-            return [new("every-feature", features)];
+            return [new("default", features)];
 
         var catalog = FeatureDiscovery.DiscoverFeatures(features.Select(feature => feature.Assembly).Distinct())
             .ToDictionary(descriptor => descriptor.Id, StringComparer.OrdinalIgnoreCase);
@@ -190,8 +191,10 @@ public sealed class FeatureCompositionTests
 
         return
         [
-            new("every-feature", Without(Alternatives.SelectMany(alternative => alternative.Second))),
-            new("every-alternative", Without(Alternatives.SelectMany(alternative => alternative.First)))
+            new("default", Without(Alternatives.SelectMany(alternative => alternative.Second))),
+            // This hosting feature owns an Embedded node and is available only on the default shell.
+            new("every-alternative", Without(Alternatives.SelectMany(alternative => alternative.First)
+                .Append(WorkflowsRuntimeKernelHostingFeature.FeatureName)))
         ];
     }
 
@@ -463,6 +466,7 @@ public sealed class FeatureCompositionTests
                 ["JsonWorkflowArtifactReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = workflows },
                 ["Elsa3JsonReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = Directory.CreateDirectory(Path.Join(directory, "elsa3")).FullName },
                 ["FileSystemDistributedLocking"] = new() { ["LocksFolderPath"] = Path.Join(directory, "locks") },
+                [WorkflowsRuntimeKernelHostingFeature.FeatureName] = new() { ["SqlitePath"] = Path.Join(directory, "kernel.db") },
                 ["EtlRuntime"] = new() { ["SnapshotRoot"] = Path.Join(directory, "etl-snapshots") },
                 // Medallion's providers connect when a lock is taken, not when they are constructed, and nothing takes one here.
                 ["DatabaseDistributedLocking"] = new() { ["Provider"] = "PostgreSql", ["ConnectionString"] = "Host=127.0.0.1;Database=elsa" },

@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Workbench.CorePreview;
+using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Native;
