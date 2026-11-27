@@ -357,6 +357,7 @@ internal static class ShippedDelayRecoveryChecks
             async Task CheckProjectorRefusalAsync(Contract.ActorRef actor)
             {
                 var prior = await reads.TailAsync(scope, actor, cancellationToken: token);
+                var root = (await cold.ReadFirstRootAsync(scope.Tenant, actor.Id, token))!;
                 var writer = new EfStore(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
                 await writer.EnableRootSelfSendsAsync(token);
                 await writer.EnableRootJobsAsync(token);
@@ -371,8 +372,8 @@ internal static class ShippedDelayRecoveryChecks
                 proxy.Write = async (batch, writeToken) =>
                 {
                     try { return await writer.CommitAsync(batch, writeToken); }
-                    catch (StoreException error) when (error.InnerException is PostgresException
-                        { ConstraintName: "kernel_require_root_sequenced_journal" })
+                    catch (StoreFormatException error) when (error.Message == "The installed sequenced journal projection is incomplete." &&
+                        batch.Turns.Any(turn => turn.Instance == root.Actor.Id && turn.Journal is not null))
                     {
                         refusedUnsequencedWrite = true;
                         return new Committed(false, 0, []);
@@ -394,9 +395,30 @@ internal static class ShippedDelayRecoveryChecks
                     catch (StoreFormatException) { ownerRefused = true; }
                     Check(readRefused && ownerRefused,
                         "a disabled journal projector fails both an exact history read and a replacement owner start");
+                    await using (var mutation = await db.Database.BeginTransactionAsync(token))
+                    {
+                        var rawRefused = false;
+                        try
+                        {
+                            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                                INSERT INTO "Journal" ("Partition", "Position", "Instance", "Revision", "Entries")
+                                SELECT "Id", "Position" + 1, {root.Actor.Id}, {root.Revision + 1}, '["unsequenced"]'
+                                FROM "Partitions" WHERE "Id" = 0
+                                """, token);
+                        }
+                        catch (PostgresException error) when (error.ConstraintName == "kernel_require_root_sequenced_journal")
+                        {
+                            rawRefused = true;
+                        }
+                        await mutation.RollbackAsync(token);
+                        Check(rawRefused, "the independent insert guard refuses a qualified raw row without its projected segment");
+                    }
+                    await db.Database.ExecuteSqlRawAsync("""
+                        ALTER TABLE "Journal" DISABLE TRIGGER kernel_require_root_sequenced_journal
+                        """, token);
                     Check(await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "journal-without-projector", Oversized,
                         cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
-                        "the fixture admits an input while the existing owner is running and the projector is disabled");
+                        "the fixture admits an input while the existing owner is running and both journal triggers are disabled");
                     while (!refusedUnsequencedWrite)
                     {
                         await live.WokenAsync(null, token);
@@ -405,16 +427,17 @@ internal static class ShippedDelayRecoveryChecks
                     }
                     var rejectedTail = await reads.TailAsync(scope, actor, cancellationToken: token);
                     Check(rejectedTail.JournalHeadRevision == prior.JournalHeadRevision && rejectedTail.Items.SequenceEqual(prior.Items),
-                        "the already-running owner's fenced commit refuses the unsequenced journal row and preserves its checkpoint");
+                        "the owned transaction pin refuses an actual journal commit with both triggers disabled and preserves its checkpoint");
                 }
                 finally
                 {
                     await db.Database.ExecuteSqlRawAsync("""
                         ALTER TABLE "Journal" ENABLE TRIGGER kernel_project_root_sequenced_journal
+                            , ENABLE TRIGGER kernel_require_root_sequenced_journal
                         """, token);
                 }
                 Check(await runs.ReadSequencedJournalAsync(actor, 0, null, 1, token) is { UpperSequence: > 0 },
-                    "reenabling the journal projector restores the same retained page");
+                    "reenabling the two journal triggers restores the same retained page");
             }
 
             async Task<Contract.ActorRef> AdmitAsync(string definition, string? operation = null)

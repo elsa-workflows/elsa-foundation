@@ -1,4 +1,5 @@
 using Kernel.EntityFramework;
+using Microsoft.Data.Sqlite;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Foundation.Sqlite;
@@ -19,9 +20,20 @@ public static partial class SqliteEmbeddedHosting
     {
         public bool SupportsSequencedJournal => qualificationFormat == StoreFormat.RootSequencedJournalQualification;
 
-        public ValueTask<Contract.ActorSequencedJournalPage?> ReadSequencedJournalAsync(Contract.BoundScope scope,
-            Contract.ActorRef actor, long afterSequence, long? upperSequence, int limit, CancellationToken cancellationToken = default) =>
-            ReadAsync(reads => reads.ReadSequencedJournalAsync(scope, actor, afterSequence, upperSequence, limit, cancellationToken), cancellationToken);
+        public async ValueTask<Contract.ActorSequencedJournalPage?> ReadSequencedJournalAsync(Contract.BoundScope scope,
+            Contract.ActorRef actor, long afterSequence, long? upperSequence, int limit, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                return await ReadAsync(reads => reads.ReadSequencedJournalAsync(scope, actor, afterSequence, upperSequence,
+                    limit, cancellationToken), cancellationToken);
+            }
+            catch (SqliteException error) when (error.SqliteErrorCode is 5 or 6)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new TimeoutException("The SQLite sequenced journal could not acquire its read lock.", error);
+            }
+        }
 
         public ValueTask<Contract.ActorTerminalOutput?> ReadTerminalOutputAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             long endedAt, bool includeValues, CancellationToken cancellationToken = default) =>

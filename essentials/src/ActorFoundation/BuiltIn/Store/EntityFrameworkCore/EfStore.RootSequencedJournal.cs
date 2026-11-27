@@ -102,7 +102,7 @@ public sealed partial class EfStore
             """);
     }
 
-    private static string PostgresSequencedJournalReady(string physicalMarker) => $"""
+    internal static string PostgresSequencedJournalReady(string physicalMarker) => $"""
         EXISTS (SELECT 1 FROM pg_catalog.pg_class selected
             WHERE selected.oid = {physicalMarker} AND selected.relkind = 'r'
                 AND (SELECT count(*) FROM (VALUES ('"Journal"'), ('"FoundationSequencedJournal"'),

@@ -731,7 +731,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
-            await PinRootNamespaceForCommitAsync(db, cancellationToken);
+            await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
         var now = 0L;
         if (FenceInBatch)
         {
@@ -873,9 +873,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
     }
 
-    private async Task PinRootNamespaceForCommitAsync(KernelDb db, CancellationToken cancellationToken)
+    private async Task PinRootNamespaceForCommitAsync(KernelDb db, CommitBatch batch, CancellationToken cancellationToken)
     {
-        try { await PostgresRootAdmission.PinRootNamespaceAsync(db, cancellationToken); }
+        try
+        {
+            await PostgresRootAdmission.PinRootNamespaceAsync(db, cancellationToken,
+                writesJournal: db.UsesRootSequencedJournal && batch.Turns.Any(turn => turn.Journal is not null));
+        }
         catch (Exception error) when (error is not OperationCanceledException &&
             Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
         {
