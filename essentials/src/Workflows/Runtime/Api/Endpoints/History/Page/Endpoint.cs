@@ -11,9 +11,9 @@ namespace Elsa.Workflows.Runtime.Api.Endpoints.History.Page;
 [Get("runtime/workflows/instances/{workflowExecutionId}/history")]
 [RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeRead)]
 [ActivityInspectionProblems("reading run history", History = true)]
-public sealed class Endpoint(RuntimeHistoryInspectionService history) : ApiEndpoint<GetRuntimeHistory, RuntimeHistoryPageView>
+public sealed class Endpoint(IRuntimeHistoryPageReader history) : ApiEndpoint<GetRuntimeHistory, RuntimeHistoryPageView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "GetRuntimeHistory";
-    public override Task<RuntimeHistoryPageView> HandleAsync(GetRuntimeHistory request, CancellationToken cancellationToken) =>
-        history.ReadAsync(request, cancellationToken);
+    public override async Task<RuntimeHistoryPageView> HandleAsync(GetRuntimeHistory request, CancellationToken cancellationToken) =>
+        await history.ReadAsync(request, cancellationToken) ?? throw new RuntimeResourceMissingSignal();
 }

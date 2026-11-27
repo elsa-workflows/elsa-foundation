@@ -52,6 +52,7 @@ internal sealed class NativeTurn : Models.ITurn
     public Dictionary<string, string?> Labels { get; } = new(StringComparer.Ordinal);
     public List<(Models.WorkflowStart Start, bool Detached)> Children { get; } = [];
     public List<(Contract.ActorRef Target, Contract.Message Message)> Sent { get; } = [];
+    public List<JsonElement> Recorded { get; } = [];
     public NativeState Native => (NativeState)State;
 
     public Models.InstanceInfo Instance { get; }
@@ -82,7 +83,7 @@ internal sealed class NativeTurn : Models.ITurn
     public void Subscribe(string key, string wait, bool keep = false) { }
     public void Unsubscribe(string key, string wait) { }
     public string Publish(string key, string? payload, TimeSpan keepFor) => $"event-{++_sent}";
-    public void Record(object entry) { }
+    public void Record(object entry) => Recorded.Add(JsonSerializer.SerializeToElement(entry));
     public void Rebind(string workflow) { }
     public void SetLabel(string name, string? value) => Labels[name] = value;
 

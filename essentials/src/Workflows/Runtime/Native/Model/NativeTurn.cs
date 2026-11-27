@@ -34,7 +34,16 @@ internal interface INativeTurn
     void Publish(string key, string? payload, TimeSpan keep);
     void Emit(string channel, object? item);
     void Record(string entry);
+    void RecordFrameScheduled(string frame, int attempt) => Record($"a:{frame}:{attempt}");
     void RecordFrameStart(Frame frame) { }
+    void RecordFrameOutcome(NativeJournalKind kind, Frame frame) => Record($"{OutcomeCode(kind)}:{frame.Id}:{frame.Node}");
+    internal static char OutcomeCode(NativeJournalKind kind) => kind switch
+    {
+        NativeJournalKind.Completed => 'c',
+        NativeJournalKind.Faulted => 'f',
+        NativeJournalKind.Cancelled => 'x',
+        _ => throw new ArgumentOutOfRangeException(nameof(kind))
+    };
     void SetStatus(Contract.ActorStatus status, string? subStatus, JsonNode? output);
     /// <summary>One of the instance's own labels (Set Correlation Id, Set Instance Name); null removes it.</summary>
     void SetLabel(string name, string? value);
