@@ -201,7 +201,7 @@ public sealed partial class EfStore
                 foreach (var row in held)
                 {
                     var message = PostgresRootAdmission.DecodeDirect(row, Root.Reference, replies: true, liveEventWaits: db.UsesRootLiveEventWaits, scheduleControls: db.UsesRootScheduleControls,
-                        authoredEvents: db.UsesRootAuthoredEvents, keyedStarts: db.UsesRootKeyedStarts);
+                        authoredEvents: db.UsesRootAuthoredEvents, publicEvents: db.UsesRootPublicEventStarts, keyedStarts: db.UsesRootKeyedStarts);
                     if (message.ReplyTo is { } route)
                         (db.RetiredReplies ??= []).Add(new(row.Id, new(route, Root.Tenant)));
                 }

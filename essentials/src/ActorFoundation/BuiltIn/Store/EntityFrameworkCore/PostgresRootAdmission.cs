@@ -133,6 +133,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         // A second Embedded process can open the same preview database while the first is installing.
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(48602345, 1)", cancellationToken);
         var createKeyedAuthority = db.UsesRootKeyedStarts && await RootKeyedAdmission.MayCreatePostgresAuthorityAsync(db, cancellationToken);
+        var createPublicEventAuthority = db.UsesRootPublicEventStarts &&
+            await RootEventStarts.MayCreatePostgresPublicAuthorityAsync(db, cancellationToken);
         const string definitions = """
             CREATE TABLE IF NOT EXISTS "FoundationRootIssuer" (
                 "Singleton" boolean PRIMARY KEY CHECK ("Singleton"), "Key" bytea NOT NULL,
@@ -165,7 +167,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         if (db.UsesRootScheduleControls) await RootScheduleControls.InstallPostgresAsync(db, cancellationToken);
         if (db.UsesRootScheduleLineage) await RootScheduleLineage.InstallPostgresAsync(db, cancellationToken);
         if (db.UsesRootPreparedStarts) await RootPreparedStarts.InstallPostgresAsync(db, cancellationToken);
-        if (db.UsesRootEventStarts) await RootEventStarts.InstallPostgresAsync(db, cancellationToken);
+        if (db.UsesRootEventStarts)
+            await RootEventStarts.InstallPostgresAsync(db, createPublicEventAuthority, cancellationToken);
         if (db.UsesRootChildren) await EfStore.InstallRootChildCascadeAsync(db, cancellationToken);
         if (db.UsesRootStableBody)
             await db.Database.ExecuteSqlRawAsync("""

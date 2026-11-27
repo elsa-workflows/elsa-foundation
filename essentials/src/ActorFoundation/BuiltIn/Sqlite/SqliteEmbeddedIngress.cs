@@ -131,7 +131,7 @@ public static partial class SqliteEmbeddedHosting
         {
             try { return await SendCoreAsync(scope, target, id, kind, payload, options, cancellationToken); }
             catch (RootAdmissionRefused refusal) { return refusal.Admission; }
-            catch (SqliteException error) when (kind == Contract.Kinds.Recover && error.SqliteErrorCode is 5 or 6)
+            catch (SqliteException error) when ((kind == Contract.Kinds.Recover || target is Contract.Target.Event) && error.SqliteErrorCode is 5 or 6)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.NodeBusy, RetryAfter: TimeSpan.FromSeconds(1));
@@ -146,6 +146,14 @@ public static partial class SqliteEmbeddedHosting
             ArgumentNullException.ThrowIfNull(id);
             ArgumentNullException.ThrowIfNull(kind);
             cancellationToken.ThrowIfCancellationRequested();
+            var format = requests?.QualificationFormat;
+            if (target is Contract.Target.Event publish && (format == StoreFormat.RootPublicEventStartsQualification ||
+                format is null && RootProfiles.Shipped.HasFlag(RootCapabilities.PublicEventStarts)))
+            {
+                using var writer = AcquireFile(path);
+                var publications = CreateAdmission(writer, window, pressure, format);
+                return await publications.PublishPublicEventAsync(scope.Tenant, publish.CorrelationKey, id, payload, options, cancellationToken);
+            }
             if (Contract.Kinds.IsCommand(kind))
             {
                 var (actor, command, refusal) = ReadCommand(scope, target, kind, payload);
@@ -227,8 +235,15 @@ public static partial class SqliteEmbeddedHosting
                 : (exact.Actor, null, Contract.RefusalReason.StaleSelection);
         }
 
-        public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException("SQLite root ingress supports starts and ordinary sends.");
+        public async ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(scope);
+            cancellationToken.ThrowIfCancellationRequested();
+            RootPublicEventStarts.Validate(actorType, key, wait, spec);
+            using var file = AcquireFile(path);
+            var admission = CreateAdmission(file, window, pressure, requests?.QualificationFormat);
+            await admission.SetPublicEventStartAsync(scope.Tenant, key, wait, spec, cancellationToken);
+        }
     }
 }

@@ -51,7 +51,7 @@ internal static partial class KernelAuthoredEventChecks
         var directory = Directory.CreateTempSubdirectory("event-starts");
         try
         {
-            var (open, ingress, reads, owner, eventPort) = await OpenAsync(model, provider, Path.Combine(directory.FullName, "store.db"),
+            var (open, ingress, reads, owner, eventPort, _) = await OpenAsync(model, provider, Path.Combine(directory.FullName, "store.db"),
                 inBatch, token, eventStarts: true, retainReceipts, orderedScan);
             await using var owned = owner;
             var events = eventPort ?? throw new InvalidOperationException("The event start port is missing.");

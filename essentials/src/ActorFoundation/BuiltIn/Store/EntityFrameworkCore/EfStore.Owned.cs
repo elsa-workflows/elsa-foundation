@@ -71,8 +71,13 @@ public sealed partial class EfStore
         if (db.UsesRootScheduleInventory && root is RootCheckpoints qualifiedRoots) root = qualifiedRoots.BindRefusalSource(marker);
         (batch, root, var retentionRefusals) = await BindRetentionPoliciesAsync(db, batch, root, marker, cancellationToken);
         var publications = (root as RootCheckpoints)?.Publications;
+        var keeping = db.UsesRootPublicEventStarts && root is RootCheckpoints
+            ? batch.Turns.Where(turn => !turn.Unsubscribe).SelectMany(turn => turn.Subscribed)
+                .DistinctBy(wait => (wait.Key, wait.Instance, wait.Wait))
+                .Where(wait => wait.FoundationKeepsEvents && waits[(wait.Key, wait.Instance, wait.Wait)]).ToArray()
+            : [];
         Func<FormattableString, FormattableString>? bindEventSource = null;
-        if (publications is { Count: > 0 } && postgres)
+        if (postgres && (publications is { Count: > 0 } || keeping.Length != 0))
             bindEventSource = await PostgresRootAdmission.PinAuthoredEventSourceAsync(db, marker, cancellationToken);
         if (postgres && db.UsesRootLiveEventWaits && (waits.Count != 0 || publications is { Count: > 0 }))
         {
@@ -80,6 +85,8 @@ public sealed partial class EfStore
             if (publications is { Count: > 0 }) keys = keys.Concat(publications.Select(publication => publication.Key));
             await RootEventAdmission.LockPostgresKeysAsync(db, keys.Distinct(StringComparer.Ordinal).ToArray(), cancellationToken);
         }
+        IReadOnlyList<SubscriptionRow> newKeeping = keeping.Length == 0 ? [] :
+            await RootPublicEventLiveWaits.NewAsync(db, keeping, bindEventSource, cancellationToken);
         var commands = new List<OwnedCommand>();
         var c = new OwnedCommand(dialect) { HasFence = checkedMarkTime is null };
         if (formatFunction is not null) c.Statement(SqliteOwnedFormat.Check(formatFunction), Expect.Skip);
@@ -221,6 +228,8 @@ public sealed partial class EfStore
         if (batch.ClearJobTrials.Count != 0 && !await ClearJobTrialsAsync(db, batch, cancellationToken))
             return new Committed(false, 0, []);
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
+        if (newKeeping.Count != 0)
+            await RootPublicEventLiveWaits.CaptureAsync(db, newKeeping, now, bindEventSource, cancellationToken);
         if (publications is { Count: > 0 })
             await RootEventAdmission.PublishAuthoredAsync(db, publications, now, bindEventSource, cancellationToken);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back

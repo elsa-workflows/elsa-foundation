@@ -17,12 +17,15 @@ internal sealed partial class PostgresRootAdmission
             """, cancellationToken);
 
     internal static bool IsStoredDirect(string? value) => value?.StartsWith(DirectPrefix, StringComparison.Ordinal) == true ||
-        IsHeldDirect(value) || IsAuthoredEvent(value) || value?.StartsWith(KeyedDirectPrefix, StringComparison.Ordinal) == true;
+        IsHeldDirect(value) || IsAuthoredEvent(value) || IsPublicEvent(value) || value?.StartsWith(KeyedDirectPrefix, StringComparison.Ordinal) == true;
 
     private static bool IsAuthoredEvent(string? value) => value?.StartsWith(AuthoredEventDirectPrefix, StringComparison.Ordinal) == true;
+    private static bool IsHeldPublicEvent(string? value) => value?.StartsWith(HeldPublicEventDirectPrefix, StringComparison.Ordinal) == true;
+    private static bool IsPublicEvent(string? value) => value?.StartsWith(PublicEventDirectPrefix, StringComparison.Ordinal) == true ||
+        IsHeldPublicEvent(value);
     private static bool IsHeldKeyedDirect(string? value) => value?.StartsWith(HeldKeyedDirectPrefix, StringComparison.Ordinal) == true;
     private static bool IsHeldDirect(string? value) => value?.StartsWith(HeldDirectPrefix, StringComparison.Ordinal) == true ||
-        IsHeldKeyedDirect(value);
+        IsHeldPublicEvent(value) || IsHeldKeyedDirect(value);
 
     internal enum DirectResult { Accepted, Duplicate, Refused, MissingTarget, Expired }
 
@@ -34,11 +37,14 @@ internal sealed partial class PostgresRootAdmission
 
     internal async Task<HeldRootAdmission> PublishRequestAsync(HeldRootRequest request, string key, string? payload, CancellationToken token)
     {
-        if (!RootEventAdmission.IsValid(request, key, payload)) return HeldRootAdmission.Refused;
-        var window = ReceiptWindow(deduplicationWindow, request.KeepFor);
+        var publicEvents = SupportsPublicEvents();
+        if (!(publicEvents ? RootEventAdmission.IsValidPublicRequest(request, key, payload) :
+            RootEventAdmission.IsValid(request, key, payload))) return HeldRootAdmission.Refused;
+        var window = publicEvents ? deduplicationWindow : ReceiptWindow(deduplicationWindow, request.KeepFor);
         for (var retry = 0; ; retry++)
         {
             try { return await PublishRequestOnceAsync(request, key, payload, window, token); }
+            catch (RootEventAdmission.HeldPublicEventExpired) { return HeldRootAdmission.Expired; }
             catch (PostgresException error) when (retry < 2 &&
                 error.SqlState is PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.SerializationFailure)
             {
@@ -57,14 +63,20 @@ internal sealed partial class PostgresRootAdmission
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
         var pin = await PinRootNamespaceAsync(db, loadIssuer: false, token) ??
             throw new StoreFormatException("Live event requests require the pinned root source.");
+        if (db.UsesRootPublicEventStarts) await LockPublicEventStartTablesAsync(db, token);
         await RootEventAdmission.LockPostgresKeysAsync(db, [request.Tenant + "_" + key], token);
         var now = await RootEventAdmission.ReadPostgresClockAsync(db, token);
-        var result = await RootEventAdmission.PublishAsync(db, request, key, payload, now, window, attempt, token,
-            query => WithAdmissionSource(query, pin, "/*event-source*/", 5,
-                """('"Events"'), ('"Subscriptions"'), ('"FoundationRootBirths"'), ('"Instances"'), ('"Messages"')"""));
+        var result = db.UsesRootPublicEventStarts
+            ? await RootEventAdmission.PublishHeldPublicAsync(db, request, key, payload, now, window, attempt, Bind, token)
+            : await RootEventAdmission.PublishAsync(db, request, key, payload, now, window, attempt, token, Bind);
         await transaction.CommitAsync(token);
         if (result == HeldRootAdmission.Accepted) attempt?.Committed();
         return result;
+
+        FormattableString Bind(FormattableString query) => query.Format.Contains(RootPublicEventStarts.Source, StringComparison.Ordinal)
+            ? BindPublicEventStarts(query, pin)
+            : WithAdmissionSource(query, pin, "/*event-source*/", 5,
+                """('"Events"'), ('"Subscriptions"'), ('"FoundationRootBirths"'), ('"Instances"'), ('"Messages"')""");
     }
 
     internal static async Task<Func<FormattableString, FormattableString>> PinAuthoredEventSourceAsync(
@@ -76,10 +88,14 @@ internal sealed partial class PostgresRootAdmission
         if (pin?.Marker != marker)
             throw new StoreFormatException("The authored event source changed during the owned commit.");
         if (db.UsesRootEventStarts) await LockEventStartTablesAsync(db, token);
-        return sql => sql.Format.Contains(RootEventStarts.Source, StringComparison.Ordinal)
-            ? BindEventStarts(sql, pin)
-            : WithAdmissionSource(sql, pin, "/*event-source*/", 5,
+        if (db.UsesRootPublicEventStarts) await LockPublicEventStartTablesAsync(db, token);
+        return sql =>
+        {
+            if (sql.Format.Contains(RootEventStarts.Source, StringComparison.Ordinal)) return BindEventStarts(sql, pin);
+            if (sql.Format.Contains(RootPublicEventStarts.Source, StringComparison.Ordinal)) return BindPublicEventStarts(sql, pin);
+            return WithAdmissionSource(sql, pin, "/*event-source*/", 5,
                 """('"Events"'), ('"Subscriptions"'), ('"FoundationRootBirths"'), ('"Instances"'), ('"Messages"')""");
+        };
     }
 
     /// <returns>True for a new send, false for a duplicate and null for an unavailable exact life or invalid input.</returns>
@@ -299,7 +315,7 @@ internal sealed partial class PostgresRootAdmission
                 AND m."EventMatch" IS NULL AND NOT m."Done" AND m."Id" NOT LIKE 'operator/%' ORDER BY m."Seq"
             """).AsNoTracking().ToListAsync(cancellationToken);
         return rows.Select(row => DecodeDirect(row, reference, db.UsesRootReplyProtocol, db.UsesRootLiveEventWaits, db.UsesRootScheduleControls,
-            db.UsesRootAuthoredEvents, db.UsesRootKeyedStarts)).ToArray();
+            db.UsesRootAuthoredEvents, db.UsesRootPublicEventStarts, db.UsesRootKeyedStarts)).ToArray();
     }
 
     internal static bool MatchesDirectOccurrence(string reference, string operation, string occurrence, bool retentionDelete = false,
@@ -320,18 +336,21 @@ internal sealed partial class PostgresRootAdmission
     }
 
     internal static Message DecodeDirect(MessageEntity row, string reference, bool replies = false, bool liveEventWaits = false,
-        bool scheduleControls = false, bool authoredEvents = false, bool keyedStarts = false)
+        bool scheduleControls = false, bool authoredEvents = false, bool publicEvents = false, bool keyedStarts = false)
     {
         var held = IsHeldDirect(row.Start);
         var authoredEvent = IsAuthoredEvent(row.Start);
+        var publicEvent = IsPublicEvent(row.Start);
         if (authoredEvent && !authoredEvents)
             throw new StoreException(Failure.Definite, "Unsupported authored root event delivery.");
+        if (publicEvent && !publicEvents)
+            throw new StoreException(Failure.Definite, "Unsupported public root event delivery.");
         if (held != (row.ReplyTo is not null) || held &&
             (!replies || ReplyTo.Parse(row.ReplyTo!) is not { Node.Length: > 0, Request.Length: > 0, Deadline: > 0 }))
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public reply route.");
         if (row.JobGeneration != 0)
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
-        var header = ReadDirectHeader(row.Start, reference, row.Id, authoredEvent, keyedStarts);
+        var header = ReadDirectHeader(row.Start, reference, row.Id, authoredEvent, publicEvent, keyedStarts);
         if (IsHeldKeyedDirect(row.Start) && (row.Due != 0 || header.ExplicitZeroDue || row.Sender is not null))
             throw new StoreException(Failure.Definite, "Unsupported held keyed input envelope.");
         var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;
@@ -344,10 +363,10 @@ internal sealed partial class PostgresRootAdmission
             RootScheduleControls.RequireIntent(control, header.Operation, kind, payload);
         }
         EventMatch? match = null;
-        if (kind == Kinds.Event || header.EventWait is not null || authoredEvent)
+        if (kind == Kinds.Event || header.EventWait is not null || authoredEvent || publicEvent)
         {
             var separator = header.EventWait?.Key?.IndexOf('_') ?? -1;
-            if (!liveEventWaits || !held && !authoredEvent || kind != Kinds.Event || row.Sender is not null || row.Due != 0 ||
+            if (!liveEventWaits || !held && !authoredEvent && !publicEvent || kind != Kinds.Event || row.Sender is not null || row.Due != 0 ||
                 header.ExplicitZeroDue || row.KeepUntil is null || header.EventWait is not { Key: { } key, Wait: { } wait } ||
                 header.ScheduleControl is not null || row.InboxScope != InboxKey.FoundationOccurrenceScope || row.EventMatch is not null ||
                 separator is not (> 0 and <= 64) ||
@@ -363,7 +382,8 @@ internal sealed partial class PostgresRootAdmission
             }.WithInboxScope(row.InboxScope);
     }
 
-    private static StoredDirect ReadDirectHeader(string? wire, string reference, string occurrence, bool authoredEvent, bool keyedStarts)
+    private static StoredDirect ReadDirectHeader(string? wire, string reference, string occurrence, bool authoredEvent, bool publicEvent,
+        bool keyedStarts)
     {
         if (!IsStoredDirect(wire))
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
@@ -371,13 +391,20 @@ internal sealed partial class PostgresRootAdmission
         var keyed = heldKeyed || wire!.StartsWith(KeyedDirectPrefix, StringComparison.Ordinal);
         if (keyed && !keyedStarts)
             throw new StoreException(Failure.Definite, "Unsupported keyed root delivery.");
-        var prefix = authoredEvent ? AuthoredEventDirectPrefix : heldKeyed ? HeldKeyedDirectPrefix :
+        var prefix = publicEvent ? IsHeldPublicEvent(wire) ? HeldPublicEventDirectPrefix : PublicEventDirectPrefix :
+            authoredEvent ? AuthoredEventDirectPrefix : heldKeyed ? HeldKeyedDirectPrefix :
             keyed ? KeyedDirectPrefix : IsHeldDirect(wire) ? HeldDirectPrefix : DirectPrefix;
         var header = DurableKeyJson.Read<StoredDirect>(wire![prefix.Length..]);
-        if (header is not { Creation: 1 } || keyed && (header.EventWait is not null || header.ScheduleControl is not null) || !(authoredEvent
+        if (header is not { Creation: 1 })
+            throw new StoreException(Failure.Definite, "Public input occurrence differs from its admitted identity.");
+        var matchesOccurrence = publicEvent
+            ? FoundationRootCreator.IsGeneratedReference(header.EventOccurrence) && header.EventWait?.Wait is { } publicWait &&
+                header.Operation is { } eventId && occurrence == PublicEventOccurrence(reference, header.EventOccurrence!, eventId, publicWait)
+            : header.EventOccurrence is null && (authoredEvent
                 ? header.Operation is { } id && FoundationSelfSend.IsHandle(id) &&
                     header.EventWait?.Wait is { } wait && occurrence == AuthoredEventOccurrence(reference, id, wait)
-                : MatchesDirectOccurrence(reference, header.Operation, occurrence, keyed: keyed)))
+                : MatchesDirectOccurrence(reference, header.Operation, occurrence, keyed: keyed));
+        if (!matchesOccurrence || keyed && (header.EventWait is not null || header.ScheduleControl is not null))
             throw new StoreException(Failure.Definite, "Public input occurrence differs from its admitted identity.");
         return header;
     }
@@ -389,9 +416,12 @@ internal sealed partial class PostgresRootAdmission
         if (held != hasReply || held && !db.UsesRootReplyProtocol)
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public reply route.");
         var authoredEvent = IsAuthoredEvent(wire);
+        var publicEvent = IsPublicEvent(wire);
         if (authoredEvent && !db.UsesRootAuthoredEvents)
             throw new StoreException(Failure.Definite, "Unsupported authored root event delivery.");
-        var header = ReadDirectHeader(wire, reference, occurrence, authoredEvent, db.UsesRootKeyedStarts);
+        if (publicEvent && !db.UsesRootPublicEventStarts)
+            throw new StoreException(Failure.Definite, "Unsupported public root event delivery.");
+        var header = ReadDirectHeader(wire, reference, occurrence, authoredEvent, publicEvent, db.UsesRootKeyedStarts);
         if (IsHeldKeyedDirect(wire) && (due != 0 || header.ExplicitZeroDue))
             throw new StoreException(Failure.Definite, "Unsupported held keyed input envelope.");
         if (header.ScheduleControl is not null && !db.UsesRootScheduleControls)

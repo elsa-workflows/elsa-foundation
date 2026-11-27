@@ -348,6 +348,20 @@ public sealed partial class EfStore
             if (db.UsesRootEventStartScan)
                 yield return Index(RootEventStarts.ScanIndex, RootEventStarts.Targets, RootEventStarts.ScanColumns);
         }
+        if (db.UsesRootPublicEventStarts)
+        {
+            yield return Table(RootPublicEventStarts.Registrations, RootPublicEventStarts.RegistrationColumns(sqlite: true));
+            yield return Index(RootPublicEventStarts.CatchUpIndex, RootPublicEventStarts.Registrations, RootPublicEventStarts.CatchUpColumns);
+            yield return Table(RootPublicEventStarts.Targets, RootPublicEventStarts.TargetColumns(sqlite: true));
+            yield return Table(RootPublicEventPublications.Table, RootPublicEventPublications.Columns(sqlite: true));
+            yield return Table(RootPublicEventLiveWaits.Table, RootPublicEventLiveWaits.Columns(sqlite: true));
+            yield return Index(RootPublicEventLiveWaits.CatchUpIndex, RootPublicEventLiveWaits.Table, RootPublicEventLiveWaits.CatchUpColumns);
+            yield return Table(RootPublicEventLiveWaits.Receipts, RootPublicEventLiveWaits.ReceiptColumns(sqlite: true));
+            yield return Table(RootPublicEventPublications.Horizons, RootPublicEventPublications.HorizonColumns(sqlite: true));
+            yield return Index(RootPublicEventPublications.ReplayIndex, RootPublicEventPublications.Table, RootPublicEventPublications.ReplayColumns, unique: true);
+            yield return Index(RootPublicEventPublications.RetainedIndex, RootPublicEventPublications.Table, RootPublicEventPublications.RetainedColumns);
+            yield return Index(RootPublicEventPublications.CleanupIndex, RootPublicEventPublications.Table, RootPublicEventPublications.CleanupColumns);
+        }
         yield return Table("FoundationRootReceipts", """
             "Tenant" TEXT NOT NULL,
             "Operation" TEXT NOT NULL,
@@ -454,8 +468,8 @@ public sealed partial class EfStore
     private static SqliteDefinition Table(string name, string columns) =>
         new("table", name, name, $"""CREATE TABLE "{name}" ({columns}) STRICT""");
 
-    private static SqliteDefinition Index(string name, string table, string columns) =>
-        new("index", name, table, $"""CREATE INDEX "{name}" ON "{table}" {columns}""");
+    private static SqliteDefinition Index(string name, string table, string columns, bool unique = false) =>
+        new("index", name, table, $"""CREATE {(unique ? "UNIQUE " : "")}INDEX "{name}" ON "{table}" {columns}""");
 }
 
 internal sealed class SqliteAdmissionDefinitions

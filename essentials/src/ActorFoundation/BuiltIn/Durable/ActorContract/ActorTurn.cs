@@ -218,7 +218,8 @@ internal sealed partial class ActorAdapter
         private void RequireLiveWait(string key, string wait, bool keep)
         {
             if (_roots?.TakesLiveEventWaits != true) return;
-            if (keep) throw new InvalidOperationException("This root profile supports live waits without keeping unreceived events.");
+            if (keep && _roots.KeepsEventWaits != true)
+                throw new InvalidOperationException("This root profile supports live waits without keeping unreceived events.");
             if (!Durable.FoundationMetadataLimits.FitsLiveWaitName(key) || !Durable.FoundationMetadataLimits.FitsLiveWaitName(wait))
                 throw new ArgumentException("The live event key and wait name must fit the relational text encoding.");
         }

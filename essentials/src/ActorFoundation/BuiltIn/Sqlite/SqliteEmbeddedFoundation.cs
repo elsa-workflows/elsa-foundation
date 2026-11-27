@@ -47,6 +47,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     internal SqliteEmbeddedHosting.SqliteDirectRequests EventStarts =>
         qualificationFormat == StoreFormat.RootEventStartsQualification || qualificationFormat == StoreFormat.RootEventStartReceiptsQualification ||
         qualificationFormat == StoreFormat.RootEventStartScanQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
+        qualificationFormat == StoreFormat.RootPublicEventStartsQualification ||
         qualificationFormat == StoreFormat.RootKeyedStartsQualification ||
         qualificationFormat is null && SqliteEmbeddedHosting.TakesEventStarts
             ? requests.Value :
@@ -120,6 +121,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat == StoreFormat.RootDirectTestRunQualification ||
         qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
         qualificationFormat == StoreFormat.RootSharedActivationQualification ||
+        qualificationFormat == StoreFormat.RootPublicEventStartsQualification ||
         qualificationFormat == StoreFormat.RootKeyedStartsQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
 
