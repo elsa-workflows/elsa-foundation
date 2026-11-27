@@ -5,20 +5,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
-internal sealed record KernelRetentionPolicy(TimeSpan? Finished, TimeSpan? Cancelled, TimeSpan? Faulted)
-{
-    internal bool Enabled => Finished.HasValue || Cancelled.HasValue || Faulted.HasValue;
-
-    internal TimeSpan? Window(ActorHeader header) => header.Status switch
-    {
-        ActorStatus.Finished => Finished,
-        ActorStatus.Cancelled => Cancelled,
-        ActorStatus.Faulted => Faulted,
-        _ => null
-    };
-}
-
-internal sealed class KernelRetentionWorker(RetentionPass pass, BoundScope tenant, ILogger<KernelRetentionWorker> logger)
+internal sealed class KernelRetentionWorker(RetentionPass pass, BoundScope tenant, Func<CancellationToken, ValueTask<bool>> activate, Action unavailable,
+    ILogger<KernelRetentionWorker> logger)
 {
     private static readonly TimeSpan BetweenPages = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan BetweenSweeps = TimeSpan.FromMinutes(1);
@@ -26,6 +14,7 @@ internal sealed class KernelRetentionWorker(RetentionPass pass, BoundScope tenan
     internal async Task RunAsync(CancellationToken token)
     {
         PageToken? next = null;
+        var activated = false;
         try
         {
             while (!token.IsCancellationRequested)
@@ -33,6 +22,11 @@ internal sealed class KernelRetentionWorker(RetentionPass pass, BoundScope tenan
                 TimeSpan pause;
                 try
                 {
+                    if (!activated)
+                    {
+                        if (!await activate(token)) return;
+                        activated = true;
+                    }
                     next = (await pass.RunAsync(tenant, next, token)).Next;
                     pause = next is null ? BetweenSweeps : BetweenPages;
                 }
@@ -48,6 +42,7 @@ internal sealed class KernelRetentionWorker(RetentionPass pass, BoundScope tenan
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception error)
         {
+            unavailable();
             logger.LogError(error, "Kernel retention stopped for tenant {Tenant}. Restart the shell after correcting the fault.", tenant.Tenant);
         }
     }

@@ -17,7 +17,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
-    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionPolicy retention) : IAsyncDisposable
+    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention) : IAsyncDisposable
 {
     private static readonly TimeSpan RetentionDisposeBudget = TimeSpan.FromSeconds(5);
 
@@ -50,18 +50,16 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ServedWorkflow = serving.ServedWorkflow,
             ResolveWorkflow = ResolveWorkflowAsync
         });
-        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, RetentionWindow);
+        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window);
         await _owner.StartAsync(token);
         if (retention.Enabled)
         {
-            var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, RetentionWindow, Foundation.AdmitRetentionDelete);
-            var worker = new KernelRetentionWorker(pass, tenant, logs.CreateLogger<KernelRetentionWorker>());
+            var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
+            var worker = new KernelRetentionWorker(pass, tenant,
+                token => retention.InitializeAsync(Foundation.Reads, token), retention.Unavailable, logs.CreateLogger<KernelRetentionWorker>());
             _retention = Task.Run(() => worker.RunAsync(_retentionStop.Token));
         }
     }
-
-    private TimeSpan? RetentionWindow(ActorHeader header) =>
-        StringComparer.Ordinal.Equals(header.Tenant, tenant.Tenant) ? retention.Window(header) : null;
 
     public async Task StopAsync(CancellationToken token)
     {

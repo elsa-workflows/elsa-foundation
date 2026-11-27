@@ -5,11 +5,15 @@ using CShells.Lifecycle;
 using Elsa.Activities.Http.Options;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Authorization;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Modularity.Core.Models;
+using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHost;
+using Kernel.Foundation.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -54,15 +58,20 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     [ManifestSetting(DisplayName = "Faulted retention (seconds)", Description = "Minimum age for automatic deletion of resolved faults. Leave empty to keep them.", Category = "Retention")]
     public int? FaultedRetentionSeconds { get; set; }
 
+    [ManifestSetting(DisplayName = "Retention confirmation", Description = "Receipt from the retention policy preview for this tenant and store.", Category = "Retention")]
+    public string? RetentionConfirmation { get; set; }
+
     public void ConfigureServices(IServiceCollection services)
     {
         var storage = KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString);
         var tenant = EmbeddedTenant.Bind(Tenant);
         var persistenceScope = new PersistenceScope(tenant.Tenant);
-        var retention = new KernelRetentionPolicy(RetentionWindow(FinishedRetentionSeconds, nameof(FinishedRetentionSeconds)),
+        var proposedRetention = new ActorRetentionWindows(RetentionWindow(FinishedRetentionSeconds, nameof(FinishedRetentionSeconds)),
             RetentionWindow(CancelledRetentionSeconds, nameof(CancelledRetentionSeconds)),
             RetentionWindow(FaultedRetentionSeconds, nameof(FaultedRetentionSeconds)));
+        var retention = new KernelRetentionActivation(tenant, proposedRetention, RetentionConfirmation);
         services.AddSingleton(storage);
+        services.AddSingleton(retention);
         services.AddSingleton(new ShellRestartRequirement(FeatureName));
         services.AddSingleton(new KernelServing(capabilities: new KernelHostCapabilities(
             Schedules: false, Timers: storage.TakesTimers, Children: storage.TakesChildren, SelfSends: storage.TakesSelfSends,
@@ -101,6 +110,17 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
+        endpoints.MapGet("/runtime/workflows/retention", static (HttpContext context, KernelRetentionActivation retention) =>
+            {
+                var tenant = context.User.FindFirst(IdentityClaimTypes.TenantId)?.Value ?? context.User.FindFirst("tenant_id")?.Value;
+                if (!StringComparer.Ordinal.Equals(tenant ?? "default", retention.Tenant)) return Results.NotFound();
+                context.Response.Headers.CacheControl = "no-store";
+                return Results.Ok(retention.Status);
+            })
+            .WithOwner(FeatureName)
+            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+            .RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeManage);
+
         var http = endpoints.ServiceProvider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value;
         endpoints.Map(HttpBasePath(http) + "/{**path}", static (HttpContext context) =>
                 context.RequestServices.GetRequiredService<KernelHttpRequestHandler>().HandleAsync(context))

@@ -16,12 +16,20 @@ public static partial class SqliteEmbeddedHosting
     }
 
     private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat)
-        : Contract.IActorReads, Contract.IActorTerminalOutputReads, Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads
+        : Contract.IActorReads, Contract.IActorTerminalOutputReads, Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads, Contract.IActorRetentionConfirmation
     {
         public bool SupportsSequencedJournal => qualificationFormat is null
             ? TakesSequencedJournal
             : qualificationFormat is { } format &&
                 (format == StoreFormat.RootSequencedJournalQualification || format == StoreFormat.RootLiveEventQualification || SupportsPlayback);
+
+        public ValueTask<string> ProtectRetentionQuoteAsync(Contract.BoundScope scope, ReadOnlyMemory<byte> quote,
+            CancellationToken cancellationToken = default) =>
+            ReadAsync(reads => reads.ProtectRetentionQuoteAsync(scope, quote, cancellationToken), cancellationToken, normalizeLockTimeout: true);
+
+        public ValueTask<byte[]?> UnprotectRetentionQuoteAsync(Contract.BoundScope scope, string confirmation,
+            CancellationToken cancellationToken = default) =>
+            ReadAsync(reads => reads.UnprotectRetentionQuoteAsync(scope, confirmation, cancellationToken), cancellationToken, normalizeLockTimeout: true);
 
         public bool SupportsPlayback => qualificationFormat == StoreFormat.RootPlaybackQualification;
 

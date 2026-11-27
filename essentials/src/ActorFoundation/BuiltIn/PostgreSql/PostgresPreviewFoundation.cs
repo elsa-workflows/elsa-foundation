@@ -10,7 +10,7 @@ namespace Kernel.Foundation.Postgres;
 /// store with held replies, a request starts a root or sends to one and holds its caller until the owner answers.
 /// </summary>
 public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IActorReads, Contract.IActorTerminalOutputReads,
-    Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads
+    Contract.IActorSequencedJournalReads, Contract.IActorPlaybackReads, Contract.IActorRetentionConfirmation
 {
     private readonly PostgresRootAdmission admission;
     private readonly PostgresRootReads reads;
@@ -70,6 +70,14 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
         reads.ReadTerminalOutputAsync(scope, actor, endedAt, includeValues, cancellationToken);
 
     bool Contract.IActorSequencedJournalReads.SupportsSequencedJournal => reads.SupportsSequencedJournal;
+
+    ValueTask<string> Contract.IActorRetentionConfirmation.ProtectRetentionQuoteAsync(Contract.BoundScope scope,
+        ReadOnlyMemory<byte> quote, CancellationToken cancellationToken) =>
+        reads.ProtectRetentionQuoteAsync(scope, quote, cancellationToken);
+
+    ValueTask<byte[]?> Contract.IActorRetentionConfirmation.UnprotectRetentionQuoteAsync(Contract.BoundScope scope,
+        string confirmation, CancellationToken cancellationToken) =>
+        reads.UnprotectRetentionQuoteAsync(scope, confirmation, cancellationToken);
 
     bool Contract.IActorPlaybackReads.SupportsPlayback => reads.SupportsPlayback;
 
