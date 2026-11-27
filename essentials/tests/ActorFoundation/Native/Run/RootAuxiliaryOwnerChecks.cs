@@ -32,8 +32,10 @@ internal static class RootAuxiliaryOwnerChecks
         const string node = "auxiliary-root-owner";
         const string tenant = "owner-fixture";
         var scope = EmbeddedTenant.Bind(tenant);
-        var primary = new TimedActor(Kernel.WorkflowActor.WorkflowActor.ActorType);
-        var auxiliary = new TimedActor(Kernel.WorkflowActor.ScheduleActor.ActorType);
+        const string workflowType = Kernel.WorkflowActor.WorkflowActor.ActorType;
+        const string scheduleType = Kernel.WorkflowActor.ScheduleActor.ActorType;
+        var primary = new TimedActor(workflowType, [scheduleType, "unregistered-model"]);
+        var auxiliary = new TimedActor(scheduleType, [workflowType]);
         var path = directory is null ? null : Path.Combine(directory, "actors.db");
         var options = new DbContextOptionsBuilder<KernelDb>();
         var definitions = new SqliteAdmissionDefinitions();
@@ -121,6 +123,8 @@ internal static class RootAuxiliaryOwnerChecks
                 .SequenceEqual([Contract.Kinds.Start, TimedActor.TimerKind, Contract.Kinds.JobFinished]),
             "the refused external envelope does not join the auxiliary actor's authentic timer or job result");
         Require(auxiliary.TimedOut.Distinct().SequenceEqual([expiryReference]), "the auxiliary deadline settles when the callback cannot return");
+        Require(primary.RejectedChildren.Distinct().Count() == 2 && auxiliary.RejectedChildren.Distinct().Count() == 2,
+            "unsupported child starts are refused before any committed creator or parent registry entry");
         Require(await reads.GetAsync(scope, unknown.Actor!.Value, token) is null, "the owner refuses the unknown model without creating a checkpoint");
         await owner.StopAsync(token);
         Require((owner as SqliteEmbeddedHostedService)?.LastError is null && (owner as PostgresPreviewHostedService)?.LastError is null,
@@ -145,7 +149,7 @@ internal static class RootAuxiliaryOwnerChecks
         Console.WriteLine("ok " + description);
     }
 
-    private sealed class TimedActor(string type) : ActorType
+    private sealed class TimedActor(string type, IReadOnlyList<string> forbiddenChildTypes) : ActorType
     {
         internal const string TimerKind = "fixture.timer";
         internal const string Expires = "expires";
@@ -154,9 +158,11 @@ internal static class RootAuxiliaryOwnerChecks
         private readonly ConcurrentQueue<Contract.ActorRef> completed = new();
         private readonly ConcurrentQueue<Contract.ActorRef> timedOut = new();
         private readonly ConcurrentQueue<(Contract.ActorRef Actor, string Kind)> deliveries = new();
+        private readonly ConcurrentQueue<(Contract.ActorRef Actor, string Type)> rejectedChildren = new();
         internal IReadOnlyCollection<Contract.ActorRef> Completed => completed.ToArray();
         internal IReadOnlyCollection<Contract.ActorRef> TimedOut => timedOut.ToArray();
         internal IReadOnlyCollection<(Contract.ActorRef Actor, string Kind)> Deliveries => deliveries.ToArray();
+        internal IReadOnlyCollection<(Contract.ActorRef Actor, string Type)> RejectedChildren => rejectedChildren.ToArray();
 
         public string Type => type;
 
@@ -174,7 +180,18 @@ internal static class RootAuxiliaryOwnerChecks
                 deliveries.Enqueue((turn.Header.Ref, message.Kind));
                 var expires = turn.Header.TypeData == Expires;
                 if (message.Kind == Contract.Kinds.Start)
+                {
+                    foreach (var target in forbiddenChildTypes)
+                    {
+                        try
+                        {
+                            turn.Start(new(target, "unsupported-child"));
+                            throw new InvalidOperationException("An unsupported child creator was staged.");
+                        }
+                        catch (NotSupportedException) { rejectedChildren.Enqueue((turn.Header.Ref, target)); }
+                    }
                     turn.Send(turn.Header.Ref, TimerKind, TimerPayload, checked(turn.Now + 100));
+                }
                 else if (message.Kind == TimerKind && message.Payload == TimerPayload && message.Sender == turn.Header.Ref)
                     turn.StartJob(JobKey, Args(turn.Header.Ref, expires), expires ? TimeSpan.FromSeconds(1) : TimeSpan.FromSeconds(10));
                 else if (message.Kind == Contract.Kinds.JobFinished &&

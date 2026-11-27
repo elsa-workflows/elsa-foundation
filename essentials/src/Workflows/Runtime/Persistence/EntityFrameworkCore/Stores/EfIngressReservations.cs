@@ -54,8 +54,8 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
         return new(values.Take(query.Limit).ToArray(), values.Length > query.Limit ? values[query.Limit - 1].ReservationId : null);
     }
 
-    /// <summary>Stages one owner's whole exact claim set in the caller's resource/activation transaction.</summary>
-    internal async ValueTask StageOwnerAsync(TriggerScope scope, string ownerKind, string ownerId,
+    /// <summary>Stages one owner's whole exact claim set in the caller's transaction and returns its previous claims.</summary>
+    internal async ValueTask<IReadOnlyList<RuntimeIngressReservation>> StageOwnerAsync(TriggerScope scope, string ownerKind, string ownerId,
         IReadOnlyList<RuntimeIngressReservation> claims, CancellationToken ct,
         IReadOnlyDictionary<string, IIngressReservationPolicy>? policies = null)
     {
@@ -83,9 +83,9 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
         var owned = context.IngressReservations.Where(row => row.ScopeHash == scopeHash && row.OwnerKind == ownerKind && row.OwnerHash == ownerHash);
         if (!publicationOwner) owned = owned.Where(row => row.TenantKey == tenantKey);
         var ownedRows = await owned.ToArrayAsync(ct);
-        foreach (var row in ownedRows)
+        var previous = ownedRows.Select(row => Read(row, scope.Persistence)).ToArray();
+        foreach (var old in previous)
         {
-            var old = Read(row, scope.Persistence);
             if (old.OwnerKind != ownerKind || old.OwnerId != ownerId || !publicationOwner && old.Scope.TenantId != scope.TenantId)
                 throw new InvalidDataException("The reservation owner projection differs from its actual source and tenant.");
         }
@@ -108,6 +108,7 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
                 Copy(row, claim, checked(row.Revision + 1));
             }
         }
+        return previous;
     }
 
     internal async ValueTask FenceAsync(RuntimeIngressReservation expected, CancellationToken ct)

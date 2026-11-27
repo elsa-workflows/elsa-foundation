@@ -12,7 +12,8 @@ internal static class KernelScheduleClaim
         var key = Key(schedule);
         return new(WorkflowTriggerBinding.BuildId(activationId, identity.ArtifactId, schedule.Node, key),
             identity.ArtifactId, identity.DefinitionId, identity.ArtifactVersion, identity.ArtifactHash,
-            schedule.Node, RuntimeKernelScheduleOccurrence.ReservationType, key, null, new Dictionary<string, string>(), createdAt, activationId, slotId,
+            schedule.Node, RuntimeKernelScheduleOccurrence.ReservationType, key, null,
+            new Dictionary<string, string> { [RuntimeKernelScheduleControl.ScheduleKeyMetadata] = schedule.Key }, createdAt, activationId, slotId,
             TriggerCardinality.ReservationOnly, IsActive: false);
     }
 
