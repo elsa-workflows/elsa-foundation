@@ -404,13 +404,13 @@ internal static class ProfileCapabilityChecks
         Check(privateActivationPostgres.RequiredFormat == StoreFormat.RootSharedActivationQualification &&
             privateActivationSqlite.RequiredFormat == privateActivationPostgres.RequiredFormat &&
             privateActivationPostgres.RequiredFormat != sharedPostgres.RequiredFormat &&
-            privateActivationPostgres.Capabilities == sharedPostgres.Capabilities &&
-            privateActivationSqlite.Capabilities == sharedSqlite.Capabilities &&
+            privateActivationPostgres.Capabilities == RootProfiles.SharedActivationQualification &&
+            privateActivationSqlite.Capabilities == privateActivationPostgres.Capabilities &&
             StoreDefinitionsRevision.Seed(privateActivationPostgres) is { StoreSchema: 1, MessageProtocol: 26, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(privateActivationSqlite) is { StoreSchema: 2, MessageProtocol: 29, JournalCodec: 0 },
             "the combined qualification profile retains its distinct store marker and exact DDL revisions");
         Check(EfStore.RenderPostgresFirstRootGuards(sharedPostgres) == EfStore.RenderPostgresFirstRootGuards(privateActivationPostgres),
-            "the PostgreSQL shipped profile installs the same physical guards as the combined qualification");
+            "the PostgreSQL shipped profile preserves the shared first-install root guards");
         using var publicEventsPostgres = KernelDb.ForPostgresRootPublicEventStartsQualification(options);
         using var publicEventsSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(),
             StoreFormat.RootPublicEventStartsQualification);
@@ -497,7 +497,7 @@ internal static class ProfileCapabilityChecks
             pagedSqlite.RequiredFormat == pagedPostgres.RequiredFormat &&
             pagedPostgres.Capabilities == (publicEventsPostgres.Capabilities | RootCapabilities.PagedPublicEvents) &&
             pagedSqlite.Capabilities == pagedPostgres.Capabilities &&
-            !sharedPostgres.UsesRootPagedPublicEvents && !sharedSqlite.UsesRootPagedPublicEvents &&
+            !privateActivationPostgres.UsesRootPagedPublicEvents && !privateActivationSqlite.UsesRootPagedPublicEvents &&
             !publicEventsPostgres.UsesRootPagedPublicEvents && !publicEventsSqlite.UsesRootPagedPublicEvents &&
             RootProfiles.MissingPrerequisites(pagedPostgres.Capabilities) == RootCapabilities.None &&
             !RootProfiles.Formats.ContainsKey(pagedPostgres.RequiredFormat) &&
