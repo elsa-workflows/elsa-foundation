@@ -430,6 +430,8 @@ public sealed record ForEachState
 [InterventionParent(2)]
 public sealed class ForEach : CompositeActivity, IInterventionParent
 {
+    private const int MaxItems = 1_000;
+
     JsonNode? IInterventionParent.PrepareRetry(Node definition, JsonNode? state, RetryChild child)
     {
         var progress = Values.To<ForEachState>(state) ?? throw new InvalidOperationException("Missing iteration retry obligation.");
@@ -447,35 +449,44 @@ public sealed class ForEach : CompositeActivity, IInterventionParent
 
     protected internal override void Execute(CompositeContext context)
     {
-        var state = new ForEachState { Items = Items ?? [] };
-        context.SetState(state);
-        Next(context, state);
+        var items = Items ?? [];
+        if (items.Count > MaxItems)
+        {
+            context.Fault(new ActivityFault("foreach.items.limit", $"ForEach accepts at most {MaxItems} items. It received {items.Count}."));
+            return;
+        }
+        context.SetState(new ForEachState { Items = items });
+        Next(context, items, 0);
     }
 
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
-        var state = context.GetState<ForEachState>();
         if (child.Outcome == "Break")
         {
             context.Complete();
             return;
         }
-        state.Index++;
-        context.SetState(state);
-        Next(context, state);
+        // The checkpoint already owns the array. Advance its cursor without serializing the remaining items.
+        if (context.ReadState<JsonObject>() is not { } state ||
+            state[nameof(ForEachState.Items)] is not JsonArray items ||
+            state[nameof(ForEachState.Index)] is not JsonValue cursor || !cursor.TryGetValue<int>(out var current))
+            throw new InvalidOperationException("Invalid ForEach state.");
+        var index = current + 1;
+        state[nameof(ForEachState.Index)] = index;
+        Next(context, items, index);
     }
 
-    private static void Next(CompositeContext context, ForEachState state)
+    private static void Next(CompositeContext context, JsonArray items, int index)
     {
-        if (state.Index >= state.Items.Count || context.Children.Count == 0)
+        if (index >= items.Count || context.Children.Count == 0)
         {
             context.Complete();
             return;
         }
         context.Schedule(context.Children[0], scope: new Dictionary<string, JsonNode?>
         {
-            ["currentItem"] = state.Items[state.Index]?.DeepClone(),
-            ["currentIndex"] = state.Index,
+            ["currentItem"] = items[index]?.DeepClone(),
+            ["currentIndex"] = index,
         });
     }
 }

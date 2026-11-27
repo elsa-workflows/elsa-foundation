@@ -63,10 +63,13 @@ internal static class PostgresHeldCallerChecks
                 Wf.Http("send", "https://partner.example/stuck", timeout: TimeSpan.FromSeconds(60)),
                 Wf.Sequence("then", Wf.Node<PostgresHeldDirectChecks.ApprovalSignal>("approve"),
                     Wf.Fault("boom", Binding.Literal("deliberate"), Binding.Literal("a fault beside a running job"))))))
-            // More activities than one turn's cap, on a host that does not split a burst.
+            // The collection limit is enforced before scheduling the body.
             .Add(Wf.Workflow("many", Wf.Sequence("main",
-                Wf.ForEach("each", Binding.Literal(new JsonArray([.. Enumerable.Range(0, 1_200).Select(i => (JsonNode?)i)])),
-                    Wf.Set("step", "last", Binding.Literal(1))))))
+                Wf.ForEach("each", Binding.Literal(new JsonArray([.. Enumerable.Range(0, 1_000).Select(i => (JsonNode?)i)])),
+                    Wf.Set("step", "last", Binding.Expr("currentItem + currentIndex")))), ("last", 0)))
+            .Add(Wf.Workflow("too-many",
+                Wf.ForEach("each", Binding.Literal(new JsonArray([.. Enumerable.Range(0, 1_001).Select(i => (JsonNode?)i)])),
+                    Wf.Fault("unreached", Binding.Literal("body-ran"), Binding.Literal("The body must not run.")))))
             // A Parallel that one branch completes, cancelling the other branch's running timed job: the root finishes in the
             // cancelling turn, or in a later one before the job answers.
             .Add(Wf.Workflow("cancel-finish", Wf.Sequence("main",
@@ -82,11 +85,9 @@ internal static class PostgresHeldCallerChecks
             .Add(Wf.Workflow("spins", Wf.Sequence("main", Wf.While("forever", Binding.Literal(true), Wf.Set("step", "x", Binding.Literal(1)))), ("x", 0)));
         var routes = new HttpRoutes(registry);
         var partner = new Partner();
-        // The store format says whether the node takes self-sends; the shipped profile excludes them.
-        var selfSends = PostgresPreviewHosting.TakesSelfSends(Open);
-        Require(!selfSends, "the shipped format takes no self-sends, so the model runs a burst in one turn");
+        // Opt out of self-sends in the model to exercise its single-turn burst limit on the shipped store.
         var actor = new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry,
-            new NativeExecutionOptions { Http = new NativeHttpOptions { Client = new HttpClient(partner) }, SelfSends = selfSends })]);
+            new NativeExecutionOptions { Http = new NativeHttpOptions { Client = new HttpClient(partner) }, SelfSends = false })]);
         var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, WorkflowActor.WorkflowActor.ActorType,
             PostgresPreviewHosting.CreateRequests(Open, Node, WorkflowActor.WorkflowActor.ActorType), cancellationToken: stop);
         var clock = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
@@ -191,11 +192,20 @@ internal static class PostgresHeldCallerChecks
             }
             Require(true, "the Delete retires it");
 
-            // (h) A ForEach over 1,200 items finishes on a host that does not split a burst at the activity cap.
+            // (h) The last iteration at the exact limit runs with both iteration bindings, and the next size faults.
             var many = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("many")), "many-1", Contract.Kinds.Start,
                 cancellationToken: stop)).Actor!.Value;
-            Require(await SettledAsync(many) is { Status: InstanceStatus.Finished },
-                "a ForEach over 1,200 items finishes in one burst on a host without self-sends");
+            var foreachEnd = await SettledAsync(many);
+            Require(foreachEnd is { Status: InstanceStatus.Finished, State: not null } &&
+                    Json.Read<NativeState>(foreachEnd.State).Variables["last"]?.GetValue<int>() == 1_998,
+                "a ForEach over 1,000 items finishes in one burst with the correct final item and index");
+            var tooMany = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("too-many")), "too-many-1", Contract.Kinds.Start,
+                cancellationToken: stop)).Actor!.Value;
+            var refusedLoop = await SettledAsync(tooMany);
+            using (var header = System.Text.Json.JsonDocument.Parse(refusedLoop?.TypeData ?? "{}"))
+                Require(refusedLoop is { Status: InstanceStatus.Faulted } &&
+                        header.RootElement.GetProperty("SubStatus").GetString() == "foreach.items.limit",
+                    "a ForEach over 1,001 items faults with the collection limit before its body runs");
 
             // (i) A Parallel completed by its signal cancels the running timed job and finishes in the same turn: the job is
             // settled in the Finished commit, and its late input settles nothing.
