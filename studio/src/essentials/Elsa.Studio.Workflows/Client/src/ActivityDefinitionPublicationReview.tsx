@@ -36,6 +36,7 @@ export function ActivityDefinitionPublicationReview({
   onPublished,
   onFocusDiagnostic,
   onOpenVersion,
+  onOpenDraft,
   onOpenWorkflows,
   triggerRef,
   openOnMount = false,
@@ -55,6 +56,7 @@ export function ActivityDefinitionPublicationReview({
   onFocusDiagnostic(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
   /** Omit to hide the link, for example inside a flow that must not leave the current editor. */
   onOpenVersion?(versionId: string): void;
+  onOpenDraft?(draftId: string): void;
   onOpenWorkflows?: () => void;
   triggerRef?: RefObject<HTMLButtonElement | null>;
   openOnMount?: boolean;
@@ -318,6 +320,8 @@ export function ActivityDefinitionPublicationReview({
     setDialogOpen(true);
   };
 
+  const earlierDraft = diagnosticSource.find(item => item.code === "activity.version.pending-reservation" &&
+    item.subject.kind === "ActivityDraft" && item.subject.definitionId === definitionId)?.subject.id;
   const blockerPanel = publicationBlocked ? <div className="ad-publication-blockers" id={blockedReasonId} role="alert">
         <h3>Resolve these issues before publishing</h3>
         <p>{hasBlockingDiagnostics
@@ -327,6 +331,10 @@ export function ActivityDefinitionPublicationReview({
           : "The activity is not ready to publish. Review the readiness checks below or ask an administrator to resolve unavailable services, then check again."}</p>
         {diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} embedded disabled={phase === "publishing" || phase === "unknown"} /> : null}
         <div className="ad-publication-blocker-actions">
+          {earlierDraft && onOpenDraft ? <StudioButton onClick={() => {
+            setDialogOpen(false);
+            onOpenDraft(earlierDraft);
+          }}>Open earlier draft</StudioButton> : null}
           {mode === "toolbar" ? <StudioButton onClick={() => setDialogOpen(false)}>Return to editor</StudioButton> : null}
           <StudioButton onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><RefreshCw size={15} aria-hidden /> Check again</StudioButton>
         </div>

@@ -54,6 +54,11 @@ public sealed record PublishActivityDefinitionResult(
 public interface IActivityDraftPublicationIdentity
 {
     ValueTask<(string VersionId, string Version)?> FindReservationAsync(string draftId, CancellationToken cancellationToken);
+
+    /// <summary>The earliest active reservation this publication would overtake within the same definition and tenant.</summary>
+    ValueTask<(string DraftId, string Version)?> FindPrecedingReservationAsync(
+        ActivityDefinitionDraft draft, string version, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<(string, string)?>(null);
 }
 
 public interface IActivityDefinitionPublisher
@@ -589,6 +594,15 @@ public sealed class ActivityDefinitionPublisher(
             context.ExistingVersions);
         var minimumVersion = _reviewPolicy.MinimumVersion(head?.Version, requiredBump);
         var diagnostics = evaluated.Diagnostics;
+        var preceding = reservedIdentities is null ? null :
+            await reservedIdentities.FindPrecedingReservationAsync(draft, version, cancellationToken);
+        if (preceding is { } earlier)
+            diagnostics = [.. diagnostics, new ActivityDiagnostic(
+                "activity.version.pending-reservation",
+                ActivityDiagnosticSeverity.Error,
+                $"Publish the draft for version {earlier.Version} before version {version}.",
+                new("ActivityDraft", earlier.DraftId, draft.DefinitionId),
+                Remediation: "Imported workflows reference that exact version. Publish the earlier draft, then review this one again.")];
         var provider = new ActivityPublicationCapabilityReadinessView(
             "Provider",
             draft.State.Provider.ProviderKey,
@@ -606,7 +620,7 @@ public sealed class ActivityDefinitionPublisher(
                 x.TemplateHash,
                 x.OccurrenceId))
             .ToArray();
-        var isPublishable = evaluated.IsPublishable;
+        var isPublishable = evaluated.IsPublishable && preceding is null;
         var reviewToken = ActivityPublicationReviewPolicy.ReviewToken(
             draft,
             context.Authoring.HeadVersionId,

@@ -84,6 +84,51 @@ public sealed class ImportPublishOrderTests(ImportedDependenciesFixture fixture)
     }
 
     [Fact]
+    public async Task Draft_publication_preserves_the_earlier_version_a_workflow_caller_references()
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var collection = JsonNode.Parse(Elsa3ImportHost.Collection("reusable-calls-reusable"))!.AsArray();
+        var caller = collection.Single(item => (string?)item!["id"] == "outer-v1")!;
+        caller["options"]!["usableAsActivity"] = false;
+        const string collections = "migration/elsa3/reusable-activities/collections";
+        var upload = await host.PostAsync(collections, collection);
+        var handle = Elsa3ImportHost.Required(upload, "collectionHandle");
+        var (plan, _) = await host.AnalyzeAsync(handle);
+        var receipt = await host.PostAsync($"{collections}/{handle}/apply-drafts", new JsonObject
+        {
+            ["planId"] = plan, ["selectedSourceVersionIds"] = new JsonArray("outer-v1", "inner-v1", "inner-v2"),
+            ["idempotencyKey"] = "draft-order"
+        });
+        var sources = receipt["sources"]!.AsArray().ToDictionary(item => Elsa3ImportHost.Required(item!, "sourceVersionId"), item => item!);
+        string DraftPath(string source) => $"design/activities/drafts/{sources[source]["activityDraftId"]}";
+        Task<JsonNode> Review(string source, string? head = null) => host.PostAsync($"{DraftPath(source)}/publication-preflight",
+            new JsonObject { ["expectedDraftRevision"] = 1, ["expectedDefinitionHeadVersionId"] = head });
+        static JsonObject Request(JsonNode review, string key) => new()
+        {
+            ["expectedDraftRevision"] = 1, ["expectedDefinitionHeadVersionId"] = (string?)review["definitionHeadVersionId"],
+            ["version"] = (string?)review["reservedVersion"], ["reviewToken"] = (string?)review["reviewToken"], ["idempotencyKey"] = key
+        };
+
+        var blocked = await Review("inner-v2");
+        Assert.False((bool?)blocked["isPublishable"]);
+        var issue = Assert.Single(blocked["diagnostics"]!.AsArray(), x => (string?)x!["code"] == "activity.version.pending-reservation")!;
+        Assert.Equal((string?)sources["inner-v1"]["activityDraftId"], (string?)issue["subject"]!["id"]);
+        using var attempted = await host.Send(HttpMethod.Post, $"{DraftPath("inner-v2")}/publish", Request(blocked, "v2-first"));
+        Assert.False(attempted.IsSuccessStatusCode);
+        Assert.Contains("activity.version.pending-reservation", await attempted.Content.ReadAsStringAsync());
+
+        var first = await host.PostAsync($"{DraftPath("inner-v1")}/publish", Request(await Review("inner-v1"), "publish-v1"));
+        var firstId = Elsa3ImportHost.Required(first["outcome"]!, "definitionVersionId");
+        Assert.Equal((string?)sources["inner-v1"]["activityDefinitionVersionId"], firstId);
+        var second = await host.PostAsync($"{DraftPath("inner-v2")}/publish", Request(await Review("inner-v2", firstId), "publish-v2"));
+        Assert.Equal((string?)sources["inner-v2"]["activityDefinitionVersionId"], (string?)second["outcome"]!["definitionVersionId"]);
+
+        var workflow = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(sources["outer-v1"], "workflowVersionId"));
+        var run = await host.RunAsync(workflow);
+        Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
+    }
+
+    [Fact]
     public async Task Older_version_selected_after_a_newer_one_is_published_is_refused_with_bump_insufficient()
     {
         await using var host = await Elsa3ImportHost.StartAsync();
