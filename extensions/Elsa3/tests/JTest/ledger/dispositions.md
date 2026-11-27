@@ -71,3 +71,27 @@ One row per definition (spec 1235, data-model.md). Buckets stay `unclassified` u
   definitions: they are examples of a definition that must be changed to convert. Three copies are approved and in
   `adjusted/` (date-methods, minimal-baseline, elsa-functions); the fourth, `javascript-script-handler-functions.json`,
   was approved the same day with its `getConfiguration` branch returning `null`.
+
+## Migration diagnostics for the adjustments
+
+Rule (coordinator, 2026-11-27): an Elsa 3 pattern the suites show to be incompatible with Elsa 4 gets a small
+compatible adjustment here, and the converter must give the original pattern a warning or refusal with guidance that
+the adjustment follows. Audit of every adjustment so far:
+
+| Original pattern | Converter diagnostic on the original | Adjustment follows the guidance |
+|---|---|---|
+| Response content type computed by an expression (`http-endpoints`) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`: set ContentType to the literal `application/json` | yes |
+| Status code from an expression (`branching-flows`) | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`: set an explicit positive status | yes |
+| Switch mode from an expression (`branching-flows`) | `ELS3-ACTIVITY-UNSUPPORTED-MODE`: set the mode literally or split the switch | yes (mode fixed; MatchAny case tracked in #1152) |
+| `channelName` bound (`composition-dispatch-root-workflow`) | `ELS3-ACTIVITY-REMOVED-INPUT-BOUND`: clear the input | yes |
+| Dispatch `result` captured | `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` today; converts after spec 1245 | capture restored once spec 1245 is implemented |
+| Form-file variable and `files` capture (`http-endpoints`) | `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE` (#3194), `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` | yes (form-files suite tracked in #1152) |
+| `Object` variable bound to the typed Headers input (`http-endpoints`) | `VF-IMP-008`: convert explicitly in JavaScript | yes |
+| Loop value read into a String input (`performance-commit-after-every-activity`) | `ELS3-UNTYPED-RESULT`: convert with `String(...)` | yes |
+| Date parsed from text (`javascript-date-methods`, `performance-minimal-baseline`) | `VF-IMP-005`: rewrite with UTC methods or an explicit offset, or set the date interpretation | yes |
+| Unknown host function `getConfiguration` (`javascript-script-handler-functions`) | `VF-IMP-005`: replace with language syntax or move into an activity | yes |
+| Byte helpers `bytesFromString`/`bytesToString` (`javascript-elsa-functions`) | `VF-IMP-005`: move the conversion into an activity | partly: no Elsa 4 activity converts text to bytes; the copy uses plain language syntax, which the guidance does not mention |
+| XML request body (W2, `http/request-body`) | `ELS3-BEHAVIOUR-FORM-POST-NOT-PARSED`: a text body becomes a string | covered |
+| Input expression changes a variable it read (`javascript-array-methods`, `javascript-object-methods`, `logging-workflow`) | none: faults at run time with VF-BIND-001 | gap, #5894; copies wait for its guidance |
+| Script result is a Promise (`javascript-specialized-methods-workflow`) | none: Elsa 4 yields `{}` silently | gap, #5687 |
+| Time-based busy-wait (`composition-dispatch-sub-workflow`, `javascript-specialized-methods-workflow`) | none: faults on the script memory limit | gap, #5818 |
