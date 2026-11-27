@@ -93,7 +93,6 @@ public sealed partial class EfStore
                 root."HeadPosition", root."CancellationRevision", root."CancellationAt",
                 NULL AS "StoreSchema", NULL AS "MessageProtocol", NULL AS "JournalCodec", NULL AS "DefinitionStamp"
             FROM (SELECT 1) stamp LEFT JOIN root ON true LEFT JOIN page ON true
-            ORDER BY page."Position"
             """).ToListAsync(token);
         return BuildRootJournalPage(rows);
     }, token);
