@@ -244,6 +244,25 @@ public sealed class KernelCoordinatorTests
     }
 
     [Fact]
+    public async Task A_managed_schedule_activates_and_retires_through_publication_claims()
+    {
+        var host = new Host();
+        host.Coordinator = host.NewCoordinator(host.Switch, new RuntimeManagedScheduleActors());
+
+        var first = await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
+        var second = await host.ActivateAsync(Ticks("ticks@2"), "ticks-2");
+        Assert.True(first.Succeeded);
+        Assert.True(second.Succeeded);
+        Assert.False(Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1")).IsActive);
+        Assert.Equal(TriggerCardinality.ReservationOnly, Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-2")).Cardinality);
+        Assert.Equal("ticks@2", Assert.Single(host.Serving.Schedules.All).Workflow);
+
+        Assert.True((await host.DeactivateAsync(Ticks("ticks@2"))).Succeeded);
+        Assert.Empty(host.Serving.Schedules.All);
+        Assert.Empty(await host.Bindings.ListAllByActivationAsync("ticks-2"));
+    }
+
+    [Fact]
     public async Task A_republish_replaces_the_route_and_points_the_schedule_at_the_new_artifact()
     {
         var host = new Host();
