@@ -1,5 +1,6 @@
 using Kernel.Durable;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Hosting;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Foundation.Postgres;
@@ -20,16 +21,19 @@ public sealed class PostgresDirectRequests : IReplyTransport
     private readonly PostgresRootAdmission admission;
     private readonly HeldRootRequests edge;
     private readonly string? _startType;
+    private readonly bool _protectsRootStarts;
     private PostgresReplyRelay? _liveReplies;
 
-    internal PostgresDirectRequests(PostgresRootAdmission admission, EfStore store, string node, string? startType = null)
+    internal PostgresDirectRequests(PostgresRootAdmission admission, EfStore store, string node, string? startType = null,
+        ProtectRootStartAsync? protectRootStart = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
         if (startType is not null) PostgresRootAdmission.RequireActorType(startType);
         this.admission = admission;
         _startType = startType;
+        _protectsRootStarts = protectRootStart is not null;
         Node = node;
-        edge = new(new Admission(admission, store), node, startType);
+        edge = new(new Admission(admission, store, protectRootStart), node, startType);
     }
 
     /// <summary>The node whose callers these are: a reply addressed to another node is not this edge's.</summary>
@@ -48,6 +52,12 @@ public sealed class PostgresDirectRequests : IReplyTransport
     {
         if (!admission.UsesDatabaseFactory(create) || _startType != actorType)
             throw new ArgumentException("Schedule occurrences and held requests must use the same PostgreSQL store factory and primary actor type.");
+    }
+
+    internal void RequireRootStartProtectionBinding(Func<KernelDb> create, string actorType)
+    {
+        if (_protectsRootStarts && (!admission.UsesDatabaseFactory(create) || _startType != actorType))
+            throw new ArgumentException("Protected held starts must use the same PostgreSQL store factory and primary actor type.");
     }
 
     internal ValueTask<bool> ReceiveAsync(string destination, Reply reply, CancellationToken stop) =>
@@ -82,7 +92,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
         string id, string kind, string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken stop) =>
         edge.RequestAsync(scope, target, id, kind, payload, add, request, stop);
 
-    private sealed class Admission(PostgresRootAdmission admission, EfStore store) : IHeldRootAdmission
+    private sealed class Admission(PostgresRootAdmission admission, EfStore store, ProtectRootStartAsync? protectRootStart) : IHeldRootAdmission
     {
         public bool SupportsEvents { get; } = admission.SupportsLiveEventWaits();
 
@@ -93,7 +103,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
 
         public async Task<string?> StartAsync(HeldRootRequest request, StartSpec spec, CancellationToken token) =>
             (await admission.AdmitRootRequestAsync(request.Tenant, request.Caller.Id, spec, request.Node, request.Caller,
-                request.ReleaseBeforeCommit, token, request.KeepFor))?.Reference;
+                request.ReleaseBeforeCommit, token, request.KeepFor, protectRootStart))?.Reference;
 
         public async Task<HeldRootAdmission> SendAsync(HeldRootRequest request, string reference, string kind, string? payload,
             CancellationToken token) =>

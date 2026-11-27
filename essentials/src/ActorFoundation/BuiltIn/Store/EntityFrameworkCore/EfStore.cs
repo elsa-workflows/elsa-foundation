@@ -180,6 +180,7 @@ public class KernelDb : DbContext
     internal bool UsesRootScheduleSettlement => Has(RootCapabilities.ScheduleSettlement);
     internal bool UsesRootScheduleControls => Has(RootCapabilities.ScheduleControls);
     internal bool UsesRootScheduleLineage => Has(RootCapabilities.ScheduleLineage);
+    internal bool UsesRootPreparedStarts => Has(RootCapabilities.PreparedStarts);
     internal uint? ScheduleLineageCommitMarker { get; set; }
     internal bool SeparateRootFormatLock =>
         RequiredFormat == StoreFormat.RootShipped || UsesRootDueBacklog || UsesRootTerminalOutput || UsesRootChildren;
@@ -214,6 +215,8 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootScheduleControlsQualification, RootProfiles.ScheduleControlsQualification);
     internal static KernelDb ForPostgresRootScheduleLineageQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootScheduleLineageQualification, RootProfiles.ScheduleLineageQualification);
+    internal static KernelDb ForPostgresRootPreparedStartsQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootPreparedStartsQualification, RootProfiles.PreparedStartsQualification);
     internal static KernelDb ForPostgresRootManagedSchedulesQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootManagedSchedulesQualification, RootProfiles.ManagedSchedulesQualification);
     internal static KernelDb ForPostgresRootSelfTimedQualification(DbContextOptions<KernelDb> options) =>
@@ -263,6 +266,9 @@ public class KernelDb : DbContext
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootScheduleLineageQualification)
             return new(options, qualificationFormat.Value, RootProfiles.ScheduleLineageQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootPreparedStartsQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.PreparedStartsQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootManagedSchedulesQualification)
             return new(options, qualificationFormat.Value, RootProfiles.ManagedSchedulesQualification,
