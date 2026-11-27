@@ -748,7 +748,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         }
         if (!_s.Frames.TryGetValue(frame.Parent, out var parent)) return;
         var node = _wf.Nodes[parent.Node];
-        // A composite's inputs are read again for every callback, so a host expression among them can fail here too.
+        // A composite that rebinds its inputs can fail here during expression evaluation.
         Guard(parent, () =>
         {
             var composite = (CompositeActivity)RestoreActivity(parent, node);

@@ -77,6 +77,9 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private readonly CancellationTokenSource _besideEnd = new();     // A1: cancelled at the end of the stop, or on a kill
     private Task? _besideRun;
 
+    // A live carrier can finish output released by the drains while its beside loop is still running.
+    internal Func<CancellationToken, Task>? AfterReleaseAsync { get; init; }
+
     // An embedded store can release its process lock after the drains, ownership return and beside loop all end.
     internal Action? AfterCleanStop { get; init; }
     private readonly object _halting = new();
@@ -401,7 +404,12 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
 
     private async Task HaltOnceAsync()     // A1: the watchdog guards the last pass and the releases, so it ends after them
     {
-        try { await HaltLoopsAsync(); }
+        try
+        {
+            await HaltLoopsAsync();
+            if (!_kill.IsCancellationRequested && AfterReleaseAsync is { } afterRelease)
+                await afterRelease(_kill.Token);
+        }
         finally { _besideEnd.Cancel(); if (_besideRun is not null) await _besideRun; }
         if (!_kill.IsCancellationRequested) AfterCleanStop?.Invoke();
     }
