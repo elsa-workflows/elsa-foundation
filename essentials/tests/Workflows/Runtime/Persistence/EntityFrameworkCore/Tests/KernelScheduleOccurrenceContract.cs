@@ -261,7 +261,7 @@ internal static partial class KernelScheduleOccurrenceContract
         Assert.DoesNotContain(await relay.ListPendingAsync(scope, null, 10), item => item.Occurrence == outage);
         Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted, await store.TryAcceptAttemptAsync(outage, recoveryDeadline,
             _ => ValueTask.FromResult(recoveredAt)));
-        var accepted = Assert.Single((await relay.ListPendingAsync(scope, null, 10)).Where(item => item.Occurrence == outage));
+        var accepted = Assert.Single(await relay.ListPendingAsync(scope, null, 10), item => item.Occurrence == outage);
         Assert.Equal(recoveredAt.UtcTicks, accepted.Cursor.AcceptedAtUtcTicks);
         Assert.Equal("1.2.0", (await context.KernelScheduleOccurrences.AsNoTracking().SingleAsync(row => row.Id == accepted.Cursor.Id)).SchemaVersion);
         Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Accepted, await store.TryAcceptAttemptAsync(outage, recoveryDeadline.AddMinutes(1),
