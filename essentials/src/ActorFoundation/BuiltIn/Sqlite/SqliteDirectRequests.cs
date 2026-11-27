@@ -132,10 +132,12 @@ public static partial class SqliteEmbeddedHosting
             }
         }
 
+        internal IDisposable AcquireReplyLease() => AcquireFile(path, requests: this);
+
         private async ValueTask<Contract.Reply> DuringLocalOwnershipAsync(Func<ValueTask<Contract.Reply>> request, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
-            using (AcquireFile(path, requests: this)) token.ThrowIfCancellationRequested();
+            using (AcquireReplyLease()) token.ThrowIfCancellationRequested();
             try { return await request(); }
             catch (SqliteHostLockException)
             {
