@@ -44,7 +44,7 @@ internal static partial class WorkbenchPostgresPreview
                 rankedPage.Items.Any(item => item.Position == 2) && observer.Checked == 3,
                 "the actual bounded scoped queries seek a nonzero frozen rank in a retained published run");
             if (postgres)
-                await RefusePlaybackProjectorDriftAsync(Open, run, ranked, token);
+                await RefusePostgresPlaybackDriftAsync(Open, run, ranked, token);
         }
         if (postgres)
             await RefusePlaybackNamespaceReplacementAsync(options, run, descendants, token);
@@ -328,7 +328,7 @@ internal static partial class WorkbenchPostgresPreview
         SELECT pg_catalog.pg_get_functiondef('public.kernel_project_root_playback_scopes()'::regprocedure) AS "Value"
         """).SingleAsync(token);
 
-    private static async Task RefusePlaybackProjectorDriftAsync(Func<KernelDb> open, string run, ActorPlaybackQuery query, CancellationToken token)
+    private static async Task RefusePostgresPlaybackDriftAsync(Func<KernelDb> open, string run, ActorPlaybackQuery query, CancellationToken token)
     {
         await using var observer = open();
         await observer.Database.ExecuteSqlRawAsync("""
@@ -395,6 +395,41 @@ internal static partial class WorkbenchPostgresPreview
         {
             await observer.Database.ExecuteSqlRawAsync("""
                 ALTER FUNCTION public.kernel_project_root_playback_scopes() RESET ALL;
+                """, token);
+        }
+
+        await observer.Database.ExecuteSqlRawAsync("""
+            DROP INDEX kernel_playback_scope_unknown;
+            CREATE INDEX kernel_playback_scope_unknown ON "FoundationJournalPlaybackScopes"
+                ("Partition", "Actor" COLLATE pg_catalog."default", "Sequence") WHERE "Known" = 0;
+            """, token);
+        try
+        {
+            await RefuseAsync("same-name scope index with the wrong Actor collation");
+        }
+        finally
+        {
+            await observer.Database.ExecuteSqlRawAsync("""
+                DROP INDEX kernel_playback_scope_unknown;
+                CREATE INDEX kernel_playback_scope_unknown ON "FoundationJournalPlaybackScopes"
+                    ("Partition", "Actor", "Sequence") WHERE "Known" = 0;
+                """, token);
+        }
+
+        await observer.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE "FoundationSequencedJournal"
+                DROP CONSTRAINT "FoundationSequencedJournal_Partition_Position_fkey";
+            """, token);
+        try
+        {
+            await RefuseAsync("missing cascade from raw Journal to sequenced history");
+        }
+        finally
+        {
+            await observer.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "FoundationSequencedJournal"
+                    ADD CONSTRAINT "FoundationSequencedJournal_Partition_Position_fkey"
+                    FOREIGN KEY ("Partition", "Position") REFERENCES "Journal" ("Partition", "Position") ON DELETE CASCADE;
                 """, token);
         }
 

@@ -77,6 +77,28 @@ public sealed partial class EfStore
             (TABLE expected EXCEPT ALL TABLE actual) UNION ALL (TABLE actual EXCEPT ALL TABLE expected))
         """;
 
+    // Retiring a raw Journal row must reach both Playback tables and every scoped membership.
+    private static readonly string PostgresPlaybackRetirementChain = $"""
+        EXISTS (SELECT 1 FROM pg_catalog.pg_class raw_journal
+            WHERE raw_journal.oid = pg_catalog.to_regclass('"Journal"')
+                AND raw_journal.relnamespace = scopes.relnamespace AND raw_journal.relkind = 'r'
+                AND (SELECT count(*) FROM (VALUES
+                        ('{PlaybackScopeActivity}', scopes.oid, playback.oid, ARRAY[1, 2, 4]::smallint[], ARRAY[1, 2, 4]::smallint[]),
+                        ('{PlaybackName}_Partition_Position_fkey', playback.oid, stamp.tgrelid, ARRAY[1, 3]::smallint[], ARRAY[1, 2]::smallint[]),
+                        ('{PlaybackInvalidName}_Partition_Position_fkey', invalid.oid, stamp.tgrelid, ARRAY[1, 3]::smallint[], ARRAY[1, 2]::smallint[]),
+                        ('{SequencedJournalName}_Partition_Position_fkey', stamp.tgrelid, raw_journal.oid, ARRAY[1, 2]::smallint[], ARRAY[1, 2]::smallint[])
+                    ) expected(name, source, target, source_key, target_key)
+                    JOIN pg_catalog.pg_constraint edge ON edge.conname = expected.name
+                        AND edge.conrelid = expected.source AND edge.confrelid = expected.target
+                    WHERE edge.contype = 'f' AND edge.convalidated AND NOT edge.condeferrable
+                        AND edge.conkey = expected.source_key AND edge.confkey = expected.target_key
+                        AND edge.confdeltype = 'c' AND edge.confupdtype = 'a'
+                        AND (SELECT count(*) FROM pg_catalog.pg_trigger check_trigger
+                            WHERE check_trigger.tgconstraint = edge.oid AND check_trigger.tgisinternal
+                                AND check_trigger.tgrelid IN (edge.conrelid, edge.confrelid)
+                                AND check_trigger.tgenabled IN ('O', 'A')) = 4) = 4)
+        """;
+
     private static readonly string PostgresPlaybackScopeLayout = $"""
         (SELECT count(*) FROM (VALUES
                 ('{PlaybackScopeKey}', '1 2 3 4', true, true, NULL),
@@ -92,14 +114,14 @@ public sealed partial class EfStore
             WHERE idx.indisvalid AND idx.indisready AND idx.indislive AND idx.indisunique = expected.unique_index
                 AND idx.indisprimary = expected.primary_index AND idx.indkey::text = expected.columns
                 AND idx.indnkeyatts = idx.indnatts
+                AND NOT EXISTS (
+                    SELECT 1 FROM pg_catalog.generate_series(0, idx.indnkeyatts - 1) key_slot(slot)
+                    LEFT JOIN pg_catalog.pg_attribute declared ON declared.attrelid = scopes.oid
+                        AND declared.attnum = idx.indkey[key_slot.slot] AND NOT declared.attisdropped
+                    WHERE idx.indcollation[key_slot.slot] IS DISTINCT FROM declared.attcollation
+                        OR declared.attcollation IS DISTINCT FROM CASE WHEN declared.attnum IN (2, 3, 4)
+                            THEN pg_catalog.to_regcollation('pg_catalog."C"')::oid ELSE 0::oid END)
                 AND pg_catalog.pg_get_expr(idx.indpred, idx.indrelid) IS NOT DISTINCT FROM expected.predicate) = 5
-        AND EXISTS (SELECT 1 FROM pg_catalog.pg_constraint owner
-            WHERE owner.conname = '{PlaybackScopeActivity}' AND owner.contype = 'f' AND owner.convalidated
-                AND owner.conrelid = scopes.oid AND owner.confrelid = playback.oid
-                AND owner.conkey = ARRAY[1, 2, 4]::smallint[] AND owner.confkey = ARRAY[1, 2, 4]::smallint[]
-                AND owner.confdeltype = 'c' AND owner.confupdtype = 'a' AND NOT owner.condeferrable
-                AND (SELECT count(*) FROM pg_catalog.pg_trigger check_trigger
-                    WHERE check_trigger.tgconstraint = owner.oid AND check_trigger.tgisinternal
-                        AND check_trigger.tgenabled IN ('O', 'A')) = 4)
+        AND {PostgresPlaybackRetirementChain}
         """;
 }
