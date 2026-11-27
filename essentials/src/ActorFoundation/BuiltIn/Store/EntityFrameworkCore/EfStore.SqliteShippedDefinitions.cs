@@ -227,7 +227,7 @@ public sealed partial class EfStore
             {
                 Add("FoundationReleasedBy", "INTEGER");
                 Check("CK_Messages_FoundationReleasedBy", $"""
-                    "FoundationReleasedBy" IS NULL OR ("FoundationReleasedBy" > 0 AND "InboxScope" = {InboxKey.FoundationOccurrenceScope})
+                    "FoundationReleasedBy" IS NULL OR ("FoundationReleasedBy" > 0 AND {ParkInputPredicate(db, "\"InboxScope\"")})
                     """);
             }
             Check("CK_Messages_FoundationKeptBy", parkArrivals
@@ -332,9 +332,14 @@ public sealed partial class EfStore
         }
         if (db.UsesRootParkRecovery)
         {
+            if (db.UsesRootPrivateParkInputs)
+            {
+                yield return Index("IX_FoundationRootInbox_ParkTimers", "Messages", ParkTimerIndex);
+                yield return Index("IX_FoundationRootInbox_TerminalSelf", "Messages", TerminalRootSelfIndex(db));
+            }
             yield return Index("IX_FoundationRootInbox_Released", "Messages", $"""
                 ("Partition", "Target", "FoundationReleasedBy", "Seq")
-                WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationReleasedBy" IS NOT NULL
+                WHERE {ParkInputPredicate(db, "\"InboxScope\"")} AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationReleasedBy" IS NOT NULL
                 """);
             yield return Index("IX_FoundationRootInbox_CohortGroups", "Messages", $"""
                 ("Partition", "Seen", "Due", "Seq", "Target") WHERE {SqliteCohortWaitingWork}

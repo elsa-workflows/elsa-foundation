@@ -104,15 +104,23 @@ public static class PostgresPreviewHosting
             """).ToListAsync(cancellationToken);
 
     /// <summary>
-    /// Whether a node on the format <paramref name="create"/> selects takes an actor's self-sends. A host gives the answer to
+    /// Whether a node on the format <paramref name="create"/> takes an actor's self-sends. A host gives the answer to
     /// its model (for the Native model, <c>NativeExecutionOptions.SelfSends</c>), so that a model which continues a long
-    /// burst in a self-send on a format with them runs it in one turn on a format without them, the shipped format among them.
+    /// burst in a self-send on a format with them runs it in one turn on a format without them.
     /// </summary>
     public static bool TakesSelfSends(Func<KernelDb> create)
     {
         ArgumentNullException.ThrowIfNull(create);
         using var db = create();
         return db.UsesRootSelfProtocol;
+    }
+
+    /// <summary>Whether the selected format takes durable actor-owned timers, as used by the Native Delay activity.</summary>
+    public static bool TakesTimers(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootTimers;
     }
 
     /// <summary>
@@ -199,7 +207,7 @@ public static class PostgresPreviewHosting
     // The node with the transport its owner answers held callers through (a check may observe it on the way).
     internal static async Task<RuntimeNode> StartAsync(Func<KernelDb> create, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options, CancellationToken cancellationToken,
-        Action<Exception>? onFault, IReplyTransport? replies)
+        Action<Exception>? onFault, IReplyTransport? replies, bool? fenceInBatch = null)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -217,12 +225,12 @@ public static class PostgresPreviewHosting
             throw new ArgumentException("Configure positive millisecond loop intervals and a membership window of at least two balance rounds.", nameof(options));
 
         int partitions;
-        bool nativeJobs;
-        bool shipped;
+        bool nativeJobs, selfSends, shipped;
         await using (var db = create())
         {
             nativeJobs = db.UsesRootJobProtocol;
             shipped = db.RequiredFormat == StoreFormat.RootShipped;
+            selfSends = db.UsesRootSelfProtocol;
             if (!db.Database.IsNpgsql() || !(db.SupportsCorePreview || db.UsesRootReplyProtocol))
                 throw new NotSupportedException("Hosting requires a PostgreSQL Core Preview format.");
             if (db.UsesRootReplyProtocol != (replies is not null))
@@ -233,12 +241,13 @@ public static class PostgresPreviewHosting
             partitions = await PostgresRootAdmission.ReadInstalledPartitionCountAsync(db, cancellationToken);
         }
 
-        var store = new EfStore(create, postgres: true);
+        var store = new EfStore(create, postgres: true, fenceInBatch: fenceInBatch);
+        if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
         if (nativeJobs) await store.EnableRootJobsAsync(cancellationToken);
         var scope = store.BindWorkerNode(actor.Withholds);
         var watchdog = new Watchdog(Defaults.Lease, endProcess);
         var watched = watchdog.Watch(store);
-        var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actor, rootJobHandle: store.RootJobHandle,
+        var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actor, store.RootSelfIssuer, rootJobHandle: store.RootJobHandle,
             rootTimedJobClock: store.RootTimedJobSettlementEnabled ? store.ReadRootTimedJobPublicationTimeAsync : null,
             rootHeldReplies: replies is not null);
         // A store error a drain retried is reported as a loop error of the node made below: counted, and reported once per

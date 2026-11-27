@@ -107,7 +107,7 @@ internal sealed partial class ActorAdapter
             if (kind is Contract.Kinds.Start or Contract.Kinds.Event or Contract.Kinds.ChildFinished or Contract.Kinds.JobFinished)
                 throw new ArgumentException("The foundation issues this message kind.", nameof(kind));
             if (_issueSelf is not null && _issueSelf.Allows(dueAt) && target == Header.Ref)
-                return _turn.SendToSelf(_issueSelf.Handle, kind, payload, dueAt);
+                return _turn.SendToSelf(_issueSelf.Handle, kind, payload, dueAt, recordOrdinal: true);
             return _turn.SendFromActor(Store, new(address.Id), address.Creation, kind, payload, dueAt);
         }
 
@@ -115,7 +115,7 @@ internal sealed partial class ActorAdapter
         {
             if (id.Length != 65 || id[0] != '~' || id.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEF") >= 0)
                 throw new ArgumentException("Recall requires an issued message id.", nameof(id));
-            if (_issueSelf is not null) _turn.RecallPersistedSelfInput(id);
+            if (_issueSelf is not null) _turn.RecallSelfInput(id);
             else _turn.RecallFromActor(Store, id);
         }
 

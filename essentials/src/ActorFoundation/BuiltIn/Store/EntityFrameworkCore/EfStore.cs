@@ -167,6 +167,8 @@ public class KernelDb : DbContext
     internal bool UsesRootParkArrivals => Has(RootCapabilities.ParkArrivals);
     internal bool UsesRootParkRecovery => Has(RootCapabilities.ParkRecovery);
     internal bool UsesRootDueBacklog => Has(RootCapabilities.DueBacklog);
+    internal bool UsesRootPrivateParkInputs => UsesRootSelfProtocol && UsesRootParkArrivals && UsesRootComposedParkRecovery;
+    internal bool UsesRootTimerRearm => UsesRootPrivateParkInputs && Has(RootCapabilities.TimerRearm);
     internal bool UsesRootComposedParkRecovery =>
         UsesRootParkRecovery && (Capabilities & RootProfiles.ParkCompositionBase) == RootProfiles.ParkCompositionBase;
     // A composed set with Park and Termination (S5a, #4229): an operator command reaches a parked root, passes its withheld
@@ -179,12 +181,27 @@ public class KernelDb : DbContext
     internal bool ProjectsRootParkRevision => UsesRootParkInspection && (UsesRootParkRecovery || UsesRootParkedOperators);
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
+    internal static KernelDb ForPostgresRootSelfTimedQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootSelfTimedQualification, RootProfiles.SelfTimedQualification);
+    internal static KernelDb ForSqliteRootSelfTimedQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
+        new(options, StoreFormat.RootSelfTimedQualification, RootProfiles.SelfTimedQualification, sqliteShippedInstall: true,
+            sqliteRuntimeDefinitions: definitions);
+    internal static KernelDb ForPostgresRootSelfTimedParkQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootSelfTimedParkQualification, RootProfiles.SelfTimedParkQualification);
+    internal static KernelDb ForSqliteRootSelfTimedParkQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
+        new(options, StoreFormat.RootSelfTimedParkQualification, RootProfiles.SelfTimedParkQualification, sqliteShippedInstall: true,
+            sqliteRuntimeDefinitions: definitions);
+    internal static KernelDb ForPostgresRootTimerRearmQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootTimerRearmQualification, RootProfiles.TimerRearmQualification);
+    internal static KernelDb ForSqliteRootTimerRearmQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
+        new(options, StoreFormat.RootTimerRearmQualification, RootProfiles.TimerRearmQualification, sqliteShippedInstall: true,
+            sqliteRuntimeDefinitions: definitions);
     internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options) =>
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true);
     internal static KernelDb ForSqliteRootRuntime(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
     internal static KernelDb ForRootDueBacklogQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions? definitions = null) =>
-        new(options, StoreFormat.RootDueBacklogQualification, RootProfiles.Shipped | RootCapabilities.DueBacklog,
+        new(options, StoreFormat.RootDueBacklogQualification, RootProfiles.ParkRecoveryComposition | RootCapabilities.DueBacklog,
             sqliteShippedInstall: definitions is not null, sqliteRuntimeDefinitions: definitions);
     internal static KernelDb ForSqliteParkArrivalsQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions? definitions = null) =>
         new(options, StoreFormat.SqliteParkArrivalsQualification, RootProfiles.ParkCompositionBase | RootCapabilities.ParkArrivals,
@@ -262,8 +279,8 @@ public class KernelDb : DbContext
     protected override void OnModelCreating(ModelBuilder model)
     {
         var sqliteShippedInstall = UsesSqliteShippedInstall;
-        if (UsesRootSelfProtocol && !Database.IsNpgsql())
-            throw new NotSupportedException("The continuation profile requires PostgreSQL.");
+        if (UsesRootSelfProtocol && !Database.IsNpgsql() && !sqliteShippedInstall)
+            throw new NotSupportedException("The continuation profile requires PostgreSQL or a qualified SQLite root store.");
         if (UsesRootJobProtocol && !Database.IsNpgsql() && !sqliteShippedInstall)
             throw new NotSupportedException("The generated-root job profile requires PostgreSQL.");
         if (UsesRootReplyProtocol && !Database.IsNpgsql() && !sqliteShippedInstall)
@@ -879,8 +896,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                    {(WithholdsParkInputs(db) ? """AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4 AND m."Id" LIKE 'operator/%')"""
                        : db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL"""
                        : ClearsParkInPages(db) ? RootClearingInputFilter : "")}
-                   {(db.UsesRootComposedParkRecovery ? """
-                     AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4 AND (m."ReplyTo" IS NULL OR m."Id" LIKE 'operator/%'))
+                   {(db.UsesRootComposedParkRecovery ? $"""
+                     AND (i."FoundationParkAt" IS NULL OR m."InboxScope" IN ({ParkInputScopes(db)}) AND (m."ReplyTo" IS NULL OR m."Id" LIKE 'operator/%'))
                      """ : "")}
                    {RootPollCohortFilter(db)})))
             """;
@@ -895,6 +912,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             : RootOperatorPollFilter;
         // A running actor can withhold even when the physical suspension flag is clear. Offer the first due operator
         // beside earlier ordinary inputs so the owner can choose from its committed header.
+        filter = filter.Replace("/*root-self-predecessor*/",
+            db.UsesRootPrivateParkInputs ? $", {RootSelfScope}" : "", StringComparison.Ordinal);
         return _ordinaryRoots?.AuthoredWithholds is null ? filter : filter.Replace("/*authored-withholding*/",
             $"""AND (target."Status" <> {(int)InstanceStatus.Running} OR prior."Id" LIKE 'operator/%')""", StringComparison.Ordinal);
     }
@@ -909,7 +928,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                    m."Due" <= t.now AND NOT EXISTS (
                        SELECT 1 FROM "Messages" prior
                        WHERE prior."Partition" = m."Partition" AND prior."Target" = m."Target" AND prior."Seq" < m."Seq"
-                         AND prior."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND prior."EventMatch" IS NULL
+                         AND prior."InboxScope" IN ({InboxKey.FoundationOccurrenceScope}/*root-self-predecessor*/) AND prior."EventMatch" IS NULL
                          AND NOT prior."Done" AND prior."Due" <= t.now
                          /*earlier-command-input*/
                          /*authored-withholding*/
@@ -935,9 +954,12 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private static readonly string SqliteParkRecoveryPollFilter = SqliteRootPoll(includeParkArrivals: true, recovery: true);
     private static readonly string SqliteAuthoredParkRecoveryPollFilter = SqliteRootPoll(includeParkArrivals: true, recovery: true, authoredCohort: true);
 
-    private string SqlitePollFilter(KernelDb db) => SamplesAuthoredCohortWithholding(db) ? SqliteAuthoredParkRecoveryPollFilter
-        : db.UsesRootParkRecovery ? SqliteParkRecoveryPollFilter
-        : db.UsesRootParkArrivals ? SqliteParkArrivalsPollFilter : SqliteRootPollFilter;
+    private string SqlitePollFilter(KernelDb db) => WithParkInputScopes(db,
+        (SamplesAuthoredCohortWithholding(db) ? SqliteAuthoredParkRecoveryPollFilter
+            : db.UsesRootParkRecovery ? SqliteParkRecoveryPollFilter
+            : db.UsesRootParkArrivals ? SqliteParkArrivalsPollFilter : SqliteRootPollFilter)
+        .Replace("/*root-self-scope*/", RootSelfIssuer is not null ? $", {RootSelfScope}" : "", StringComparison.Ordinal)
+        .Replace("/*root-self-predecessor*/", db.UsesRootPrivateParkInputs ? $", {RootSelfScope}" : "", StringComparison.Ordinal));
 
     private static string SqliteRootPoll(bool includeParkArrivals, bool recovery, bool authoredCohort = false) =>
         (recovery ? WithReleasedCohort(RootOperatorPollTemplate) : RootOperatorPollTemplate)
