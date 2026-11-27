@@ -19,7 +19,7 @@ internal static class RootPublicEventLiveWaits
         return $"""
             "Tenant" {text} NOT NULL, "Key" {text} NOT NULL, "Instance" {text} NOT NULL, "Wait" {text} NOT NULL,
             "Registration" {text} NOT NULL,
-            "RetainAfter" {number} NOT NULL, "CatchAfter" {number} NOT NULL,
+            "RetainFrom" {number} NOT NULL, "CatchAfter" {number} NOT NULL,
             "CatchThrough" {number} NOT NULL CHECK ("CatchAfter" <= "CatchThrough"),
             PRIMARY KEY ("Key", "Instance", "Wait"),
             FOREIGN KEY ("Key", "Instance", "Wait") REFERENCES "Subscriptions" ("Key", "Instance", "Wait") ON DELETE CASCADE
@@ -40,7 +40,7 @@ internal static class RootPublicEventLiveWaits
 
     internal sealed record Candidate(bool SourceReady, string? Tenant, string? Key, string? Actor, string? Wait, string? Registration);
     private sealed record NewWait(bool SourceReady, int? Index);
-    private sealed record Position(bool SourceReady, string? Reference, int? Partition, long? After, long? Through, long? RetainAfter);
+    private sealed record Position(bool SourceReady, string? Reference, int? Partition, long? After, long? Through, long? RetainFrom);
     private sealed record Publication(bool SourceReady, long? Ordinal, string? Occurrence, long? KeepUntil, string? EventId, string? Payload);
 
     // Ordinary waits use insert-if-absent. A second Subscribe cannot upgrade a wait that was already present.
@@ -67,15 +67,15 @@ internal static class RootPublicEventLiveWaits
     {
         foreach (var group in waits.GroupBy(w => w.FoundationTenant!).OrderBy(g => g.Key, StringComparer.Ordinal))
         {
-            var retainedAfter = await RootPublicEventPublications.RetentionThresholdAsync(db, group.Key, now, bind, token);
+            var retainedFrom = await RootPublicEventPublications.RetentionThresholdAsync(db, group.Key, now, bind, token);
             var packed = Json.Write(group.Select(w => new { w.Key, w.Instance, w.Wait, registration = Guid.NewGuid().ToString("N") }));
             FormattableString query = $"""
                 WITH source AS MATERIALIZED (/*public-event-start-source*/), proposed AS (/*waits*/)
                 INSERT INTO "FoundationPublicEventLiveWaits"
-                    ("Tenant", "Key", "Instance", "Wait", "Registration", "RetainAfter", "CatchAfter", "CatchThrough")
-                SELECT {group.Key}, s."Key", s."Instance", s."Wait", w."Registration", {retainedAfter}, 0,
+                    ("Tenant", "Key", "Instance", "Wait", "Registration", "RetainFrom", "CatchAfter", "CatchThrough")
+                SELECT {group.Key}, s."Key", s."Instance", s."Wait", w."Registration", {retainedFrom}, 0,
                     coalesce((SELECT max(p."Ordinal") FROM "FoundationPublicEventPublications" p
-                        WHERE p."Tenant" = {group.Key} AND p."Key" = s."Key" AND p."KeepUntil" > {retainedAfter}
+                        WHERE p."Tenant" = {group.Key} AND p."Key" = s."Key" AND p."KeepUntil" >= {retainedFrom}
                             AND p."CleanupAt" = p."KeepUntil"), 0)
                 FROM source, proposed w JOIN "Subscriptions" s
                     ON s."Key" = w."Key" AND s."Instance" = w."Instance" AND s."Wait" = w."Wait"
@@ -127,7 +127,7 @@ internal static class RootPublicEventLiveWaits
         var postgres = bind is not null;
         var query = (FormattableString)$"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/), position AS MATERIALIZED (
-                SELECT b."Reference", i."Partition", r."CatchAfter" AS "After", r."CatchThrough" AS "Through", r."RetainAfter"
+                SELECT b."Reference", i."Partition", r."CatchAfter" AS "After", r."CatchThrough" AS "Through", r."RetainFrom"
                 FROM "FoundationPublicEventLiveWaits" r JOIN "Subscriptions" s
                     ON s."Key" = r."Key" AND s."Instance" = r."Instance" AND s."Wait" = r."Wait"
                 JOIN "Instances" i ON i."Id" = s."Instance" AND i."Partition" = s."Partition"
@@ -161,7 +161,7 @@ internal static class RootPublicEventLiveWaits
             WITH source AS MATERIALIZED (/*public-event-start-source*/), matching AS (
                 SELECT "Ordinal", "Occurrence", "KeepUntil", "EventId", "Payload"
                 FROM "FoundationPublicEventPublications"
-                WHERE "Tenant" = {candidate.Tenant} AND "Key" = {candidate.Key} AND "KeepUntil" > {position.RetainAfter}
+                WHERE "Tenant" = {candidate.Tenant} AND "Key" = {candidate.Key} AND "KeepUntil" >= {position.RetainFrom}
                     AND "CleanupAt" = "KeepUntil" AND "Ordinal" > {position.After} AND "Ordinal" <= {position.Through}
                     AND (SELECT "SourceReady" FROM source)
                 ORDER BY "Ordinal" LIMIT 1

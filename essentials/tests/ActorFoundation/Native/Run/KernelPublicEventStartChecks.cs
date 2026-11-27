@@ -91,8 +91,9 @@ internal static partial class KernelAuthoredEventChecks
             await using (var db = open())
             {
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "FoundationPublicEventPublications" SET "ReceiptUntil" = 0
+                    UPDATE "FoundationPublicEventPublications" SET "ReceiptUntil" = 100
                     WHERE "Tenant" = {scope.Tenant} AND "Key" = {scope.Tenant + "_" + key}
+                        AND "Operation" = {FoundationRootCreator.OperationDigest("event\0id")}
                     """, token);
             }
             var recreated = await ingress.SendAsync(scope, target, "event\0id", "ignored", "second incarnation", options, token);
@@ -104,7 +105,7 @@ internal static partial class KernelAuthoredEventChecks
             const string heldKey = "held-public-start";
             var heldTarget = new Contract.Target.Event(heldKey);
             await ingress.SetStartAsync(scope, heldKey, "held", new(model.Type, "held-recipient", "held template"), token);
-            var held = await RequestAsync(heldTarget, "held-id", "held item");
+            var held = await RequestAsync(heldTarget, "held-id", "held item", new(KeepFor: TimeSpan.Zero));
             Check(held is { Channel: "held-event", Error: null } && held.Item?.ToString() == "held item",
                 "a held Event creates the registered actor and returns its first matching reply");
             // The short-lived target can be pruned as soon as the held publication has been dispatched.
@@ -116,6 +117,33 @@ internal static partial class KernelAuthoredEventChecks
             var heldReplay = await ingress.SendAsync(scope, heldTarget, "held-id", "ignored", "different item", cancellationToken: token);
             Check(heldReplay is { Outcome: Contract.AdmissionOutcome.Duplicate, Publication.EventId: "held-id" },
                 "one-way retry observes the held Event publication receipt without creating another actor");
+            const string fanoutKey = "held-fanout";
+            await ingress.SetStartAsync(scope, fanoutKey, "a-quiet", new(model.Type, "fanout-quiet", "quiet template"), token);
+            await ingress.SetStartAsync(scope, fanoutKey, "b-emits", new(model.Type, "fanout-emits", "reply template"), token);
+            var fanout = RequestAsync(new(fanoutKey), "fanout-id", "fanout item");
+            try
+            {
+                await UntilAsync(async () =>
+                {
+                    var finished = await reads.ListAsync(scope, new Contract.ActorQuery(Type: model.Type, Status: Contract.ActorStatus.Finished),
+                        cancellationToken: token);
+                    return finished.Items.Any(item => item.Header.TypeData ==
+                        JsonSerializer.Serialize(new[] { "quiet template", fanoutKey, "a-quiet", "fanout item", "fanout-id" }));
+                });
+                Check(!fanout.IsCompleted, "a quiet actor's terminal result leaves the shared held request open for other exact matches");
+            }
+            finally { model.ReleaseFanout.TrySetResult(); }
+            var winner = await fanout;
+            Check(winner is { Channel: "held-fanout", Error: null } && winner.Item?.ToString() == "fanout item",
+                "the first emitted output wins after another held Event recipient finishes quietly");
+
+            const string quietFanoutKey = "held-all-quiet";
+            await ingress.SetStartAsync(scope, quietFanoutKey, "one", new(model.Type, "fanout-quiet", "one"), token);
+            await ingress.SetStartAsync(scope, quietFanoutKey, "two", new(model.Type, "fanout-quiet", "two"), token);
+            var quietFanout = await RequestAsync(new(quietFanoutKey), "all-quiet", "no output");
+            Check(quietFanout is { Channel: null, Status: Contract.ActorStatus.Finished, Error: null },
+                "a held Event with only quiet matches returns their terminal result");
+
             var unmatched = new Contract.Target.Event("unmatched-held-start");
             var missing = await RequestAsync(unmatched, "unmatched", "discarded");
             var afterMissing = await ingress.SendAsync(scope, unmatched, "unmatched", "ignored", "accepted later", cancellationToken: token);
@@ -245,7 +273,7 @@ internal static partial class KernelAuthoredEventChecks
             await using (var db = open())
             {
                 var barred = await db.Database.SqlQuery<bool>($"""
-                    SELECT r."CatchThrough" = 0 AND p."KeepUntil" < r."RetainAfter" AS "Value"
+                    SELECT r."CatchThrough" = 0 AND p."KeepUntil" < r."RetainFrom" AS "Value"
                     FROM "FoundationPublicEventStarts" r JOIN "FoundationPublicEventPublications" p
                         ON p."Tenant" = r."Tenant" AND p."Key" = r."Key"
                     WHERE r."Tenant" = {scope.Tenant} AND r."Key" = {scope.Tenant + "_" + quietKey} AND r."Wait" = 'after-clock-backstep'
@@ -254,6 +282,7 @@ internal static partial class KernelAuthoredEventChecks
                     "retention cleanup's tenant watermark survives a clock backstep without changing publication acceptance");
             }
             await StopOwnerAsync(successor);
+            await CheckPublicationClockAsync();
             await CheckReinstallationAsync();
             return 0;
 
@@ -261,6 +290,78 @@ internal static partial class KernelAuthoredEventChecks
             {
                 if (host is RuntimeNode postgresOwner) await postgresOwner.StopAsync(token);
                 else await ((SqliteEmbeddedHostedService)host).StopAsync(token);
+            }
+
+            async Task CheckPublicationClockAsync()
+            {
+                var clockScope = ContractScopes.Bind("public-event-clock");
+                var retention = new Contract.AddOptions(KeepFor: TimeSpan.FromMinutes(1));
+                var anchor = await ReadClockAsync();
+                var sweptUntil = anchor + 100;
+                var retainedUntil = anchor + 200;
+                await ingress.SendAsync(clockScope, new Contract.Target.Event("swept"), "swept", "ignored", "first", retention, token);
+                await ingress.SendAsync(clockScope, new Contract.Target.Event("retained"), "retained", "ignored", "second", retention, token);
+                var withoutRetention = await ingress.SendAsync(clockScope, new Contract.Target.Event("receipt-only"), "receipt-only",
+                    Contract.Kinds.Suspend, null, cancellationToken: token);
+                Check(withoutRetention.Outcome == Contract.AdmissionOutcome.Accepted,
+                    "outside Event ignores operator message kinds even with no body");
+
+                await using var db = open();
+                await using var transaction = await db.Database.BeginTransactionAsync(token);
+                Func<FormattableString, FormattableString>? bind = null;
+                if (provider == "postgres")
+                {
+                    var marker = await db.Database.SqlQueryRaw<long>("""
+                        SELECT pg_catalog.to_regclass('"KernelStoreVersions"')::oid::bigint AS "Value"
+                        """).SingleAsync(token);
+                    bind = await PostgresRootAdmission.PinAuthoredEventSourceAsync(db, checked((uint)marker), token);
+                    await RootEventAdmission.LockPostgresKeysAsync(db,
+                        [Qualify("swept"), Qualify("retained"), Qualify("receipt-only"), scope.Tenant + "_" + key], token);
+                }
+
+                var previous = await RootPublicEventPublications.ReadReplayAsync(db, scope.Tenant, scope.Tenant + "_" + key, "event\0id",
+                    FoundationRootCreator.OperationDigest("event\0id"), 50, sql => RootPublicEventStarts.Bind(sql, bind), token);
+                Check(previous == recreated.Publication!.Incarnation, "a clock backstep after id reuse returns the newest receipt");
+                var olderPayload = await db.Database.SqlQuery<bool>($"""
+                    SELECT "ReceiptUntil" IS NULL AND "KeepUntil" IS NOT NULL AND "Payload" = {DurableKeyJson.Write("outside payload")} AS "Value"
+                    FROM "FoundationPublicEventPublications" WHERE "Incarnation" = {outside.Publication!.Incarnation.ToString("N")}
+                    """).SingleAsync(token);
+                Check(olderPayload, "superseding a receipt leaves its independent retained payload intact");
+                var heldOnly = await db.Database.SqlQuery<bool>($"""
+                    SELECT "KeepUntil" IS NULL AND "Payload" IS NULL AND "ReceiptUntil" > {anchor} AS "Value"
+                    FROM "FoundationPublicEventPublications" WHERE "Tenant" = {scope.Tenant} AND "Key" = {scope.Tenant + "_" + heldKey}
+                    """).SingleAsync(token);
+                Check(heldOnly, "held KeepFor zero preserves the ordinary replay window and never retains Event material");
+
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "FoundationPublicEventPublications"
+                    SET "KeepUntil" = CASE WHEN "Key" = {Qualify("swept")} THEN {sweptUntil} ELSE {retainedUntil} END,
+                        "CleanupAt" = CASE WHEN "Key" = {Qualify("swept")} THEN {sweptUntil} ELSE {retainedUntil} END
+                    WHERE "Tenant" = {clockScope.Tenant} AND "Key" IN ({Qualify("swept")}, {Qualify("retained")})
+                    """, token);
+                var swept = await db.Database.SqlQuery<long>($"""
+                    SELECT "Ordinal" AS "Value" FROM "FoundationPublicEventPublications" WHERE "Tenant" = {clockScope.Tenant}
+                        AND "Key" = {Qualify("swept")}
+                    """).SingleAsync(token);
+                Check(await RootPublicEventPublications.CleanupAsync(db, new(true, clockScope.Tenant, Qualify("swept"), swept),
+                    anchor + 500, bind, token), "the bounded sweep closes only the selected retained publication");
+                foreach (var candidate in new[] { "swept", "retained", "receipt-only" })
+                    await RootPublicEventStarts.SetAsync(db, clockScope.Tenant, Qualify(candidate), "after-backstep", replacement, retainedUntil, bind, token);
+
+                var keepsExactSelection = await db.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM "FoundationPublicEventHorizons" WHERE "Tenant" = {clockScope.Tenant}
+                            AND "Through" = {sweptUntil})
+                        AND (SELECT count(*) FROM "FoundationPublicEventStarts" WHERE "Tenant" = {clockScope.Tenant}
+                            AND "Wait" = 'after-backstep' AND "RetainFrom" = {retainedUntil}) = 3
+                        AND EXISTS (SELECT 1 FROM "FoundationPublicEventStarts" WHERE "Tenant" = {clockScope.Tenant}
+                            AND "Key" = {Qualify("retained")} AND "CatchThrough" > 0)
+                        AND NOT EXISTS (SELECT 1 FROM "FoundationPublicEventStarts" WHERE "Tenant" = {clockScope.Tenant}
+                            AND "Key" IN ({Qualify("swept")}, {Qualify("receipt-only")}) AND "CatchThrough" <> 0) AS "Value"
+                    """).SingleAsync(token);
+                Check(keepsExactSelection, "sweep advances only to the actual retention deadline, including equal eligible material after a backstep");
+                await transaction.RollbackAsync(token);
+
+                string Qualify(string candidate) => clockScope.Tenant + "_" + candidate;
             }
 
             async Task CheckReinstallationAsync()
@@ -293,12 +394,17 @@ internal static partial class KernelAuthoredEventChecks
                 ? new EfStore(open, postgres: true).InstallPreviewRootSchemaAsync(token)
                 : SqliteEmbeddedFoundation.ForPublicEventStartsQualification(path, "authored-event-owner", model.Type).InstallShippedAsync(token);
 
-            async Task<Contract.Reply> RequestAsync(Contract.Target.Event requested, string id, string item)
+            async Task<long> ReadClockAsync()
             {
                 await using var db = open();
-                var now = provider == "postgres" ? await RootEventAdmission.ReadPostgresClockAsync(db, token)
+                return provider == "postgres" ? await RootEventAdmission.ReadPostgresClockAsync(db, token)
                     : await SqliteRootAdmission.ReadClockAsync(db, token);
-                return await ingress.RequestAsync(scope, requested, id, Contract.Kinds.Event, item, null, new(null, now + 6000), token);
+            }
+
+            async Task<Contract.Reply> RequestAsync(Contract.Target.Event requested, string id, string item, Contract.AddOptions? options = null)
+            {
+                var now = await ReadClockAsync();
+                return await ingress.RequestAsync(scope, requested, id, Contract.Kinds.Event, item, options, new(null, now + 6000), token);
             }
 
             async Task<string> StartPublisherAsync(string operation)
@@ -355,10 +461,11 @@ internal static partial class KernelAuthoredEventChecks
     {
         internal const string Key = "event:Orders";
         internal const string KeepingStartTopic = "retained-start-same-wait";
+        internal TaskCompletionSource ReleaseFanout { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public string Type => "public-event-probe";
         public bool Withholds(Contract.ActorHeader header) => false;
 
-        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        public async ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             foreach (var message in turn.Inbox)
             {
@@ -378,12 +485,16 @@ internal static partial class KernelAuthoredEventChecks
                 if (message.Event is { } published)
                 {
                     if (turn.Header.TypeData == "held-recipient") turn.Emit("held-event", message.Payload);
+                    if (turn.Header.TypeData == "fanout-emits")
+                    {
+                        await ReleaseFanout.Task.WaitAsync(cancellationToken);
+                        turn.Emit("held-fanout", message.Payload);
+                    }
                     turn.SetHeader(JsonSerializer.Serialize(new[] { turn.State, published.Key, published.Wait, message.Payload, published.Id }),
                         turn.Header.Labels);
                     if (turn.State != KeepingStartTopic) turn.End(Contract.ActorStatus.Finished);
                 }
             }
-            return ValueTask.CompletedTask;
         }
 
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();

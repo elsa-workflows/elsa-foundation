@@ -84,7 +84,7 @@ internal static partial class RootEventAdmission
             return HeldRootAdmission.Duplicate;
         }
 
-        await EnqueueAsync(db, messages, address, until, BindSource, postgres, token);
+        await EnqueueAsync(db, messages, until, BindSource, postgres, token);
         return HeldRootAdmission.Accepted;
 
         FormattableString BindSource(FormattableString sql) => BindEventSource(sql, bindPostgresSource);
@@ -156,7 +156,7 @@ internal static partial class RootEventAdmission
                 count += captured.Count;
                 bytes += captured.Bytes;
                 if (captured.Count != 0 || until > now)
-                    await RootPublicEventPublications.RememberAuthoredAsync(db, publication, occurrence, until, bindPostgresSource, token);
+                    await RootPublicEventPublications.RememberAuthoredAsync(db, publication, occurrence, now, until, bindPostgresSource, token);
                 if (captured.Count != 0)
                     await RootPublicEventStarts.DispatchAsync(db, publication.FoundationTenant!, occurrence, until, bindPostgresSource, token,
                         rememberDelivery: until > now);
@@ -170,7 +170,7 @@ internal static partial class RootEventAdmission
                 SELECT {publication.Key}, {publication.Id}, {until} FROM source WHERE "SourceReady"
                 """), token);
             if (receipt != 1) throw new StoreFormatException("The pinned authored event receipt could not be written.");
-            if (messages.Count != 0) await EnqueueAsync(db, messages, null, until, BindSource, postgres, token);
+            if (messages.Count != 0) await EnqueueAsync(db, messages, until, BindSource, postgres, token);
         }
     }
 
@@ -205,10 +205,10 @@ internal static partial class RootEventAdmission
 
     internal static Task EnqueueRetainedLiveAsync(KernelDb db, MessageEntity message, long until,
         Func<FormattableString, FormattableString>? bind, CancellationToken token) =>
-        EnqueueAsync(db, [message], null, until, sql => RootPublicEventStarts.Bind(sql, bind), bind is not null, token,
+        EnqueueAsync(db, [message], until, sql => RootPublicEventStarts.Bind(sql, bind), bind is not null, token,
             RootPublicEventStarts.Source);
 
-    private static async Task EnqueueAsync(KernelDb db, List<MessageEntity> messages, string? address, long until,
+    private static async Task EnqueueAsync(KernelDb db, List<MessageEntity> messages, long until,
         Func<FormattableString, FormattableString> bindSource, bool postgres, CancellationToken token, string source = "/*event-source*/")
     {
         if (postgres)
@@ -218,10 +218,11 @@ internal static partial class RootEventAdmission
                 INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Kind", "Start", "Payload", "Due", "Seen",
                     "Attempts", "Trial", "Done", "KeepUntil", "ReplyTo", "JobGeneration")
                 SELECT item.id, {InboxKey.FoundationOccurrenceScope}, item.actor, item.home, {Kinds.Event}, item.header,
-                    {messages[0].Payload}::text, 0, 0, 0, 0, false, {until}, {address}, 0
+                    {messages[0].Payload}::text, 0, 0, 0, 0, false, {until}, item.reply, 0
                 FROM unnest({messages.Select(m => m.Id).ToArray()}::text[], {messages.Select(m => m.Target).ToArray()}::text[],
-                    {messages.Select(m => m.Partition).ToArray()}::integer[], {messages.Select(m => m.Start!).ToArray()}::text[])
-                    WITH ORDINALITY AS item(id, actor, home, header, position)
+                    {messages.Select(m => m.Partition).ToArray()}::integer[], {messages.Select(m => m.Start!).ToArray()}::text[],
+                    {messages.Select(m => m.ReplyTo).ToArray()}::text[])
+                    WITH ORDINALITY AS item(id, actor, home, header, reply, position)
                 CROSS JOIN source WHERE "SourceReady" ORDER BY item.position
                 """;
             if (source != "/*event-source*/")

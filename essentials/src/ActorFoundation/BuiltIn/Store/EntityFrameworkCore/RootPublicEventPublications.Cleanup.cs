@@ -7,17 +7,17 @@ internal static partial class RootPublicEventPublications
 {
     private const string Uncovered = """
         AND NOT EXISTS (SELECT 1 FROM "FoundationPublicEventStarts" r
-            WHERE r."Tenant" = p."Tenant" AND r."Key" = p."Key" AND p."KeepUntil" > r."RetainAfter"
+            WHERE r."Tenant" = p."Tenant" AND r."Key" = p."Key" AND p."KeepUntil" >= r."RetainFrom"
                 AND p."CleanupAt" = p."KeepUntil" AND p."Ordinal" > r."CatchAfter" AND p."Ordinal" <= r."CatchThrough")
         AND NOT EXISTS (SELECT 1 FROM "FoundationPublicEventLiveWaits" r
-            WHERE r."Tenant" = p."Tenant" AND r."Key" = p."Key" AND p."KeepUntil" > r."RetainAfter"
+            WHERE r."Tenant" = p."Tenant" AND r."Key" = p."Key" AND p."KeepUntil" >= r."RetainFrom"
                 AND p."CleanupAt" = p."KeepUntil" AND p."Ordinal" > r."CatchAfter" AND p."Ordinal" <= r."CatchThrough")
         AND NOT EXISTS (SELECT 1 FROM "FoundationPublicEventTargets" t
             WHERE t."Tenant" = p."Tenant" AND t."Publication" = p."Occurrence" AND t."Reference" IS NULL)
         """;
 
     internal sealed record CleanupKey(bool SourceReady, string? Tenant, string? Key, long? Ordinal);
-    private sealed record CleanupPublication(bool SourceReady, string? Occurrence, long? ReceiptUntil, bool? ClosesRetention);
+    private sealed record CleanupPublication(bool SourceReady, string? Occurrence, long? ReceiptUntil, long? ClosedKeepUntil);
 
     internal static async Task<CleanupKey?> FindCleanupAsync(KernelDb db, long now, Func<FormattableString, FormattableString>? bind,
         CancellationToken token)
@@ -41,7 +41,7 @@ internal static partial class RootPublicEventPublications
     {
         var expired = await db.Database.SqlQuery<CleanupPublication>(CleanupSql($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/), expired AS (
-                SELECT p."Occurrence", p."ReceiptUntil", p."CleanupAt" = p."KeepUntil" AS "ClosesRetention"
+                SELECT p."Occurrence", p."ReceiptUntil", CASE WHEN p."CleanupAt" = p."KeepUntil" THEN p."KeepUntil" END AS "ClosedKeepUntil"
                 FROM "FoundationPublicEventPublications" p
                 WHERE p."Tenant" = {target.Tenant} AND p."Key" = {target.Key} AND p."Ordinal" = {target.Ordinal}
                     AND p."CleanupAt" < {now} AND (SELECT "SourceReady" FROM source) /*uncovered*/
@@ -50,9 +50,9 @@ internal static partial class RootPublicEventPublications
             """, bind)).SingleAsync(token);
         RequireCleanupSource(expired.SourceReady);
         if (expired.Occurrence is null) return false;
-        if (expired.ClosesRetention == true)
+        if (expired.ClosedKeepUntil is { } closedKeepUntil)
         {
-            await AdvanceRetentionAsync(db, target.Tenant!, now, bind, token);
+            await AdvanceRetentionAsync(db, target.Tenant!, closedKeepUntil, bind, token);
             await db.Database.ExecuteSqlInterpolatedAsync(RootPublicEventStarts.Bind($"""
                 WITH source AS MATERIALIZED (/*public-event-start-source*/)
                 DELETE FROM "FoundationPublicEventLiveReceipts" WHERE "Occurrence" = {expired.Occurrence}
@@ -69,7 +69,7 @@ internal static partial class RootPublicEventPublications
         var mutation = expired.ReceiptUntil >= now
             ? (FormattableString)$"""
                 WITH source AS MATERIALIZED (/*public-event-start-source*/)
-                UPDATE "FoundationPublicEventPublications" SET "Payload" = NULL, "CleanupAt" = "ReceiptUntil"
+                UPDATE "FoundationPublicEventPublications" SET "Payload" = NULL, "KeepUntil" = NULL, "CleanupAt" = "ReceiptUntil"
                 WHERE "Tenant" = {target.Tenant} AND "Key" = {target.Key} AND "Ordinal" = {target.Ordinal}
                     AND (SELECT "SourceReady" FROM source)
                 """
