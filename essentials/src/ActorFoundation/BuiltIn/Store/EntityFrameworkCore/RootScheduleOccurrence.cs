@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
 
@@ -51,49 +52,51 @@ internal sealed record ScheduledWorkflowBirth(string Reference, Message Creator,
     }
 
     private sealed record Receipt(bool SourceReady, string? Reference, string? Tenant, string? Actor, int? Partition,
-        long? Creation, string? Creator, string? Fingerprint);
+        long? Creation, string? Creator, string? Fingerprint, bool HasLineage, bool Retired);
 
     /// <summary>Root birth survives retirement, so an admitted occurrence never depends on an expiring ingress receipt.</summary>
     internal async Task<bool> ReadReceiptAsync(KernelDb db, string tenant, CancellationToken token,
-        Func<FormattableString, FormattableString>? bindSource = null)
-    {
-        FormattableString query = $"""
-            WITH source AS MATERIALIZED (/*schedule-source*/)
-            SELECT source."SourceReady", birth."Reference", birth."Tenant", birth."Actor", birth."Partition",
-                birth."Creation", birth."Creator", birth."Fingerprint"
-            FROM source LEFT JOIN "FoundationRootBirths" birth ON source."SourceReady" AND birth."Reference" = {Reference}
-            """;
-        var row = await db.Database.SqlQuery<Receipt>(RootScheduleInventory.Bind(query, bindSource)).SingleAsync(token);
-        if (!row.SourceReady) throw new StoreFormatException("The pinned schedule store changed during occurrence admission.");
-        if (row.Reference is null) return false;
-        if (row.Tenant != tenant || row.Actor != Creator.Target.Id || row.Partition != Creator.Target.Partition || row.Creation != 1 ||
-            row.Creator != Creator.InboxKey.Id || row.Fingerprint != Fingerprint)
-            throw new StoreFormatException("The scheduled workflow birth differs from its accepted occurrence.");
-        return true;
-    }
+        Func<FormattableString, FormattableString>? bindSource = null) =>
+        await ReadAsync(db, tenant, false, token, bindSource) is not null;
 
-    // This proves retirement of this actor birth. Detached descendants have independent lifetimes.
+    // Profile 120 proves the one actor birth. The occurrence lineage profile also proves its descendants are retired.
     internal async Task<bool> IsRetiredAsync(KernelDb db, string tenant, CancellationToken token,
-        Func<FormattableString, FormattableString>? bindSource = null)
-    {
-        if (!await ReadReceiptAsync(db, tenant, token, bindSource)) return false;
+        Func<FormattableString, FormattableString>? bindSource = null) =>
+        (await ReadAsync(db, tenant, true, token, bindSource))?.Retired == true;
 
-        FormattableString query = $"""
-            WITH source AS MATERIALIZED (/*schedule-source*/)
-            SELECT source."SourceReady", source."SourceReady" AND EXISTS (
+    private async Task<Receipt?> ReadAsync(KernelDb db, string tenant, bool confirmRetirement, CancellationToken token,
+        Func<FormattableString, FormattableString>? bindSource)
+    {
+        var retirement = confirmRetirement ? """
+            birth."Reference" IS NOT NULL AND EXISTS (
                 SELECT 1 FROM "Instances" instance
                 JOIN "Journal" tombstone ON tombstone."Instance" = instance."Id"
                     AND tombstone."Partition" = instance."Partition" AND tombstone."Revision" = -1
-                WHERE instance."Id" = {Creator.Target.Id} AND instance."Partition" = {Creator.Target.Partition}
-                    AND instance."FoundationTenant" = {tenant}
-                    AND instance."FoundationReference" = {Reference} AND instance."Retired"
-                    AND tombstone."Entries" = '["delete"]') AS "Retired"
-            FROM source
+                WHERE instance."Id" = birth."Actor" AND instance."Partition" = birth."Partition"
+                    AND instance."FoundationTenant" = birth."Tenant" AND instance."FoundationReference" = birth."Reference"
+                    AND instance."Retired" AND tombstone."Entries" = '["delete"]')
+            """ + (db.UsesRootScheduleLineage ? "\n" + RootScheduleLineage.RootMembershipProof : "") : "false";
+        FormattableString query = $"""
+            WITH source AS MATERIALIZED (/*schedule-source*/)
+            SELECT source."SourceReady", birth."Reference", birth."Tenant", birth."Actor", birth."Partition",
+                birth."Creation", birth."Creator", birth."Fingerprint", /*lineage-receipt*/ AS "HasLineage",
+                /*retirement-proof*/ AS "Retired"
+            FROM source LEFT JOIN "FoundationRootBirths" birth ON source."SourceReady" AND birth."Reference" = {Reference}
             """;
-        var proof = await db.Database.SqlQuery<RetirementProof>(RootScheduleInventory.Bind(query, bindSource)).SingleAsync(token);
-        if (!proof.SourceReady) throw new StoreFormatException("The pinned schedule store changed during retirement confirmation.");
-        return proof.Retired;
+        query = FormattableStringFactory.Create(query.Format
+            .Replace("/*lineage-receipt*/", db.UsesRootScheduleLineage ? """
+                EXISTS (SELECT 1 FROM /*lineage-table*/ lineage WHERE lineage."Reference" = birth."Reference"
+                    AND lineage."Tenant" = birth."Tenant" AND lineage."RootReference" = birth."Reference")
+                """ : "true", StringComparison.Ordinal)
+            .Replace("/*retirement-proof*/", retirement, StringComparison.Ordinal)
+            .Replace("/*lineage-table*/", RootScheduleLineage.PhysicalTable(db), StringComparison.Ordinal), query.GetArguments());
+        var row = await db.Database.SqlQuery<Receipt>(RootScheduleInventory.Bind(query, bindSource)).SingleAsync(token);
+        if (!row.SourceReady) throw new StoreFormatException("The pinned schedule store changed during occurrence lookup.");
+        if (row.Reference is null) return null;
+        if (row.Tenant != tenant || row.Actor != Creator.Target.Id || row.Partition != Creator.Target.Partition || row.Creation != 1 ||
+            row.Creator != Creator.InboxKey.Id || row.Fingerprint != Fingerprint)
+            throw new StoreFormatException("The scheduled workflow birth differs from its accepted occurrence.");
+        if (!row.HasLineage) throw new StoreFormatException("The scheduled workflow birth has no exact lineage receipt.");
+        return row;
     }
-
-    private sealed record RetirementProof(bool SourceReady, bool Retired);
 }
