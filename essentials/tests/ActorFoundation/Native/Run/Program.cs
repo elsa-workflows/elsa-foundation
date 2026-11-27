@@ -48,6 +48,8 @@ if (args is ["root-admission-pressure", var pressureProvider and ("postgres" or 
     return await RootAdmissionPressureChecks.RunAsync(pressureProvider == "postgres", pressureFence == "in-batch");
 if (args is ["shipped-delay-recovery", var delayProvider and ("postgres" or "sqlite"), var delayFence and ("checked" or "in-batch")])
     return await ShippedDelayRecoveryChecks.RunAsync(delayProvider == "postgres", delayFence == "in-batch");
+if (args is ["root-sequenced-journal", var journalProvider and ("postgres" or "sqlite"), var journalFence and ("checked" or "in-batch")])
+    return await ShippedDelayRecoveryChecks.RunAsync(journalProvider == "postgres", journalFence == "in-batch", sequencedJournal: true);
 if (args is ["pg-root-operators", "admit"])
     return await PostgresRootOperatorChecks.RunAsync(null);
 if (args is ["pg-root-operators", var defaultOperatorPhase and ("read" or "resume"), var operatorA, var operatorB, var operatorC])
@@ -355,7 +357,8 @@ if (args is ["cost", "postgres", var connection])
 }
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
 Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | pg-write-budget <owned|ef> <checked|in-batch> [--require-budget] | " +
-    "shipped-write-budget <sqlite|postgres> <checked|in-batch> [--require-budget] | memory [runs] | pg-runtime-cluster [partitions] [wake]");
+    "shipped-write-budget <sqlite|postgres> <checked|in-batch> [--require-budget] | root-sequenced-journal <sqlite|postgres> <checked|in-batch> | " +
+    "memory [runs] | pg-runtime-cluster [partitions] [wake]");
 return 2;
 
 internal static class Cost

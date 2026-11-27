@@ -53,7 +53,7 @@ public sealed partial class EfStore
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         if (formatFunction is null) await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
-            await PinRootNamespaceForCommitAsync(db, cancellationToken);
+            await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
         if (root is PostgresMarkPreparation marks)
         {
             // Discover the exact binding while the same transaction already holds the format and source pins.
