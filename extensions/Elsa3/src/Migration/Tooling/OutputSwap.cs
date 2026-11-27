@@ -110,7 +110,10 @@ internal sealed class OutputSwap : IDisposable
 
         _committed = true;
         TryDelete(previous);
-        TryDelete(StagingFolder);
+        // Only when the superseded output is gone does the marked folder go; otherwise the marker stays with it, so a
+        // later sweep removes it instead of keeping it as an only copy.
+        if (!Directory.Exists(previous))
+            TryDelete(StagingFolder);
     }
 
     /// <summary>
@@ -119,7 +122,7 @@ internal sealed class OutputSwap : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (_committed || (!_keepStaging && !HoldsPreviousOutput(StagingFolder)))
+        if (_committed ? !Directory.Exists(Path.Combine(StagingFolder, PreviousName)) : !_keepStaging && !HoldsPreviousOutput(StagingFolder))
             TryDelete(StagingFolder);
     }
 
