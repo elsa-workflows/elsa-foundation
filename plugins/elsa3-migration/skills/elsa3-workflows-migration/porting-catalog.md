@@ -6,7 +6,7 @@ is ported the same way, whoever does it. Read it on its own, or follow it from [
 ## How to use a case
 
 1. Find the cases that apply to the component. Each case starts with **Applies when** and a **Search**: the text that
-   finds the construct in Elsa 3 source. One component often needs several cases (a trigger with bookmarks, services
+   finds the construct in Elsa 3 source. One component often needs several cases (an activity with bookmarks, services
    and outputs): record them all in the migration plan.
 2. Apply the cases **in catalog order**, 01 to 19. Later cases build on the shape the earlier ones give.
 3. Follow the case's verdict:
@@ -427,9 +427,10 @@ public sealed record PaymentResult(
 
 ## Case 09: Triggers
 
-**Verdict**: port
+**Verdict**: port (start triggers); redesign (a trigger that waits mid-flow)
 
-**Applies when**: the activity starts workflows: an Elsa 3 `Trigger`, or an activity with a trigger payload.
+**Applies when**: the activity starts workflows: an Elsa 3 `Trigger`, or an activity with a trigger payload. An Elsa 3
+trigger also waited when a workflow reached it mid-flow; in Elsa 4 a custom trigger only starts workflows.
 
 **Search**: `: Trigger`, `GetTriggerPayload`, `GetTriggerPayloads`, `IsTriggerOfWorkflow`
 
@@ -464,46 +465,42 @@ public class InvoiceReceived : Trigger<string>
 
 **After (Elsa 4)** <!-- sample: case-09 -->
 ```csharp
-// A trigger activity: it completes when an incoming invoice starts the workflow at this node, and otherwise
-// waits for the next one. The stimulus provider below tells publishing which stimulus starts the workflow;
-// AcmeFeature registers it. A node with CanStartWorkflow set to false only waits mid-flow, so the provider
-// declares no start stimulus for it (publishing refuses a start trigger that is not on the start path).
+// A start trigger: an incoming invoice starts the workflow at this node, and the activity completes with it.
+// A custom trigger only starts workflows; it never waits mid-flow (publishing refuses a start trigger that is not
+// on the workflow's start path). The stimulus provider below tells publishing which stimulus starts the workflow;
+// AcmeFeature registers it.
 [TriggerActivity]
-public sealed class InvoiceReceived : StatefulTriggerActivity<InvoiceReceivedResult, InvoiceWaitState, IncomingInvoice>
+public sealed class InvoiceReceived : StatefulTriggerActivity<InvoiceReceivedResult, InvoiceReceivedState, IncomingInvoice>
 {
     public const string ActivityType = "Acme.InvoiceReceived";
     public const string StimulusType = "Acme.Invoice";
-    private const string InvoiceTarget = "resume-target:invoice";
 
     [ActivityInput]
     [Required]
     public string Mailbox { get; set; } = null!;
 
-    [ActivityInput(DisplayName = "Start new workflows", DefaultValue = "true")]
-    public bool CanStartWorkflow { get; set; } = true;
-
     public static string Hash(string mailbox) =>
         $"sha256:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(mailbox))).ToLowerInvariant()}";
 
-    protected override ValueTask<ActivityTransition<InvoiceReceivedResult, InvoiceWaitState>> ExecuteAsync(
-        ActivityStartContext<IncomingInvoice> context)
-    {
-        if (context.TryGetTrigger(out var invoice))
-            return ValueTask.FromResult(Complete(new InvoiceReceivedResult(invoice.InvoiceNumber)));
+    protected override ValueTask<ActivityTransition<InvoiceReceivedResult, InvoiceReceivedState>> ExecuteAsync(
+        ActivityStartContext<IncomingInvoice> context) =>
+        ValueTask.FromResult(context.TryGetTrigger(out var invoice)
+            ? Complete(new InvoiceReceivedResult(invoice.InvoiceNumber))
+            : NotStartedByAnInvoice());
 
-        var registration = new ActivityTriggerRegistration<IncomingInvoice>(InvoiceTarget, StimulusType, Hash(Mailbox));
-        return ValueTask.FromResult(Suspend(new InvoiceWaitState(Mailbox), [registration]));
-    }
+    // Never reached: the trigger never suspends.
+    protected override ValueTask<ActivityTransition<InvoiceReceivedResult, InvoiceReceivedState>> ResumeAsync(
+        ActivityResumeContext<InvoiceReceivedState, IncomingInvoice> context) =>
+        ValueTask.FromResult(NotStartedByAnInvoice());
 
-    [ResumeTarget(InvoiceTarget)]
-    protected override ValueTask<ActivityTransition<InvoiceReceivedResult, InvoiceWaitState>> ResumeAsync(
-        ActivityResumeContext<InvoiceWaitState, IncomingInvoice> context) =>
-        ValueTask.FromResult(Complete(new InvoiceReceivedResult(context.Trigger.InvoiceNumber)));
+    private static ActivityTransition<InvoiceReceivedResult, InvoiceReceivedState> NotStartedByAnInvoice() =>
+        Fault(new ActivityFault("acme.invoice-trigger-not-started", "InvoiceReceived only starts workflows; it ran without an incoming invoice."));
 }
 
 public sealed record IncomingInvoice(string InvoiceNumber);
 
-public sealed record InvoiceWaitState(string Mailbox);
+// The private state a stateful base class requires; a start-only trigger keeps none.
+public sealed record InvoiceReceivedState;
 
 public sealed record InvoiceReceivedResult([property: Output(Key = "Result")] string InvoiceNumber);
 
@@ -517,13 +514,6 @@ internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulus
         if (!StringComparer.Ordinal.Equals(node.ActivityType, InvoiceReceived.ActivityType))
             return ActivityTriggerStimulusResult.NotRecognized;
 
-        // A mid-flow wait: recognised, but it starts nothing.
-        var canStart = node.InputBindings.GetValueOrDefault(nameof(InvoiceReceived.CanStartWorkflow));
-        if (canStart?.Source == RuntimeInputBindingSource.Literal && canStart.LiteralValue is { } flag &&
-            (flag.ValueKind == JsonValueKind.False ||
-             (flag.ValueKind == JsonValueKind.String && bool.TryParse(flag.GetString(), out var parsed) && !parsed)))
-            return ActivityTriggerStimulusResult.Recognized([]);
-
         // The stimulus is fixed at publish time, so the mailbox must be a literal.
         var binding = node.InputBindings.GetValueOrDefault(nameof(InvoiceReceived.Mailbox));
         if (binding?.Source != RuntimeInputBindingSource.Literal || binding.LiteralValue is not { ValueKind: JsonValueKind.String } mailbox)
@@ -536,19 +526,21 @@ internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulus
 ```
 
 **Steps**:
-1. Mark the class `[TriggerActivity]` and derive from `StatefulTriggerActivity<TResult, TState, TTrigger>`.
+1. Mark the class `[TriggerActivity]` and derive from `StatefulTriggerActivity<TResult, TState, TTrigger>`, the base
+   class that hands the activity its typed trigger. `TState` is an empty record: a start trigger keeps no state.
 2. In `ExecuteAsync`, `context.TryGetTrigger(out var trigger)` is true when a delivery started the workflow at this
-   node: complete from it. Otherwise suspend as in case 08.
+   node: complete from it. Otherwise return a fault: the trigger only starts workflows. `ResumeAsync` is never reached.
 3. Write an `IActivityTriggerStimulusProvider` that recognises the activity type and describes the stimulus from the
    node's literal inputs, the way `GetTriggerPayload` did. Register it in the feature (case 18).
-4. Give the trigger a `CanStartWorkflow` input (default `true`). When a node sets it to `false`, the provider returns
-   `Recognized([])`: the node only waits mid-flow. Publishing refuses a node that declares a start stimulus but is not on
-   the workflow's start path.
 
-**Known gap**: the converter does not yet carry Elsa 3's `canStartWorkflow` custom property onto a custom trigger
-(it does for Elsa's own triggers). A converted workflow that waits on a ported custom trigger mid-flow therefore keeps
-`CanStartWorkflow` at its default and is refused at publish. Record such definitions in the plan; do not work around it
-in the activity (for example by defaulting the input to `false`, which breaks the workflows the trigger starts).
+**Redesign** (a trigger that waits mid-flow): publishing refuses a start trigger that is not on the workflow's start
+path, so an Elsa 3 definition that reaches the trigger mid-flow does not publish. Choose one of:
+- **split the workflow** at the wait: the part after it becomes its own workflow, started by the trigger, with the
+  data it needs passed along or correlated;
+- **wait on Elsa 4's `Event` activity** instead: the workflow waits for a named event (optionally correlated), and the
+  code that fed the Elsa 3 trigger publishes that event.
+
+Record the choice in the plan; write no waiting code into the trigger.
 
 ## Case 10: Services
 

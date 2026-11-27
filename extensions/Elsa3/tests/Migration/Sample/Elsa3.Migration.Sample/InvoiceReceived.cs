@@ -9,46 +9,42 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Acme;
 
 // catalog:case-09 begin
-// A trigger activity: it completes when an incoming invoice starts the workflow at this node, and otherwise
-// waits for the next one. The stimulus provider below tells publishing which stimulus starts the workflow;
-// AcmeFeature registers it. A node with CanStartWorkflow set to false only waits mid-flow, so the provider
-// declares no start stimulus for it (publishing refuses a start trigger that is not on the start path).
+// A start trigger: an incoming invoice starts the workflow at this node, and the activity completes with it.
+// A custom trigger only starts workflows; it never waits mid-flow (publishing refuses a start trigger that is not
+// on the workflow's start path). The stimulus provider below tells publishing which stimulus starts the workflow;
+// AcmeFeature registers it.
 [TriggerActivity]
-public sealed class InvoiceReceived : StatefulTriggerActivity<InvoiceReceivedResult, InvoiceWaitState, IncomingInvoice>
+public sealed class InvoiceReceived : StatefulTriggerActivity<InvoiceReceivedResult, InvoiceReceivedState, IncomingInvoice>
 {
     public const string ActivityType = "Acme.InvoiceReceived";
     public const string StimulusType = "Acme.Invoice";
-    private const string InvoiceTarget = "resume-target:invoice";
 
     [ActivityInput]
     [Required]
     public string Mailbox { get; set; } = null!;
 
-    [ActivityInput(DisplayName = "Start new workflows", DefaultValue = "true")]
-    public bool CanStartWorkflow { get; set; } = true;
-
     public static string Hash(string mailbox) =>
         $"sha256:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(mailbox))).ToLowerInvariant()}";
 
-    protected override ValueTask<ActivityTransition<InvoiceReceivedResult, InvoiceWaitState>> ExecuteAsync(
-        ActivityStartContext<IncomingInvoice> context)
-    {
-        if (context.TryGetTrigger(out var invoice))
-            return ValueTask.FromResult(Complete(new InvoiceReceivedResult(invoice.InvoiceNumber)));
+    protected override ValueTask<ActivityTransition<InvoiceReceivedResult, InvoiceReceivedState>> ExecuteAsync(
+        ActivityStartContext<IncomingInvoice> context) =>
+        ValueTask.FromResult(context.TryGetTrigger(out var invoice)
+            ? Complete(new InvoiceReceivedResult(invoice.InvoiceNumber))
+            : NotStartedByAnInvoice());
 
-        var registration = new ActivityTriggerRegistration<IncomingInvoice>(InvoiceTarget, StimulusType, Hash(Mailbox));
-        return ValueTask.FromResult(Suspend(new InvoiceWaitState(Mailbox), [registration]));
-    }
+    // Never reached: the trigger never suspends.
+    protected override ValueTask<ActivityTransition<InvoiceReceivedResult, InvoiceReceivedState>> ResumeAsync(
+        ActivityResumeContext<InvoiceReceivedState, IncomingInvoice> context) =>
+        ValueTask.FromResult(NotStartedByAnInvoice());
 
-    [ResumeTarget(InvoiceTarget)]
-    protected override ValueTask<ActivityTransition<InvoiceReceivedResult, InvoiceWaitState>> ResumeAsync(
-        ActivityResumeContext<InvoiceWaitState, IncomingInvoice> context) =>
-        ValueTask.FromResult(Complete(new InvoiceReceivedResult(context.Trigger.InvoiceNumber)));
+    private static ActivityTransition<InvoiceReceivedResult, InvoiceReceivedState> NotStartedByAnInvoice() =>
+        Fault(new ActivityFault("acme.invoice-trigger-not-started", "InvoiceReceived only starts workflows; it ran without an incoming invoice."));
 }
 
 public sealed record IncomingInvoice(string InvoiceNumber);
 
-public sealed record InvoiceWaitState(string Mailbox);
+// The private state a stateful base class requires; a start-only trigger keeps none.
+public sealed record InvoiceReceivedState;
 
 public sealed record InvoiceReceivedResult([property: Output(Key = "Result")] string InvoiceNumber);
 
@@ -61,13 +57,6 @@ internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulus
         ArgumentNullException.ThrowIfNull(node);
         if (!StringComparer.Ordinal.Equals(node.ActivityType, InvoiceReceived.ActivityType))
             return ActivityTriggerStimulusResult.NotRecognized;
-
-        // A mid-flow wait: recognised, but it starts nothing.
-        var canStart = node.InputBindings.GetValueOrDefault(nameof(InvoiceReceived.CanStartWorkflow));
-        if (canStart?.Source == RuntimeInputBindingSource.Literal && canStart.LiteralValue is { } flag &&
-            (flag.ValueKind == JsonValueKind.False ||
-             (flag.ValueKind == JsonValueKind.String && bool.TryParse(flag.GetString(), out var parsed) && !parsed)))
-            return ActivityTriggerStimulusResult.Recognized([]);
 
         // The stimulus is fixed at publish time, so the mailbox must be a literal.
         var binding = node.InputBindings.GetValueOrDefault(nameof(InvoiceReceived.Mailbox));

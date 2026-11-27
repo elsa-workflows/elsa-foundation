@@ -51,22 +51,14 @@ public sealed class AcmeFeatureTests
     }
 
     [Fact]
-    public async Task Trigger_waits_for_the_next_invoice_otherwise_and_resumes_on_it()
+    public async Task Trigger_faults_when_no_invoice_started_the_workflow_here()
     {
-        IStatefulActivity<InvoiceReceivedResult, InvoiceWaitState, IncomingInvoice> waiting = new InvoiceReceived { Mailbox = "invoices@acme.test" };
+        IActivity activity = new InvoiceReceived { Mailbox = "invoices@acme.test" };
 
-        var suspended = await waiting.ExecuteAsync(TestContext.Create());
+        var transition = await activity.ExecuteAsync(TestContext.Create());
 
-        var suspension = Assert.IsAssignableFrom<IStatefulActivitySuspensionTransition<InvoiceWaitState>>(suspended);
-        var registration = Assert.IsType<ActivityTriggerRegistration<IncomingInvoice>>(Assert.Single(suspension.Registrations));
-        Assert.Equal(InvoiceReceived.StimulusType, registration.StimulusType);
-        Assert.Equal(InvoiceReceived.Hash("invoices@acme.test"), registration.StimulusHash);
-
-        IStatefulActivity<InvoiceReceivedResult, InvoiceWaitState, IncomingInvoice> resumed = new InvoiceReceived();
-        var completed = await resumed.ResumeAsync(new ActivityResumeContext<InvoiceWaitState, IncomingInvoice>(
-            TestContext.Create(), suspension.State, new IncomingInvoice("INV-0043"), "registration-1", "delivery-1"));
-
-        Assert.Equal("INV-0043", Assert.IsAssignableFrom<IActivityCompletionTransition<InvoiceReceivedResult>>(completed).Result.InvoiceNumber);
+        var fault = Assert.IsAssignableFrom<IActivityFaultTransition>(transition);
+        Assert.Equal("acme.invoice-trigger-not-started", fault.Fault.Code);
     }
 
     [Fact]
@@ -86,25 +78,12 @@ public sealed class AcmeFeatureTests
         Assert.False(new InvoiceReceivedStimulusProvider().Describe(Node("Acme.Other", "x")).IsRecognized);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData("false")]
-    public void Stimulus_provider_declares_no_start_stimulus_for_a_mid_flow_wait(object canStartWorkflow)
-    {
-        var result = new InvoiceReceivedStimulusProvider().Describe(Node(InvoiceReceived.ActivityType, "invoices@acme.test", canStartWorkflow));
-
-        Assert.True(result.IsRecognized);
-        Assert.Empty(result.Descriptors);
-    }
-
-    private static ExecutableNode Node(string activityType, string mailbox, object? canStartWorkflow = null)
+    private static ExecutableNode Node(string activityType, string mailbox)
     {
         var bindings = new Dictionary<string, RuntimeInputBinding>
         {
             [nameof(InvoiceReceived.Mailbox)] = Literal(nameof(InvoiceReceived.Mailbox), "String", mailbox)
         };
-        if (canStartWorkflow is { } canStart)
-            bindings[nameof(InvoiceReceived.CanStartWorkflow)] = Literal(nameof(InvoiceReceived.CanStartWorkflow), "Boolean", canStart);
         using var document = JsonDocument.Parse("{}");
         return new ExecutableNode(
             executableNodeId: "node-1",

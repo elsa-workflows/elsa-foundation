@@ -65,7 +65,9 @@ journey to the end, start a new session halfway, and confirm it resumes from the
 5. **Given** a plan with stage "test migration", **When** a new session starts the skill, **Then** it reads the plan
    first and continues from the recorded stage and component statuses without rerunning finished work.
 6. **Given** every remaining definition converts or carries a refusal the user accepted in the plan, **When** the
-   skill finishes, **Then** it describes the handoff (FR-020) and changes nothing outside the workspace.
+   skill finishes, **Then** it describes the handoff (FR-020) and has changed nothing outside the workspace except, in
+   the user's clone, the migration host's references to the feature projects and its local settings (FR-011), which
+   the user makes or approves.
 
 ### User Story 2 - The same journey without an AI (Priority: P1)
 
@@ -175,7 +177,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   and the skill does not ask the user to act on them.
 - A finding has no Elsa 4 remedy (the report says neither patching the definition nor building a component helps):
   the skill records the user's decision in the plan (redesign, drop, or an accepted refusal) and writes no code.
-- The user's Elsa 3 activity uses several catalog cases at once (a trigger with bookmarks, services and outputs): the
+- The user's Elsa 3 activity uses several catalog cases at once (an activity with bookmarks, services and outputs): the
   plan lists every case, and the port follows them in catalog order.
 - A definition is refused only because a dependency was refused: the skill fixes the root first and does not work on
   the blocked definition.
@@ -282,7 +284,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   | 6 | Outcomes | Outcome attributes on the class; select by name in the completion | port |
   | 7 | Scheduling child activities | None for activity authors: scheduling children is engine-only | redesign: a reusable Activity Graph definition, or the built-in composites |
   | 8 | Signals and bookmarks | Bookmarks: a stateful activity that suspends and resumes on a resume target. Signals: none | port (bookmarks); redesign (signals) |
-  | 9 | Triggers | A trigger activity plus a trigger stimulus provider registered in the feature | port |
+  | 9 | Triggers | A trigger activity plus a trigger stimulus provider registered in the feature; a custom trigger only starts workflows | port (start triggers); redesign (a trigger that waits mid-flow: split the workflow at the wait, or wait on Elsa 4's Event activity) |
   | 10 | Services | Constructor injection; the execution context offers no service lookup | port |
   | 11 | Variables and workflow state | Variable-reference inputs read and written through the step's variables; undeclared names and workflow state need their access markers; a free-form properties bag has no counterpart | port; redesign for the properties bag |
   | 12 | Background and task activities | The background-execution-safe marker; the workflow author chooses background placement (spec 1230) | port when the activity meets the eligibility criteria |

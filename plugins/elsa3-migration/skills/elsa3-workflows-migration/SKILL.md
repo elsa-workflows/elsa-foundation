@@ -165,7 +165,7 @@ each:
 
 1. **Cases.** Read its Elsa 3 source (asking before opening each file, naming it) and find the porting catalog cases
    that apply. Record them in catalog order. A
-   component often needs several (a trigger with bookmarks, services and outputs).
+   component often needs several (an activity with bookmarks, services and outputs).
 2. **Target.** Record the Elsa 4 target name: for an activity, the full class name (case 02); for a JavaScript
    function, `<prefix>.<name>` (case 14); for a variable type, its dotted alias (case 16).
 3. **Feature and project.** Record the Elsa 4 feature and project the component goes into (case 18), and the Elsa 3
@@ -263,6 +263,9 @@ the user:
 - **A JavaScript global used other than as a direct call** (assigned to a variable, passed as a callback): once a host
   function provides it, the assessment reports a Must fix finding that patches the definition. Send the user to case
   14: make it a direct call in the Elsa 3 definition. Neither the tool nor this guide scans scripts.
+- **A custom trigger reached mid-flow**: a ported trigger only starts workflows, and publishing refuses one off the
+  start path. Follow case 09's redesign (split the workflow, or wait on Elsa 4's `Event` activity); do not add waiting
+  code to the trigger.
 - **A finding has no Elsa 4 remedy**: record the user's decision (redesign, drop or accept the refusal); write no code.
 - **A definition refused only because a dependency was refused**: fix the root; leave the blocked definition alone.
 - **The migration host does not reference or list a planned feature**: report it before running the assessment.
