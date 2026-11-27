@@ -17,11 +17,13 @@ internal sealed class SqliteCommitDialect() : ReturningDialect(SqliteCommitDiale
         if (window is not null) throw new NotSupportedException("Commit windows are PostgreSQL's.");
         if (rows.Count == 1) { base.Fence(c, rows, window, unfenced, ignoreCount); return; }
         // A VALUES CTE can carry the whole owned set without SQLite's compound SELECT term limit.
-        var values = string.Join(", ", rows.Select(r => FormattableString.Invariant($"({r.Id}, {r.Epoch}, {r.Position}, {r.NewPosition})")));
+        var backlogColumns = rows.Any(row => row.Backlog.HasValue);
+        var valuesColumns = backlogColumns ? "id, epoch, pos, np, backlog" : "id, epoch, pos, np";
+        var columns = backlogColumns ? """, "Backlog" = COALESCE(f.backlog, "Partitions"."Backlog")""" : "";
         var held = unfenced ? "1 = 1" : """ "Partitions"."Epoch" = f.epoch AND "Partitions"."Position" = f.pos """;
         c.Statement($"""
-            WITH f(id, epoch, pos, np) AS (VALUES {values})
-            UPDATE "Partitions" SET "Position" = f.np FROM f WHERE "Partitions"."Id" = f.id AND ({held})
+            WITH f({valuesColumns}) AS (VALUES {Values(rows, backlogColumns)})
+            UPDATE "Partitions" SET "Position" = f.np{columns} FROM f WHERE "Partitions"."Id" = f.id AND ({held})
             RETURNING {Now} AS "Value"
             """, Expect.Fence, rows.Count);
     }

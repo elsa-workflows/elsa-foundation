@@ -228,7 +228,10 @@ public sealed partial class EfStore
     {
         var moves = batch.Turns.Where(t => t.Journal is not null).GroupBy(batch.PartitionOf).ToDictionary(g => g.Key, g => g.Count());
         var order = UnorderedFenceLocks && batch.Fences is { } listed ? listed : batch.Fenced;
-        return [.. order.Select(f => new FenceRow(f.Partition, f.Epoch, f.Position, f.Position + moves.GetValueOrDefault(f.Partition)))];
+        return [.. order.Select(f => new FenceRow(f.Partition, f.Epoch, f.Position, f.Position + moves.GetValueOrDefault(f.Partition))
+        {
+            Backlog = batch.DueBacklog?.TryGetValue(f.Partition, out var estimate) == true ? estimate : null
+        })];
     }
 
     /// <summary>After a refused owned batch: whether one of its bound keys names a message row outside the fenced partitions (rows never change partition).</summary>

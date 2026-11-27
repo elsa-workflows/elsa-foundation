@@ -15,6 +15,7 @@ public sealed class PartitionEntity
     public long? WindowEnd { get; set; }
     public long Position { get; set; }
     public bool Died { get; set; }          // the last take found another owner's lease expired
+    internal int Backlog { get; set; }
 }
 
 public sealed class NodeEntity
@@ -165,6 +166,7 @@ public class KernelDb : DbContext
     internal bool UsesRootParkInspection => Has(RootCapabilities.ParkInspection);
     internal bool UsesRootParkArrivals => Has(RootCapabilities.ParkArrivals);
     internal bool UsesRootParkRecovery => Has(RootCapabilities.ParkRecovery);
+    internal bool UsesRootDueBacklog => Has(RootCapabilities.DueBacklog);
     internal bool UsesRootComposedParkRecovery =>
         UsesRootParkRecovery && (Capabilities & RootProfiles.ParkCompositionBase) == RootProfiles.ParkCompositionBase;
     // A composed set with Park and Termination (S5a, #4229): an operator command reaches a parked root, passes its withheld
@@ -181,6 +183,9 @@ public class KernelDb : DbContext
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true);
     internal static KernelDb ForSqliteRootRuntime(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
         new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+    internal static KernelDb ForRootDueBacklogQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions? definitions = null) =>
+        new(options, StoreFormat.RootDueBacklogQualification, RootProfiles.Shipped | RootCapabilities.DueBacklog,
+            sqliteShippedInstall: definitions is not null, sqliteRuntimeDefinitions: definitions);
     internal static KernelDb ForSqliteParkArrivalsQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions? definitions = null) =>
         new(options, StoreFormat.SqliteParkArrivalsQualification, RootProfiles.ParkCompositionBase | RootCapabilities.ParkArrivals,
             sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
@@ -288,6 +293,7 @@ public class KernelDb : DbContext
             e.Property(p => p.Id).ValueGeneratedNever();
             e.Property(p => p.Epoch).IsConcurrencyToken();      // the fence, when it rides in the batch
             e.Property(p => p.Position).IsConcurrencyToken();
+            if (UsesRootDueBacklog) e.Property(p => p.Backlog).HasDefaultValue(0).ValueGeneratedNever();
         });
         model.Entity<NodeEntity>(e =>
         {
@@ -330,6 +336,8 @@ public class KernelDb : DbContext
             if (Database.ProviderName == "MySql.EntityFrameworkCore") e.Property(m => m.Id).HasMaxLength(255);
             e.Property(m => m.InboxScope).ValueGeneratedNever();
             e.HasIndex(m => new { m.Partition, m.Seq });
+            if (UsesRootDueBacklog)
+                e.HasIndex(m => new { m.Partition, m.Due }).HasFilter(Database.IsNpgsql() ? "\"Done\" = false" : "\"Done\" = 0");
             e.Property(m => m.EventMatch).IsConcurrencyToken();
             e.Property(m => m.Done).IsConcurrencyToken();       // a consumed row must still be there and not done: the count check
             // seq: an identity column on PostgreSQL. SQLite has one writer, so the store assigns max + 1 under the write lock.
@@ -380,7 +388,7 @@ public class KernelDb : DbContext
 /// clock instead of the database's. <paramref name="fenceInBatch"/> chooses; null takes the engine's default
 /// (<see cref="FenceInBatch"/>).
 /// </summary>
-public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore
+public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore, IDueBacklogStore
 {
     public Func<long>? FoundationClock => null;
 
@@ -563,7 +571,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         if (batch.Turns.Any(turn => turn.FoundationKept is not null || turn.FoundationRootParkInputs is not null))
             throw new StoreException(Failure.Definite, "This store does not support retaining Park inputs.");
         StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable,
-            supportsJobTrialClear:SupportsJobTrialClear);
+            supportsJobTrialClear:SupportsJobTrialClear, supportsDueBacklog:SupportsDueBacklog);
         // Marker shape uses the canonical row address. A raw update's alternate spelling is
         // authorized separately by the database-column predicate in AliasUpdateGuard.
         var qualification=batch.Turns.Any(t=>t.Row is {} r && t.Instance!=r.Id)

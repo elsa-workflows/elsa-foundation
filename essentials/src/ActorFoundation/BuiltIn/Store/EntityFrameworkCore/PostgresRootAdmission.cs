@@ -312,7 +312,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         {
             // Lock the shared marker first. A fresh statement then samples both markers, including a revision row
             // inserted by the transaction that held the lock. Batch the statements to keep one round trip.
-            var separateLock = db.RequiredFormat == StoreFormat.RootShipped;
+            var separateLock = db.RequiredFormat == StoreFormat.RootShipped || db.UsesRootDueBacklog;
             var marker = new NpgsqlBatchCommand(StoreDefinitionsRevision.AddPostgresStampSql("""
                 SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", /*definitions-stamp*/
                 FROM "KernelStoreVersions" v WHERE v."Id" = $1

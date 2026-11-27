@@ -11,7 +11,8 @@ public sealed class CountingStore(IKernelStore inner, Action committed, Action<C
     ParkDrainSample? IFoundationSchedulingStore.SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere) =>
         (inner as IFoundationSchedulingStore)?.SampleParkDrains(node, owned, handedOffHere);
     bool IDueBacklogStore.MeasuresDueBacklog => inner is IDueBacklogStore { MeasuresDueBacklog: true };
-    int IDueBacklogStore.PublishedDueBacklog(int partition) => ((IDueBacklogStore)inner).PublishedDueBacklog(partition);
+    ValueTask<int> IDueBacklogStore.ReadPublishedDueBacklogAsync(int partition, CancellationToken cancellationToken) =>
+        ((IDueBacklogStore)inner).ReadPublishedDueBacklogAsync(partition, cancellationToken);
     ValueTask<int> IDueBacklogStore.CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken) =>
         ((IDueBacklogStore)inner).CountDueBacklogAsync(partition, cap, cancellationToken);
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
