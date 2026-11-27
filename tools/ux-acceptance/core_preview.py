@@ -37,7 +37,8 @@ SUITE = 'core-preview'
 PROJECT = 'desktop-light'
 CAPTURES = {
     'core preview stack is ready': ['reference'],
-    'Studio opens the committed kernel activity timeline': ['activity-timeline', 'activity-selection'],
+    'Studio opens the committed kernel activity timeline': ['activity-timeline', 'activity-selection', 'history-paused',
+                                                           'history-catch-up', 'history-committed'],
     'kernel HTTP response opens the committed run': ['kernel-http-result', 'kernel-http-run', 'kernel-http-refusal'],
 }
 EVIDENCE = {
