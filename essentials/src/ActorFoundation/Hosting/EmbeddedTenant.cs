@@ -15,8 +15,6 @@ public static class EmbeddedTenant
     public static BoundScope Bind(string configuredTenant)
     {
         var configured = new BoundScope(configuredTenant);
-        if (configured.Tenant.StartsWith(IsolatedPrefix, StringComparison.Ordinal))
-            throw new ArgumentException("The configured tenant uses a reserved isolation namespace.", nameof(configuredTenant));
         var existing = Interlocked.CompareExchange(ref _scope, configured, null);
         if (existing is null) return configured;
         if (existing.Tenant == configured.Tenant) return existing;
@@ -30,6 +28,8 @@ public static class EmbeddedTenant
         ArgumentException.ThrowIfNullOrWhiteSpace(purpose);
         if (!ReferenceEquals(configured, Volatile.Read(ref _scope)))
             throw new InvalidOperationException("Only the configured Embedded tenant can have an isolated actor scope.");
+        if (configured.Tenant.StartsWith(IsolatedPrefix, StringComparison.Ordinal))
+            throw new ArgumentException("The configured tenant uses the private actor namespace.", nameof(configured));
         var identity = Encoding.UTF8.GetBytes($"{configured.Tenant}/{purpose}");
         var digest = SHA256.HashData(identity);
         return new BoundScope(IsolatedPrefix + Convert.ToHexStringLower(digest.AsSpan(0, 25)));
