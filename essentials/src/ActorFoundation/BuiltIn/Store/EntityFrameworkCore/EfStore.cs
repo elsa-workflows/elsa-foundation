@@ -216,6 +216,8 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootEventStartReceiptsQualification, RootProfiles.EventStartReceiptsQualification);
     internal static KernelDb ForPostgresRootEventStartScanQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootEventStartScanQualification, RootProfiles.EventStartScanQualification);
+    internal static KernelDb ForPostgresRootSharedActivationQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootSharedActivationQualification, RootProfiles.SharedActivationQualification);
     internal static KernelDb ForPostgresRootAuthoredEventsQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootAuthoredEventsQualification, RootProfiles.AuthoredEventsQualification);
     internal static KernelDb ForPostgresRootLiveEventQualification(DbContextOptions<KernelDb> options) =>
@@ -278,6 +280,9 @@ public class KernelDb : DbContext
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootEventStartScanQualification)
             return new(options, qualificationFormat.Value, RootProfiles.EventStartScanQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootSharedActivationQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.SharedActivationQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootAuthoredEventsQualification)
             return new(options, qualificationFormat.Value, RootProfiles.AuthoredEventsQualification,

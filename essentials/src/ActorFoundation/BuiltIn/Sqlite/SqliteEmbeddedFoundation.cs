@@ -46,7 +46,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
 
     internal SqliteEmbeddedHosting.SqliteDirectRequests EventStarts =>
         qualificationFormat == StoreFormat.RootEventStartsQualification || qualificationFormat == StoreFormat.RootEventStartReceiptsQualification ||
-        qualificationFormat == StoreFormat.RootEventStartScanQualification
+        qualificationFormat == StoreFormat.RootEventStartScanQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification
             ? requests.Value :
             throw new InvalidOperationException("Event starts require their private qualification profile.");
 
@@ -112,6 +112,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         qualificationFormat == StoreFormat.RootPreparedStartsQualification ||
         qualificationFormat == StoreFormat.RootDirectTestRunQualification ||
         qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
+        qualificationFormat == StoreFormat.RootSharedActivationQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
 
     /// <summary>Installs or verifies the file and binds future operations to its resolved path.</summary>

@@ -70,7 +70,7 @@ public static partial class SqliteEmbeddedHosting
               qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
               qualificationFormat == StoreFormat.RootAuthoredEventsQualification || qualificationFormat == StoreFormat.RootEventStartsQualification ||
               qualificationFormat == StoreFormat.RootEventStartReceiptsQualification || qualificationFormat == StoreFormat.RootEventStartScanQualification ||
-              qualificationFormat == StoreFormat.RootDirectTestRunQualification;
+              qualificationFormat == StoreFormat.RootDirectTestRunQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification;
 
         public ValueTask<Contract.ActorPlaybackPage?> ReadPlaybackAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             Contract.ActorPlaybackQuery query, CancellationToken cancellationToken = default) =>

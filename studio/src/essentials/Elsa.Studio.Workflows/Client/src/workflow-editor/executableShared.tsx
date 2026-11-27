@@ -1,13 +1,15 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import React from "react";
 import { useNotificationGuard } from "./notifications";
-import { Check, Copy } from "lucide-react";
+import { Check, CircleAlert, Copy, Info } from "lucide-react";
 import type { WorkflowExecutableReference } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
 import type { ExecutableRunState } from "./editorTypes";
 import { copyTextToClipboard, formatReferenceScope, getExecutableReferenceStatus } from "./editorHelpers";
 
 export function ExecutableRunStatusLine({ status, run, compact = false }: { status: string; run: ExecutableRunState | null; compact?: boolean }) {
+  const severity = run?.severity ?? "success";
+  const Icon = severity === "error" ? CircleAlert : severity === "info" ? Info : Check;
   const openRun = () => {
     if (!run?.workflowExecutionId) return;
     window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(run.workflowExecutionId)}`));
@@ -15,8 +17,8 @@ export function ExecutableRunStatusLine({ status, run, compact = false }: { stat
   };
 
   return (
-    <div className={`wf-status-line${compact ? " compact" : ""}`}>
-      <Check size={compact ? 13 : 14} />
+    <div className={`wf-status-line${compact ? " compact" : ""}`} data-severity={severity} role="status">
+      <Icon size={compact ? 13 : 14} aria-hidden="true" />
       <span>{status}</span>
       {run?.workflowExecutionId ? (
         <button type="button" onClick={openRun}>Open Run {run.workflowExecutionId}</button>

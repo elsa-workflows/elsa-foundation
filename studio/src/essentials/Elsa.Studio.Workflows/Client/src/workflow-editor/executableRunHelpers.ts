@@ -9,21 +9,29 @@ export function readExecutableRunWorkflowExecutionId(response: WorkflowExecutabl
 // 409 with { error } distinguishing an expired test-run reference from a retired one. The backend
 // sentence is shown verbatim, followed by the recovery hint matching the structured reason.
 export function formatExecutableRunError(error: unknown): string {
+  return describeExecutableRunError(error).message;
+}
+
+export function describeExecutableRunError(error: unknown): { message: string; outcomeUnknown?: true } {
   const message = error instanceof Error ? error.message : String(error);
   const payload = (typeof error === "object" && error && "payload" in error ? (error as { payload?: unknown }).payload : null)
     ?? tryParseJson(message);
-  const backendError = payload && typeof payload === "object" && typeof (payload as { error?: unknown }).error === "string"
-    ? (payload as { error: string }).error
+  const problem = payload && typeof payload === "object"
+    ? payload as { error?: unknown; persistenceOutcome?: unknown; reason?: unknown }
     : null;
-  if (!backendError) return message;
+  if (problem?.persistenceOutcome === "Unknown" && problem.reason === "InlineStartOutcomeUnknown")
+    return { outcomeUnknown: true, message: "The workflow may still run. Check Runs before starting it again." };
+
+  const backendError = typeof problem?.error === "string" ? problem.error : null;
+  if (!backendError) return { message };
 
   if (/no live .* reference/i.test(backendError)) {
-    return /expired/i.test(backendError)
+    return { message: /expired/i.test(backendError)
       ? `${backendError} Start a new test run from the definition editor to mint a fresh reference.`
-      : `${backendError} Restore the executable or republish its definition to run it.`;
+      : `${backendError} Restore the executable or republish its definition to run it.` };
   }
 
-  return backendError;
+  return { message: backendError };
 }
 
 function tryParseJson(text: string): unknown {
