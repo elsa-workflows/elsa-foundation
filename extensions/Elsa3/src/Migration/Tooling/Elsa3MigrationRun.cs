@@ -346,10 +346,19 @@ internal static class Elsa3MigrationRun
             ComponentName(diagnostic));
 
     /// <summary>The import's own codes come from the import stage; every other diagnostic of a plan item from the converter.</summary>
-    private static FindingStage Stage(string code) =>
-        code.StartsWith("ELS3-REUSABLE-", StringComparison.Ordinal) || code.StartsWith("ELS3-RECONCILE-", StringComparison.Ordinal)
-            ? FindingStage.Import
-            : code.StartsWith("ELS3-MIGRATION-", StringComparison.Ordinal) ? FindingStage.Import : FindingStage.Conversion;
+    private static FindingStage Stage(string code) => ImportCodes.Contains(code) ? FindingStage.Import : FindingStage.Conversion;
+
+    /// <summary>The codes the import, the reconciliation and this tooling own, read from their constant classes.</summary>
+    private static readonly HashSet<string> ImportCodes = new[]
+        {
+            typeof(ReusableActivityImportDiagnosticCodes),
+            typeof(Elsa3ReconciliationDiagnosticCodes),
+            typeof(Elsa3MigrationToolingCodes)
+        }
+        .SelectMany(type => type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static))
+        .Where(field => field is { IsLiteral: true } && field.FieldType == typeof(string))
+        .Select(field => (string)field.GetRawConstantValue()!)
+        .ToHashSet(StringComparer.Ordinal);
 
     private static string? NodeId(Elsa3MigrationDiagnostic diagnostic) => diagnostic.Metadata.GetValueOrDefault("ActivityNodeId");
 

@@ -85,6 +85,54 @@ public sealed class FixtureRunTests
         Assert.Equal(folderReport.RootElement.GetProperty("definitions").GetRawText(), zipReport.RootElement.GetProperty("definitions").GetRawText());
     }
 
+    /// <summary>
+    /// SC-007 (T027): with the fixture feature listed locally, <c>assess</c> clears exactly the findings that name its
+    /// components; the value-only read becomes <c>ELS3-REPLACED-FUNCTION-REFERENCE</c>, and the definitions it unblocks
+    /// publish.
+    /// </summary>
+    [Fact]
+    public async Task Assess_with_the_fixture_feature_clears_exactly_the_findings_naming_its_components()
+    {
+        string[] provided = ["Acme.NotifyCustomer", "lookupCustomer", "getConfig", "getCustomerData", "Acme.Orders.OrderDto"];
+        using var host = new TestHostFolder();
+        var (inventoryRun, inventoryOutput) = await FixtureRun.RunAsync(host, output: Path.Combine(host.Root, "inventory"));
+        host.WriteLocalSettings("""{ "CShells": { "Shells": { "default": { "Features": { "AcmeElsa3MigrationFixture": {} } } } } }""");
+
+        var (assessRun, assessOutput) = await FixtureRun.RunAsync(host, MigrationCommand.Assess, output: Path.Combine(host.Root, "assess"));
+
+        Assert.Null(inventoryRun.Refusal);
+        Assert.Null(assessRun.Refusal);
+        using var inventory = FixtureRun.ReadReport(inventoryOutput);
+        using var assess = FixtureRun.ReadReport(assessOutput);
+        var before = Definitions(inventory.RootElement);
+        var after = Definitions(assess.RootElement);
+        Assert.Equal(before.Keys.Order(), after.Keys.Order());
+
+        foreach (var (key, definition) in before)
+        {
+            var expected = NonRoutine(definition).Where(finding => !provided.Contains(finding.ComponentName)).Select(finding => finding.Code).Order(StringComparer.Ordinal).ToList();
+            if (key == ("customer-batch", 1))
+                expected = ["ELS3-REPLACED-FUNCTION-REFERENCE"];
+            Assert.True(expected.SequenceEqual(NonRoutine(after[key]).Select(finding => finding.Code).Order(StringComparer.Ordinal)),
+                $"{key}: expected [{string.Join(", ", expected)}], got [{string.Join(", ", NonRoutine(after[key]).Select(finding => finding.Code))}].");
+        }
+
+        foreach (var unblocked in new[] { "invoice-reminder", "shipment-notice", "welcome-customer", "customer-lookup", "customer-profile", "regional-pricing", "order-archive" })
+            Assert.True(after[(unblocked, 1)].GetProperty("published").GetBoolean(), $"{unblocked} did not publish.");
+
+        var components = assess.RootElement.GetProperty("components").EnumerateArray().Select(component => component.GetProperty("name").GetString()).ToArray();
+        Assert.DoesNotContain("lookupCustomer", components);
+        Assert.DoesNotContain("Acme.NotifyCustomer", components);
+        Assert.Equal("assess", assess.RootElement.GetProperty("command").GetString());
+        Assert.Contains("AcmeElsa3MigrationFixture", assess.RootElement.GetProperty("run").GetProperty("features").EnumerateArray().Select(feature => feature.GetString()));
+    }
+
+    private static IEnumerable<(string Code, string? ComponentName)> NonRoutine(JsonElement definition) =>
+        definition.GetProperty("findings").EnumerateArray()
+            .Where(finding => !finding.TryGetProperty("routine", out var routine) || !routine.GetBoolean())
+            .Select(finding => (finding.GetProperty("code").GetString()!,
+                finding.TryGetProperty("componentName", out var name) && name.ValueKind == JsonValueKind.String ? name.GetString() : null));
+
     private static Dictionary<(string?, int), JsonElement> Definitions(JsonElement root) =>
         root.GetProperty("definitions").EnumerateArray()
             .GroupBy(definition => (definition.GetProperty("definitionId").GetString(), definition.GetProperty("version").GetInt32()))
