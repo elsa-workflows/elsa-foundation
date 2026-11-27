@@ -662,6 +662,8 @@ public static class NativeExecutableMapper
                             $"On this host the member '{segments[0]}' of {type.Name} '{producer}''s {projection} reads differently. {(members.Count > 0 ? $"Read one of: {string.Join(", ", members.Keys)}." : "Remove this read until the shapes match.")}");
                     segments = [first, .. segments.Skip(1)];
                 }
+                if (mapped.LowercaseFirstMember)
+                    segments = [segments[0].ToLowerInvariant(), .. segments.Skip(1)];
                 return Join(mapped.Path, segments) ?? "";
             }
             // A GraphActivity's result is its outputs, by reference key.

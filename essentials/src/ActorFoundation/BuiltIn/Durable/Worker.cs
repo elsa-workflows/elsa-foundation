@@ -520,10 +520,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (Volatile.Read(ref _answered) is not null && !cancellationToken.IsCancellationRequested) await AnsweredAsync(cancellationToken);
         if (!LeaseUsable()) return null;
         if (cancellationToken.IsCancellationRequested) return TimeSpan.Zero;
+        PolledLookups? lookups = null;
         if (_woken)
         {
             _woken = false;
-            await PollAsync(cancellationToken);
+            lookups = await PollAsync(includeLookups: true, cancellationToken);
         }
         if (!LeaseUsable()) return null;
         if (cancellationToken.IsCancellationRequested) return TimeSpan.Zero;
@@ -552,7 +553,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var ticket in _items.Values.Where(i => i.Key is not null).ToArray()) StartJob(ticket, cancellationToken);
         var receivedBeforePass = _lastReceivedJob;
         var busy = NeedsLoad || NeedsMeet || NeedsFlush || ReadyForTurns(cancellationToken).Any();
-        await LoadAsync(cancellationToken);
+        await LoadAsync(lookups, cancellationToken);
         if (cancellationToken.IsCancellationRequested) return Owns ? TimeSpan.Zero : null;
         await MeetAsync(cancellationToken);
         if (cancellationToken.IsCancellationRequested) return Owns ? TimeSpan.Zero : null;
@@ -1456,19 +1457,33 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     // ---- messages into memory ------------------------------------------------------------------------------------
 
-    public async Task PollAsync(CancellationToken cancellationToken = default)
+    public async Task PollAsync(CancellationToken cancellationToken = default) =>
+        await PollAsync(includeLookups: false, cancellationToken);
+
+    private async Task<PolledLookups?> PollAsync(bool includeLookups, CancellationToken cancellationToken)
     {
-        if (_polling || !LeaseUsable()) return;
+        if (_polling || !LeaseUsable()) return null;
         var generation = _generation;
         _polling = true;
         _consumed.Clear();
         _retiredRootsDuringPoll.Clear();
         Polled polled;
         var fences = Fences;
+        IReadOnlyList<ActorLookup>? reads = null;
+        Dictionary<string, LookupCandidate>? candidates = null;
         try
         {
-            polled = fences.Count == 1 ? await _store.PollAsync(fences[0].Partition, fences[0].Epoch, _options.Horizon, _options.PollLimit, cancellationToken)
-                : await _store.PollAsync(fences, _options.Horizon, _options.PollLimit, cancellationToken);
+            if (includeLookups && _options.OnObservedDelivery is null && !_store.HasActorAliases &&
+                _store is IOwnerPollLookups { CanPollLookups: true } reader)
+                (polled, reads) = await reader.PollLookupsAsync(fences, _options.Horizon, _options.PollLimit, page =>
+                {
+                    if (generation != _generation || cancellationToken.IsCancellationRequested || !fences.SequenceEqual(Fences)) return [];
+                    candidates = SelectPollLookups(page);
+                    return candidates?.Keys.ToArray() ?? [];
+                }, cancellationToken);
+            else
+                polled = fences.Count == 1 ? await _store.PollAsync(fences[0].Partition, fences[0].Epoch, _options.Horizon, _options.PollLimit, cancellationToken)
+                    : await _store.PollAsync(fences, _options.Horizon, _options.PollLimit, cancellationToken);
         }
         catch (Exception)
         {
@@ -1477,12 +1492,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 _polling = false;
                 if (cancellationToken.IsCancellationRequested) _woken = true; // the interrupted read consumed no rows
             }
-            return;
+            return null;
         }
-        if (generation != _generation) return;
+        if (generation != _generation) return null;
         _polling = false;
         Observe(polled.Now);    // anchored when the answer arrives, so the estimate never runs ahead of the database
-        if (!LeaseUsable()) return;
+        if (!LeaseUsable()) return null;
         var read = 0;
         foreach (var row in polled.Messages)
         {
@@ -1497,7 +1512,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 suspect: (!row.PersistedHold || row.ReleasedBy is not null) && Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0,
                 cancellationToken: cancellationToken, persistedHold: row.PersistedHold && row.ReleasedBy is null, releasedBy: row.ReleasedBy,
                 replyTenant: row.ReplyTenant, rootCreator: row.RootCreator);
-            if (!LeaseUsable()) return;
+            if (!LeaseUsable()) return null;
         }
         if (ParkDrainMetrics.Enabled)
         {
@@ -1518,6 +1533,30 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // K1 D1: a full poll that read something new is read on at the next pass, without waiting for a hint or the poll
         // interval. One poll serves the node's whole set, so a backlog in one partition must not slow the others' reads.
         if (polled.Messages.Count >= _options.PollLimit && read > 0) _woken = true;
+        return candidates is not null && reads is not null ? new(generation, fences, candidates, reads) : null;
+    }
+
+    private sealed record PolledLookups(long Generation, IReadOnlyList<PartitionFence> Fences,
+        Dictionary<string, LookupCandidate> Candidates, IReadOnlyList<ActorLookup> Rows);
+
+    private readonly record struct LookupCandidate(Slot? Slot, InstanceRow? Row, bool Loaded)
+    {
+        // A new slot may have been created by the page. A prior slot must still be the same slot and checkpoint.
+        public bool Matches(Slot current) => Slot is null ? current is { Row: null, Loaded: false } :
+            ReferenceEquals(Slot, current) && ReferenceEquals(Row, current.Row) && Loaded == current.Loaded;
+    }
+
+    private Dictionary<string, LookupCandidate>? SelectPollLookups(Polled page)
+    {
+        // Bound optional checkpoint reads independently from the larger inbox page.
+        const int limit = IOwnerPollLookups.MaximumActors;
+        var incoming = page.Messages.Select(row => row.Message.Target.Id)
+            .Where(actor => !_slots.ContainsKey(actor)).Distinct(StringComparer.Ordinal).Take(limit + 1).ToArray();
+        if (incoming.Length == 0 && !NeedsLoad) return null;
+        var targets = _slots.Where(s => NeedsActorLookup(s.Value)).Select(s => s.Key).Concat(incoming).Take(limit + 1).ToArray();
+        if (targets.Length == 0 || targets.Length > limit) return null;
+        return targets.ToDictionary(actor => actor, actor => _slots.TryGetValue(actor, out var slot) ?
+            new LookupCandidate(slot, slot.Row, slot.Loaded) : default, StringComparer.Ordinal);
     }
 
     // Ingress can stage a local creator without mutating the owner's slots or taking its turn lock.
@@ -2054,11 +2093,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
         return false;
     }
 
-    public async Task LoadAsync(CancellationToken cancellationToken = default)
+    private bool NeedsActorLookup(Slot slot) => !slot.Loaded || slot.Row is null ||
+        _store.HasActorAliases && slot.Unwritten || slot.PendingReferences > 0;
+
+    public async Task LoadAsync(CancellationToken cancellationToken = default) => await LoadAsync(null, cancellationToken);
+
+    private async Task LoadAsync(PolledLookups? lookups, CancellationToken cancellationToken)
     {
         if (_loading || !Owns || !NeedsLoad) return;
         // Prefer live candidates whose address the database cannot supply, including an actor still waiting in memory.
-        var requested = _slots.Where(s => !s.Value.Loaded || s.Value.Row is null || (_store.HasActorAliases && s.Value.Unwritten) || s.Value.PendingReferences > 0)
+        var requested = _slots.Where(s => NeedsActorLookup(s.Value))
             .OrderByDescending(s => LookupPriority(s.Value)).ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal);
         var targets = requested.Keys;
         var pending = _slots.Where(s => s.Value.PendingReferences > 0)
@@ -2070,7 +2114,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
         _aliasesChangedDuringLoad = false;
         _loading = true;
         IReadOnlyList<ActorLookup> rows;
-        try { rows = await _store.LoadActorsAsync(ids, cancellationToken); }
+        try
+        {
+            if (lookups is not null && aliasRead == 0 && pending.Length == 0 && !cancellationToken.IsCancellationRequested &&
+                lookups.Generation == generation && lookups.Fences.SequenceEqual(Fences) &&
+                targets.All(id => lookups.Candidates.TryGetValue(id, out var candidate) && candidate.Matches(requested[id])))
+            {
+                var projected = lookups.Rows.ToDictionary(row => row.Requested, StringComparer.Ordinal);
+                rows = targets.Select(id => projected[id]).ToArray();
+            }
+            else
+                rows = await _store.LoadActorsAsync(ids, cancellationToken);
+        }
         catch (Exception)
         {
             if (generation == _generation) _loading = _aliasesChangedDuringLoad = _retryAliases = false;
