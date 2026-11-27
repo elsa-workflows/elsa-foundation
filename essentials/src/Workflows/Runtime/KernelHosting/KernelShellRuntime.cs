@@ -57,6 +57,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             Expressions = expressions,
             SelfSends = serving.Capabilities.SelfSends,
             UseStructuralJournal = Foundation.Reads is IActorSequencedJournalReads { SupportsSequencedJournal: true },
+            AuthoredEventStarts = storage.TakesEventStarts,
             ServedWorkflow = serving.ServedWorkflow,
             ResolveWorkflow = ResolveWorkflowAsync
         });

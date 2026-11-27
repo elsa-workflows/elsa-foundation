@@ -70,6 +70,9 @@ public class NativeExecutionOptions
     /// <summary>Uses versioned structural journal records for an opted-in host.</summary>
     public bool UseStructuralJournal { get; init; }
 
+    /// <summary>Lets a host deliver an explicitly selected Event start with no payload.</summary>
+    public bool AuthoredEventStarts { get; init; }
+
     /// <summary>
     /// Whether the host's foundation takes the model's self-sends. With them, a Balanced or Ephemeral burst that reaches
     /// <see cref="MaxActivitiesPerTurn"/> continues in the next turn. Without them a burst runs on to its next wait or end in
@@ -169,6 +172,8 @@ public sealed partial class NativeState
     public Dictionary<string, JsonNode?> Results { get; set; } = new(StringComparer.Ordinal);
     public string? TriggerNode { get; set; }
     public JsonNode? Trigger { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool EmptyEventStartPending { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, InvocationInbox>? Inboxes { get; set; }
 }
@@ -282,6 +287,8 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 foreach (var (name, value) in _wf.Variables) _s.Variables[name] = value?.DeepClone();
                 if (start.Input is { } input) _s.Variables["input"] = input.DeepClone();
                 (_s.TriggerNode, _s.Trigger) = (start.TriggerNode, start.Trigger ?? turn.Ambient as JsonNode);
+                _s.EmptyEventStartPending = options.AuthoredEventStarts && _s.Trigger is null && start.TriggerNode is { } selected &&
+                    NativeStartTriggers.StartEvents(_wf).Any(node => node.Id == selected);
                 _s.Agenda.Add(new Work { Frame = NewId("f"), Node = _wf.Root.Id });
                 break;
             }
@@ -459,7 +466,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             {
                 var delivery = PendingTrigger == node.Id;
                 var trigger = delivery ? _s.Trigger : null;
-                if (delivery) (_s.TriggerNode, _s.Trigger) = (null, null);
+                if (delivery) (_s.TriggerNode, _s.Trigger, _s.EmptyEventStartPending) = (null, null, false);
                 var context = Context(frame);
                 Apply(frame, await InvokeAuthored(frame, () => stateful.StartAsync(context, delivery, trigger)));
                 break;
@@ -849,7 +856,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
 
     /// <summary>The node whose start trigger is still to be delivered, if any.</summary>
     internal string? PendingTrigger =>
-        _s.TriggerNode is { } node && (_s.Trigger is not null || _wf.Nodes.GetValueOrDefault(node)?.Type == typeof(Event)) ? node : null;
+        _s.Trigger is not null || _s.EmptyEventStartPending ? _s.TriggerNode : null;
 
     internal IReadOnlyList<string> Running(string frame) =>
         [.. _s.Frames.Values.Where(f => f.Parent == frame).Select(f => f.Id), .. _s.Agenda.Where(w => !w.Resume && !w.Gone && w.Parent == frame).Select(w => w.Frame)];
