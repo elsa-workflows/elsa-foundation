@@ -41,8 +41,8 @@ internal static class RootPublicEventLiveWaits
     internal sealed record Candidate(bool SourceReady, string? Tenant, string? Key, string? Actor, string? Wait, string? Registration);
     private sealed record NewWait(bool SourceReady, int? Index);
     private sealed record Position(bool SourceReady, string? Reference, int? Partition, long? After, long? Through, long? RetainFrom);
-    private sealed record Publication(bool SourceReady, long? Ordinal, string? Occurrence, long? KeepUntil, string? EventId, string? Payload,
-        bool? PayloadEscaped);
+    private sealed record Publication(bool SourceReady, long? PageEnd, long? Ordinal, string? Occurrence, long? KeepUntil, string? EventId,
+        string? Payload, bool? PayloadEscaped);
 
     // Ordinary waits use insert-if-absent. A second Subscribe cannot upgrade a wait that was already present.
     internal static async Task<SubscriptionRow[]> NewAsync(KernelDb db, SubscriptionRow[] proposed,
@@ -69,15 +69,16 @@ internal static class RootPublicEventLiveWaits
         foreach (var group in waits.GroupBy(w => w.FoundationTenant!).OrderBy(g => g.Key, StringComparer.Ordinal))
         {
             var retainedFrom = await RootPublicEventPublications.RetentionThresholdAsync(db, group.Key, now, bind, token);
+            // Record the key's high-water ordinal by index. The owner applies eligibility in its later bounded catch-up steps.
             var packed = Json.Write(group.Select(w => new { w.Key, w.Instance, w.Wait, registration = Guid.NewGuid().ToString("N") }));
             FormattableString query = $"""
                 WITH source AS MATERIALIZED (/*public-event-start-source*/), proposed AS (/*waits*/)
                 INSERT INTO "FoundationPublicEventLiveWaits"
                     ("Tenant", "Key", "Instance", "Wait", "Registration", "RetainFrom", "CatchAfter", "CatchThrough")
                 SELECT {group.Key}, s."Key", s."Instance", s."Wait", w."Registration", {retainedFrom}, 0,
-                    coalesce((SELECT max(p."Ordinal") FROM "FoundationPublicEventPublications" p
-                        WHERE p."Tenant" = {group.Key} AND p."Key" = s."Key" AND p."KeepUntil" >= {retainedFrom}
-                            AND p."CleanupAt" = p."KeepUntil"), 0)
+                    coalesce((SELECT p."Ordinal" FROM "FoundationPublicEventPublications" p
+                        WHERE p."Tenant" = {group.Key} AND p."Key" = s."Key"
+                        ORDER BY p."Ordinal" DESC LIMIT 1), 0)
                 FROM source, proposed w JOIN "Subscriptions" s
                     ON s."Key" = w."Key" AND s."Instance" = w."Instance" AND s."Wait" = w."Wait"
                 JOIN "Instances" i ON i."Id" = s."Instance" AND i."Partition" = s."Partition"
@@ -159,15 +160,22 @@ internal static class RootPublicEventLiveWaits
         }
 
         var publication = await db.Database.SqlQuery<Publication>(RootPublicEventStarts.Bind($"""
-            WITH source AS MATERIALIZED (/*public-event-start-source*/), matching AS (
-                SELECT "Ordinal", "Occurrence", "KeepUntil", "EventId", "Payload", "PayloadEscaped"
+            WITH source AS MATERIALIZED (/*public-event-start-source*/), page AS MATERIALIZED (
+                SELECT "Ordinal", "KeepUntil", "CleanupAt"
                 FROM "FoundationPublicEventPublications"
-                WHERE "Tenant" = {candidate.Tenant} AND "Key" = {candidate.Key} AND "KeepUntil" >= {position.RetainFrom}
-                    AND "CleanupAt" = "KeepUntil" AND "Ordinal" > {position.After} AND "Ordinal" <= {position.Through}
+                WHERE "Tenant" = {candidate.Tenant} AND "Key" = {candidate.Key}
+                    AND "Ordinal" > {position.After} AND "Ordinal" <= {position.Through}
                     AND (SELECT "SourceReady" FROM source)
+                ORDER BY "Ordinal" LIMIT {InMemoryStore.ParkPageLimit}
+            ), matching AS (
+                SELECT "Ordinal" FROM page
+                WHERE "KeepUntil" >= {position.RetainFrom} AND "CleanupAt" = "KeepUntil"
                 ORDER BY "Ordinal" LIMIT 1
             )
-            SELECT source."SourceReady", matching.* FROM source LEFT JOIN matching ON true
+            SELECT source."SourceReady", (SELECT max("Ordinal") FROM page) AS "PageEnd",
+                p."Ordinal", p."Occurrence", p."KeepUntil", p."EventId", p."Payload", p."PayloadEscaped"
+            FROM source LEFT JOIN matching ON true
+            LEFT JOIN "FoundationPublicEventPublications" p ON p."Ordinal" = matching."Ordinal"
             """, bind)).SingleAsync(token);
         if (!publication.SourceReady) throw SourceChanged();
         if (publication.Occurrence is { } occurrence)
@@ -189,7 +197,7 @@ internal static class RootPublicEventLiveWaits
         }
         if (await db.Database.ExecuteSqlInterpolatedAsync(RootPublicEventStarts.Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)
-            UPDATE "FoundationPublicEventLiveWaits" SET "CatchAfter" = {publication.Ordinal ?? position.Through}
+            UPDATE "FoundationPublicEventLiveWaits" SET "CatchAfter" = {publication.Ordinal ?? publication.PageEnd ?? position.Through}
             WHERE "Key" = {candidate.Key} AND "Instance" = {candidate.Actor} AND "Wait" = {candidate.Wait}
                 AND "Registration" = {candidate.Registration} AND "CatchAfter" = {position.After}
                 AND (SELECT "SourceReady" FROM source)
