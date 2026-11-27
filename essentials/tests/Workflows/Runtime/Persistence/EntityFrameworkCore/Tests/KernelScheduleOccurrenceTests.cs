@@ -15,9 +15,10 @@ public sealed class KernelScheduleOccurrenceTests
             var connection = new SqliteConnectionStringBuilder { DataSource = Path.Combine(directory.FullName, "runtime.db"), Pooling = false };
             var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection.ToString()).Options;
             await using (var context = new RuntimeSqliteDbContext(options))
-                await context.Database.MigrateAsync();
+                await KernelScheduleOccurrenceContract.InstallWithLegacyControlsAsync(context);
 
-            await KernelScheduleOccurrenceContract.RunAsync(() => new RuntimeSqliteDbContext(options));
+            await KernelScheduleOccurrenceContract.RunAsync(() => new RuntimeSqliteDbContext(options), interceptor =>
+                new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>(options).AddInterceptors(interceptor).Options));
         }
         finally { directory.Delete(recursive: true); }
     }

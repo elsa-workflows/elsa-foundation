@@ -10,7 +10,8 @@ using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRun
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access) : IRuntimeKernelScheduleControlReader
+internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access) :
+    IRuntimeKernelScheduleControlReader, IRuntimeKernelScheduleControlScanStore
 {
     public async ValueTask<RuntimeKernelScheduleControl?> FindAsync(TriggerScope scope, string scheduleKey, CancellationToken cancellationToken = default)
     {

@@ -74,14 +74,15 @@ internal sealed class KernelScheduleReconciliationWorker
             throw new InvalidOperationException("Only one schedule reconciliation loop may run for this shell.");
         try
         {
-            var controls = new Scan<string>(ControlSweep);
+            long? controlsPausedAt = null;
             var pending = _occurrenceScopes.Select(_ => new Scan<RuntimeKernelScheduleOccurrenceCursor>(Tick)).ToArray();
             var retired = _occurrenceScopes.Select(_ => new Scan<RuntimeKernelScheduleOccurrenceCursor>(RetirementSweep)).ToArray();
             using var timer = new PeriodicTimer(Tick, _clock);
             do
             {
                 token.ThrowIfCancellationRequested();
-                await ScanPageAsync(controls, ReadControlTailAsync, ReadControlsAsync, "control scan", token);
+                if (controlsPausedAt is null || _clock.GetElapsedTime(controlsPausedAt.Value) >= ControlSweep)
+                    controlsPausedAt = await ScanControlsAsync(token) ? null : _clock.GetTimestamp();
                 for (var i = 0; i < _occurrenceScopes.Length; i++)
                 {
                     var scope = _occurrenceScopes[i];
@@ -96,18 +97,29 @@ internal sealed class KernelScheduleReconciliationWorker
         finally { Volatile.Write(ref _running, 0); }
     }
 
-    private ValueTask<string?> ReadControlTailAsync(CancellationToken token) =>
-        WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleControlReader>().ReadTailAsync(_controlScope, token));
-
-    private async ValueTask<string?> ReadControlsAsync(string? after, string through, CancellationToken token)
+    private async ValueTask<bool> ScanControlsAsync(CancellationToken token)
     {
-        using var read = Limit(token);
-        var page = await WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleControlReader>()
-            .ListAsync(_controlScope, after, through, PageSize, read.Token));
-        RequirePage(page.Items.Count);
-        foreach (var control in page.Items)
-            await VisitAsync(ct => ApplyControlAsync(control, ct), "apply control", control.ScheduleKey, token);
-        return page.Next;
+        try
+        {
+            IRuntimeKernelScheduleControlScanPage? page;
+            using (var read = Limit(token))
+                page = await WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleControlScanStore>()
+                    .ReadScanPageAsync(_controlScope, PageSize, read.Token));
+            if (page is null) return false;
+            RequirePage(page.Items.Count);
+            foreach (var control in page.Items)
+                await VisitAsync(ct => ApplyControlAsync(control, ct), "apply control", control.ScheduleKey, token);
+
+            using var checkpoint = Limit(token);
+            var advanced = await WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleControlScanStore>()
+                .TryAdvanceScanAsync(_controlScope, page, checkpoint.Token));
+            return !advanced || page.HasMore;
+        }
+        catch (Exception error) when (!token.IsCancellationRequested)
+        {
+            _logger.LogWarning(error, "Kernel schedule control scan failed for tenant {Tenant}. It will retry.", _actors.Tenant);
+            return false;
+        }
     }
 
     private async ValueTask ApplyControlAsync(RuntimeKernelScheduleControl control, CancellationToken token)

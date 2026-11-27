@@ -2105,6 +2105,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("InsertionOrdinal")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("OwnerSlotHash")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
@@ -2138,7 +2141,43 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "TenantKeyHash", "Id")
                         .HasDatabaseName("IX_KernelScheduleControl_Tenant");
 
+                    b.HasIndex("ScopeKeyHash", "TenantKeyHash", "InsertionOrdinal", "Id")
+                        .HasDatabaseName("IX_KernelScheduleControl_Scan");
+
                     b.ToTable("elsa_runtime_kernel_schedule_control", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeKernelScheduleControlScanEntity", b =>
+                {
+                    b.Property<string>("ScopeKeyHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantKeyHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AfterId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AfterOrdinal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("LastOrdinal")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Pass")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("Through")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ScopeKeyHash", "TenantKeyHash");
+
+                    b.ToTable("elsa_runtime_kernel_schedule_control_scan", (string)null);
                 });
 
             modelBuilder.Entity("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities.RuntimeKernelScheduleOccurrenceEntity", b =>
