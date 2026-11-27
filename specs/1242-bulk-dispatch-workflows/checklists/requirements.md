@@ -14,7 +14,7 @@
 
 ## Requirement Completeness
 
-- [x] No [NEEDS CLARIFICATION] markers remain. The open choices go to the coordinator as questions in the PR.
+- [x] No [NEEDS CLARIFICATION] markers remain. The coordinator answered Q1–Q5 on 2026-11-27.
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)

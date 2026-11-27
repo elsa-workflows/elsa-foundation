@@ -34,17 +34,18 @@ the design side), and converter rules.
 - **Sanctioned patterns only**: the activity is a structural activity with a structure handler, as `If` and `ForEach`
   are. The converter change is a map entry and existing rule kinds. Pass.
 - **No runtime knob for authors**: no degree, batch or channel input. The cap (FR-007) and the window of 16
-  (FR-005) are fixed constants. Pass. This departs from large-fan-out.md decision 1's author input; that is Q4.
+  (FR-005) are fixed constants. Pass. This departs from large-fan-out.md decision 1's author input. The coordinator
+  kept 16 as the starting value; tuning it for GA is #5980 (Q4).
 - **Refuse over workaround**: the converter refuses what it cannot map faithfully (spec FR-019), and Elsa 3 defects
   (the shared bookmark counter, the leaking `Input` dictionary) are not reproduced. Pass.
-- **ADR needed?** No, with the recommended answer to Q4.
+- **ADR needed?** No.
   - Each child keeps "one dispatch per activity execution" (spec 096 FR-012).
   - Per-item iteration ids and scopes follow ADR 0028, and BPMN multi-instance already schedules one node per
     iteration.
   - The runtime and designer synthesize no node. Only the converter generates the `Dispatch` child, with its
     existing child-adding mechanism (§3), so there is no new pattern.
-  - All-at-once dispatch (the alternative in Q4) would drop the bound on outstanding children and needs a
-    decision-register entry or an ADR amendment first. The rejected option B would have needed an ADR.
+  - The window of 16 stays within large-fan-out.md's bound on outstanding children. The rejected option B would have
+    needed an ADR.
 
 ## Design
 
@@ -68,10 +69,15 @@ the design side), and converter rules.
     `variables.currentItem` read.
   - **`CompletesAfterItsChildren`** returns true, as `If` and `LoopStructureHandler` do, so spec 266's unordered-write
     analysis does not report false findings around the bulk node.
-  - **`AssessChildResult`** returns `Unknown` with `MayRunConcurrently = true` and
-    `EarlierProducerRunCanReachConsumer = true`, so a slot binding to the `Dispatch` node's result is refused
-    (`ActivityChildResultFacts`). If returns `false` for the second flag, which here would let a branch read another
-    item's dispatch result (spec FR-010).
+  - **`AssessChildResult`**, per pair:
+    - **Producer `Dispatch`, consumer `ChildCompleted` or `ChildFaulted`**: `Unknown`, with
+      `MayRunConcurrently = true` and `EarlierProducerRunCanReachConsumer = true`, so a slot binding to the `Dispatch`
+      node's result is refused (spec FR-010).
+    - **A child paired with itself** (the graph asks every container above the common one about its child's
+      self-pair): `EarlierProducerRunCanReachConsumer = false`, as `LoopStructureHandler` answers. The bulk activity
+      schedules each pass itself, and the runtime resolves results by causal history. So a result binding between two
+      activities inside one slot (for example inside a `Sequence` or `Flowchart`) still publishes.
+    - **Any other pair**: answered as `If` answers its pairs.
   - **`RelateChildren`** answers `Unordered` for every pair, including a child paired with itself. `Dispatch` and both
     slots run concurrently across passes. If's "never overlap" facts would feed spec 266's concurrency checks false
     ordering.
@@ -236,7 +242,9 @@ the design side), and converter rules.
   - parent cancellation cancels the waiting children;
   - publish pins the `Dispatch` node through the unchanged `DispatchPinSource`;
   - a slot that writes a workflow variable publishes with the `ValueFlow/ConcurrentWrite` warning;
-  - a slot binding to the `Dispatch` node's result is refused at publish.
+  - a slot binding to the `Dispatch` node's result is refused at publish: an optional binding with
+    `ValueFlow/EarlierProducerRun`, a required one with `ValueFlow/UnavailableProducer`;
+  - a result binding between two activities inside one slot `Sequence` publishes.
 - **Converter** (`Elsa3BulkDispatchConversionTests`): every member rule; each FR-017 and FR-019 row; an item key
   that clashes with a workflow variable (the item wins in `Inputs`, and the variable wins in the correlation function,
   as in Elsa 3); the item-read
@@ -267,9 +275,11 @@ extensions/Elsa3/src/Mapping/
 ├── Services/Elsa3ValueFlowLowerer.cs                    (item read, child-result reads)
 ├── Services/Elsa3ExpressionRewriter.cs                  (args.<key> in the correlation function)
 ├── Conversion/Elsa3DefinitionConverter.cs               (bulk key in AncestorScopeNames)
-├── Models/Elsa3ConversionPlan.cs                        (bulk child → item key field)
+├── Conversion/Elsa3ConversionPlan.cs                    (bulk child → item key field)
+├── Conversion/Elsa3ConversionRequest.cs                 (BulkDispatchTargetInputs field)
+├── Services/Elsa3ReusableActivityImportMaterializer.cs  (pre-scan; published lookup via the DI constructor)
 └── README.md
-extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs (6 codes)
+extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs (6 codes: 3 errors, 3 warnings)
 ```
 
 ## Complexity Tracking
