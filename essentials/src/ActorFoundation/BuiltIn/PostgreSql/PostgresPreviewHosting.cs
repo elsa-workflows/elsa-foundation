@@ -43,6 +43,17 @@ public static partial class PostgresPreviewHosting
         return InstallPreviewFormatAsync(() => CreateScheduleControlsQualificationContext(options), cancellationToken);
     }
 
+    /// <summary>Selects the private profile for qualifying managed schedules with the complete shipped workflow runtime.</summary>
+    public static KernelDb CreateManagedSchedulesQualificationContext(DbContextOptions<KernelDb> options) =>
+        KernelDb.ForPostgresRootManagedSchedulesQualification(options);
+
+    /// <summary>Installs or verifies a dedicated managed schedule qualification database.</summary>
+    public static Task InstallManagedSchedulesQualificationAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return InstallPreviewFormatAsync(() => CreateManagedSchedulesQualificationContext(options), cancellationToken);
+    }
+
     /// <summary>Binds the trusted control transport to the host's chosen auxiliary schedule actor.</summary>
     public static Contract.IScheduleRootControls BindScheduleControls(Func<KernelDb> create, string scheduleActorType)
     {
@@ -182,6 +193,14 @@ public static partial class PostgresPreviewHosting
         ArgumentNullException.ThrowIfNull(create);
         using var db = create();
         return db.UsesRootSelfProtocol;
+    }
+
+    /// <summary>Whether the selected profile supports managed schedule delivery and irreversible cohort retirement.</summary>
+    public static bool TakesManagedSchedules(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootScheduleControls && db.UsesRootScheduleLineage;
     }
 
     /// <summary>Whether the selected format takes durable actor-owned timers, as used by the Native Delay activity.</summary>

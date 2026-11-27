@@ -47,7 +47,8 @@ public static partial class SqliteEmbeddedHosting
 
         public bool SupportsDescendantPlayback => qualificationFormat is null
             ? RootProfiles.Shipped.HasFlag(RootCapabilities.PlaybackDescendants)
-            : qualificationFormat == StoreFormat.RootPlaybackDescendantsQualification;
+            : qualificationFormat == StoreFormat.RootPlaybackDescendantsQualification ||
+              qualificationFormat == StoreFormat.RootManagedSchedulesQualification;
 
         public ValueTask<Contract.ActorPlaybackPage?> ReadPlaybackAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             Contract.ActorPlaybackQuery query, CancellationToken cancellationToken = default) =>

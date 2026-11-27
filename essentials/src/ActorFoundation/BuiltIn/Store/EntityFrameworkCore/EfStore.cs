@@ -214,6 +214,8 @@ public class KernelDb : DbContext
         ForUnshippedComposition(options, StoreFormat.RootScheduleControlsQualification, RootProfiles.ScheduleControlsQualification);
     internal static KernelDb ForPostgresRootScheduleLineageQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootScheduleLineageQualification, RootProfiles.ScheduleLineageQualification);
+    internal static KernelDb ForPostgresRootManagedSchedulesQualification(DbContextOptions<KernelDb> options) =>
+        ForUnshippedComposition(options, StoreFormat.RootManagedSchedulesQualification, RootProfiles.ManagedSchedulesQualification);
     internal static KernelDb ForPostgresRootSelfTimedQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootSelfTimedQualification, RootProfiles.SelfTimedQualification);
     internal static KernelDb ForSqliteRootSelfTimedQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
@@ -261,6 +263,9 @@ public class KernelDb : DbContext
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         if (qualificationFormat == StoreFormat.RootScheduleLineageQualification)
             return new(options, qualificationFormat.Value, RootProfiles.ScheduleLineageQualification,
+                sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        if (qualificationFormat == StoreFormat.RootManagedSchedulesQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ManagedSchedulesQualification,
                 sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
         return qualificationFormat is { } format
             ? ForRootTerminalOutputQualification(options, sqliteShippedInstall: true, definitions, format)

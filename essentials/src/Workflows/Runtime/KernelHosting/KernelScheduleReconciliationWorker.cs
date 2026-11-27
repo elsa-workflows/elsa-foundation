@@ -94,6 +94,11 @@ internal sealed class KernelScheduleReconciliationWorker
             } while (await timer.WaitForNextTickAsync(token));
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception error)
+        {
+            _logger.LogError(error, "Kernel schedule reconciliation stopped for tenant {Tenant}. Restart the shell after correcting the fault.",
+                _actors.Tenant);
+        }
         finally { Volatile.Write(ref _running, 0); }
     }
 

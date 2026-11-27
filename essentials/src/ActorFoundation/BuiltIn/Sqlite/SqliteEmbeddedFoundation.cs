@@ -48,6 +48,10 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     public static SqliteEmbeddedFoundation ForScheduleControlsQualification(string databasePath, string node, string actorType) =>
         new(databasePath, node, actorType, StoreFormat.RootScheduleControlsQualification);
 
+    /// <summary>Composes the private profile for qualifying managed schedules with the complete shipped workflow runtime.</summary>
+    public static SqliteEmbeddedFoundation ForManagedSchedulesQualification(string databasePath, string node, string actorType) =>
+        new(databasePath, node, actorType, StoreFormat.RootManagedSchedulesQualification);
+
     private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? qualificationFormat)
     {
         path = Path.GetFullPath(databasePath);
@@ -57,6 +61,10 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         requests = new(() => SqliteEmbeddedHosting.CreateRequests(InstalledPath, node, actorType,
             qualificationFormat: qualificationFormat), LazyThreadSafetyMode.PublicationOnly);
     }
+
+    /// <summary>Whether this profile supports managed schedule delivery and irreversible cohort retirement.</summary>
+    public bool TakesManagedSchedules => qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
+        qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
 
     /// <summary>Installs or verifies the file and binds future operations to its resolved path.</summary>
     public async Task InstallShippedAsync(CancellationToken cancellationToken = default)

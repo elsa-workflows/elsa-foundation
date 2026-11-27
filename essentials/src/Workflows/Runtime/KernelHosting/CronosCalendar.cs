@@ -1,13 +1,13 @@
 using Cronos;
 using Kernel.WorkflowActor;
 
-namespace Elsa.Workbench.CorePreview;
+namespace Elsa.Workflows.Runtime.KernelHosting;
 
 /// <summary>
 /// Cron occurrences on the kernel host, read as the old core reads them (Cronos, UTC): five fields are standard cron, six or
 /// more include seconds, and an occurrence is the first strictly after the given time.
 /// </summary>
-internal sealed class CronosCalendar : ICronCalendar
+public sealed class CronosCalendar : ICronCalendar
 {
     public long? Next(string expression, long after) =>
         Parse(expression).GetNextOccurrence(DateTimeOffset.FromUnixTimeMilliseconds(after), TimeZoneInfo.Utc, inclusive: false)?.ToUnixTimeMilliseconds();
