@@ -192,13 +192,13 @@ the design side), and converter rules.
   recorded, because `WaitForCompletion` is a consumed `Structure` member by then.
 - **Branches with a literal-false wait** (spec FR-018): the rewrite does not call `AddChild` for them, and raises
   `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` for each dropped branch.
-- **Outer writes** (spec FR-010a, FR-019): after lowering, a write inside a converted branch or the `Dispatch` child to
-  a variable declared outside the bulk node is refused with `…-BULK-DISPATCH-OUTER-WRITE`. Publish would only warn
-  (spec 266, `ValueFlow/ConcurrentWrite`). This converter refusal is what stops a converted counter from silently losing
-  updates (spec Q5). It is required, and it has its own test.
+- **Outer writes** (spec FR-010a, FR-020a, Q5): after lowering, a write inside a converted branch or the `Dispatch`
+  child to a variable declared outside the bulk node raises the behaviour warning `…-BULK-DISPATCH-OUTER-WRITE`. It
+  goes in `raisedByRewrites`. The definition converts. Publish adds spec 266's `ValueFlow/ConcurrentWrite` warning,
+  because Elsa 4 deliberately allows such writes.
 - **Child-result reads** (spec FR-019): resolved to `…-CHILD-RESULT-READ` in name resolution for nodes inside the
   converted slots, before the generic missing-name failures.
-- **Codes**: 4 errors and 2 warnings in `extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs`.
+- **Codes**: 3 errors and 3 warnings in `extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs`.
   `…-ITEM-INPUTS`, raised by the rewrite, goes in `raisedByRewrites` in `Elsa3ActivityMapCoverageTests`.
   `…-CAPPED` is the entry's behaviour warning.
 

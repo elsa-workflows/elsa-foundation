@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-26
 
-**Status**: Draft
+**Status**: Draft — coordinator answered Q1–Q5 on 2026-11-27
 
 **Issue**: #5833, part of initiative #3052 (Elsa 3 to Elsa 4 conversion). Parity record: #1152.
 
@@ -399,18 +399,21 @@ and on-completed-callbacks suites pass.
 | `DefaultItemInputKey` not a literal, or static `Input` in another language | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` |
 | Target workflow neither in the import nor published in Elsa 4 | `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`, guidance: import the target first, or in the same run |
 | `Completed`/`Canceled` route with no faithful meaning (FR-017) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE` |
-| A branch (or `CorrelationIdFunction`/`Input`) writing a variable declared outside the bulk node. Elsa 3 ran the branches one at a time; Elsa 4 runs passes concurrently (FR-010a) | `ELS3-ACTIVITY-BULK-DISPATCH-OUTER-WRITE`. Guidance: Elsa 4 runs the branches concurrently, so a shared counter or list would lose updates (publish only warns). Record per-child results in the child workflow, or compute the total after the bulk activity |
 | A branch reading what Elsa 3 passed it: the `ChildInstanceId` variable, or the input `WorkflowOutput`, `WorkflowInstanceId`, `WorkflowStatus` or `WorkflowSubStatus` | `ELS3-ACTIVITY-BULK-DISPATCH-CHILD-RESULT-READ`, raised in name resolution. Guidance: remove the read; the child's result is not available in the branch yet |
 
 - **FR-020**: Every conversion MUST raise warning `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED`, as an entry-level behaviour
   warning on the map entry. It says that more than 1,000
   items fault in Elsa 4 (FR-007), and that at most 16 passes are open at once (FR-005), where Elsa 3 dispatched every
   child at once. It points to batching with a sequential `ForEach` over batches.
+- **FR-020a**: A conversion where a branch, the correlation function or the static `Input` writes a variable declared
+  outside the bulk node MUST raise behaviour warning `ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE`. Guidance: Elsa 3 ran
+  the branches one at a time, and Elsa 4 runs them concurrently, so a shared counter or list can lose updates. Record
+  per-child results in the child workflow, or compute the total after the bulk activity. The definition still
+  converts, and publish adds Elsa 4's own `ValueFlow/ConcurrentWrite` warning (FR-010a).
 - **FR-021**: New codes go to `Elsa3ActivityDiagnosticCodes` and the spec 236 diagnostic-code contract, each in the
   task that first raises it.
-  - Errors: `…-BULK-DISPATCH-TARGET-UNKNOWN`, `…-BULK-DISPATCH-OUTCOME-ROUTE`, `…-BULK-DISPATCH-CHILD-RESULT-READ`,
-    `…-BULK-DISPATCH-OUTER-WRITE`.
-  - Warnings: `…-BULK-DISPATCH-ITEM-INPUTS`, `…-BULK-DISPATCH-CAPPED`.
+  - Errors: `…-BULK-DISPATCH-TARGET-UNKNOWN`, `…-BULK-DISPATCH-OUTCOME-ROUTE`, `…-BULK-DISPATCH-CHILD-RESULT-READ`.
+  - Warnings: `…-BULK-DISPATCH-ITEM-INPUTS`, `…-BULK-DISPATCH-CAPPED`, `…-BULK-DISPATCH-OUTER-WRITE`.
 
 **Documentation and evidence**
 
@@ -472,7 +475,7 @@ and on-completed-callbacks suites pass.
 - Dispatch channels, trace options, a degree-of-parallelism or batch input.
 - Editing the S-15 ledger or adjusted JTest copies.
 
-## Coordinator answers (2026-11-27)
+## Coordinator answers (2026-11-27; all questions settled)
 
 1. **Q1, the cap**: settled in #5875, which covers the parallel ForEach and this activity. Sipke is looking at it.
    FR-007 follows its outcome, with one rule for waiting and fire-and-forget children.
@@ -482,14 +485,7 @@ and on-completed-callbacks suites pass.
 3. **Q3, `ChildFaulted` for cancelled and undispatchable children**: agreed. A separate `ChildCanceled` slot can be
    added later if needed; it is not part of this spec.
 4. **Q4, the window of 16**: kept as the starting value. Tuning it for GA is follow-up #5980.
-5. **Q5, outer writes**: open, see below.
-
-## Open question for the coordinator
-
-- **Q5**: what should happen to a write to an outer variable from a branch?
-  - Elsa 4's own rule (spec 266) classifies a variable write from concurrent passes as `ValueFlow/ConcurrentWrite`
-    and only warns at publish, never refuses.
-  - Following Elsa 4's rules, the converter drops its own `…-OUTER-WRITE` refusal and lets Elsa 4's publish
-    validation speak. A converted counter then publishes with that warning.
-  - The alternative is to make the warning a refusal, but only for writes under a `BulkDispatchWorkflows` node. That
-    would add a rule Elsa 4 does not have elsewhere.
+5. **Q5, outer writes**: follow Elsa 4. Writing an outer variable from concurrent passes is deliberately allowed with a
+   warning (spec 266: `ValueFlow/ConcurrentWrite`, "a warning, never a refusal"). So the converter does not refuse it.
+   It raises behaviour warning `ELS3-BEHAVIOUR-BULK-DISPATCH-OUTER-WRITE` with guidance (FR-020a), because Elsa 3 ran
+   the branches one at a time and a converted counter can now lose updates.
