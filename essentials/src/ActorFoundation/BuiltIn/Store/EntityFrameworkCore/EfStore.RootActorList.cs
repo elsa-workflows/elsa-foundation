@@ -221,6 +221,12 @@ public sealed partial class EfStore
     internal static Task InstallRootActorListAsync(KernelDb db, CancellationToken cancellationToken) =>
         db.Database.ExecuteSqlRawAsync(ActorListProjection.Of(db).InstallSql, cancellationToken);
 
+    private const string RootChildParentProjection = """
+        (SELECT p."Reference" FROM "Instances" child JOIN "FoundationRootBirths" p
+            ON p."Actor" = child."Parent" AND p."Tenant" = child."FoundationTenant" AND p."Creation" = 1
+            WHERE child."FoundationReference" = l."Reference" AND child."FoundationTenant" = l."Tenant")
+        """;
+
     private static FormattableString ActorListQuery(KernelDb db, ActorListProjection projection, FormattableString query)
     {
         var sql = query.Format
@@ -229,11 +235,7 @@ public sealed partial class EfStore
             .Replace("/*park-fault*/", projection.ParkFaultColumn, StringComparison.Ordinal)
             .Replace("/*park-revision*/", projection.ParkRevisionColumn, StringComparison.Ordinal)
             .Replace("/*park-resolution*/", projection.ParkResolutionColumn, StringComparison.Ordinal)
-            .Replace("/*parent*/", db.UsesRootChildren ? """
-                (SELECT p."Reference" FROM "Instances" child JOIN "FoundationRootBirths" p
-                    ON p."Actor" = child."Parent" AND p."Tenant" = child."FoundationTenant" AND p."Creation" = 1
-                    WHERE child."FoundationReference" = l."Reference" AND child."FoundationTenant" = l."Tenant")
-                """ : "NULL::text", StringComparison.Ordinal)
+            .Replace("/*parent*/", db.UsesRootChildren ? RootChildParentProjection : "NULL::text", StringComparison.Ordinal)
             .Replace("/*filter*/", projection.SchemaBound ? "" : "kernel_actor_list_filter", StringComparison.Ordinal)
             .Replace("/*filter-cast*/", projection.SchemaBound ? "::jsonb" : "", StringComparison.Ordinal);
         return FormattableStringFactory.Create(StoreDefinitionsRevision.AddPostgresStampSql(sql), query.GetArguments());

@@ -27,7 +27,7 @@ public static partial class SqliteEmbeddedHosting
         InstallShippedFileAsync(databasePath, cancellationToken);
 
     internal static async Task<string> InstallShippedFileAsync(string databasePath, CancellationToken cancellationToken,
-        StoreFormat? terminalOutputFormat = null)
+        StoreFormat? qualificationFormat = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         cancellationToken.ThrowIfCancellationRequested();
@@ -35,7 +35,7 @@ public static partial class SqliteEmbeddedHosting
         // Create a missing file without opening SQLite or changing an existing store before acquiring the host lock.
         using (new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite)) { }
         using var file = AcquireFile(path, forRuntime: true);
-        await using var db = KernelDb.ForSqliteRootShipped(file.Options, terminalOutputFormat);
+        await using var db = KernelDb.ForSqliteRootShipped(file.Options, qualificationFormat);
         await EfStore.InstallSqliteShippedAsync(db, partitions: 1, cancellationToken);
         await UseWalAsync(db, cancellationToken);
         return file.Path;
@@ -63,7 +63,8 @@ public static partial class SqliteEmbeddedHosting
     {
         ArgumentNullException.ThrowIfNull(actor);
         RequireFoundationActorType(actor.Type);
-        return StartCoreAsync(databasePath, node, (store, terminalOutputLimit) => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode(actor.Withholds)), actor, store.RootSelfIssuer,
+        return StartCoreAsync(databasePath, node, (store, terminalOutputLimit) => new ActorAdapter(
+                store.WorkerHeaders(store.BindSqliteWorkerNode(actor.Withholds)), actor, store.RootSelfIssuer,
                 rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true,
                 retentionWindow: retentionWindow,
                 rootTerminalOutputLimit: terminalOutputLimit),
@@ -91,7 +92,7 @@ public static partial class SqliteEmbeddedHosting
             if (rootType is not null) requests?.RequireBinding(file.Path, rootType, node);
             var shipped = rootType is not null;
             KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions,
-                terminalOutputFormat: requests?.TerminalOutputFormat) : new(file.Options);
+                qualificationFormat: requests?.QualificationFormat) : new(file.Options);
 
             int partitions;
             bool selfSends;
@@ -123,6 +124,7 @@ public static partial class SqliteEmbeddedHosting
             {
                 if (selfSends) await store.EnableRootSelfSendsAsync(cancellationToken);
                 await store.EnableRootJobsAsync(cancellationToken);
+                await store.EnableRootChildrenAsync(cancellationToken);
             }
             var watchdog = new Watchdog(Defaults.Lease, endProcess);
             var watched = watchdog.Watch(store);

@@ -5,16 +5,16 @@ namespace Kernel.Foundation.Sqlite;
 
 public static partial class SqliteEmbeddedHosting
 {
-    internal static Contract.IActorReads CreateFoundationReads(string databasePath, int pageSize = 100, StoreFormat? terminalOutputFormat = null)
+    internal static Contract.IActorReads CreateFoundationReads(string databasePath, int pageSize = 100, StoreFormat? qualificationFormat = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
         ArgumentOutOfRangeException.ThrowIfEqual(pageSize, int.MaxValue);
         using var file = AcquireFile(databasePath);
-        return new SqliteEmbeddedReads(file.Path, pageSize, terminalOutputFormat);
+        return new SqliteEmbeddedReads(file.Path, pageSize, qualificationFormat);
     }
 
-    private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? terminalOutputFormat)
+    private sealed class SqliteEmbeddedReads(string path, int pageSize, StoreFormat? qualificationFormat)
         : Contract.IActorReads, Contract.IActorTerminalOutputReads
     {
         public ValueTask<Contract.ActorTerminalOutput?> ReadTerminalOutputAsync(Contract.BoundScope scope, Contract.ActorRef actor,
@@ -40,7 +40,7 @@ public static partial class SqliteEmbeddedHosting
         {
             token.ThrowIfCancellationRequested();
             using var file = AcquireFile(path);
-            KernelDb Open() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, terminalOutputFormat);
+            KernelDb Open() => KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
             await using var db = Open();
             await EfStore.RequireSqliteRootAdmissionAsync(db, token);
             await file.AdmissionDefinitions.RequireAsync(db, token);

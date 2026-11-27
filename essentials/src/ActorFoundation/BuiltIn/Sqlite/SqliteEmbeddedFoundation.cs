@@ -12,28 +12,31 @@ public sealed class SqliteEmbeddedFoundation
     private readonly string path;
     private readonly string node;
     private readonly string actorType;
-    private readonly StoreFormat? terminalOutputFormat;
+    private readonly StoreFormat? qualificationFormat;
     private readonly Lazy<SqliteEmbeddedHosting.SqliteDirectRequests> requests;
     private readonly SemaphoreSlim installation = new(1, 1);
     private string? installedPath;
 
     /// <summary>Binds the database, owner identity and actor type for the shipped Embedded composition.</summary>
     public SqliteEmbeddedFoundation(string databasePath, string node, string actorType)
-        : this(databasePath, node, actorType, terminalOutputFormat: null) { }
+        : this(databasePath, node, actorType, qualificationFormat: null) { }
 
     /// <summary>Composes the dedicated preview format for qualifying retained terminal output.</summary>
     public static SqliteEmbeddedFoundation ForTerminalOutputQualification(string databasePath, string node, string actorType,
         bool withTimers = false) =>
         new(databasePath, node, actorType, withTimers ? StoreFormat.RootS6TerminalOutputQualification : StoreFormat.RootTerminalOutputQualification);
 
-    private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? terminalOutputFormat)
+    internal static SqliteEmbeddedFoundation ForChildQualification(string databasePath, string node, string actorType) =>
+        new(databasePath, node, actorType, StoreFormat.SqliteRootChildrenQualification);
+
+    private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? qualificationFormat)
     {
         path = Path.GetFullPath(databasePath);
         this.node = node;
         this.actorType = actorType;
-        this.terminalOutputFormat = terminalOutputFormat;
+        this.qualificationFormat = qualificationFormat;
         requests = new(() => SqliteEmbeddedHosting.CreateRequests(InstalledPath, node, actorType,
-            terminalOutputFormat: terminalOutputFormat), LazyThreadSafetyMode.PublicationOnly);
+            qualificationFormat: qualificationFormat), LazyThreadSafetyMode.PublicationOnly);
     }
 
     /// <summary>Installs or verifies the file and binds future operations to its resolved path.</summary>
@@ -42,7 +45,7 @@ public sealed class SqliteEmbeddedFoundation
         await installation.WaitAsync(cancellationToken);
         try
         {
-            var verified = await SqliteEmbeddedHosting.InstallShippedFileAsync(installedPath ?? path, cancellationToken, terminalOutputFormat);
+            var verified = await SqliteEmbeddedHosting.InstallShippedFileAsync(installedPath ?? path, cancellationToken, qualificationFormat);
             Volatile.Write(ref installedPath, verified);
         }
         finally { installation.Release(); }
@@ -65,7 +68,7 @@ public sealed class SqliteEmbeddedFoundation
         SqliteEmbeddedHosting.OpenFoundationWithRequestsAsync(InstalledPath, actorType, requests.Value, cancellationToken);
 
     /// <summary>Creates a paged reader of committed roots, inboxes and journals.</summary>
-    public Contract.IActorReads CreateReads(int pageSize = 100) => SqliteEmbeddedHosting.CreateFoundationReads(InstalledPath, pageSize, terminalOutputFormat);
+    public Contract.IActorReads CreateReads(int pageSize = 100) => SqliteEmbeddedHosting.CreateFoundationReads(InstalledPath, pageSize, qualificationFormat);
 
     /// <summary>Reads the store clock used to set held-request deadlines.</summary>
     public ValueTask<long> ReadClockAsync(CancellationToken cancellationToken = default) => requests.Value.ReadClockAsync(cancellationToken);

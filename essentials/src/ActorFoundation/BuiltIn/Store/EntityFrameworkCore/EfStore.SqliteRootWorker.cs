@@ -94,15 +94,15 @@ public sealed partial class EfStore
         await using var db = create();
         await RequireSqliteOperationalFormatAsync(db, token);
         var row = await ReadSqliteCreatorAsync(db, tenant, reference, fingerprint: null, token);
-        return row is null ? null : DecodeSqliteCreator(row);
+        return row is null ? null : DecodeSqliteCreator(row, db.UsesRootChildren);
     }
 
-    private static Message DecodeSqliteCreator(MessageEntity row)
+    private static Message DecodeSqliteCreator(MessageEntity row, bool children)
     {
         if (row.ReplyTo is not null && (row.Due != 0 ||
             ReplyTo.Parse(row.ReplyTo) is not { Node.Length: > 0, Request.Length: > 0, Deadline: > 0 }))
             throw new StoreException(Failure.Definite, "Invalid SQLite held creator reply route.");
-        return PostgresRootAdmission.DecodeCreator(row);
+        return PostgresRootAdmission.DecodeCreator(row, children);
     }
 
     private static Task<MessageEntity?> ReadSqliteCreatorAsync(KernelDb db, string tenant, string reference, string? fingerprint,
@@ -126,7 +126,7 @@ public sealed partial class EfStore
         var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload);
         if (fingerprint is null) return false;
         var pending = await ReadSqliteCreatorAsync(db, checkpoint.Tenant, checkpoint.Reference, fingerprint, token);
-        if (pending is null || !checkpoint.MatchesCreator(DecodeSqliteCreator(pending))) return false;
+        if (pending is null || !checkpoint.MatchesCreator(DecodeSqliteCreator(pending, db.UsesRootChildren))) return false;
         var parked = checkpoint.Row is { Status: InstanceStatus.Faulted, Fault: not null };
         if (parked)
         {
@@ -153,13 +153,15 @@ public sealed partial class EfStore
                 AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {pending.Target}))
             """;
         return await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock(update), token) == 1 &&
-            (!parked || await VerifySqliteParkProjectionAsync(db, checkpoint.Tenant, checkpoint.Reference, revision, checkpoint.Row.Fault!, token));
+            (!parked || await VerifySqliteParkProjectionAsync(db, checkpoint.Tenant, checkpoint.Reference, revision, checkpoint.Row.Fault!, token)) &&
+            (checkpoint.ChildEffects is null || await checkpoint.ChildEffects.BindAsync(db, checkpoint.Tenant, token));
     }
 
     private static async Task<bool> BindSqliteRootTurnAsync(KernelDb db, RootTurnCheckpoint turn, CancellationToken token)
     {
         var timedFault = turn.Status == InstanceStatus.Faulted && db.RootStateFamily.Ends(turn.Status);
-        var terminated = turn.OperatorTermination && db.UsesRootTermination && turn.Status == InstanceStatus.Cancelled;
+        var terminated = db.UsesRootTermination && turn.Status == InstanceStatus.Cancelled &&
+            (turn.OperatorTermination || db.UsesRootChildren && turn.Inputs is [{ FoundationRootChildInput: true }]);
         if (turn.Status is not (InstanceStatus.Running or InstanceStatus.Finished) && !timedFault && !terminated ||
             turn.Current.Suspended && !terminated || turn.OperatorSuspension is not null ||
             !turn.TimedJob && turn.JobCompletion is not null || turn.Values is not null ||
@@ -216,13 +218,15 @@ public sealed partial class EfStore
                 "FoundationStateWire" = {turn.Wire}, "StateVersion" = {turn.StateVersion}, "Status" = {(int)turn.Status},
                 "Revision" = {revision}, "FoundationWriteRevision" = {revision},
                 "Jobs" = {jobs}, "NextJobGeneration" = {nextGeneration},
+                "Children" = CASE WHEN {turn.ChildEffects is not null} THEN {turn.ChildEffects?.Children} ELSE "Children" END,
                 "FoundationTerminalRevision" = CASE WHEN {ended} THEN {revision} END,
                 "FoundationTerminalAt" = CASE WHEN {ended} THEN /*sqlite-root-clock*/ END
             WHERE "Id" = {actor.Id} AND "Partition" = {home} AND "Revision" = {turn.Current.Revision}
                 AND "FoundationTenant" = {turn.Tenant} AND "FoundationReference" = {turn.Reference}
                 AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {actor.Id}))
             """;
-        return await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock(update), token) == 1;
+        return await db.Database.ExecuteSqlInterpolatedAsync(UseSqliteRootClock(update), token) == 1 &&
+            (turn.ChildEffects is null || await turn.ChildEffects.BindAsync(db, turn.Tenant, token));
     }
 
     private static async Task<bool> SettleSqliteRootInputsAsync(KernelDb db, string reference, CreationAddress actor,
@@ -260,7 +264,10 @@ public sealed partial class EfStore
                 AND "Id" IN (SELECT value FROM json_each({Json.Write(self)})) AND "Target" = {actor.Id}
                 AND "Partition" = {home} AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
             """, token) != self.Length) return false;
-        var outside = expected.Where(key => key.Scope == InboxKey.FoundationOccurrenceScope).Select(key => key.Id).ToArray();
+        var children = messages.Where(IsSqliteInternalChildInput).Select(message => message.InboxKey.Id).ToArray();
+        if (children.Length > 0 && !await DeleteSqliteRootChildInputsAsync(db, actor, home, children, token)) return false;
+        var outside = messages.Where(message => message.InboxScope == InboxKey.FoundationOccurrenceScope &&
+            !IsSqliteInternalChildInput(message)).Select(message => message.InboxKey.Id).ToArray();
         if (outside.Length == 0) return true;
         var ids = Json.Write(outside);
         return await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -270,6 +277,9 @@ public sealed partial class EfStore
                 AND NOT "Done"
             """, token) == outside.Length;
     }
+
+    private static bool IsSqliteInternalChildInput(Message input) =>
+        input.FoundationRootChildNotice || input.FoundationRootChildInput || input.Kind == Kinds.Cascade;
 
     private static Task<List<long>> ReadSqliteTerminalRevisionAsync(KernelDb db, WorkerRoot root, CancellationToken token) =>
         db.Database.SqlQuery<long>($"""

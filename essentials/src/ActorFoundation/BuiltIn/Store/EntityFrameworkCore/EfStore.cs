@@ -185,8 +185,7 @@ public class KernelDb : DbContext
     internal bool ProjectsRootParkRevision => UsesRootParkInspection && (UsesRootParkRecovery || UsesRootParkedOperators);
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
     internal static KernelDb ForPostgresRootChildrenQualification(DbContextOptions<KernelDb> options) =>
-        ForUnshippedComposition(options, StoreFormat.PostgresRootChildrenQualification,
-            RootProfiles.TimerRearmQualification | RootCapabilities.Children);
+        ForUnshippedComposition(options, StoreFormat.PostgresRootChildrenQualification, RootProfiles.ChildQualification);
     internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
     internal static KernelDb ForPostgresRootSelfTimedQualification(DbContextOptions<KernelDb> options) =>
         ForUnshippedComposition(options, StoreFormat.RootSelfTimedQualification, RootProfiles.SelfTimedQualification);
@@ -203,14 +202,19 @@ public class KernelDb : DbContext
     internal static KernelDb ForSqliteRootTimerRearmQualification(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions) =>
         new(options, StoreFormat.RootTimerRearmQualification, RootProfiles.TimerRearmQualification, sqliteShippedInstall: true,
             sqliteRuntimeDefinitions: definitions);
-    internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options, StoreFormat? terminalOutputFormat = null) =>
-        ForSqliteRootFormat(options, terminalOutputFormat, definitions: null);
+    internal static KernelDb ForSqliteRootShipped(DbContextOptions<KernelDb> options, StoreFormat? qualificationFormat = null) =>
+        ForSqliteRootFormat(options, qualificationFormat, definitions: null);
     internal static KernelDb ForSqliteRootRuntime(DbContextOptions<KernelDb> options, SqliteAdmissionDefinitions definitions,
-        StoreFormat? terminalOutputFormat = null) => ForSqliteRootFormat(options, terminalOutputFormat, definitions);
-    private static KernelDb ForSqliteRootFormat(DbContextOptions<KernelDb> options, StoreFormat? terminalOutputFormat,
-        SqliteAdmissionDefinitions? definitions) => terminalOutputFormat is { } format
-        ? ForRootTerminalOutputQualification(options, sqliteShippedInstall: true, definitions, format)
-        : new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        StoreFormat? qualificationFormat = null) => ForSqliteRootFormat(options, qualificationFormat, definitions);
+    private static KernelDb ForSqliteRootFormat(DbContextOptions<KernelDb> options, StoreFormat? qualificationFormat,
+        SqliteAdmissionDefinitions? definitions)
+    {
+        if (qualificationFormat == StoreFormat.SqliteRootChildrenQualification)
+            return new(options, qualificationFormat.Value, RootProfiles.ChildQualification, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+        return qualificationFormat is { } format
+            ? ForRootTerminalOutputQualification(options, sqliteShippedInstall: true, definitions, format)
+            : new(options, StoreFormat.RootShipped, RootProfiles.Shipped, sqliteShippedInstall: true, sqliteRuntimeDefinitions: definitions);
+    }
 
     internal static KernelDb ForRootTerminalOutputQualification(DbContextOptions<KernelDb> options,
         bool sqliteShippedInstall = false, SqliteAdmissionDefinitions? definitions = null, StoreFormat? format = null)
@@ -1068,7 +1072,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition) throw RootShape();
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     JobGeneration = r.JobGeneration!.Value, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
-                var message = key.Scope == 0 ? (db?.UsesSqliteRootRuntime == true ? DecodeSqliteCreator(entity) : PostgresRootAdmission.DecodeCreator(entity, db?.UsesRootChildren == true))
+                var message = key.Scope == 0 ? (db?.UsesSqliteRootRuntime == true ? DecodeSqliteCreator(entity, db.UsesRootChildren) : PostgresRootAdmission.DecodeCreator(entity, db?.UsesRootChildren == true))
                     with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
                     : DecodeRootInput(db!, entity, root.Reference, RootSelfIssuer, RootJobsEnabled, RootTimedJobSettlementEnabled);
                 if (root != bindings.ForInput(message.InboxKey)) throw RootShape();
