@@ -65,6 +65,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootLiveEventQualification => new(3, 117, 1);
     internal static StoreFormat RootPlaybackDescendantsQualification => new(3, 118, 1);
     internal static StoreFormat RootScheduleInventoryQualification => new(3, 119, 1);
+    internal static StoreFormat RootScheduleSettlementQualification => new(3, 120, 1);
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
     internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
     internal static StoreFormat RootSelfTimedParkQualification => Current with { MessageProtocol = 90 };
@@ -115,7 +116,8 @@ internal enum RootCapabilities
     Playback = 1 << 27,
     RetentionPolicy = 1 << 28,
     PlaybackDescendants = 1 << 29,
-    ScheduleInventory = 1 << 30
+    ScheduleInventory = 1 << 30,
+    ScheduleSettlement = 1 << 31
 }
 
 internal static class RootProfiles
@@ -154,6 +156,7 @@ internal static class RootProfiles
     // Freeze this private profile to the base it qualified. Playback has its own qualification profile.
     internal const RootCapabilities ScheduleInventoryQualification = Shipped31 | RootCapabilities.LiveEventWaits |
         RootCapabilities.RetentionPolicy | RootCapabilities.ScheduleInventory;
+    internal const RootCapabilities ScheduleSettlementQualification = ScheduleInventoryQualification | RootCapabilities.ScheduleSettlement;
     internal const RootCapabilities SequencedJournalQualification = Shipped29 | RootCapabilities.SequencedJournal;
     internal const RootCapabilities PlaybackQualification = Shipped31 | RootCapabilities.Playback;
     internal const RootCapabilities PlaybackDescendantsQualification = Shipped34;
@@ -226,7 +229,8 @@ internal static class RootProfiles
         [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
         [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
         [RootCapabilities.RetentionPolicy] = RootCapabilities.Retention | RootCapabilities.TerminalSelection | RootCapabilities.ParkInspection,
-        [RootCapabilities.ScheduleInventory] = RootCapabilities.Timers | RootCapabilities.ParkOpening
+        [RootCapabilities.ScheduleInventory] = RootCapabilities.Timers | RootCapabilities.ParkOpening,
+        [RootCapabilities.ScheduleSettlement] = RootCapabilities.ScheduleInventory | RootCapabilities.JobProtocol
     };
 
     // The prerequisites of the set's members that the set lacks. None means the set is closed.
@@ -457,7 +461,8 @@ internal static class StoreDefinitionsRevision
                     sqlite ? SqlitePlaybackRevision : PostgreSqlPlaybackRevision,
                 _ when db.RequiredFormat == StoreFormat.RootPlaybackDescendantsQualification =>
                     sqlite ? SqlitePlaybackDescendantsRevision : PostgreSqlPlaybackDescendantsRevision,
-                _ when db.RequiredFormat == StoreFormat.RootScheduleInventoryQualification =>
+                _ when db.RequiredFormat == StoreFormat.RootScheduleInventoryQualification ||
+                    db.RequiredFormat == StoreFormat.RootScheduleSettlementQualification =>
                     sqlite ? SqliteScheduleInventoryRevision : PostgreSqlScheduleInventoryRevision,
                 _ when db.RequiredFormat == StoreFormat.RootTerminalOutputQualification => sqlite ? SqliteTerminalOutputRevision : PostgreSqlTerminalOutputRevision,
                 _ when db.RequiredFormat == StoreFormat.RootS6TerminalOutputQualification => sqlite ? SqliteS6TerminalOutputRevision : PostgreSqlS6TerminalOutputRevision,
