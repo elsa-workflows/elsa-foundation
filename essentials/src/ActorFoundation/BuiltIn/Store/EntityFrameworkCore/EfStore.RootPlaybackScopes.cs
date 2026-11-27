@@ -5,6 +5,9 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     private const string PlaybackScopesName = "FoundationJournalPlaybackScopes";
+    private const string PlaybackReceiptsName = "FoundationJournalPlaybackReceipts";
+    private const string PlaybackReceiptOwner = "kernel_root_playback_receipt_owner";
+    internal const string PlaybackReceiptRequired = "kernel_require_root_playback_receipt";
     private const string PlaybackScopeKey = "kernel_playback_scope_key";
     private const string PlaybackScopeRank = "kernel_playback_scope_rank";
     private const string PlaybackScopeSequence = "kernel_playback_scope_sequence";
@@ -30,6 +33,24 @@ public sealed partial class EfStore
         CREATE TABLE "{PlaybackScopesName}" ({PlaybackScopeColumns("bigint", """text COLLATE "C" """)});
         CREATE INDEX {PlaybackScopeMemberIndex} ON "{PlaybackScopesName}" {PlaybackScopeMemberColumns};
         CREATE INDEX {PlaybackUnknownScopeIndex} ON "{PlaybackScopesName}" {PlaybackUnknownScopeColumns};
+        """;
+
+    // The scoped projector completes a range by inserting the receipt last. PostgreSQL checks the
+    // deferred reference at commit, including if the function changed after the owner checked its body.
+    // The reverse reference makes the receipt part of the same retained journal row's lifetime.
+    private static readonly string PostgresPlaybackReceipts = $"""
+        CREATE TABLE "{PlaybackReceiptsName}" (
+            "Partition" integer NOT NULL, "Position" bigint NOT NULL,
+            PRIMARY KEY ("Partition", "Position"),
+            CONSTRAINT {PlaybackReceiptOwner} FOREIGN KEY ("Partition", "Position")
+                REFERENCES "{SequencedJournalName}" ("Partition", "Position") ON DELETE CASCADE);
+        ALTER TABLE "{SequencedJournalName}" ADD CONSTRAINT {PlaybackReceiptRequired}
+            FOREIGN KEY ("Partition", "Position") REFERENCES "{PlaybackReceiptsName}" ("Partition", "Position")
+            DEFERRABLE INITIALLY DEFERRED;
+        """;
+
+    private static readonly string PostgresPlaybackReceiptInsert = $"""
+        INSERT INTO "{PlaybackReceiptsName}" ("Partition", "Position") VALUES (NEW."Partition", NEW."Position");
         """;
 
     private static IEnumerable<SqliteDefinition> SqlitePlaybackScopes()
@@ -84,11 +105,31 @@ public sealed partial class EfStore
                         WHERE idx.indrelid = scopes.oid AND idx.indisvalid AND idx.indisready AND index_name.relname IN
                         ('{PlaybackScopeKey}', '{PlaybackScopeRank}', '{PlaybackScopeSequence}',
                          '{PlaybackScopeMemberIndex}', '{PlaybackUnknownScopeIndex}')) = 5)
+        AND stamp.tgqual IS NULL AND stamp.tgnargs = 0 AND implementation.proconfig IS NULL AND NOT implementation.prosecdef
+        AND {PostgresPlaybackReceiptsReady}
         AND pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(implementation.prosrc, 'UTF8')), 'hex') =
             '{PostgresPlaybackScopeProjectorDigest.Value}'
         AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger legacy
             WHERE legacy.tgrelid = stamp.tgrelid AND legacy.tgname = '{PlaybackTrigger}'
                 AND legacy.tgenabled IN ('O', 'A'))
+        """;
+
+    private static readonly string PostgresPlaybackReceiptsReady = $"""
+        EXISTS (SELECT 1 FROM pg_catalog.pg_class receipts
+            WHERE receipts.oid = pg_catalog.to_regclass('"{PlaybackReceiptsName}"')
+                AND receipts.relnamespace = format.relnamespace AND receipts.relkind = 'r'
+                AND (SELECT count(*) FROM (VALUES
+                        ('{PlaybackReceiptOwner}', receipts.oid, stamp.tgrelid, false, 'c'),
+                        ('{PlaybackReceiptRequired}', stamp.tgrelid, receipts.oid, true, 'a')
+                    ) expected(name, source, target, deferred, delete_action)
+                    JOIN pg_catalog.pg_constraint bound ON bound.conname = expected.name
+                        AND bound.conrelid = expected.source AND bound.confrelid = expected.target
+                    WHERE bound.contype = 'f' AND bound.convalidated
+                        AND bound.condeferrable = expected.deferred AND bound.condeferred = expected.deferred
+                        AND bound.confdeltype::text = expected.delete_action AND bound.confupdtype = 'a'
+                        AND bound.conkey = ARRAY[1, 2]::smallint[] AND bound.confkey = ARRAY[1, 2]::smallint[]
+                        AND (SELECT count(*) FROM pg_catalog.pg_trigger rule
+                            WHERE rule.tgconstraint = bound.oid AND rule.tgisinternal AND rule.tgenabled IN ('O', 'A')) = 4) = 2)
         """;
 
     private const string ExactPlaybackObservation = """

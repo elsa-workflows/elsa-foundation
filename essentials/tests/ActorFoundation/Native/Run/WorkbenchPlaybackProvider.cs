@@ -20,8 +20,12 @@ internal static partial class WorkbenchPostgresPreview
     {
         var postgres = sqlite is null;
         var options = PlaybackOptions(connection, sqlite);
+        var replacement = postgres && descendants ? new PlaybackCommitReplacement() : null;
+        var receiptFailure = replacement is null ? null : new PlaybackReceiptFailure();
+        var ownerOptions = replacement is null ? options : new DbContextOptionsBuilder<KernelDb>(options)
+            .AddInterceptors(replacement, receiptFailure!).Options;
         var definitions = new SqliteAdmissionDefinitions();
-        KernelDb Open() => OpenPlayback(options, postgres, definitions, descendants);
+        KernelDb Open() => OpenPlayback(ownerOptions, postgres, definitions, descendants);
         var reads = new EfStore(Open, postgres);
         var query = new ActorPlaybackQuery(2, 0, null, null);
         var first = await reads.ReadRootPlaybackAsync("default", run, query, token);
@@ -73,6 +77,8 @@ internal static partial class WorkbenchPostgresPreview
         Require(initial is { Availability: ActorPlaybackAvailability.Available, Count: 1 } &&
             prefix is { Availability: ActorPlaybackAvailability.Available, Count: 1 },
             "unmarked diagnostic strings leave Playback membership unchanged");
+        if (replacement is not null)
+            prefix = await VerifyAtomicProjectionAsync(prefix, replacement, receiptFailure!);
         var clean = prefix;
         if (descendants)
         {
@@ -145,7 +151,87 @@ internal static partial class WorkbenchPostgresPreview
             }
         }
 
+        async Task<ActorPlaybackPage> VerifyAtomicProjectionAsync(ActorPlaybackPage before, PlaybackCommitReplacement drift, PlaybackReceiptFailure failure)
+        {
+            await using var observer = OpenPlayback(options, postgres: true, definitions, descendants: true);
+            var installed = await ReadPlaybackProjectorAsync(observer, token);
+            var baseline = await ReadPhysicalAsync();
+            Require(baseline.Ranges == baseline.Receipts && baseline.Ranges > 0, "normal owned PostgreSQL writes complete their exact projection receipts");
+            await using (var cut = await observer.Database.BeginTransactionAsync(token))
+            {
+                // The other connection changes the function only after the owner's namespace pin and immediately before its journal SQL.
+                drift.Arm(async ct =>
+                {
+                    await observer.Database.ExecuteSqlRawAsync(ReplacePlaybackProjector, ct);
+                    await cut.CommitAsync(ct);
+                });
+                var delivery = await ingress.SendAsync(scope, new Target.Ref(exact), "owned-projector-race", "record",
+                    """["owned-projector-race"]""", cancellationToken: token);
+                Require(delivery.Outcome == AdmissionOutcome.Accepted, "the owner admits the input for the after-pin projection race");
+                await failure.Rejected.Task.WaitAsync(token);
+            }
+            try
+            {
+                Require(await ReadPhysicalAsync() == baseline, "a missing projection receipt rolls back the exact journal range, checkpoint and fence");
+            }
+            finally
+            {
+                await observer.Database.ExecuteSqlRawAsync(installed, token);
+            }
+            var recovered = await ObserveAfterAsync(before.LatestSequence);
+            var committed = await ReadPhysicalAsync();
+            Require(recovered.Count == before.Count && committed.Ranges == baseline.Ranges + 1 &&
+                committed.Receipts == baseline.Receipts + 1 && committed.Revision == baseline.Revision + 1,
+                "the real owner retries the same input and commits its single matching projection receipt after restoration");
+            return recovered;
+
+            Task<PlaybackWriteState> ReadPhysicalAsync() => observer.Database.SqlQuery<PlaybackWriteState>($"""
+                SELECT p."Position", state."Revision",
+                    (SELECT COUNT(*) FROM "FoundationSequencedJournal" range_row
+                        WHERE range_row."Partition" = birth."Partition" AND range_row."Actor" = birth."Actor") AS "Ranges",
+                    (SELECT COUNT(*) FROM "FoundationSequencedJournal" range_row
+                        JOIN "FoundationJournalPlaybackReceipts" receipt ON receipt."Partition" = range_row."Partition"
+                            AND receipt."Position" = range_row."Position"
+                        WHERE range_row."Partition" = birth."Partition" AND range_row."Actor" = birth."Actor") AS "Receipts"
+                FROM "FoundationRootBirths" birth
+                JOIN "Instances" state ON state."Partition" = birth."Partition" AND state."Id" = birth."Actor"
+                JOIN "Partitions" p ON p."Id" = birth."Partition"
+                WHERE birth."Tenant" = {scope.Tenant} AND birth."Reference" = {exact.Id} AND birth."Creation" = 1
+                """).SingleAsync(token);
+        }
+
         static void Escalate(string message) => throw new InvalidOperationException(message);
+    }
+
+    private sealed record PlaybackWriteState(long Position, long Revision, long Ranges, long Receipts);
+
+    private sealed class PlaybackCommitReplacement : DbCommandInterceptor
+    {
+        private Func<CancellationToken, Task>? replace;
+
+        internal void Arm(Func<CancellationToken, Task> operation) => Volatile.Write(ref replace, operation);
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains(RowGroups.Journal, StringComparison.Ordinal) &&
+                Interlocked.Exchange(ref replace, null) is { } mutate)
+                await mutate(cancellationToken);
+            return result;
+        }
+    }
+
+    private sealed class PlaybackReceiptFailure : DbTransactionInterceptor
+    {
+        internal TaskCompletionSource Rejected { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override Task TransactionFailedAsync(DbTransaction transaction, TransactionErrorEventData eventData,
+            CancellationToken cancellationToken = default)
+        {
+            if (eventData.Exception is PostgresException { SqlState: "23503", ConstraintName: EfStore.PlaybackReceiptRequired })
+                Rejected.TrySetResult();
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class PlaybackScopePlanObserver(bool postgres) : DbCommandInterceptor
@@ -202,6 +288,18 @@ internal static partial class WorkbenchPostgresPreview
         }
     }
 
+    private const string ReplacePlaybackProjector = """
+        CREATE OR REPLACE FUNCTION public.kernel_project_root_playback_scopes() RETURNS trigger LANGUAGE plpgsql AS $fn$
+        BEGIN
+            RETURN NULL;
+        END
+        $fn$;
+        """;
+
+    private static Task<string> ReadPlaybackProjectorAsync(KernelDb db, CancellationToken token) => db.Database.SqlQueryRaw<string>("""
+        SELECT pg_catalog.pg_get_functiondef('public.kernel_project_root_playback_scopes()'::regprocedure) AS "Value"
+        """).SingleAsync(token);
+
     private static async Task RefusePlaybackProjectorDriftAsync(Func<KernelDb> open, string run, ActorPlaybackQuery query, CancellationToken token)
     {
         await using var observer = open();
@@ -229,17 +327,9 @@ internal static partial class WorkbenchPostgresPreview
                 """, token);
         }
 
-        var installed = await observer.Database.SqlQueryRaw<string>("""
-            SELECT pg_catalog.pg_get_functiondef('public.kernel_project_root_playback_scopes()'::regprocedure) AS "Value"
-            """).SingleAsync(token);
+        var installed = await ReadPlaybackProjectorAsync(observer, token);
         var bound = await ReadProjectorBindingAsync();
-        await observer.Database.ExecuteSqlRawAsync("""
-            CREATE OR REPLACE FUNCTION public.kernel_project_root_playback_scopes() RETURNS trigger LANGUAGE plpgsql AS $fn$
-            BEGIN
-                RETURN NULL;
-            END
-            $fn$;
-            """, token);
+        await observer.Database.ExecuteSqlRawAsync(ReplacePlaybackProjector, token);
         try
         {
             Require(await ReadProjectorBindingAsync() == bound, "replacing the projector body preserves the installed trigger and function identities");
@@ -248,6 +338,36 @@ internal static partial class WorkbenchPostgresPreview
         finally
         {
             await observer.Database.ExecuteSqlRawAsync(installed, token);
+        }
+
+        await observer.Database.ExecuteSqlRawAsync("""
+            CREATE OR REPLACE TRIGGER kernel_project_root_playback_scopes AFTER INSERT ON "FoundationSequencedJournal"
+                FOR EACH ROW WHEN (false) EXECUTE FUNCTION kernel_project_root_playback_scopes();
+            """, token);
+        try
+        {
+            await RefuseAsync("unexpected projector trigger predicate");
+        }
+        finally
+        {
+            await observer.Database.ExecuteSqlRawAsync("""
+                CREATE OR REPLACE TRIGGER kernel_project_root_playback_scopes AFTER INSERT ON "FoundationSequencedJournal"
+                    FOR EACH ROW EXECUTE FUNCTION kernel_project_root_playback_scopes();
+                """, token);
+        }
+
+        await observer.Database.ExecuteSqlRawAsync("""
+            ALTER FUNCTION public.kernel_project_root_playback_scopes() SET search_path TO pg_catalog;
+            """, token);
+        try
+        {
+            await RefuseAsync("unexpected projector search path override");
+        }
+        finally
+        {
+            await observer.Database.ExecuteSqlRawAsync("""
+                ALTER FUNCTION public.kernel_project_root_playback_scopes() RESET ALL;
+                """, token);
         }
 
         Task<string> ReadProjectorBindingAsync() => observer.Database.SqlQueryRaw<string>("""
@@ -318,6 +438,10 @@ internal static partial class WorkbenchPostgresPreview
             WHERE "Tenant" = {scope.Tenant} AND "Reference" = {run} AND "Creation" = 1
             """).SingleAsync(token);
         Require(await ScopesAsync() > 0, "the selected run has committed descendant membership before Delete");
+        var positions = postgres ? await db.Database.SqlQuery<long>($"""
+            SELECT "Position" AS "Value" FROM "FoundationSequencedJournal"
+            WHERE "Partition" = {key.Partition} AND "Actor" = {key.Actor}
+            """).ToArrayAsync(token) : [];
         if (postgres)
         {
             var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
@@ -333,6 +457,11 @@ internal static partial class WorkbenchPostgresPreview
         while (await reads.GetAsync(scope, new(run), token) is not null)
             await Task.Delay(50, token);
         Require(await ScopesAsync() == 0, "fenced retirement cascades the exact run's Playback scope index");
+        if (postgres)
+            Require(positions.Length > 0 && !await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "FoundationJournalPlaybackReceipts"
+                    WHERE "Partition" = {key.Partition} AND "Position" = ANY({positions})) AS "Value"
+                """).SingleAsync(token), "fenced retirement removes each committed PostgreSQL projection receipt");
 
         Task<long> ScopesAsync() => db.Database.SqlQuery<long>($"""
             SELECT CAST(COUNT(*) AS bigint) AS "Value" FROM "FoundationJournalPlaybackScopes"

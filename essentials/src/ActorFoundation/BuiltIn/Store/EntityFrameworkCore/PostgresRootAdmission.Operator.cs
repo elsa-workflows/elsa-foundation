@@ -540,7 +540,7 @@ internal sealed partial class PostgresRootAdmission
             if (db.UsesRootPlayback)
                 tables += """, "FoundationJournalPlayback", "FoundationJournalPlaybackInvalid" """;
             if (db.UsesRootPlaybackDescendants)
-                tables += """, "FoundationJournalPlaybackScopes" """;
+                tables += """, "FoundationJournalPlaybackScopes", "FoundationJournalPlaybackReceipts" """;
             commands.Add(new(tables + " IN ROW EXCLUSIVE MODE"));
         }
         commands.Add(validate);

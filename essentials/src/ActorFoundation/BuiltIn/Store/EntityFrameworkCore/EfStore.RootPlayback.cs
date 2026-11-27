@@ -20,7 +20,7 @@ public sealed partial class EfStore
     private static string PlaybackProjector(bool descendants) => descendants ? PlaybackScopesTrigger : PlaybackTrigger;
     private static string PostgresPlaybackSource(bool descendants) => $"""
         pg_catalog.concat_ws('/', {PostgresPlaybackSourceRelations}{(descendants
-            ? $", pg_catalog.to_regclass('\"{PlaybackScopesName}\"')::oid" : "")})
+            ? $", pg_catalog.to_regclass('\"{PlaybackScopesName}\"')::oid, pg_catalog.to_regclass('\"{PlaybackReceiptsName}\"')::oid" : "")})
         """;
 
     private const string PostgresPlaybackSourceRelations = """
@@ -145,7 +145,7 @@ public sealed partial class EfStore
         CREATE TABLE "{PlaybackName}" ({PlaybackColumns("bigint", """text COLLATE "C" """)});
         CREATE TABLE "{PlaybackInvalidName}" ({PlaybackInvalidColumns("bigint", """text COLLATE "C" """)});
         CREATE INDEX kernel_playback_commit ON "{PlaybackName}" ("Partition", "Position");
-        {(descendants ? PostgresPlaybackScopes : "")}
+        {(descendants ? $"{PostgresPlaybackScopes}\n{PostgresPlaybackReceipts}" : "")}
         CREATE FUNCTION {PlaybackProjector(descendants)}() RETURNS trigger LANGUAGE plpgsql
             AS $fn${PostgresPlaybackProjectorBody(descendants)}$fn$;
         CREATE TRIGGER {PlaybackProjector(descendants)} AFTER INSERT ON "{SequencedJournalName}"
@@ -155,7 +155,7 @@ public sealed partial class EfStore
     private static string PostgresPlaybackProjectorBody(bool descendants) => ("\n" + $"""
         BEGIN
             {PlaybackInsert(PostgresPlaybackObservations)};
-            {PlaybackInvalidInsert(PostgresPlaybackObservations)};{(descendants ? $"\n    {PostgresPlaybackScopeInsert};" : "")}
+            {PlaybackInvalidInsert(PostgresPlaybackObservations)};{(descendants ? $"\n    {PostgresPlaybackScopeInsert};\n    {PostgresPlaybackReceiptInsert}" : "")}
             RETURN NULL;
         END
         """ + "\n").ReplaceLineEndings("\n");
