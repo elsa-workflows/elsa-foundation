@@ -65,7 +65,7 @@ internal sealed class KernelStandalonePreparedStartHandoff(IServiceScopeFactory 
             recipient.Authority.SystemIdentity, recipient.Authority, WorkflowRunKind.PublishedRun, recipient.TenantId, recipient.Partition), token);
         if (!allowed.IsAllowed)
             throw new TriggerOperationException("target-start-policy-denied", "The current host policy blocks this accepted recipient.");
-        var mode = services.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(material);
+        var mode = KernelPersistenceMode.Resolve(services, material);
         if (mode == PersistenceMode.Ephemeral)
             throw new NotSupportedException("Prepared standalone qualification requires a durable actor.");
         var input = new JsonObject();

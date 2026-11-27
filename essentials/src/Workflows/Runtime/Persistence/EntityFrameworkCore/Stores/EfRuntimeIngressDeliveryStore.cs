@@ -18,7 +18,8 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
     NativeIngressTargetEvidence? evidence = null, IRuntimeModelExecutionReader? modelInputs = null,
     IRecurringTriggerScheduleStore? schedules = null, IEnumerable<IStimulusDeliveryIntentAdapter>? stimulusAdapters = null,
     NativeIngressWaitTargetEvidence? waitEvidence = null, IBookmarkResumeResolver? resumeResolver = null,
-    IRuntimeCheckpointCommitStore? checkpoints = null, IRuntimePreparedStartAttemptProof? preparedStarts = null) : IRuntimeIngressDeliveryStore
+    IRuntimeCheckpointCommitStore? checkpoints = null, IRuntimePreparedStartAttemptProof? preparedStarts = null,
+    IRuntimePreparedStandaloneRecipient? preparedTarget = null) : IRuntimeIngressDeliveryStore
 {
     public ValueTask<RuntimeIngressAdmissionReceipt?> FindAcceptedAsync(TriggerScope scope, string sourceOutboxItemId,
         string requestFingerprint, CancellationToken cancellationToken = default) =>
@@ -52,9 +53,16 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
                 !ReferenceEquals(authority.Context, context) || executables.GetMaterialStore() is not EfWorkflowExecutableStore material ||
                 !ReferenceEquals(material.Context, context) || references is not EfWorkflowExecutableSourceReferenceStore sourceReferences ||
                 !ReferenceEquals(sourceReferences.Context, context) || !context.Database.IsRelational() ||
-                evidence is null || evidence.PhysicalQueue is not EfSchedulerWorkQueueStore proofQueue || !ReferenceEquals(proofQueue.Context, context) ||
-                evidence.PhysicalExecutions is not EfWorkflowExecutionStateStore proofExecutions || !ReferenceEquals(proofExecutions.Context, context) ||
                 !RuntimeSchemaWriteVersion.SupportsIngress(context)) return false;
+            if (sourceStore.PreparedStandaloneOnly)
+            {
+                if (preparedStarts is null || preparedTarget is null ||
+                    context.Database.ProviderName is not ("Microsoft.EntityFrameworkCore.Sqlite" or "Npgsql.EntityFrameworkCore.PostgreSQL"))
+                    return false;
+            }
+            else if (evidence?.PhysicalQueue is not EfSchedulerWorkQueueStore proofQueue || !ReferenceEquals(proofQueue.Context, context) ||
+                evidence.PhysicalExecutions is not EfWorkflowExecutionStateStore proofExecutions || !ReferenceEquals(proofExecutions.Context, context))
+                return false;
             var scope = access.Current.RequireScope();
             return sourceStore.Uses(context, scope) && authority.AccessContext.RequireScope() == scope &&
                 ((IStimulusDeliveryStore)sourceStore).CanRetainExecutables(outbox, executables, references, executions);
@@ -82,6 +90,13 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         ArgumentNullException.ThrowIfNull(request.Targets);
         request = request with { Targets = Array.AsReadOnly(request.Targets.ToArray()) };
         RuntimeIngressAdmissionValidation.CheckCandidate(request);
+        if (PreparedStandaloneOnly)
+        {
+            PreparedStandaloneAdmission.RequireSource(request.Candidate);
+            if (request.WaitCandidate is not null ||
+                request.Candidate.SubscriptionDelivery!.Recipients.Any(recipient => !preparedTarget!.Selects(source, recipient)))
+                throw new NotSupportedException("This Runtime owner admits only prepared Actor Foundation starts.");
+        }
         if (await PrepareWaitsAsync(request, cancellationToken) is { } capturedWaits)
             request = request with { Candidate = RuntimeIngressWaitCapture.Attach(request.Candidate, capturedWaits) };
         if (request.Candidate.SubscriptionDelivery!.Recipients.Any(recipient => recipient.ModelProtocol is not null) &&
@@ -211,6 +226,8 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(seal);
+        if (PreparedStandaloneOnly && seal.Version != RuntimeDispatchSeal.PreparedStartQualificationVersion)
+            throw new NotSupportedException("This Runtime owner commits only prepared Actor Foundation dispatch.");
         var initial = await ReadSourceAsync(source, cancellationToken);
         var target = initial.SubscriptionDelivery!.Recipients.SingleOrDefault(recipient => recipient.RecipientId == seal.RecipientId) ??
             throw new InvalidDataException("The dispatch recipient was not accepted.");
@@ -249,6 +266,8 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
     {
         ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(receipt);
         RequireScope(source.Scope, cancellationToken); RequireOwnedBoundary();
+        if (PreparedStandaloneOnly)
+            throw new NotSupportedException("Prepared Actor Foundation receipts require checked attempt reconciliation.");
         return ChangeObservedAsync(source.Scope, source.SourceOutboxItemId, async (current, token) =>
         {
             RuntimeIngressAdmissionValidation.CheckClaim(current, source, time.GetUtcNow());
@@ -373,8 +392,14 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         return tracking ? query.SingleOrDefaultAsync(token) : query.AsNoTracking().SingleOrDefaultAsync(token);
     }
 
-    private static RuntimePostCommitOutboxItem Read(RuntimePostCommitOutboxEntity row, PersistenceScope scope, string id) =>
-        EfRuntimePostCommitOutboxStore.ReadChecked(row, scope.Value, id);
+    private bool PreparedStandaloneOnly => outbox is EfRuntimePostCommitOutboxStore { PreparedStandaloneOnly: true };
+
+    private RuntimePostCommitOutboxItem Read(RuntimePostCommitOutboxEntity row, PersistenceScope scope, string id)
+    {
+        var item = EfRuntimePostCommitOutboxStore.ReadChecked(row, scope.Value, id);
+        if (PreparedStandaloneOnly) PreparedStandaloneAdmission.RequireSource(item);
+        return item;
+    }
 
     private void RequireOwnedBoundary()
     {
