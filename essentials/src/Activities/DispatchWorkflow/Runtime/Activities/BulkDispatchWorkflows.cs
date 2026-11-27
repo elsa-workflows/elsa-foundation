@@ -28,8 +28,10 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Activities;
 /// </para>
 /// <para>
 /// The activity implements no child-fault handler, as <c>ForEach</c> and <c>If</c> do not: the workflow's incident
-/// strategy decides every fault of the <c>Dispatch</c> node or a slot (FR-008). Under ContinueWithIncidents a faulted
-/// pass keeps its place in the window until <c>RetryFaultedActivity</c> lets it end.
+/// strategy decides every fault of the <c>Dispatch</c> node or a slot (FR-008). Under ContinueWithIncidents the incident
+/// stays open and the faulted pass keeps its place in the window. The activity keeps waiting for that child without
+/// consuming its fault, as <c>Sequence</c> does, so an operator's <c>RescheduleActivity</c> of the faulted child reaches
+/// it and the successor's completion ends the pass (<see cref="IRuntimeAcceptsRescheduledFaultedChild"/>).
 /// </para>
 /// </remarks>
 [RefusesSecretBinding(nameof(Items), SecretBindingRefusalReason.PersistedByActivity)]
@@ -42,7 +44,8 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Activities;
 [ActivityChildSlot(BulkDispatchWorkflowsConstants.ChildFaultedSlotName, BulkDispatchWorkflowsConstants.ChildFaultedSlotProperty,
     BulkDispatchWorkflowsConstants.ChildFaultedSlotDisplayName, ActivityChildSlotCardinalities.Single)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
-public sealed class BulkDispatchWorkflows : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
+public sealed class BulkDispatchWorkflows : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler,
+    IRuntimeAcceptsRescheduledFaultedChild
 {
     public const string ActivityType = BulkDispatchWorkflowsConstants.ActivityType;
 

@@ -3,6 +3,7 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Fixture = Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowRuntimeTestFixture;
@@ -138,6 +139,73 @@ public sealed class BulkDispatchWorkflowsEndToEndTests
         Assert.Empty(await fixture.ListDispatchesAsync(parentId));
         var bulk = Assert.Single(await fixture.ListActivitiesAsync(parentId), state => state.Execution.ExecutableNodeId == Fixture.BulkNodeId);
         Assert.Equal(ActivityExecutionStatus.Faulted, bulk.Status);
+    }
+
+    [Fact]
+    public async Task A_slot_fault_under_the_default_strategy_faults_the_workflow()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        const string parentId = "parent-bulk-slot-fault";
+        object?[] items = [Fixture.BulkItem(0, message: Fixture.FaultingSlotMessage), Fixture.BulkItem(1)];
+
+        await fixture.StartBulkParentAsync("bulk-slot-fault", parentId, items, waitForCompletion: true, completedSlot: true);
+        await fixture.SweepUntilQuietAsync();
+
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await fixture.FindWorkflowAsync(parentId))?.Status);
+        Assert.Contains(await fixture.ListActivitiesAsync(parentId), state =>
+            state.Execution.ExecutableNodeId == Fixture.CompletedSlotNodeId && state.Status == ActivityExecutionStatus.Faulted);
+    }
+
+    [Fact]
+    public async Task A_fault_of_the_Dispatch_execution_itself_follows_the_strategy_and_does_not_run_ChildFaulted()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        const string parentId = "parent-bulk-dispatch-fault";
+        // The child declares no input 'undeclared', so the Dispatch execution refuses this item's inputs.
+        var bad = Fixture.BulkItem(0);
+        bad["undeclared"] = "x";
+
+        await fixture.StartBulkParentAsync("bulk-dispatch-fault", parentId, [bad], waitForCompletion: true, faultedSlot: true);
+        await fixture.SweepUntilQuietAsync();
+
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await fixture.FindWorkflowAsync(parentId))?.Status);
+        Assert.Contains(await fixture.ListActivitiesAsync(parentId), state =>
+            state.Execution.ExecutableNodeId == Fixture.BulkDispatchNodeId && state.Status == ActivityExecutionStatus.Faulted);
+        Assert.Empty(SlotRuns(fixture, parentId));
+        Assert.Empty(await fixture.ListDispatchesAsync(parentId));
+    }
+
+    [Fact]
+    public async Task Under_ContinueWithIncidents_a_slot_fault_keeps_its_pass_open_until_a_reschedule_ends_it()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        const string parentId = "parent-bulk-retry";
+        object?[] items = [Fixture.BulkItem(0, message: Fixture.FaultingSlotMessage), Fixture.BulkItem(1), Fixture.BulkItem(2)];
+
+        await fixture.StartBulkParentAsync("bulk-retry", parentId, items, waitForCompletion: true, completedSlot: true,
+            incidentStrategy: IncidentStrategyBuiltIns.ContinueWithIncidentsReference);
+        await fixture.SweepUntilQuietAsync();
+
+        // The other passes went on; the faulted pass keeps the bulk activity open.
+        Assert.Equal(["completed:1:item-1", "completed:2:item-2"], SlotRuns(fixture, parentId));
+        Assert.NotEqual(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(parentId))?.Status);
+        await AssertBulkStatusAsync(fixture, parentId, ActivityExecutionStatus.Running, ActivityExecutionStatus.Suspended);
+        var faulted = Assert.Single(await fixture.ListActivitiesAsync(parentId), state =>
+            state.Execution.ExecutableNodeId == Fixture.CompletedSlotNodeId && state.Status == ActivityExecutionStatus.Faulted);
+
+        // ContinueWithIncidents leaves the incident open, not waiting for intervention, so RetryFaultedActivity refuses it.
+        var refused = await fixture.AlterFaultedActivityAsync(parentId, faulted.Execution.ActivityExecutionId, "RetryFaultedActivity", 1);
+        Assert.Equal("NoBlockingIncident", Assert.Single(refused.Outcomes).Code);
+
+        // The bulk activity keeps waiting for the faulted child, so rescheduling it reaches the activity.
+        fixture.SlotFaultRepaired = true;
+        var job = await fixture.AlterFaultedActivityAsync(parentId, faulted.Execution.ActivityExecutionId, "RescheduleActivity", 1);
+
+        Assert.True(job.Status == WorkflowAlterationJobStatus.Succeeded, JsonSerializer.Serialize(new { job.SafeFailure, job.Outcomes }));
+        await AssertParentCompletedAsync(fixture, parentId);
+        await AssertBulkDoneAsync(fixture, parentId);
+        // The rescheduled slot reads its own pass's item and index.
+        Assert.Equal(["completed:0:slot-fault", "completed:1:item-1", "completed:2:item-2"], SlotRuns(fixture, parentId));
     }
 
     private static async Task<ActivityExecutionState[]> DispatchExecutionsAsync(Fixture fixture, string parentId) =>

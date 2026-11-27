@@ -1033,6 +1033,8 @@ internal sealed record ChildExecutionObservation(
 
 internal sealed class ChildExecutionProbe
 {
+    internal bool SlotFaultRepaired { get; set; }
+
     private readonly Lock _gate = new();
     private readonly List<ChildExecutionObservation> _observations = [];
     private readonly List<ChildControlObservation> _controlObservations = [];

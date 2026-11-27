@@ -8,6 +8,10 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Workflows.Runtime.Services.Alterations;
+using Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 using Microsoft.Extensions.DependencyInjection;
 using BulkDispatchWorkflowsActivity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.BulkDispatchWorkflows;
 using DispatchWorkflowActivity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
@@ -23,9 +27,59 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture
     internal const string CompletedSlotNodeId = "node-bulk-completed";
     internal const string FaultedSlotNodeId = "node-bulk-faulted";
 
+    /// <summary>The slot probe faults for an item whose message is this, until <see cref="SlotFaultRepaired"/> is set.</summary>
+    internal const string FaultingSlotMessage = "slot-fault";
+
+    /// <summary>Lets a slot probe that faulted succeed on its retry.</summary>
+    internal bool SlotFaultRepaired
+    {
+        get => _provider.GetRequiredService<ChildExecutionProbe>().SlotFaultRepaired;
+        set => _provider.GetRequiredService<ChildExecutionProbe>().SlotFaultRepaired = value;
+    }
+
     /// <summary>A child input set for one item: the child probe faults when <paramref name="fault"/> is set.</summary>
-    internal static Dictionary<string, object?> BulkItem(int count, bool fault = false) =>
-        new() { ["message"] = fault ? FaultingChildMessage : $"item-{count}", ["count"] = count };
+    internal static Dictionary<string, object?> BulkItem(int count, bool fault = false, string? message = null) =>
+        new() { ["message"] = message ?? (fault ? FaultingChildMessage : $"item-{count}"), ["count"] = count };
+
+    /// <summary>
+    /// Submits <c>RetryFaultedActivity/1</c> for a faulted activity as an operator does, runs the alteration pump until
+    /// the job ends and sweeps until the run is quiet.
+    /// </summary>
+    internal async ValueTask<WorkflowAlterationJobState> AlterFaultedActivityAsync(string workflowExecutionId, string sourceActivityExecutionId, string kind, int schemaVersion)
+    {
+        WorkflowAlterationPlanAdmissionResult admission;
+        await using (var scope = _provider.CreateAsyncScope())
+        {
+            admission = await scope.ServiceProvider.GetRequiredService<WorkflowAlterationPlanService>().SubmitAsync(
+                new WorkflowAlterationSubmission(
+                    new WorkflowAlterationAuthorityScope("tenant-42", "parent-caller", "root-initiator"),
+                    WorkflowAlterationTargetSelector.ForExecutionIds([workflowExecutionId]),
+                    [new WorkflowAlterationEnvelope(kind, schemaVersion,
+                        kind == "RescheduleActivity"
+                        ? JsonSerializer.SerializeToElement(new { sourceActivityExecutionId })
+                        : JsonSerializer.SerializeToElement(new { sourceActivityExecutionId, reason = "Slot repaired" }))]),
+                new WorkflowAlterationOperatorProvenance("operator-1", correlationId: null),
+                $"{kind}:{sourceActivityExecutionId}");
+        }
+
+        var jobId = WorkflowAlterationIdentity.CreateJobId(admission.Plan.PlanId, workflowExecutionId);
+        var options = new WorkflowAlterationOrchestrationOptions { WorkerId = "test-worker" };
+        WorkflowAlterationJobState? job = null;
+        for (var sweep = 0; sweep < 8; sweep++)
+        {
+            await using (var scope = _provider.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<WorkflowAlterationOrchestrationSweep>().ExecuteAsync(options, "test-worker");
+                job = await scope.ServiceProvider.GetRequiredService<IWorkflowAlterationStore>().FindJobAsync(jobId);
+            }
+
+            if (job?.Status is WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed or WorkflowAlterationJobStatus.Cancelled)
+                break;
+        }
+
+        await SweepUntilQuietAsync();
+        return job ?? throw new InvalidOperationException($"Alteration job '{jobId}' was not found.");
+    }
 
     /// <summary>
     /// Starts a parent whose root is a bulk dispatch over <paramref name="items"/>. The Dispatch node passes each item as
@@ -70,8 +124,9 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture
                 provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
                 parentWorkflowExecutionId: null,
                 correlationId: "correlation-parent",
+                // Tenant and partition agree, as an operator alteration (RetryFaultedActivityAsync) requires.
                 tenantId: "tenant-42",
-                partition: new WorkflowExecutionPartition("partition-eu"),
+                partition: new WorkflowExecutionPartition("tenant-42"),
                 authority: authority,
                 startAuthority: null,
                 dispatchNestingDepth: 0));
@@ -135,6 +190,8 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture
             {
                 [nameof(BulkDispatchWorkflowsActivity.Items)] = LiteralBinding(nameof(BulkDispatchWorkflowsActivity.Items), itemsJson, typeof(object))
             },
+            // The publisher compiles this from IRuntimeAcceptsRescheduledFaultedChild (ExecutableNodeCompiler).
+            metadata: new Dictionary<string, string> { [RuntimeMetadataKeys.AcceptsRescheduledFaultedChild] = "true" },
             childSlots: slots,
             structure: new ExecutableActivityStructure(
                 BulkDispatchWorkflowsConstants.StructureKind,
@@ -197,11 +254,14 @@ internal sealed partial class DispatchWorkflowRuntimeTestFixture
 
         protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
         {
+            var message = Item is { } item && item.TryGetValue("message", out var value) ? value.GetString() : null;
+            if (message == FaultingSlotMessage && !probe.SlotFaultRepaired)
+                throw new InvalidOperationException("The slot probe was asked to fault.");
             probe.Record(context.WorkflowExecutionId, context.InvocationId, new Dictionary<string, object?>
             {
                 ["slot"] = Slot,
                 ["index"] = Index,
-                ["message"] = Item is { } item && item.TryGetValue("message", out var message) ? message.GetString() : null
+                ["message"] = message
             });
             return ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
         }

@@ -60,8 +60,10 @@ the design side), and converter rules.
   - It implements no child or descendant fault handler, as `ForEach` and `If` do not, so the workflow's incident
     strategy decides every fault (spec FR-008). `RequestChildFaultIntervention` is not used: it would bypass the
     strategy and leave the run waiting under the default Fault.
-  - It does not implement `IRuntimeAcceptsRescheduledFaultedChild`, because retry goes through
-    `RetryFaultedActivity`, which does not need it.
+  - It implements `IRuntimeAcceptsRescheduledFaultedChild`, as `Sequence` does: it keeps waiting for a faulted child
+    without consuming its fault, so `RescheduleActivity` of that child ends the pass. Under ContinueWithIncidents the
+    incident is open rather than waiting for intervention, so `RetryFaultedActivity` refuses it (`NoBlockingIncident`)
+    and rescheduling is the operator's path (amended during implementation).
 - **Input**: `Items`.
 - **Attributes**: `[ActivityStructure("elsa.bulk-dispatch-workflows.structure", "1.0.0")]` and
   `[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]`, as `ForEach` has. The bulk node performs no effect
@@ -130,7 +132,7 @@ the design side), and converter rules.
     - A `RetryFaultedActivity` successor gets its frame from the source's frame (`ActivitySuccessorStaging`).
   - Complete with `Done` when the set holds every index.
 - **Faults**: no handler. The incident strategy decides. Under ContinueWithIncidents the pass stays open until a
-  `RetryFaultedActivity`, and the retried child's completion ends the pass as usual.
+  `RescheduleActivity` of the faulted child, and the successor's completion ends the pass as usual.
 - **Concurrent same-node scheduling**: no new scheduler (FR-024). Every `ScheduleChildActivity` call gets its own
   activity execution id (`SchedulerWorkItems.cs`). `BpmnProcessRuntime` already schedules one bound node, its
   call-activity `DispatchWorkflow` included, once per instance with an `IterationId` and a
@@ -245,13 +247,14 @@ the design side), and converter rules.
   - an empty or null `Items`;
   - the cap fault;
   - under the default Fault strategy a `Dispatch` or slot fault faults the workflow;
-  - under ContinueWithIncidents a slot fault is a retryable incident, other passes go on, and a retry ends the pass;
-  - a `Dispatch` self-fault stays an incident (`ChildFaulted` does not run), and a retry ends the pass;
+  - under ContinueWithIncidents a slot fault is an open incident, other passes go on, `RetryFaultedActivity` is
+    refused, and a `RescheduleActivity` ends the pass;
+  - a `Dispatch` self-fault follows the strategy (`ChildFaulted` does not run);
   - the window of 16: never more than 16 passes open, including under repeated callbacks;
   - publish refuses an empty or wrong `Dispatch` slot (`BulkDispatch/DispatchSlot`);
   - `variables.currentItem` reads in `Dispatch` and in the slots resolve at publish;
   - at run time, `ChildCompleted` and `ChildFaulted` read the right `currentItem` and `currentIndex` for their pass, also
-    after a retry;
+    after a reschedule;
   - a fault inside a `Sequence` in a slot follows the incident strategy in the same way;
   - parent cancellation cancels the waiting children;
   - publish pins the `Dispatch` node through the unchanged `DispatchPinSource`;

@@ -218,8 +218,9 @@ and on-completed-callbacks suites pass.
 - **Two waiting activities in one parent instance**: each keeps its own children. Elsa 3's shared per-instance
   bookmark and counter is not reproduced.
 - **A slot activity faults**, for example the `WriteLine` in `ChildFaulted`: the workflow's incident strategy decides
-  (FR-008). Under the default Fault strategy the workflow faults. Under ContinueWithIncidents it becomes a retryable
-  incident on that item's pass, the other passes keep running, and the bulk activity completes after a retry.
+  (FR-008). Under the default Fault strategy the workflow faults. Under ContinueWithIncidents it becomes an open
+  incident on that item's pass, the other passes keep running, and the bulk activity completes after the operator
+  reschedules the faulted activity (`RescheduleActivity`).
 - **The `Dispatch` execution itself faults** (an input the child does not declare, the nesting depth, a missing pinned
   target, an error in the `Inputs` or `CorrelationId` expression): the incident strategy decides, as above.
   `ChildFaulted` does not run for it. Elsa 3 faulted the whole activity, which is what the default strategy does.
@@ -285,8 +286,11 @@ and on-completed-callbacks suites pass.
   `ForEach` and `If` do not, so the workflow's incident strategy decides.
   - This covers a fault of the `Dispatch` execution itself, of a slot child, or of an activity deeper inside a slot.
   - Under the default Fault strategy the workflow faults, matching Elsa 3, where the activity faulted.
-  - Under ContinueWithIncidents the fault is a retryable incident on its pass. The other passes go on, and retrying the
-    faulted activity (`RetryFaultedActivity`) lets the pass end and the bulk activity continue.
+  - Under ContinueWithIncidents the fault is an open incident on its pass. The other passes go on. The bulk activity
+    keeps waiting for the faulted child without consuming its fault (`IRuntimeAcceptsRescheduledFaultedChild`, as
+    `Sequence` does), so rescheduling the faulted activity (`RescheduleActivity`) lets the pass end and the bulk
+    activity continue. `RetryFaultedActivity` does not apply there: it needs a blocking incident that waits for
+    intervention, and ContinueWithIncidents opens the incident instead (amended during implementation).
   - `ChildFaulted` is for children that ended badly (FR-006 outcomes), not for faults of the `Dispatch` node. The node
     raises those as plain exceptions, so they cannot be told apart, and absorbing them would hide recoverable errors.
 - **FR-009**: The activity has one outcome, `Done`.
@@ -306,13 +310,14 @@ and on-completed-callbacks suites pass.
   - The activity README (`essentials/src/Activities/DispatchWorkflow/Runtime/README.md`) explains the lost-update risk and the alternative: record per-child results in the child workflow, or
     read them after the bulk activity.
 - **FR-010b**: The same activity README also states:
-  - that only `RetryFaultedActivity` ends a faulted pass. `RescheduleActivity` is refused, because the faulted pass
-    has a blocking incident (`BlockingIncident`);
+  - that under ContinueWithIncidents an operator ends a faulted pass with `RescheduleActivity` of the faulted
+    activity. `RetryFaultedActivity` is refused there (`NoBlockingIncident`), because the strategy leaves the incident
+    open rather than waiting for intervention (amended during implementation);
   - that `DispatchFailed` reaches `ChildFaulted` only when the `Dispatch` node waits. A fire-and-forget child that
     fails to start is not seen by the bulk activity;
   - that a slot holding a `Flowchart` or another composite that handles its own child faults reports the fault as the
     slot's direct child, so the activity to retry is that direct child;
-  - that under ContinueWithIncidents a faulted pass keeps its place in the window of 16 until it is retried, so 16
+  - that under ContinueWithIncidents a faulted pass keeps its place in the window of 16 until it is rescheduled, so 16
     open incidents stall the activity.
 
 **Converter**

@@ -52,6 +52,8 @@ public sealed class BulkDispatchWorkflowsDesignTests
         // FR-008: the incident strategy decides every child fault, so the activity handles none itself.
         Assert.False(typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(typeof(BulkDispatchWorkflowsActivity)));
         Assert.False(typeof(IRuntimeActivityDescendantFaultHandler).IsAssignableFrom(typeof(BulkDispatchWorkflowsActivity)));
+        // It keeps waiting for a faulted child without consuming its fault, so RescheduleActivity can end the pass.
+        Assert.True(typeof(IRuntimeAcceptsRescheduledFaultedChild).IsAssignableFrom(typeof(BulkDispatchWorkflowsActivity)));
         Assert.Equal(16, BulkDispatchWorkflowsConstants.Window);
         Assert.Equal(1000, BulkDispatchWorkflowsConstants.ItemCap);
         Assert.Equal(["Items"], typeof(BulkDispatchWorkflowsActivity).GetProperties()
