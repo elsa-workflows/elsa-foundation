@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -16,13 +17,16 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
 
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
-    private sealed record StartWrite(bool Claimed, bool Enqueued);
+    private sealed record PinnedRootSource(uint Marker, uint Namespace, Issuer? Issuer);
+    private sealed record StartClaim(bool SourceReady, bool Claimed);
+    private sealed record StartWrite(bool SourceReady, bool Claimed, bool Enqueued);
+    private sealed record StartReceipt(bool SourceReady, string? Reference);
     // Bound the formatting and payload cost of a duplicate that loses the batched receipt claim.
     private const int BatchedStartInputCodeUnits = 8 * 1024;
     private const string ClaimReceiptSql = """
         INSERT INTO "FoundationRootReceipts" AS r ("Tenant","Operation","Reference","Until")
         SELECT {0}, {1}, {2}, floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {3}
-        WHERE NOT {4}
+        WHERE NOT {4} AND (SELECT "SourceReady" FROM source)
         ON CONFLICT ("Tenant","Operation") DO UPDATE SET "Reference" = EXCLUDED."Reference",
             "Until" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {3}
         WHERE r."Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
@@ -230,9 +234,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         await using var db = create();
         RequirePressureProfile(db);
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
-        Issuer? issuer = null;
-        if (db.RequiresPinnedRootNamespace)
-            issuer = await PinRootNamespaceAsync(db, loadIssuer: reply is null, cancellationToken);
+        var pin = db.RequiresPinnedRootNamespace
+            ? await PinRootNamespaceAsync(db, loadIssuer: reply is null, cancellationToken) : null;
         if (reply is not null)
         {
             if (!db.UsesRootReplyProtocol) throw new NotSupportedException("This profile does not hold requests.");
@@ -245,7 +248,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                 return null;
             }
         }
-        issuer ??= await ReadIssuerAsync(db, cancellationToken);
+        var issuer = pin?.Issuer ?? await ReadIssuerAsync(db, cancellationToken);
         var preferred = InstanceRef.Spread(name, issuer.Partitions);
         var actor = InstanceRef.In(attempt?.Place(preferred, issuer.Partitions) ?? preferred, name);
         try { attempt?.Require(actor.Partition); }
@@ -253,20 +256,28 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         {
             // Preserve the one-round-trip claim/write on the accepted small-start path. A refused attempt
             // only reads the already installed receipt and has made no change to the store.
-            var existing = await db.Database.SqlQuery<string>($"""
-                SELECT "Reference" AS "Value" FROM "FoundationRootReceipts"
-                WHERE "Tenant" = {tenant} AND "Operation" = {digest}
-                    AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
-                """).SingleOrDefaultAsync(cancellationToken);
+            var existing = await ReadReceiptAsync(liveOnly: true);
             if (existing is null) throw;
             return new(existing, true);
         }
         var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
         var windowMs = (long)window.TotalMilliseconds;
         var claimFirst = spec.Input is { Length: > BatchedStartInputCodeUnits };
-        if (claimFirst && await db.Database.ExecuteSqlRawAsync(ClaimReceiptSql,
-                new object[] { tenant, digest, reference, windowMs, false }, cancellationToken) == 0)
-            return await Replay();
+        if (claimFirst)
+        {
+            var claimSql = """
+                WITH source AS MATERIALIZED (/*start-source*/), receipt AS (
+                """ + ClaimReceiptSql + """
+
+                    RETURNING "Reference"
+                )
+                SELECT source."SourceReady", EXISTS (SELECT 1 FROM receipt) AS "Claimed" FROM source
+                """;
+            var claimQuery = FormattableStringFactory.Create(claimSql, tenant, digest, reference, windowMs, false);
+            var claim = (await db.Database.SqlQuery<StartClaim>(WithStartSource(claimQuery, pin)).ToListAsync(cancellationToken)).Single();
+            RequireStartSource(claim.SourceReady);
+            if (!claim.Claimed) return await Replay();
+        }
 
         var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, reply?.Address);
         var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
@@ -276,13 +287,13 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         // A live receipt wins even when the replay's encoded envelope is too large. When no receipt
         // wins, this transaction rolls back the claim if its creator cannot be stored.
         var command = """
-            WITH receipt AS (
+            WITH source AS MATERIALIZED (/*start-source*/), receipt AS (
             """ + ClaimReceiptSql + """
 
                 RETURNING "Reference"
             ), accepted AS (
                 SELECT "Reference" FROM receipt
-                UNION ALL SELECT {2} WHERE {4}
+                UNION ALL SELECT {2} WHERE {4} AND (SELECT "SourceReady" FROM source)
             ), birth AS (
                 INSERT INTO "FoundationRootBirths" ("Tenant","Reference","Actor","Partition","Creation","Creator","Fingerprint")
                 SELECT {0}, accepted."Reference", {5}, {6}, 1, {7}, {8}
@@ -294,11 +305,15 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                 FROM birth
                 RETURNING "Id"
             )
-            SELECT EXISTS (SELECT 1 FROM accepted) AS "Claimed", EXISTS (SELECT 1 FROM creator) AS "Enqueued"
+            SELECT source."SourceReady", EXISTS (SELECT 1 FROM accepted) AS "Claimed",
+                EXISTS (SELECT 1 FROM creator) AS "Enqueued"
+            FROM source
             """;
-        var write = (await db.Database.SqlQueryRaw<StartWrite>(command, tenant, digest, reference, windowMs, claimFirst,
+        var writeQuery = FormattableStringFactory.Create(command, tenant, digest, reference, windowMs, claimFirst,
             actor.Id, actor.Partition, creator.InboxKey.Id, fingerprint, fits, creator.Kind, creator.Due ?? 0,
-            (fits ? payload : null)!, fits ? header : "", (reply?.Address)!).ToListAsync(cancellationToken)).Single();
+            (fits ? payload : null)!, fits ? header : "", (reply?.Address)!);
+        var write = (await db.Database.SqlQuery<StartWrite>(WithStartSource(writeQuery, pin)).ToListAsync(cancellationToken)).Single();
+        RequireStartSource(write.SourceReady);
         if (!write.Claimed) return await Replay();
         if (!fits) throw new MetadataLimitExceeded(nameof(spec), EfStore.RootContentBytes);
         if (!write.Enqueued)
@@ -309,12 +324,58 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
 
         async Task<Receipt> Replay()
         {
-            var existing = await db.Database.SqlQuery<string>($"""
-                SELECT "Reference" AS "Value" FROM "FoundationRootReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
-                """).SingleAsync(cancellationToken);
+            var existing = await ReadReceiptAsync(liveOnly: false)
+                ?? throw new InvalidOperationException("The conflicting root receipt no longer exists.");
             await transaction.CommitAsync(cancellationToken);
             return new(existing, true);
         }
+
+        async Task<string?> ReadReceiptAsync(bool liveOnly)
+        {
+            var result = await db.Database.SqlQuery<StartReceipt>(WithStartSource($"""
+                WITH source AS MATERIALIZED (/*start-source*/)
+                SELECT source."SourceReady", (SELECT r."Reference" FROM "FoundationRootReceipts" r
+                    WHERE source."SourceReady" AND r."Tenant" = {tenant} AND r."Operation" = {digest}
+                        AND (NOT {liveOnly} OR r."Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint))
+                    AS "Reference"
+                FROM source
+                """, pin)).SingleAsync(cancellationToken);
+            RequireStartSource(result.SourceReady);
+            return result.Reference;
+        }
+    }
+
+    private static FormattableString WithStartSource(FormattableString query, PinnedRootSource? pin)
+    {
+        if (pin is null)
+            return FormattableStringFactory.Create(query.Format.Replace("/*start-source*/", """SELECT true AS "SourceReady" """, StringComparison.Ordinal),
+                query.GetArguments());
+
+        // A schema rename can redirect unqualified relation names despite the earlier table locks.
+        // Recheck the physical marker and target lineage in each receipt or creator statement.
+        var markerId = Placeholder(query.ArgumentCount);
+        var markerOid = Placeholder(query.ArgumentCount + 1);
+        var namespaceOid = Placeholder(query.ArgumentCount + 2);
+        var source = $$"""
+            SELECT EXISTS (
+                SELECT 1 FROM "KernelStoreVersions" v JOIN pg_catalog.pg_class marker ON marker.oid = v.tableoid
+                WHERE v."Id" = {{markerId}} AND marker.oid::bigint = {{markerOid}}
+                    AND marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
+                    AND marker.relnamespace::bigint = {{namespaceOid}}
+                    AND (SELECT count(*) FROM (VALUES ('"FoundationRootReceipts"'), ('"FoundationRootBirths"'), ('"Messages"')) required(name)
+                        JOIN pg_catalog.pg_class relation ON relation.oid = pg_catalog.to_regclass(required.name)
+                            AND relation.relkind = 'r' AND relation.relnamespace = marker.relnamespace) = 3
+            ) AS "SourceReady"
+            """;
+        return FormattableStringFactory.Create(query.Format.Replace("/*start-source*/", source, StringComparison.Ordinal),
+            [.. query.GetArguments(), StoreVersionEntity.MarkerId, (long)pin.Marker, (long)pin.Namespace]);
+
+        static string Placeholder(int index) => "{" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}";
+    }
+
+    private static void RequireStartSource(bool ready)
+    {
+        if (!ready) throw new StoreFormatException("The PostgreSQL root's pinned startup source changed before the write.");
     }
 
     private void RequirePressureProfile(KernelDb db)

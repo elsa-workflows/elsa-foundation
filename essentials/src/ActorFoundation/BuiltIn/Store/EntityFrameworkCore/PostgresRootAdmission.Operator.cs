@@ -327,7 +327,7 @@ internal sealed partial class PostgresRootAdmission
 
     internal static Task PinRootNamespaceAsync(KernelDb db, CancellationToken token) => PinRootNamespaceAsync(db, false, token);
 
-    private static async Task<Issuer?> PinRootNamespaceAsync(KernelDb db, bool loadIssuer, CancellationToken token)
+    private static async Task<PinnedRootSource?> PinRootNamespaceAsync(KernelDb db, bool loadIssuer, CancellationToken token)
     {
         EfStore.RefuseSqliteShippedRuntime(db);
         try
@@ -379,7 +379,7 @@ internal sealed partial class PostgresRootAdmission
             throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");
     }
 
-    private static Task<Issuer?> PinRootParkSourcesAsync(KernelDb db, bool loadIssuer, CancellationToken token)
+    private static Task<PinnedRootSource> PinRootParkSourcesAsync(KernelDb db, bool loadIssuer, CancellationToken token)
     {
         // Every Park set that admits operator commands, Recover or a composed one, pins their receipts too.
         var receipts = db.UsesRootOperatorProtocol;
@@ -418,7 +418,7 @@ internal sealed partial class PostgresRootAdmission
         // Before sending any business SQL, confirm the locked relations belong to the same physical marker.
         List<NpgsqlBatchCommand> commands = [pin, new(lockTables), validate];
         if (loadIssuer) commands.Add(new("""SELECT issuer."Key", issuer."Partitions", marker.oid """ + RootIssuerSource));
-        return ReadGuardedAdmissionAsync<Issuer?>(db, commands, async (reader, marker, ct) =>
+        return ReadGuardedAdmissionAsync<PinnedRootSource>(db, commands, async (reader, marker, ct) =>
         {
             if (!await reader.ReadAsync(ct) || reader.GetFieldValue<uint>(1) != marker)
                 throw new StoreFormatException("The kernel store version marker schema is unreadable.");
@@ -428,12 +428,12 @@ internal sealed partial class PostgresRootAdmission
                 throw new StoreFormatException(childLedger
                     ? "The child profile requires its source tables in the marker schema."
                     : "Park requires the source tables in the marker schema.");
-            if (!loadIssuer) return null;
+            if (!loadIssuer) return new(marker, schema, null);
             if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct))
                 throw new StoreFormatException(RootIssuerMissing);
             if (reader.GetFieldValue<uint>(2) != marker)
                 throw new StoreFormatException("The kernel store version marker changed its physical table.");
-            return ReadIssuer(reader);
+            return new(marker, schema, ReadIssuer(reader));
         }, token);
     }
 

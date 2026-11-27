@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,6 +9,7 @@ using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
@@ -62,6 +64,7 @@ internal static class PostgresShippedFormatChecks
         await CheckGuardBodyParityAsync(Open, stop);
         await CheckDefinitionRevisionAsync(Open, store, stop);
         await CheckNamespaceReplacementAsync(Open, connection, stop);
+        await CheckStartNamespaceReplacementAsync(Open, connection, stop);
         await using (var db = Open())
         {
             await db.Database.ExecuteSqlRawAsync("""DROP TRIGGER kernel_root_self_insert ON "Messages" """, stop);
@@ -386,23 +389,7 @@ internal static class PostgresShippedFormatChecks
     private static async Task CheckNamespaceReplacementAsync(Func<KernelDb> open, string connection, CancellationToken token)
     {
         await using var observer = open();
-        await observer.Database.ExecuteSqlRawAsync("""
-            DO $fixture$
-            DECLARE source text; relation text;
-            BEGIN
-                FOREACH source IN ARRAY ARRAY['pin_swap', 'pin_replacement'] LOOP
-                    EXECUTE format('CREATE SCHEMA %I', source);
-                    EXECUTE format('CREATE TABLE %I."KernelStoreVersions" (LIKE "KernelStoreVersions" INCLUDING ALL)', source);
-                    EXECUTE format('INSERT INTO %I."KernelStoreVersions" SELECT * FROM "KernelStoreVersions"', source);
-                    FOREACH relation IN ARRAY ARRAY['FoundationRootIssuer', 'FoundationRootBirths', 'Instances', 'Messages',
-                        'Partitions', 'Nodes', 'Journal', 'Subscriptions', 'FoundationDirectReceipts', 'FoundationActorList',
-                        'FoundationRootReceipts', 'Events', 'FoundationOperatorReceipts'] LOOP
-                        EXECUTE format('CREATE TABLE %I.%I (LIKE %I INCLUDING ALL)', source, relation, relation);
-                    END LOOP;
-                END LOOP;
-            END
-            $fixture$;
-            """, token);
+        await CreateNamespaceSwapAsync(observer, token);
         try
         {
             var settings = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(new NpgsqlConnectionStringBuilder(connection)
@@ -422,10 +409,7 @@ internal static class PostgresShippedFormatChecks
                 """).SingleAsync(token))
                 await Task.Delay(20, token);
             Require(!waiting.IsCompleted, "the pin has resolved the original marker and is waiting for its lock");
-            await advancing.Database.ExecuteSqlRawAsync("""
-                ALTER SCHEMA pin_swap RENAME TO pin_departed;
-                ALTER SCHEMA pin_replacement RENAME TO pin_swap;
-                """, token);
+            await advancing.Database.ExecuteSqlRawAsync(SwapNamespaceSql, token);
             await advance.CommitAsync(token);
             try
             {
@@ -439,11 +423,131 @@ internal static class PostgresShippedFormatChecks
         }
         finally
         {
-            await observer.Database.ExecuteSqlRawAsync("""
-                DROP SCHEMA IF EXISTS pin_departed CASCADE;
-                DROP SCHEMA IF EXISTS pin_swap CASCADE;
-                DROP SCHEMA IF EXISTS pin_replacement CASCADE;
-                """, token);
+            await DropNamespaceSwapAsync(observer, token);
+        }
+    }
+
+    private const string SwapNamespaceSql = """
+        ALTER SCHEMA pin_swap RENAME TO pin_departed;
+        ALTER SCHEMA pin_replacement RENAME TO pin_swap;
+        """;
+
+    private static Task CreateNamespaceSwapAsync(KernelDb observer, CancellationToken token) =>
+        observer.Database.ExecuteSqlRawAsync("""
+            DO $fixture$
+            DECLARE source text; relation text;
+            BEGIN
+                FOREACH source IN ARRAY ARRAY['pin_swap', 'pin_replacement'] LOOP
+                    EXECUTE format('CREATE SCHEMA %I', source);
+                    EXECUTE format('CREATE TABLE %I."KernelStoreVersions" (LIKE "KernelStoreVersions" INCLUDING ALL)', source);
+                    EXECUTE format('INSERT INTO %I."KernelStoreVersions" SELECT * FROM "KernelStoreVersions"', source);
+                    FOREACH relation IN ARRAY ARRAY['FoundationRootIssuer', 'FoundationRootBirths', 'Instances', 'Messages',
+                        'Partitions', 'Nodes', 'Journal', 'Subscriptions', 'FoundationDirectReceipts', 'FoundationActorList',
+                        'FoundationRootReceipts', 'Events', 'FoundationOperatorReceipts'] LOOP
+                        EXECUTE format('CREATE TABLE %I.%I (LIKE %I INCLUDING ALL)', source, relation, relation);
+                    END LOOP;
+                    EXECUTE format('INSERT INTO %I."FoundationRootIssuer" SELECT * FROM "FoundationRootIssuer"', source);
+                END LOOP;
+            END
+            $fixture$;
+            """, token);
+
+    private static Task DropNamespaceSwapAsync(KernelDb observer, CancellationToken token) =>
+        observer.Database.ExecuteSqlRawAsync("""
+            DROP SCHEMA IF EXISTS pin_departed CASCADE;
+            DROP SCHEMA IF EXISTS pin_swap CASCADE;
+            DROP SCHEMA IF EXISTS pin_replacement CASCADE;
+            """, token);
+
+    private static async Task CheckStartNamespaceReplacementAsync(Func<KernelDb> open, string connection, CancellationToken token)
+    {
+        var cases = new[] { ("small start", 0, 1), ("large receipt claim", 9_000, 1), ("large creator continuation", 9_000, 2) };
+        foreach (var (name, size, write) in cases)
+        {
+            await using var observer = open();
+            await CreateNamespaceSwapAsync(observer, token);
+            try
+            {
+                // The sequence is a nontransactional witness. A write reaching a replacement relation
+                // would advance it even if the client subsequently rolled its transaction back.
+                await observer.Database.ExecuteSqlRawAsync("""
+                    UPDATE pin_replacement."FoundationRootIssuer" SET "Key" = decode(repeat('ab', 32), 'hex');
+                    CREATE SEQUENCE pin_replacement.start_write_witness;
+                    CREATE FUNCTION pin_replacement.record_start_write() RETURNS trigger LANGUAGE plpgsql AS $fixture$
+                    BEGIN
+                        PERFORM nextval(format('%I.start_write_witness', TG_TABLE_SCHEMA)::regclass);
+                        RETURN NEW;
+                    END
+                    $fixture$;
+                    CREATE TRIGGER witness AFTER INSERT OR UPDATE ON pin_replacement."FoundationRootReceipts"
+                        FOR EACH ROW EXECUTE FUNCTION pin_replacement.record_start_write();
+                    CREATE TRIGGER witness AFTER INSERT OR UPDATE ON pin_replacement."FoundationRootBirths"
+                        FOR EACH ROW EXECUTE FUNCTION pin_replacement.record_start_write();
+                    CREATE TRIGGER witness AFTER INSERT OR UPDATE ON pin_replacement."Messages"
+                        FOR EACH ROW EXECUTE FUNCTION pin_replacement.record_start_write();
+                    """, token);
+                var swap = new SwapBeforeStartWrite(observer, write);
+                var settings = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(new NpgsqlConnectionStringBuilder(connection)
+                    { SearchPath = "pin_swap" }.ConnectionString).AddInterceptors(swap).Options;
+                var admission = new PostgresRootAdmission(() => PostgresPreviewHosting.CreateShippedContext(settings),
+                    TimeSpan.FromHours(1), lockOrdinaryWrites: true);
+                var spec = new StartSpec("native", "waits", size == 0 ? null : Json.Write(new string('a', size)));
+                try
+                {
+                    await admission.AdmitAsync("pin-swap", "start", spec, cancellationToken: token);
+                    throw new InvalidOperationException("Startup accepted the replacement schema after the pin returned.");
+                }
+                catch (StoreFormatException error) when (error.Message == "The PostgreSQL root's pinned startup source changed before the write.")
+                {
+                    Require(swap.Swapped && await observer.Database.SqlQueryRaw<bool>("""
+                        SELECT NOT (SELECT is_called FROM pin_swap.start_write_witness)
+                            AND NOT EXISTS (SELECT 1 FROM pin_swap."FoundationRootReceipts")
+                            AND NOT EXISTS (SELECT 1 FROM pin_swap."FoundationRootBirths")
+                            AND NOT EXISTS (SELECT 1 FROM pin_swap."Messages")
+                            AND NOT EXISTS (SELECT 1 FROM pin_departed."FoundationRootReceipts")
+                            AS "Value"
+                        """).SingleAsync(token), $"the {name} refuses the post-pin replacement without writing there or retaining an earlier claim");
+                }
+                if (write == 2)
+                {
+                    var started = await admission.AdmitAsync("pin-swap", "start", spec, cancellationToken: token);
+                    var replayed = await admission.AdmitAsync("pin-swap", "start", spec, cancellationToken: token);
+                    Require(!started.Duplicate && replayed.Duplicate && started.Reference == replayed.Reference,
+                        "the guarded large startup claims, publishes and replays on its current pinned source");
+                }
+            }
+            finally
+            {
+                await DropNamespaceSwapAsync(observer, token);
+            }
+        }
+    }
+
+    private sealed class SwapBeforeStartWrite(KernelDb observer, int atWrite) : DbCommandInterceptor
+    {
+        private int _writes;
+        internal bool Swapped { get; private set; }
+
+        private async Task SwapIfSelectedAsync(DbCommand command, CancellationToken token)
+        {
+            if (!command.CommandText.Contains("""INSERT INTO "FoundationRootReceipts" AS r""", StringComparison.Ordinal) || ++_writes != atWrite)
+                return;
+            await observer.Database.ExecuteSqlRawAsync(SwapNamespaceSql, token);
+            Swapped = true;
+        }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            await SwapIfSelectedAsync(command, cancellationToken);
+            return result;
+        }
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            await SwapIfSelectedAsync(command, cancellationToken);
+            return result;
         }
     }
 
