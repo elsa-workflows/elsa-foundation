@@ -284,7 +284,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
               <ActionResult action={view.driverAction ?? { kind: runState.driverActionResult.value.kind }} result={runState.driverActionResult.value} />
             </Suspense>
           ) : null}
-          {!rejected && context && onRunViewUpdated && "view" in testRun ? (
+          {!rejected && view.status !== "CompletedWithoutRecord" && context && onRunViewUpdated && "view" in testRun ? (
             <LazyWorkflowTestRunControls
               context={context}
               testRun={runState}
