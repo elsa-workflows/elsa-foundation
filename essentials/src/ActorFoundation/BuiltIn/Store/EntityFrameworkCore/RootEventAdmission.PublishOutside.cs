@@ -42,20 +42,23 @@ internal static partial class RootEventAdmission
         FormattableString BindPublic(FormattableString sql) => RootPublicEventStarts.Bind(sql, bind);
         if (await RootPublicEventPublications.ReadReplayAsync(db, tenant, qualified, id, operation, now, BindPublic, token) is { } replay)
             return (HeldRootAdmission.Duplicate, new(key, id, replay, Contract.PublicationStatus.Matched));
-        var address = caller?.Address;
         if (caller is null) attempt?.RequireCapacity();
 
         var incarnation = Guid.NewGuid();
         var occurrence = FoundationRootCreator.OperationDigest(DurableKeyJson.Write(new[] { "outside", qualified, incarnation.ToString("N") }));
-        var keepThrough = checked(now + (long)retention.TotalMilliseconds);
+        var retentionMilliseconds = (long)retention.TotalMilliseconds;
+        long? keepThrough = retentionMilliseconds == 0 ? null : checked(now + retentionMilliseconds);
         var receiptThrough = checked(now + (long)receiptWindow.TotalMilliseconds);
-        var keepInputsThrough = caller is null ? keepThrough : receiptThrough;
+        var keepInputsThrough = caller is null ? keepThrough ?? now : receiptThrough;
         var waits = await ReadWaitsAsync(db, tenant, qualified, BindLive, bind is not null, token);
         if (waits.Count > FoundationMetadataLimits.MaxTurnSends) throw FanoutFull();
+        var recipients = caller is null ? null : waits.Select(wait => wait.Actor!).Distinct(StringComparer.Ordinal)
+            .Select((actor, recipient) => (actor, recipient)).ToDictionary(item => item.actor, item => item.recipient, StringComparer.Ordinal);
         var messages = new List<MessageEntity>(waits.Count);
         long bytes = 0;
         foreach (var wait in waits)
         {
+            var address = caller?.EventAddress(recipients![wait.Actor!]);
             var (header, body, kind) = EncodeDirect(id, 1, Kinds.Event, payload, null, held: address is not null, new(qualified, wait.Wait!),
                 eventOccurrence: occurrence);
             bytes += Encoding.UTF8.GetByteCount(header) + (body is null ? 0 : Encoding.UTF8.GetByteCount(body)) +
@@ -69,29 +72,35 @@ internal static partial class RootEventAdmission
         }
 
         int[] starts;
+        int startCount;
+        var liveRecipients = recipients?.Count ?? 0;
         try
         {
             var captured = await RootPublicEventStarts.CaptureAsync(db, tenant, qualified, id, occurrence, payload,
-                FoundationMetadataLimits.MaxTurnSends - waits.Count, FoundationMetadataLimits.MessageContentBytes - bytes, bind, token, address);
-            if (caller is not null && waits.Count == 0 && captured.Count == 0) return (HeldRootAdmission.NoWaiter, null);
+                FoundationMetadataLimits.MaxTurnSends - waits.Count, FoundationMetadataLimits.MessageContentBytes - bytes, bind, token,
+                caller is null ? 0 : Encoding.UTF8.GetByteCount(caller.EventAddress(FoundationMetadataLimits.MaxTurnSends - 1)));
+            startCount = captured.Count;
+            if (caller is not null && liveRecipients == 0 && startCount == 0) return (HeldRootAdmission.NoWaiter, null);
             await RootPublicEventPublications.InsertAsync(db, tenant, qualified, id, operation, incarnation, occurrence,
-                caller is null ? payload : null, receiptThrough, keepThrough, BindPublic, token);
-            starts = captured.Count == 0 ? [] : await RootPublicEventStarts.DispatchAsync(db, tenant, occurrence, keepInputsThrough,
-                bind, token, address, rememberDelivery: keepThrough > now);
+                payload, now, receiptThrough, keepThrough, BindPublic, token);
+            starts = startCount == 0 ? [] : await RootPublicEventStarts.DispatchAsync(db, tenant, occurrence, keepInputsThrough,
+                bind, token, caller is null ? null : index => caller.EventAddress(liveRecipients + index),
+                rememberDelivery: keepThrough is not null);
         }
         catch (RootPublicEventStarts.FanoutExceeded) { throw FanoutFull(); }
         if (waits.Count != 0 || starts.Length != 0)
             attempt?.Require(waits.Select(wait => wait.Partition!.Value).Concat(starts).Distinct().ToArray());
         if (messages.Count != 0)
         {
-            if (keepThrough > now)
+            if (keepThrough is not null)
                 await RootPublicEventLiveWaits.RememberPublishedAsync(db, occurrence, messages.Select(message => message.Id).ToArray(), bind, token);
-            await EnqueueAsync(db, messages, address, keepInputsThrough, BindLive, bind is not null, token);
+            await EnqueueAsync(db, messages, keepInputsThrough, BindLive, bind is not null, token);
         }
         if (caller is not null)
         {
             var committedAt = bind is null ? await SqliteRootAdmission.ReadClockAsync(db, token) : await ReadPostgresClockAsync(db, token);
             if (!caller.IsOpen || caller.Caller.Deadline <= committedAt) throw new HeldPublicEventExpired();
+            caller.Caller.ExpectEventRecipients(liveRecipients + startCount);
         }
         return (HeldRootAdmission.Accepted, new(key, id, incarnation, Contract.PublicationStatus.Matched));
 

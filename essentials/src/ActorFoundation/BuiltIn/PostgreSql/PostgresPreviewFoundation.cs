@@ -52,7 +52,8 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(kind);
-        if (kind is Contract.Kinds.Suspend or Contract.Kinds.Resume || kind == Contract.Kinds.Terminate && payload is null)
+        if ((kind is Contract.Kinds.Suspend or Contract.Kinds.Resume || kind == Contract.Kinds.Terminate && payload is null) &&
+            (target is not Contract.Target.Event || !admission.SupportsPublicEvents()))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (target is not Contract.Target.Ref exact || payload is not null || !FoundationMetadataLimits.IsOutsideMessageId(id) ||

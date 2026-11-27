@@ -7,6 +7,8 @@ internal static partial class RootPublicEventPublications
 {
     internal const string Table = "FoundationPublicEventPublications";
     internal const string Horizons = "FoundationPublicEventHorizons";
+    internal const string ReplayIndex = "IX_FoundationPublicEventPublications_Replay";
+    internal const string ReplayColumns = """("Tenant","Key","Operation") WHERE "ReceiptUntil" IS NOT NULL """;
     internal const string RetainedIndex = "IX_FoundationPublicEventPublications_Retained";
     internal const string RetainedColumns = """("Tenant","Key","Ordinal")""";
     internal const string CleanupIndex = "IX_FoundationPublicEventPublications_Cleanup";
@@ -20,7 +22,7 @@ internal static partial class RootPublicEventPublications
         return $"""
             "Tenant" {text} NOT NULL, "Key" {text} NOT NULL, "Operation" {text} NOT NULL,
             "Incarnation" {text} NOT NULL, "Occurrence" {text} NOT NULL UNIQUE, "EventId" {text} NOT NULL, "Payload" {text},
-            "ReceiptUntil" {number}, "KeepUntil" {number} NOT NULL, "CleanupAt" {number} NOT NULL,
+            "ReceiptUntil" {number}, "KeepUntil" {number}, "CleanupAt" {number} NOT NULL,
             "Ordinal" {ordinal}, UNIQUE ("Tenant", "Key", "Operation", "Incarnation")
             """;
     }
@@ -50,9 +52,10 @@ internal static partial class RootPublicEventPublications
         var replay = await db.Database.SqlQuery<StoredPublication>(bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)
             SELECT source."SourceReady", found."Incarnation", found."EventId" FROM source LEFT JOIN (
-                SELECT "Incarnation", "EventId" FROM "FoundationPublicEventPublications"
-                WHERE "Tenant" = {tenant} AND "Key" = {key} AND "Operation" = {operation} AND "ReceiptUntil" >= {now}
-            ) found ON source."SourceReady"
+                SELECT "Incarnation", "EventId", "ReceiptUntil" FROM "FoundationPublicEventPublications"
+                WHERE "Tenant" = {tenant} AND "Key" = {key} AND "Operation" = {operation} AND "ReceiptUntil" IS NOT NULL
+                ORDER BY "Ordinal" DESC LIMIT 1
+            ) found ON source."SourceReady" AND found."ReceiptUntil" >= {now}
             """)).ToListAsync(token);
         if (replay is not [var row] || !row.SourceReady)
             throw new StoreFormatException("The pinned public event receipt is unavailable or no longer unique.");
@@ -63,23 +66,32 @@ internal static partial class RootPublicEventPublications
     }
 
     internal static async Task InsertAsync(KernelDb db, string tenant, string key, string id, string operation, Guid incarnation, string occurrence,
-        string? payload, long? receiveThrough, long keepThrough, Func<FormattableString, FormattableString> bind, CancellationToken token)
+        string? payload, long now, long? receiveThrough, long? keepThrough, Func<FormattableString, FormattableString> bind,
+        CancellationToken token)
     {
-        var packed = payload is null ? null : DurableKeyJson.Write(payload);
+        if (receiveThrough is not null)
+            await db.Database.ExecuteSqlInterpolatedAsync(bind($"""
+                WITH source AS MATERIALIZED (/*public-event-start-source*/)
+                UPDATE "FoundationPublicEventPublications" SET "ReceiptUntil" = NULL
+                WHERE "Tenant" = {tenant} AND "Key" = {key} AND "Operation" = {operation} AND "ReceiptUntil" IS NOT NULL
+                    AND (SELECT "SourceReady" FROM source)
+                """), token);
+        var packed = keepThrough is not null && payload is not null ? DurableKeyJson.Write(payload) : null;
         if (await db.Database.ExecuteSqlInterpolatedAsync(bind($"""
                 WITH source AS MATERIALIZED (/*public-event-start-source*/)
                 INSERT INTO "FoundationPublicEventPublications"
                     ("Tenant","Key","Operation","Incarnation","Occurrence","EventId","Payload","ReceiptUntil","KeepUntil","CleanupAt")
                 SELECT {tenant}, {key}, {operation}, {incarnation.ToString("N")}, {occurrence}, {DurableKeyJson.Write(id)},
-                    CAST({packed} AS TEXT), CAST({receiveThrough} AS BIGINT), {keepThrough}, {keepThrough} FROM source WHERE "SourceReady"
+                    CAST({packed} AS TEXT), CAST({receiveThrough} AS BIGINT), CAST({keepThrough} AS BIGINT), {keepThrough ?? now}
+                FROM source WHERE "SourceReady"
                 """), token) != 1)
             throw new StoreFormatException("The public event receipt did not land in its pinned source.");
     }
 
-    internal static async Task RememberAuthoredAsync(KernelDb db, EventRow publication, string occurrence, long until,
+    internal static async Task RememberAuthoredAsync(KernelDb db, EventRow publication, string occurrence, long now, long until,
         Func<FormattableString, FormattableString>? bind, CancellationToken token) =>
         await InsertAsync(db, publication.FoundationTenant!, publication.Key, publication.Id, occurrence, Guid.NewGuid(), occurrence,
-            publication.Payload, receiveThrough: null, until, sql => RootPublicEventStarts.Bind(sql, bind), token);
+            publication.Payload, now, receiveThrough: null, until > now ? until : null, sql => RootPublicEventStarts.Bind(sql, bind), token);
 
     // The database clock may move backward after cleanup. New registrations take a stable tenant watermark,
     // while a previously covered publication retains its registration's original threshold.
@@ -99,16 +111,16 @@ internal static partial class RootPublicEventPublications
                 WHERE h."Tenant" = {tenant} AND "SourceReady" FOR SHARE OF h
                 """;
         var recorded = (await db.Database.SqlQuery<long>(RootPublicEventStarts.Bind(query, bind)).ToListAsync(token)).Single();
-        return Math.Max(now, recorded);
+        return Math.Max(now, checked(recorded + 1));
     }
 
-    private static async Task AdvanceRetentionAsync(KernelDb db, string tenant, long now, Func<FormattableString, FormattableString>? bind,
+    private static async Task AdvanceRetentionAsync(KernelDb db, string tenant, long sweptThrough, Func<FormattableString, FormattableString>? bind,
         CancellationToken token)
     {
         var rows = await db.Database.ExecuteSqlInterpolatedAsync(RootPublicEventStarts.Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)
             INSERT INTO "FoundationPublicEventHorizons" ("Tenant", "Through")
-            SELECT {tenant}, {now} FROM source WHERE "SourceReady"
+            SELECT {tenant}, {sweptThrough} FROM source WHERE "SourceReady"
             ON CONFLICT ("Tenant") DO UPDATE SET "Through" = CASE
                 WHEN "FoundationPublicEventHorizons"."Through" < excluded."Through" THEN excluded."Through"
                 ELSE "FoundationPublicEventHorizons"."Through" END

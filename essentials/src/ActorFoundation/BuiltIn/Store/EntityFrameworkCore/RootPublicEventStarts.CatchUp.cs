@@ -51,14 +51,14 @@ internal static partial class RootPublicEventStarts
         RequireTransaction(db, bind);
         var step = await db.Database.SqlQuery<CatchUpStep>(Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/), registration AS MATERIALIZED (
-                SELECT "Incarnation" AS "Registration", "CatchAfter" AS "After", "CatchThrough" AS "Through", "RetainAfter"
+                SELECT "Incarnation" AS "Registration", "CatchAfter" AS "After", "CatchThrough" AS "Through", "RetainFrom"
                 FROM "FoundationPublicEventStarts" WHERE "Tenant" = {target.Tenant} AND "Key" = {target.Key}
                     AND "Wait" = {target.Wait} AND "Incarnation" = {target.Registration}
                     AND "CatchAfter" < "CatchThrough" AND (SELECT "SourceReady" FROM source)
             ), publication AS (
                 SELECT p."Ordinal", p."KeepUntil", p."Occurrence"
                 FROM "FoundationPublicEventPublications" p, registration r
-                WHERE p."Tenant" = {target.Tenant} AND p."Key" = {target.Key} AND p."KeepUntil" > r."RetainAfter"
+                WHERE p."Tenant" = {target.Tenant} AND p."Key" = {target.Key} AND p."KeepUntil" >= r."RetainFrom"
                     AND p."CleanupAt" = p."KeepUntil" AND p."Ordinal" > r."After" AND p."Ordinal" <= r."Through"
                 ORDER BY p."Ordinal" LIMIT 1
             )

@@ -59,6 +59,7 @@ internal static partial class RootEventStarts
                 CREATE INDEX "{RootPublicEventLiveWaits.CatchUpIndex}" ON "{RootPublicEventLiveWaits.Table}" {RootPublicEventLiveWaits.CatchUpColumns};
                 CREATE TABLE "{RootPublicEventLiveWaits.Receipts}" ({RootPublicEventLiveWaits.ReceiptColumns(sqlite: false)});
                 CREATE TABLE "{RootPublicEventPublications.Horizons}" ({RootPublicEventPublications.HorizonColumns(sqlite: false)});
+                CREATE UNIQUE INDEX "{RootPublicEventPublications.ReplayIndex}" ON "{RootPublicEventPublications.Table}" {RootPublicEventPublications.ReplayColumns};
                 CREATE INDEX "{RootPublicEventPublications.RetainedIndex}" ON "{RootPublicEventPublications.Table}" {RootPublicEventPublications.RetainedColumns};
                 CREATE INDEX "{RootPublicEventPublications.CleanupIndex}" ON "{RootPublicEventPublications.Table}" {RootPublicEventPublications.CleanupColumns};
                 """, token);
@@ -102,6 +103,7 @@ internal static partial class RootEventStarts
                 CREATE INDEX "{publicLive}_c" ON "{publicLive}" {RootPublicEventLiveWaits.CatchUpColumns};
                 CREATE TABLE "{publicLiveReceipts}" ({RootPublicEventLiveWaits.ReceiptColumns(sqlite: false)});
                 CREATE TABLE "{publicHorizons}" ({RootPublicEventPublications.HorizonColumns(sqlite: false)});
+                CREATE UNIQUE INDEX "{publicPublications}_op" ON "{publicPublications}" {RootPublicEventPublications.ReplayColumns};
                 CREATE INDEX "{publicPublications}_r" ON "{publicPublications}" {RootPublicEventPublications.RetainedColumns};
                 CREATE INDEX "{publicPublications}_c" ON "{publicPublications}" {RootPublicEventPublications.CleanupColumns};
                 """, token);

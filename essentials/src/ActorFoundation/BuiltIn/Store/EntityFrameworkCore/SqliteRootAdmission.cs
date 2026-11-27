@@ -253,10 +253,11 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     internal async Task<HeldRootAdmission> PublishRequestAsync(HeldRootRequest request, string key, string? payload,
         CancellationToken token, RootAdmissionPressure.Attempt? reserved)
     {
-        using (var profile = create())
-            if (!(profile.UsesRootPublicEventStarts ? RootEventAdmission.IsValidPublicRequest(request, key, payload) :
-                RootEventAdmission.IsValid(request, key, payload))) return HeldRootAdmission.Refused;
-        var window = ReceiptWindow(deduplicationWindow, request.KeepFor);
+        bool publicEvents;
+        using (var profile = create()) publicEvents = profile.UsesRootPublicEventStarts;
+        if (!(publicEvents ? RootEventAdmission.IsValidPublicRequest(request, key, payload) :
+            RootEventAdmission.IsValid(request, key, payload))) return HeldRootAdmission.Refused;
+        var window = publicEvents ? deduplicationWindow : ReceiptWindow(deduplicationWindow, request.KeepFor);
         try
         {
             return await WriteAsync((db, now, ct) => db.UsesRootPublicEventStarts

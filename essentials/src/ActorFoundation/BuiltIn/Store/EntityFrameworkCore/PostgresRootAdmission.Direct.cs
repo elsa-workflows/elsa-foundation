@@ -37,9 +37,10 @@ internal sealed partial class PostgresRootAdmission
 
     internal async Task<HeldRootAdmission> PublishRequestAsync(HeldRootRequest request, string key, string? payload, CancellationToken token)
     {
-        if (!(SupportsPublicEvents() ? RootEventAdmission.IsValidPublicRequest(request, key, payload) :
+        var publicEvents = SupportsPublicEvents();
+        if (!(publicEvents ? RootEventAdmission.IsValidPublicRequest(request, key, payload) :
             RootEventAdmission.IsValid(request, key, payload))) return HeldRootAdmission.Refused;
-        var window = ReceiptWindow(deduplicationWindow, request.KeepFor);
+        var window = publicEvents ? deduplicationWindow : ReceiptWindow(deduplicationWindow, request.KeepFor);
         for (var retry = 0; ; retry++)
         {
             try { return await PublishRequestOnceAsync(request, key, payload, window, token); }

@@ -22,7 +22,7 @@ internal static partial class RootPublicEventStarts
         return $"""
             "Tenant" {text} NOT NULL, "Key" {text} NOT NULL, "Wait" {text} NOT NULL,
             "Incarnation" {text} NOT NULL, "Start" {text} NOT NULL,
-            "RetainAfter" {number} NOT NULL, "CatchAfter" {number} NOT NULL,
+            "RetainFrom" {number} NOT NULL, "CatchAfter" {number} NOT NULL,
             "CatchThrough" {number} NOT NULL CHECK ("CatchAfter" <= "CatchThrough"),
             PRIMARY KEY ("Tenant", "Key", "Wait")
             """;
@@ -68,7 +68,7 @@ internal static partial class RootPublicEventStarts
         Func<FormattableString, FormattableString>? bind, CancellationToken token)
     {
         RequireTransaction(db, bind);
-        var retainedAfter = spec is null ? now : await RootPublicEventPublications.RetentionThresholdAsync(db, tenant, now, bind, token);
+        var retainedFrom = spec is null ? now : await RootPublicEventPublications.RetentionThresholdAsync(db, tenant, now, bind, token);
         var command = spec is null
             ? (FormattableString)$"""
                 WITH source AS MATERIALIZED (/*public-event-start-source*/)
@@ -78,15 +78,15 @@ internal static partial class RootPublicEventStarts
             : $"""
                 WITH source AS MATERIALIZED (/*public-event-start-source*/), coverage AS (
                     SELECT coalesce(max("Ordinal"), 0) AS "Through" FROM "FoundationPublicEventPublications"
-                    WHERE "Tenant" = {tenant} AND "Key" = {key} AND "KeepUntil" > {retainedAfter} AND "CleanupAt" = "KeepUntil"
+                    WHERE "Tenant" = {tenant} AND "Key" = {key} AND "KeepUntil" >= {retainedFrom} AND "CleanupAt" = "KeepUntil"
                         AND (SELECT "SourceReady" FROM source)
                 )
                 INSERT INTO "FoundationPublicEventStarts"
-                    ("Tenant", "Key", "Wait", "Incarnation", "Start", "RetainAfter", "CatchAfter", "CatchThrough")
-                SELECT {tenant}, {key}, {wait}, {Guid.NewGuid().ToString("N")}, {DurableKeyJson.Write(spec)}, {retainedAfter}, 0, coverage."Through"
+                    ("Tenant", "Key", "Wait", "Incarnation", "Start", "RetainFrom", "CatchAfter", "CatchThrough")
+                SELECT {tenant}, {key}, {wait}, {Guid.NewGuid().ToString("N")}, {DurableKeyJson.Write(spec)}, {retainedFrom}, 0, coverage."Through"
                 FROM coverage, source WHERE "SourceReady"
                 ON CONFLICT ("Tenant", "Key", "Wait") DO UPDATE
-                    SET "Incarnation" = excluded."Incarnation", "Start" = excluded."Start", "RetainAfter" = excluded."RetainAfter",
+                    SET "Incarnation" = excluded."Incarnation", "Start" = excluded."Start", "RetainFrom" = excluded."RetainFrom",
                         "CatchAfter" = excluded."CatchAfter", "CatchThrough" = excluded."CatchThrough"
                     WHERE "FoundationPublicEventStarts"."Start" <> excluded."Start"
                 """;
@@ -104,7 +104,7 @@ internal static partial class RootPublicEventStarts
     // only the registration; a publication that already selected its creator keeps the original template.
     internal static async Task<(int Count, long Bytes)> CaptureAsync(KernelDb db, string tenant, string key, string eventId,
         string publication, string? payload, int available, long availableBytes, Func<FormattableString, FormattableString>? bind,
-        CancellationToken token, string? replyTo = null)
+        CancellationToken token, int replyAddressBytes = 0)
     {
         RequireTransaction(db, bind);
         FormattableString query = $"""
@@ -124,8 +124,7 @@ internal static partial class RootPublicEventStarts
         RequireSource(quote.SourceReady);
         if (quote.Count == 0) return default;
         var packed = payload is null ? null : DurableKeyJson.Write(payload);
-        var replyBytes = replyTo is null ? 0 : 2 * Encoding.UTF8.GetByteCount(replyTo);
-        var bytes = quote.Bytes + quote.Count * ((packed is null ? 0 : Encoding.UTF8.GetByteCount(packed)) + replyBytes);
+        var bytes = quote.Bytes + quote.Count * ((packed is null ? 0 : Encoding.UTF8.GetByteCount(packed)) + 2 * replyAddressBytes);
         if (quote.Count > available || bytes > availableBytes)
             throw new FanoutExceeded("The event's start subscriptions exceed the atomic delivery limit.");
 
@@ -143,7 +142,7 @@ internal static partial class RootPublicEventStarts
     }
 
     internal static async Task<int[]> DispatchAsync(KernelDb db, string tenant, string publication, long until,
-        Func<FormattableString, FormattableString>? bind, CancellationToken token, string? replyTo = null, bool rememberDelivery = false)
+        Func<FormattableString, FormattableString>? bind, CancellationToken token, Func<int, string>? replyTo = null, bool rememberDelivery = false)
     {
         RequireTransaction(db, bind);
         var targets = await db.Database.SqlQuery<CapturedStart>(Bind($"""
@@ -169,19 +168,20 @@ internal static partial class RootPublicEventStarts
             var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
             var template = DurableKeyJson.Read<Contract.StartSpec>(target.Start!);
             var spec = new StartSpec(template.Type, template.TypeData, template.Input, History: (History)template.History);
-            var creator = FoundationRootCreator.Create(actor, operation, FoundationRootCreator.OperationDigest(operation), spec, null, replyTo);
+            var replyAddress = replyTo?.Invoke(prepared.Count);
+            var creator = FoundationRootCreator.Create(actor, operation, FoundationRootCreator.OperationDigest(operation), spec, null, replyAddress);
             var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
             var (creatorHeader, input) = EncodeCreator(creator);
             var payload = target.Payload is { } packed ? DurableKeyJson.Read<string>(packed) : null;
             var id = DurableKeyJson.Read<string>(target.EventId!);
-            var (eventHeader, eventPayload, kind) = EncodeDirect(id, 1, Kinds.Event, payload, null, held: replyTo is not null,
+            var (eventHeader, eventPayload, kind) = EncodeDirect(id, 1, Kinds.Event, payload, null, held: replyAddress is not null,
                 new(target.Key!, target.Wait!), eventOccurrence: publication);
-            if (!FitsEnvelope(creatorHeader, input, replyTo) || !FitsEnvelope(eventHeader, eventPayload, replyTo))
+            if (!FitsEnvelope(creatorHeader, input, replyAddress) || !FitsEnvelope(eventHeader, eventPayload, replyAddress))
                 throw new FanoutExceeded("The event's start or delivery exceeds the root envelope limit.");
             prepared.Add(new(target.Registration!, actor, reference, fingerprint,
-                new(creator.InboxKey.Id, 0, creator.Kind, creatorHeader, input, null, replyTo),
+                new(creator.InboxKey.Id, 0, creator.Kind, creatorHeader, input, null, replyAddress),
                 new(PublicEventOccurrence(reference, publication, id, target.Wait!), InboxKey.FoundationOccurrenceScope,
-                    kind, eventHeader, eventPayload, until, replyTo)));
+                    kind, eventHeader, eventPayload, until, replyAddress)));
         }
         if (rememberDelivery)
             await RootPublicEventLiveWaits.RememberPublishedAsync(db, publication, prepared.Select(start => start.Event.Id).ToArray(), bind, token);
