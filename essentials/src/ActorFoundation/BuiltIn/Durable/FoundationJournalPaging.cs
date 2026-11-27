@@ -9,6 +9,9 @@ internal static class FoundationJournalPaging
     {
         internal const int Size = sizeof(long) + sizeof(int);
 
+        internal static Bookmark AfterPosition(long position) => position < long.MaxValue
+            ? new(position + 1, -1) : new(position, int.MaxValue);
+
         internal static Bookmark Read(ReadOnlySpan<byte> data) =>
             new(BinaryPrimitives.ReadInt64LittleEndian(data), BinaryPrimitives.ReadInt32LittleEndian(data[sizeof(long)..]));
 
@@ -33,6 +36,8 @@ internal static class FoundationJournalPaging
             var entries = document.RootElement;
             var split = entries.ValueKind == JsonValueKind.Array && entries.GetArrayLength() > 0;
             var count = split ? entries.GetArrayLength() : 1;
+            if (row.Position == after.Position && after.Ordinal >= count - 1)
+                continue;
             var ordinal = row.Position == after.Position ? after.Ordinal + 1 : 0;
             for (; ordinal < count; ordinal++)
             {

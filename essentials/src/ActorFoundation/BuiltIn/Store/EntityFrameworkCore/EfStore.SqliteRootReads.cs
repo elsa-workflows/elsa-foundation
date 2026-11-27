@@ -63,25 +63,31 @@ public sealed partial class EfStore
     private static Task<RootJournalPage> ReadSqliteRootJournalAsync(KernelDb db, string tenant, string reference,
         long fromPosition, int limit, CancellationToken token) => ReadSqliteRootSnapshotAsync(db, async at =>
     {
-        var rows = await db.Database.SqlQuery<RootJournalEntry>($"""
+        var rows = await db.Database.SqlQuery<JournalProjection>($"""
             /* sqlite-root-journal */
             WITH root AS MATERIALIZED (
-                SELECT b."Partition", b."Actor", i."Revision",
+                SELECT b."Partition", b."Actor", i."Revision", p."Position" AS "HeadPosition",
                     CASE WHEN i."Status" = {(int)InstanceStatus.Cancelled} THEN i."FoundationTerminalRevision" END AS "CancellationRevision",
                     CASE WHEN i."Status" = {(int)InstanceStatus.Cancelled} THEN i."FoundationTerminalAt" END AS "CancellationAt"
                 FROM "FoundationRootBirths" b JOIN "Instances" i
                     ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
                     AND i."FoundationTenant" = b."Tenant" AND i."FoundationReference" = b."Reference"
+                JOIN "Partitions" p ON p."Id" = b."Partition"
                 WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
+            ), page AS (
+                SELECT j."Position", j."Revision", j."Entries"
+                FROM "Journal" j
+                WHERE (j."Partition", j."Instance") = (SELECT "Partition", "Actor" FROM root)
+                    AND j."Position" >= {fromPosition} AND j."Revision" BETWEEN 1 AND (SELECT "Revision" FROM root)
+                ORDER BY j."Position" LIMIT {limit}
             )
-            SELECT j."Position", j."Revision", j."Entries", (SELECT "Revision" FROM root) AS "HeadRevision",
-                (SELECT "CancellationRevision" FROM root) AS "CancellationRevision", (SELECT "CancellationAt" FROM root) AS "CancellationAt"
-            FROM "Journal" j
-            WHERE (j."Partition", j."Instance") = (SELECT "Partition", "Actor" FROM root)
-                AND j."Position" >= {fromPosition} AND j."Revision" BETWEEN 1 AND (SELECT "Revision" FROM root)
-            ORDER BY j."Position" LIMIT {limit}
+            SELECT {at} AS "AsOf", page."Position", page."Revision", page."Entries", root."Revision" AS "HeadRevision",
+                root."HeadPosition", root."CancellationRevision", root."CancellationAt",
+                NULL AS "StoreSchema", NULL AS "MessageProtocol", NULL AS "JournalCodec", NULL AS "DefinitionStamp"
+            FROM (SELECT 1) stamp LEFT JOIN root ON true LEFT JOIN page ON true
+            ORDER BY page."Position"
             """).ToListAsync(token);
-        return new RootJournalPage(rows, at);
+        return BuildRootJournalPage(rows);
     }, token);
 
     private static Task<RootInboxPage> ReadSqliteRootInboxAsync(KernelDb db, string tenant, string reference, long afterSeq,
