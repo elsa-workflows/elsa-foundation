@@ -14,7 +14,8 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, PersistenceScope scope, BoundScope actors,
-    KernelServing serving, KernelShellStorage foundation, TimeProvider clock, ILogger<KernelExecutableProtection> logger)
+    KernelServing serving, KernelShellStorage foundation, TimeProvider clock, ILogger<KernelExecutableProtection> logger,
+    BoundScope? testActors = null)
 {
     private const int PageSize = 32;
     private static readonly TimeSpan CleanupCadence = TimeSpan.FromSeconds(5);
@@ -34,7 +35,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
         foreach (var birth in births)
         {
             if (birth.Tenant != actors.Tenant || scope.Value != actors.Tenant ||
-                KernelExecutableSelection.Read(birth.Type, birth.TypeData) is not { } selected)
+                KernelExecutableSelection.Read(birth.Type, birth.TypeData) is not { TestStart: null } selected)
                 return ChildBirthProtectionOutcome.Refused;
             if (selected.Executable is { } exact)
                 pins.Add(new(scope, actors.Tenant, birth.Actor.Id, exact, birth.Issuance));
@@ -67,16 +68,21 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
 
     internal async ValueTask<bool> ProtectHeldStartAsync(PendingRootStart start, CancellationToken token)
     {
-        if (start.Tenant != actors.Tenant || scope.Value != actors.Tenant ||
+        if (scope.Value != actors.Tenant ||
             KernelExecutableSelection.Read(start.Type, start.TypeData) is not { } selected)
             return false;
+        var selectedTenant = selected.TestStart is null ? actors : testActors;
+        if (selectedTenant is null || selectedTenant.Tenant != start.Tenant) return false;
 
         if (selected.Executable is not { } expected) return serving.IsHostWorkflow(selected.Workflow, selected.Definition);
-        RuntimeKernelExecutablePin[] pins = [new(scope, actors.Tenant, start.Actor.Id, expected, start.Issuance)];
+        RuntimeKernelExecutablePin[] pins = [new(scope, actors.Tenant, start.Actor.Id, expected, start.Issuance)
+        {
+            IsolatedTenant = selected.TestStart is null ? null : selectedTenant.Tenant
+        }];
         while (true)
         {
             token.ThrowIfCancellationRequested();
-            try { return await TryPinAsync(pins, token, selected.PublishedStart is null ? null : selected); }
+            try { return await TryPinAsync(pins, token, selected); }
             catch (Exception error) when (error is WorkflowExecutableDependencyGraphException or InvalidDataException)
             {
                 logger.LogWarning(error, "Held executable protection refused the selected identity for tenant {Tenant}.", actors.Tenant);
@@ -116,6 +122,38 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
         await using var runtime = await scopes.CreateAsyncScopeAsync(scope);
         var services = runtime.ServiceProvider;
         var store = services.GetRequiredService<IRuntimeKernelExecutablePinStore>();
+        if (selected?.TestStart is { } test)
+        {
+            if (test is not { ScopeId.Length: > 0, Partition.Length: > 0, SourceDigest.Length: > 0 } ||
+                (test.Tenant ?? PersistenceScope.DefaultValue) != scope.Value || test.ExpiresAt <= clock.GetUtcNow() ||
+                test.ScopeId != test.SourceReferenceId || test.SubjectId is not null && string.IsNullOrWhiteSpace(test.SubjectId))
+                return false;
+            var reference = await services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
+                .FindAsync(test.SourceReferenceId, bounded.Token);
+            if (reference is null || reference.Scope != WorkflowExecutableReferenceScope.TestRun ||
+                reference.ArtifactId != selected.Workflow || reference.DefinitionId != selected.Definition ||
+                reference.TenantId != test.Tenant || reference.ExpiresAt != test.ExpiresAt ||
+                reference.SourceKind != test.SourceKind || reference.SourceId != test.SourceId || reference.SourceVersion != test.SourceVersion ||
+                reference.DefinitionVersionId != test.DefinitionVersionId || reference.ArtifactVersion != test.ArtifactVersion ||
+                !reference.IsLive(clock.GetUtcNow()) || KernelPublishedRunDispatcher.SourceDigest(reference) != test.SourceDigest)
+                return false;
+            var expected = new WorkflowTestScope(test.ScopeId, test.ExpiresAt, test.Tenant, new(test.Partition));
+            var current = await services.GetRequiredService<IWorkflowTestScopeStore>().FindAsync(test.ScopeId, bounded.Token);
+            if (current is not { State: WorkflowTestScopeState.Open } || !WorkflowTestScope.ContextEquals(current.Scope, expected))
+                return false;
+
+            var pin = pins.Single();
+            var selectedBinding = new WorkflowTestRunActorBinding(pin.ActorReference, pin.Issuance);
+            if (current.IsolatedActor is { } previous && previous != selectedBinding)
+            {
+                // Query the issuing store before beginning the Runtime transaction. Disarm is permanent.
+                if (testActors is null || await foundation.ConfirmPreparedStartAsync(testActors,
+                    new(previous.ActorReference), previous.Issuance, bounded.Token) != RootStartProof.PreparationDisarmed)
+                    return false;
+            }
+
+            return await store.TryPinTestRunAsync(pin, expected, reference, current.IsolatedActor, bounded.Token);
+        }
         if (selected?.PublishedStart is not { } publication) return await store.TryPinAsync(pins, bounded.Token);
 
         // The preparation fingerprints the complete start header. The Runtime transaction fences the
@@ -182,6 +220,8 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
         {
             using var bounded = Limit(token);
             await foundation.PrunePreparedStartsAsync(actors, bounded.Token);
+            if (testActors is not null)
+                await foundation.PrunePreparedStartsAsync(testActors, bounded.Token);
         }
         catch (Exception error) when (!token.IsCancellationRequested)
         {
@@ -206,8 +246,11 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
             if (exact != pin) return RuntimeKernelExecutablePinProof.Unresolved;
             if (PendingRootStart.OwnsIssuance(exact.Issuance))
             {
-                if (!foundation.TakesPreparedStarts) return RuntimeKernelExecutablePinProof.Unresolved;
-                var root = await foundation.ConfirmPreparedStartAsync(actors, new(exact.ActorReference), exact.Issuance, cancellationToken);
+                var selectedTenant = exact.IsolatedTenant is null ? actors : testActors;
+                if (!foundation.TakesPreparedStarts || selectedTenant is null ||
+                    exact.IsolatedTenant is { } isolated && isolated != selectedTenant.Tenant)
+                    return RuntimeKernelExecutablePinProof.Unresolved;
+                var root = await foundation.ConfirmPreparedStartAsync(selectedTenant, new(exact.ActorReference), exact.Issuance, cancellationToken);
                 return root switch
                 {
                     RootStartProof.BirthRetired => RuntimeKernelExecutablePinProof.BirthRetired,
@@ -216,6 +259,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
                 };
             }
 
+            if (exact.IsolatedTenant is not null) return RuntimeKernelExecutablePinProof.Unresolved;
             var proof = await foundation.ConfirmChildBirthAsync(actors, new(exact.ActorReference), exact.Issuance, cancellationToken);
             return proof switch
             {

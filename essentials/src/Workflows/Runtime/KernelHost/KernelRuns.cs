@@ -2,6 +2,9 @@ using Kernel.Foundation.Contracts;
 
 namespace Elsa.Workflows.Runtime.KernelHost;
 
+/// <summary>The separate Foundation namespace for scoped Test Run reads.</summary>
+internal sealed record KernelTestRuns(KernelRuns Reads);
+
 /// <summary>
 /// The workflow runs a kernel host's foundation holds, for a kernel shell's run reads (Studio's Runs page): the
 /// foundation's reads and the one tenant the host binds them to. A host composes it and registers it by instance, as it
@@ -114,7 +117,7 @@ public sealed class KernelRuns
         {
             var page = await reads.ListAsync(Tenant, query, from, cancellationToken);
             foreach (var view in page.Items)
-                if (Kernel.WorkflowActor.WorkflowActor.DescribeRun(view.Header) is { } run)
+                if (Kernel.WorkflowActor.WorkflowActor.DescribeRun(view.Header) is { TestStart: null } run)
                     yield return (view, run);
             from = page.Next;
         } while (from is not null);

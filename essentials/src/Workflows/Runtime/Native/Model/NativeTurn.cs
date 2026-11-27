@@ -18,6 +18,7 @@ internal interface INativeTurn
     bool HasExactIdentity { get; }
     bool SavesWaitRecipes { get; }
     string OperationOrigin { get; }
+    string? TestScopeId => null;
     long Now { get; }
     NativeState State { get; }
     object? Ambient { get; }

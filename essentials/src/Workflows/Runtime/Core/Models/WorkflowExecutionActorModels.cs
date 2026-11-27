@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using Elsa.Workflows.Runtime.Core.Constants;
 
@@ -136,6 +137,13 @@ public sealed class WorkflowExecutionCommandDispatchOptions
 
     public IServiceProvider? AmbientServices { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    public WorkflowTestRunHttpBudget? TestRunHttpBudget { get; init; }
+}
+
+/// <summary>The selected scoped HTTP target's elapsed-time budget, including request preparation and response delivery.</summary>
+public sealed record WorkflowTestRunHttpBudget(long StartedAtTimestamp, TimeSpan Timeout)
+{
+    public TimeSpan Remaining => Timeout - Stopwatch.GetElapsedTime(StartedAtTimestamp);
 }
 
 public sealed class WorkflowExecutionActorActivationRequest

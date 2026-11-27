@@ -16,5 +16,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Native.Run" />     <!-- test-only witness hooks, such as AfterNodeStop -->
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHosting" />
   </ItemGroup>
 </Project>

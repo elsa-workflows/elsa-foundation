@@ -40,16 +40,18 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
             throw new ArgumentException("Unknown history category.", nameof(request));
         var query = new RuntimeHistoryQuery(request.WorkflowExecutionId, request.Limit, request.Cursor,
             request.ActivityExecutionId, request.IncludeDescendants, request.BookmarkId, request.Category, request.Name, request.Search, access);
-        var tenant = host.Tenant.Tenant;
+        var source = run.IsolatedReads ?? host;
+        var tenant = source.Tenant.Tenant;
         var position = cursor.Open(query, tenant, header.Workflow);
         var page = KernelActivityTimeline.Supports(header)
-            ? await ReadKernelAsync(query, tenant, header.Workflow, position, cancellationToken)
+            ? await ReadKernelAsync(source, query, tenant, header.Workflow, position, cancellationToken)
             : Unsupported();
         if (page is null) return (null, null);
 
         var verified = await AuthorizedRunAsync(request.WorkflowExecutionId, cancellationToken);
         if (verified is not { Header: { } currentHeader } || currentHeader.Workflow != header.Workflow ||
-            currentHeader.Model != header.Model || currentHeader.History != header.History || verified.State.TenantId != run.State.TenantId ||
+            currentHeader.Model != header.Model || currentHeader.History != header.History || currentHeader.TestStart != header.TestStart ||
+            verified.State.TenantId != run.State.TenantId ||
             await AccessBindingAsync(cancellationToken) != access)
             return (null, null);
         if (currentPermission is not null && await currentPermission(verified.State) is { } revoked)
@@ -57,14 +59,14 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
         return (page, null);
     }
 
-    private async ValueTask<RuntimeHistoryPageView?> ReadKernelAsync(RuntimeHistoryQuery query, string tenant, string workflow,
+    private async ValueTask<RuntimeHistoryPageView?> ReadKernelAsync(KernelRuns source, RuntimeHistoryQuery query, string tenant, string workflow,
         KernelHistoryCursor.Position position, CancellationToken cancellationToken)
     {
         ActorSequencedJournalPage? snapshot;
         try
         {
-            if (!await host.SupportsSequencedJournalAsync(cancellationToken)) return Unsupported();
-            snapshot = await host.ReadSequencedJournalAsync(new ActorRef(query.WorkflowExecutionId),
+            if (!await source.SupportsSequencedJournalAsync(cancellationToken)) return Unsupported();
+            snapshot = await source.ReadSequencedJournalAsync(new ActorRef(query.WorkflowExecutionId),
                 position.AfterSequence, position.UpperSequence, query.Limit, cancellationToken);
         }
         catch (Exception error) when (IsTransientReadFailure(error))

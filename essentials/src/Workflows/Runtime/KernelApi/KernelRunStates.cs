@@ -27,6 +27,7 @@ internal static class KernelRunStates
         // is stable across reads, so the run keeps its place in pages and windows.
         var created = run.StartedAt ?? UnknownStart;
         var publication = run.PublishedStart;
+        var test = run.TestStart;
         return new WorkflowExecutionState(
             header.Ref.Id,
             // An artifact the store does not hold has no version or hash to show.
@@ -42,17 +43,21 @@ internal static class KernelRunStates
             TenantId: tenant,
             SystemMetadata: new Dictionary<string, string>())
         {
-            RunKind = WorkflowRunKind.PublishedRun,
-            PinnedSource = publication is null ? null : new(publication.SourceReferenceId, publication.SourceKind, publication.SourceId,
-                publication.SourceVersion, run.Definition, publication.DefinitionVersionId, publication.ArtifactVersion,
-                publication.ActivationId, publication.SlotId),
-            Partition = publication is null ? null : new(tenant),
-            Authority = publication is null ? null : PublishedAuthority(publication.SubjectId)
+            RunKind = test is null ? WorkflowRunKind.PublishedRun : WorkflowRunKind.TestRun,
+            PinnedSource = test is not null ? new(test.SourceReferenceId, test.SourceKind, test.SourceId, test.SourceVersion,
+                run.Definition, test.DefinitionVersionId, test.ArtifactVersion, PublicationId: null, SlotId: null)
+                : publication is null ? null : new(publication.SourceReferenceId, publication.SourceKind, publication.SourceId,
+                    publication.SourceVersion, run.Definition, publication.DefinitionVersionId, publication.ArtifactVersion,
+                    publication.ActivationId, publication.SlotId),
+            Partition = test is not null ? new(test.Partition) : publication is null ? null : new(tenant),
+            Authority = test is not null ? Authority("workflow-designer-test-run", test.SubjectId)
+                : publication is null ? null : Authority("runtime-api", publication.SubjectId),
+            TestScope = test is not null ? new(test.ScopeId, test.ExpiresAt, test.Tenant, new(test.Partition)) : null
         };
     }
 
-    private static WorkflowExecutionAuthoritySnapshot PublishedAuthority(string? subjectId) =>
-        WorkflowExecutionAuthoritySnapshot.CreateRoot("runtime-api", subjectId is null ? null : new Dictionary<string, string>(StringComparer.Ordinal)
+    private static WorkflowExecutionAuthoritySnapshot Authority(string requestedBy, string? subjectId) =>
+        WorkflowExecutionAuthoritySnapshot.CreateRoot(requestedBy, subjectId is null ? null : new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["elsa.identity.subject-kind"] = "persisted-user",
             ["elsa.identity.subject-id"] = subjectId
