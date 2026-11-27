@@ -57,6 +57,20 @@ public sealed class KernelRuns
     public async ValueTask<bool> SupportsSequencedJournalAsync(CancellationToken cancellationToken = default) =>
         await _reads(cancellationToken) is IActorSequencedJournalReads { SupportsSequencedJournal: true };
 
+    /// <summary>Whether the selected foundation carries indexed playback.</summary>
+    public async ValueTask<bool> SupportsPlaybackAsync(CancellationToken cancellationToken = default) =>
+        await _reads(cancellationToken) is IActorPlaybackReads { SupportsPlayback: true };
+
+    /// <summary>Reads a ranked occurrence window in the host's tenant.</summary>
+    public async ValueTask<ActorPlaybackPage?> ReadPlaybackAsync(ActorRef actor, ActorPlaybackQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        var reads = await _reads(cancellationToken);
+        return reads is IActorPlaybackReads { SupportsPlayback: true } playback
+            ? await playback.ReadPlaybackAsync(Tenant, actor, query, cancellationToken)
+            : throw new NotSupportedException("The configured foundation does not expose indexed playback.");
+    }
+
     /// <summary>Reads a bounded retained sequence window in the host's bound tenant.</summary>
     public async ValueTask<ActorSequencedJournalPage?> ReadSequencedJournalAsync(ActorRef actor, long afterSequence,
         long? upperSequence, int limit, CancellationToken cancellationToken = default)

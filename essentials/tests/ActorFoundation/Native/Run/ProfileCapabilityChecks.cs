@@ -236,7 +236,15 @@ internal static class ProfileCapabilityChecks
             StoreDefinitionsRevision.Seed(sequencedPostgres) is { StoreSchema: 1, MessageProtocol: 10, JournalCodec: 0 } &&
             StoreDefinitionsRevision.Seed(sequencedSqlite) is { StoreSchema: 2, MessageProtocol: 14, JournalCodec: 0 },
             "protocol 115 privately retains the protocol-29 capabilities and distinct PostgreSQL and SQLite journal definitions");
-        mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities;
+        using var playbackPostgres = KernelDb.ForPostgresRootPlaybackQualification(options);
+        using var playbackSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(), StoreFormat.RootPlaybackQualification);
+        Check(playbackPostgres.Capabilities == (sharedPostgres.Capabilities | RootCapabilities.Playback) &&
+            playbackSqlite.Capabilities == playbackPostgres.Capabilities && !sharedPostgres.UsesRootPlayback &&
+            !sharedSqlite.UsesRootPlayback && !RootProfiles.Formats.ContainsKey(playbackPostgres.RequiredFormat) &&
+            StoreDefinitionsRevision.Seed(playbackPostgres) is { StoreSchema: 1, MessageProtocol: 12, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(playbackSqlite) is { StoreSchema: 2, MessageProtocol: 15, JournalCodec: 0 },
+            "private playback adds indexed occurrences over the shipped journal without changing the shipped profile");
+        mapped |= backlog.Capabilities | terminalOutput.Capabilities | children.Capabilities | sequencedPostgres.Capabilities | playbackPostgres.Capabilities;
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
@@ -268,7 +276,8 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol,
             [RootCapabilities.TimerRearm] = RootProfiles.ParkCompositionBase | RootCapabilities.Timers | RootCapabilities.ParkRecovery,
             [RootCapabilities.TerminalOutput] = RootCapabilities.TerminalSelection | RootCapabilities.Retention,
-            [RootCapabilities.SequencedJournal] = RootCapabilities.Retention
+            [RootCapabilities.SequencedJournal] = RootCapabilities.Retention,
+            [RootCapabilities.Playback] = RootCapabilities.SequencedJournal
         };
         Check(RootProfiles.Prerequisites.Count == expectedEdges.Count &&
             expectedEdges.All(edge => RootProfiles.Prerequisites.TryGetValue(edge.Key, out var needs) && needs == edge.Value),

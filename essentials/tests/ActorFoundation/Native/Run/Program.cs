@@ -13,9 +13,11 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
-if (args is ["workbench-shipped-history", var historyProvider and ("sqlite" or "postgres"), var historyWorkbench])
+if (args is ["workbench-shipped-history", var historyProvider and ("sqlite" or "postgres"), var historyWorkbench, .. var historyMode] &&
+    historyMode is ([] or ["playback"]))
 {
-    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedHistoryAsync(historyWorkbench, historyProvider == "postgres");
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunShippedHistoryAsync(historyWorkbench, historyProvider == "postgres",
+        playback: historyMode is ["playback"]);
     return 0;
 }
 if (args is ["workbench-shipped-children", var childrenProvider and ("sqlite" or "postgres"), var childrenWorkbench])
@@ -363,7 +365,7 @@ if (args is ["cost", "postgres", var connection])
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
 Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | pg-write-budget <owned|ef> <checked|in-batch> [--require-budget] | " +
     "shipped-write-budget <sqlite|postgres> <checked|in-batch> [--require-budget] | root-sequenced-journal <sqlite|postgres> <checked|in-batch> | " +
-    "workbench-shipped-history <sqlite|postgres> <executable> | " +
+    "workbench-shipped-history <sqlite|postgres> <executable> [playback] | " +
     "memory [runs] | pg-runtime-cluster [partitions] [wake]");
 return 2;
 

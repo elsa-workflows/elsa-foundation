@@ -33,6 +33,7 @@ public class WorkflowsRuntimeKernelApiFeature : IShellFeature, IPostConfigureShe
         services.AddScoped<KernelRunReader>();
         services.AddScoped<KernelActivityTimeline>();
         services.AddScoped<KernelHistoryCursor>();
+        services.AddScoped<KernelPlaybackCursor>();
         services.AddApiCapabilitySource<KernelHistoryCapabilitySource>();
         services.TryAddScoped<ActivityExecutionBrowseSource>();
         ReplaceReadService(typeof(IWorkflowInstanceListService), typeof(WorkflowInstanceListService), typeof(KernelWorkflowInstanceListService));
@@ -40,6 +41,7 @@ public class WorkflowsRuntimeKernelApiFeature : IShellFeature, IPostConfigureShe
         ReplaceReadService(typeof(IActivityExecutionBrowseSource), typeof(ActivityExecutionBrowseSource), typeof(KernelActivityExecutionBrowseSource));
         ReplaceReadService(typeof(IActivityExecutionInspectionService), typeof(ActivityExecutionInspectionService), typeof(KernelActivityExecutionInspectionService));
         ReplaceReadService(typeof(IRuntimeHistoryPageReader), typeof(RuntimeHistoryInspectionService), typeof(KernelRuntimeHistoryPageReader));
+        ReplaceReadService(typeof(IRuntimeHistoryOccurrencePageReader), typeof(RuntimeHistoryInspectionService), typeof(KernelPlaybackPageReader));
 
         void ReplaceReadService(Type service, Type runtimeImplementation, Type kernelImplementation)
         {

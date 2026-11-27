@@ -403,6 +403,8 @@ public sealed partial class EfStore
         foreach (var history in SqliteRootWorkflowHistoryDefinitions()) yield return history;
         if (db.UsesRootSequencedJournal)
             foreach (var segment in SqliteSequencedJournalDefinitions()) yield return segment;
+        if (db.UsesRootPlayback)
+            foreach (var playback in SqlitePlaybackDefinitions()) yield return playback;
         if (db.UsesRootTerminalOutput) yield return SqliteRootTerminalOutputDefinition();
         foreach (var outcome in SqliteRootOutcomes(db)) yield return outcome;
     }

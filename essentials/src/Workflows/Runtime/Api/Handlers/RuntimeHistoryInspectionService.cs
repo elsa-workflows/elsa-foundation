@@ -21,7 +21,7 @@ public interface IRuntimeHistoryPageReader
 public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore workflows,
     IActivityInspectionContextAsync authorization, TimeProvider time, IRuntimeHistoryStore? history = null,
     IBookmarkStateStore? bookmarks = null, IActivityExecutionStateStore? activities = null,
-    ILogger<RuntimeHistoryInspectionService>? logger = null) : IRuntimeHistoryPageReader
+    ILogger<RuntimeHistoryInspectionService>? logger = null) : IRuntimeHistoryPageReader, IRuntimeHistoryOccurrencePageReader
 {
     // Supplied by API composition and resolved only after authorization/read. Optional capture-owner
     // outages must not hide readable retained evidence or eagerly activate writers on denied reads.
@@ -29,6 +29,9 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
 
     async Task<RuntimeHistoryPageView?> IRuntimeHistoryPageReader.ReadAsync(GetRuntimeHistory request, CancellationToken cancellationToken) =>
         await ReadAsync(request, cancellationToken);
+
+    async Task<RuntimeHistoryOccurrencePageView?> IRuntimeHistoryOccurrencePageReader.ReadAsync(GetRuntimeHistoryOccurrences request,
+        CancellationToken cancellationToken) => await ReadOccurrencesAsync(request, cancellationToken);
 
     public async Task<RuntimeHistoryPageView> ReadAsync(GetRuntimeHistory request, CancellationToken token = default)
     {
