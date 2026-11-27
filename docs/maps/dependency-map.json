@@ -18612,6 +18612,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.ActorFoundation.TestSupport",
+          "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Http",
           "path": "extensions/Http/src/Activities/Elsa.Activities.Http.csproj"
         },
