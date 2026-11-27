@@ -29,4 +29,32 @@ public sealed class LoopValueScriptPublishTests(ITestOutputHelper output)
         Assert.True(frame.Values.TryGetValue("last", out var last), string.Join(", ", frame.Values.Keys));
         Assert.Equal("\"3\"", last.InlineValue?.GetRawText());
     }
+
+    /// <summary>
+    /// #5849: the same loop inside a reusable activity. The template compiles, the wrapper that places it publishes, and
+    /// the placed loop body reads the loop's iteration value on every pass, for For and ForEach alike.
+    /// </summary>
+    [Theory]
+    [InlineData("reusable-for-loop-value-script", new[] { "1", "2", "3" })]
+    [InlineData("reusable-foreach-loop-value-script", new[] { "a", "b", "c" })]
+    public async Task A_loop_value_read_inside_a_reusable_activity_publishes_and_runs(string fixture, string[] expected)
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var (apply, items) = await host.ImportAsync($"import-{fixture}", fixture);
+        Assert.True(apply.StatusCode == HttpStatusCode.Created, apply.Body.ToJsonString());
+        var reusable = Assert.Single(items);
+        var wrapper = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(reusable, "workflowVersionId"));
+
+        var run = await host.RunAsync(wrapper);
+        output.WriteLine(run.Describe());
+
+        Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
+        Assert.Empty(run.Incidents);
+        var written = run.Activities
+            .Where(state => state.InputSnapshot?.Values.ContainsKey("text") == true)
+            .OrderBy(state => state.StartedAt)
+            .Select(state => state.InputSnapshot!.Values["text"].InlineValue?.GetString())
+            .ToArray();
+        Assert.Equal(expected, written);
+    }
 }
