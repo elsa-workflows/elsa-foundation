@@ -109,8 +109,12 @@ public sealed class KernelPublishedExecuteTests
             (IRuntimeKernelExecutablePinStore)ActivatorUtilities.CreateInstance(services, pinDescriptor.ImplementationType!), pinBoundary));
         var api = new WorkflowsRuntimeApiFeature();
         api.ConfigureServices(builder.Services);
-        new WorkflowsRuntimeKernelHostingFeature().ConfigureServices(builder.Services, KernelShellStorage.CreatePreparedStartsQualification(provider,
-            directory is null ? null : Path.Combine(directory, "foundation.db"), foundation));
+        new WorkflowsRuntimeKernelHostingFeature
+        {
+            Provider = provider,
+            SqlitePath = directory is null ? null : Path.Combine(directory, "foundation.db"),
+            PostgresConnectionString = foundation
+        }.ConfigureServices(builder.Services);
         new WorkflowsRuntimeKernelFeature().PostConfigureServices(builder.Services);
         api.PostConfigureServices(builder.Services);
 
