@@ -140,6 +140,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<IActivityExecutionInspectionService>(sp => sp.GetRequiredService<ActivityExecutionInspectionService>());
         services.TryAddScoped<IActivityExecutionBrowseSource, ActivityExecutionBrowseSource>();
         services.TryAddScoped<WorkflowInstanceDeletionService>();
+        services.TryAddScoped<IWorkflowInstanceDeletionService>(sp => sp.GetRequiredService<WorkflowInstanceDeletionService>());
         services.TryAddScoped<WorkflowInstanceDetailsService>();
         services.TryAddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<WorkflowInstanceDetailsService>());
         services.TryAddScoped<WorkflowInstanceListService>();

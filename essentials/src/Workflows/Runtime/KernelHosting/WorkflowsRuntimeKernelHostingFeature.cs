@@ -79,6 +79,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             RetentionWindow(FaultedRetentionSeconds, nameof(FaultedRetentionSeconds)));
         var retention = new KernelRetentionActivation(tenant, proposedRetention, RetentionConfirmation);
         services.AddSingleton(storage);
+        services.AddSingleton(new KernelOperatorIngress(storage.OpenOperatorsAsync, storage.ReadClockAsync));
         services.AddSingleton(retention);
         services.AddSingleton(new ShellRestartRequirement(FeatureName));
         var schedules = storage.TakesManagedSchedules;

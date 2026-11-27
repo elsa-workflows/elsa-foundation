@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Primitives.Models;
@@ -15,6 +16,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -85,6 +87,9 @@ public sealed class KernelPublishedExecuteTests
             structure: Structure("elsa.flowchart.structure", new { startNodeId = "output", connections = Array.Empty<object>(), variables = Array.Empty<object>() }),
             slots: [Slot("Flowchart.Activities", SetOutput("output", "message", Request("input", "message")))]));
 
+        var waiting = ExecutableOf("execute-waiting", "waiting", Sequence("sequence",
+            Node("delay", Types.Delay, [Literal("Duration", "00:00:45", "TimeSpan")])));
+
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0));
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
@@ -95,6 +100,7 @@ public sealed class KernelPublishedExecuteTests
             { "KernelExecuteFixture" });
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IWorkflowExecutableStartPolicy, FixturePolicy>();
+        builder.Services.AddSingleton<IPermissionResourceHandler, DeleteResourcePolicy>();
         builder.Services.AddSingleton<IWellKnownTypeRegistry, FixtureTypes>();
         builder.Services.AddWorkflowRuntime();
         builder.Services.AddRuntimeEntityFrameworkCore(new()
@@ -117,6 +123,7 @@ public sealed class KernelPublishedExecuteTests
         }.ConfigureServices(builder.Services);
         new WorkflowsRuntimeKernelFeature().PostConfigureServices(builder.Services);
         api.PostConfigureServices(builder.Services);
+        new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(builder.Services);
 
         await using var app = builder.Build();
         app.UseAuthentication();
@@ -129,9 +136,11 @@ public sealed class KernelPublishedExecuteTests
         var materials = stores.GetRequiredService<IWorkflowExecutableStore>();
         await materials.SaveAsync(canonical, token);
         await materials.SaveAsync(flowchart, token);
+        await materials.SaveAsync(waiting, token);
         await PublishAsync(alias, "blue");
         await PublishAsync(sibling, "default");
         await PublishAsync(flowchart, "default");
+        await PublishAsync(waiting, "default");
         var shell = app.Services.GetRequiredService<KernelShellRuntime>();
         await shell.StartAsync(token);
         try
@@ -169,11 +178,76 @@ public sealed class KernelPublishedExecuteTests
             Assert.Empty(await pins.ListPinnedExecutableArtifactIdsAsync(token));
 
             using var native = await ExecuteAsync(alias.Identity.ArtifactId, new { sourceReferenceId = target });
-            await VerifyAsync(native, alias, canonical.Identity, "blue", "authored-input", "authored-variable");
+            var completed = await VerifyAsync(native, alias, canonical.Identity, "blue", "authored-input", "authored-variable");
             using var flow = await ExecuteAsync(flowchart.Identity.ArtifactId, new { inputs = new { message = "flowchart-input" } }, tenant: "default");
             await VerifyAsync(flow, flowchart, flowchart.Identity, "default", "flowchart-input");
             Assert.Equal(new[] { canonical.Identity.ArtifactId, flowchart.Identity.ArtifactId }.Order(StringComparer.Ordinal),
                 (await pins.ListPinnedExecutableArtifactIdsAsync(token)).Order(StringComparer.Ordinal));
+
+            using var forbiddenDelete = await DeleteAsync(completed, manage: false);
+            Assert.Equal(HttpStatusCode.Forbidden, forbiddenDelete.StatusCode);
+            using var foreignDelete = await DeleteAsync(completed, manage: true, tenant: "another-tenant");
+            Assert.Equal(HttpStatusCode.NotFound, foreignDelete.StatusCode);
+            using var aliasDelete = await DeleteAsync(completed, manage: true, tenantAlias: "another-tenant");
+            Assert.Equal(HttpStatusCode.NotFound, aliasDelete.StatusCode);
+            using var mismatchedDelete = await DeleteAsync(completed, manage: true, tenant: "default", tenantAlias: "another-tenant");
+            Assert.Equal(HttpStatusCode.NotFound, mismatchedDelete.StatusCode);
+            Assert.NotNull(await reads.GetAsync(bound, new(completed), token));
+            if (directory is not null)
+            {
+                var connection = new SqliteConnectionStringBuilder { DataSource = Path.Combine(directory, "foundation.db"), Pooling = false };
+                await using var locked = new SqliteConnection(connection.ToString());
+                await locked.OpenAsync(token);
+                await using var write = locked.BeginTransaction(deferred: false);
+                using var busy = await DeleteAsync(completed, manage: true);
+                Assert.Equal(HttpStatusCode.Conflict, busy.StatusCode);
+                await write.RollbackAsync(token);
+                Assert.NotNull(await reads.GetAsync(bound, new(completed), token));
+            }
+            await VerifyDeletedAsync(completed);
+
+            var delayed = await StartWaitingAsync();
+            await VerifyDeletedAsync(delayed);
+
+            var reauthorized = await StartWaitingAsync();
+            using var deniedPurge = await DeleteAsync(reauthorized, manage: true, subject: "deny-terminal-purge");
+            Assert.Equal(HttpStatusCode.NotFound, deniedPurge.StatusCode);
+            Assert.Equal(Contract.ActorStatus.Cancelled, (await reads.GetAsync(bound, new(reauthorized), token))?.Header.Status);
+            await VerifyDeletedAsync(reauthorized);
+
+            async Task<string> StartWaitingAsync()
+            {
+                using var delayed = await ExecuteAsync(waiting.Identity.ArtifactId, new { });
+                Assert.Equal(HttpStatusCode.OK, delayed.StatusCode);
+                var receipt = Assert.IsType<WorkflowExecutionStartDispatchView>(await delayed.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token));
+                Contract.ActorView? actor;
+                do
+                {
+                    await Task.Delay(50, token);
+                    actor = await reads.GetAsync(bound, new(receipt.WorkflowExecutionId), token);
+                } while (actor is null);
+                Assert.Equal(Contract.ActorStatus.Running, actor.Header.Status);
+                return receipt.WorkflowExecutionId;
+            }
+
+            async Task VerifyDeletedAsync(string run)
+            {
+                using var response = await DeleteAsync(run, manage: true);
+                Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync(token));
+                Assert.Equal(new WorkflowInstanceDeletionView(run), await response.Content.ReadFromJsonAsync<WorkflowInstanceDeletionView>(token));
+                Assert.Null(await reads.GetAsync(bound, new(run), token));
+            }
+
+            async Task<HttpResponseMessage> DeleteAsync(string run, bool manage, string? tenant = null, string subject = "accepted",
+                string? tenantAlias = null)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Delete, $"/runtime/workflows/instances/{run}");
+                request.Headers.Add("X-Fixture-Subject", subject);
+                if (manage) request.Headers.Add("X-Fixture-Manage", "yes");
+                if (tenantAlias is not null) request.Headers.Add("X-Fixture-Tenant-Alias", tenantAlias);
+                if (tenant is not null) request.Headers.Add("X-Fixture-Tenant", tenant);
+                return await http.SendAsync(request, token);
+            }
 
             async Task<HttpResponseMessage> ExecuteAsync(string artifact, object body, string? tenant = null, string subject = "accepted")
             {
@@ -184,7 +258,7 @@ public sealed class KernelPublishedExecuteTests
                 return await http.SendAsync(request, token);
             }
 
-            async Task VerifyAsync(HttpResponseMessage response, WorkflowExecutable source, WorkflowExecutableIdentity material, string slot,
+            async Task<string> VerifyAsync(HttpResponseMessage response, WorkflowExecutable source, WorkflowExecutableIdentity material, string slot,
                 string message, string? seed = null)
             {
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -214,6 +288,7 @@ public sealed class KernelPublishedExecuteTests
                 using var document = JsonDocument.Parse(output!.Values!);
                 Assert.Equal(message, document.RootElement.GetProperty("message").GetString());
                 if (seed is not null) Assert.Equal(seed, document.RootElement.GetProperty("seed").GetString());
+                return actor.Id;
             }
         }
         finally { await shell.StopAsync(CancellationToken.None); }
@@ -248,8 +323,20 @@ public sealed class KernelPublishedExecuteTests
                 new(IdentityClaimTypes.Permission, "workflows/runtime:execute"),
                 new(IdentityClaimTypes.Normalized, "v1")
             };
+            if (Request.Headers.ContainsKey("X-Fixture-Manage")) claims.Add(new(IdentityClaimTypes.Permission, "workflows/runtime:manage"));
             if (Request.Headers.TryGetValue("X-Fixture-Tenant", out var tenant)) claims.Add(new(IdentityClaimTypes.TenantId, tenant.ToString()));
+            if (Request.Headers.TryGetValue("X-Fixture-Tenant-Alias", out var alias)) claims.Add(new("tenant_id", alias.ToString()));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name)), Scheme.Name)));
+        }
+    }
+
+    private sealed class DeleteResourcePolicy : IPermissionResourceHandler
+    {
+        public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
+        {
+            var deny = context.Resource is WorkflowExecutionState { Status: WorkflowExecutionStatus.Cancelled } &&
+                context.Principal.FindFirstValue(IdentityClaimTypes.UserId) == "deny-terminal-purge";
+            return ValueTask.FromResult<PermissionEvaluationResult?>(deny ? PermissionEvaluationResult.Denied() : null);
         }
     }
 
