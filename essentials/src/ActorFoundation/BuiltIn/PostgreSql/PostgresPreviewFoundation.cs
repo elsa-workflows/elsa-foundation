@@ -136,7 +136,7 @@ public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IAct
 
     public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
         CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("Event starts are outside this preview.");
+        ingress.SetStartAsync(scope, key, wait, spec, cancellationToken);
 
     public ValueTask<Contract.Page<Contract.ActorView>> ListAsync(Contract.BoundScope scope, Contract.ActorQuery query,
         Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>

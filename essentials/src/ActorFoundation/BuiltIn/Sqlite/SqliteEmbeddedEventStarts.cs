@@ -35,6 +35,9 @@ public sealed partial class SqliteEmbeddedFoundation
         return new(databasePath, node, actorType, StoreFormat.RootSharedActivationQualification, protectRootStart);
     }
 
+    internal static SqliteEmbeddedFoundation ForPublicEventStartsQualification(string databasePath, string node, string actorType) =>
+        new(databasePath, node, actorType, StoreFormat.RootPublicEventStartsQualification);
+
     /// <summary>Binds trusted Event registration and relay to the selected file and tenant.</summary>
     public IEventStartAdmissions BindEventStarts(Contract.BoundScope scope) => new BoundEventStarts(EventStarts, scope);
 

@@ -141,6 +141,15 @@ internal static class RootEventAdmission
                 count += captured.Count;
                 bytes += captured.Bytes;
             }
+            if (db.UsesRootPublicEventStarts)
+            {
+                var occurrence = FoundationRootCreator.OperationDigest(DurableKeyJson.Write(new[] { "authored", publication.Key, publication.Id }));
+                var captured = await RootPublicEventStarts.CaptureAsync(db, publication.FoundationTenant!, publication.Key, publication.Id,
+                    occurrence, publication.Payload, FoundationMetadataLimits.MaxTurnSends - count, FoundationMetadataLimits.MessageContentBytes - bytes,
+                    bindPostgresSource, token);
+                count += captured.Count;
+                bytes += captured.Bytes;
+            }
             var receipt = await db.Database.ExecuteSqlInterpolatedAsync(BindSource($"""
                 WITH source AS MATERIALIZED (/*event-source*/)
                 INSERT INTO "Events" ("Key", "Id", "KeepUntil")

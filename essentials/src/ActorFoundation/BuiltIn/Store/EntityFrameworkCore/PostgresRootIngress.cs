@@ -264,8 +264,12 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
     }
 
     public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
-        CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("Event starts are outside this preview.");
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        RootPublicEventStarts.Validate(actorType, key, wait, spec);
+        return new(admission.SetPublicEventStartAsync(scope.Tenant, key, wait, spec, cancellationToken));
+    }
 
     // The error an operator caller sees when the owner refused its held command.
     internal static string RefusalError(string result) => result switch

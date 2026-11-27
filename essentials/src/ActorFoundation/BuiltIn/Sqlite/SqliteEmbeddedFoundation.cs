@@ -47,6 +47,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     internal SqliteEmbeddedHosting.SqliteDirectRequests EventStarts =>
         qualificationFormat == StoreFormat.RootEventStartsQualification || qualificationFormat == StoreFormat.RootEventStartReceiptsQualification ||
         qualificationFormat == StoreFormat.RootEventStartScanQualification || qualificationFormat == StoreFormat.RootSharedActivationQualification ||
+        qualificationFormat == StoreFormat.RootPublicEventStartsQualification ||
         qualificationFormat is null && SqliteEmbeddedHosting.TakesEventStarts
             ? requests.Value :
             throw new InvalidOperationException("The selected SQLite profile does not support Event starts.");
@@ -105,7 +106,7 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
     public bool TakesManagedSchedules => qualificationFormat == StoreFormat.RootManagedSchedulesQualification ||
         qualificationFormat == StoreFormat.RootPreparedStartsQualification ||
         qualificationFormat == StoreFormat.RootInlinePromotionQualification ||
-        qualificationFormat == StoreFormat.RootSharedActivationQualification ||
+        qualificationFormat == StoreFormat.RootSharedActivationQualification || qualificationFormat == StoreFormat.RootPublicEventStartsQualification ||
         qualificationFormat is null && RootProfiles.Shipped.HasFlag(RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage);
 
     /// <summary>Installs or verifies the file and binds future operations to its resolved path.</summary>

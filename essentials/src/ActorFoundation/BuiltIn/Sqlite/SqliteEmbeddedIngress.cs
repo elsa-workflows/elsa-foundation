@@ -224,8 +224,15 @@ public static partial class SqliteEmbeddedHosting
                 : (exact.Actor, null, Contract.RefusalReason.StaleSelection);
         }
 
-        public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException("SQLite root ingress supports starts and ordinary sends.");
+        public async ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(scope);
+            cancellationToken.ThrowIfCancellationRequested();
+            RootPublicEventStarts.Validate(actorType, key, wait, spec);
+            using var file = AcquireFile(path);
+            var admission = CreateAdmission(file, window, pressure, requests?.QualificationFormat);
+            await admission.SetPublicEventStartAsync(scope.Tenant, key, wait, spec, cancellationToken);
+        }
     }
 }

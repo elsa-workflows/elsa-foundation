@@ -343,6 +343,11 @@ public sealed partial class EfStore
             if (db.UsesRootEventStartScan)
                 yield return Index(RootEventStarts.ScanIndex, RootEventStarts.Targets, RootEventStarts.ScanColumns);
         }
+        if (db.UsesRootPublicEventStarts)
+        {
+            yield return Table(RootPublicEventStarts.Registrations, RootPublicEventStarts.RegistrationColumns(sqlite: true));
+            yield return Table(RootPublicEventStarts.Targets, RootPublicEventStarts.TargetColumns(sqlite: true));
+        }
         yield return Table("FoundationRootReceipts", """
             "Tenant" TEXT NOT NULL,
             "Operation" TEXT NOT NULL,
