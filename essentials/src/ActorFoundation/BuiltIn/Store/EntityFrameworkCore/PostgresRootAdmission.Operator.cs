@@ -501,9 +501,6 @@ internal sealed partial class PostgresRootAdmission
         if (childLedger)
             lockTables = lockTables.Replace("IN ACCESS SHARE MODE", ", \"FoundationRootChildCascades\" IN ACCESS SHARE MODE", StringComparison.Ordinal);
 
-        if (db.UsesRootScheduleLineage)
-            lockTables = lockTables.Replace("IN ACCESS SHARE MODE", ", \"FoundationScheduleLineage\" IN ACCESS SHARE MODE", StringComparison.Ordinal);
-
         var pin = new NpgsqlBatchCommand("""
             SELECT pg_catalog.set_config('search_path', 'pg_catalog,' || pg_catalog.quote_ident(ns.nspname) || ',pg_temp', true),
                 c.oid, c.relnamespace
@@ -536,6 +533,8 @@ internal sealed partial class PostgresRootAdmission
         // Resolve lock targets after setting the local search path. The batch contains only reads and locks.
         // Before sending any business SQL, confirm the locked relations belong to the same physical marker.
         List<NpgsqlBatchCommand> commands = [pin, new(lockTables)];
+        // Keep the validated lineage table free of user DDL for the whole proof or fenced write.
+        if (db.UsesRootScheduleLineage) commands.Add(new(RootScheduleLineage.PostgresLock));
         // Keep trigger state stable until the fenced write commits. ROW EXCLUSIVE permits other
         // writers but conflicts with ALTER TABLE ... ENABLE/DISABLE TRIGGER.
         if (pinSequencedJournal)
@@ -561,7 +560,9 @@ internal sealed partial class PostgresRootAdmission
             var schema = reader.GetFieldValue<uint>(2);
             if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct) ||
                 reader.GetFieldValue<uint>(0) != marker || reader.GetFieldValue<uint>(1) != schema || !reader.GetBoolean(2))
-                throw new StoreFormatException(childLedger
+                throw new StoreFormatException(db.UsesRootScheduleLineage
+                    ? "The PostgreSQL schedule lineage source or its definitions are incomplete."
+                    : childLedger
                     ? "The child profile requires its source tables in the marker schema."
                     : "Park requires the source tables in the marker schema.");
             if (pinSequencedJournal && !reader.GetBoolean(3))

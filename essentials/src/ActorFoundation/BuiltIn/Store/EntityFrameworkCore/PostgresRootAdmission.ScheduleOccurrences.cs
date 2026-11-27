@@ -13,7 +13,10 @@ internal sealed partial class PostgresRootAdmission
         RequireCreator(occurrence.CreatorOperation, pinnedWorkflow);
         await using var db = create();
         if (!db.UsesRootScheduleSettlement) throw new NotSupportedException("The profile does not confirm scheduled workflow retirement.");
-        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, token);
+        // Read the catalog after taking the lineage DDL lock. The final statement observes the birth, tombstone and
+        // cohort in one snapshot, so it does not use a snapshot opened before a concurrent DDL transaction finished.
+        await using var transaction = await db.Database.BeginTransactionAsync(db.UsesRootScheduleLineage
+            ? System.Data.IsolationLevel.ReadCommitted : System.Data.IsolationLevel.RepeatableRead, token);
         var pin = await PinScheduleStoreAsync(db, writing: false, token, loadIssuer: true);
         var issuer = pin.Issuer ?? throw new StoreFormatException("The pinned root store has no issuer.");
         var birth = ScheduledWorkflowBirth.Create(tenant, occurrence, pinnedWorkflow, issuer.Key, issuer.Partitions);

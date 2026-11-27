@@ -13,6 +13,8 @@ internal static class RootScheduleLineage
         ("Tenant", "RootReference", "Retired")
         """;
 
+    internal const string PostgresLock = """LOCK TABLE ONLY "FoundationScheduleLineage" IN ROW EXCLUSIVE MODE""";
+
     internal static string Columns(bool sqlite)
     {
         var text = sqlite ? "TEXT" : """text COLLATE "C" """;
@@ -29,7 +31,8 @@ internal static class RootScheduleLineage
     internal static async Task InstallPostgresAsync(KernelDb db, CancellationToken token)
     {
         await db.Database.ExecuteSqlRawAsync($"""
-            CREATE TABLE IF NOT EXISTS "{Table}" ({Columns(sqlite: false)});
+            CREATE TABLE IF NOT EXISTS "{Table}" ({Columns(sqlite: false)}) USING heap;
+            {PostgresLock};
             CREATE INDEX IF NOT EXISTS "{CohortIndex}" ON "{Table}" {IndexedColumns};
             """, token);
         var ready = await db.Database.SqlQueryRaw<bool>($"""
@@ -45,7 +48,13 @@ internal static class RootScheduleLineage
             JOIN pg_catalog.pg_class marker ON marker.oid = {{markerOid}} AND marker.relnamespace = lineage.relnamespace
             JOIN pg_catalog.pg_class births ON births.oid = pg_catalog.to_regclass('"FoundationRootBirths"')
                 AND births.relnamespace = lineage.relnamespace
+            JOIN pg_catalog.pg_am heap ON heap.oid = lineage.relam AND heap.amname = 'heap' AND heap.amtype = 't'
             WHERE lineage.oid = pg_catalog.to_regclass('"FoundationScheduleLineage"') AND lineage.relkind = 'r'
+                AND lineage.relpersistence = 'p' AND NOT lineage.relispartition
+                AND NOT lineage.relrowsecurity AND NOT lineage.relforcerowsecurity
+                AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger t WHERE t.tgrelid = lineage.oid AND NOT t.tgisinternal)
+                AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_rewrite r WHERE r.ev_class = lineage.oid)
+                AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_inherits i WHERE i.inhrelid = lineage.oid OR i.inhparent = lineage.oid)
                 AND (SELECT array_agg(attribute.attname::text ORDER BY attribute.attnum)
                     FROM pg_catalog.pg_attribute attribute
                     WHERE attribute.attrelid = lineage.oid AND attribute.attnum BETWEEN 1 AND 4
@@ -153,12 +162,11 @@ internal static class RootScheduleLineage
             [.. query.GetArguments(), (long)marker]);
     }
 
-    internal static FormattableString RequireRootMembershipForProof(FormattableString query, string tenant, string reference) =>
-        FormattableStringFactory.Create(query.Format.Replace("/*cohort-proof*/", $$"""
+    internal const string RootMembershipProof = """
             AND EXISTS (SELECT 1 FROM "FoundationScheduleLineage"
-                WHERE "Tenant" = {{{query.ArgumentCount}}} AND "Reference" = {{{query.ArgumentCount + 1}}}
-                    AND "RootReference" = {{{query.ArgumentCount + 1}}} AND "Retired")
+                WHERE "Tenant" = birth."Tenant" AND "Reference" = birth."Reference"
+                    AND "RootReference" = birth."Reference" AND "Retired")
             AND NOT EXISTS (SELECT 1 FROM "FoundationScheduleLineage"
-                WHERE "Tenant" = {{{query.ArgumentCount}}} AND "RootReference" = {{{query.ArgumentCount + 1}}} AND NOT "Retired")
-            """, StringComparison.Ordinal), [.. query.GetArguments(), tenant, reference]);
+                WHERE "Tenant" = birth."Tenant" AND "RootReference" = birth."Reference" AND NOT "Retired")
+            """;
 }

@@ -277,6 +277,53 @@ internal static class RootScheduleInventoryChecks
                 await db.Database.ExecuteSqlRawAsync(definition, token);
             }
         }
+        if (postgres && db.UsesRootScheduleLineage)
+        {
+            var beforeDrift = await db.Messages.CountAsync(token);
+            try
+            {
+                await using var changing = open();
+                await using var schema = await changing.Database.BeginTransactionAsync(token);
+                await changing.Database.ExecuteSqlRawAsync("""
+                    ALTER TABLE "FoundationScheduleLineage" ENABLE ROW LEVEL SECURITY;
+                    """, token);
+                var proof = RetiredAsync(nextOccurrence, nextActor.Id);
+                do
+                {
+                    if (proof.IsCompleted) throw new InvalidOperationException("The lineage proof did not wait for its DDL lock.");
+                    await Task.Delay(10, token);
+                } while (!await db.Database.SqlQueryRaw<bool>("""
+                    SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_locks
+                        WHERE relation = pg_catalog.to_regclass('"FoundationScheduleLineage"')
+                            AND mode = 'RowExclusiveLock' AND NOT granted) AS "Value"
+                    """).SingleAsync(token));
+                await schema.CommitAsync(token);
+                await RequireUnsafeDefinitionRefusalAsync("row-level security committed while the proof waited", proof);
+            }
+            finally
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    ALTER TABLE "FoundationScheduleLineage" DISABLE ROW LEVEL SECURITY;
+                    """, token);
+            }
+
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE FUNCTION rewrite_live_lineage() RETURNS trigger LANGUAGE plpgsql AS $body$
+                BEGIN NEW."Retired" := true; RETURN NEW; END; $body$;
+                CREATE TRIGGER rewrite_live_lineage BEFORE INSERT ON "FoundationScheduleLineage"
+                FOR EACH ROW EXECUTE FUNCTION rewrite_live_lineage();
+                """, token);
+            try { await RequireUnsafeDefinitionRefusalAsync("a user trigger that rewrites a live member"); }
+            finally
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    DROP TRIGGER rewrite_live_lineage ON "FoundationScheduleLineage";
+                    DROP FUNCTION rewrite_live_lineage();
+                    """, token);
+            }
+            Require(await db.Messages.CountAsync(token) == beforeDrift && await RetiredAsync(nextOccurrence, nextActor.Id),
+                "lineage schema refusals preserve the inbox and exact retirement receipt");
+        }
 
         Task<Contract.Admission> AdmitAsync(string tenantId, RootScheduleOccurrence item, StartSpec spec) => postgres
             ? pg.AdmitScheduledOccurrenceAsync(tenantId, item, spec, token)
@@ -285,6 +332,23 @@ internal static class RootScheduleInventoryChecks
         Task<bool> RetiredAsync(RootScheduleOccurrence item, string actorReference) => postgres
             ? pg.IsScheduledOccurrenceRetiredAsync(tenant, item, pinned, actorReference, token)
             : sqlite.IsScheduledOccurrenceRetiredAsync(tenant, item, pinned, actorReference, token);
+
+        async Task RequireUnsafeDefinitionRefusalAsync(string mutation, Task<bool>? pendingProof = null)
+        {
+            try
+            {
+                await (pendingProof ?? RetiredAsync(nextOccurrence, nextActor.Id));
+                throw new InvalidOperationException("Cohort retirement accepted " + mutation + ".");
+            }
+            catch (StoreFormatException error) when (error.Message.Contains("PostgreSQL schedule lineage", StringComparison.Ordinal)) { }
+            try
+            {
+                await AdmitAsync(tenant, occurrence with { ArmGeneration = 4 }, pinned);
+                throw new InvalidOperationException("Occurrence admission accepted " + mutation + ".");
+            }
+            catch (StoreFormatException error) when (error.Message.Contains("PostgreSQL schedule lineage", StringComparison.Ordinal)) { }
+            Console.WriteLine($"ok cohort retirement and occurrence admission refuse {mutation}");
+        }
 
         async Task MustRefuseAsync(RootScheduleOccurrence item, StartSpec spec)
         {
