@@ -286,7 +286,12 @@
                         "value": ""
                     }
                 },
-                "result": null,
+                "result": {
+                    "typeName": "Object",
+                    "memoryReference": {
+                        "id": "95a8ae1f740fb705"
+                    }
+                },
                 "id": "270b3a90801a8067",
                 "nodeId": "Workflow1:a49d90808e110d31:270b3a90801a8067",
                 "name": "DispatchWorkflow1",
