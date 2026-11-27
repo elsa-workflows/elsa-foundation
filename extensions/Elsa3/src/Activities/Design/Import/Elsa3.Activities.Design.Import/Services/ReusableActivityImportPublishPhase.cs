@@ -114,8 +114,9 @@ public sealed class ReusableActivityImportPublishPhase(
         }
         catch (Exception exception) when (ReusableActivityImportRefusals.Find<SchemaWriteRefusedException>(exception) is { } refusal)
         {
-            // The draft write, before the publisher runs, can be refused for its schema family too (#5972); the state says
-            // why, as the publisher's refused outcome does, not "failed unexpectedly".
+            // The draft write, before the publisher runs, can be refused for its schema family too, as can a publisher that
+            // throws the refusal instead of returning it (#5972); the state says why, as a refused outcome does, not "failed
+            // unexpectedly".
             return new(version.Id, version.SourceVersionId, ReusableActivityPublicationStatus.Refused, refusal.Code,
                 [ReusableActivityImportRefusals.SchemaWriteRefused(refusal, Subject(version))]);
         }

@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -93,7 +94,7 @@ internal sealed class Elsa3FolderImportTask(
             .Where(state => state.Status is not (ReusableActivityPublicationStatus.Published or ReusableActivityPublicationStatus.AlreadyPublished))
             .ToDictionary(
                 state => state.SourceVersionId,
-                state => (state.ErrorCode ?? state.Status.ToString(), $"The reusable activity was not published ({state.Status}{(state.BlockedBy is null ? "" : $", blocked by '{state.BlockedBy}'")})."),
+                NotPublished,
                 StringComparer.Ordinal);
         var (publishable, publishSkips) = selection.Exclude(plan, refused, inputsById, result.AppliedSourceVersionIds, missingTargetState: "not published");
         skipped.AddRange(publishSkips);
@@ -174,6 +175,18 @@ internal sealed class Elsa3FolderImportTask(
     /// The selected item each error diagnostic names, by its <c>SourceVersionId</c> metadata or else its source-version
     /// path segment; empty when any error names no selected item, because then the refusal cannot be attributed.
     /// </summary>
+    /// <summary>
+    /// Why a reusable was not published, for its skip: its status and, when it has one, what its first error says, which
+    /// is where a schema refusal names its family and versions (#5972).
+    /// </summary>
+    internal static (string Code, string Cause) NotPublished(ReusableActivityPublicationState state)
+    {
+        var status = $"The reusable activity was not published ({state.Status}{(state.BlockedBy is null ? "" : $", blocked by '{state.BlockedBy}'")})";
+        var error = state.Diagnostics?.FirstOrDefault(diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error);
+        return (state.ErrorCode ?? state.Status.ToString(),
+            error is null ? $"{status}." : $"{status}: {Elsa3ImportSelection.Cause(error.Message, error.Remediation)}");
+    }
+
     internal static Dictionary<string, (string Code, string Cause)> Locate(ReusableActivityImportValidationException exception, IReadOnlyList<string> selected)
     {
         var selectedIds = selected.ToHashSet(StringComparer.Ordinal);

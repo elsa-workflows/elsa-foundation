@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Core.Models;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Reconciliation.Models;
 using Elsa3.Activities.Design.Import.Reconciliation.Services;
@@ -96,6 +97,37 @@ public sealed class Elsa3ImportSelectionTests
 
         Assert.Empty(Elsa3FolderImportTask.Locate(exception, ["a"]));
     }
+
+    [Fact]
+    public void A_refused_reusable_is_skipped_with_what_its_first_error_says()
+    {
+        // #5972: a schema refusal names its family and versions only in its diagnostic; the skip must keep them.
+        var state = new ReusableActivityPublicationState("v1", "a", ReusableActivityPublicationStatus.Refused, "schema-write-refused",
+        [
+            new("activity.note", ActivityDiagnosticSeverity.Warning, "A warning first.", Subject()),
+            new("schema-write-refused", ActivityDiagnosticSeverity.Error,
+                "Schema family 'activity-drafts' requires version 3; this host writes 2.", Subject(),
+                Remediation: "Upload the same export again.")
+        ]);
+
+        var (code, cause) = Elsa3FolderImportTask.NotPublished(state);
+
+        Assert.Equal("schema-write-refused", code);
+        Assert.Equal("The reusable activity was not published (Refused): Schema family 'activity-drafts' requires version 3; this host writes 2. Upload the same export again.", cause);
+    }
+
+    [Fact]
+    public void A_reusable_blocked_by_a_dependency_without_diagnostics_names_the_status_and_the_dependency()
+    {
+        var state = new ReusableActivityPublicationState("v2", "b", ReusableActivityPublicationStatus.NotPublishedDependency, BlockedBy: "v1");
+
+        var (code, cause) = Elsa3FolderImportTask.NotPublished(state);
+
+        Assert.Equal(nameof(ReusableActivityPublicationStatus.NotPublishedDependency), code);
+        Assert.Equal("The reusable activity was not published (NotPublishedDependency, blocked by 'v1').", cause);
+    }
+
+    private static ActivityDiagnosticSubject Subject() => new("ActivityDefinitionVersion", "v1", "d1", "v1");
 
     private static Elsa3InputItem Input(string definitionId, string id, int version, string file) =>
         new(file, new Elsa3WorkflowDefinition { Id = id, DefinitionId = definitionId, Version = version });
