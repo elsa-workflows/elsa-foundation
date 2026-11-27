@@ -84,12 +84,10 @@ internal sealed class ActorList : IActorReads
         var snapshot = _store.ReadFoundationJournal(scope.Tenant, actor.Id, after.Position, _pageSize + 1);
         var (entries, last) = Durable.FoundationJournalPaging.Read(
             snapshot.Rows.Select(row => (row.Position, row.Revision, row.Entries)), after, _pageSize);
-        var added = entries.Select(entry => new JournalEntry(entry.Revision, entry.Entry)).ToArray();
-
         // The final nonempty page also carries a bookmark so a caller can follow the tail after catching up.
-        if (added.Length == 0) return new(new Page<JournalEntry>(added, null, snapshot.AsOf));
+        if (entries.Count == 0) return new(new Page<JournalEntry>(entries, null, snapshot.AsOf));
         last.Write(cursor);
-        return new(new Page<JournalEntry>(added, new PageToken(_store.SealReadCursor(context, cursor)), snapshot.AsOf));
+        return new(new Page<JournalEntry>(entries, new PageToken(_store.SealReadCursor(context, cursor)), snapshot.AsOf));
     }
 
     public ValueTask<Page<DeliveryView>> InboxAsync(BoundScope scope, ActorRef actor, PageToken? from = null,

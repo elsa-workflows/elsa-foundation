@@ -112,8 +112,9 @@ internal static partial class SqliteHostLifetimeChecks
                 last = tokenAfter;
                 journal = await reads.TailAsync(tenant, first, last, token);
             }
-            Require(entries.Where(entry => entry.Entry.Contains("\"Step\"", StringComparison.Ordinal)).Select(entry => (entry.Revision, entry.Entry))
-                    .SequenceEqual([(1L, "{\"Step\":\"start-first\"}"), (1L, "{\"Step\":\"start-second\"}")]) &&
+            Require(entries.Where(entry => entry.Entry.Contains("\"Step\"", StringComparison.Ordinal))
+                    .SequenceEqual([new(1, "{\"Step\":\"start-first\"}"), new(1, "{\"Step\":\"start-second\"}")]) &&
+                entries.Select(entry => entry.CommitOrdinal).SequenceEqual(Enumerable.Range(0, entries.Count).Select(index => (int?)index)) &&
                 journal is { Items.Count: 0, Next: null, AsOf: > 0 } &&
                 await reads.TailAsync(other, first, cancellationToken: token) is { Items.Count: 0, AsOf: > 0 },
                 "journal paging resumes exactly within one revision and keeps other tenants' journals empty");
@@ -123,7 +124,7 @@ internal static partial class SqliteHostLifetimeChecks
             await WaitForRootAsync(reader, tenant.Tenant, first, 2, token);
             var terminal = (await reader.ReadFirstRootAsync(tenant.Tenant, first.Id, token))!;
             Require(terminal is { Status: InstanceStatus.Finished, TerminalAt: > 0 } &&
-                await reads.TailAsync(tenant, first, last, token) is { Items: [{ Revision: 2 }], Next: not null },
+                await reads.TailAsync(tenant, first, last, token) is { Items: [{ Revision: 2, CommitOrdinal: 0 }], Next: not null },
                 "the previously caught-up journal cursor resumes at the new checkpoint");
             Require((await ListAsync(tenant, unrestricted with { EndedBefore = terminal.TerminalAt })).Count == 0 &&
                 (await ListAsync(tenant, unrestricted with { EndedBefore = terminal.TerminalAt + 1 })).Single().Header.Ref == first,
