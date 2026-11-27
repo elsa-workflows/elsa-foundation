@@ -235,7 +235,7 @@ internal static class RuntimeIngressAdmissionValidation
         var current = delivery.Progress.SingleOrDefault(progress => progress.RecipientId == id) ?? throw new InvalidDataException("The recipient was not accepted.");
         if (current.Phase is RuntimeRecipientPhase.TargetAccepted or RuntimeRecipientPhase.CancelledBeforeDispatch) return item;
         return item.WithSubscriptionDelivery(delivery.WithProgress(new RuntimeRecipientProgress(id, current.Phase, current.Seal, current.Receipt,
-            checked(current.AttemptCount + 1), retryAt, code, recoveryState)));
+            checked(current.AttemptCount + 1), retryAt, code, recoveryState) { PreparedStartAttempt = current.PreparedStartAttempt }));
     }
 
     internal static RuntimeCommittedIngressWait ProposedWait(RuntimePostCommitOutboxItem item, RuntimeIngressWaitDispatchSeal seal)

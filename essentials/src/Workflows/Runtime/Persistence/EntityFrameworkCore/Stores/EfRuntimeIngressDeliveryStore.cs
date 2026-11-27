@@ -18,7 +18,7 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
     NativeIngressTargetEvidence? evidence = null, IRuntimeModelExecutionReader? modelInputs = null,
     IRecurringTriggerScheduleStore? schedules = null, IEnumerable<IStimulusDeliveryIntentAdapter>? stimulusAdapters = null,
     NativeIngressWaitTargetEvidence? waitEvidence = null, IBookmarkResumeResolver? resumeResolver = null,
-    IRuntimeCheckpointCommitStore? checkpoints = null) : IRuntimeIngressDeliveryStore
+    IRuntimeCheckpointCommitStore? checkpoints = null, IRuntimePreparedStartAttemptProof? preparedStarts = null) : IRuntimeIngressDeliveryStore
 {
     public ValueTask<RuntimeIngressAdmissionReceipt?> FindAcceptedAsync(TriggerScope scope, string sourceOutboxItemId,
         string requestFingerprint, CancellationToken cancellationToken = default) =>
@@ -224,7 +224,9 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
                 throw new InvalidDataException("The dispatch recipient was not accepted.");
             var recipient = delivery.Recipients.Single(recipient => recipient.RecipientId == seal.RecipientId);
             var committed = new RuntimeCommittedRecipient(item, recipient, seal);
-            if (recipient.ModelProtocol is null)
+            if (seal.Version == RuntimeDispatchSeal.PreparedStartQualificationVersion)
+                ValidatePreparedStartSeal(committed, native);
+            else if (recipient.ModelProtocol is null)
             {
                 NativeIngressTargetEvidence.ValidateEnvelope(committed, NativeIngressTargetEvidence.ReadEnvelope(seal));
                 NativeIngressTargetEvidence.ValidateExecutable(committed, native ?? throw new InvalidDataException("Accepted target material is missing."));
@@ -248,6 +250,8 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
         {
             RuntimeIngressAdmissionValidation.CheckClaim(current, source, time.GetUtcNow());
             var target = RuntimeIngressAdmissionValidation.ReceiptTarget(current, receipt);
+            if (target.Seal.Version == RuntimeDispatchSeal.PreparedStartQualificationVersion)
+                throw new NotSupportedException("Prepared actor receipts require the checked attempt reconciliation path.");
             if (current.SubscriptionDelivery!.Progress.Single(progress => progress.RecipientId == receipt.RecipientId).Receipt is not null) return current;
             RuntimeTargetAcceptanceReceipt? observed;
             if (target.Recipient.ModelProtocol is null)

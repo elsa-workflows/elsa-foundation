@@ -11516,6 +11516,7 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeSubscriptionStartIdentity.WorkflowExec
 Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceKind
 Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceKind.InitialCheckpoint = 1 -> Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceKind
 Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceKind.ModelInput = 2 -> Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceKind.PreparedActorBirth = 3 -> Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceKind
 Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceKind.SchedulerCommand = 0 -> Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceKind
 Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceReceipt
 Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceReceipt.EvidenceId.get -> string!
