@@ -12,7 +12,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record StartAdmission(long Now, string? Reference, byte[]? Key, int? Partitions);
     private sealed record Target(string Actor, int Partition, bool HasCheckpoint, int? Status, bool Terminal, bool Pending, bool Parked, string? Header);
-    private sealed class PreparedReplyExpired : Exception;
+    private sealed class PreparationExpired : Exception;
 
     internal Task<int> VerifyAsync(CancellationToken token) => WriteAsync(async (db, _, ct) =>
     {
@@ -29,14 +29,18 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         CancellationToken token) => (await StartCoreAsync(tenant, operation, spec, due, keepFor, null, token))!;
 
     internal async Task<string?> StartRequestAsync(HeldRootRequest request, StartSpec spec, CancellationToken token,
-        RootAdmissionPressure.Attempt? reserved = null, PreparedRootStart? prepared = null)
+        RootAdmissionPressure.Attempt? reserved = null) =>
+        (await StartProtectedAsync(request.Tenant, request.Caller.Id, spec, request, token, reserved, prepared: null))?.Actor?.Id;
+
+    internal async Task<Contract.Admission?> StartProtectedAsync(string tenant, string operation, StartSpec spec, HeldRootRequest? reply,
+        CancellationToken token, RootAdmissionPressure.Attempt? reserved, PreparedRootStart? prepared)
     {
-        if (!request.IsOpen) throw new ArgumentException("A held SQLite start requires an open caller bound to its tenant.", nameof(request));
+        if (reply is { IsOpen: false }) throw new ArgumentException("A held SQLite start requires an open caller bound to its tenant.", nameof(reply));
         try
         {
-            return (await StartCoreAsync(request.Tenant, request.Caller.Id, spec, null, request.KeepFor, request, token, reserved, prepared))?.Actor?.Id;
+            return await StartCoreAsync(tenant, operation, spec, null, reply?.KeepFor, reply, token, reserved, prepared);
         }
-        catch (PreparedReplyExpired) { return null; }
+        catch (PreparationExpired) { return null; }
     }
 
     private async Task<Contract.Admission?> StartCoreAsync(string tenant, string operation, StartSpec spec, long? due, TimeSpan? keepFor,
@@ -44,14 +48,16 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     {
         RequireCreator(operation, spec);
         var window = ReceiptWindow(deduplicationWindow, keepFor);
-        var digest = FoundationRootCreator.OperationDigest(operation);
+        var storedOperation = prepared is not null && reply is null ? RootPreparedStarts.OneWayOperation(operation) : operation;
+        var digest = FoundationRootCreator.OperationDigest(storedOperation);
         using var localAttempt = reserved is null ? pressure?.Begin(tenant, RootAdmissionKind.Start) : null;
         var attempt = reserved ?? localAttempt;
         return await WriteAsync<Contract.Admission?>(async (db, ct) =>
         {
             var admission = await ReadStartAdmissionAsync(db, tenant, digest, ct);
             var now = admission.Now;
-            if (reply is not null && reply.Caller.Deadline <= now) return null;
+            var deadline = reply?.Caller.Deadline ?? prepared?.Deadline;
+            if (deadline <= now) return null;
             if (admission.Reference is { } existing)
             {
                 if (prepared is not null)
@@ -68,7 +74,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             var actor = prepared is null ? PlaceStart(tenant, partitions, attempt) : new InstanceRef(prepared.Actor);
             if (prepared is not null) _ = attempt?.Place(actor.Partition, partitions);
             var reference = FoundationRootCreator.ReferenceFor(key, tenant, new(actor.Id, 1));
-            var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, reply?.Address);
+            var creator = FoundationRootCreator.Create(actor, storedOperation, digest, spec, due, reply?.Address);
             var (header, payload) = EncodeCreator(creator);
             if (!FitsEnvelope(header, payload, creator.ReplyTo))
                 throw new MetadataLimitExceeded(nameof(spec), EfStore.RootContentBytes);
@@ -78,7 +84,8 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
             if (prepared is not null)
             {
-                var expected = new PreparedRootStart(tenant, reference, actor.Id, actor.Partition, digest, fingerprint, reply!.Caller.Deadline);
+                var expected = new PreparedRootStart(tenant, reference, actor.Id, actor.Partition, digest, fingerprint,
+                    reply?.Caller.Deadline ?? prepared.Deadline);
                 if (prepared != expected || !await RootPreparedStarts.ConsumeAsync(db, prepared, ct)) return null;
             }
             RequireOne(await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -97,18 +104,18 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         }, token, attempt);
     }
 
-    internal Task<(string? Existing, PreparedRootStart? Stage, PendingRootStart? Offer)> PrepareHeldStartAsync(
-        HeldRootRequest request, StartSpec spec, RootAdmissionPressure.Attempt? attempt, CancellationToken token)
+    internal Task<(string? Existing, PreparedRootStart? Stage, PendingRootStart? Offer)> PrepareProtectedStartAsync(
+        string tenant, string operation, StartSpec spec, HeldRootRequest? reply, RootAdmissionPressure.Attempt? attempt, CancellationToken token)
     {
-        if (!request.IsOpen) throw new ArgumentException("A held SQLite start requires an open caller bound to its tenant.", nameof(request));
-        var operation = request.Caller.Id;
-        var tenant = request.Tenant;
+        if (reply is { IsOpen: false }) throw new ArgumentException("A held SQLite start requires an open caller bound to its tenant.", nameof(reply));
         RequireCreator(operation, spec);
-        var digest = FoundationRootCreator.OperationDigest(operation);
+        var storedOperation = reply is null ? RootPreparedStarts.OneWayOperation(operation) : operation;
+        var digest = FoundationRootCreator.OperationDigest(storedOperation);
         return WriteAsync<(string?, PreparedRootStart?, PendingRootStart?)>(async (db, ct) =>
         {
             var admission = await ReadStartAdmissionAsync(db, tenant, digest, ct);
-            if (request.Caller.Deadline <= admission.Now) return default;
+            var deadline = reply?.Caller.Deadline ?? RootPreparedStarts.OneWayDeadline(admission.Now);
+            if (deadline <= admission.Now) return default;
             if (admission.Reference is { } existing) return (existing, null, null);
             attempt?.RequireCapacity();
             if (admission is not { Key: { } key, Partitions: { } partitions })
@@ -116,15 +123,15 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
             var actor = PlaceStart(tenant, partitions, attempt);
             attempt?.Require(actor.Partition);
             attempt?.RolledBack(); // Charge the original operation only when its creator commits.
-            var creator = FoundationRootCreator.Create(actor, operation, digest, spec, null, request.Address);
+            var creator = FoundationRootCreator.Create(actor, storedOperation, digest, spec, null, reply?.Address);
             var (header, payload) = EncodeCreator(creator);
             if (!FitsEnvelope(header, payload, creator.ReplyTo))
                 throw new MetadataLimitExceeded(nameof(spec), EfStore.RootContentBytes);
 
             var stage = new PreparedRootStart(tenant, FoundationRootCreator.ReferenceFor(key, tenant, new(actor.Id, 1)),
-                actor.Id, actor.Partition, digest, CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!, request.Caller.Deadline);
+                actor.Id, actor.Partition, digest, CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!, deadline);
             if (!await RootPreparedStarts.RecordAsync(db, stage, ct))
-                throw new StoreFormatException("The SQLite held root preparation was not recorded.");
+                throw new StoreFormatException("The SQLite root preparation was not recorded.");
             return (null, stage, RootPreparedStarts.Offer(stage, spec, key));
         }, token, attempt);
     }
@@ -257,7 +264,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
     private static async Task RequireBeforePreparedDeadlineAsync(KernelDb db, PreparedRootStart prepared, CancellationToken token)
     {
         // Unwind the transaction so expiry cannot commit the prepared-stage deletion, birth, receipt or enqueue.
-        if (await ReadClockAsync(db, token) >= prepared.Deadline) throw new PreparedReplyExpired();
+        if (await ReadClockAsync(db, token) >= prepared.Deadline) throw new PreparationExpired();
     }
 
     private Task<T> WriteAsync<T>(Func<KernelDb, long, CancellationToken, Task<T>> write, CancellationToken token,

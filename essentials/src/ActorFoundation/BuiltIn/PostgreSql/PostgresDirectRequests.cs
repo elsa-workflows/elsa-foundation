@@ -21,7 +21,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
     private readonly PostgresRootAdmission admission;
     private readonly HeldRootRequests edge;
     private readonly string? _startType;
-    private readonly bool _protectsRootStarts;
+    private readonly ProtectRootStartAsync? _protectRootStart;
     private PostgresReplyRelay? _liveReplies;
 
     internal PostgresDirectRequests(PostgresRootAdmission admission, EfStore store, string node, string? startType = null,
@@ -31,7 +31,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
         if (startType is not null) PostgresRootAdmission.RequireActorType(startType);
         this.admission = admission;
         _startType = startType;
-        _protectsRootStarts = protectRootStart is not null;
+        _protectRootStart = protectRootStart;
         Node = node;
         edge = new(new Admission(admission, store, protectRootStart), node, startType);
     }
@@ -45,6 +45,16 @@ public sealed class PostgresDirectRequests : IReplyTransport
     /// <summary>The database time, in milliseconds, that a request's deadline is measured against.</summary>
     public ValueTask<long> ReadClockAsync(CancellationToken cancellationToken = default) => admission.ReadReplyTimeAsync(cancellationToken);
 
+    /// <summary>Binds one-way protected starts to this PostgreSQL store and the host's selected tenant.</summary>
+    public IProtectedRootStarts BindProtectedRootStarts(Contract.BoundScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        if (_protectRootStart is not { } protect || _startType is not { } actorType)
+            throw new InvalidOperationException("Configure PostgreSQL root start protection before binding one-way starts.");
+        return new BoundProtectedRootStarts(actorType,
+            (operation, spec, token) => admission.AdmitProtectedRootStartAsync(scope.Tenant, operation, spec, protect, token));
+    }
+
     internal Requests Pending => edge.Pending;
     internal RootAdmissionPressure? Pressure => admission.Pressure;
 
@@ -56,7 +66,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
 
     internal void RequireRootStartProtectionBinding(Func<KernelDb> create, string actorType)
     {
-        if (_protectsRootStarts && (!admission.UsesDatabaseFactory(create) || _startType != actorType))
+        if (_protectRootStart is not null && (!admission.UsesDatabaseFactory(create) || _startType != actorType))
             throw new ArgumentException("Protected held starts must use the same PostgreSQL store factory and primary actor type.");
     }
 

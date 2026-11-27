@@ -8,9 +8,31 @@ using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
 
-/// <summary>The exact root prepared for a held start before its executable can be pinned.</summary>
+/// <summary>The exact root prepared before its executable can be pinned.</summary>
 internal sealed record PreparedRootStart(string Tenant, string Reference, string Actor, int Partition,
     string Operation, string Fingerprint, long Deadline);
+
+internal sealed class BoundProtectedRootStarts(string actorType,
+    Func<string, StartSpec, CancellationToken, Task<Contract.Admission?>> admit) : IProtectedRootStarts
+{
+    public async ValueTask<Contract.Admission> StartAsync(string operationId, Contract.StartSpec spec,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operationId);
+        ArgumentNullException.ThrowIfNull(spec);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (spec.Type != actorType || spec.Ephemeral || !Enum.IsDefined(spec.History) ||
+            !FoundationMetadataLimits.IsOutsideMessageId(operationId))
+            return new(Contract.AdmissionOutcome.Refused);
+        try
+        {
+            return await admit(operationId, new(spec.Type, spec.TypeData, spec.Input, History: (History)spec.History), cancellationToken)
+                ?? RootPreparedStarts.OneWayUnavailable().Admission;
+        }
+        catch (RootAdmissionRefused refusal) { return refusal.Admission; }
+        catch (MetadataLimitExceeded) { return new(Contract.AdmissionOutcome.Refused); }
+    }
+}
 
 internal static class RootPreparedStarts
 {
@@ -21,10 +43,29 @@ internal static class RootPreparedStarts
     internal const string Source = "/*prepared-start-source*/";
     private const string IssuancePrefix = PendingRootStart.IssuancePrefix;
     private const int MaximumIssuanceLength = 2_048;
+    private static readonly TimeSpan OneWayBudget = TimeSpan.FromSeconds(10);
+
+    internal static long OneWayDeadline(long now) => checked(now + (long)OneWayBudget.TotalMilliseconds);
+
+    // Ordinary ingress cannot submit this reserved id or win a protected operation's receipt.
+    internal static string OneWayOperation(string operation) => "~prepared-start/1:" + FoundationRootCreator.OperationDigest(operation);
+
+    internal static async Task<bool> ProtectOneWayAsync(ProtectRootStartAsync protect, PendingRootStart offer, CancellationToken token)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(OneWayBudget);
+        try { return await ProtectAsync(protect, offer, deadline.Token); }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested && !token.IsCancellationRequested)
+        {
+            throw OneWayUnavailable();
+        }
+    }
+
+    internal static RootAdmissionRefused OneWayUnavailable() => new(Contract.RefusalReason.NodeBusy, TimeSpan.FromSeconds(1));
 
     internal static async Task<bool> ProtectAsync(ProtectRootStartAsync protect, PendingRootStart offer, CancellationToken token)
     {
-        // A synchronous callback must not tie up an admission slot past the held deadline.
+        // A synchronous callback must not tie up an admission slot past its deadline.
         var work = Task.Run(async () => await protect(offer, token), token);
         try
         {

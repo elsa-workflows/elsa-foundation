@@ -231,7 +231,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var reply = new DirectReply(request.ReplyAddress(node, early), request.Deadline);
         return protectRootStart is null
             ? AdmitCoreAsync(tenant, operation, spec, null, keepFor, reply, cancellationToken)
-            : AdmitProtectedRootRequestAsync(tenant, operation, spec, keepFor, reply, protectRootStart, cancellationToken);
+            : AdmitProtectedRootAsync(tenant, operation, spec, keepFor, reply, protectRootStart, cancellationToken);
     }
 
     private async Task<Receipt?> AdmitCoreAsync(string tenant, string operation, StartSpec spec, long? due,
