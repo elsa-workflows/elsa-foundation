@@ -46,5 +46,6 @@ internal sealed class RuntimeKernelScheduleCutoverEntityConfiguration : IEntityT
         builder.ToTable(RuntimeKernelScheduleControlEfModule.CutoverTableName);
         builder.HasKey(row => row.Id);
         builder.Property(row => row.Id).HasMaxLength(64);
+        builder.Property(row => row.SchemaVersion).HasMaxLength(32).IsRequired();
     }
 }

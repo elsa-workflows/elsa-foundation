@@ -296,8 +296,12 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore(
 
         var cutoffId = EfRuntimeKernelScheduleControlStore.CutoverId(origin.Scope.Persistence, selected.SlotId, origin.PublicationRevision, continuity);
         var cutover = await context.KernelScheduleCutovers.AsNoTracking().SingleOrDefaultAsync(row => row.Id == cutoffId, token);
-        return cutover is not null && cutover.ActivatedAtUtcTicks >= origin.Due.UtcTicks &&
-            cutover.ActivatedAtUtcTicks <= DateTimeOffset.MaxValue.UtcTicks;
+        if (cutover is null) return false;
+        if (cutover.SchemaVersion == RuntimeKernelScheduleControlEfModule.InitialSchemaVersion ||
+            EfSchemaVersion.NotReadable(RuntimeKernelScheduleControlEfModule.Chain, cutover.SchemaVersion) ||
+            cutover.ActivatedAtUtcTicks <= DateTimeOffset.UnixEpoch.UtcTicks || cutover.ActivatedAtUtcTicks > DateTimeOffset.MaxValue.UtcTicks)
+            throw new InvalidDataException("The schedule cutover receipt has an unreadable stamp or instant.");
+        return cutover.ActivatedAtUtcTicks >= origin.Due.UtcTicks;
     }
 
     private async ValueTask<(WorkflowExecutableSourceReference Source, WorkflowTriggerBinding Binding)?> FencePublicationAsync(string scope, RuntimeKernelScheduleOccurrence occurrence,

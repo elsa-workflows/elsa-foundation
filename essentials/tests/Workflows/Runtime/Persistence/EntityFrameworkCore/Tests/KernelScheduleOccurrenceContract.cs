@@ -411,6 +411,15 @@ internal static partial class KernelScheduleOccurrenceContract
         Assert.Equal(initial.Stamp, latest.Stamp);
         Assert.Equal(Now.AddSeconds(10), latest.FoundationActivatedAt);
         Assert.Equal(4, clockReads);
+        var originalCutoverId = EfRuntimeKernelScheduleControlStore.CutoverId(unqualified.Persistence, slot, 1, initial.Stamp);
+        var originalCutover = context.KernelScheduleCutovers.Where(row => row.Id == originalCutoverId);
+        var storedCutover = await originalCutover.AsNoTracking().SingleAsync();
+        Assert.Equal("1.1.0", storedCutover.SchemaVersion);
+        Assert.Equal(middle.FoundationActivatedAt.UtcTicks, storedCutover.ActivatedAtUtcTicks);
+        Assert.Equal(1, await originalCutover.ExecuteUpdateAsync(set => set.SetProperty(row => row.SchemaVersion, "1.0.0")));
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            store.TryHandoffAttemptAsync(due, Successor(due), latest.Stamp, due.AcceptBefore, ReadClock).AsTask());
+        Assert.Equal(1, await originalCutover.ExecuteUpdateAsync(set => set.SetProperty(row => row.SchemaVersion, storedCutover.SchemaVersion)));
 
         Assert.Equal(RuntimeKernelScheduleAttemptOutcome.Refused,
             await store.TryAcceptAttemptAsync(due, due.AcceptBefore, ReadClock));

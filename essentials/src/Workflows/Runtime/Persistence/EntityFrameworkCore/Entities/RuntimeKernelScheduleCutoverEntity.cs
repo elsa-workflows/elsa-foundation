@@ -5,4 +5,5 @@ internal sealed class RuntimeKernelScheduleCutoverEntity
 {
     public string Id { get; set; } = null!;
     public long ActivatedAtUtcTicks { get; set; }
+    public string SchemaVersion { get; set; } = null!;
 }

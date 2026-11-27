@@ -111,7 +111,9 @@ internal sealed partial class EfRuntimeKernelScheduleControlStore(RuntimeDbConte
                         context.KernelScheduleCutovers.Add(new()
                         {
                             Id = CutoverId(persistence, slotId, former.PublicationRevision, priorContinuity.Stamp),
-                            ActivatedAtUtcTicks = cutover!.Value.UtcTicks
+                            ActivatedAtUtcTicks = cutover!.Value.UtcTicks,
+                            SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleControlEfModule.SchemaFamily,
+                                RuntimeKernelScheduleControlEfModule.SchemaVersion)
                         });
                     }
                 }
