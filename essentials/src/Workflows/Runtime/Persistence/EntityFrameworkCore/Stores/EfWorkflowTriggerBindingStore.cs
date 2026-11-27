@@ -266,6 +266,22 @@ public sealed class EfWorkflowTriggerBindingStore(
     /// <summary>The context every staged change writes through; a switch commits only stores that share it.</summary>
     internal RuntimeDbContext Context => context;
 
+    internal async ValueTask<WorkflowTriggerBinding?> FenceBindingAsync(string bindingId, CancellationToken cancellationToken)
+    {
+        if (context.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("A binding fence requires the caller's transaction.");
+        var scope = RequireScope();
+        var id = Id(scope, bindingId);
+        var row = await context.WorkflowTriggerBindings.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (row is null) return null;
+
+        var binding = Read(row, scope, bindingId);
+        var locked = await context.WorkflowTriggerBindings
+            .Where(item => item.Id == id && item.Revision == row.Revision && item.ContentJson == row.ContentJson)
+            .ExecuteUpdateAsync(update => update.SetProperty(item => item.Revision, item => item.Revision), cancellationToken);
+        return locked == 1 ? binding : null;
+    }
+
     public async ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activationId);

@@ -183,12 +183,12 @@ internal sealed class EfRuntimeKernelScheduleOccurrenceStore(
         const string type = RuntimeKernelScheduleOccurrence.ReservationType;
         var key = RuntimeKernelScheduleOccurrence.ReservationKey(occurrence.ScheduleKey);
         var bindingId = WorkflowTriggerBinding.BuildId(occurrence.ActivationId, identity.ArtifactId, occurrence.TriggerNode, key);
-        var rows = await bindings.ListAllByActivationAsync(occurrence.ActivationId, token);
-        if (!rows.Any(binding => binding.TriggerBindingId == bindingId && binding.IsActive &&
-            binding.Cardinality == TriggerCardinality.ReservationOnly && binding.SlotId == slot.SlotId &&
-            binding.DefinitionId == identity.DefinitionId && binding.ArtifactId == identity.ArtifactId &&
-            binding.ArtifactHash == identity.ArtifactHash && binding.ArtifactVersion == identity.ArtifactVersion &&
-            binding.ExecutableNodeId == occurrence.TriggerNode && binding.StimulusType == type && binding.StimulusHash == key))
+        var binding = await bindings.FenceBindingAsync(bindingId, token);
+        if (binding is not { IsActive: true, Cardinality: TriggerCardinality.ReservationOnly } ||
+            binding.ActivationId != occurrence.ActivationId || binding.SlotId != slot.SlotId ||
+            binding.DefinitionId != identity.DefinitionId || binding.ArtifactId != identity.ArtifactId ||
+            binding.ArtifactHash != identity.ArtifactHash || binding.ArtifactVersion != identity.ArtifactVersion ||
+            binding.ExecutableNodeId != occurrence.TriggerNode || binding.StimulusType != type || binding.StimulusHash != key)
             return null;
 
         var reservations = new EfIngressReservationStore(context, access);

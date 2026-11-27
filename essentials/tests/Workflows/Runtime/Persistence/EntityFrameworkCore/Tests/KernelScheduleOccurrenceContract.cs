@@ -90,6 +90,11 @@ internal static class KernelScheduleOccurrenceContract
         Assert.Equal(delayed, Assert.Single(await relay.ListPendingAsync(scope, null, 1)).Occurrence);
         await relay.MarkMaterializedAsync(delayed, new string('D', 64));
 
+        var binding = Assert.Single(await bindings.ListAllByActivationAsync(replacement.ActivationId));
+        await bindings.SaveAsync(binding with { IsActive = false });
+        Assert.False(await AcceptAsync(replacement with { ArmGeneration = 5, TimerDeliveryId = "inactive-binding" }));
+        await bindings.SaveAsync(binding);
+
         Assert.True((await activationSwitch.TryDeactivateAsync(new(first.DefinitionId, slotName,
             WorkflowActivationSource.Publishing, 2, Now), [])).Succeeded);
         clock.Advance(TimeSpan.FromMinutes(2));
