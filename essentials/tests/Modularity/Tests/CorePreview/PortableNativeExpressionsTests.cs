@@ -1,5 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CShells.DependencyInjection;
+using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -28,6 +31,76 @@ public sealed class PortableNativeExpressionsTests
         await using var session = Open(out _);
         var value = session.Evaluate(new HostExpression("JavaScript", "args.a + args.b", "Int32", null), new Dictionary<string, JsonNode?> { ["a"] = 2, ["b"] = 3 }, None);
         Assert.Equal("5", value?.ToJsonString());
+    }
+
+    [Fact]
+    public async Task Workbench_expression_opens_the_replacement_after_the_looked_up_shell_is_disposed()
+    {
+        const string shellName = "default";
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var token = deadline.Token;
+        var services = new ServiceCollection().AddLogging();
+        services.AddCShells(shells => shells.WithAssemblyContaining<ExpressionProbeFeature>()
+            .AddShell(shellName, shell => shell.WithFeature<ExpressionProbeFeature>()));
+        await using var provider = services.BuildServiceProvider();
+        var registry = provider.GetRequiredService<IShellRegistry>();
+        var original = await registry.GetOrActivateAsync(shellName, token);
+        var lookedUp = new TaskCompletionSource<IShell?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var openScope = new ManualResetEventSlim();
+        var lookups = 0;
+        var expressions = new PortableNativeExpressions(() => WorkbenchCorePreview.OpenExpressionScope(shellName, GetActiveShell));
+        var evaluation = Task.Run(async () =>
+        {
+            await using var session = expressions.Open(token);
+            return session.Evaluate(new HostExpression("JavaScript", "args.value + 1", "Int32", null),
+                new Dictionary<string, JsonNode?> { ["value"] = 41 }, None)?.GetValue<int>();
+        }, token);
+
+        try
+        {
+            Assert.Same(original, await lookedUp.Task.WaitAsync(token));
+            var replacement = await registry.ReloadAsync(shellName, token);
+            Assert.Null(replacement.Error);
+            Assert.NotNull(replacement.NewShell);
+            Assert.NotSame(original, replacement.NewShell);
+            Assert.Same(replacement.NewShell, registry.GetActive(shellName));
+            Assert.NotNull(replacement.Drain);
+            await replacement.Drain.WaitAsync(token);
+            Assert.Equal(ShellLifecycleState.Disposed, original.State);
+
+            openScope.Set();
+            Assert.Equal(42, await evaluation.WaitAsync(token));
+            Assert.Equal(2, lookups);
+
+            var staleLookups = 0;
+            Assert.Throws<NativeExpressionsUnavailableException>(() => WorkbenchCorePreview.OpenExpressionScope(shellName, () =>
+            {
+                staleLookups++;
+                return original;
+            }));
+            Assert.Equal(2, staleLookups);
+            Assert.Throws<NativeExpressionsUnavailableException>(() => WorkbenchCorePreview.OpenExpressionScope(shellName, () => null));
+        }
+        finally
+        {
+            openScope.Set();
+            if (registry.GetActive(shellName) is { } active)
+            {
+                var drain = await registry.DrainAsync(active, token);
+                await drain.WaitAsync(token);
+            }
+        }
+
+        IShell? GetActiveShell()
+        {
+            var shell = registry.GetActive(shellName);
+            if (Interlocked.Increment(ref lookups) == 1)
+            {
+                lookedUp.SetResult(shell);
+                openScope.Wait(token);
+            }
+            return shell;
+        }
     }
 
     [Fact]
@@ -164,14 +237,23 @@ public sealed class PortableNativeExpressionsTests
     private static INativeExpressionSession Open(out Lifetime lifetime)
     {
         var services = new ServiceCollection();
-        new ExpressionsFeature().ConfigureServices(services);
-        new JavaScriptFeature().ConfigureServices(services);
-        new JintFeature().ConfigureServices(services);
-        new LiquidExpressionsFeature().ConfigureServices(services);
+        new ExpressionProbeFeature().ConfigureServices(services);
         var provider = services.BuildServiceProvider();
         var scope = provider.CreateAsyncScope();
         var tracked = lifetime = new Lifetime(scope);
         return new PortableNativeExpressions(() => (scope.ServiceProvider, tracked)).Open(CancellationToken.None);
+    }
+
+    [ShellFeature("WorkbenchExpressionProbe")]
+    public sealed class ExpressionProbeFeature : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            new ExpressionsFeature().ConfigureServices(services);
+            new JavaScriptFeature().ConfigureServices(services);
+            new JintFeature().ConfigureServices(services);
+            new LiquidExpressionsFeature().ConfigureServices(services);
+        }
     }
 
     private sealed class Lifetime(IAsyncDisposable? inner = null) : IAsyncDisposable
