@@ -473,6 +473,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         public string? BirthTenant { get; set; }
         public string? BirthReference { get; set; }
         public string? BirthFingerprint { get; set; }
+        public long? BirthTableOid { get; set; }
     }
 
     private class PollRow
@@ -1051,7 +1052,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private static string WithReleasedCohort(string filter) => filter.Replace("/*released-cohort*/",
         """m."FoundationReleasedBy" = target."FoundationParkGeneration" OR """, StringComparison.Ordinal);
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
-        ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
+        ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """
+            + (postgres ? """, b.tableoid::bigint AS "BirthTableOid" """ : """, NULL AS "BirthTableOid" """)
+        : "";
     private string PollMessages => _ordinaryRoots is { Discover: true }
         ? $"""
            ({RootInboxSource} m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
@@ -1103,6 +1106,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 if (root != bindings.ForInput(message.InboxKey)) throw RootShape();
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value)
                 {
+                    RootCreator = key.Scope == 0 && db?.UsesRootParkOpening == true &&
+                        r is GeneratedPollRow { BirthTableOid: > 0 and var birthTableOid, Seq: > 0 and var creatorSeq }
+                        ? new PostgresCreatorWitness(_creatorWitnessIssuer, root, message, birthTableOid, creatorSeq) : null,
                     // A held start's caller is the root's tenant's, as a held direct input's is.
                     ReplyTenant = message.ReplyTo is not null ? root.Tenant : null
                 };

@@ -54,7 +54,11 @@ public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, 
     internal ParkRelease? ReleasedBy { get; init; }
     internal int PayloadLength { get; init; }
     internal string? ReplyTenant { get; init; }
+    internal RootCreatorWitness? RootCreator { get; init; }
 }
+
+// A provider can carry exact creator evidence from its poll to its own first-checkpoint writer.
+internal abstract record RootCreatorWitness(Message Envelope);
 
 /// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
 public sealed record SubscriptionRow(
@@ -167,6 +171,7 @@ public sealed record TurnCommit(
     IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<InboxKey>? Held = null, bool Delete = false)
 {
     internal FoundationHeaderChange? FoundationHeader { get; init; }
+    internal RootCreatorWitness? RootCreator { get; init; }
     // The qualified writer compares the exact envelope the owner dispatched with the locked occurrence.
     internal Message? FoundationRootOperator { get; init; }
     internal RootJobCompletion? FoundationRootJobCompletion { get; init; }
