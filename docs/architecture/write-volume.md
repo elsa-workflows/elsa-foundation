@@ -128,7 +128,8 @@ first, as the sketch requires.
 - Values by reference for large values, as value rows in the same database (decision 1), accepted by the `pad=`
   PostgreSQL run (decision 2); a size benchmark stays in the cost runs.
 - The owned commit on PostgreSQL, SQL Server, SQLite and MySQL, as built.
-- Default table settings, with POSTGRES.md's guidance published as a PostgreSQL operations note (decision 3).
+- Default table settings, with the [PostgreSQL operations note](../../essentials/src/ActorFoundation/BuiltIn/PostgreSql/README.md#postgresql-operations)
+  carrying the prototype guidance (decision 3).
 - No partitioned inbox, no lazy snapshot, no new tuning default.
 - A write-volume run on the release's final schema before release, since every later field, index and guard changes
   bytes and the old figures do not carry over to it.
