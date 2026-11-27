@@ -393,6 +393,29 @@ uses separate runtime builds and checks the physical rows after each refusal. It
 is `6f38d98648` for the ordinary relational format (3, 2, 1). Shipped provider profiles and the published
 release floor remain K12 qualification items.
 
+The [SQLite shipped compatibility rehearsal](../../essentials/tests/ActorFoundation/Native/Run/check-sqlite-shipped-compatibility.sh)
+builds the actual format 26 runtime at `92c54ac879` and the format 27 runtime at `fad467643e` from pinned archives.
+It uses disposable files and runs the checked and in-batch fences. The candidate installer refuses while the old
+process holds the file. The old owner then commits again at the same epoch. Once the old owner stops, the candidate
+refuses its file on the stored marker. The rehearsal installs a separate empty candidate file under the pre-GA recreation
+policy.
+
+The prior startup, installer, sweeper, projected actor-list read and journal read refuse the closed candidate file.
+SQLite maintains its shipped actor-list projection in the owner’s transaction, so the rehearsal exercises the projected
+read instead of starting a separate projector. Fingerprints cover the schema and persisted rows after each refusal.
+After the candidate owner stops, a separate process runs the pinned format 27 build as the compatibility floor. It reopens
+the file and advances the same actor with the earlier physical journal rows intact. The script prints source revisions,
+provider assembly hashes and the retained receipt directory.
+
+Run the pinned 26 to 27 rehearsal from a checkout that includes the fixture:
+
+```sh
+bash essentials/tests/ActorFoundation/Native/Run/check-sqlite-shipped-compatibility.sh
+```
+
+This is a tested SQLite floor for family versions 3/27/1 and definitions 2/10/0. The shipped PostgreSQL compatibility
+rehearsal and published rollback floors for supported providers remain K12 qualification items.
+
 ## Gate 2 review: counterexamples and answers
 
 The [independent architecture review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)
