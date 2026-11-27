@@ -28,7 +28,7 @@ public static partial class PostgresPreviewHosting
     /// <summary>Selects the shipped PostgreSQL store with the configured primary actor and root start protection.</summary>
     public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts)
     {
-        PostgresRootAdmission.RequireActorType(actorType);
+        RootPublicEventHost.RequireConfiguredActorType(actorType);
         return KernelDb.ForPostgresRootShipped(options, new(actorType, protectsStarts));
     }
 
