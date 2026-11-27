@@ -277,6 +277,7 @@ public sealed class HttpEndpointMiddleware(
         // The sink remains a compatibility marker for an already-started custom response; canonical
         // WriteHttpResponse does not consume it or any other request-affine service.
         var sync = endpointOptions.ResponseMode == ResponseMode.Sync;
+        if (sync) HttpResponseInstructionDelivery.ReserveWorkflowInstanceHeader(context.Response);
         var responseSink = sync ? context.RequestServices?.GetService<SyncHttpResponseSink>() : null;
         responseSink?.Populate(context);
 

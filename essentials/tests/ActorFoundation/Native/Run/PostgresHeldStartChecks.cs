@@ -73,7 +73,8 @@ internal static class PostgresHeldStartChecks
             Require(witness.Sends.TryGetValue("Ada", out var finishedAtFirst) && finishedAtFirst == 1,
                 "the start's response is released after the commit of the turn that wrote it");
             var order = await ReadRootAsync(store, scope, created.Actor!.Value, stop);
-            Require(order is { Status: InstanceStatus.Finished }, "the started root is committed Finished");
+            Require(order is { Status: InstanceStatus.Finished } && created.Reply.Actor == created.Actor,
+                "the reply names the exact committed Finished root");
 
             // 2. A repeat of the operation starts nothing and is not answered with the first start's response.
             var births = await BirthsAsync(Open, stop);
@@ -115,6 +116,7 @@ internal static class PostgresHeldStartChecks
                 "a start on a respond-before-commit route is answered with its response");
             Require(witness.Sends.TryGetValue("early", out var finishedAtEarly) && finishedAtEarly == finishedBefore,
                 "a respond-before-commit response is released before the turn's commit");
+            Require(early.Reply.Actor is null, "an early reply supplies no link to an uncommitted run");
             Require(await ReadRootAsync(store, scope, early.Actor!.Value, stop) is { Status: InstanceStatus.Finished },
                 "the respond-before-commit root still commits Finished");
 
