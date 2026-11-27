@@ -259,7 +259,10 @@ public static class PostgresPreviewHosting
         var workers = new WorkerOptions { Partitions = partitions, OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error) };
         var host = DurableHost.ForNode(node, watched, adapter, partitions, replies is null ? workers : workers with { Transport = replies });
         var runtime = new RuntimeNode(node, watched, partitions, options, beside: RunBesideAsync,
-            beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault);
+            beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault)
+        {
+            AfterReleaseAsync = relay is null ? null : relay.FlushAsync
+        };
         Volatile.Write(ref reporter, runtime);
         if (relay is not null) edge!.AttachLiveReplies(relay);
         try

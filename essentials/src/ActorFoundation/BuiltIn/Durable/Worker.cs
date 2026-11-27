@@ -3879,12 +3879,26 @@ public sealed class Worker : IScopeActivation, ITurnServices
             // caller belongs to the later command settlement, while a kept fault input answers here.
             if (unit.OpensPark && unit.Row?.FoundationDispatchHeader is not null &&
                 item.Message is { InboxScope: InboxKey.FoundationOccurrenceScope, Operator.RootHeldReply: true }) continue;
-            if (item.ReplyRoute is { } route && !Expired(route.Address) && !unit.Replied.Any(r => r.Message == item.Message.InboxKey))
-                slot.Replies.Add(route);
+            if (item.ReplyRoute is not { } route || Expired(route.Address) || unit.Replied.Any(r => r.Message == item.Message.InboxKey))
+                continue;
+            // An opted-out bound caller already reached its first authored output on the early pass.
+            if (!early && !Has(Flaw.EmitBeforeCommit) && route.Tenant is not null && unit.Emitted.Count != 0 &&
+                ReplyTo.Parse(route.Address).BeforeCommit)
+                continue;
+            slot.Replies.Add(route);
         }
         var callers = slot.Replies.Where(route => Has(Flaw.EmitBeforeCommit) || ReplyTo.Parse(route.Address).BeforeCommit == early).ToList();
         for (var i = 0; i < unit.Emitted.Count; i++)
-            foreach (var to in callers) Send(to, $"{Origin(unit)}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item, revision: unit.Revision, release: release);
+            foreach (var to in callers)
+            {
+                // A bound request takes any authored output. Its end is an answer only if no output was released.
+                if (to.Tenant is not null)
+                {
+                    if (i != 0) continue;
+                    slot.Replies.Remove(to);
+                }
+                Send(to, $"{Origin(unit)}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item, revision: unit.Revision, release: release);
+            }
         if (early || unit.Status == InstanceStatus.Running) return;
         foreach (var to in slot.Replies) Send(to, Origin(unit) + "#end", null, null, unit.Status, unit.Status is null ? "missing" : null);
         slot.Replies.Clear();

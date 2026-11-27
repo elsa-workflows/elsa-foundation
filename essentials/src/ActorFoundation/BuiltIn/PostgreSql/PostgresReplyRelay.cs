@@ -20,15 +20,15 @@ internal sealed class PostgresReplyRelay(Func<KernelDb> create, string node, Pos
     private readonly Channel<Outbound> _queue = Channel.CreateBounded<Outbound>(
         new BoundedChannelOptions(64) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _published = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _closing;
 
     internal static async Task<PostgresReplyRelay> OpenAsync(Func<KernelDb> create, string node,
         Action<Reply> receive, Action<Exception>? onFault, CancellationToken token)
     {
         await using var db = create();
         await using var pinned = await EfStore.BeginPinnedRootOperationAsync(db, token);
-        var issuer = await db.Database.SqlQueryRaw<byte[]>("""
-            SELECT "Key" AS "Value" FROM "FoundationRootIssuer" WHERE "Singleton"
-            """).SingleAsync(token);
+        var issuer = await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token);
         try
         {
             if (issuer.Length != 32) throw new StoreFormatException("The live reply carrier needs a valid store issuer.");
@@ -42,8 +42,20 @@ internal sealed class PostgresReplyRelay(Func<KernelDb> create, string node, Pos
 
     internal void Send(string destination, Reply reply)
     {
-        if (!_queue.Writer.TryWrite(new(destination, reply)) && !_queue.Reader.Completion.IsCompleted)
+        if (!_queue.Writer.TryWrite(new(destination, reply)) && Volatile.Read(ref _closing) == 0)
             Report(new IOException("The live PostgreSQL reply queue is full."));
+    }
+
+    internal async Task FlushAsync(CancellationToken kill)
+    {
+        Complete();
+        using var bound = CancellationTokenSource.CreateLinkedTokenSource(kill);
+        bound.CancelAfter(TimeSpan.FromSeconds(2));
+        try { await _published.Task.WaitAsync(bound.Token); }
+        catch (OperationCanceledException) when (bound.IsCancellationRequested)
+        {
+            if (!kill.IsCancellationRequested) Report(new TimeoutException("The live PostgreSQL replies did not drain before shutdown."));
+        }
     }
 
     internal async Task RunAsync(CancellationToken token)
@@ -51,19 +63,24 @@ internal sealed class PostgresReplyRelay(Func<KernelDb> create, string node, Pos
         try { await Task.WhenAll(ListenAsync(token), PublishAsync(token)); }
         finally
         {
-            _queue.Writer.TryComplete();
+            Complete();
             while (_queue.Reader.TryRead(out _)) { }
-            _ready.TrySetCanceled(token);
         }
+    }
+
+    private void Complete()
+    {
+        Interlocked.Exchange(ref _closing, 1);
+        _queue.Writer.TryComplete();
     }
 
     private async Task ListenAsync(CancellationToken token)
     {
-        var channel = frames.Channel(node);
         while (!token.IsCancellationRequested)
         {
             try
             {
+                var channel = frames.Channel(node);
                 await using var db = create();
                 var source = (NpgsqlConnection)db.Database.GetDbConnection();
                 var settings = new NpgsqlConnectionStringBuilder(source.ConnectionString) { Pooling = false, Multiplexing = false };
@@ -94,15 +111,16 @@ internal sealed class PostgresReplyRelay(Func<KernelDb> create, string node, Pos
                     }
                 }
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
-            catch (Exception error) when (error is NpgsqlException or IOException or TimeoutException)
+            catch (Exception) when (token.IsCancellationRequested) { break; }
+            catch (Exception error)
             {
                 if (_ready.TrySetException(error)) return;
                 Report(error);
                 try { await Task.Delay(TimeSpan.FromMilliseconds(250), token); }
-                catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
+                catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
             }
         }
+        _ready.TrySetCanceled(token);
     }
 
     private async Task PublishAsync(CancellationToken token)
@@ -132,13 +150,14 @@ internal sealed class PostgresReplyRelay(Func<KernelDb> create, string node, Pos
                     await batch.ExecuteNonQueryAsync(token);
                     await transaction.CommitAsync(token);
                 }
-                catch (Exception error) when (error is NpgsqlException or IOException or TimeoutException or JsonException or NotSupportedException)
+                catch (Exception error)
                 {
                     if (!token.IsCancellationRequested) Report(error);
                 }
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        finally { _published.TrySetResult(); }
     }
 
     private void Report(Exception error)
