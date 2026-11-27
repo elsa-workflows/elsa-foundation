@@ -234,6 +234,9 @@ internal static class WorkbenchCorePreview
                 ServedWorkflow = serving is null ? null : serving.ServedWorkflow,
                 // Without self-sends a turn cannot continue in the next: it runs on to its next wait, within its bounds.
                 SelfSends = capabilities.SelfSends,
+                UseStructuralJournal = useSqlite
+                    ? !terminalOutputQualification && SqliteEmbeddedHosting.TakesSequencedJournal
+                    : PostgresPreviewHosting.TakesSequencedJournal(OpenPostgres),
                 // An instance started on a version no slot serves since the restart runs it from the default shell's artifacts.
                 ResolveWorkflow = serving is null ? null : (workflow, token) => ResolveWorkflowAsync(shells, shellName, workflow, token),
             });

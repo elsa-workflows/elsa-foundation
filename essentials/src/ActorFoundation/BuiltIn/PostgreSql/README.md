@@ -32,9 +32,9 @@ Opt-in PostgreSQL node composition and Generic Host lifetime for the Built-in Ac
   one. Any other is refused, naming what it holds, with the advice to recreate it empty. Objects of PostgreSQL extensions
   do not count, and hosts starting at once install one after the other (an advisory lock). A multi-node host keeps
   installation an explicit setup step (`EfStore.CreateAsync` and `InstallPreviewRootSchemaAsync`), run while no node is.
-- The shipped format takes self-sends, actor-owned Delay timers, and attached or detached child starts. Hosts read the
-  selected profile through `TakesSelfSends`, `TakesTimers` and `TakesChildren`. Timer and Cron start triggers require a
-  schedule-actor host.
+- The shipped format takes self-sends, actor-owned Delay timers, attached or detached child starts, and sequenced workflow
+  history. Hosts read the selected profile through `TakesSelfSends`, `TakesTimers`, `TakesChildren`, and `TakesSequencedJournal`.
+  Timer and Cron start triggers require a schedule-actor host.
 
 The shipped format grows by composition. Each widening of its capability set takes a new protocol number, and a database
 installed with an older set is refused. Before GA a preview database is recreated; after GA a widening migrates, with a

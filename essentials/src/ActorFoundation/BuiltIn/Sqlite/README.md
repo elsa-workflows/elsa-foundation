@@ -15,5 +15,6 @@ The database lives on a local filesystem with one process per file. Use the data
 
 This composition uses the owned writer in either fence mode.
 
-The shipped profile takes self-sends, actor-owned Delay timers, and attached or detached child starts. Use
-`SqliteEmbeddedHosting.TakesSelfSends`, `TakesTimers` and `TakesChildren` when configuring a model.
+The shipped profile takes self-sends, actor-owned Delay timers, attached or detached child starts, and sequenced workflow
+history. Use `SqliteEmbeddedHosting.TakesSelfSends`, `TakesTimers`, `TakesChildren`, and `TakesSequencedJournal` when
+configuring a model.
