@@ -317,7 +317,8 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
     internal async Task CheckTakeVersionsAsync()
     {
         await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
-        await VersionTakeChecks.Run(fixture.CreateContext, fixture.Store, fixture.NewClient());
+        await VersionTakeChecks.Run(fixture.CreateContext, fixture.Store, fixture.NewClient(),
+            interceptor => Store(fixture.CreateAdmin(interceptor), FenceInBatch));
     }
 
     internal async Task CheckServiceVersionsAsync()
