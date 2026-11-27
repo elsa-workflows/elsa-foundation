@@ -123,6 +123,11 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
             () => (InstalledPath, requests.Value), retentionWindow, auxiliaryActor, protectChildBirths);
     }
 
+    /// <summary>Confirms an exact protected child in this foundation's installed file.</summary>
+    public ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(Contract.BoundScope scope, Contract.ActorRef child,
+        string issuance, CancellationToken cancellationToken = default) =>
+        SqliteEmbeddedHosting.ConfirmChildBirthAsync(InstalledPath, qualificationFormat, scope, child, issuance, cancellationToken);
+
     /// <summary>Opens durable ingress and held requests routed to this foundation's owner.</summary>
     public Task<Contract.IIngress> OpenIngressAsync(CancellationToken cancellationToken = default) =>
         SqliteEmbeddedHosting.OpenFoundationWithRequestsAsync(InstalledPath, actorType, requests.Value, cancellationToken);

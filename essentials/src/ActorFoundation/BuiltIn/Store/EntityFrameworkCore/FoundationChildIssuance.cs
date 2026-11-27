@@ -75,10 +75,3 @@ internal sealed record FoundationChildIssuance(string Tenant, string Parent, str
     private static bool IsDigest(ReadOnlySpan<char> value) =>
         value.Length == 64 && value.IndexOfAnyExcept("0123456789ABCDEF") < 0;
 }
-
-internal enum FoundationChildBirthProof
-{
-    Unresolved,
-    BirthRetired,
-    IssuanceFencedAbsent
-}

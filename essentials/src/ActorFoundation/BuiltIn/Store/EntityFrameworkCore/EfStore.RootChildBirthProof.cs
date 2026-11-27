@@ -1,3 +1,4 @@
+using Kernel.Foundation.Hosting;
 using System.Data;
 using System.Runtime.CompilerServices;
 using Microsoft.Data.Sqlite;

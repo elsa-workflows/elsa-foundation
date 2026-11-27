@@ -64,7 +64,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     public void ConfigureServices(IServiceCollection services) =>
         ConfigureServices(services, KernelShellStorage.Create(Provider, SqlitePath, PostgresConnectionString));
 
-    internal void ConfigureServices(IServiceCollection services, KernelShellStorage storage)
+    internal void ConfigureServices(IServiceCollection services, KernelShellStorage storage, bool protectChildExecutables = false)
     {
         var tenant = EmbeddedTenant.Bind(Tenant);
         var persistenceScope = new PersistenceScope(tenant.Tenant);
@@ -85,7 +85,7 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
             : new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),
             sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILoggerFactory>(),
-            persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System));
+            persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System, protectChildExecutables));
         services.AddSingleton(sp => new KernelRuns(tenant, sp.GetRequiredService<KernelShellRuntime>().ReadAsync));
         services.AddSingleton(sp =>
         {
