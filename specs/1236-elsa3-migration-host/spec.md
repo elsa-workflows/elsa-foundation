@@ -4,7 +4,10 @@
 
 **Created**: 2026-11-24 (rescoped 2026-11-25)
 
-**Status**: Approved
+**Status**: Implemented
+
+**Status note**: Implemented covers the host, US1, US3 and US4. The US2 acceptance run (T011–T013) follows as S-15's final
+run on this host once the migration CLI's `inventory` exists.
 
 **Input**: A migration-specific ASP.NET Core host in this repository. It composes, by project references, exactly the
 Elsa 4 features that the JTest acceptance set's converted Elsa 3 workflows need, and loads the migration CLI's

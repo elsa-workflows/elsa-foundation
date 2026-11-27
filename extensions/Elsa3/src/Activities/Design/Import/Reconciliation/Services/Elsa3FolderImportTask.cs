@@ -62,6 +62,9 @@ internal sealed class Elsa3FolderImportTask(
         FailIfStrict(result.Skipped, result.Scope, logSkipped: false);
     }
 
+    /// <inheritdoc cref="Elsa3ImportRun.NotPublished"/>
+    internal static (string Code, string Cause) NotPublished(ReusableActivityPublicationState state) => Elsa3ImportRun.NotPublished(state);
+
     /// <inheritdoc cref="Elsa3ImportRun.Locate"/>
     internal static Dictionary<string, (string Code, string Cause)> Locate(ReusableActivityImportValidationException exception, IReadOnlyList<string> selected) =>
         Elsa3ImportRun.Locate(exception, selected);

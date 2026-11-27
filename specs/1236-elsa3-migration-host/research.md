@@ -273,3 +273,14 @@ The host lives in `apps/` with the other hosts, so §E2.7 (the `Elsa3` domain ho
 support) and the domain tree are unchanged. §E2.1's list of host and test groupings is not read by any guard, and on
 main it names neither `Elsa.Essentials.Host` nor `Elsa.Foundation.Host`, so this host follows that precedent and adds
 nothing. No constitution text changes.
+
+## R-12 Enum input defaults published from the catalog (found in implementation, 2026-11-27)
+
+- **Fact.** The sample's HttpEndpoint, with `ResponseMode` left to its catalog default, failed publication with
+  `VF-COER-001 ... cannot be converted to alias 'Elsa.Http.Core.ResponseMode'`. So did the `"Sync"` the Elsa 3 converter
+  writes. `ClrAssemblyScanner` records an enum input's default and options by member name, and Studio offers those
+  names, but `JsonConversionContract.Read` read a plain enum from a number only.
+- **Decision (Joey, 2026-11-27: fix the engine defect in this PR).** A defect fix, not a requirement change: what the
+  catalog writes must publish. `Read` also takes the exact declared member name when the target is the enum type
+  itself and neither the member nor the type declares a converter. Writing stays a number. The 1207 conversion
+  contract's wire-change table and `docs/serialization.md` record the read.

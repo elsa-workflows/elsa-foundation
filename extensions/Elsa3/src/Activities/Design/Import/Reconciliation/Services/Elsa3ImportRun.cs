@@ -1,8 +1,11 @@
+using Elsa.Activities.Design.Core.Models;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Reconciliation.Models;
+using Elsa3.Activities.Design.Import.Services;
 using Elsa3.Models;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -171,7 +174,7 @@ internal sealed class Elsa3ImportRun(Elsa3ImportSelection selection, IPersistenc
             .Where(state => state.Status is not (ReusableActivityPublicationStatus.Published or ReusableActivityPublicationStatus.AlreadyPublished))
             .ToDictionary(
                 state => state.SourceVersionId,
-                state => (state.ErrorCode ?? state.Status.ToString(), $"The reusable activity was not published ({state.Status}{(state.BlockedBy is null ? "" : $", blocked by '{state.BlockedBy}'")})."),
+                NotPublished,
                 StringComparer.Ordinal);
         var (publishable, publishSkips) = selection.Exclude(plan, refused, inputsById, result.AppliedSourceVersionIds, missingTargetState: "not published");
         skipped.AddRange(publishSkips);
@@ -248,6 +251,29 @@ internal sealed class Elsa3ImportRun(Elsa3ImportSelection selection, IPersistenc
         }
 
         return (null, null);
+    }
+
+    /// <summary>
+    /// Why a reusable was not published, for its skip: its status and what its first error says, which is where a schema
+    /// refusal names its family and versions (#5972). A refusal a later start can get past (a schema refusal, an
+    /// unexpected failure) says the next start tries again instead of its remediation, which speaks to an upload applied
+    /// under a new idempotency key; any other refusal comes back on every start, so it keeps its remediation. A version
+    /// blocked by a dependency names only that dependency, whose own skip says why.
+    /// </summary>
+    internal static (string Code, string Cause) NotPublished(ReusableActivityPublicationState state)
+    {
+        var status = $"The reusable activity was not published ({state.Status}{(state.BlockedBy is null ? "" : $", blocked by '{state.BlockedBy}'")})";
+        var error = state.BlockedBy is null
+            ? state.Diagnostics?.FirstOrDefault(diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error)
+            : null;
+        var cause = error?.Code switch
+        {
+            null => $"{status}.",
+            SchemaWriteRefusedException.RefusalCode or SchemaDormancyRefusedException.RefusalCode => $"{status}: {error.Message} The next start tries again.",
+            ReusableActivityImportPublishPhase.PublicationFailed => $"{status}: {error.Message} The error logged before this one has the cause; the next start tries again.",
+            _ => $"{status}: {Elsa3ImportSelection.Cause(error.Message, error.Remediation)}"
+        };
+        return (state.ErrorCode ?? state.Status.ToString(), cause);
     }
 
     /// <summary>

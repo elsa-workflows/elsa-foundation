@@ -1554,6 +1554,9 @@ public sealed partial class GraphActivityProviderTests
                 .ToArray();
         }
         public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => ScopedVariables.GetValueOrDefault(activity.NodeId, []);
+        public IReadOnlyDictionary<string, IReadOnlyCollection<VariableDefinition>> IterationVariables { get; init; } =
+            new Dictionary<string, IReadOnlyCollection<VariableDefinition>>();
+        public IReadOnlyCollection<VariableDefinition> ProjectIterationVariables(ActivityNode activity) => IterationVariables.GetValueOrDefault(activity.NodeId, []);
         public bool SupportsScopedVariables(ActivityNode activity) => false;
 
         private static bool IsSequence(ActivityNodeStructure structure) =>

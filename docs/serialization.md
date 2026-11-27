@@ -25,7 +25,11 @@ caller an unrestricted option set.
 A conversion to or from a user CLR type uses `JsonConversionContract`, selected on the type or input member with
 `JsonConversionAttribute`. The default is camelCase, exact matching and unmatched-member warnings. API wire dates
 require an explicit offset; user conversion and API write modes have distinct rules for `DateTimeKind.Unspecified`.
-The [conversion contract](../specs/1207-json-data-integrity-baseline/contracts/json-baseline.md) defines diagnostics,
+A value converted to an enum type itself (an enum input, for example) whose type has no converter of its own reads from
+its number or from the exact name a member declares (the activity
+catalog records enum defaults and options by name); other casing and flags lists are refused, an enum with its own
+converter reads through it, and writing stays a number. The
+[conversion contract](../specs/1207-json-data-integrity-baseline/contracts/json-baseline.md) defines diagnostics,
 date handling and the scoped override surface.
 
 Data-carrying API, store and message members use `JsonElement` or `JsonNode`. Typed owner metadata stays typed.
