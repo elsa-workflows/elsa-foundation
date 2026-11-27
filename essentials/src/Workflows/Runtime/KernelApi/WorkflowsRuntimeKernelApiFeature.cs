@@ -30,7 +30,11 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
 
     public virtual void ConfigureServices(IServiceCollection services) => services.AddDataProtection();
 
-    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) => KernelHistoryStream.Map(endpoints);
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
+    {
+        KernelHistoryStream.Map(endpoints);
+        KernelParkRecovery.Map(endpoints);
+    }
 
     public virtual void PostConfigureServices(IServiceCollection services)
     {
@@ -53,6 +57,7 @@ public class WorkflowsRuntimeKernelApiFeature : IWebShellFeature, IPostConfigure
         {
             ReplaceService(typeof(IWorkflowInstanceDeletionService), typeof(WorkflowInstanceDeletionService), typeof(KernelWorkflowInstanceDeletionService));
             services.TryAddSingleton<SelectedRunDeletionAvailable>();
+            services.TryAddScoped<KernelParkRecovery>();
         }
 
         void ReplaceService(Type service, Type runtimeImplementation, Type kernelImplementation)

@@ -5,6 +5,8 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Api.AspNetCore;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
@@ -89,6 +91,11 @@ public sealed class KernelPublishedExecuteTests
 
         var waiting = ExecutableOf("execute-waiting", "waiting", Sequence("sequence",
             Node("delay", Types.Delay, [Literal("Duration", "00:00:45", "TimeSpan")])));
+        var recoverable = ExecutableOf("execute-recoverable", "recoverable", Sequence("sequence",
+            Node("wait", Types.HttpEndpoint,
+                [Literal("Path", "recoverable", "String"), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", false, "Boolean")]),
+            SetOutput("output", "result", Expression("value", "JavaScript", "'recovered'", "String")),
+            Node("reply", Types.WriteHttpResponse, [Literal("Body", "recovered", "String")])));
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0));
@@ -102,6 +109,10 @@ public sealed class KernelPublishedExecuteTests
         builder.Services.AddSingleton<IWorkflowExecutableStartPolicy, FixturePolicy>();
         builder.Services.AddSingleton<IPermissionResourceHandler, DeleteResourcePolicy>();
         builder.Services.AddSingleton<IWellKnownTypeRegistry, FixtureTypes>();
+        var expressions = new FixtureExpressions();
+        builder.Services.AddSingleton<IPortableExpressionEvaluator>(expressions);
+        builder.Services.AddSingleton(new WorkflowHttpEndpointSettings("/fixture/workflows", TimeSpan.FromSeconds(3), 4096,
+            (context, _, _) => { context.Response.StatusCode = 504; return ValueTask.CompletedTask; }));
         builder.Services.AddWorkflowRuntime();
         builder.Services.AddRuntimeEntityFrameworkCore(new()
         {
@@ -115,20 +126,24 @@ public sealed class KernelPublishedExecuteTests
             (IRuntimeKernelExecutablePinStore)ActivatorUtilities.CreateInstance(services, pinDescriptor.ImplementationType!), pinBoundary));
         var api = new WorkflowsRuntimeApiFeature();
         api.ConfigureServices(builder.Services);
-        new WorkflowsRuntimeKernelHostingFeature
+        var kernelHosting = new WorkflowsRuntimeKernelHostingFeature
         {
             Provider = provider,
             SqlitePath = directory is null ? null : Path.Combine(directory, "foundation.db"),
             PostgresConnectionString = foundation
-        }.ConfigureServices(builder.Services);
+        };
+        kernelHosting.ConfigureServices(builder.Services);
         new WorkflowsRuntimeKernelFeature().PostConfigureServices(builder.Services);
         api.PostConfigureServices(builder.Services);
-        new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(builder.Services);
+        var kernelApi = new WorkflowsRuntimeKernelApiFeature();
+        kernelApi.PostConfigureServices(builder.Services);
 
         await using var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
         WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
+        kernelApi.MapEndpoints(app, app.Environment);
+        kernelHosting.MapEndpoints(app, app.Environment);
         var scopes = app.Services.GetRequiredService<IServiceScopeFactory>();
         await using var publication = await scopes.CreateAsyncScopeAsync(Scope);
         var stores = publication.ServiceProvider;
@@ -137,10 +152,12 @@ public sealed class KernelPublishedExecuteTests
         await materials.SaveAsync(canonical, token);
         await materials.SaveAsync(flowchart, token);
         await materials.SaveAsync(waiting, token);
+        await materials.SaveAsync(recoverable, token);
         await PublishAsync(alias, "blue");
         await PublishAsync(sibling, "default");
         await PublishAsync(flowchart, "default");
         await PublishAsync(waiting, "default");
+        await PublishAsync(recoverable, "default");
         var shell = app.Services.GetRequiredService<KernelShellRuntime>();
         await shell.StartAsync(token);
         try
@@ -214,6 +231,57 @@ public sealed class KernelPublishedExecuteTests
             Assert.Equal(HttpStatusCode.NotFound, deniedPurge.StatusCode);
             Assert.Equal(Contract.ActorStatus.Cancelled, (await reads.GetAsync(bound, new(reauthorized), token))?.Header.Status);
             await VerifyDeletedAsync(reauthorized);
+            await VerifyRecoveryAsync();
+
+            async Task VerifyRecoveryAsync()
+            {
+                using var start = await ExecuteAsync(recoverable.Identity.ArtifactId, new { });
+                Assert.Equal(HttpStatusCode.OK, start.StatusCode);
+                var receipt = Assert.IsType<WorkflowExecutionStartDispatchView>(await start.Content.ReadFromJsonAsync<WorkflowExecutionStartDispatchView>(token));
+                var actor = new Contract.ActorRef(receipt.WorkflowExecutionId);
+                while ((await reads.TailAsync(bound, actor, cancellationToken: token)).JournalHeadRevision is not > 0)
+                    await Task.Delay(40, token);
+                using var first = await http.PostAsync("/fixture/workflows/recoverable", null, token);
+                var route = $"/runtime/workflows/instances/{actor.Id}/recovery";
+
+                using var forbidden = await RecoveryAsync(HttpMethod.Get, manage: false);
+                Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+                using var hidden = await RecoveryAsync(HttpMethod.Get, tenant: "another-tenant");
+                Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
+                using var parked = await RecoveryAsync(HttpMethod.Get);
+                Assert.Equal(HttpStatusCode.OK, parked.StatusCode);
+                var status = await parked.Content.ReadFromJsonAsync<JsonElement>(token);
+                Assert.Equal("Available", status.GetProperty("status").GetString());
+                var selected = status.GetProperty("token").GetString();
+                Assert.False(string.IsNullOrEmpty(selected));
+                using var stale = await RecoveryAsync(HttpMethod.Post, selection: "stale");
+                Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+                Assert.NotNull((await reads.GetAsync(bound, actor, token))?.Park);
+
+                expressions.IsAvailable = true;
+                using var accepted = await RecoveryAsync(HttpMethod.Post, selection: selected);
+                Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+                while (await reads.GetAsync(bound, actor, token) is not { Park: null }) await Task.Delay(40, token);
+                using var noPark = await RecoveryAsync(HttpMethod.Get);
+                Assert.Equal("NotParked", (await noPark.Content.ReadFromJsonAsync<JsonElement>(token)).GetProperty("status").GetString());
+                using var retiredSelection = await RecoveryAsync(HttpMethod.Post, selection: selected);
+                Assert.Equal(HttpStatusCode.Conflict, retiredSelection.StatusCode);
+
+                using var second = await http.PostAsync("/fixture/workflows/recoverable", null, token);
+                Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+                Assert.Equal("recovered", await second.Content.ReadAsStringAsync(token));
+                Assert.Equal(Contract.ActorStatus.Finished, (await reads.GetAsync(bound, actor, token))?.Header.Status);
+
+                async Task<HttpResponseMessage> RecoveryAsync(HttpMethod method, bool manage = true, string? tenant = null, string? selection = null)
+                {
+                    using var request = new HttpRequestMessage(method, route);
+                    if (method == HttpMethod.Post) request.Content = JsonContent.Create(new { token = selection });
+                    request.Headers.Add("X-Fixture-Subject", "accepted");
+                    if (manage) request.Headers.Add("X-Fixture-Manage", "yes");
+                    if (tenant is not null) request.Headers.Add("X-Fixture-Tenant", tenant);
+                    return await http.SendAsync(request, token);
+                }
+            }
 
             async Task<string> StartWaitingAsync()
             {
@@ -304,6 +372,15 @@ public sealed class KernelPublishedExecuteTests
                 WorkflowActivationSource.Publishing, 0), token);
             Assert.True(result.Succeeded, result.Diagnostic);
         }
+    }
+
+    private sealed class FixtureExpressions : IPortableExpressionEvaluator
+    {
+        public volatile bool IsAvailable;
+
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) => IsAvailable
+            ? ValueTask.FromResult(JsonSerializer.SerializeToElement("recovered"))
+            : throw new Kernel.Native.NativeExpressionsUnavailableException("The fixture evaluator is unavailable.");
     }
 
     private static WorkflowExecutable PublishedAs(WorkflowExecutable canonical, string definition, string version) =>
