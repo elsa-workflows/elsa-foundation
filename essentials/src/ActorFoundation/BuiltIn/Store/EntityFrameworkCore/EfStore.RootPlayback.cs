@@ -187,7 +187,7 @@ public sealed partial class EfStore
             var members = occurrences.Where(row => row.Sequence > root.RetainedAfter && row.Sequence <= upper);
             if (query.Activity is { } activity)
             {
-                var scoped = await members.SingleOrDefaultAsync(row => row.Activity == activity, token);
+                var scoped = await FindMemberAsync(activity);
                 if (scoped is null) return Result(ActorPlaybackAvailability.Unavailable, "scope-unavailable");
                 if (query.Anchor is { } exact && exact != activity)
                     return Result(ActorPlaybackAvailability.TargetUnavailable, "anchor-outside-scope");
@@ -204,7 +204,7 @@ public sealed partial class EfStore
             var selected = query.Position ?? 0;
             if (query.Anchor is { } anchor)
             {
-                var target = await members.SingleOrDefaultAsync(row => row.Activity == anchor, token);
+                var target = await FindMemberAsync(anchor);
                 if (target is null) return Result(ActorPlaybackAvailability.TargetUnavailable, "anchor-outside-range");
                 selected = target.Ordinal - first.Value;
             }
@@ -222,6 +222,12 @@ public sealed partial class EfStore
                     index == 0 ? null : rows[index - 1].Activity, index == rows.Length - 1 ? null : rows[index + 1].Activity))
                 .Where((_, index) => rows[index].Ordinal >= start && rows[index].Ordinal <= end).ToArray();
             return Available(count, selected, items);
+
+            // Seek the exact activity key first. Testing retained bounds on that one row keeps a
+            // provider from choosing the range index and scanning the frozen prefix for an anchor.
+            async Task<PlaybackRow?> FindMemberAsync(string activity) =>
+                await occurrences.SingleOrDefaultAsync(row => row.Activity == activity, token) is { } row &&
+                    row.Sequence > root.RetainedAfter && row.Sequence <= upper ? row : null;
 
             ActorPlaybackPage Available(long total, long target, IReadOnlyList<ActorPlaybackEntry> items) =>
                 new(ActorPlaybackAvailability.Available, null, root.Latest, upper, root.RetainedAfter, root.LastRecordedAt,
