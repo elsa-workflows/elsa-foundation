@@ -2,8 +2,19 @@ using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CShells;
+using CShells.Configuration;
+using CShells.DependencyInjection;
+using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.ActorFoundation.Hosting;
+using Elsa.Api.Capabilities;
+using Elsa.Api.Capabilities.Models;
+using Elsa.Events;
 using Elsa.Foundation.Identity.Extensions;
+using Elsa.Workflows.Design.Validations;
+using Elsa.Workflows.Publishing;
+using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
@@ -26,6 +37,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -178,19 +190,25 @@ public sealed class KernelRunListTests
         builder.Services.AddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         builder.Services.AddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         builder.Services.AddSingleton(new KernelRuns(Scope, _ => ValueTask.FromResult<IActorReads>(reads)));
-        WorkflowsRuntimeKernelApiFeature.ConfigureRetainedServices(builder.Services);
-        new WorkflowsRuntimeKernelApiFeature().PostConfigureServices(builder.Services);
+        var feature = new WorkflowsRuntimeKernelRetainedApiFeature();
+        feature.ConfigureServices(builder.Services);
+        feature.PostConfigureServices(builder.Services);
 
         await using var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
-        WorkflowsRuntimeKernelApiFeature.MapRetainedEndpoints(app);
+        feature.MapEndpoints(app, app.Environment);
         await app.StartAsync();
         await using var scope = app.Services.CreateAsyncScope();
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowSchedulerDrainer>());
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionActorProvider>());
         Assert.Null(scope.ServiceProvider.GetService<IWorkflowExecutionStateStore>());
         Assert.Null(scope.ServiceProvider.GetService<RuntimeHistoryInspectionService>());
+        Assert.Single(scope.ServiceProvider.GetServices<IWorkflowRunInspection>());
+        var links = Assert.Single(scope.ServiceProvider.GetServices<ApiCapabilityDeclaration>()).Links;
+        Assert.Contains(links, link => link.Rel == "workflow-instances-page");
+        Assert.Contains(links, link => link.Rel == "activity-executions");
+        Assert.DoesNotContain(links, link => link.Rel is "runtime-diagnostics" or "workflow-dispatches" or "workflow-execute" or "workflow-instance-delete");
 
         var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
         using var client = new HttpClient { BaseAddress = new(address) };
@@ -207,6 +225,72 @@ public sealed class KernelRunListTests
         Assert.Equal(HttpStatusCode.NotFound, history.StatusCode);
         using var legacy = await client.GetAsync("/runtime/workflows/diagnostics/settings");
         Assert.Equal(HttpStatusCode.NotFound, legacy.StatusCode);
+        using var start = await client.PostAsync("/runtime/workflows/executables/missing/execute", content: null);
+        Assert.Equal(HttpStatusCode.NotFound, start.StatusCode);
+    }
+
+    [Fact]
+    public void Retained_api_refuses_co_selection_with_the_broad_runtime_routes()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        var retained = new WorkflowsRuntimeKernelRetainedApiFeature();
+        retained.ConfigureServices(services);
+
+        var error = Assert.Throws<InvalidOperationException>(() => retained.PostConfigureServices(services));
+        Assert.Contains("share Workflow Runtime routes", error.Message);
+    }
+
+    [Fact]
+    public async Task Retained_api_selection_activates_a_shell_without_the_legacy_runner()
+    {
+        const string shellName = "retained-kernel-api";
+        var configuration = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddCShells(shells => shells.WithAssemblies(
+                typeof(RetainedKernelApiTestHost).Assembly,
+                typeof(WorkflowsRuntimeKernelRetainedApiFeature).Assembly,
+                typeof(WorkflowsRuntimeKernelFeature).Assembly,
+                typeof(WorkflowsRuntimeApiFeature).Assembly,
+                typeof(ApiCapabilitiesFeature).Assembly,
+                typeof(WorkflowsPublishingFeature).Assembly,
+                typeof(WorkflowDesignValidationsFeature).Assembly,
+                typeof(EventsFeature).Assembly)
+            .AddShell(shellName, shell => shell.WithFeature(RetainedKernelApiTestHost.Name)
+                .WithFeature(WorkflowsRuntimeKernelRetainedApiFeature.FeatureName)));
+
+        await using var host = services.BuildServiceProvider(validateScopes: true);
+        var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(shellName);
+        await using var scope = shell.ServiceProvider.CreateAsyncScope();
+        var runtime = scope.ServiceProvider;
+        var features = runtime.GetRequiredService<ShellSettings>().EnabledFeatures;
+        Assert.Contains(WorkflowsRuntimeKernelRetainedApiFeature.FeatureName, features);
+        Assert.Contains(WorkflowsRuntimeKernelFeature.FeatureName, features);
+        Assert.Contains("WorkflowsPublishing", features);
+        Assert.DoesNotContain("WorkflowsRuntimeApi", features);
+        Assert.DoesNotContain("WorkflowsRuntimeTriggers", features);
+        Assert.IsType<KernelActivationCoordinator>(runtime.GetRequiredService<IWorkflowActivationCoordinator>());
+        Assert.Single(runtime.GetServices<IWorkflowRunInspection>());
+        Assert.Null(runtime.GetService<IWorkflowSchedulerDrainer>());
+        Assert.Null(runtime.GetService<IWorkflowExecutionActorProvider>());
+        Assert.Null(runtime.GetService<IWorkflowExecutionStateStore>());
+    }
+
+    [ShellFeature(name: Name)]
+    public sealed class RetainedKernelApiTestHost : IShellFeature
+    {
+        internal const string Name = "RetainedKernelApiTestHost";
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddFoundationIdentityAbstractions();
+            services.AddPersistenceCore();
+            services.AddSingleton(new KernelServing());
+            services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
+            services.AddSingleton(new KernelRuns(Scope, _ => ValueTask.FromResult<IActorReads>(new Reads(Views[0]))));
+        }
     }
 
     [Fact]
