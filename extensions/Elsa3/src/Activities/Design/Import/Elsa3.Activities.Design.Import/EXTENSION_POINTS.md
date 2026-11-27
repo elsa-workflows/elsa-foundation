@@ -199,6 +199,6 @@ states (spec 188 credential-literal contract, Known gaps).
 
 ## Draft-first collection Apply
 
-Studio posts the reviewed collection to `collections/{collectionHandle}/apply-drafts`. The published activity choice is bound to its idempotency key. The existing `apply` operation keeps its legacy default. Both routes require import and publication management permission. A composed activity publisher is required for reusable selections so deferred publication can resolve reserved identities.
+Studio posts the reviewed collection to `collections/{collectionHandle}/apply-drafts`. The published activity choice is bound to its idempotency key. The existing `apply` operation keeps its original request type and publication behavior. Publication choices belong to `apply-drafts`. Both routes require import and publication management permission. A composed activity publisher is required for reusable selections so deferred publication can resolve reserved identities.
 
 Custom operation services implement `IReusableActivityDraftImport` to offer draft Apply. The commit command must implement `IReusableActivityDraftImportCommand` and write current workflow drafts, reusable drafts and their reservations atomically. The operation store implements `IImportedActivityDraftReservations` for tenant-scoped lookup of the reserved version ID and SemVer. Missing draft support returns HTTP 501 before mutation.

@@ -54,6 +54,7 @@ public sealed record ReusableActivityImportItem(
     IReadOnlyList<Elsa3MigrationDiagnostic> Diagnostics,
     int ConverterRevision = 0)
 {
+    public string? SourceName { get; init; }
     public bool CanApply => Diagnostics.All(x => !x.IsError);
 }
 
@@ -278,6 +279,12 @@ public sealed record ReusableActivityImportSourceReceipt(
 {
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? ActivityDraftId { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? WorkflowDraftSourceVersionId { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; init; }
 }
 
 public enum ReusableActivityImportResourceDisposition

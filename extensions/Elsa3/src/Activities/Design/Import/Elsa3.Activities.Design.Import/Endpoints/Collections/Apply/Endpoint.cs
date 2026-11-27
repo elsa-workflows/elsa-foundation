@@ -10,7 +10,7 @@ namespace Elsa3.Activities.Design.Import.Endpoints.Collections.Apply;
 [Post("migration/elsa3/reusable-activities/collections/{collectionHandle}/apply")]
 // Applying publishes the imported reusable activities, so it is never a way around the publish permission (spec 246 D-4).
 [RequireAllPermissions(Elsa3ImportPermissions.Manage, Elsa3ImportPermissions.PublishingManage)]
-public sealed class Endpoint(IReusableActivityImportOperationService service) : ApiEndpointWithResult<ReusableActivityDraftApplyHttpRequest, ReusableActivityImportReceipt>
+public sealed class Endpoint(IReusableActivityImportOperationService service) : ApiEndpointWithResult<ReusableActivityImportApplyHttpRequest, ReusableActivityImportReceipt>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -19,17 +19,12 @@ public sealed class Endpoint(IReusableActivityImportOperationService service) : 
         options.BodyMode = EndpointBodyMode.Required;
     }
 
-    public override async Task<EndpointResult<ReusableActivityImportReceipt>> HandleAsync(ReusableActivityDraftApplyHttpRequest request, CancellationToken cancellationToken)
+    public override async Task<EndpointResult<ReusableActivityImportReceipt>> HandleAsync(ReusableActivityImportApplyHttpRequest request, CancellationToken cancellationToken)
     {
         var collectionHandle = HttpContext.Request.RouteValues.TryGetValue("collectionHandle", out var value)
             ? value?.ToString() ?? string.Empty
             : string.Empty;
-        if (request.PublishImportedActivities.HasValue && service is not IReusableActivityDraftImport)
-            return EndpointResult.Status(StatusCodes.Status501NotImplemented, default(ReusableActivityImportReceipt)!);
-        var result = request.PublishImportedActivities is { } publish
-            ? await ((IReusableActivityDraftImport)service).ApplyDraftsAsync(collectionHandle, request.PlanId, request.SelectedSourceVersionIds,
-                request.IdempotencyKey, ReusableActivityImportHttp.Scope(HttpContext.User), publish, cancellationToken)
-            : await service.ApplyAsync(
+        var result = await service.ApplyAsync(
             collectionHandle, request.PlanId, request.SelectedSourceVersionIds,
             request.IdempotencyKey, ReusableActivityImportHttp.Scope(HttpContext.User), cancellationToken);
         HttpContext.Response.Headers.Location = $"/migration/elsa3/reusable-activities/imports/{Uri.EscapeDataString(request.IdempotencyKey)}";

@@ -92,6 +92,10 @@ public sealed class EfReusableActivityImportCommand(
             var failure = outcome.Failure!;
             if (failure is SchemaWriteRefusedException or ReusableActivityImportCollisionException)
                 ExceptionDispatchInfo.Throw(failure);
+            // SQLSTATE 40001 positively identifies a rolled-back serialization attempt, including at COMMIT.
+            if (plan.PublishImportedActivities.HasValue && failure is EfCommitOutcomeUnknownException
+                { InnerException: System.Data.Common.DbException { SqlState: "40001" } })
+                return EfWriteAttempt<ReusableActivityImportCommitResult>.Retry(failure);
             if (failure is EfCommitOutcomeUnknownException)
                 return await ReconcileUncertainCommitAsync(mutation, scoped, commitAttemptId, failure, cancellationToken);
             if (!WriteConflicts.ShouldRetry(null, failure))

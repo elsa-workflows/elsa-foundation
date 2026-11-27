@@ -622,7 +622,7 @@ export function Elsa3ReusableImportPage({
           <div className="elsa3-import-selection-list">
             {selectedItems.map(item => (
               <span key={item.sourceVersionId}>
-                <strong>{item.sourceDefinitionId} v{item.sourceVersion}</strong>
+                <strong>{item.sourceName || item.sourceDefinitionId} v{item.sourceVersion}</strong>
                 <code>{item.sourceVersionId}</code>
                 {readiness?.addedDependencySourceVersionIds.includes(item.sourceVersionId) ? <small>Required dependency</small> : <small>Requested owner</small>}
               </span>
@@ -661,13 +661,20 @@ export function Elsa3ReusableImportPage({
             <div><dt>Ordinary Workflows</dt><dd>{summary.ordinaryWorkflows}</dd></div>
             <div><dt>Exact reusable rewrites</dt><dd>{summary.rewrites}</dd></div>
           </dl>
-          <p>Open the imported workflow drafts to edit and publish them.</p>
+          <ul className="elsa3-import-review-outcomes">
+            {selectedItems.map(item => (
+              <li key={item.sourceVersionId}>
+                <strong>{item.sourceName || item.sourceDefinitionId} v{item.sourceVersion}</strong>
+                {" · "}{item.isReusable ? publishImportedActivities ? "Publish activity now" : "Save activity draft" : "Save workflow draft"}
+              </li>
+            ))}
+          </ul>
           {summary.activityDefinitions > 0 ? (
             <label>
               <input id="elsa3-publish-imported" type="checkbox" checked={publishImportedActivities}
                 disabled={applyStatus !== "idle" || Boolean(receipt)}
                 onChange={event => setPublishImportedActivities(event.target.checked)} /> Publish imported activities now
-              <span> — Leave this unchecked to review the activity drafts before publishing.</span>
+              <span> · Published activities become available to workflows.</span>
             </label>
           ) : null}
           <div className="elsa3-import-actions">
@@ -721,10 +728,10 @@ function SourceVersionRow({
           checked={requested || selected}
           disabled={!selectable || disabled}
           onChange={event => onChange(event.target.checked)}
-          aria-label={`Select ${item.sourceDefinitionId} exact source version ${item.sourceVersion}`}
+          aria-label={`Select ${item.sourceName || item.sourceDefinitionId} exact source version ${item.sourceVersion}`}
         />
         <span>
-          <strong>Source version {item.sourceVersion}</strong>
+          <strong>{item.sourceName ? `${item.sourceName} v${item.sourceVersion}` : `Source version ${item.sourceVersion}`}</strong>
           <small>{item.isReusable ? "Reusable source → Activity Definition + wrapper Workflow" : "Ordinary consuming Workflow"}</small>
         </span>
       </label>
@@ -845,17 +852,17 @@ function ImportReceipt({
           return (
             <article key={source.sourceVersionId} className="elsa3-import-row">
               <header className="elsa3-import-split">
-                <strong>{source.sourceDefinitionId} · {source.sourceVersionId}</strong>
+                <strong>{source.name || source.sourceDefinitionId} · {source.sourceVersionId}</strong>
                 <span>{importResourceDisposition(source.workflowDisposition)}</span>
               </header>
               {publication && (receipt.publishImportedActivities !== false || isPublishedImportStatus(publication.status)) ? <PublicationState publication={publication} /> : null}
               <div className="elsa3-import-actions">
-                <StudioButton
+                {(!source.workflowDraftSourceVersionId || source.workflowDraftSourceVersionId === source.sourceVersionId) && <StudioButton
                   type="button"
                   onClick={() => navigate(`/workflows/definitions?definition=${encodeURIComponent(source.workflowDefinitionId)}&version=${encodeURIComponent(source.workflowVersionId)}`)}
                 >
                   <Network size={14} /> {receipt.publishImportedActivities != null ? "Open workflow draft" : `Open ${source.activityDefinitionId ? "wrapper " : ""}Workflow`}
-                </StudioButton>
+                </StudioButton>}
                 {source.activityDefinitionId && source.activityDraftId && !isPublishedImportStatus(publication?.status ?? "") ? (
                   <StudioButton type="button" onClick={() => navigate(`/workflows/activity-definitions?definition=${encodeURIComponent(source.activityDefinitionId!)}&section=editor&draft=${encodeURIComponent(source.activityDraftId!)}`)}>
                     <Link2 size={14} /> Open activity draft

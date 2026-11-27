@@ -45,6 +45,7 @@ export interface Elsa3ReusableImportDirectStart {
 }
 
 export interface Elsa3ReusableImportItem {
+  sourceName?: string | null;
   sourceDefinitionId: string;
   sourceVersionId: string;
   sourceVersion: number;
@@ -97,6 +98,8 @@ export type Elsa3ReusableImportResourceDisposition = "Created" | "Reused" | stri
 
 export interface Elsa3ReusableImportSourceReceipt {
   activityDraftId?: string | null;
+  workflowDraftSourceVersionId?: string | null;
+  name?: string | null;
   sourceDefinitionId: string;
   sourceVersionId: string;
   workflowDefinitionId: string;

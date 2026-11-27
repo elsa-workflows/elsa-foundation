@@ -28,7 +28,7 @@ test("Elsa 3 import pages exact rows, preserves a valid subset, expands closure,
         diagnostics: []
       });
     }
-    if (url.pathname.endsWith("/apply")) {
+    if (url.pathname.endsWith("/apply-drafts")) {
       state.applyBody = request.postDataJSON();
       return json(route, {
         title: "Elsa 3 import failed",
@@ -79,6 +79,7 @@ test("Elsa 3 import pages exact rows, preserves a valid subset, expands closure,
   await page.getByRole("button", { name: "Apply reviewed import" }).click();
   await expect(page.getByRole("heading", { name: "Import results" })).toBeVisible();
   expect(state.applyBody).toMatchObject({
+    publishImportedActivities: false,
     planId: "plan",
     selectedSourceVersionIds: ["dependency-v1", "owner-v1"]
   });
@@ -120,7 +121,7 @@ test("Elsa 3 import reports an idempotent Already imported receipt without a sec
         diagnostics: []
       });
     }
-    if (url.pathname.endsWith("/apply")) return json(route, importReceipt(1));
+    if (url.pathname.endsWith("/apply-drafts")) return json(route, importReceipt(1));
     return route.abort();
   });
 
@@ -223,7 +224,8 @@ test("captures Classic light receipt screenshots when asked", async ({ page }) =
         diagnostics: []
       });
     }
-    if (url.pathname.endsWith("/apply")) {
+    if (url.pathname.endsWith("/apply-drafts")) {
+      expect(route.request().postDataJSON().publishImportedActivities).toBe(true);
       return json(route, publicationReceipt());
     }
     return route.abort();
@@ -237,6 +239,7 @@ test("captures Classic light receipt screenshots when asked", async ({ page }) =
   await page.getByRole("button", { name: "Analyze collection" }).click();
   await page.getByRole("checkbox", { name: "Select owner exact source version 1" }).check();
   await page.getByRole("button", { name: "Review exact import" }).click();
+  await page.getByRole("checkbox", { name: /Publish imported activities now/ }).check();
   await page.getByRole("button", { name: "Apply reviewed import" }).click();
   const receipt = page.getByRole("region", { name: "Import results" })
     .or(page.locator("section").filter({ has: page.getByRole("heading", { name: "Import results" }) }));

@@ -97,6 +97,10 @@ public static class ReusableActivityImportCommitRules
         ArgumentNullException.ThrowIfNull(wasCreated);
         var scope = mutation.AccessScope ?? throw new ArgumentException("Only a scoped mutation has a receipt.", nameof(mutation));
         var idempotencyKey = mutation.IdempotencyKey ?? throw new ArgumentException("Only a keyed mutation has a receipt.", nameof(mutation));
+        var current = mutation.PublishImportedActivities.HasValue
+            ? mutation.Workflows.GroupBy(workflow => workflow.Definition.Id).ToDictionary(
+                group => group.Key, group => group.MaxBy(workflow => Version.Parse(workflow.Version.Version))!.SourceVersionId)
+            : null;
         var sources = mutation.SourceVersionIds.Order(StringComparer.Ordinal).Select(sourceVersionId =>
         {
             var workflow = mutation.Workflows.Single(x => StringComparer.Ordinal.Equals(x.SourceVersionId, sourceVersionId));
@@ -115,7 +119,9 @@ public static class ReusableActivityImportCommitRules
                 activity is null ? null : $"/design/activities/definitions/{Uri.EscapeDataString(activity.Definition.Id)}",
                 activity is null ? null : $"/design/activities/versions/{Uri.EscapeDataString(activity.Version.Id)}")
             {
-                ActivityDraftId = mutation.PublishImportedActivities.HasValue ? activity?.Version.DraftId : null
+                ActivityDraftId = mutation.PublishImportedActivities.HasValue ? activity?.Version.DraftId : null,
+                Name = mutation.PublishImportedActivities.HasValue ? activity?.Definition.DisplayName ?? workflow.Definition.Name : null,
+                WorkflowDraftSourceVersionId = current?.GetValueOrDefault(workflow.Definition.Id)
             };
         }).ToArray();
         return new(
