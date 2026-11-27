@@ -11,7 +11,7 @@ namespace Kernel.Native.Run;
 
 internal static class RootScheduleInventoryChecks
 {
-    internal static async Task<int> RunAsync(bool postgres)
+    internal static async Task<int> RunAsync(bool postgres, bool settleOccurrences = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var token = timeout.Token;
@@ -30,9 +30,10 @@ internal static class RootScheduleInventoryChecks
                     DataSource = Path.Combine(directory!.FullName, "schedules.db"), ForeignKeys = true, Pooling = false, DefaultTimeout = 1
                 }.ConnectionString);
 
-            var format = StoreFormat.RootScheduleInventoryQualification;
-            KernelDb Open() => postgres ? KernelDb.ForPostgresRootScheduleInventoryQualification(options.Options)
-                : KernelDb.ForSqliteRootShipped(options.Options, format);
+            var format = settleOccurrences ? StoreFormat.RootScheduleSettlementQualification : StoreFormat.RootScheduleInventoryQualification;
+            KernelDb Open() => !postgres ? KernelDb.ForSqliteRootShipped(options.Options, format)
+                : settleOccurrences ? KernelDb.ForPostgresRootScheduleSettlementQualification(options.Options)
+                : KernelDb.ForPostgresRootScheduleInventoryQualification(options.Options);
             await using var db = Open();
             var pg = new PostgresRootAdmission(Open, TimeSpan.Zero, scheduleActorType: ScheduleActor.ActorType);
             var sqlite = new SqliteRootAdmission(Open, TimeSpan.Zero, new SqliteAdmissionDefinitions(), scheduleActorType: ScheduleActor.ActorType);
@@ -97,6 +98,12 @@ internal static class RootScheduleInventoryChecks
                 "restart inventory seeks within the exact tenant and definition without reading the checkpoint table");
             Require((await ReadAsync("missing", "definition", null, 1)).Roots.Count == 0,
                 "a foreign tenant cannot see either schedule actor");
+            if (settleOccurrences)
+            {
+                await VerifyOccurrencesAsync(db, postgres, pg, sqlite, timer, reference, token);
+                if (postgres)
+                    Require(barrier.ConfirmedSettlementOverlap, "two relays contend on the same birth and creation identity");
+            }
             if (!postgres)
             {
                 await db.Database.OpenConnectionAsync(token);
@@ -169,6 +176,46 @@ internal static class RootScheduleInventoryChecks
         }
     }
 
+    private static async Task VerifyOccurrencesAsync(KernelDb db, bool postgres, PostgresRootAdmission pg, SqliteRootAdmission sqlite,
+        ScheduleRootKey timer, string reference, CancellationToken token)
+    {
+        const string tenant = "tenant-a";
+        var occurrence = new RootScheduleOccurrence(timer, reference, 1, "~timer-a", 1000);
+        var pinned = new StartSpec("workflow", """{"Workflow":"version-a"}""", Input: "original");
+        var before = await db.Messages.CountAsync(token);
+        var otherTenant = await AdmitAsync("tenant-b", occurrence, pinned);
+        Require(otherTenant is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch },
+            "an occurrence cannot use a different tenant's schedule binding");
+        var contenders = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(() => AdmitAsync(tenant, occurrence, pinned), token)));
+        var first = contenders.Single(item => item.Outcome == Contract.AdmissionOutcome.Accepted);
+        Require(first.Actor is not null && contenders.Count(item => item.Outcome == Contract.AdmissionOutcome.Duplicate && item.Actor == first.Actor) == 3 &&
+            await db.Messages.CountAsync(token) == before + 1, "a repeated relay acceptance writes one workflow birth and queues one creator");
+        Require((await AdmitAsync(tenant, occurrence, pinned)) is { Outcome: Contract.AdmissionOutcome.Duplicate } replay && replay.Actor == first.Actor &&
+            !await db.Database.SqlQueryRaw<bool>("""SELECT EXISTS (SELECT 1 FROM "FoundationRootReceipts") AS "Value" """).SingleAsync(token),
+            "replay uses the durable birth even with no generic operation receipt");
+
+        await MustRefuseAsync(occurrence, pinned with { Definition = """{"Workflow":"version-b"}""" });
+        await MustRefuseAsync(occurrence with { Due = 2000 }, pinned);
+        Require(await db.Messages.CountAsync(token) == before + 1, "changed pinned workflow or due time adds no creator to the existing occurrence");
+        var next = await AdmitAsync(tenant, occurrence with { ArmGeneration = 2 }, pinned);
+        Require(next.Outcome == Contract.AdmissionOutcome.Accepted && next.Actor != first.Actor &&
+            await db.Messages.CountAsync(token) == before + 2, "the next arm generation has a distinct occurrence even with the same timer identity");
+
+        Task<Contract.Admission> AdmitAsync(string tenantId, RootScheduleOccurrence item, StartSpec spec) => postgres
+            ? pg.AdmitScheduledOccurrenceAsync(tenantId, item, spec, token)
+            : sqlite.AdmitScheduledOccurrenceAsync(tenantId, item, spec, token);
+
+        async Task MustRefuseAsync(RootScheduleOccurrence item, StartSpec spec)
+        {
+            try
+            {
+                await AdmitAsync(tenant, item, spec);
+                throw new InvalidOperationException("A changed immutable occurrence was accepted.");
+            }
+            catch (StoreFormatException) { }
+        }
+    }
+
     private static void Require(bool condition, string description)
     {
         if (!condition) throw new InvalidOperationException(description);
@@ -178,8 +225,11 @@ internal static class RootScheduleInventoryChecks
     private sealed class PostgresClaimBarrier : DbCommandInterceptor
     {
         private readonly TaskCompletionSource _contenders = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _settlers = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _reached;
+        private int _settled;
         internal bool ConfirmedOverlap => Volatile.Read(ref _reached) >= 2;
+        internal bool ConfirmedSettlementOverlap => Volatile.Read(ref _settled) >= 2;
 
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
             CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
@@ -188,6 +238,11 @@ internal static class RootScheduleInventoryChecks
             {
                 if (Interlocked.Increment(ref _reached) >= 2) _contenders.TrySetResult();
                 await _contenders.Task.WaitAsync(cancellationToken);
+            }
+            if (command.CommandText.StartsWith("/* accepted schedule occurrence */", StringComparison.Ordinal))
+            {
+                if (Interlocked.Increment(ref _settled) >= 2) _settlers.TrySetResult();
+                await _settlers.Task.WaitAsync(cancellationToken);
             }
             return result;
         }
