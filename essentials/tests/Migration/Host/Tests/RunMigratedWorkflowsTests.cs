@@ -16,13 +16,11 @@ namespace Elsa.Migration.Host.Tests;
 [Collection(HostRunsCollection.Name)]
 public sealed class RunMigratedWorkflowsTests
 {
-    private const string SampleWorkflowsFolder = "migrated/workflows";
-
     [Fact]
     public async Task The_sample_is_published_and_its_HTTP_trigger_answers()
     {
-        var folder = MigrationHostRun.NewMigratedFolder(withSample: true);
-        await using var host = await MigrationHostRun.StartAsync(folder);
+        var folder = InProcessRun.NewMigratedFolder(withSample: true);
+        await using var host = await InProcessRun.StartAsync(folder);
 
         await AssertReady(host);
         using var response = await host.Client.GetAsync("/workflows/http/hello");
@@ -35,11 +33,11 @@ public sealed class RunMigratedWorkflowsTests
     [Fact]
     public async Task A_composite_from_the_activities_file_that_uses_another_activity_runs_inside_a_migrated_workflow()
     {
-        var folder = MigrationHostRun.NewMigratedFolder(withSample: false);
+        var folder = InProcessRun.NewMigratedFolder(withSample: false);
         const string compositeKey = "Acme.Greeting";
         File.WriteAllText(folder.ActivitiesFile, CompositeCatalog(compositeKey, CatalogIds.VersionIdOf(typeof(WriteLine))));
         File.WriteAllText(Path.Combine(folder.WorkflowsFolder, "acme-greeting.json"), WorkflowUsing(CatalogIds.VersionIdOf(compositeKey, "1.0.0")));
-        await using var host = await MigrationHostRun.StartAsync(folder);
+        await using var host = await InProcessRun.StartAsync(folder);
 
         await AssertReady(host);
         using var response = await host.Client.GetAsync("/workflows/http/acme-greeting");
@@ -57,26 +55,28 @@ public sealed class RunMigratedWorkflowsTests
     {
         const string modeKey = "CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:Mode";
         const string variable = "CShells__Shells__default__Features__WorkflowsRuntimeCheckpointPersistence__Mode";
+        var root = InProcessRun.NewRoot();
         Environment.SetEnvironmentVariable(variable, "Balanced");
         try
         {
-            var builder = MigrationHost.CreateBuilder(["--environment=Development", $"--contentRoot={HostPaths.ProjectFolder}"]);
+            var builder = MigrationHost.CreateBuilder(["--environment=Development", $"--contentRoot={InProcessRun.CommittedContentRoot(root)}"]);
 
             Assert.Equal("Balanced", builder.Configuration[modeKey]);
             Assert.Equal("50", builder.Configuration["CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:MaxActivitiesPerCommit"]);
-            Assert.Equal(SampleWorkflowsFolder, builder.Configuration[MigrationHostRun.WorkflowsFolderKey]);
+            Assert.Equal("elsa3-migration", builder.Configuration["CShells:Shells:default:Features:JsonWorkflowReconciliation:Options:SourceId"]);
         }
         finally
         {
             Environment.SetEnvironmentVariable(variable, null);
+            InProcessRun.DeleteRoot(root);
         }
     }
 
     [Fact]
     public async Task An_unknown_feature_keeps_the_host_from_becoming_ready_and_the_log_names_it()
     {
-        var folder = MigrationHostRun.NewMigratedFolder(withSample: false);
-        await using var host = await MigrationHostRun.StartAsync(folder, new Dictionary<string, string>
+        var folder = InProcessRun.NewMigratedFolder(withSample: false);
+        await using var host = await InProcessRun.StartAsync(folder, new Dictionary<string, string>
         {
             ["CShells:Shells:default:Features:AcmeMissingActivities:Enabled"] = "true"
         });
@@ -89,11 +89,11 @@ public sealed class RunMigratedWorkflowsTests
     [Fact]
     public async Task A_missing_workflows_folder_keeps_the_host_from_becoming_ready_and_the_log_names_it()
     {
-        var folder = MigrationHostRun.NewMigratedFolder(withSample: false);
+        var folder = InProcessRun.NewMigratedFolder(withSample: false);
         var missing = Path.Combine(folder.Root, "migrated", "no-such-workflows");
-        await using var host = await MigrationHostRun.StartAsync(folder, new Dictionary<string, string>
+        await using var host = await InProcessRun.StartAsync(folder, new Dictionary<string, string>
         {
-            [MigrationHostRun.WorkflowsFolderKey] = missing
+            [InProcessRun.WorkflowsFolderKey] = missing
         });
 
         await AssertNotReady(host);
@@ -104,9 +104,9 @@ public sealed class RunMigratedWorkflowsTests
     [Fact]
     public async Task A_missing_activities_file_keeps_the_host_from_becoming_ready_and_the_log_names_it()
     {
-        var folder = MigrationHostRun.NewMigratedFolder(withSample: false);
+        var folder = InProcessRun.NewMigratedFolder(withSample: false);
         File.Delete(folder.ActivitiesFile);
-        await using var host = await MigrationHostRun.StartAsync(folder);
+        await using var host = await InProcessRun.StartAsync(folder);
 
         await AssertNotReady(host);
         Assert.Contains(host.Logs.Lines, line => line.Contains("could not activate shell 'default'", StringComparison.Ordinal)
@@ -124,7 +124,7 @@ public sealed class RunMigratedWorkflowsTests
     }
 
     /// <summary>Signs in as the development administrator, as the JTest template does, and reads the run's activity types.</summary>
-    private static async Task<HashSet<string>> ExecutedActivityTypes(MigrationHostRun host, string definitionId)
+    private static async Task<HashSet<string>> ExecutedActivityTypes(InProcessRun host, string definitionId)
     {
         var token = await host.SignInAsync();
         using var page = await host.GetJsonAsync($"/runtime/workflows/instances/page?definitionId={definitionId}&take=10", token);
@@ -136,14 +136,14 @@ public sealed class RunMigratedWorkflowsTests
             .ToHashSet(StringComparer.Ordinal);
     }
 
-    private static async Task AssertReady(MigrationHostRun host)
+    private static async Task AssertReady(InProcessRun host)
     {
         using var ready = await host.Client.GetAsync("/health/ready");
         Assert.True(ready.StatusCode == HttpStatusCode.OK,
             $"The host is not ready: {await ready.Content.ReadAsStringAsync()}{Environment.NewLine}{host.Logs.Text}");
     }
 
-    private static async Task AssertNotReady(MigrationHostRun host)
+    private static async Task AssertNotReady(InProcessRun host)
     {
         using var ready = await host.Client.GetAsync("/health/ready");
         Assert.Equal(HttpStatusCode.ServiceUnavailable, ready.StatusCode);

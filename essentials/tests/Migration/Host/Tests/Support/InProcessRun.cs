@@ -8,14 +8,16 @@ namespace Elsa.Migration.Host.Tests.Support;
 
 /// <summary>
 /// One in-process run of the migration host (spec 1236 R-5): <c>MigrationHost.CreateBuilder</c>, a test server, then
-/// <c>MigrationHost.Build</c>, in Development with the host project as content root, on its own temporary data folder and
-/// migrated folder. Each setting override goes in as a command-line argument, the highest configuration source.
+/// <c>MigrationHost.Build</c>, in Development, on its own temporary content root, data folder and migrated folder. The
+/// content root holds copies of the host's committed settings files only, so an engineer's git-ignored
+/// <c>shells.Local.json</c> in the host project never reaches a test. User secrets still can (the host adds them through
+/// its assembly's <c>UserSecretsId</c>); every setting a test relies on is a command-line override, which wins over them. Each setting override goes in as a command-line argument, the highest configuration source.
 /// </summary>
-internal sealed class MigrationHostRun : IAsyncDisposable
+internal sealed class InProcessRun : IAsyncDisposable
 {
     private const string Features = "CShells:Shells:default:Features";
 
-    private MigrationHostRun(string root, WebApplication app, CapturingLoggerProvider logs)
+    private InProcessRun(string root, WebApplication app, CapturingLoggerProvider logs)
     {
         Root = root;
         App = app;
@@ -34,7 +36,7 @@ internal sealed class MigrationHostRun : IAsyncDisposable
     /// <summary>A temporary migrated folder: the host's sample, or empty workflows and an empty activities file.</summary>
     public static MigratedFolder NewMigratedFolder(bool withSample)
     {
-        var root = Path.Combine(Path.GetTempPath(), "elsa-migration-host-tests", Guid.NewGuid().ToString("N"));
+        var root = NewRoot();
         var migrated = Path.Combine(root, "migrated");
         Directory.CreateDirectory(Path.Combine(migrated, "workflows"));
         Directory.CreateDirectory(Path.Combine(migrated, "activities"));
@@ -49,7 +51,7 @@ internal sealed class MigrationHostRun : IAsyncDisposable
     }
 
     /// <summary>Starts the host on <paramref name="folder"/> with <paramref name="settings"/> as command-line overrides.</summary>
-    public static async Task<MigrationHostRun> StartAsync(MigratedFolder folder, IDictionary<string, string>? settings = null)
+    public static async Task<InProcessRun> StartAsync(MigratedFolder folder, IDictionary<string, string>? settings = null)
     {
         var all = new Dictionary<string, string>
         {
@@ -64,7 +66,7 @@ internal sealed class MigrationHostRun : IAsyncDisposable
         foreach (var (key, value) in settings ?? new Dictionary<string, string>())
             all[key] = value;
 
-        var args = new List<string> { "--environment=Development", $"--contentRoot={HostPaths.ProjectFolder}" };
+        var args = new List<string> { "--environment=Development", $"--contentRoot={CommittedContentRoot(folder.Root)}" };
         args.AddRange(all.Select(setting => $"--{setting.Key}={setting.Value}"));
 
         var builder = MigrationHost.CreateBuilder([.. args]);
@@ -73,8 +75,43 @@ internal sealed class MigrationHostRun : IAsyncDisposable
         builder.Logging.AddProvider(logs);
 
         var app = MigrationHost.Build(builder);
-        await app.StartAsync();
-        return new MigrationHostRun(folder.Root, app, logs);
+        try
+        {
+            await app.StartAsync();
+        }
+        catch
+        {
+            await app.DisposeAsync();
+            throw;
+        }
+
+        return new InProcessRun(folder.Root, app, logs);
+    }
+
+    /// <summary>A content root under <paramref name="root"/> with copies of the host's committed settings files.</summary>
+    public static string CommittedContentRoot(string root)
+    {
+        var contentRoot = Path.Combine(root, "content");
+        Directory.CreateDirectory(contentRoot);
+        foreach (var file in new[] { "shells.json", "appsettings.json", "appsettings.Development.json" })
+            File.Copy(Path.Combine(HostPaths.ProjectFolder, file), Path.Combine(contentRoot, file), overwrite: true);
+        return contentRoot;
+    }
+
+    /// <summary>A fresh temporary root for one test.</summary>
+    public static string NewRoot() => Path.Combine(Path.GetTempPath(), "elsa-migration-host-tests", Guid.NewGuid().ToString("N"));
+
+    /// <summary>Deletes a test's temporary root; a file the runtime still holds open is left for the OS to clean up.</summary>
+    public static void DeleteRoot(string root)
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try
+        {
+            Directory.Delete(root, recursive: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>
@@ -112,6 +149,7 @@ internal sealed class MigrationHostRun : IAsyncDisposable
         Client.Dispose();
         await App.StopAsync();
         await App.DisposeAsync();
+        DeleteRoot(Root);
     }
 }
 

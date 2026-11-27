@@ -117,7 +117,12 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 
 ## Phase 6: User Story 2 - JTest acceptance (P1)
 
-- [ ] T011 [US2] Wait for all three:
+  **Done 2026-11-27 (PR #6031), with one block:** sign-in and the definitions list work (US4 scenario 1). Scenario 2 is
+  blocked outside this host: Studio opens a definition through its current draft and a reconciled definition has none
+  ("This workflow definition has no current draft"). The README says so and how to change a migrated workflow instead.
+- [ ] T011 [US2] **Follow-up, not this PR:** the acceptance run is S-15's final run on this host (spec 1235, PR #5662),
+  once the 1237 CLI's `inventory` exists; spec status is `Implemented` for the host itself (coordinator, 2026-11-27).
+  Wait for all three:
   - the CLI's `inventory` command (spec 1237);
   - the merged S-15 acceptance with a Workbench run on the head under test;
   - T007.

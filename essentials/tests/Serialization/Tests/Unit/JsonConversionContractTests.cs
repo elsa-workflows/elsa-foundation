@@ -42,7 +42,21 @@ public sealed class JsonConversionContractTests
         Assert.Throws<JsonException>(() => JsonConversionContract.For(typeof(DeliveryMode)).Read(Element("\"Async, Sync\""), typeof(DeliveryMode)));
     }
 
+    [Fact]
+    public void An_enum_with_a_converter_of_its_own_still_reads_through_it()
+    {
+        // A naming-policy converter on the enum type writes "lowCost"; reading must go through the same converter, not the
+        // exact-member-name path, or the type's own written form would no longer round-trip.
+        var contract = JsonConversionContract.For(typeof(ShippingTier));
+        var written = contract.Write(ShippingTier.LowCost, typeof(ShippingTier));
+        Assert.Equal("\"lowCost\"", written.GetRawText());
+        Assert.Equal(ShippingTier.LowCost, contract.Read(written, typeof(ShippingTier)));
+        Assert.Equal(ShippingTier.LowCost, contract.Read(Element("\"LOWCOST\""), typeof(ShippingTier)));
+    }
+
     private enum DeliveryMode { Async = 0, Sync = 1 }
+    [JsonConverter(typeof(ShippingTierConverter))] private enum ShippingTier { Standard = 0, LowCost = 1 }
+    private sealed class ShippingTierConverter() : JsonStringEnumConverter<ShippingTier>(JsonNamingPolicy.CamelCase);
 
     [Fact]
     public void Default_round_trips_camel_case_and_warns_without_rewriting_carried_data()

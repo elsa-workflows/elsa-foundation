@@ -159,8 +159,12 @@ public sealed class JsonConversionContract
         }
         // An enum value authored by name: the activity catalog records an enum input's default and options by the member
         // name (ClrAssemblyScanner), and Studio offers those names, so a literal carries "Sync" rather than 1. The baseline
-        // writes and reads enums as numbers; at the root this also takes the exact name a member declares. Writing is unchanged.
-        if (contract.memberConverter is null && value.ValueKind == JsonValueKind.String && (Nullable.GetUnderlyingType(type) ?? type) is { IsEnum: true } enumType)
+        // writes and reads a plain enum as a number and refuses any string; at the root this also takes the exact name a
+        // member declares. An enum with a converter of its own (on the member or on the type) keeps reading through it, so
+        // its written form still round-trips. Writing is unchanged.
+        if (contract.memberConverter is null && value.ValueKind == JsonValueKind.String
+            && (Nullable.GetUnderlyingType(type) ?? type) is { IsEnum: true } enumType
+            && enumType.GetCustomAttribute<JsonConverterAttribute>(inherit: false) is null)
             return ReadEnumName(value.GetString()!, enumType);
         var operation = new Operation();
         foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, contract, operation)) report?.Invoke(diagnostic);

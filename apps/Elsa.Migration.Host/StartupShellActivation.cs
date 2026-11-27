@@ -12,10 +12,10 @@ namespace Elsa.Migration.Host;
 /// file that can't be imported) and the host keeps running: <c>/health/ready</c> stays 503. That is what the spec calls refusing
 /// to start. CShells tries the activation again on the shell's next request.
 /// </remarks>
-internal sealed class DefaultShellActivation(
+internal sealed class StartupShellActivation(
     IShellRegistry registry,
     IConfiguration configuration,
-    ILogger<DefaultShellActivation> logger) : IHostedService
+    ILogger<StartupShellActivation> logger) : IHostedService
 {
     private const string ConfiguredShellsSection = "CShells:Shells";
 

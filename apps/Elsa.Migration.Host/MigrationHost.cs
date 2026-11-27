@@ -16,6 +16,10 @@ namespace Elsa.Migration.Host;
 /// <see cref="Program"/> and the host tests both build it through <see cref="CreateBuilder"/> and <see cref="Build"/>, so a test
 /// can put a test server on the builder before the app is built.
 /// </summary>
+/// <remarks>
+/// Naming exception (constitution §E6 R2): the type repeats its namespace because specs 1236 (T005) and 1237 (T004a, the
+/// migration CLI that composes what this host composes) name it <c>MigrationHost</c>. The host is temporary (#5800).
+/// </remarks>
 public static class MigrationHost
 {
     /// <summary>The owner every endpoint this host maps is attributed to.</summary>
@@ -101,7 +105,7 @@ public static class MigrationHost
 
         // /health/ready reads the tracker; the default shell is activated when the host starts.
         services.AddSingleton(new ShellActivationTracker());
-        services.AddHostedService<DefaultShellActivation>();
+        services.AddHostedService<StartupShellActivation>();
 
         // Root authentication and authorization, after CShells so its shell-delegating providers stay in place.
         services.AddAuthentication();
