@@ -207,7 +207,8 @@ internal static class PostgresRootComposedInstallChecks
         // and the recovery columns it added roll back. (The narrower set already records the Park revision, S5b-1.)
         async Task NarrowerInstallRefused()
         {
-            var narrowCapabilities = capabilities & ~(RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery);
+            var added = RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery | RootCapabilities.TimerRearm;
+            var narrowCapabilities = capabilities & ~added;
             await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + NarrowSchema, stop);
             var narrow = new DbContextOptionsBuilder<KernelDb>()
                 .UseNpgsql(new NpgsqlConnectionStringBuilder(connection) { SearchPath = NarrowSchema }.ConnectionString).Options;
@@ -216,7 +217,7 @@ internal static class PostgresRootComposedInstallChecks
             await new EfStore(() => KernelDb.ForUnshippedComposition(narrow, Composed, narrowCapabilities), postgres: true).CreateAsync(1);
             await new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed, narrowCapabilities), TimeSpan.FromHours(1)).InstallAsync(stop);
             var wider = new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed,
-                narrowCapabilities | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery), TimeSpan.FromHours(1));
+                narrowCapabilities | (capabilities & added)), TimeSpan.FromHours(1));
             try
             {
                 await wider.InstallAsync(stop);

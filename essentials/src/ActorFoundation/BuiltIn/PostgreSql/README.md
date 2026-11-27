@@ -18,7 +18,7 @@ Opt-in PostgreSQL node composition and Generic Host lifetime for the Built-in Ac
   sends, so a turn's response reaches its caller before the turn's end.
 
 - `PostgresPreviewHosting.CreateShippedContext` selects the shipped format: the format 17 operator chain, Native jobs
-  with timed settlement, direct held replies, Park opening, inspection, ordinary arrivals and one-page Recover.
+  with timed settlement, direct held replies, Park opening, inspection, arrivals and one-page Recover.
   `InstallPreviewRootSchemaAsync` also installs workflow history. The node takes `requests` for held replies.
   `PostgresPreviewHosting.CreateRequests` makes them before the store is opened, and the host hands the same requests to
   `OpenFoundationAsync` for its edge. A preview database on an earlier format is recreated before opening it with the
@@ -32,9 +32,9 @@ Opt-in PostgreSQL node composition and Generic Host lifetime for the Built-in Ac
   one. Any other is refused, naming what it holds, with the advice to recreate it empty. Objects of PostgreSQL extensions
   do not count, and hosts starting at once install one after the other (an advisory lock). A multi-node host keeps
   installation an explicit setup step (`EfStore.CreateAsync` and `InstallPreviewRootSchemaAsync`), run while no node is.
-- The shipped format runs no self-sends, timers or child starts yet. Self-sends wait on S6's input-scope union with timed jobs,
-  and child workflows on PostgreSQL roots are their own slice. So a kernel host refuses Delay and Dispatch Workflow at
-  publish.
+- Format 27 takes self-sends and actor-owned timers, including the timers used by Delay. The host reads these capabilities
+  through `TakesSelfSends` and `TakesTimers`. Timer and Cron start triggers and Dispatch Workflow still require their own
+  host support.
 
 The shipped format grows by composition. Each widening of its capability set takes a new protocol number, and a database
 installed with an older set is refused. Before GA a preview database is recreated; after GA a widening migrates, with a

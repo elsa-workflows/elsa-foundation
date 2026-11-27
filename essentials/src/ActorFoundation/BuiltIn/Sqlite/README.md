@@ -14,3 +14,6 @@ Elsa__CorePreview__SqlitePath=/absolute/local/path/kernel.sqlite
 The database lives on a local filesystem with one process per file. Use the database path directly or through a symbolic link. Keep the database, its WAL and its `.host-lock` sidecar together, and leave the sidecar in place. Hard links to the database are unsupported. A clean stop releases the lock. If a stop faults or the node is killed, the process retains the lock until it exits so a stuck store call cannot overlap a new host.
 
 This composition uses the owned writer in either fence mode.
+
+Format 27 takes self-sends and actor-owned timers, including the timers used by Delay. Use
+`SqliteEmbeddedHosting.TakesSelfSends` and `TakesTimers` when configuring a model for the shipped profile.

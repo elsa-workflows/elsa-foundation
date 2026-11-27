@@ -131,11 +131,12 @@ internal static class WorkbenchCorePreview
         if (publications && (nativeJobs || timedJobs))
             throw new InvalidOperationException(
                 "With Elsa:CorePreview:Publications on, the Core Preview runs on the shipped format, which carries Native jobs: leave NativeJobs and TimedNativeJobs off.");
-        // The shipped store runs no schedule actor, timers or child workflows yet, and the edge serves no wait routes: serving refuses
-        // a Timer, Cron, Delay, Dispatch Workflow and an HTTP Endpoint that waits where it maps them. Whether the node takes
-        // self-sends is the store format's to say; without them a burst runs on to its next wait.
-        var capabilities = new KernelHostCapabilities(Schedules: false, Timers: false, Children: false,
-            SelfSends: !useSqlite && PostgresPreviewHosting.TakesSelfSends(OpenPostgres), HttpWaits: false);
+        // Both shipped stores take the actor-owned timers Delay uses. Schedule actors, children and HTTP wait routes
+        // still need their own host support. The non-shipped PostgreSQL modes take their capabilities from their profile.
+        var capabilities = new KernelHostCapabilities(Schedules: false,
+            Timers: useSqlite ? SqliteEmbeddedHosting.TakesTimers : PostgresPreviewHosting.TakesTimers(OpenPostgres),
+            Children: false, SelfSends: useSqlite ? SqliteEmbeddedHosting.TakesSelfSends : PostgresPreviewHosting.TakesSelfSends(OpenPostgres),
+            HttpWaits: false);
         string? waitProbeRefusal = null;
         var serving = publications ? new KernelServing(CronosCalendar.Error, capabilities) : null;
         if (serving is not null)

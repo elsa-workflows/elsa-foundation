@@ -2411,7 +2411,8 @@ jobs:
           PG_ID: ${{ job.services.postgres.id }}
         run: |
           failed=()
-          for run in "pg-shipped-format" "pg-root-parked-operators owned checked shipped" "pg-root-parked-operators owned in-batch shipped" "pg-root-parked-operators ef checked shipped"; do
+          for run in "pg-shipped-format" "shipped-delay-recovery postgres checked" "shipped-delay-recovery postgres in-batch" \
+              "pg-root-parked-operators owned checked shipped" "pg-root-parked-operators owned in-batch shipped" "pg-root-parked-operators ef checked shipped"; do
             db="shipped_$(tr -c 'a-z0-9' '_' <<<"$run")"
             echo "::group::$run"
             docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE ${db:0:60}"

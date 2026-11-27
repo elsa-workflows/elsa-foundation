@@ -42,6 +42,8 @@ internal static class RootJobTicket
         sends is [var deadline, var ticket] && deadline.HasIssuedTicket && ticket.HasIssuedTicket &&
         Read(ticket, actor, model, timed: true) is { } job && deadline.WithoutTicketAuthority() == Deadline(actor, job);
 
+    internal static bool IsTimedSend(Message message) => message.Kind is Kinds.Job or Kinds.JobDeadline or Kinds.JobFinished;
+
     internal static bool IsCompletion(Delivery delivery, InstanceRow row, bool timed = false) =>
         delivery is { Durable: true, IsWorkerJobCompletion: true, Original: { } original } &&
         Read(original, row.Id, row.Model, timed) is { } ticket &&

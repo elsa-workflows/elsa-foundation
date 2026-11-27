@@ -30,19 +30,19 @@ public sealed partial class EfStore
         // Quote up to one full page and a sentinel using stored lengths. The join opens only the quoted envelopes, including a
         // singleton larger than the byte allowance so it can make progress. Count all retained identities at Open.
         // Materialize scalar lengths before the window runs, so it does not buffer the original envelope columns.
-        var envelopes = db.Database.SqlQuery<SqliteKeptEnvelope>($"""
+        var envelopes = db.Database.SqlQuery<SqliteKeptEnvelope>(WithParkInputScopeParameters(db, $"""
             WITH total AS (
                 SELECT CASE WHEN {opening} THEN (SELECT count(*) FROM "Messages" m
                     WHERE m."Target" = {actor} AND m."Partition" = {partition} AND m."EventMatch" IS NULL
                         AND m."Done" AND m."FoundationKeptBy" IS NOT NULL
-                        AND m."InboxScope" IN (0, {InboxKey.FoundationOccurrenceScope}, {RootTimedJobScope})) ELSE 0 END AS "TotalRows"
+                        AND m."InboxScope" IN (0, /*park-input-scopes*/, {RootTimedJobScope})) ELSE 0 END AS "TotalRows"
             ), kept AS MATERIALIZED (
                 SELECT m."Id", m."InboxScope", m."Seq", m."FoundationKeptBy" AS "KeptBy",
                     (octet_length(m."Id") + octet_length(m."Kind") + coalesce(octet_length(m."Start"), 0)
                         + coalesce(octet_length(m."Payload"), 0) + coalesce(octet_length(m."ReplyTo"), 0)) AS "Bytes"
                 FROM "Messages" m WHERE m."Target" = {actor} AND m."Partition" = {partition} AND m."EventMatch" IS NULL
                     AND m."Done" AND m."FoundationKeptBy" IS NOT NULL
-                    AND m."InboxScope" IN (0, {InboxKey.FoundationOccurrenceScope}, {RootTimedJobScope})
+                    AND m."InboxScope" IN (0, /*park-input-scopes*/, {RootTimedJobScope})
                 ORDER BY m."Seq", m."Id", m."InboxScope" LIMIT {InMemoryStore.ParkPageLimit + 1}
             ), quote AS (
                 SELECT kept.*, row_number() OVER step AS "Ordinal", sum("Bytes") OVER step AS "QuoteBytes"
@@ -53,11 +53,11 @@ public sealed partial class EfStore
             FROM quote q CROSS JOIN total LEFT JOIN "Messages" m ON m."Id" = q."Id" AND m."InboxScope" = q."InboxScope" AND
                 (q."Ordinal" = 1 OR (q."Ordinal" <= {InMemoryStore.ParkPageLimit} AND q."QuoteBytes" <= {ParkRecoveryCredit.LimitBytes}))
             ORDER BY q."Ordinal" /* bounded-park-page */
-            """);
+            """));
         await foreach (var row in envelopes.AsAsyncEnumerable().WithCancellation(token))
         {
             var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(DurableKeyJson.Write(row))));
-            kept.Add(new(row.Id, row.InboxScope, new(row.Id, row.KeptBy, digest, digest, row.Bytes)));
+            kept.Add(new(row.Id, row.InboxScope, new(row.Id, row.InboxScope, row.KeptBy, digest, digest, row.Bytes)));
         }
         return kept;
     }
@@ -98,12 +98,13 @@ public sealed partial class EfStore
         {
             var ids = Json.Write(group.Select(row => row.Id).ToArray());
             // A creator has no outside delivery receipt. Its immutable birth and start receipt remain, and the consumed
-            // creator itself leaves the mailbox as it would have done on a successful first turn.
-            if (group.Key == 0)
+            // creator itself leaves the mailbox as it would have done on a successful first turn. Private inputs also
+            // have no receipt, and ordinary settlement removes them.
+            if (group.Key is 0 or RootSelfScope)
             {
                 if (await db.Database.ExecuteSqlInterpolatedAsync($"""
                     DELETE FROM "Messages" WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition}
-                        AND "InboxScope" = 0 AND "Done" AND "FoundationKeptBy" IS NOT NULL AND "EventMatch" IS NULL
+                        AND "InboxScope" = {group.Key} AND "Done" AND "FoundationKeptBy" IS NOT NULL AND "EventMatch" IS NULL
                         AND "Id" IN (SELECT value FROM json_each({ids}))
                     """, token) != group.Count()) return false;
             }
@@ -142,11 +143,11 @@ public sealed partial class EfStore
         if (changed != 1) return false;
         if (turn.Ends) return true;
         if (turn.Clearing is null)
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
+            await db.Database.ExecuteSqlInterpolatedAsync(WithParkInputScopeParameters(db, $"""
                 UPDATE "Messages" SET "Seen" = 0, "Trial" = 0
-                WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition} AND "InboxScope" IN (/*park-input-scopes*/)
                     AND "EventMatch" IS NULL AND NOT "Done" AND "Id" NOT GLOB 'operator/*'
-                """, token);
+                """), token);
         return await EnqueueSqliteParkControlAsync(db, root, turn.Command, turn.Mark, window, delay: 0, token);
     }
 

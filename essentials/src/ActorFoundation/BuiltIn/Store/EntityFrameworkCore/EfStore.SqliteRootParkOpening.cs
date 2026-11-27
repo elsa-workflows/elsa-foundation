@@ -31,14 +31,7 @@ public sealed partial class EfStore
         if (park.Opening ? park.Reason != ParkKeepReason.Consumed : !db.UsesRootParkArrivals) return false;
         var root = park.Root;
         var recorded = park.Inputs is [{ FoundationJobResult: true }];
-        var scope = recorded ? RootTimedJobScope : InboxKey.FoundationOccurrenceScope;
-        var ids = park.Inputs.Select(input => recorded ? StoredJobId(input.InboxKey) : input.InboxKey.Id).ToArray();
         var at = await db.Database.SqlQueryRaw<long>($"SELECT {SqliteCommitDialect.MillisecondClock} AS \"Value\"").SingleAsync(token);
-        var pending = await db.Messages.AsNoTracking().Where(row => row.Target == root.Actor && row.Partition == root.Partition &&
-            row.InboxScope == scope && row.EventMatch == null && !row.Done && row.Due <= at && ids.Contains(row.Id))
-            .OrderBy(row => row.Seq).ToArrayAsync(token);
-        var inputs = recorded ? pending.Select(DecodeRootTimedRow) : pending.Select(row => DecodeRootInput(db, row, root.Reference, issue: null));
-        if (!inputs.SequenceEqual(park.Inputs)) return false;
 
         var revision = park.JournalRevision;
         var prior = park.Opening ? null : await ReadSqliteParkMarkAsync(db, root.Actor, root.Partition, token);
@@ -62,13 +55,21 @@ public sealed partial class EfStore
                 AND "FoundationTenant" = {root.Tenant} AND "FoundationReference" = {root.Reference}
                 AND EXISTS (SELECT 1 FROM "FoundationRootBirths" WHERE "Actor" = {root.Actor} AND "Partition" = {root.Partition}
                     AND "Tenant" = {root.Tenant} AND "Reference" = {root.Reference} AND "Creation" = 1 AND "Fingerprint" = {root.Fingerprint})
-            """, pinsResult ? ids[0] : null);
+            """, pinsResult ? ParkStorageId(park.Inputs[0]) : null);
         write = WithLiveParkJob(db, write, live?.Proof);
         if (!pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1) return false;
-        if (pinsResult) await ReleaseProtectedTimedJobsAsync(db, root.Actor, ids, token);
-        if (!await KeepSqliteParkInputsAsync(db, root.Actor, root.Partition, scope, ids, park.Reason, token) ||
-            pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1)
-            return false;
+        foreach (var group in park.Inputs.GroupBy(ParkStorageScope))
+        {
+            var ids = group.Select(ParkStorageId).ToArray();
+            var pending = await db.Messages.AsNoTracking().Where(row => row.Target == root.Actor && row.Partition == root.Partition &&
+                row.InboxScope == group.Key && row.EventMatch == null && !row.Done && row.Due <= at && ids.Contains(row.Id))
+                .OrderBy(row => row.Seq).ToArrayAsync(token);
+            var decoded = pending.Select(row => DecodeRootInput(db, row, root.Reference, park.SelfIssuer, timed: recorded));
+            if (!ParkInputsMatch(decoded, group)) return false;
+            if (pinsResult) await ReleaseProtectedTimedJobsAsync(db, root.Actor, ids, token);
+            if (!await KeepSqliteParkInputsAsync(db, root.Actor, root.Partition, group.Key, ids, park.Reason, token)) return false;
+        }
+        if (pinsResult && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1) return false;
 
         if (park.Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync(WithSqliteOperatorPredicate(db, $"""
             UPDATE "Messages" SET "Seen" = 0
