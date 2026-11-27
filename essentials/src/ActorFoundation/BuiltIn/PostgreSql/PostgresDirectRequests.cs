@@ -143,6 +143,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
         string? startType, bool supportsKeys) : IHeldRootAdmission
     {
         public bool SupportsEvents { get; } = admission.SupportsLiveEventWaits();
+        public bool SupportsPublicEvents { get; } = admission.SupportsPublicEvents();
         public bool SupportsKeys { get; } = supportsKeys;
 
         public Task<Contract.Admission?> AdmitKeyAsync(HeldRootRequest request, Contract.Target.Key key, string kind,
