@@ -16,7 +16,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Workflows.Runtime.KernelHosting;
 
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
-    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention, TimeProvider clock) : IAsyncDisposable
+    ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention, TimeProvider clock, bool protectChildExecutables = false) : IAsyncDisposable
 {
     private static readonly TimeSpan MaintenanceStopBudget = TimeSpan.FromSeconds(1);
 
@@ -32,6 +32,12 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         await storage.InstallAsync(token);
         _foundation = await storage.OpenAsync(token);
         var schedules = await CreateScheduleWorkerAsync(token);
+        KernelChildBirthProtection? protection = null;
+        if (protectChildExecutables)
+        {
+            protection = new(scopes, persistenceScope, tenant, serving, storage, clock, logs.CreateLogger<KernelChildBirthProtection>());
+            await protection.RequireAsync(token);
+        }
         await ServePublicationsAsync(token);
 
         _client = NativeHttpOptions.CreateClient();
@@ -51,7 +57,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             ResolveWorkflow = ResolveWorkflowAsync
         });
         var auxiliary = schedules is null ? null : new ScheduleActor(schedules.Value.Calendar, schedules.Value.Worker.CreateAcceptor());
-        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window, auxiliary);
+        (_owner, _lifetime) = storage.CreateOwner(new WorkflowActor([model]), logs, retention.Window, auxiliary, protection is null ? null : protection.ProtectAsync);
         await _owner.StartAsync(token);
         var pass = new RetentionPass(Foundation.Reads, WorkflowActor.ActorType, retention.Window, Foundation.AdmitRetentionDelete);
         var worker = new KernelRetentionWorker(pass, tenant,
@@ -59,10 +65,10 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             token => retention.RefreshAsync(Foundation.RetentionPolicies, token),
             retention.Unavailable, logs.CreateLogger<KernelRetentionWorker>());
         var maintenanceToken = _maintenanceStop.Token;
-        var retentionTask = Task.Run(() => worker.RunAsync(maintenanceToken));
-        _maintenance = schedules is { } managed
-            ? Task.WhenAll(retentionTask, Task.Run(() => managed.Worker.RunAsync(maintenanceToken)))
-            : retentionTask;
+        List<Task> maintenance = [Task.Run(() => worker.RunAsync(maintenanceToken))];
+        if (schedules is { } managed) maintenance.Add(Task.Run(() => managed.Worker.RunAsync(maintenanceToken)));
+        if (protection is not null) maintenance.Add(Task.Run(() => protection.RunAsync(maintenanceToken)));
+        _maintenance = Task.WhenAll(maintenance);
     }
 
     public async Task StopAsync(CancellationToken token)

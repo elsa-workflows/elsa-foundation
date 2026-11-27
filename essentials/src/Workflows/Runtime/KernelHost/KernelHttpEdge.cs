@@ -53,7 +53,10 @@ public static class KernelHttpEdge
         if (match.Route is not { Start: true } route || !serving.Routes.TryStart(route.Method, route.Template.Text, out var served) ||
             served != (route.Workflow, route.Node) || !serving.Registry.TryGet(route.Workflow, out var workflow)) return null;
         var trigger = Values.From(request with { RouteValues = match.Values });
-        var start = NativeExecutionModel.Start(workflow.Id, Modes.Balanced, null, route.Node, trigger, workflow.Definition);
+        var start = NativeExecutionModel.Start(workflow.Id, Modes.Balanced, null, route.Node, trigger, workflow.Definition) with
+        {
+            ExecutableSelection = workflow.ExecutableSelection
+        };
         return new(Kernel.WorkflowActor.WorkflowActor.Start(start), workflow.Id, route.RespondBeforeCommit);
     }
 

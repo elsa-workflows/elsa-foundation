@@ -50,7 +50,10 @@ public static class NativeExecutableMapper
             Native.Workflow workflow;
             try
             {
-                workflow = new Native.Workflow(executable.Identity.ArtifactId, root, variables, executable.Identity.DefinitionId);
+                workflow = new Native.Workflow(executable.Identity.ArtifactId, root, variables, executable.Identity.DefinitionId)
+                {
+                    ExecutableSelection = JsonSerializer.Serialize(executable.Identity)
+                };
             }
             catch (Native.NativeDefinitionException invalid)
             {

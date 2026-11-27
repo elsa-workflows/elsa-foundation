@@ -1,3 +1,4 @@
+using Kernel.Foundation.Hosting;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;

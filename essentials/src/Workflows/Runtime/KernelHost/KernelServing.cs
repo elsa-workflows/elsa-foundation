@@ -69,8 +69,12 @@ public sealed class KernelServing
         var serving = _state.Slots.Values.Where(slot => slot.DefinitionId == definition).ToArray();
         if (serving.Length == 0) return ServedDefinition.None;
         var reached = serving.FirstOrDefault(slot => slot.SlotName == DefaultSlotName) ?? (serving.Length == 1 ? serving[0] : null);
-        return reached is null ? ServedDefinition.SeveralServe : ServedDefinition.By(reached.Workflow.Id);
+        return reached is null ? ServedDefinition.SeveralServe : ServedDefinition.FromWorkflow(reached.Workflow);
     }
+
+    internal bool IsHostWorkflow(string workflow, string definition) =>
+        _state.Slots.GetValueOrDefault("host:" + workflow) is { } host && host.Workflow.Definition == definition &&
+        host.Workflow.ExecutableSelection is null && Registry.TryGet(workflow, out var registered) && ReferenceEquals(registered, host.Workflow);
 
     /// <summary>What the host's foundation runs, which the coordinator maps executables against.</summary>
     public KernelHostCapabilities Capabilities { get; }

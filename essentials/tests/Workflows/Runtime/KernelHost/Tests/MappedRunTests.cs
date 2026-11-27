@@ -85,6 +85,31 @@ public sealed class MappedRunTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task A_dispatch_keeps_the_identity_from_its_exact_served_selection(bool wait)
+    {
+        var parent = NativeExecutableMapper.Map(Executable(Node("dispatch", Types.Dispatch,
+            [Literal("WorkflowDefinitionId", "invoice", "String"), Literal("WaitForCompletion", wait, "Boolean")])));
+        var selected = NativeExecutableMapper.Map(ExecutableOf("invoice-id", "invoice", WriteLine("old", Literal("text", "old"))));
+        var replacement = new Native.Workflow(selected.Id, new Native.Node("replacement", typeof(Native.WriteLine)), definition: selected.Definition)
+            { ExecutableSelection = "different material" };
+        var registry = new Native.WorkflowRegistry().Add(parent).Add(selected);
+        var model = new Native.NativeExecutionModel(registry, new Native.NativeExecutionOptions
+        {
+            ServedWorkflow = _ =>
+            {
+                registry.Add(replacement);
+                return Native.ServedDefinition.FromWorkflow(selected);
+            }
+        });
+
+        var (start, detached) = Assert.Single((await NativeTurn.StartAsync(model, parent)).Children);
+        Assert.Equal((selected.Id, selected.Definition, selected.ExecutableSelection, !wait),
+            (start.Workflow, start.Definition, start.ExecutableSelection, detached));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task A_dispatch_of_a_definition_the_host_does_not_publish_faults_before_a_child_starts(bool wait)
     {
         var workflow = NativeExecutableMapper.Map(Executable(Node("dispatch", Types.Dispatch,

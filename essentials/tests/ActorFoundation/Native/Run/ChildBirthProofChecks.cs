@@ -1,3 +1,4 @@
+using Kernel.Foundation.Hosting;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Runtime;

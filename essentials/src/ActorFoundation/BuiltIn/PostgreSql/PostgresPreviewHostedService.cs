@@ -52,6 +52,11 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
             { RetentionWindow = retentionWindow };
     }
 
+    /// <summary>Confirms an exact protected child using the same installed store as the owner.</summary>
+    public static ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(Func<KernelDb> create, BoundScope scope,
+        ActorRef child, string issuance, CancellationToken cancellationToken = default) =>
+        EfStore.ConfirmRootChildBirthAsync(create, scope, child, issuance, cancellationToken);
+
     private PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor, Action<string> endProcess,
         LoopOptions? options, ILogger<PostgresPreviewHostedService>? logger, PostgresDirectRequests? requests, IActorType? auxiliaryActor,
         ProtectChildBirthsAsync? protectChildBirths = null)
