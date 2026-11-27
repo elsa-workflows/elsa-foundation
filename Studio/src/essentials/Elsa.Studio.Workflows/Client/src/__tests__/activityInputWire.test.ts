@@ -5,7 +5,7 @@ import { buildDraftFromJson, serializeDraftToJson } from "../workflowSerializati
 import type { ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft } from "../workflowTypes";
 
 describe("activity input wire adapter", () => {
-  it.each([{ value: null, wire: null }, { value: false, wire: "false" }, { value: 0, wire: "0" }, { value: "", wire: "" }])("preserves explicit $value through load, an unrelated edit, save and reopen", ({ value, wire }) => {
+  it.each([{ value: null, wire: null }, { value: false, wire: false }, { value: 0, wire: 0 }, { value: "", wire: "" }])("preserves explicit $value through load, an unrelated edit, save and reopen", ({ value, wire }) => {
     const loaded = stateOf({
       ...writeLine("review", {}),
       inputs: [
@@ -239,15 +239,44 @@ describe("activity input wire adapter", () => {
     ]);
   });
 
-  it("serializes non-string literal values for the string-typed backend contract", () => {
-    const state = stateOf(writeLine("write-one", { count: wrapped(42, "Literal"), enabled: wrapped(true, "Literal") }));
+  it("sends Boolean and number literals as JSON Booleans and numbers, and text as text", () => {
+    // The backend reads literals as strict JSON (ADR 0091): "true" is not a Boolean and "200" is not an Int32.
+    const state = stateOf(writeLine("write-one", {
+      count: wrapped(42, "Literal"),
+      ratio: wrapped(0.5, "Literal"),
+      enabled: wrapped(true, "Literal"),
+      disabled: wrapped(false, "Literal"),
+      text: wrapped("true", "Literal")
+    }));
 
     const node = canonicalizeStateForWire(state).rootActivity!;
 
     expect(node.inputs).toEqual([
-      { referenceKey: "count", value: { value: "42", expressionType: "Literal" } },
-      { referenceKey: "enabled", value: { value: "true", expressionType: "Literal" } }
+      { referenceKey: "count", value: { value: 42, expressionType: "Literal" } },
+      { referenceKey: "ratio", value: { value: 0.5, expressionType: "Literal" } },
+      { referenceKey: "enabled", value: { value: true, expressionType: "Literal" } },
+      { referenceKey: "disabled", value: { value: false, expressionType: "Literal" } },
+      { referenceKey: "text", value: { value: "true", expressionType: "Literal" } }
     ]);
+    expect(JSON.stringify(node.inputs)).toContain('"value":{"value":true,"expressionType":"Literal"}');
+  });
+
+  it("keeps typed scalars typed through save, load and save again", () => {
+    const saved = canonicalizeStateForWire(stateOf(writeLine("write-one", {
+      statusCode: wrapped(200, "Literal"),
+      canStartWorkflow: wrapped(true, "Literal")
+    })));
+
+    const reopened = expandStateFromWire(JSON.parse(JSON.stringify(saved)));
+    expect((reopened.rootActivity!.statusCode as { expression: { value: unknown } }).expression.value).toBe(200);
+    expect((reopened.rootActivity!.canStartWorkflow as { expression: { value: unknown } }).expression.value).toBe(true);
+    expect(canonicalizeStateForWire(reopened)).toEqual(saved);
+  });
+
+  it("sends a number JSON cannot hold as null rather than as text", () => {
+    const node = canonicalizeStateForWire(stateOf(writeLine("write-one", { count: wrapped(Number.NaN, "Literal") }))).rootActivity!;
+
+    expect(node.inputs).toEqual([{ referenceKey: "count", value: { value: null, expressionType: "Literal" } }]);
   });
 
   it("sends structured literals (collections and objects) as Object expressions the backend can deserialize", () => {

@@ -42,8 +42,8 @@ interface WrappedInputValue {
 
 interface WireArgumentState {
   referenceKey: string;
-  // `value` is the backend ArgumentValue.Value (object?). Literals serialize to a string; references and
-  // other structured definitions keep their objects so stable identities survive the trip.
+  // `value` is the backend ArgumentValue.Value (object?). Scalar literals keep their JSON type (string, number,
+  // Boolean); references and other structured definitions keep their objects so stable identities survive the trip.
   value: { value: unknown; expressionType: string };
   conversion?: unknown;
   [key: string]: unknown;
@@ -334,8 +334,8 @@ function toOutputCaptureValue(argument: unknown): OutputCaptureValue | null {
   };
 }
 
-// Resolves an expression to the backend's ArgumentValue { value, expressionType }. Scalars serialize to a
-// string under their authored syntax. A structured value (an object or array) is an authored definition and
+// Resolves an expression to the backend's ArgumentValue { value, expressionType }. Scalars keep their JSON type
+// under their authored syntax. A structured value (an object or array) is an authored definition and
 // rides the wire as it is: a Variable, Input, Connection or ActivityResult reference, a portable expression
 // definition, and equally a definition this client does not know, such as a member read or a source kind
 // added later. Turning one into JSON text would change what the document means, so an unknown definition is
@@ -359,11 +359,14 @@ function toWireArgument(expression: { type: string; value: unknown }): { value: 
 
 const textContractSyntaxes = new Set(["literal", "object", "secret"]);
 
-// ArgumentValue.Value is a string on the backend, so non-string literals must be serialized.
-function toWireValue(value: unknown): string | null {
+// Scalars keep their JSON type. The backend reads a literal as strict JSON (ADR 0091 decision 2; spec 1207 refuses
+// `"true"` into Boolean and `"5"` into Int32 on every path), so a Boolean or number sent as text would not publish.
+// A string stays a string: for a text input the text is the value. A number JSON can't hold (NaN, Infinity) has no
+// literal form; it is sent as null so the backend's nullability check reports it instead of a silent coercion.
+function toWireValue(value: unknown): string | number | boolean | null {
   if (value == null) return null;
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
   return JSON.stringify(value);
 }
 
