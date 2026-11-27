@@ -77,6 +77,7 @@ internal static class RootSelfTimedParkChecks
 
             await store.EnableRootSelfSendsAsync(token);
             await store.EnableRootJobsAsync(token);
+            await store.EnableRootChildrenAsync(token);
             var probe = new Probe(rearm);
             var roots = postgres ? store.BindWorkerNode(probe.Withholds) : store.BindSqliteWorkerNode(probe.Withholds);
             var adapter = new ActorAdapter(new EfStore.RootHeaders(roots), probe, store.RootSelfIssuer,

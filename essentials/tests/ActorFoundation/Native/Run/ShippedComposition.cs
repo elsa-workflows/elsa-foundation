@@ -6,13 +6,14 @@ namespace Kernel.Native.Run;
 // format numbers stay, so a shipped profile still refuses their markers; the checks use the current shipped capabilities.
 internal static class ShippedComposition
 {
-    /// <summary>Binds an owner's partition, first turning on the job capability of a profile that carries jobs.</summary>
+    /// <summary>Binds an owner's partition after initializing the selected profile's job and child capabilities.</summary>
     internal static async Task<(EfStore.WorkerRoots Scope, int Count)> BindWorkerPartitionAsync(EfStore store, Func<KernelDb> open, int partition,
         CancellationToken stop)
     {
         bool jobs;
         await using (var db = open()) jobs = db.UsesRootJobProtocol;
         if (jobs) await store.EnableRootJobsAsync(stop);
+        await store.EnableRootChildrenAsync(stop);
         return await store.BindWorkerPartitionAsync(partition, stop);
     }
 }

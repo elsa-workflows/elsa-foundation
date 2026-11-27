@@ -230,6 +230,7 @@ internal static class PostgresRootStateFamilyChecks
         Check(started.Outcome == Contract.AdmissionOutcome.Accepted, "the Park-less set admits a public workflow start");
         var reference = started.Actor!.Value.Id;
         await store.EnableRootJobsAsync(ct);
+        await store.EnableRootChildrenAsync(ct);
         var (roots, count) = await store.BindWorkerPartitionAsync(0, ct);
         var worker = new Worker("family-writer", 0, store, PostgresNativeRootOwner.Adapter(store, roots, registry), new WorkerOptions { Partitions = count });
         var host = new DurableHost([worker]);
@@ -303,6 +304,7 @@ internal static class PostgresRootStateFamilyChecks
         var pads = new Dictionary<string, int>();
         var padded = new HashSet<string>();
         await store.EnableRootJobsAsync(ct);
+        await store.EnableRootChildrenAsync(ct);
         var (roots, count) = await store.BindWorkerPartitionAsync(0, ct);
         var worker = new Worker("family-jobs", 0, store, PostgresNativeRootOwner.Adapter(store, roots, registry),
             new WorkerOptions { Partitions = count, OnPreparedCheckpoint = (turn, _, _) => Pad(turn) });

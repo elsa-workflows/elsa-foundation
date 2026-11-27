@@ -361,6 +361,7 @@ internal static class ShippedDelayRecoveryChecks
                 var writer = new EfStore(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
                 await writer.EnableRootSelfSendsAsync(token);
                 await writer.EnableRootJobsAsync(token);
+                await writer.EnableRootChildrenAsync(token);
                 var model = new ParkProbe(new PublicActor([new NativeExecutionModel(serving.Registry)]), timers);
                 var roots = writer.BindWorkerNode(model.Withholds);
                 var adapter = new ActorAdapter(writer.WorkerHeaders(roots), model, writer.RootSelfIssuer,
@@ -506,6 +507,7 @@ internal static class ShippedDelayRecoveryChecks
                 var keeper = new EfStore(Open, postgres, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
                 await keeper.EnableRootSelfSendsAsync(token);
                 await keeper.EnableRootJobsAsync(token);
+                await keeper.EnableRootChildrenAsync(token);
                 var issuer = keeper.RootSelfIssuer!;
                 // Place a legitimately issued immediate send behind the command while no owner is polling.
                 var key = FoundationSelfSend.Issue(issuer.Handle, CreationProtocol.Origin(timer.Actor, 1), image.Revision, 1, null);

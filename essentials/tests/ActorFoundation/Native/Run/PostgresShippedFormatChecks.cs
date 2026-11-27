@@ -134,6 +134,7 @@ internal static class PostgresShippedFormatChecks
             (bound, _) => ReferenceEquals(bound, scope), stop, (bound, _) => ReferenceEquals(bound, scope));
         await store.EnableRootSelfSendsAsync(stop);
         await store.EnableRootJobsAsync(stop);
+        await store.EnableRootChildrenAsync(stop);
         store.BindWorkerNode();
         var waiting = await StartAsync("waits", "waits-1");
         var waitingActor = (await clock.ResolveAsync(scope.Tenant, waiting.Id, stop))!.Id;
@@ -306,7 +307,7 @@ internal static class PostgresShippedFormatChecks
         await using var db = open();
         var sql = EfStore.RenderPostgresFirstRootGuards(db).ReplaceLineEndings("\n");
         var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
-        Require(fingerprint == "6437ebccede5e7ea7b5517ba26a3c445efc88b3d035aab7e350fb422d89caedd",
+        Require(fingerprint == "386668f5b48fff1df215164659610a159b98efa15fb588264a65c0375ef094ba",
             $"the complete emitted PostgreSQL guard installation batch matches its revision ({fingerprint})");
         var bodies = await db.Database.SqlQueryRaw<string>("""
             SELECT md5(p.prosrc) AS "Value"
@@ -317,7 +318,7 @@ internal static class PostgresShippedFormatChecks
             ORDER BY p.proname
             """).ToListAsync(token);
         Require(bodies is ["631edb89241ac99b9413e1101d7eea78", "e7baf78be308c2709f13bfda3a6c4a1e",
-                "0a3dfca99fafab70faca7da405f3aa7c", "32455ab166ed6b45a9ecf861da7d4d74", "d09aff9335d80374110e4786ef74b5a7"],
+                "4a83fb3dc15c4bdf262a7da76f726a47", "32455ab166ed6b45a9ecf861da7d4d74", "dc1bee032b85280076623ff9c5561d04"],
             $"the installed PostgreSQL Park job protection, projector, checkpoint, journal and deferred outcome functions match their revision ({string.Join(", ", bodies)})");
     }
 
@@ -443,7 +444,7 @@ internal static class PostgresShippedFormatChecks
                     EXECUTE format('INSERT INTO %I."KernelStoreVersions" SELECT * FROM "KernelStoreVersions"', source);
                     FOREACH relation IN ARRAY ARRAY['FoundationRootIssuer', 'FoundationRootBirths', 'Instances', 'Messages',
                         'Partitions', 'Nodes', 'Journal', 'Subscriptions', 'FoundationDirectReceipts', 'FoundationActorList',
-                        'FoundationRootReceipts', 'Events', 'FoundationOperatorReceipts'] LOOP
+                        'FoundationRootReceipts', 'Events', 'FoundationOperatorReceipts', 'FoundationRootChildCascades'] LOOP
                         EXECUTE format('CREATE TABLE %I.%I (LIKE %I INCLUDING ALL)', source, relation, relation);
                     END LOOP;
                     EXECUTE format('INSERT INTO %I."FoundationRootIssuer" SELECT * FROM "FoundationRootIssuer"', source);

@@ -1376,6 +1376,7 @@ internal static class PostgresRootParkedOperatorChecks
                 await owner.CreateAsync(count);
                 await new PostgresRootAdmission(OpenWide, TimeSpan.FromHours(1)).InstallAsync(stop);
                 await owner.EnableRootJobsAsync(stop);
+                await owner.EnableRootChildrenAsync(stop);
                 owner.BindWorkerNode(set.Probe.Withholds);
                 var fences = (await owner.TakeAsync(Enumerable.Range(0, count).ToArray(), "wide-idle", FixtureLease, stop)).Taken;
                 try
@@ -1435,6 +1436,7 @@ internal static class PostgresRootParkedOperatorChecks
                 var epoch = fences.Single(fence => fence.Partition == partition).Epoch;
                 var sampler = new EfStore(OpenSample, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
                 await sampler.EnableRootJobsAsync(stop);
+                await sampler.EnableRootChildrenAsync(stop);
                 sampler.BindWorkerNode(set.Probe.Withholds);
                 await MarkReleasedAsync(0);
                 for (var pass = 0; pass < 4; pass++)
@@ -1463,6 +1465,7 @@ internal static class PostgresRootParkedOperatorChecks
                     """);
                 var wideSampler = new EfStore(OpenSample, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
                 await wideSampler.EnableRootJobsAsync(stop);
+                await wideSampler.EnableRootChildrenAsync(stop);
                 wideSampler.BindWorkerNode(set.Probe.Withholds);
                 var loaded = await wideSampler.PollAsync(fences, TimeSpan.Zero, 128, stop);
                 Check(loaded.Messages.Any(row => row.Message.Kind == Kinds.Terminate &&
@@ -1473,6 +1476,7 @@ internal static class PostgresRootParkedOperatorChecks
                 {
                     var refresh = new EfStore(OpenSample, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
                     await refresh.EnableRootJobsAsync(stop);
+                    await refresh.EnableRootChildrenAsync(stop);
                     refresh.BindWorkerNode(set.Probe.Withholds);
                     var actor = waiting.Actor.Id;
                     var original = await LastControlAsync();
@@ -3125,6 +3129,7 @@ internal static class PostgresRootParkedOperatorChecks
             await using (var profile = open())
                 if (profile.UsesRootSelfProtocol) await store.EnableRootSelfSendsAsync(stop);
             if (UsesAuthoredWithholding) await store.EnableRootJobsAsync(stop);
+            if (UsesAuthoredWithholding) await store.EnableRootChildrenAsync(stop);
             var scope = UsesAuthoredWithholding ? store.BindWorkerNode(Probe.Withholds)
                 : (await ShippedComposition.BindWorkerPartitionAsync(store, open, 0, stop)).Scope;
             // A set with direct held replies dispatches held inputs, as PostgresPreviewHosting wires its owner.

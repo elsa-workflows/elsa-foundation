@@ -56,6 +56,7 @@ internal static partial class SqliteHostLifetimeChecks
             var cursor = await SqliteRootAdmission.ReadSelectionCursorAsync(db, token);
             var store = new EfStore(Open, postgres: false, fenceInBatch) { CommitSql = CommitSql.Owned };
             await store.EnableRootJobsAsync(token);
+            await store.EnableRootChildrenAsync(token);
             Func<CommitBatch, CancellationToken, Task>? afterCommit = null;
             IKernelStore workerStore = store;
             if (recovery)
@@ -536,6 +537,7 @@ internal static partial class SqliteHostLifetimeChecks
 
                     var sampler = new EfStore(Open, postgres: false, fenceInBatch) { CommitSql = CommitSql.Owned };
                     await sampler.EnableRootJobsAsync(token);
+                    await sampler.EnableRootChildrenAsync(token);
                     sampler.BindSqliteWorkerNode(executor.Withholds);
                     Require((await sampler.PollAsync(partition, epoch, TimeSpan.Zero, 1, token)).Messages.Count == 0,
                         "an earlier group fills the only header slot when the SQLite sampler freezes its ceiling");
