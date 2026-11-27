@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text.Json;
+using Kernel.Foundation.Contracts;
 
 namespace Kernel.Durable;
 
@@ -25,10 +26,10 @@ internal static class FoundationJournalPaging
     internal static byte[] Context(string tenant, string reference) =>
         JsonSerializer.SerializeToUtf8Bytes(new { Read = "actor-tail", Tenant = tenant, Actor = reference });
 
-    internal static (IReadOnlyList<(long Revision, string Entry)> Entries, Bookmark Last) Read(
+    internal static (IReadOnlyList<JournalEntry> Entries, Bookmark Last) Read(
         IEnumerable<(long Position, long Revision, string Entries)> rows, Bookmark after, int limit)
     {
-        var added = new List<(long Revision, string Entry)>();
+        var added = new List<JournalEntry>();
         var last = after;
         foreach (var row in rows)
         {
@@ -41,7 +42,7 @@ internal static class FoundationJournalPaging
             var ordinal = row.Position == after.Position ? after.Ordinal + 1 : 0;
             for (; ordinal < count; ordinal++)
             {
-                added.Add((row.Revision, split ? entries[ordinal].GetRawText() : row.Entries));
+                added.Add(new(row.Revision, split ? entries[ordinal].GetRawText() : row.Entries) { CommitOrdinal = ordinal });
                 last = new(row.Position, ordinal);
                 if (added.Count == limit) return (added, last);
             }
