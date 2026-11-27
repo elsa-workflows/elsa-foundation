@@ -9,4 +9,5 @@ internal sealed class RuntimeKernelScheduleControlEntity
     public string ContentJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = RuntimeKernelScheduleControlEfModule.SchemaVersion;
     public long Revision { get; set; }
+    public long InsertionOrdinal { get; set; }
 }

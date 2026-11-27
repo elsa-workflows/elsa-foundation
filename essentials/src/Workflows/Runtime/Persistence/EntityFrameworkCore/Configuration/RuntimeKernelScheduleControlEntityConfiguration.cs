@@ -20,5 +20,21 @@ internal sealed class RuntimeKernelScheduleControlEntityConfiguration : IEntityT
 
         builder.HasIndex(row => new { row.ScopeKeyHash, row.TenantKeyHash, row.Id }).HasDatabaseName("IX_KernelScheduleControl_Tenant");
         builder.HasIndex(row => new { row.ScopeKeyHash, row.OwnerSlotHash }).HasDatabaseName("IX_KernelScheduleControl_Owner");
+        builder.HasIndex(row => new { row.ScopeKeyHash, row.TenantKeyHash, row.InsertionOrdinal, row.Id })
+            .HasDatabaseName("IX_KernelScheduleControl_Scan");
+    }
+}
+
+internal sealed class RuntimeKernelScheduleControlScanEntityConfiguration : IEntityTypeConfiguration<RuntimeKernelScheduleControlScanEntity>
+{
+    public void Configure(EntityTypeBuilder<RuntimeKernelScheduleControlScanEntity> builder)
+    {
+        builder.ToTable("elsa_runtime_kernel_schedule_control_scan");
+        builder.HasKey(row => new { row.ScopeKeyHash, row.TenantKeyHash });
+        builder.Property(row => row.ScopeKeyHash).HasMaxLength(64);
+        builder.Property(row => row.TenantKeyHash).HasMaxLength(64);
+        builder.Property(row => row.AfterId).HasMaxLength(64);
+        builder.Property(row => row.LastOrdinal).IsConcurrencyToken();
+        builder.Property(row => row.Pass).IsConcurrencyToken();
     }
 }

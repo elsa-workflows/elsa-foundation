@@ -57,7 +57,7 @@ internal static class KernelScheduleReconciliationChecks
             .AddScoped<IPersistenceAccessContextAccessor>(sp => sp.GetRequiredService<Access>())
             .AddScoped<IPersistenceAccessContextBinder>(sp => sp.GetRequiredService<Access>())
             .AddScoped(sp => new RuntimeLedger(fixture, sp.GetRequiredService<Access>()))
-            .AddScoped<IRuntimeKernelScheduleControlReader>(sp => sp.GetRequiredService<RuntimeLedger>())
+            .AddScoped<IRuntimeKernelScheduleControlScanStore>(sp => sp.GetRequiredService<RuntimeLedger>())
             .AddScoped<IRuntimeKernelScheduleOccurrenceDeliveryStore>(sp => sp.GetRequiredService<RuntimeLedger>())
             .AddScoped<IRuntimeKernelScheduleOccurrenceRetirementStore>(sp => sp.GetRequiredService<RuntimeLedger>())
             .AddScoped<IRuntimeKernelScheduleOccurrenceStore>(sp => sp.GetRequiredService<RuntimeLedger>())
@@ -111,8 +111,8 @@ internal static class KernelScheduleReconciliationChecks
                 "superseded, conflicted and wrong-tenant controls have distinct diagnostics");
             await fixture.RepeatControl.Task.WaitAsync(deadline.Token);
             Require(fixture.Controls.Take(3).SequenceEqual([(Unqualified, (string?)null), (Unqualified, "second-page"), (Unqualified, (string?)null)]) &&
-                    fixture.ControlAttempts == 2 && fixture.ControlWrites == 1,
-                "a fresh control sweep starts over and consumes the provider's duplicate receipt without another control write");
+                    fixture.ControlAttempts == 2 && fixture.ControlWrites == 1 && fixture.StopAttempts == 2,
+                "a fresh control sweep retries an earlier failed control and replays an existing receipt without another write");
         }
         finally
         {
@@ -150,6 +150,8 @@ internal static class KernelScheduleReconciliationChecks
                 return ValueTask.FromResult(new ContractAdmission(AdmissionOutcome.Accepted));
             }
             Require(header is null, "Stop has no managed start header");
+            if (control == stop && ++fixture.StopAttempts == 1)
+                throw new IOException("the first stop apply failed before acknowledgement");
             return ValueTask.FromResult(new ContractAdmission(AdmissionOutcome.Refused,
                 Reason: control == stop ? RefusalReason.StaleSelection : RefusalReason.Conflict));
         }
@@ -205,35 +207,35 @@ internal static class KernelScheduleReconciliationChecks
         internal bool SawBoundedPage;
         internal int ControlAttempts;
         internal int ControlWrites;
+        internal int StopAttempts;
+        internal bool ControlContinuation;
     }
 
-    private sealed class RuntimeLedger(Fixture fixture, Access access) : IRuntimeKernelScheduleControlReader,
+    private sealed class RuntimeLedger(Fixture fixture, Access access) : IRuntimeKernelScheduleControlScanStore,
         IRuntimeKernelScheduleOccurrenceDeliveryStore, IRuntimeKernelScheduleOccurrenceRetirementStore, IRuntimeKernelScheduleOccurrenceStore
     {
         private int _calls;
 
-        public ValueTask<RuntimeKernelScheduleControl?> FindAsync(TriggerScope scope, string scheduleKey, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<string?> ReadTailAsync(TriggerScope scope, CancellationToken cancellationToken = default)
-        {
-            CheckScope(scope);
-            return ValueTask.FromResult<string?>("tail");
-        }
-
-        public ValueTask<RuntimeKernelScheduleControlPage> ListAsync(TriggerScope scope, string? after, int limit,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-        public ValueTask<RuntimeKernelScheduleControlPage> ListAsync(TriggerScope scope, string? after, string through, int limit,
+        public ValueTask<IRuntimeKernelScheduleControlScanPage?> ReadScanPageAsync(TriggerScope scope, int limit,
             CancellationToken cancellationToken = default)
         {
             CheckScope(scope);
-            Require(through == "tail", "control pages use the selected tail");
-            fixture.Controls.Add((scope, after));
-            return ValueTask.FromResult(after is null
-                ? new RuntimeKernelScheduleControlPage([fixture.Active, fixture.Stop, fixture.Foreign], "second-page")
-                : new RuntimeKernelScheduleControlPage([fixture.Stop with { Revision = 2 }], null));
+            fixture.Controls.Add((scope, fixture.ControlContinuation ? "second-page" : null));
+            return ValueTask.FromResult<IRuntimeKernelScheduleControlScanPage?>(fixture.ControlContinuation
+                ? new ControlPage([fixture.Stop with { Revision = 2 }], false)
+                : new ControlPage([fixture.Active, fixture.Stop, fixture.Foreign], true));
         }
+
+        public ValueTask<bool> TryAdvanceScanAsync(TriggerScope scope, IRuntimeKernelScheduleControlScanPage page,
+            CancellationToken cancellationToken = default)
+        {
+            CheckScope(scope);
+            Require(page.HasMore != fixture.ControlContinuation, "each attempted control page advances its own position");
+            fixture.ControlContinuation = page.HasMore;
+            return ValueTask.FromResult(true);
+        }
+
+        private sealed record ControlPage(IReadOnlyList<RuntimeKernelScheduleControl> Items, bool HasMore) : IRuntimeKernelScheduleControlScanPage;
 
         public ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadPendingTailAsync(TriggerScope scope, CancellationToken cancellationToken = default)
         {
