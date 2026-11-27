@@ -25,7 +25,7 @@ public sealed partial class EfStore
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         var dialect = RequireDialect();
         // A statement-stable cutoff lets PostgreSQL seek on Due as well as Partition.
-        var now = postgres ? "(extract(epoch from statement_timestamp()) * 1000)::bigint" : dialect.Now;
+        var now = postgres ? "floor(extract(epoch from statement_timestamp()) * 1000)::bigint" : dialect.Now;
         return await db.Database.SqlQueryRaw<int>($$"""
             SELECT CAST(count(*) AS integer) AS "Value" FROM (
                 SELECT 1 FROM "Messages"

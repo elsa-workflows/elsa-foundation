@@ -86,8 +86,12 @@ internal static class RootDueBacklogChecks
             await db.SaveChangesAsync(token);
             await store.ReleaseAsync(owned.Taken, token);
             var successor = await store.TakeAsync([0, 1], "next-sampler", lease, token);
-            Check(successor.Taken.Count == 2 && successor.Taken[0].Epoch > owned.Taken[0].Epoch,
+            Check(successor.Taken.Count == 2 && successor.Taken[0].Epoch > owned.Taken[0].Epoch &&
+                successor.Taken[0].Position == owned.Taken[0].Position,
                 "the successor owns a new epoch");
+            var expired = batch with { DueBacklog = new Dictionary<int, int> { [0] = 9 } };
+            Check(!(await store.CommitAsync(expired, token)).Landed && await backlog.ReadPublishedDueBacklogAsync(0, token) == 2,
+                "the old owner cannot publish at the same position after takeover");
             await sampler.ReadAsync(successor.Taken, successor.Now, token);
             var reduced = sampler.ForCommit(successor.Taken);
             Check(reduced is { Count: 1 } && reduced[0] == 0 &&
