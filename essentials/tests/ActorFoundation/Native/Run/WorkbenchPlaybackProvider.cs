@@ -1,10 +1,14 @@
 using System.Data.Common;
+using System.Text.Json;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
 using Kernel.Foundation.Postgres;
+using Kernel.Foundation.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Hosting;
 using Npgsql;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Elsa.Workbench.Qualification;
 
@@ -25,21 +29,31 @@ internal static partial class WorkbenchPostgresPreview
         if (postgres)
             await RefusePlaybackNamespaceReplacementAsync(options.Options, run, token);
 
-        await using var write = Open();
-        var root = await write.Database.SqlQuery<PlaybackFixtureRoot>($"""
-            SELECT "Actor" AS "Id", "Partition" FROM "FoundationRootBirths"
-            WHERE "Tenant" = 'default' AND "Reference" = {run} AND "Creation" = 1
-            """).SingleAsync(token);
-        var position = await write.Journal.Where(row => row.Partition == root.Partition).MaxAsync(row => row.Position, token);
-        var revision = await write.Journal.Where(row => row.Partition == root.Partition && row.Instance == root.Id).MaxAsync(row => row.Revision, token);
-        Task AppendAsync(string entries) => write.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "Journal" ("Partition", "Position", "Instance", "Revision", "Entries")
-            VALUES ({root.Partition}, {++position}, {root.Id}, {++revision}, {entries})
-            """, token);
+        const string node = "playback-observation-probe";
+        var actor = new PlaybackObservationProbe();
+        var sqliteHost = sqlite is null ? null : SqliteEmbeddedFoundation.ForPlaybackQualification(sqlite, node, actor.Type);
+        if (sqliteHost is not null) await sqliteHost.InstallShippedAsync(token);
+        var requests = postgres ? PostgresPreviewHosting.CreateRequests(Open, node, actor.Type) : null;
+        IHostedService owner = sqliteHost is null
+            ? new PostgresPreviewHostedService(Open, node, actor, Escalate, requests: requests)
+            : sqliteHost.CreateHostedService(actor, Escalate);
+        await using var lifetime = (IAsyncDisposable)owner;
+        var ingress = sqliteHost is null
+            ? (IIngress)await PostgresPreviewHosting.OpenFoundationAsync(Open, actor.Type, requests, cancellationToken: token)
+            : await sqliteHost.OpenIngressAsync(token);
+        await owner.StartAsync(token);
+        var scope = EmbeddedTenant.Bind("default");
+        var admitted = await ingress.SendAsync(scope, new Target.Start(new Contract.StartSpec(actor.Type, "playback")), "start",
+            Contract.Kinds.Start, cancellationToken: token);
+        if (admitted is not { Outcome: AdmissionOutcome.Accepted, Actor: { } exact })
+            throw new InvalidOperationException("The malformed-observation probe was not admitted.");
 
-        await AppendAsync("""["b:f900:unmarked","{\"NativeStructure\":1,\"Kind\":2,\"At\":1,\"Frame\":\"f900\",\"Node\":\"lookalike\"}"]""");
-        var prefix = await reads.ReadRootPlaybackAsync("default", run, query, token);
-        Require(prefix is { Availability: ActorPlaybackAvailability.Available } && prefix.Count == first!.Count,
+        var initial = await ObserveAfterAsync(0);
+        var prefix = await SendAsync("diagnostics",
+            """["b:f900:unmarked","{\"NativeStructure\":1,\"Kind\":2,\"At\":1,\"Frame\":\"f900\",\"Node\":\"lookalike\"}"]""",
+            initial.LatestSequence);
+        Require(initial is { Availability: ActorPlaybackAvailability.Available, Count: 1 } &&
+            prefix is { Availability: ActorPlaybackAvailability.Available, Count: 1 },
             "unmarked diagnostic strings leave Playback membership unchanged");
         string[] malformed =
         [
@@ -49,21 +63,68 @@ internal static partial class WorkbenchPostgresPreview
             """{"NativeStructure":2,"Kind":2,"At":1000,"Frame":"f903","Node":"bad"}""",
             """{"NativeStructure":1,"NativeStructure":2,"Kind":2,"At":1000,"Frame":"f904","Node":"bad"}"""
         ];
-        foreach (var entry in malformed) await AppendAsync("[" + entry + "]");
+        var stale = prefix;
+        for (var index = 0; index < malformed.Length; index++)
+            stale = await SendAsync($"marked-{index}", "[" + malformed[index] + "]", stale.LatestSequence);
+
+        await using var write = Open();
         var invalid = await write.Database.SqlQuery<long>($"""
-            SELECT CAST(COUNT(*) AS bigint) AS "Value" FROM "FoundationJournalPlaybackInvalid"
-            WHERE "Partition" = {root.Partition} AND "Actor" = {root.Id}
+            SELECT CAST(COUNT(*) AS bigint) AS "Value" FROM "FoundationJournalPlaybackInvalid" invalid
+            JOIN "FoundationRootBirths" birth ON birth."Partition" = invalid."Partition" AND birth."Actor" = invalid."Actor"
+            WHERE birth."Tenant" = {scope.Tenant} AND birth."Reference" = {exact.Id} AND birth."Creation" = 1
             """).SingleAsync(token);
         Require(invalid == malformed.Length, "every malformed marked observation gets a retained refusal receipt");
-        var stale = await reads.ReadRootPlaybackAsync("default", run, query, token);
-        var frozen = await reads.ReadRootPlaybackAsync("default", run,
-            query with { UpperSequence = prefix!.UpperSequence, RetainedAfterSequence = prefix.RetainedAfterSequence }, token);
+        var frozen = await reads.ReadRootPlaybackAsync(scope.Tenant, exact.Id,
+            query with { UpperSequence = prefix.UpperSequence, RetainedAfterSequence = prefix.RetainedAfterSequence }, token);
         Require(stale is { Availability: ActorPlaybackAvailability.Unavailable, Reason: "occurrence-observation-unknown", Items.Count: 0 } &&
             frozen is { Availability: ActorPlaybackAvailability.Available } && frozen.Count == prefix.Count && frozen.LatestSequence > frozen.UpperSequence,
             "malformed marked observations refuse fresh admission while earlier frozen membership remains playable");
+        await owner.StopAsync(token);
+
+        async Task<ActorPlaybackPage> SendAsync(string id, string payload, long after)
+        {
+            var delivery = await ingress.SendAsync(scope, new Target.Ref(exact), id, "record", payload, cancellationToken: token);
+            Require(delivery.Outcome == AdmissionOutcome.Accepted, "the owned probe admits the journal observation");
+            return await ObserveAfterAsync(after);
+        }
+
+        async Task<ActorPlaybackPage> ObserveAfterAsync(long after)
+        {
+            while (true)
+            {
+                var page = await reads.ReadRootPlaybackAsync(scope.Tenant, exact.Id, query, token);
+                if (page is not null && page.LatestSequence > after) return page;
+                await Task.Delay(25, token);
+            }
+        }
+
+        static void Escalate(string message) => throw new InvalidOperationException(message);
     }
 
-    private sealed record PlaybackFixtureRoot(string Id, int Partition);
+    private sealed class PlaybackObservationProbe : Contract.IActorType
+    {
+        public string Type => "playback-observation-probe";
+        public bool Withholds(ActorHeader header) => false;
+        public long TerminalGrowth(ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(ActorHeader header, string state, long now) => false;
+        public RestorePlan RestoreWaits(ActorHeader header, string state) => new([], [], []);
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public ValueTask TurnAsync(IActorTurn turn, CancellationToken cancellationToken)
+        {
+            if (turn.StartSettings is not null)
+            {
+                turn.State = "ready";
+                turn.Record(new { NativeStructure = 1, Kind = 2, At = turn.Now, Frame = "f1", Node = "probe" });
+            }
+            foreach (var message in turn.Inbox.Where(message => message.Kind == "record"))
+            {
+                using var observations = JsonDocument.Parse(message.Payload!);
+                foreach (var observation in observations.RootElement.EnumerateArray()) turn.Record(observation);
+            }
+            return ValueTask.CompletedTask;
+        }
+    }
 
     private static async Task RefusePlaybackNamespaceReplacementAsync(DbContextOptions<KernelDb> options, string run, CancellationToken token)
     {
