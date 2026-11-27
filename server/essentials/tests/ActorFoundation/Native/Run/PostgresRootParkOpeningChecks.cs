@@ -1,9 +1,11 @@
+using System.Data.Common;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
@@ -13,6 +15,39 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootParkOpeningChecks
 {
+    private sealed class RecoveryQuoteObservation : DbCommandInterceptor
+    {
+        internal bool ObserveNext { get; set; }
+        internal int Quoted { get; private set; }
+        internal bool SkippedKeptScan { get; private set; }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (!ObserveNext || !command.CommandText.Contains("WITH arrivals AS MATERIALIZED", StringComparison.Ordinal))
+                return result;
+            ObserveNext = false;
+            await using var explain = ((NpgsqlCommand)command).Clone();
+            explain.CommandText = "EXPLAIN (ANALYZE, FORMAT JSON) " + command.CommandText;
+            using var plan = JsonDocument.Parse((string)(await explain.ExecuteScalarAsync(cancellationToken))!);
+            var nodes = Plans(plan.RootElement[0].GetProperty("Plan")).ToArray();
+            Quoted = nodes.Single(node => node.TryGetProperty("Subplan Name", out var name) && name.GetString() == "CTE arrivals")
+                .GetProperty("Actual Rows").GetInt32();
+            SkippedKeptScan = nodes.Any(node => node.TryGetProperty("Relation Name", out var relation) && relation.GetString() == "Messages" &&
+                node.GetProperty("Actual Loops").GetInt32() == 0);
+            return result;
+
+            static IEnumerable<JsonElement> Plans(JsonElement node)
+            {
+                yield return node;
+                if (node.TryGetProperty("Plans", out var nested))
+                    foreach (var child in nested.EnumerateArray())
+                        foreach (var descendant in Plans(child))
+                            yield return descendant;
+            }
+        }
+    }
+
     internal static async Task<int> RunAsync(bool owned, bool inBatch, bool inspection = false, bool arrivals = false, bool recovery = false)
     {
         if (recovery) (inspection, arrivals) = (true, true);
@@ -21,6 +56,7 @@ internal static class PostgresRootParkOpeningChecks
         const string payload = "{\"retain\":\"this input\"}";
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
+        var recoveryQuote = new RecoveryQuoteObservation();
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         KernelDb Profile(DbContextOptions<KernelDb> settings) => recovery ? KernelDb.ForPostgresRootParkRecovery(settings)
             : arrivals ? KernelDb.ForPostgresRootParkArrivals(settings)
@@ -51,7 +87,7 @@ internal static class PostgresRootParkOpeningChecks
         }
         using var quoting = new NpgsqlCommandBuilder();
         var mixed = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "park_shadow," + quoting.QuoteIdentifier(source) };
-        var mixedOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(mixed.ConnectionString).Options;
+        var mixedOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(mixed.ConnectionString).AddInterceptors(recoveryQuote).Options;
         KernelDb OpenMixed() => Profile(mixedOptions);
         var admission = new PostgresRootAdmission(OpenMixed, TimeSpan.FromHours(1), lockOrdinaryWrites: true);
         var tenant = ContractScopes.Bind("park-preview");
@@ -630,8 +666,11 @@ internal static class PostgresRootParkOpeningChecks
                     SELECT 'page-filler-' || n, -4, {before.Actor.Id}, 'ordinary', 0, 0, 0, 0, 0, true, 0, 1 FROM generate_series(1, {InMemoryStore.ParkPageLimit}) n
                     """, stop);
             Check(await Send(actor, "recover-page", new(selection)) is { Outcome: Contract.AdmissionOutcome.Accepted }, "ingress admits a recover of the oversized Park");
+            recoveryQuote.ObserveNext = true;
             await using (var pager = await Own("recover-page"))
                 await Drive(pager, row => row is { Revision: 5 });
+            Check(recoveryQuote.Quoted == InMemoryStore.ParkPageLimit + 1 && recoveryQuote.SkippedKeptScan,
+                $"the PostgreSQL row-limit refusal quotes one page and its overflow row and skips the kept-envelope scan (quoted {recoveryQuote.Quoted}, skipped {recoveryQuote.SkippedKeptScan})");
             Check((await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop))[^1] is { Revision: 5, Entries: """{"Outcome":"refused","Operation":"recover-page","Reason":"page"}""" } &&
                 (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop)) is { Status: InstanceStatus.Faulted, Fault: fault, State: original } &&
                 await ReadParkMark(before.Actor.Id) == opened && (await reads.GetAsync(tenant, actor, stop))?.Park == parked.Park,
@@ -751,8 +790,11 @@ internal static class PostgresRootParkOpeningChecks
                     """, stop);
             Check(await Send(sibling, "recover-bytes", new(neighborSelection)) is { Outcome: Contract.AdmissionOutcome.Accepted },
                 "ingress admits a recover of two arrivals over 4 MiB");
+            recoveryQuote.ObserveNext = true;
             await using (var large2 = await Own("large-page"))
                 await Drive(large2, row => row?.Revision == neighborParked.Revision + 2, sibling);
+            Check(recoveryQuote.Quoted == 2 && recoveryQuote.SkippedKeptScan,
+                $"the PostgreSQL byte-limit refusal quotes both sizes and skips the kept-envelope scan (quoted {recoveryQuote.Quoted}, skipped {recoveryQuote.SkippedKeptScan})");
             Check((await store.ReadJournalOfAsync(0, neighborId, 0, stop))[^1].Entries ==
                     """{"Outcome":"refused","Operation":"recover-bytes","Reason":"page"}""" &&
                 (await store.ReadFirstRootAsync(tenant.Tenant, sibling.Id, stop)) is { Status: InstanceStatus.Faulted },

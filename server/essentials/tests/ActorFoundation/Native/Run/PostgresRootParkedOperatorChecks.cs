@@ -1158,10 +1158,20 @@ internal static class PostgresRootParkedOperatorChecks
                     is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null },
                 "the public operator grant returns the same actor's receipt and refuses a receipt for a different actor");
             const string raceId = "competing-exact-operator-id";
+            var receiptBarrier = new OperatorReceiptInsertBarrier();
+            var raceOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings).AddInterceptors(receiptBarrier).Options;
+            KernelDb OpenRace() => KernelDb.ForPostgresRootShipped(raceOptions);
+            var raceFirst = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenRace, Probe.Type,
+                (caller, target, kind) => ReferenceEquals(caller, tenant) && target == suspending && kind == Contract.Kinds.Suspend,
+                cancellationToken: stop);
+            var raceSecond = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(OpenRace, Probe.Type,
+                (caller, target, kind) => ReferenceEquals(caller, tenant) && target == recovering && kind == Contract.Kinds.Suspend,
+                cancellationToken: stop);
             var competing = await Task.WhenAll(
-                firstGrant.SendAsync(tenant, firstRef, raceId, Contract.Kinds.Suspend, cancellationToken: stop).AsTask(),
-                secondGrant.SendAsync(tenant, secondRef, raceId, Contract.Kinds.Suspend, cancellationToken: stop).AsTask());
-            Check(competing.Count(result => result.Outcome == Contract.AdmissionOutcome.Accepted) == 1 &&
+                raceFirst.SendAsync(tenant, firstRef, raceId, Contract.Kinds.Suspend, cancellationToken: stop).AsTask(),
+                raceSecond.SendAsync(tenant, secondRef, raceId, Contract.Kinds.Suspend, cancellationToken: stop).AsTask());
+            Check(receiptBarrier.ConflictReads == 1 &&
+                competing.Count(result => result.Outcome == Contract.AdmissionOutcome.Accepted) == 1 &&
                 competing[0].Actor == (competing[0].Outcome == Contract.AdmissionOutcome.Accepted ? suspending : null) &&
                 competing[1].Actor == (competing[1].Outcome == Contract.AdmissionOutcome.Accepted ? recovering : null) &&
                 competing.Any(result => result is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null }),
@@ -3496,6 +3506,30 @@ internal static class PostgresRootParkedOperatorChecks
         private static bool IsTriggerRefusal(Exception error) =>
             (error as PostgresException ?? error.InnerException as PostgresException) is { SqlState: "23514" } refused &&
             TriggerMessages.Contains(refused.MessageText);
+    }
+
+    private sealed class OperatorReceiptInsertBarrier : DbCommandInterceptor
+    {
+        private readonly TaskCompletionSource _insertsReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _inserts;
+        private int _conflictReads;
+        internal int ConflictReads => Volatile.Read(ref _conflictReads);
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            var sql = command.CommandText;
+            if (sql.Contains("""INSERT INTO "FoundationOperatorReceipts" AS r""", StringComparison.Ordinal))
+            {
+                // Each request has missed the receipt lookup before executing its competing insert.
+                if (Interlocked.Increment(ref _inserts) == 2) _insertsReady.TrySetResult();
+                await _insertsReady.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
+            }
+            else if (sql.Contains("""FROM "FoundationOperatorReceipts" WHERE "Tenant" =""", StringComparison.Ordinal) &&
+                !sql.Contains("\"Until\"", StringComparison.Ordinal))
+                Interlocked.Increment(ref _conflictReads);
+            return result;
+        }
     }
 
     private sealed class LiveJobCommitGate : DbTransactionInterceptor
