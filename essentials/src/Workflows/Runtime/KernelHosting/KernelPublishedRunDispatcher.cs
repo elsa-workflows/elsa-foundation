@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Kernel.Foundation.Contracts;
@@ -46,12 +47,12 @@ internal sealed class KernelPublishedRunDispatcher(IServiceScopeFactory scopes, 
         var source = await sources.ResolvePublishedAsync(request.ArtifactId, request.SourceSelection, persistence, cancellationToken);
         var published = await ReadServedAsync(source);
 
-        var inputs = WorkflowStartDispatcher.ApplyInputContract(executable, request.Inputs,
+        var inputs = WorkflowStartAdmission.ApplyInputContract(executable, request.Inputs,
             services.GetRequiredService<IWorkflowExecutableInputValidator>());
         var policies = services.GetServices<IWorkflowExecutableStartPolicy>().ToArray();
         if (policies is not [var policy])
             throw new InvalidOperationException($"Runtime composition requires exactly one {nameof(IWorkflowExecutableStartPolicy)} registration, but found {policies.Length}.");
-        await WorkflowStartDispatcher.EnforceStartPolicyAsync(request, executable.Identity, new(persistence.Value), policy, cancellationToken);
+        await WorkflowStartAdmission.EnforceStartPolicyAsync(request, executable.Identity, new(persistence.Value), policy, cancellationToken);
 
         var input = new JsonObject();
         foreach (var (name, value) in inputs) input.Add(name, JsonNode.Parse(value.GetRawText()));

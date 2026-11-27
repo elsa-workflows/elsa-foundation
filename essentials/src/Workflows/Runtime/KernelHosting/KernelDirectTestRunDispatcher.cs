@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -55,12 +56,12 @@ internal sealed class KernelDirectTestRunDispatcher(IServiceScopeFactory scopes,
             throw new WorkflowExecutableReferenceRejectedException(request.ArtifactId, requiredScope,
                 WorkflowExecutableReferenceRejectionReason.NoLiveReference);
 
-        var inputs = WorkflowStartDispatcher.ApplyInputContract(executable, request.Inputs,
+        var inputs = WorkflowStartAdmission.ApplyInputContract(executable, request.Inputs,
             services.GetRequiredService<IWorkflowExecutableInputValidator>());
         var policies = services.GetServices<IWorkflowExecutableStartPolicy>().ToArray();
         if (policies is not [var policy])
             throw new InvalidOperationException($"Runtime composition requires exactly one {nameof(IWorkflowExecutableStartPolicy)} registration, but found {policies.Length}.");
-        await WorkflowStartDispatcher.EnforceStartPolicyAsync(request, executable.Identity, test.Partition, policy, cancellationToken);
+        await WorkflowStartAdmission.EnforceStartPolicyAsync(request, executable.Identity, test.Partition, policy, cancellationToken);
 
         var provenance = WorkflowExecutableSourceProvenance.From(source);
         var mode = services.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(executable);
