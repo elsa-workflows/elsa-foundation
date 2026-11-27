@@ -1,6 +1,8 @@
 using System.Data;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Kernel.Foundation.Contracts;
 using Microsoft.EntityFrameworkCore;
@@ -144,17 +146,24 @@ public sealed partial class EfStore
         CREATE TABLE "{PlaybackInvalidName}" ({PlaybackInvalidColumns("bigint", """text COLLATE "C" """)});
         CREATE INDEX kernel_playback_commit ON "{PlaybackName}" ("Partition", "Position");
         {(descendants ? PostgresPlaybackScopes : "")}
-        CREATE FUNCTION {PlaybackProjector(descendants)}() RETURNS trigger LANGUAGE plpgsql AS $fn$
-        BEGIN
-            {PlaybackInsert(PostgresPlaybackObservations)};
-            {PlaybackInvalidInsert(PostgresPlaybackObservations)};
-            {(descendants ? PostgresPlaybackScopeInsert + ";" : "")}
-            RETURN NULL;
-        END
-        $fn$;
+        CREATE FUNCTION {PlaybackProjector(descendants)}() RETURNS trigger LANGUAGE plpgsql
+            AS $fn${PostgresPlaybackProjectorBody(descendants)}$fn$;
         CREATE TRIGGER {PlaybackProjector(descendants)} AFTER INSERT ON "{SequencedJournalName}"
             FOR EACH ROW EXECUTE FUNCTION {PlaybackProjector(descendants)}();
         """;
+
+    private static string PostgresPlaybackProjectorBody(bool descendants) => ("\n" + $"""
+        BEGIN
+            {PlaybackInsert(PostgresPlaybackObservations)};
+            {PlaybackInvalidInsert(PostgresPlaybackObservations)};{(descendants ? $"\n    {PostgresPlaybackScopeInsert};" : "")}
+            RETURN NULL;
+        END
+        """ + "\n").ReplaceLineEndings("\n");
+
+    // PostgreSQL keeps the source between the dollar quotes. Qualify that same canonical body
+    // so a restore or CREATE OR REPLACE cannot silently leave materialization stale.
+    private static readonly Lazy<string> PostgresPlaybackScopeProjectorDigest = new(() =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(PostgresPlaybackProjectorBody(descendants: true)))));
 
     private static IEnumerable<SqliteDefinition> SqlitePlaybackDefinitions(bool descendants)
     {

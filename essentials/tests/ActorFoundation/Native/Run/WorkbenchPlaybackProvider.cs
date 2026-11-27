@@ -217,15 +217,57 @@ internal static partial class WorkbenchPostgresPreview
             """, token);
         try
         {
+            await RefuseAsync("legacy projector");
+        }
+        finally
+        {
+            await observer.Database.ExecuteSqlRawAsync("""
+                DROP TRIGGER kernel_project_root_playback ON "FoundationSequencedJournal";
+                DROP FUNCTION kernel_project_root_playback();
+                CREATE TRIGGER kernel_project_root_playback_scopes AFTER INSERT ON "FoundationSequencedJournal"
+                    FOR EACH ROW EXECUTE FUNCTION kernel_project_root_playback_scopes();
+                """, token);
+        }
+
+        var installed = await observer.Database.SqlQueryRaw<string>("""
+            SELECT pg_catalog.pg_get_functiondef('public.kernel_project_root_playback_scopes()'::regprocedure) AS "Value"
+            """).SingleAsync(token);
+        var bound = await ReadProjectorBindingAsync();
+        await observer.Database.ExecuteSqlRawAsync("""
+            CREATE OR REPLACE FUNCTION public.kernel_project_root_playback_scopes() RETURNS trigger LANGUAGE plpgsql AS $fn$
+            BEGIN
+                RETURN NULL;
+            END
+            $fn$;
+            """, token);
+        try
+        {
+            Require(await ReadProjectorBindingAsync() == bound, "replacing the projector body preserves the installed trigger and function identities");
+            await RefuseAsync("replacement body under the selected name");
+        }
+        finally
+        {
+            await observer.Database.ExecuteSqlRawAsync(installed, token);
+        }
+
+        Task<string> ReadProjectorBindingAsync() => observer.Database.SqlQueryRaw<string>("""
+            SELECT binding.oid::text || '/' || binding.tgfoid::text AS "Value"
+            FROM pg_catalog.pg_trigger binding
+            WHERE binding.tgrelid = 'public."FoundationSequencedJournal"'::regclass
+                AND binding.tgname = 'kernel_project_root_playback_scopes'
+            """).SingleAsync(token);
+
+        async Task RefuseAsync(string drift)
+        {
             var reads = new EfStore(open, postgres: true);
             try
             {
                 await reads.ReadRootPlaybackAsync("default", run, query, token);
-                throw new InvalidOperationException("A frozen descendant window accepted a restored legacy projector.");
+                throw new InvalidOperationException($"A frozen descendant window accepted the {drift}.");
             }
             catch (StoreFormatException)
             {
-                Require(true, "frozen descendant Playback refuses a restored legacy projector even with its marker and scope rows intact");
+                Require(true, $"frozen descendant Playback rejects the {drift} with its marker and scope rows intact");
             }
 
             const string node = "playback-projector-drift";
@@ -236,21 +278,12 @@ internal static partial class WorkbenchPostgresPreview
             try
             {
                 await owner.StartAsync(token);
-                throw new InvalidOperationException("The owner allowed a restored legacy playback projector.");
+                throw new InvalidOperationException($"The owner allowed the {drift}.");
             }
             catch (StoreFormatException error) when (error.Message == "The installed playback projection is incomplete.")
             {
-                Require(true, "the direct PostgreSQL owner rejects projector drift before starting a node");
+                Require(true, $"the direct PostgreSQL owner rejects the {drift} before starting a node");
             }
-        }
-        finally
-        {
-            await observer.Database.ExecuteSqlRawAsync("""
-                DROP TRIGGER kernel_project_root_playback ON "FoundationSequencedJournal";
-                DROP FUNCTION kernel_project_root_playback();
-                CREATE TRIGGER kernel_project_root_playback_scopes AFTER INSERT ON "FoundationSequencedJournal"
-                    FOR EACH ROW EXECUTE FUNCTION kernel_project_root_playback_scopes();
-                """, token);
         }
     }
 

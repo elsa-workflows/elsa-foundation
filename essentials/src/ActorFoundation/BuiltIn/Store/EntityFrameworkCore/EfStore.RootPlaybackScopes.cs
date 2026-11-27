@@ -75,7 +75,7 @@ public sealed partial class EfStore
         """json_extract(p."Observation", '$.Parent') COLLATE BINARY""",
         """json_extract(parent."Observation", '$.Parent') COLLATE BINARY""");
 
-    private static readonly string PostgresPlaybackScopeReady = $"""
+    private static string PostgresPlaybackScopeReady => $"""
         AND EXISTS (SELECT 1 FROM pg_catalog.pg_class scopes
                 WHERE scopes.oid = pg_catalog.to_regclass('"{PlaybackScopesName}"')
                     AND scopes.relnamespace = format.relnamespace AND scopes.relkind = 'r'
@@ -84,6 +84,8 @@ public sealed partial class EfStore
                         WHERE idx.indrelid = scopes.oid AND idx.indisvalid AND idx.indisready AND index_name.relname IN
                         ('{PlaybackScopeKey}', '{PlaybackScopeRank}', '{PlaybackScopeSequence}',
                          '{PlaybackScopeMemberIndex}', '{PlaybackUnknownScopeIndex}')) = 5)
+        AND pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(implementation.prosrc, 'UTF8')), 'hex') =
+            '{PostgresPlaybackScopeProjectorDigest.Value}'
         AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger legacy
             WHERE legacy.tgrelid = stamp.tgrelid AND legacy.tgname = '{PlaybackTrigger}'
                 AND legacy.tgenabled IN ('O', 'A'))
