@@ -168,8 +168,8 @@ public sealed class RetainedWorkflowOverviewCompositionTests
             };
             if (access == "operator")
                 claims.Add(new(IdentityClaimTypes.Permission, PermissionKey.Wildcard));
-            var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme));
-            return Task.FromResult(AuthenticateResult.Success(new(principal, Scheme)));
+            var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name));
+            return Task.FromResult(AuthenticateResult.Success(new(principal, Scheme.Name)));
         }
     }
 
