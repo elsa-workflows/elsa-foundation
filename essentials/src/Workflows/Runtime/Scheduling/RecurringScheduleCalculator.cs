@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Xml;
 using Cronos;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -24,22 +22,7 @@ public sealed class RecurringScheduleCalculator : IRecurringScheduleCalculator
     }
 
     /// <summary>Parses the interval spec: an ISO-8601 duration (e.g. <c>PT5M</c>) or an invariant <see cref="TimeSpan"/> string.</summary>
-    public static TimeSpan ParseInterval(string expression)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(expression);
-
-        // ISO-8601 durations start with 'P'; anything else is treated as a plain TimeSpan for authoring convenience.
-        TimeSpan interval;
-        if (expression.StartsWith('P') || expression.StartsWith("-P", StringComparison.Ordinal))
-            interval = XmlConvert.ToTimeSpan(expression);
-        else if (!TimeSpan.TryParse(expression, CultureInfo.InvariantCulture, out interval))
-            throw new FormatException($"Interval expression '{expression}' is neither an ISO-8601 duration nor a TimeSpan.");
-
-        if (interval <= TimeSpan.Zero)
-            throw new FormatException($"Interval expression '{expression}' must be a positive duration.");
-
-        return interval;
-    }
+    public static TimeSpan ParseInterval(string expression) => RecurringScheduleInterval.ParsePositive(expression);
 
     private static DateTimeOffset? ComputeNextCron(string expression, DateTimeOffset after, TimeZoneInfo timezone)
     {

@@ -13149,3 +13149,5 @@ Elsa.Workflows.Runtime.Core.Contracts.KernelWorkflowHttpActivities
 Elsa.Workflows.Runtime.Core.Contracts.KernelWorkflowHttpActivities.KernelWorkflowHttpActivities() -> void
 Elsa.Workflows.Runtime.Core.Contracts.StandaloneWorkflowHttpRouteProjection
 Elsa.Workflows.Runtime.Core.Contracts.StandaloneWorkflowHttpRouteProjection.StandaloneWorkflowHttpRouteProjection() -> void
+Elsa.Workflows.Runtime.Core.Models.RecurringScheduleInterval
+static Elsa.Workflows.Runtime.Core.Models.RecurringScheduleInterval.ParsePositive(string! expression) -> System.TimeSpan
