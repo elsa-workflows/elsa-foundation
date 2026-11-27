@@ -49,11 +49,11 @@ internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
             target.Spec is { } spec ? Start(spec) : null, options?.DueAt, options?.KeepFor, replyTo);
         return new(receipt.Outcome switch
         {
-            Durable.InMemoryStore.KeyAdmissionOutcome.Accepted => new Admission(AdmissionOutcome.Accepted, new ActorRef(receipt.Reference!)),
-            Durable.InMemoryStore.KeyAdmissionOutcome.Duplicate => new Admission(AdmissionOutcome.Duplicate, new ActorRef(receipt.Reference!)),
-            Durable.InMemoryStore.KeyAdmissionOutcome.Conflict => new(AdmissionOutcome.Refused, Reason: RefusalReason.Conflict),
-            Durable.InMemoryStore.KeyAdmissionOutcome.Repeat => new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.Repeat),
-            Durable.InMemoryStore.KeyAdmissionOutcome.ObligationOutstanding => new(AdmissionOutcome.Refused, Reason: RefusalReason.ObligationOutstanding),
+            Durable.FoundationKeyAdmission.Outcome.Accepted => new Admission(AdmissionOutcome.Accepted, new ActorRef(receipt.Reference!)),
+            Durable.FoundationKeyAdmission.Outcome.Duplicate => new Admission(AdmissionOutcome.Duplicate, new ActorRef(receipt.Reference!)),
+            Durable.FoundationKeyAdmission.Outcome.Conflict => new(AdmissionOutcome.Refused, Reason: RefusalReason.Conflict),
+            Durable.FoundationKeyAdmission.Outcome.Repeat => new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.Repeat),
+            Durable.FoundationKeyAdmission.Outcome.ObligationOutstanding => new(AdmissionOutcome.Refused, Reason: RefusalReason.ObligationOutstanding),
             _ => new Admission(AdmissionOutcome.Refused)
         });
     }

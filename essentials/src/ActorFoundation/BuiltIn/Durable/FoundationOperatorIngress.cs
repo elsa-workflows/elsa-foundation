@@ -51,7 +51,7 @@ public sealed partial class InMemoryStore
         lock (_gate)
         {
             if (callerKey is not null)
-                reference = _foundationCallerBindings.GetValueOrDefault(tenant + "_" + callerKey)?.Reference;
+                reference = _foundationCallerBindings.GetValueOrDefault(FoundationKeyAdmission.QualifiedName(tenant, callerKey))?.Reference;
             if (reference is null || !_referenceBindings.TryGetValue(reference, out var binding) || binding.Tenant != tenant ||
                 selection is not null && BoundActor(tenant, reference) is null)
                 return (OperatorAdmission.Unavailable, null);
