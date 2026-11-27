@@ -150,10 +150,10 @@ internal enum RootCapabilities : long
     EventStartScan = 1L << 39,
     PublicEventStarts = 1L << 40,
     DirectTestRuns = 1L << 41,
-    HeldEphemeralHttpTestRuns = 1L << 46,
     KeyedStarts = 1L << 43,
     PublicEventHost = 1L << 44,
-    PagedPublicEvents = 1L << 45
+    PagedPublicEvents = 1L << 45,
+    HeldEphemeralHttpTestRuns = 1L << 46
 }
 
 internal static class RootProfiles
@@ -188,7 +188,8 @@ internal static class RootProfiles
     private const RootCapabilities Shipped31 = Shipped29 | RootCapabilities.Children | RootCapabilities.SequencedJournal;
     private const RootCapabilities Shipped33 = Shipped31 | RootCapabilities.LiveEventWaits | RootCapabilities.RetentionPolicy;
     private const RootCapabilities Shipped34 = Shipped33 | RootCapabilities.Playback | RootCapabilities.PlaybackDescendants;
-    internal const RootCapabilities Shipped = KeyedStartsQualification | PublicEventHostQualification | PagedPublicEventsQualification;
+    internal const RootCapabilities Shipped = KeyedStartsQualification | PublicEventHostQualification | PagedPublicEventsQualification |
+        RootCapabilities.DirectTestRuns | RootCapabilities.HeldEphemeralHttpTestRuns;
     // Freeze this private profile to the base it qualified. Playback has its own qualification profile.
     internal const RootCapabilities ScheduleInventoryQualification = Shipped31 | RootCapabilities.LiveEventWaits |
         RootCapabilities.RetentionPolicy | RootCapabilities.ScheduleInventory;
