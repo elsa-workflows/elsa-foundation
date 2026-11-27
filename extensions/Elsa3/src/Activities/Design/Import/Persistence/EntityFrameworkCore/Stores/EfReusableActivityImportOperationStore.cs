@@ -1,5 +1,3 @@
-using Elsa.Activities.Design.Core.Models;
-using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Primitives.Versioning;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Primitives.Exceptions;
@@ -22,27 +20,15 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
 /// </summary>
 public sealed class EfReusableActivityImportOperationStore(
     Elsa3ImportDbContext db,
-    IPersistenceAccessContextAccessor accessContextAccessor,
-    Func<ActivitiesDesignDbContext>? designContext) : IReusableActivityImportOperationStore, IImportedActivityDraftReservations
+    IPersistenceAccessContextAccessor accessContextAccessor) : IReusableActivityImportOperationStore, IImportedActivityDraftReservations
 {
-    public EfReusableActivityImportOperationStore(Elsa3ImportDbContext db, IPersistenceAccessContextAccessor accessContextAccessor)
-        : this(db, accessContextAccessor, null) { }
-
     public async ValueTask<(string DraftId, string Version)?> FindPrecedingReservationAsync(
-        string? draftTenantId, string definitionId, string draftId, string version, string? publishedHeadVersion, CancellationToken cancellationToken)
+        string? draftTenantId, IReadOnlyCollection<string> activeSiblingIds, string version, string? publishedHeadVersion, CancellationToken cancellationToken)
     {
         var tenant = accessContextAccessor.Current.Scope?.Value;
         if (tenant is null || tenant != draftTenantId || !SemVer.TryParse(version, out var boundary))
             return null;
-        var design = designContext?.Invoke() ?? throw new InvalidOperationException("Draft publication requires Activities Design persistence.");
-        var tenantKey = ActivitiesDesignDbContext.NormalizeTenantKey(tenant);
-        var definitionHash = ActivitiesDesignDbContext.ComputeIdentityHash(definitionId);
-        var ids = await design.ActivityDefinitionDrafts.AsNoTracking()
-            .Where(row => EF.Property<string>(row, "TenantScopeKey") == tenantKey &&
-                          EF.Property<string>(row, "DefinitionIdIdentityHash") == definitionHash &&
-                          row.DefinitionId == definitionId && row.TenantId == tenant && row.Status == ActivityDefinitionDraftStatus.Active)
-            .Select(row => row.Id).ToArrayAsync(cancellationToken);
-        var bindingIds = ids.Where(id => id != draftId && id.StartsWith("elsa3-activity-draft-", StringComparison.Ordinal))
+        var bindingIds = activeSiblingIds
             .Select(id => ReusableActivityImportIdentity.DefinitionBinding(Services.ReusableActivityImportCommitRules.DraftReservationKind, id));
         var bindings = await EfReusableActivityImportCommand.LoadBindingsAsync(db, bindingIds, tenant, cancellationToken);
         var hasHead = SemVer.TryParse(publishedHeadVersion, out var head);

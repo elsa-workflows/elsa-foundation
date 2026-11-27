@@ -93,14 +93,29 @@ public sealed class EfReusableActivityImportCommand(
                 var provider = draftServices?.Invoke().Locks ?? throw new InvalidOperationException("Draft import requires workflow authoring services.");
                 foreach (var key in plan.Versions.Select(v => ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(v.DefinitionId))
                              .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
-                    locks.Push(await provider.AcquireLockAsync(key, null, cancellationToken));
+                {
+                    try
+                    {
+                        locks.Push(await provider.AcquireLockAsync(key, null, cancellationToken));
+                    }
+                    catch (Exception error) when (error is not OperationCanceledException)
+                    {
+                        throw Persistence("acquire activity publication lock", mutation, error);
+                    }
+                }
             }
             return await CommitPlanAsync(mutation, plan, tenantId, scoped, cancellationToken);
         }
         finally
         {
+            Exception? releaseFailure = null;
             while (locks.TryPop(out var handle))
-                await handle.DisposeAsync();
+            {
+                try { await handle.DisposeAsync(); }
+                catch (Exception error) { releaseFailure ??= error; }
+            }
+            if (releaseFailure is not null)
+                throw Persistence("release activity publication locks", mutation, releaseFailure);
         }
     }
 

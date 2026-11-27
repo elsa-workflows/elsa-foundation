@@ -1,4 +1,3 @@
-using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -75,9 +74,7 @@ public static class Elsa3ImportEntityFrameworkCoreRegistration
             services.AddSingleton(configured);
             addContext(services, configured);
 
-            services.AddScoped<IReusableActivityImportOperationStore>(provider => new EfReusableActivityImportOperationStore(
-                provider.GetRequiredService<Elsa3ImportDbContext>(), provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-                provider.GetRequiredService<ActivitiesDesignDbContext>));
+            services.AddScoped<IReusableActivityImportOperationStore, EfReusableActivityImportOperationStore>();
             services.AddScoped<Func<(Elsa.Primitives.Contracts.IIdentityGenerator, Elsa.Locking.Core.IDistributedLockProvider)>>(
                 provider => () => (provider.GetRequiredService<Elsa.Primitives.Contracts.IIdentityGenerator>(),
                     provider.GetRequiredService<Elsa.Locking.Core.IDistributedLockProvider>()));

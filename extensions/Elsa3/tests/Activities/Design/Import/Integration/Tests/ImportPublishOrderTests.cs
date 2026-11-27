@@ -132,6 +132,30 @@ public sealed class ImportPublishOrderTests(ImportedDependenciesFixture fixture)
     }
 
     [Fact]
+    public async Task A_publication_lock_timeout_leaves_the_reviewed_upload_usable_for_retry()
+    {
+        var key = ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(ReusableActivityImportIdentity.Create("activity-definition", "inner"));
+        var failOnce = 1;
+        await using var host = await Elsa3ImportHost.StartAsync(beforeAcquireLock: (name, _) =>
+            name == key && Interlocked.Exchange(ref failOnce, 0) == 1
+                ? Task.FromException(new TimeoutException("Publication lock is busy."))
+                : Task.CompletedTask);
+        var handle = await host.UploadCollectionAsync("reusable-calls-reusable");
+        var (plan, _) = await host.AnalyzeAsync(handle);
+        var path = $"migration/elsa3/reusable-activities/collections/{handle}/apply-drafts";
+        var request = new JsonObject
+        {
+            ["idempotencyKey"] = "retry-lock", ["planId"] = plan, ["selectedSourceVersionIds"] = new JsonArray("inner-v1")
+        };
+
+        using var failed = await host.Send(HttpMethod.Post, path, request);
+        Assert.Equal(HttpStatusCode.InternalServerError, failed.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await host.GetImportStatusAsync("retry-lock")).StatusCode);
+        var receipt = await host.PostAsync(path, request);
+        Assert.Equal("inner-v1", (string?)Assert.Single(receipt["sources"]!.AsArray())!["sourceVersionId"]);
+    }
+
+    [Fact]
     public async Task A_concurrent_publication_that_wins_the_definition_lock_rejects_an_obsolete_new_reservation()
     {
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -199,6 +199,11 @@ public sealed partial class EfActivityDesignStores(
     async Task<IReadOnlyList<ActivityDefinitionDraft>> IActivityDefinitionDraftStore.ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken) =>
         await ReadAllPagesAsync(ByReference(Access(db.ActivityDefinitionDrafts.AsNoTracking()), nameof(ActivityDefinitionDraft.DefinitionId), definitionId), query => WithPhysicalIdentityTie(query.OrderBy(x => x.Id)), cancellationToken);
 
+    async Task<IReadOnlyList<string>> IActivityDefinitionDraftStore.ListActiveIdsByDefinitionAsync(string definitionId, string? tenantId, CancellationToken cancellationToken) =>
+        await ByReference(Access(db.ActivityDefinitionDrafts.AsNoTracking()), nameof(ActivityDefinitionDraft.DefinitionId), definitionId)
+            .Where(draft => draft.TenantId == tenantId && draft.Status == ActivityDefinitionDraftStatus.Active)
+            .Select(draft => draft.Id).ToArrayAsync(cancellationToken);
+
     Task<ActivityDefinitionVersionPublication?> IActivityDefinitionVersionPublicationStore.FindAsync(string definitionVersionId, CancellationToken cancellationToken) =>
         ByReference(Access(db.ActivityDefinitionVersionPublications.AsNoTracking()), nameof(ActivityDefinitionVersionPublication.DefinitionVersionId), definitionVersionId).SingleOrDefaultAsync(cancellationToken);
 
