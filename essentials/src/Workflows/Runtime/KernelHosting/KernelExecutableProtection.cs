@@ -9,6 +9,7 @@ using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
 using Kernel.Foundation.Hosting;
 using Kernel.WorkflowActor;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -21,7 +22,7 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
     private const int PageSize = 32;
     private static readonly TimeSpan CleanupCadence = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan OperationBudget = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan HeldRetryDelay = TimeSpan.FromMilliseconds(200);
+    internal static readonly TimeSpan HeldRetryDelay = TimeSpan.FromMilliseconds(200);
 
     internal async Task RequireAsync(CancellationToken token)
     {
@@ -126,14 +127,27 @@ internal sealed class KernelExecutableProtection(IServiceScopeFactory scopes, Pe
                 logger.LogWarning(error, "Held executable protection refused the selected identity for tenant {Tenant}.", actors.Tenant);
                 return false;
             }
-            catch (Exception error) when (!token.IsCancellationRequested &&
-                error is OperationCanceledException or WorkflowExecutableRootWriteLeaseLostException or
-                    WorkflowExecutableRootWriteLeaseUnavailableException or TimeoutException or DbException { IsTransient: true })
+            catch (Exception error) when (error is WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
+                IsTransientHeldStorageFailure(error))
             {
+                token.ThrowIfCancellationRequested();
                 logger.LogDebug(error, "Held executable protection will retry for tenant {Tenant}.", actors.Tenant);
                 await Task.Delay(HeldRetryDelay, clock, token);
             }
         }
+    }
+
+    internal static bool IsTransientHeldStorageFailure(Exception error)
+    {
+        // A Runtime store or a provider execution strategy can wrap the original failure. SQLite reports busy and locked by code.
+        for (Exception? cause = error; cause is not null; cause = cause.InnerException)
+        {
+            if (cause is InvalidDataException) return false;
+            if (cause is OperationCanceledException or TimeoutException or DbException { IsTransient: true } or
+                SqliteException { SqliteErrorCode: 5 or 6 })
+                return true;
+        }
+        return false;
     }
 
     internal ValueTask<bool> ProtectEventStartAsync(PendingRootStart start, EventStartTarget target, CancellationToken token)

@@ -151,17 +151,31 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     internal async ValueTask<WorkflowPublishedStart?> ReadHeldPublicationAsync(KernelServedSlot slot, CancellationToken token)
     {
-        if (serving.Find(slot.SlotId) != slot) return null;
-        await using var runtime = await scopes.CreateAsyncScopeAsync(persistenceScope);
-        var source = await runtime.ServiceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
-            .FindAsync(WorkflowActivationReferenceIdentity.Create(slot.ActivationId), token);
-        if (source is null || source.Scope != WorkflowExecutableReferenceScope.Published ||
-            source.ArtifactId != slot.Workflow.Id || source.DefinitionId != slot.DefinitionId || source.SlotId != slot.SlotId ||
-            source.ActivationId != slot.ActivationId || (source.TenantId ?? PersistenceScope.DefaultValue) != tenant.Tenant ||
-            source.PublicationScope is { } sourceScope && sourceScope != persistenceScope || !source.IsLive(clock.GetUtcNow()))
-            return null;
-        // The same source and slot are rechecked by the protected pin transaction before birth.
-        return KernelPublishedRunDispatcher.CreatePublication(source, slot, subjectId: null);
+        var referenceId = WorkflowActivationReferenceIdentity.Create(slot.ActivationId);
+        while (serving.Find(slot.SlotId) == slot)
+        {
+            token.ThrowIfCancellationRequested();
+            try
+            {
+                await using var runtime = await scopes.CreateAsyncScopeAsync(persistenceScope);
+                var source = await runtime.ServiceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
+                    .FindAsync(referenceId, token);
+                if (source is null || source.Scope != WorkflowExecutableReferenceScope.Published ||
+                    source.ArtifactId != slot.Workflow.Id || source.DefinitionId != slot.DefinitionId || source.SlotId != slot.SlotId ||
+                    source.ActivationId != slot.ActivationId || (source.TenantId ?? PersistenceScope.DefaultValue) != tenant.Tenant ||
+                    source.PublicationScope is { } sourceScope && sourceScope != persistenceScope || !source.IsLive(clock.GetUtcNow()))
+                    return null;
+                // The same source and slot are rechecked by the protected pin transaction before birth.
+                return KernelPublishedRunDispatcher.CreatePublication(source, slot, subjectId: null);
+            }
+            catch (Exception error) when (KernelExecutableProtection.IsTransientHeldStorageFailure(error))
+            {
+                token.ThrowIfCancellationRequested();
+                logs.CreateLogger<KernelShellRuntime>().LogDebug(error, "Held publication source read will retry for tenant {Tenant}.", tenant.Tenant);
+                await Task.Delay(KernelExecutableProtection.HeldRetryDelay, clock, token);
+            }
+        }
+        return null;
     }
 
     public ValueTask<Admission> StartPublishedAsync(string operationId, StartSpec start, CancellationToken token)

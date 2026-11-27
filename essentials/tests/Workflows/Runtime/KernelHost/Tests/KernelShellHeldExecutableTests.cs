@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Workflows.Runtime.Core.Configuration;
@@ -16,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -75,6 +77,7 @@ public sealed class KernelShellHeldExecutableTests
             WriteLine("finish", Literal("text", "finished"))));
         var identity = executable.Identity;
         var unavailable = new PinAvailability();
+        var sourceReads = new SourceReadFailures();
         Contract.ActorRef actor;
         WorkflowPublishedStart selected;
 
@@ -103,8 +106,10 @@ public sealed class KernelShellHeldExecutableTests
                     ReadPublication = shell.ReadHeldPublicationAsync
                 };
                 var reads = await shell.ReadAsync(token);
+                sourceReads.FailNextRead();
                 var context = await RequestAsync(handler, Route);
                 Assert.Equal(202, context.StatusCode);
+                Assert.Equal(1, sourceReads.Failures);
                 actor = new(Assert.Single(context.Headers[KernelHttpEdge.WorkflowInstanceIdHeader])!);
                 var birth = Assert.IsType<Contract.ActorView>(await reads.GetAsync(tenant, actor, token));
                 Assert.Equal(Contract.ActorStatus.Running, birth.Header.Status);
@@ -133,6 +138,21 @@ public sealed class KernelShellHeldExecutableTests
                 Assert.Equal(408, (await RequestAsync(shortRequest, Route)).StatusCode);
                 Assert.True(unavailable.Attempts > 0);
                 Assert.Equal(actor, Assert.Single((await reads.ListAsync(tenant, new(), cancellationToken: token)).Items).Header.Ref);
+                unavailable.FailWrites = false;
+                var earlierFailures = sourceReads.Failures;
+                sourceReads.Unavailable = true;
+                try
+                {
+                    var timedOut = await RequestAsync(shortRequest, Route);
+                    Assert.Equal(408, timedOut.StatusCode);
+                    Assert.False(timedOut.Headers.ContainsKey(KernelHttpEdge.WorkflowInstanceIdHeader));
+                    Assert.True(sourceReads.Failures > earlierFailures + 1);
+                    Assert.Equal(1, sourceReads.LateFailures);
+                    Assert.Equal(actor, Assert.Single((await reads.ListAsync(tenant, new(), cancellationToken: token)).Items).Header.Ref);
+                }
+                finally { sourceReads.Unavailable = false; }
+
+                unavailable.FailWrites = true;
                 var probe = Wf.Workflow("held-probe", Wf.Sequence("main", Wf.HttpEndpoint("start", "held-probe"), Wf.Respond("out", "ok")));
                 await services.GetRequiredService<KernelServing>().ServeHostWorkflowAsync(probe, token);
                 var hosted = await RequestAsync(handler, "/workflows/http/held-probe");
@@ -216,6 +236,10 @@ public sealed class KernelShellHeldExecutableTests
                 Provider = provider, ConnectionString = runtime,
                 RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
             });
+            if (provider == "PostgreSql")
+                services.ConfigureDbContext<RuntimePostgreSqlDbContext>(options => options.AddInterceptors(sourceReads));
+            else
+                services.ConfigureDbContext<RuntimeSqliteDbContext>(options => options.AddInterceptors(sourceReads));
             var pinStore = services.Last(item => item.ServiceType == typeof(IRuntimeKernelExecutablePinStore));
             services.Remove(pinStore);
             services.AddScoped<IRuntimeKernelExecutablePinStore>(sp => new TestPins(
@@ -236,6 +260,41 @@ public sealed class KernelShellHeldExecutableTests
             context.Response.Body = body;
             await handler.HandleAsync(context);
             return context.Response;
+        }
+    }
+
+    private sealed class SourceReadFailures : DbCommandInterceptor
+    {
+        private int failNext;
+        private int failures;
+        private int unavailableAttempts;
+        private int lateFailures;
+        internal volatile bool Unavailable;
+        internal int Failures => Volatile.Read(ref failures);
+        internal int LateFailures => Volatile.Read(ref lateFailures);
+
+        internal void FailNextRead() => Interlocked.Exchange(ref failNext, 1);
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains(RuntimeArtifactEfModule.SourceReferenceTableName, StringComparison.Ordinal) &&
+                (Unavailable || Interlocked.Exchange(ref failNext, 0) != 0))
+            {
+                Interlocked.Increment(ref failures);
+                if (Unavailable && Interlocked.Increment(ref unavailableAttempts) >= 3)
+                {
+                    // A provider can surface its transient error after the request has already expired.
+                    try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken); }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        Interlocked.Increment(ref lateFailures);
+                    }
+                }
+                if (command is SqliteCommand) throw new SqliteException("Test source read is busy.", 5);
+                throw new NpgsqlException("Test source read is transient.", new TimeoutException());
+            }
+            return result;
         }
     }
 
