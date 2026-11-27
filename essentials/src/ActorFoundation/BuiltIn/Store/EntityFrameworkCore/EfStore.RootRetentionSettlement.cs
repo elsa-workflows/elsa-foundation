@@ -61,7 +61,7 @@ public sealed partial class EfStore
             var eligible = retirement.Park is null && current.TerminalAt is > 0 && window is { } finite &&
                 current.TerminalAt.Value <= policy.AsOf - finite;
             if (!eligible) refused.Add(retirement.Root.Actor);
-            commands.Add(retirement with { RetentionEligible = eligible });
+            commands.Add(retirement with { RetentionEligible = eligible, RetentionMarker = marker });
         }
 
         if (refused.Count == 0) return (batch, checkpoints with { Commands = commands }, null);
