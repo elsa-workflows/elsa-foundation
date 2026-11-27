@@ -330,6 +330,9 @@ internal sealed partial class PostgresRootAdmission
     internal static Task PinRootNamespaceAsync(KernelDb db, CancellationToken token, bool writesJournal = false) =>
         PinRootNamespaceAsync(db, false, token, writesJournal);
 
+    internal static async Task<uint?> PinRootCommitNamespaceAsync(KernelDb db, bool writesJournal, CancellationToken token) =>
+        (await PinRootNamespaceAsync(db, loadIssuer: false, token, writesJournal))?.Marker;
+
     internal static Task<uint> PinRetentionPolicySourceAsync(KernelDb db, CancellationToken token)
     {
         var pin = new NpgsqlBatchCommand("""

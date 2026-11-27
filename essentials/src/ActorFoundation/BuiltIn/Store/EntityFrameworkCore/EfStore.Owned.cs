@@ -53,6 +53,7 @@ public sealed partial class EfStore
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         if (formatFunction is null) await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         long? checkedMarkTime = null;
+        uint? marker = null;
         if (root is PostgresMarkPreparation marks)
         {
             // The ordered pin prepares the exact mark binding and can check an unchanged fence in checked mode.
@@ -66,7 +67,8 @@ public sealed partial class EfStore
             catch (Exception error) { throw new RootMarkPreparationFailure(error); }
         }
         else if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
-            await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
+            marker = await PinRootNamespaceForCommitAsync(db, batch, cancellationToken);
+        (batch, root, var retentionRefusals) = await BindRetentionPoliciesAsync(db, batch, root, marker, cancellationToken);
         if (postgres && db.UsesRootLiveEventWaits && waits.Count != 0)
             await RootEventAdmission.LockPostgresKeysAsync(db, waits.Keys.Select(wait => wait.Key).Distinct(StringComparer.Ordinal).ToArray(), cancellationToken);
         var commands = new List<OwnedCommand>();
@@ -212,7 +214,10 @@ public sealed partial class EfStore
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
-        return new Committed(true, now, seqs) { RetiredReplies = db.RetiredReplies ?? [] };
+        return new Committed(true, now, seqs)
+        {
+            RetiredReplies = db.RetiredReplies ?? [], RetentionRefusals = retentionRefusals
+        };
     }
 
     /// <summary>

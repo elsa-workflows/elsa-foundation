@@ -193,7 +193,7 @@ public sealed partial class EfStore
     }
 
     private static async Task<PostgresPolicyRow> ReadPostgresRetentionPolicyAsync(KernelDb db, long marker, string tenant,
-        CancellationToken token)
+        CancellationToken token, string? requiredLock = null)
     {
         try
         {
@@ -210,6 +210,9 @@ public sealed partial class EfStore
                     AND source.relnamespace = v.relnamespace AND source.relkind = 'r'
                 LEFT JOIN "FoundationRetentionPolicies" r ON r."Tenant" = {tenant} AND r.tableoid = policy.oid
                 WHERE v.oid = pg_catalog.to_regclass('"KernelStoreVersions"') AND v.oid::bigint = {marker}
+                    AND ({requiredLock}::text IS NULL OR EXISTS (SELECT 1 FROM pg_catalog.pg_locks l
+                        WHERE l.pid = pg_catalog.pg_backend_pid() AND l.locktype = 'relation'
+                            AND l.relation = policy.oid AND l.mode = {requiredLock} AND l.granted))
                 """).SingleOrDefaultAsync(token)
                 ?? throw new StoreFormatException("The PostgreSQL retention policy source is missing or changed.");
         }

@@ -92,12 +92,15 @@ public sealed partial class EfStore
         bool WithheldInputs = false, FoundationSelfIssuer? SelfIssuer = null)
         : QualifiedRootCheckpoint(-1)
     {
+        internal bool? RetentionEligible { get; init; }
+        internal bool IsRetentionDelete => Command.Operator?.RetentionDelete == true;
+
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
         {
             var running = Current.Status == InstanceStatus.Running;
             var ending = running || Park is not null;
-            if (!db.UsesRootRetirement || Position <= 0 || running && !db.UsesRootTerminateThenDelete ||
-                Command.Operator?.RetentionDelete == true && !db.UsesRootRetention)
+            if (!db.UsesRootRetirement || Position <= 0 && RetentionEligible != false || running && !db.UsesRootTerminateThenDelete ||
+                IsRetentionDelete && (!db.UsesRootRetention || db.UsesRootRetentionPolicy && RetentionEligible is null))
                 return false;
             if (db.UsesSqliteRootRuntime)
                 return await BindSqliteRootRetirementAsync(db, this, token);
@@ -129,6 +132,8 @@ public sealed partial class EfStore
                     Park is null ? running && (Current.Suspended || WithheldInputs) : !db.UsesRootParkArrivals || Park.Clearing is not null,
                     token, parked: Park is not null))
                 return false;
+
+            if (RetentionEligible == false) return true;
 
             if (clearsPrivate && (!await ClearTerminalRootSelfAsync(db, Current.Actor, Root.Partition, Current.Revision, SelfIssuer, includeImmediate: true, token) ||
                 await HasRootRetirementInboxResidueAsync(db, Root, token)))

@@ -13,6 +13,7 @@ internal interface IRootDispatchHeaders
     Func<string, string>? ChildMessageHandle => null;
     string? ChildReference(string tenant, Durable.CreationAddress address) => null;
     bool RequiresCommittedTerminal { get; }
+    bool RequiresDurableRetentionPolicy => false;
     bool KeepsParkInputs { get; }
     bool KeepsParkArrivals { get; }
     bool KeepsPrivateParkInputs { get; }
@@ -351,7 +352,7 @@ internal sealed partial class ActorAdapter
 
         var current = RootHeader(row);
         var now = input.Services.Now;
-        if (command.RetentionDelete && !RetentionElapsed(current, header.Terminal.At, now))
+        if (command.RetentionDelete && roots?.RequiresDurableRetentionPolicy != true && !RetentionElapsed(current, header.Terminal.At, now))
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "NotEligible");
         var protection = DeletionRefusal(current, row.State, now);
         if (protection is not null)

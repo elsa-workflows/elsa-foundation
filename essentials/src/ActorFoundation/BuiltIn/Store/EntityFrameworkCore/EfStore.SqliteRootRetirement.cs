@@ -44,6 +44,8 @@ public sealed partial class EfStore
             if (page is null || !await ClearSqliteParkPageAsync(db, root, page, retire.Command.Operator!.RootParkWindow!.Value, token)) return false;
         }
 
+        if (retire.RetentionEligible == false) return true;
+
         if (clearsPrivate && (!await ClearTerminalRootSelfAsync(db, current.Actor, root.Partition, current.Revision, retire.SelfIssuer, includeImmediate: true, token) ||
             await HasRootRetirementInboxResidueAsync(db, root, token)))
             return false;
