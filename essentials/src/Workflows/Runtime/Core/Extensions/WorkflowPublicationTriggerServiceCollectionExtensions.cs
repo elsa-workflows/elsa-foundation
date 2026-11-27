@@ -14,7 +14,15 @@ public static class WorkflowPublicationTriggerServiceCollectionExtensions
 
         services.TryAddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
         services.TryAddSingleton<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>();
-        services.TryAddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();
+        services.TryAddScoped<IWorkflowTriggerIndexer>(provider => new WorkflowTriggerIndexer(
+            provider.GetRequiredService<IWorkflowTriggerBindingExtractor>(),
+            provider.GetRequiredService<IWorkflowTriggerBindingStore>(),
+            provider.GetServices<IWorkflowTriggerIndexObserver>(),
+            provider.GetServices<IWorkflowTriggerIndexValidator>())
+        {
+            EmptyRecurringProjection = provider.GetService<IRecurringTriggerScheduleStore>(),
+            RecurringScheduleProviders = provider.GetServices<IRecurringTriggerScheduleProvider>()
+        });
         return services;
     }
 }

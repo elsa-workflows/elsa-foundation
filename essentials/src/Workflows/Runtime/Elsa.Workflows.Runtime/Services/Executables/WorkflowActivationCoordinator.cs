@@ -371,7 +371,7 @@ public sealed partial class WorkflowActivationCoordinator(
                 definitionId,
                 slotName,
                 activationId,
-                "Workflow activation requires the trigger serving spine (IWorkflowTriggerIndexer and IWorkflowTriggerBindingStore). Compose the WorkflowsRuntimeTriggers feature before activating.");
+                "Workflow activation requires the publication trigger services (IWorkflowTriggerIndexer and IWorkflowTriggerBindingStore).");
     }
 
     private async ValueTask<WorkflowExecutableSourceReference?> FindLiveReferenceAsync(WorkflowActivationSlot slot, CancellationToken cancellationToken) =>
