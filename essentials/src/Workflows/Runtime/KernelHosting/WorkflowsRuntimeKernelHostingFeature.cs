@@ -14,7 +14,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.KernelApi;
 using Elsa.Workflows.Runtime.KernelHost;
-using Kernel.EntityFramework;
+using Kernel.Durable;
 using Kernel.Foundation.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
