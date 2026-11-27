@@ -15,4 +15,8 @@
     <ProjectReference Include="..\..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Activities.DispatchWorkflow.Tests" />
+  </ItemGroup>
+
 </Project>
