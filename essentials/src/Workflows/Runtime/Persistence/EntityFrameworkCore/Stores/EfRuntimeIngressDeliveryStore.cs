@@ -222,6 +222,9 @@ internal sealed partial class EfRuntimeIngressDeliveryStore(RuntimeDbContext con
             var delivery = item.SubscriptionDelivery!;
             var progress = delivery.Progress.SingleOrDefault(progress => progress.RecipientId == seal.RecipientId) ??
                 throw new InvalidDataException("The dispatch recipient was not accepted.");
+            if (seal.Version == RuntimeDispatchSeal.PreparedStartQualificationVersion &&
+                progress.Phase == RuntimeRecipientPhase.CancelledBeforeDispatch)
+                return item;
             var recipient = delivery.Recipients.Single(recipient => recipient.RecipientId == seal.RecipientId);
             var committed = new RuntimeCommittedRecipient(item, recipient, seal);
             if (seal.Version == RuntimeDispatchSeal.PreparedStartQualificationVersion)

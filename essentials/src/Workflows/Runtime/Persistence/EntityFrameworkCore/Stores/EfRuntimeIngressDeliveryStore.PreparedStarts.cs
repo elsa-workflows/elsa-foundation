@@ -7,18 +7,23 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfRuntimeIngressDeliveryStore : IRuntimePreparedStartHandoff
 {
-    public async ValueTask<RuntimeCommittedRecipient> CommitPreparedStartAsync(RuntimeDeliverySourceContext source, string recipientId,
+    public async ValueTask<RuntimeCommittedRecipient?> CommitPreparedStartAsync(RuntimeDeliverySourceContext source, string recipientId,
         CancellationToken cancellationToken = default)
     {
         RequirePreparedStarts();
         var item = await ReadSourceAsync(source, cancellationToken);
         var recipient = item.SubscriptionDelivery!.Recipients.SingleOrDefault(candidate => candidate.RecipientId == recipientId) ??
             throw new InvalidDataException("The prepared dispatch recipient was not accepted.");
-        var existing = item.SubscriptionDelivery.Progress.Single(progress => progress.RecipientId == recipientId).Seal;
-        var seal = existing ?? CreatePreparedStartQualificationSeal(item, recipient);
-        var committed = existing is null ? await CommitDispatchAsync(source, seal, cancellationToken) : item;
-        return ReadPreparedStart(committed, new(seal.SourceOutboxItemId, seal.SourceFingerprint,
-            seal.SelectionFingerprint, source.Scope, recipientId, seal.Fingerprint)).Committed;
+        var progress = Progress(item);
+        if (progress.Phase == RuntimeRecipientPhase.CancelledBeforeDispatch) return null;
+        var seal = progress.Seal ?? CreatePreparedStartQualificationSeal(item, recipient);
+        var committed = progress.Seal is null ? await CommitDispatchAsync(source, seal, cancellationToken) : item;
+        return Progress(committed).Phase == RuntimeRecipientPhase.CancelledBeforeDispatch ? null :
+            ReadPreparedStart(committed, new(seal.SourceOutboxItemId, seal.SourceFingerprint,
+                seal.SelectionFingerprint, source.Scope, recipientId, seal.Fingerprint)).Committed;
+
+        RuntimeRecipientProgress Progress(RuntimePostCommitOutboxItem current) =>
+            current.SubscriptionDelivery!.Progress.Single(state => state.RecipientId == recipientId);
     }
 
     internal static RuntimeDispatchSeal CreatePreparedStartQualificationSeal(RuntimePostCommitOutboxItem item,

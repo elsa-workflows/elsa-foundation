@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 
 internal sealed class StandaloneTriggerDeliveryExecutor(IRuntimeIngressDeliveryStore store,
     IEnumerable<IStandaloneTriggerRuntimeTarget> targets, TimeProvider clock, IWorkflowExecutableStartPolicy policy,
-    IRuntimeIngressWaitTarget? waitTarget = null) : IRuntimeDeliverySourceExecutor
+    IRuntimeIngressWaitTarget? waitTarget = null, IRuntimePreparedStandaloneRecipient? prepared = null) : IRuntimeDeliverySourceExecutor
 {
     private readonly IReadOnlyDictionary<string, IStandaloneTriggerRuntimeTarget> targets = targets.ToDictionary(x => x.ModelKey, StringComparer.Ordinal);
 
@@ -14,6 +14,8 @@ internal sealed class StandaloneTriggerDeliveryExecutor(IRuntimeIngressDeliveryS
     {
         var item = await store.ReadSourceAsync(source, cancellationToken);
         var selection = item.SubscriptionDelivery ?? throw new InvalidDataException("A standalone source has no accepted cohort.");
+        var blocksOrdinaryWaits = selection.WaitDelivery is not null && selection.Recipients.Any(recipient =>
+            UsesPrepared(item, recipient, selection.Progress.Single(progress => progress.RecipientId == recipient.RecipientId)));
         var failures = new List<Exception>();
         foreach (var recipient in selection.Recipients)
         {
@@ -23,6 +25,18 @@ internal sealed class StandaloneTriggerDeliveryExecutor(IRuntimeIngressDeliveryS
             if (progress.Phase is RuntimeRecipientPhase.TargetAccepted or RuntimeRecipientPhase.CancelledBeforeDispatch) continue;
             try
             {
+                if (UsesPrepared(item, recipient, progress))
+                {
+                    if (prepared is null || blocksOrdinaryWaits)
+                        throw new NotSupportedException("The selected standalone handoff cannot deliver this source cohort.");
+                    if (progress.Phase == RuntimeRecipientPhase.Pending)
+                        await CheckPolicyAsync(recipient, cancellationToken);
+                    item = await prepared.DeliverAsync(source, recipient.RecipientId, cancellationToken);
+                    var settled = item.SubscriptionDelivery!.Progress.Single(state => state.RecipientId == recipient.RecipientId);
+                    if (settled.Phase is not (RuntimeRecipientPhase.TargetAccepted or RuntimeRecipientPhase.CancelledBeforeDispatch))
+                        throw new IOException("The prepared target has no committed acceptance evidence yet.");
+                    continue;
+                }
                 if (!targets.TryGetValue(recipient.ModelKey, out var target))
                     throw new NotSupportedException("The accepted target's runtime adapter is unavailable.");
                 if (progress.Phase == RuntimeRecipientPhase.Pending)
@@ -68,7 +82,8 @@ internal sealed class StandaloneTriggerDeliveryExecutor(IRuntimeIngressDeliveryS
             if (progress.Phase == RuntimeIngressWaitPhase.TargetAccepted) continue;
             try
             {
-                if (waitTarget is null) throw new NotSupportedException("The ordinary wait runtime adapter is unavailable.");
+                if (blocksOrdinaryWaits || waitTarget is null)
+                    throw new NotSupportedException("The ordinary wait runtime adapter is unavailable for this source cohort.");
                 if (progress.Phase == RuntimeIngressWaitPhase.Pending)
                 {
                     var proposed = await waitTarget.PrepareDispatchAsync(item, recipient, cancellationToken);
@@ -103,6 +118,11 @@ internal sealed class StandaloneTriggerDeliveryExecutor(IRuntimeIngressDeliveryS
         if (item.SubscriptionDelivery?.IsSettled != true)
             throw new InvalidDataException("The source cannot complete before every accepted recipient is transferred or cancelled.");
     }
+
+    private bool UsesPrepared(RuntimePostCommitOutboxItem item, RuntimeSubscriptionRecipient recipient, RuntimeRecipientProgress progress) =>
+        progress.Seal?.Version == RuntimeDispatchSeal.PreparedStartQualificationVersion ||
+        progress.Phase == RuntimeRecipientPhase.Pending && item.StandaloneIngress is { } standalone &&
+            prepared?.Selects(standalone, recipient) == true;
 
     private async ValueTask CheckPolicyAsync(RuntimeSubscriptionRecipient recipient, CancellationToken ct)
     {

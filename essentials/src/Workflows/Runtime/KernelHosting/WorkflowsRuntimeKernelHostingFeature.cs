@@ -54,6 +54,9 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     [ManifestSetting(DisplayName = "Tenant", Description = "The tenant bound to this shell's kernel ingress and reads.", Category = "Runtime", DefaultValue = "default")]
     public string Tenant { get; set; } = "default";
 
+    /// <summary>Private opt-in for qualifying standalone Event and recurring workflow starts.</summary>
+    public bool PreparedStandaloneStarts { get; set; }
+
     [ManifestSetting(DisplayName = "Finished retention (seconds)", Description = "Minimum age for automatic deletion of finished runs. Leave empty to keep them.", Category = "Retention")]
     public int? FinishedRetentionSeconds { get; set; }
 
@@ -74,6 +77,8 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
 
     internal void ConfigureServices(IServiceCollection services, KernelShellStorage storage, bool protectChildExecutables = false)
     {
+        if (PreparedStandaloneStarts && !storage.TakesPreparedStarts)
+            throw new InvalidOperationException("Prepared standalone starts require Foundation's protected root admission capability.");
         var tenant = EmbeddedTenant.Bind(Tenant);
         var testTenant = storage.TakesDirectTestRuns ? EmbeddedTenant.Isolate(tenant, "workflow-test-run") : null;
         var persistenceScope = new PersistenceScope(tenant.Tenant);
@@ -109,7 +114,15 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
         services.AddSingleton(sp => new KernelShellRuntime(storage, sp.GetRequiredService<KernelServing>(),
             sp.GetRequiredService<IServiceScopeFactory>(), sp.GetRequiredService<ILoggerFactory>(),
             persistenceScope, tenant, retention, sp.GetService<TimeProvider>() ?? TimeProvider.System, protectChildExecutables, testTenant,
-            sp.GetService<KernelEventPublicationRelay>()));
+            sp.GetService<KernelEventPublicationRelay>(), PreparedStandaloneStarts));
+        if (PreparedStandaloneStarts)
+        {
+            services.AddScoped<IRuntimePreparedStartAttemptProof>(sp => new KernelStandalonePreparedStartProof(persistenceScope, tenant,
+                sp.GetRequiredService<KernelShellRuntime>().StandaloneStarts));
+            services.AddScoped<IRuntimePreparedStandaloneRecipient>(sp => new KernelStandalonePreparedStartHandoff(
+                sp.GetRequiredService<IServiceScopeFactory>(), persistenceScope, tenant,
+                sp.GetRequiredService<KernelServing>().Capabilities, sp.GetRequiredService<KernelShellRuntime>().StandaloneStarts));
+        }
         if (storage.TakesPreparedStarts)
             services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutionStartService>(sp =>
             {

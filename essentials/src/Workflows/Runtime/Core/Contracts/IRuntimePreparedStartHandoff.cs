@@ -15,7 +15,7 @@ public interface IRuntimePreparedStartAttemptProof
 /// <summary>Private host qualification for a sealed standalone recipient's prepared actor.</summary>
 public interface IRuntimePreparedStartHandoff
 {
-    ValueTask<RuntimeCommittedRecipient> CommitPreparedStartAsync(RuntimeDeliverySourceContext source, string recipientId,
+    ValueTask<RuntimeCommittedRecipient?> CommitPreparedStartAsync(RuntimeDeliverySourceContext source, string recipientId,
         CancellationToken cancellationToken = default);
     ValueTask<(long Generation, bool Disarmed)?> ReadPreparedStartAttemptAsync(RuntimeCommittedRecipientAuthority authority,
         CancellationToken cancellationToken = default);
@@ -23,4 +23,18 @@ public interface IRuntimePreparedStartHandoff
         long previousGeneration, string tenant, string actorReference, string issuance, CancellationToken cancellationToken = default);
     ValueTask<RuntimePostCommitOutboxItem> ReconcilePreparedStartAsync(RuntimeDeliverySourceContext source,
         RuntimeCommittedRecipientAuthority authority, long generation, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Opt-in source-owned delivery for a protected standalone root recipient.</summary>
+public interface IRuntimePreparedStandaloneRecipient
+{
+    bool Selects(RuntimeStandaloneIngressSource source, RuntimeSubscriptionRecipient recipient);
+    ValueTask<RuntimePostCommitOutboxItem> DeliverAsync(RuntimeDeliverySourceContext source, string recipientId, CancellationToken cancellationToken);
+}
+
+/// <summary>Reads the exact live execution named by a committed prepared standalone recipient receipt.</summary>
+public interface IRuntimePreparedStandaloneRunReader
+{
+    ValueTask<WorkflowExecutionState?> ReadAsync(TriggerScope scope, RuntimeSubscriptionRecipient recipient,
+        RuntimeTargetAcceptanceReceipt receipt, CancellationToken cancellationToken);
 }

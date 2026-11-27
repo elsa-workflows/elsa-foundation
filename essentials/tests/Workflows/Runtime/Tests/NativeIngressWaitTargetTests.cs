@@ -50,6 +50,74 @@ public sealed class NativeIngressWaitTargetTests
         Assert.Empty((await fixture.Queue.ListAsync(new(fixture.Wait.Identity.WorkflowExecutionId))).Items);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Prepared_standalone_selection_preserves_pending_work_when_waits_or_policy_block(bool containsWait)
+    {
+        using var fixture = await Fixture.CreateAsync();
+        var item = fixture.Item;
+        if (!containsWait)
+        {
+            var source = item.StandaloneIngress!;
+            var selection = new RuntimeSubscriptionDelivery(1, source.OutboxItemId, source.Fingerprint, fixture.Scope,
+                [fixture.Root], [], [new(fixture.Root.RecipientId, RuntimeRecipientPhase.Pending)]);
+            item = RuntimePostCommitOutboxItem.CreateStandaloneIngress(source, selection,
+                RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
+        }
+
+        var claim = RuntimePostCommitOutboxClaimTransitions.Claim(item, new("owner", Now, TimeSpan.FromMinutes(1), 1));
+        var ingress = new BlockedIngress(claim.Item);
+        var prepared = new PreparedTarget();
+        var executor = new StandaloneTriggerDeliveryExecutor(ingress, [], fixture.Clock, new DeniedStartPolicy(), fixture.Target, prepared);
+        var failure = await Assert.ThrowsAsync<TriggerOperationException>(() =>
+            executor.HandleAsync(new(claim, fixture.Scope)).AsTask());
+        Assert.Equal("accepted-delivery-pending", failure.Code);
+        Assert.Equal(0, prepared.Calls);
+        Assert.Equal(containsWait ? RuntimeRecipientRecoveryState.BlockedCapability : RuntimeRecipientRecoveryState.BlockedPolicy, ingress.RootRecovery);
+        Assert.Equal(containsWait ? RuntimeRecipientRecoveryState.BlockedCapability : RuntimeRecipientRecoveryState.None, ingress.WaitRecovery);
+        Assert.Equal(0, fixture.Executor.Calls);
+    }
+
+    private sealed class BlockedIngress(RuntimePostCommitOutboxItem item) : IRuntimeIngressDeliveryStore
+    {
+        internal RuntimeRecipientRecoveryState RootRecovery;
+        internal RuntimeRecipientRecoveryState WaitRecovery;
+        public ValueTask<RuntimePostCommitOutboxItem> ReadSourceAsync(RuntimeDeliverySourceContext source,
+            CancellationToken cancellationToken = default) => ValueTask.FromResult(item);
+        public ValueTask<RuntimePostCommitOutboxItem> RecordRecipientFailureAsync(RuntimeDeliverySourceContext source, string recipientId,
+            RuntimeRecipientRecoveryState recoveryState, string code, DateTimeOffset? retryAt, CancellationToken cancellationToken = default)
+        {
+            RootRecovery = recoveryState;
+            return ValueTask.FromResult(item);
+        }
+
+        public ValueTask<RuntimePostCommitOutboxItem> RecordWaitFailureAsync(RuntimeDeliverySourceContext source, string waitId,
+            RuntimeRecipientRecoveryState recoveryState, string code, DateTimeOffset? retryAt, CancellationToken cancellationToken = default)
+        {
+            WaitRecovery = recoveryState;
+            return ValueTask.FromResult(item);
+        }
+    }
+
+    private sealed class PreparedTarget : IRuntimePreparedStandaloneRecipient
+    {
+        internal int Calls;
+        public bool Selects(RuntimeStandaloneIngressSource source, RuntimeSubscriptionRecipient recipient) => true;
+        public ValueTask<RuntimePostCommitOutboxItem> DeliverAsync(RuntimeDeliverySourceContext source, string recipientId,
+            CancellationToken cancellationToken)
+        {
+            Calls++;
+            return ValueTask.FromResult(source.Claim.Item);
+        }
+    }
+
+    private sealed class DeniedStartPolicy : IWorkflowExecutableStartPolicy
+    {
+        public ValueTask<WorkflowExecutableStartDecision> EvaluateAsync(WorkflowExecutableStartPolicyContext context,
+            CancellationToken cancellationToken) => ValueTask.FromResult(WorkflowExecutableStartDecision.Deny("denied", "Denied by fixture."));
+    }
+
     private static WorkflowExecutionCommandEnvelope Probe(string json) => new("probe", "running",
         new("command", "running", WorkflowExecutionCommandKind.ResumeBookmark, Now,
             JsonDocument.Parse(json).RootElement.Clone(), new Dictionary<string, string>()),

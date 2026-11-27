@@ -27,7 +27,7 @@ using Contract = Kernel.Foundation.Contracts;
 
 namespace Elsa.Workflows.Runtime.KernelHost.Tests;
 
-public sealed class KernelStandalonePreparedStartTests
+public sealed partial class KernelStandalonePreparedStartTests
 {
     private const string FoundationDatabase = "KERNEL_STANDALONE_FOUNDATION_POSTGRES";
     private const string RuntimeDatabase = "KERNEL_STANDALONE_RUNTIME_POSTGRES";
@@ -97,7 +97,7 @@ public sealed class KernelStandalonePreparedStartTests
                     WorkflowActivationReferenceIdentity.Create(before.ActiveActivationId!), token)).DeletedAt);
                 var first = await ClaimAsync(stores, "first", clock, token);
                 var handoff = (IRuntimePreparedStartHandoff)stores.GetRequiredService<IRuntimeIngressDeliveryStore>();
-                var committed = await handoff.CommitPreparedStartAsync(first, recipient.RecipientId, token);
+                var committed = Assert.IsType<RuntimeCommittedRecipient>(await handoff.CommitPreparedStartAsync(first, recipient.RecipientId, token));
                 authority = new(committed.Seal.SourceOutboxItemId, committed.Seal.SourceFingerprint,
                     committed.Seal.SelectionFingerprint, Persistence, recipient.RecipientId, committed.Seal.Fingerprint);
 
@@ -191,7 +191,7 @@ public sealed class KernelStandalonePreparedStartTests
 
         KernelStandalonePreparedStartHandoff Delivery(IServiceProvider host, IPreparedRootStartHandoff selected) =>
             new(host.GetRequiredService<IServiceScopeFactory>(), Persistence, ownerScope,
-                host.GetRequiredService<KernelServing>().Capabilities, selected);
+                host.GetRequiredService<KernelServing>().Capabilities, () => selected);
     }
 
     private static WorkflowExecutable Material(string version, ExecutableNode root) =>
