@@ -429,11 +429,38 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("loads the published definition run action on demand", async () => {
+  it.each([
+    {
+      label: "legacy start",
+      dispatch: { workflowExecutionId: "wfexec-published-run" },
+      feedback: { level: "success", title: "Run started", message: "Started Hello World." }
+    },
+    {
+      label: "write-free completion",
+      dispatch: { workflowExecutionId: null, persistenceOutcome: "Volatile", actorStatus: "Finished" },
+      feedback: { level: "success", title: "Run completed in memory", message: "Hello World completed in memory." }
+    },
+    {
+      label: "committed fault",
+      dispatch: { workflowExecutionId: "wfexec-faulted", persistenceOutcome: "Committed", actorStatus: "Faulted" },
+      feedback: { level: "error", title: "Run faulted", message: "Hello World faulted." }
+    },
+    {
+      label: "in-memory fault",
+      dispatch: { workflowExecutionId: null, persistenceOutcome: "Volatile", actorStatus: "Faulted" },
+      feedback: { level: "error", title: "Run faulted", message: "Hello World faulted." }
+    },
+    {
+      label: "unconfirmed execution",
+      dispatch: { workflowExecutionId: null, persistenceOutcome: "Unknown", reason: "InlineStartOutcomeUnknown" },
+      httpStatus: 504,
+      feedback: { level: "info", title: "Run outcome unavailable", message: "The workflow may still run. Check Runs before starting it again." }
+    }
+  ])("loads the published definition run action on demand and reports $label", async ({ dispatch, feedback, httpStatus }) => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/runtime/workflows/executables/artifact-current/execute") && init?.method === "POST") {
-        return response({ workflowExecutionId: "wfexec-published-run" });
+        return response(dispatch, httpStatus);
       }
       if (url.includes("/runtime/workflows/executables")) return response([
         executable({
@@ -464,11 +491,12 @@ describe("workflows module", () => {
         "https://server.example/runtime/workflows/executables/artifact-current/execute",
         expect.objectContaining({ method: "POST" })
       ));
-      await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
-        level: "success",
-        title: "Run started",
-        message: "Started Hello World."
-      })));
+      await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(dispatch.workflowExecutionId
+        ? expect.objectContaining({
+          ...feedback,
+          link: { label: "Open run", path: expect.stringContaining(`/workflows/instances/${dispatch.workflowExecutionId}`) }
+        })
+        : feedback));
     } finally {
       await unmount();
     }
@@ -2316,10 +2344,12 @@ describe("workflows module", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === "POST") return response({ workflowExecutionId: "wfexec-published-1" });
+      if (init?.method === "POST") return response({
+        workflowExecutionId: "wfexec-published-1", persistenceOutcome: "Committed", actorStatus: "Faulted"
+      });
       if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-published-1")) {
         return response(workflowInstanceDetails({
-          instance: workflowInstance({ workflowExecutionId: "wfexec-published-1", sourceReferenceId: "ref-new", activityCount: 3 }),
+          instance: workflowInstance({ workflowExecutionId: "wfexec-published-1", sourceReferenceId: "ref-new", status: "Faulted", activityCount: 3 }),
           activities: [
             activityExecution({
               activityExecutionId: "root-execution",
@@ -2403,6 +2433,7 @@ describe("workflows module", () => {
     await fill(inputByLabel(document.body, "Greeting"), "Hello from published run");
     await click(buttonByText(document.body, "Run workflow"));
     await waitForText(container, "Open Run wfexec-published-1");
+    expect(container.querySelector('.wf-status-line[data-severity="error"]')?.textContent).toContain("artifact-1 faulted");
     await click(buttonByText(container, "Open Run wfexec-published-1"));
     await waitForRunWorkbench(container);
 
@@ -2878,7 +2909,7 @@ describe("workflows module", () => {
     }
   });
 
-  it("collects workflow inputs before running from the Executable Inspector", async () => {
+  it.each([false, true])("collects workflow inputs from the Executable Inspector (unknown outcome: %s)", async (outcomeUnknown) => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
       unobserve() {}
@@ -2887,7 +2918,9 @@ describe("workflows module", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST" && url.endsWith("/executables/artifact-1/execute")) {
-        return response({ workflowExecutionId: "wfexec-inspector-1" });
+        return outcomeUnknown
+          ? response({ persistenceOutcome: "Unknown", reason: "InlineStartOutcomeUnknown" }, 504)
+          : response({ workflowExecutionId: "wfexec-inspector-1" });
       }
       if (url.includes("/design/workflows/versions/version-2")) {
         const version = workflowDefinitionVersionDetails({ id: "version-2", version: "2.0.0" });
@@ -2917,7 +2950,13 @@ describe("workflows module", () => {
     await waitForText(document.body, "Provide the workflow inputs for this run.");
     await fill(inputByLabel(document.body, "Greeting"), "Hello from inspector");
     await click(buttonByText(document.body, "Run workflow"));
-    await waitForText(container, "Open Run wfexec-inspector-1");
+    if (outcomeUnknown) {
+      await waitForText(container, "Run outcome unavailable. The workflow may still run. Check Runs before starting it again.");
+      expect(container.querySelector(".wf-status-line[role='status']")?.getAttribute("data-severity")).toBe("info");
+      expect(container.textContent).not.toContain("The executable could not be run");
+    } else {
+      await waitForText(container, "Open Run wfexec-inspector-1");
+    }
 
     const executeCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/executables/artifact-1/execute") && init?.method === "POST");
     expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({

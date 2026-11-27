@@ -10,7 +10,7 @@ import type {
   WorkflowInput
 } from "../workflowTypes";
 import { readWorkflowInputs } from "../workflowReferenceAuthoring";
-import { formatExecutableRunError, getExecutableReferenceStatus, readExecutableRunWorkflowExecutionId } from "./executableRunHelpers";
+import { describeExecutableRunError, getExecutableReferenceStatus, readExecutableRunWorkflowExecutionId } from "./executableRunHelpers";
 import type { ExecutableRunState } from "./editorTypes";
 import { getNotifications } from "./notifications";
 
@@ -53,12 +53,31 @@ export async function resolvePublishedDefinitionRunTarget(
   return candidates[0]?.target ?? null;
 }
 
-export function notifyPublishedRunStarted(name: string, result: WorkflowExecutableRunResponse): void {
+function describePublishedRun(name: string, result: WorkflowExecutableRunResponse): {
+  level: ExecutableRunState["severity"];
+  title: string;
+  summary: string;
+} {
+  if (result.persistenceOutcome === "Volatile" || result.persistenceOutcome === "Committed") {
+    switch (result.actorStatus) {
+      case "Finished": return result.persistenceOutcome === "Volatile"
+        ? { level: "success", title: "Run completed in memory", summary: `${name} completed in memory` }
+        : { level: "success", title: "Run completed", summary: `${name} completed` };
+      case "Faulted": return { level: "error", title: "Run faulted", summary: `${name} faulted` };
+      case "Cancelled": return { level: "info", title: "Run cancelled", summary: `${name} was cancelled` };
+    }
+  }
+
+  return { level: "success", title: "Run started", summary: `Started ${name}` };
+}
+
+export function notifyPublishedRunOutcome(name: string, result: WorkflowExecutableRunResponse): void {
   const workflowExecutionId = readExecutableRunWorkflowExecutionId(result);
+  const { level, title, summary } = describePublishedRun(name, result);
   getNotifications().notify({
-    level: "success",
-    title: "Run started",
-    message: `Started ${name}.`,
+    level,
+    title,
+    message: `${summary}.`,
     ...(workflowExecutionId ? {
       link: {
         label: "Open run",
@@ -66,6 +85,10 @@ export function notifyPublishedRunStarted(name: string, result: WorkflowExecutab
       }
     } : {})
   });
+}
+
+export function notifyUnknownRunOutcome(message: string): void {
+  getNotifications().notify({ level: "info", title: "Run outcome unavailable", message });
 }
 
 export function findPublishedRunReference(
@@ -100,10 +123,20 @@ export function createExecutableWorkflowRunFeedback({ setStatus, setLastRun, set
       setError("");
     },
     onStarted: (target: ExecutableWorkflowRunTarget, result: WorkflowExecutableRunResponse) => {
-      setLastRun({ artifactId: target.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result) });
-      setStatus(`Started ${target.artifactId}`);
+      const { level, summary } = describePublishedRun(target.artifactId, result);
+      setLastRun({ artifactId: target.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result), severity: level });
+      setStatus(summary);
     },
-    onError: (error: unknown) => setError(formatExecutableRunError(error))
+    onError: (error: unknown, artifactId: string) => {
+      const { message, outcomeUnknown } = describeExecutableRunError(error);
+      if (outcomeUnknown) {
+        setError("");
+        setLastRun({ artifactId, workflowExecutionId: null, severity: "info" });
+        setStatus(`Run outcome unavailable. ${message}`);
+      } else {
+        setError(message);
+      }
+    }
   };
 }
 
@@ -111,7 +144,7 @@ export function useExecutableWorkflowRun({ context, onDispatchStart, onStarted, 
   context: StudioEndpointContext;
   onDispatchStart(): void;
   onStarted(target: ExecutableWorkflowRunTarget, result: WorkflowExecutableRunResponse): void;
-  onError(error: unknown): void;
+  onError(error: unknown, artifactId: string): void;
 }) {
   const [pending, setPending] = useState<PendingExecutableRun | null>(null);
   const [runningArtifactId, setRunningArtifactId] = useState<string | null>(null);
@@ -122,7 +155,7 @@ export function useExecutableWorkflowRun({ context, onDispatchStart, onStarted, 
     try {
       onStarted(target, await runExecutable(context, target.artifactId, inputs, target.sourceReferenceId));
     } catch (error) {
-      onError(error);
+      onError(error, target.artifactId);
     } finally {
       setRunningArtifactId(null);
     }
@@ -139,7 +172,7 @@ export function useExecutableWorkflowRun({ context, onDispatchStart, onStarted, 
       else await dispatch(target, {});
     } catch (error) {
       setRunningArtifactId(null);
-      onError(error);
+      onError(error, target.artifactId);
     }
   };
 

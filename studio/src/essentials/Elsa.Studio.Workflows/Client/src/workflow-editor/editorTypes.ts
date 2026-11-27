@@ -87,6 +87,7 @@ export interface WorkflowTestDriveSetupState {
 export interface ExecutableRunState {
   artifactId: string;
   workflowExecutionId: string | null;
+  severity: "success" | "error" | "info";
 }
 
 export type WorkflowConnectSource = { nodeId: string; handleId: string | null };

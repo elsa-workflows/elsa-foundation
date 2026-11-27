@@ -870,6 +870,8 @@ export interface WorkflowExecutableRunResponse {
   workflowExecutionId?: string | null;
   runId?: string | null;
   executionId?: string | null;
+  persistenceOutcome?: string | null;
+  actorStatus?: string | null;
 }
 
 export interface WorkflowInstanceSummary {

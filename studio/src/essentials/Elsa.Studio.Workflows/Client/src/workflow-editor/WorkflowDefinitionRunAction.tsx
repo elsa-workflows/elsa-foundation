@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
 import type { StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDefinitionSummary } from "../workflowTypes";
-import { formatExecutableRunError } from "./executableRunHelpers";
+import { describeExecutableRunError, formatExecutableRunError } from "./executableRunHelpers";
 import { getNotifications, useNotificationGuard } from "./notifications";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
-import { notifyPublishedRunStarted, resolvePublishedDefinitionRunTarget, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
+import { notifyPublishedRunOutcome, notifyUnknownRunOutcome, resolvePublishedDefinitionRunTarget, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
 
 export function WorkflowDefinitionRunAction({ context, definition, requestId, runInputEditors }: {
   context: StudioEndpointContext;
@@ -19,15 +19,15 @@ export function WorkflowDefinitionRunAction({ context, definition, requestId, ru
     onDispatchStart: () => undefined,
     onStarted: (_target, result) => {
       const feedback = pendingRunFeedback.current;
-      if (feedback.canNotify?.()) notifyPublishedRunStarted(feedback.name, result);
+      if (feedback.canNotify?.()) notifyPublishedRunOutcome(feedback.name, result);
     },
     onError: error => {
       const feedback = pendingRunFeedback.current;
-      if (feedback.canNotify?.()) getNotifications().notify({
-        level: "error",
-        title: `Couldn't start ${feedback.name}`,
-        message: formatExecutableRunError(error)
-      });
+      if (feedback.canNotify?.()) {
+        const { outcomeUnknown, message } = describeExecutableRunError(error);
+        if (outcomeUnknown) notifyUnknownRunOutcome(message);
+        else getNotifications().notify({ level: "error", title: `Couldn't start ${feedback.name}`, message });
+      }
     }
   });
   const request = useRef({ context, definition, requestId, captureNotificationGuard, run: runAction.request });

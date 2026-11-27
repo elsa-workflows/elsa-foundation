@@ -821,6 +821,18 @@
   min-width: 0;
 }
 
+.wf-status-line[data-severity="error"] {
+  border-color: color-mix(in srgb, var(--wf-danger) 35%, var(--wf-border));
+  background: var(--wf-danger-soft);
+  color: var(--studio-danger-fg);
+}
+
+.wf-status-line[data-severity="info"] {
+  border-color: var(--wf-border);
+  background: var(--wf-well);
+  color: var(--wf-text);
+}
+
 .wf-status-line button {
   margin-left: auto;
   border: 0;
