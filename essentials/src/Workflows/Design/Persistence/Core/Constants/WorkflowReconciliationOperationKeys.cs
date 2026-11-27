@@ -30,6 +30,14 @@ public static class WorkflowReconciliationOperationKeys
         new(Compose(DefinitionMetadataWriteKind, definitionId, Guid.NewGuid().ToString("N")));
 
     /// <summary>
+    /// Clones the draft of a reconciled definition that has none from one of its versions (#6070), identified by its
+    /// semantic-version sort key. Nodes reconcile at once without a lock, so they share the key and one draft is
+    /// cloned. A draft discarded later is not cloned again from the same version: the key replays.
+    /// </summary>
+    public static DesignOperationKey DraftClone(string definitionId, string semVerSortKey) =>
+        new(Compose("draft-clone", definitionId, semVerSortKey));
+
+    /// <summary>
     /// The start every <see cref="DefinitionMetadataWrite"/> key of the definition shares. The identity is framed
     /// with its length, so no other definition's keys start the same way.
     /// </summary>
