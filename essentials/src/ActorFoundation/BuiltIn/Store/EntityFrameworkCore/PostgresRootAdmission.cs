@@ -372,7 +372,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         WithAdmissionSource(query, pin, "/*start-source*/", 3, """('"FoundationRootReceipts"'), ('"FoundationRootBirths"'), ('"Messages"')""");
 
     private static FormattableString WithAdmissionSource(FormattableString query, PinnedRootSource? pin,
-        string placeholder, int tableCount, string tables)
+        string placeholder, int tableCount, string tables, bool requirePermanentDirectRelations = false)
     {
         if (pin is null)
             return FormattableStringFactory.Create(query.Format.Replace(placeholder, """SELECT true AS "SourceReady" """, StringComparison.Ordinal),
@@ -383,6 +383,10 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var markerId = Placeholder(query.ArgumentCount);
         var markerOid = Placeholder(query.ArgumentCount + 1);
         var namespaceOid = Placeholder(query.ArgumentCount + 2);
+        const string permanentDirect = """
+            AND relation.relpersistence = 'p'
+            AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_inherits i WHERE i.inhparent = relation.oid OR i.inhrelid = relation.oid)
+            """;
         var source = $$"""
             SELECT EXISTS (
                 SELECT 1 FROM "KernelStoreVersions" v JOIN pg_catalog.pg_class marker ON marker.oid = v.tableoid
@@ -391,7 +395,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                     AND marker.relnamespace::bigint = {{namespaceOid}}
                     AND (SELECT count(*) FROM (VALUES {{tables}}) required(name)
                         JOIN pg_catalog.pg_class relation ON relation.oid = pg_catalog.to_regclass(required.name)
-                            AND relation.relkind = 'r' AND relation.relnamespace = marker.relnamespace) = {{tableCount}}
+                            AND relation.relkind = 'r' AND relation.relnamespace = marker.relnamespace
+                            {{(requirePermanentDirectRelations ? permanentDirect : "")}}) = {{tableCount}}
             ) AS "SourceReady"
             """;
         return FormattableStringFactory.Create(query.Format.Replace(placeholder, source, StringComparison.Ordinal),

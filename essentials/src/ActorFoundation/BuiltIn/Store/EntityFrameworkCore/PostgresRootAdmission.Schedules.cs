@@ -116,8 +116,10 @@ internal sealed partial class PostgresRootAdmission
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
         var pin = await PinRootNamespaceAsync(db, loadIssuer: false, token)
             ?? throw new StoreFormatException("Binding the schedule owner mode requires a pinned root store.");
-        await LockScheduleOwnerModeAsync(db, token);
-        await RootScheduleOwnerMode.BindAsync(db, auxiliaryActor, token, sql => BindScheduleOwnerSource(sql, pin));
+        await LockScheduleOwnerModeAsync(db, token, binding: true);
+        await RootScheduleOwnerMode.BindAsync(db, auxiliaryActor, token, sql => WithAdmissionSource(sql, pin,
+            "/*schedule-source*/", 3, """('"FoundationScheduleOwnerMode"'), ('"FoundationScheduleRoots"'), ('"FoundationScheduleControls"')""",
+            requirePermanentDirectRelations: true));
         await transaction.CommitAsync(token);
     }
 
@@ -125,20 +127,23 @@ internal sealed partial class PostgresRootAdmission
     {
         if (!RootScheduleOwnerMode.Applies(db)) return;
         await LockScheduleOwnerModeAsync(db, token);
-        await RootScheduleOwnerMode.RequireAsync(db, actorType, token, sql => BindScheduleOwnerSource(sql, pin));
+        await RootScheduleOwnerMode.RequireAsync(db, actorType, token, sql => WithAdmissionSource(sql, pin,
+            "/*schedule-source*/", 1, """('"FoundationScheduleOwnerMode"')""", requirePermanentDirectRelations: true));
     }
 
-    private static async Task LockScheduleOwnerModeAsync(KernelDb db, CancellationToken token)
+    private static async Task LockScheduleOwnerModeAsync(KernelDb db, CancellationToken token, bool binding = false)
     {
-        try { await db.Database.ExecuteSqlRawAsync("""LOCK TABLE "FoundationScheduleOwnerMode" IN ACCESS SHARE MODE""", token); }
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(binding
+                ? """LOCK TABLE ONLY "FoundationScheduleOwnerMode", ONLY "FoundationScheduleRoots", ONLY "FoundationScheduleControls" IN ACCESS SHARE MODE"""
+                : """LOCK TABLE ONLY "FoundationScheduleOwnerMode" IN ACCESS SHARE MODE""", token);
+        }
         catch (Npgsql.PostgresException error) when (IsUnavailableSelectedSchema(error))
         {
             throw new StoreFormatException("The schedule owner mode is unreadable.", error);
         }
     }
-
-    private static FormattableString BindScheduleOwnerSource(FormattableString sql, PinnedRootSource pin) =>
-        WithAdmissionSource(sql, pin, "/*schedule-source*/", 1, """('"FoundationScheduleOwnerMode"')""");
 
     private static FormattableString BindScheduleSource(FormattableString sql, PinnedRootSource pin) =>
         WithAdmissionSource(sql, pin, "/*schedule-source*/", 3,

@@ -96,6 +96,26 @@ internal static class ShippedScheduleOwnerModeChecks
         await using (var restarted = await StartOwnerAsync("schedule-mode-restarted", managed)) { }
         Check(true, "the mode survives stopping all owners and permits only a matching restart");
 
+        if (postgres)
+        {
+            await using var db = Open();
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationScheduleOwnerMode" SET UNLOGGED""", token);
+            await MustRefuseAsync(() => StartOwnerAsync("schedule-mode-unlogged", managed), "selected physical root store");
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationScheduleOwnerMode" SET LOGGED""", token);
+            Check(true, "PostgreSQL refuses an unlogged replacement of the durable mode table");
+        }
+
+        if (managed)
+        {
+            var scheduled = await CountControlsAsync();
+            await using var db = Open();
+            await db.Database.ExecuteSqlRawAsync("""DELETE FROM "FoundationScheduleOwnerMode" WHERE "Singleton" = 1""", token);
+            await MustRefuseAsync(() => StartOwnerAsync("schedule-mode-incomplete", wantsManaged: false), "missing from a store with durable schedule work");
+            await MustRefuseAsync(() => StartOwnerAsync("schedule-mode-incomplete", wantsManaged: true), "missing from a store with durable schedule work");
+            var modes = await db.Database.SqlQueryRaw<long>("""SELECT count(*) AS "Value" FROM "FoundationScheduleOwnerMode" """).SingleAsync(token);
+            Check(modes == 0 && await CountControlsAsync() == scheduled, "an incomplete owner-mode restore is refused without changing schedule state");
+        }
+
         KernelDb Open() => postgres ? PostgresPreviewHosting.CreateShippedContext(options.Options) :
             KernelDb.ForSqliteRootShipped(options.Options);
 
@@ -143,7 +163,8 @@ internal static class ShippedScheduleOwnerModeChecks
     private static async Task MustRefuseAsync(Func<Task> operation, string diagnosis)
     {
         try { await operation(); }
-        catch (NotSupportedException error) when (error.Message.Contains(diagnosis, StringComparison.Ordinal)) { return; }
+        catch (Exception error) when (error is NotSupportedException or StoreFormatException &&
+            error.Message.Contains(diagnosis, StringComparison.Ordinal)) { return; }
         throw new InvalidOperationException($"Expected a schedule owner mode refusal containing '{diagnosis}'.");
     }
 
