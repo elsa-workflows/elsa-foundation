@@ -104,6 +104,14 @@ export function Elsa3ReusableImportPage({
     () => (analysis?.items ?? []).filter(item => expandedSelection.has(item.sourceVersionId)),
     [analysis?.items, expandedSelection]
   );
+  const newestSelectedVersions = useMemo(() => {
+    const versions = new Map<string, number>();
+    for (const item of selectedItems) {
+      const prior = versions.get(item.workflowDefinitionId);
+      if (prior === undefined || prior < item.sourceVersion) versions.set(item.workflowDefinitionId, item.sourceVersion);
+    }
+    return versions;
+  }, [selectedItems]);
   const completeCycles = useMemo(
     () => uniqueCycles([
       ...(analysis?.diagnostics ?? []),
@@ -665,7 +673,10 @@ export function Elsa3ReusableImportPage({
             {selectedItems.map(item => (
               <li key={item.sourceVersionId}>
                 <strong>{item.sourceName || item.sourceDefinitionId} v{item.sourceVersion}</strong>
-                {" · "}{item.isReusable ? publishImportedActivities ? "Publish activity now" : "Save activity draft" : "Save workflow draft"}
+                {" · "}{item.isReusable && (publishImportedActivities ? "Publish activity now · " : "Save activity draft · ")}
+                {newestSelectedVersions.get(item.workflowDefinitionId) === item.sourceVersion
+                  ? item.isReusable ? "Save wrapper workflow draft" : "Save workflow draft"
+                  : "Import workflow version"}
               </li>
             ))}
           </ul>
