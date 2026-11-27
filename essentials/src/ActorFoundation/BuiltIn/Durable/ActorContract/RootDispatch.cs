@@ -351,8 +351,7 @@ internal sealed partial class ActorAdapter
             outcome.FoundationCascade is { Entries.Children.IsEmpty: true, Entries.Jobs.IsEmpty: false, Input: null } && outcome.Sent.Count == 0;
         if (outcome.Row is not { } next ||
             next.Status is not (Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished) && !timedFault && !terminated && !faulted ||
-            !((rootTimedJobIssuance || rootTimedJobSettlement) && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, next.Id, next.Model)) &&
-                outcome.Sent.Any(m => !SupportedSend(m, next)) ||
+            !SupportsSends(next) ||
             outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
             // Emitted output is live: the owner releases it to the callers it holds for the root, whichever turn consumed
@@ -360,6 +359,16 @@ internal sealed partial class ActorAdapter
             outcome.FoundationCascade is not null && !settlesJobs || outcome.InMemory)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
+
+        bool SupportsSends(Durable.InstanceRow row)
+        {
+            if ((!rootTimedJobIssuance && !rootTimedJobSettlement) || issueSelf is null)
+                return (rootTimedJobIssuance || rootTimedJobSettlement) && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, row.Id, row.Model) ||
+                    outcome.Sent.All(message => SupportedSend(message, row));
+            var jobSends = outcome.Sent.Where(Durable.RootJobTicket.IsTimedSend).ToArray();
+            return (jobSends.Length == 0 || Durable.RootJobTicket.StartsTimedPair(jobSends, row.Id, row.Model)) &&
+                outcome.Sent.Where(message => !Durable.RootJobTicket.IsTimedSend(message)).All(message => SupportedSend(message, row));
+        }
 
         bool SupportedSend(Durable.Message message, Durable.InstanceRow row) =>
             rootJobHandle is not null && message.HasIssuedTicket && Durable.RootJobTicket.Read(message, row.Id, row.Model) is not null ||

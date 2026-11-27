@@ -220,15 +220,15 @@ public sealed partial class EfStore
 
             async Task<bool> Mark(IReadOnlyList<InboxKey> keys, bool trial)
             {
-                foreach (var group in keys.GroupBy(key => key.Scope))
+                foreach (var group in keys.GroupBy(key => key.Scope switch
+                         {
+                             -1 when db.UsesRootTimedJobSettlement && DeadlineActor(key) is not null => RootTimedJobScope,
+                             -1 => RootSelfScope,
+                             > 0 => db.UsesRootTimedJobSettlement ? RootTimedJobScope : RootJobScope,
+                             _ => key.Scope
+                         }))
                 {
-                    var scope = group.Key switch
-                    {
-                        -1 or > 0 when db.UsesRootTimedJobSettlement => RootTimedJobScope,
-                        -1 => RootSelfScope,
-                        > 0 => RootJobScope,
-                        _ => group.Key
-                    };
+                    var scope = group.Key;
                     var ids = group.Select(key => scope is RootJobScope or RootTimedJobScope ? StoredJobId(key) : key.Id).ToArray();
                     var count = db.UsesSqliteRootRuntime
                         ? await MarkSqliteRootAsync(db, Root, Epoch, trial, scope, ids, cancellationToken)
@@ -335,7 +335,7 @@ public sealed partial class EfStore
             batch.Turns.Select(t => t.Instance).Distinct().Count() != batch.Turns.Count) throw RootShape();
 
         if (batch.Seen.Concat(batch.Trial).Any(key =>
-            key.Scope == -1 && RootSelfIssuer is null && !RootTimedJobSettlementEnabled ||
+            key.Scope == -1 && (DeadlineActor(key) is not null ? !RootTimedJobSettlementEnabled : RootSelfIssuer is null) ||
             key.Scope > 0 && !RootJobsEnabled)) throw RootShape();
         StoreBatchRules.RequireDistinct(fences);
         (CommitBatch Batch, RootCheckpoints Checkpoints)? prepared;
@@ -398,6 +398,8 @@ public sealed partial class EfStore
         turn.Done.All(k => k.Scope == InboxKey.FoundationOccurrenceScope && root.Owns(k)) &&
         turn.Consumed.All(k => (k.Scope == -1 || jobs && k.Scope > 0) && root.Owns(k));
 
+    private static bool IsRootJobInput(InboxKey key) => key.Scope > 0 || DeadlineActor(key) is not null;
+
     private static bool SameInputs(IEnumerable<Message> inputs, IEnumerable<InboxKey> expected)
     {
         var keys = inputs.Select(m => m.InboxKey).ToArray();
@@ -455,8 +457,8 @@ public sealed partial class EfStore
                 return new(null, liveRefusal);
             // A job that was running when its root ended (a Terminate or a Faulted end settled it) finishes where nothing waits
             // for it: its ticket and deadline rows left with the end, so the job's own input settles nothing.
-            var settled = turn.Consumed.Where(key => key.Scope > 0).Select(StoredJobId).ToArray();
-            return new(null, new TerminalRootInputs(root, [.. turn.Done, .. turn.Consumed.Where(key => key.Scope <= 0)], RootSelfIssuer,
+            var settled = turn.Consumed.Where(IsRootJobInput).Select(StoredJobId).ToArray();
+            return new(null, new TerminalRootInputs(root, [.. turn.Done, .. turn.Consumed.Where(key => !IsRootJobInput(key))], RootSelfIssuer,
                 WithoutParkFacts(held), settled));
         }
         var row = turn.Row;
@@ -465,7 +467,7 @@ public sealed partial class EfStore
         if (values is not null && (!RootValuesEnabled || turn.Expected is null || turn.FoundationRootOperator is not null))
             throw RootShape();
         if (recalls is not null && (RootSelfIssuer is null || turn.Expected is null ||
-            recalls.Any(key => key.Scope != -1 || !root.Owns(key)) ||
+            recalls.Any(key => SelfActor(key) != root.Actor) ||
             turn.Consumed.Any(recalls.Contains) || turn.Sent.Any(m => recalls.Contains(m.InboxKey)))) throw RootShape();
         // A family that ends Faulted roots (timed-job settlement) commits a Faulted end from any turn, the first included.
         var timedFault = RootTimedJobSettlementEnabled && row.Status == InstanceStatus.Faulted;
@@ -501,9 +503,7 @@ public sealed partial class EfStore
 
         if (RootTimedJobIssuanceEnabled && turn.Expected is not null ||
             RootTimedJobs && !RootTimedJobPreviewEnabled && turn.Expected is null && !RootJobTicket.StartsTimedPair(turn.Sent, root.Actor, row.Model)) throw RootShape();
-        var wires = RootTimedJobs ? EncodeRootTimedSends(turn.Sent) :
-            turn.Sent.Select((message, index) => RootJobsEnabled && message.Kind == Kinds.Job
-                ? EncodeRootJob(message, root, row.Model) : EncodeRootSelf(root.Actor, row.Revision, index, message)).ToArray();
+        var wires = EncodeRootSends(root, row, turn.Sent);
         var jobState = RootJobsEnabled ? new RootJobState(row.Jobs, row.NextJobGeneration) : null;
         PreparedRoot WithSends(PreparedRoot prepared) => wires.Length == 0 ? prepared :
             prepared with { JournalTurn = prepared.JournalTurn! with { Sent = wires } };
@@ -543,12 +543,13 @@ public sealed partial class EfStore
         if (row.Model != current.Model || row.Definition != current.Definition || row.History != current.History ||
             change is null && (header.Header.TypeData != current.TypeData || header.Header.Labels.Count != current.Labels.Count ||
                 current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))) throw RootShape();
-        if (settledJobs is null && RootTimedJobSettlementEnabled && (!RootTimedJobPreviewEnabled || turn.Consumed.Any(key => key.Scope == -1 || key.Scope > 0)))
+        if (settledJobs is null && RootTimedJobSettlementEnabled &&
+            (!RootTimedJobPreviewEnabled || turn.Consumed.Any(IsRootJobInput)))
             return await PrepareRootTimedTurnAsync(root, turn, row, state, current, fence, wires, cancellationToken);
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         var ids = turn.Done.Concat(inputKeys).Select(key => key.Scope > 0 ? StoredJobId(key) : key.Id).ToArray();
-        var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
+        var messages = postgres && RootSelfIssuer is not null ? db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """) : db.Messages;
         var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
             (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == RootSelfScope || RootJobsEnabled && !RootTimedJobPreviewEnabled && m.InboxScope == RootJobScope) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
         var inputs = records.Select(record => DecodeRootInput(db, record, root.Reference, RootSelfIssuer, RootJobsEnabled)).ToArray();

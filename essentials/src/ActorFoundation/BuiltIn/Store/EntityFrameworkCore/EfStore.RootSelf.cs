@@ -11,7 +11,7 @@ public sealed partial class EfStore
     private const string RootSelfWire = "!foundation-self/1";
     private sealed record RootSelfHeader(long Revision, int Ordinal, string Kind,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? Due = null);
-    private string RootInboxSource => _ordinaryRoots is null || RootSelfIssuer is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
+    private string RootInboxSource => !postgres || _ordinaryRoots is null || RootSelfIssuer is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
     internal FoundationSelfIssuer? RootSelfIssuer { get; private set; }
 
     private sealed record SelfInstallation(byte[] Key, bool Installed);
@@ -19,8 +19,15 @@ public sealed partial class EfStore
     internal async Task EnableRootSelfSendsAsync(CancellationToken token)
     {
         await using var db = create();
-        if (!db.Database.IsNpgsql() || !db.UsesRootSelfProtocol)
-            throw new StoreFormatException("Immediate public continuations require the PostgreSQL continuation protocol.");
+        if (!db.UsesRootSelfProtocol || !(db.Database.IsNpgsql() || db.UsesSqliteRootRuntime))
+            throw new StoreFormatException("Generated-root self inputs require a qualified root runtime and continuation protocol.");
+        if (db.UsesSqliteRootRuntime)
+        {
+            await RequireSqliteOperationalFormatAsync(db, token);
+            var key = await SqliteRootAdmission.ReadRootIssuerKeyAsync(db, token);
+            RootSelfIssuer = new(seed => FoundationSelfSend.Handle(key, seed), db.UsesRootTimers);
+            return;
+        }
         await RequireStoreVersionsAsync(db, token);
         var install = await db.Database.SqlQueryRaw<SelfInstallation>("""
             SELECT "Key", EXISTS (
@@ -89,7 +96,7 @@ public sealed partial class EfStore
         var escaped = m.Payload is not null && (m.Payload.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(m.Payload));
         var header = (escaped ? "B" : "T") + DurableKeyJson.Write(new RootSelfHeader(revision, ordinal, m.Kind, m.Due));
         if (!FoundationMetadataLimits.FitsContent(m.Payload) || Encoding.UTF8.GetByteCount(header) > 24 * 1024)
-            throw new StoreException(Failure.Definite, "Encoded self input exceeds the PostgreSQL row budget.");
+            throw new StoreException(Failure.Definite, "Encoded self input exceeds the root row budget.");
         var content = escaped ? Convert.ToBase64String(RootSelfContent.Encode(m.Payload!)) : m.Payload;
         var body = content is null ? header : string.Concat(header, "\n", content);
         // The existing writer returns the insert's sequence for same-owner handover.

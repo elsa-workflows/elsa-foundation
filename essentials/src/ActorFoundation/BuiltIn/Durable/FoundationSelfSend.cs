@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 
 namespace Kernel.Durable;
@@ -9,6 +10,15 @@ internal sealed record FoundationSelfIssuer(Func<string, string> Handle, bool Su
 
 internal static class FoundationSelfSend
 {
+    private sealed record AuthoredSend(int Ordinal);
+    private static readonly ConditionalWeakTable<Message, AuthoredSend> AuthoredSends = new();
+
+    internal static void RememberOrdinal(Message message, int ordinal) => AuthoredSends.Add(message, new(ordinal));
+
+    // Issuance belongs to the original turn output. It does not change the delivery envelope or its equality.
+    internal static int? AuthoredOrdinal(Message message) =>
+        AuthoredSends.TryGetValue(message, out var authored) ? authored.Ordinal : null;
+
     internal static string Handle(byte[] issuer, string seed) =>
         "~" + Convert.ToHexString(HMACSHA256.HashData(issuer, DurableKeyJson.CodeUnits(seed)));
 

@@ -57,6 +57,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat SqliteParkArrivalsQualification => Current with { MessageProtocol = 85 };
     internal static StoreFormat RootDueBacklogQualification => Current with { MessageProtocol = 110 };
     internal static StoreFormat SqliteParkRecoveryQualification => Current with { MessageProtocol = 84 };
+    internal static StoreFormat RootSelfTimedQualification => Current with { MessageProtocol = 83 };
 
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
     // qualification profiles, kept for their checks until K14. A widening takes the next shared protocol number.
@@ -114,6 +115,10 @@ internal static class RootProfiles
     /// </summary>
     internal const RootCapabilities ParkCompositionBase = Retention | RootCapabilities.OperatorReplies | TimedJobSettlement |
         RootCapabilities.TimedJobPreview | RootCapabilities.ReplyProtocol | ParkInspection;
+
+    // Park is qualified separately before the self and timed envelope union can ship.
+    internal const RootCapabilities SelfTimedQualification = StableBody | TimedJobSettlement | RootCapabilities.TimedJobPreview |
+        RootCapabilities.SelfProtocol | RootCapabilities.Timers;
 
     /// <summary>
     /// The shared shipped format includes ordinary Park arrivals and one-page Resume alongside the operator chain.
@@ -364,7 +369,8 @@ internal static class StoreDefinitionsRevision
     internal static StoreVersionEntity? Seed(KernelDb db)
     {
         var sqliteQualification = db.UsesSqliteShippedInstall &&
-            (db.RequiredFormat == StoreFormat.SqliteParkArrivalsQualification || db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification);
+            (db.RequiredFormat == StoreFormat.SqliteParkArrivalsQualification || db.RequiredFormat == StoreFormat.SqliteParkRecoveryQualification ||
+                db.RequiredFormat == StoreFormat.RootSelfTimedQualification);
         if (db.RequiredFormat != StoreFormat.RootShipped && !sqliteQualification && !db.UsesRootDueBacklog) return null;
         var sqlite = db.Database.IsSqlite();
         return new StoreVersionEntity

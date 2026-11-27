@@ -105,8 +105,8 @@ public sealed partial class EfStore
         bool includePrivateInputs = true, bool parked = false)
     {
         if (db.UsesSqliteRootRuntime)
-            return issue is null && await SettleSqliteRootInputsAsync(db, reference, actor, expected,
-                expectedEnvelopes, suspended, cancellationToken, parked);
+            return await SettleSqliteRootInputsAsync(db, reference, actor, expected,
+                expectedEnvelopes, suspended, cancellationToken, parked, includePrivateInputs ? issue : null);
 
         var home = new InstanceRef(actor.Id).Partition;
         var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
