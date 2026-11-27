@@ -15,22 +15,36 @@ internal sealed record NativeStructuralJournal(int NativeStructure, NativeJourna
     internal static NativeStructuralJournal Create(NativeJournalKind kind, long at, string? frame = null, string? node = null,
         string? parent = null) => new(Version, kind, at, frame, node, parent);
 
-    internal static NativeStructuralJournal? Read(JsonElement entry)
+    // A true result identifies our wire shape. A null decoded record means the marked entry is invalid or unsupported.
+    internal static bool Read(JsonElement entry, out NativeStructuralJournal? record)
     {
-        if (entry.ValueKind != JsonValueKind.Object || !entry.TryGetProperty(nameof(NativeStructure), out var version) ||
-            version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var value) || value != Version ||
-            !entry.TryGetProperty(nameof(Kind), out var kind) || kind.ValueKind != JsonValueKind.Number ||
-            !entry.TryGetProperty(nameof(At), out var at) || at.ValueKind != JsonValueKind.Number)
-            return null;
+        record = null;
+        if (entry.ValueKind != JsonValueKind.Object || !entry.TryGetProperty(nameof(NativeStructure), out var version))
+            return false;
 
-        var record = entry.Deserialize<NativeStructuralJournal>();
-        return record?.Kind switch
+        if (version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var value) || value != Version ||
+            !entry.TryGetProperty(nameof(Kind), out var kind) || kind.ValueKind != JsonValueKind.Number ||
+            !entry.TryGetProperty(nameof(At), out var at) || at.ValueKind != JsonValueKind.Number ||
+            !at.TryGetInt64(out var milliseconds) || milliseconds < DateTimeOffset.MinValue.ToUnixTimeMilliseconds() ||
+            milliseconds > DateTimeOffset.MaxValue.ToUnixTimeMilliseconds())
+            return true;
+
+        try
         {
-            NativeJournalKind.Turn when record.Frame is null && record.Node is null && record.Parent is null => record,
-            NativeJournalKind.Scheduled when !string.IsNullOrEmpty(record.Frame) && record.Node is null && record.Parent is null => record,
-            NativeJournalKind.Started or NativeJournalKind.Completed or NativeJournalKind.Faulted or NativeJournalKind.Cancelled
-                when !string.IsNullOrEmpty(record.Frame) && !string.IsNullOrEmpty(record.Node) => record,
-            _ => null
-        };
+            var decoded = entry.Deserialize<NativeStructuralJournal>();
+            record = decoded?.Kind switch
+            {
+                NativeJournalKind.Turn when decoded.Frame is null && decoded.Node is null && decoded.Parent is null => decoded,
+                NativeJournalKind.Scheduled when !string.IsNullOrEmpty(decoded.Frame) && decoded.Node is null && decoded.Parent is null => decoded,
+                NativeJournalKind.Started or NativeJournalKind.Completed or NativeJournalKind.Faulted or NativeJournalKind.Cancelled
+                    when !string.IsNullOrEmpty(decoded.Frame) && !string.IsNullOrEmpty(decoded.Node) => decoded,
+                _ => null
+            };
+        }
+        catch (JsonException)
+        {
+            // The marker is present even when its contents cannot be decoded.
+        }
+        return true;
     }
 }

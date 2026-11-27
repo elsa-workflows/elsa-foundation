@@ -25,11 +25,12 @@ internal static class KernelHistoryJournal
     internal static RuntimeHistoryEventView? Project(string run, long sequence, long revision, int ordinal, string entry, long recordedAt)
     {
         using var document = JsonDocument.Parse(entry);
-        if (NativeStructuralJournal.Read(document.RootElement) is not { } record || !EventNames.TryGetValue(record.Kind, out var name))
-            return null;
+        if (!NativeStructuralJournal.Read(document.RootElement, out var record)) return null;
+        if (record is null) throw new JsonException("The Native structural journal record could not be decoded.");
+        if (!EventNames.TryGetValue(record.Kind, out var name)) return null;
 
         var commit = RuntimeHistoryIdentity.CreateId(run, Policy, revision.ToString(CultureInfo.InvariantCulture));
-        var eventId = RuntimeHistoryIdentity.CreateId(commit, name, ordinal.ToString(CultureInfo.InvariantCulture));
+        var eventId = RuntimeHistoryIdentity.CreateId(commit, name, sequence.ToString(CultureInfo.InvariantCulture));
         return new(eventId, run, sequence, SchemaVersion: 1, name, Category,
             nameof(RuntimeHistoryAuthority.CommittedTransition), DateTimeOffset.FromUnixTimeMilliseconds(record.At),
             DateTimeOffset.FromUnixTimeMilliseconds(recordedAt), record.Frame, record.Node,

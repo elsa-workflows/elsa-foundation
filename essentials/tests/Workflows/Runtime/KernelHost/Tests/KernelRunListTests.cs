@@ -1,10 +1,13 @@
+using System.Data.Common;
 using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
+using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Workflows.Runtime.KernelApi;
@@ -38,6 +41,7 @@ public sealed class KernelRunListTests
         public JournalCancellation? Cancellation { get; set; }
         public IReadOnlyDictionary<string, JournalEntry[]> Journal { get; init; } = new Dictionary<string, JournalEntry[]>();
         public List<SequencedJournalEntry>? Sequence { get; init; }
+        public Func<ActorSequencedJournalPage, ActorSequencedJournalPage>? SequencePage { get; set; }
         public int SequenceReads { get; private set; }
         public bool SupportsSequencedJournal => Sequence is not null;
 
@@ -50,9 +54,10 @@ public sealed class KernelRunListTests
             var sequence = Assert.IsType<List<SequencedJournalEntry>>(Sequence);
             var upper = upperSequence ?? sequence.Count;
             var items = sequence.Where(entry => entry.Sequence > afterSequence && entry.Sequence <= upper).Take(limit).ToArray();
-            return ValueTask.FromResult<ActorSequencedJournalPage?>(new(items, upper == 0 ? 0 : 1, upper,
+            var page = new ActorSequencedJournalPage(items, upper == 0 ? 0 : 1, upper,
                 items.LastOrDefault()?.Sequence ?? afterSequence, sequence.LastOrDefault(entry => entry.Sequence == upper)?.RecordedAt,
-                CapturedFromStart: true, AsOf: 3_000));
+                CapturedFromStart: true, AsOf: 3_000);
+            return ValueTask.FromResult<ActorSequencedJournalPage?>(SequencePage is { } project ? project(page) : page);
         }
 
         public ValueTask<ActorView?> GetAsync(BoundScope scope, ActorRef actor, CancellationToken cancellationToken = default)
@@ -223,6 +228,106 @@ public sealed class KernelRunListTests
         var timeline = (await run.BrowseAsync(new("run-1", 10), null, CancellationToken.None))!;
         Assert.Equal(2, timeline.Page.TotalCount);
         Assert.All(timeline.Page.Items, item => Assert.Equal(ActivityExecutionStatus.Completed, item.Execution.Status));
+    }
+
+    [Theory]
+    [InlineData("""{"NativeStructure":2}""")]
+    [InlineData("""{"NativeStructure":1,"Kind":2,"At":1000,"Frame":42,"Node":"branch"}""")]
+    [InlineData("""{"NativeStructure":1,"Kind":0,"At":9223372036854775807}""")]
+    public async Task Standard_history_stops_at_a_malformed_structural_marker_and_timeline_ignores_legacy_strings_in_its_turn(string marker)
+    {
+        var reads = new Reads(Views)
+        {
+            Sequence = [new(1, 1, 0, HistoryStart, 1_200), new(2, 2, 0, marker, 2_000)],
+            Journal = new Dictionary<string, JournalEntry[]>
+            {
+                ["run-1"] = [new(1, HistoryStart), new(2, marker), new(2, "\"t:2000\""), new(2, "\"b:f2:lookalike:f1\"")]
+            }
+        };
+        using var shell = Shell(reads, HostTenant);
+        using var scope = shell.CreateScope();
+        var endpoint = new Elsa.Workflows.Runtime.Api.Endpoints.History.Page.Endpoint(
+            scope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>());
+        AssertInvalidHistoryPage(await endpoint.HandleAsync(new("run-1"), CancellationToken.None));
+
+        var browse = scope.ServiceProvider.GetRequiredService<IActivityExecutionBrowseSource>();
+        var run = (await browse.FindWorkflowAsync("run-1", CancellationToken.None))!;
+        var timeline = (await run.BrowseAsync(new("run-1", 10), null, CancellationToken.None))!;
+        Assert.Equal("f1", Assert.Single(timeline.Page.Items).Execution.ActivityExecutionId);
+    }
+
+    [Fact]
+    public async Task Standard_history_rejects_a_reused_commit_ordinal_on_a_frozen_page()
+    {
+        var reads = new Reads(Views)
+        {
+            Sequence = [new(1, 1, 0, HistoryStart, 1_200), new(2, 1, 0, HistoryStart, 1_200)]
+        };
+        using var shell = Shell(reads, HostTenant);
+        using var scope = shell.CreateScope();
+        var history = scope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>();
+        var request = new GetRuntimeHistory("run-1", Limit: 1);
+        var first = Assert.IsType<RuntimeHistoryPageView>(await history.ReadAsync(request));
+        Assert.Single(first.Items);
+        Assert.NotNull(first.NextContinuationToken);
+        AssertInvalidHistoryPage(Assert.IsType<RuntimeHistoryPageView>(
+            await history.ReadAsync(request with { Cursor = first.NextContinuationToken })));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Standard_history_refuses_an_unrepresentable_page_timestamp(bool asOf)
+    {
+        var reads = new Reads(Views)
+        {
+            Sequence = [new(1, 1, 0, HistoryStart, 1_200)],
+            SequencePage = page => asOf ? page with { AsOf = long.MinValue } : page with { LastRecordedAt = long.MaxValue }
+        };
+        using var shell = Shell(reads, HostTenant);
+        using var scope = shell.CreateScope();
+        var history = scope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>();
+        AssertInvalidHistoryPage(Assert.IsType<RuntimeHistoryPageView>(await history.ReadAsync(new("run-1"))));
+    }
+
+    [Fact]
+    public async Task Standard_history_normalizes_only_transient_provider_read_failures()
+    {
+        var reads = new Reads(Views) { Sequence = [] };
+        using var shell = Shell(reads, HostTenant);
+        using var scope = shell.CreateScope();
+        var history = scope.ServiceProvider.GetRequiredService<IRuntimeHistoryPageReader>();
+        var request = new GetRuntimeHistory("run-1");
+
+        foreach (var transient in new Exception[] { new TimeoutException(), new JournalDbException(transient: true) })
+        {
+            reads.SequencePage = _ => throw transient;
+            var unavailable = await Assert.ThrowsAsync<RuntimeHistoryUnavailableException>(() => history.ReadAsync(request));
+            Assert.Same(transient, unavailable.InnerException);
+        }
+
+        reads.SequencePage = _ => throw new JournalDbException(transient: false);
+        await Assert.ThrowsAsync<JournalDbException>(() => history.ReadAsync(request));
+        reads.SequencePage = _ => throw new ArgumentOutOfRangeException("afterSequence");
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => history.ReadAsync(request));
+        reads.SequencePage = _ => throw new OperationCanceledException();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => history.ReadAsync(request));
+    }
+
+    private const string HistoryStart = """{"NativeStructure":1,"Kind":2,"At":1000,"Frame":"f1","Node":"branch"}""";
+
+    private static void AssertInvalidHistoryPage(RuntimeHistoryPageView page)
+    {
+        Assert.Equal("invalid", page.Coverage.State);
+        Assert.Empty(page.Items);
+        Assert.Equal(0, page.ScannedThroughSequence);
+        Assert.Null(page.NextContinuationToken);
+        Assert.Null(page.CatchUpToken);
+    }
+
+    private sealed class JournalDbException(bool transient) : DbException
+    {
+        public override bool IsTransient => transient;
     }
 
     public sealed class HistoryDiagnostic : Native.CompositeActivity

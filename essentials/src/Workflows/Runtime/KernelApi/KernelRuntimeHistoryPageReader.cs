@@ -1,7 +1,9 @@
+using System.Data.Common;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Workflows.Runtime.KernelHost;
@@ -32,18 +34,10 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
             request.ActivityExecutionId, request.IncludeDescendants, request.BookmarkId, request.Category, request.Name, request.Search, access);
         var tenant = host.Tenant.Tenant;
         var position = cursor.Open(query, tenant, header.Workflow);
-        RuntimeHistoryPageView page;
-        if (!KernelActivityTimeline.Supports(header) || !await host.SupportsSequencedJournalAsync(cancellationToken))
-        {
-            page = Empty("unsupported", "The run does not have sequenced structural history on this host.", time.GetUtcNow());
-        }
-        else
-        {
-            var snapshot = await host.ReadSequencedJournalAsync(new ActorRef(request.WorkflowExecutionId),
-                position.AfterSequence, position.UpperSequence, query.Limit, cancellationToken);
-            if (snapshot is null) return null;
-            page = Project(query, tenant, header.Workflow, position, snapshot);
-        }
+        var page = KernelActivityTimeline.Supports(header)
+            ? await ReadKernelAsync(query, tenant, header.Workflow, position, cancellationToken)
+            : Unsupported();
+        if (page is null) return null;
 
         var verified = await AuthorizedRunAsync(request.WorkflowExecutionId, cancellationToken);
         return verified is { Header: { } currentHeader } && currentHeader.Workflow == header.Workflow &&
@@ -51,10 +45,38 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
             await AccessBindingAsync(cancellationToken) == access ? page : null;
     }
 
+    private async ValueTask<RuntimeHistoryPageView?> ReadKernelAsync(RuntimeHistoryQuery query, string tenant, string workflow,
+        KernelHistoryCursor.Position position, CancellationToken cancellationToken)
+    {
+        ActorSequencedJournalPage? snapshot;
+        try
+        {
+            if (!await host.SupportsSequencedJournalAsync(cancellationToken)) return Unsupported();
+            snapshot = await host.ReadSequencedJournalAsync(new ActorRef(query.WorkflowExecutionId),
+                position.AfterSequence, position.UpperSequence, query.Limit, cancellationToken);
+        }
+        catch (Exception error) when (error is TimeoutException or DbException { IsTransient: true })
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new RuntimeHistoryUnavailableException(query.WorkflowExecutionId, "read-sequenced-journal", error);
+        }
+        return snapshot is null ? null : Project(query, tenant, workflow, position, snapshot);
+    }
+
     private RuntimeHistoryPageView Project(RuntimeHistoryQuery query, string tenant, string workflow,
         KernelHistoryCursor.Position position, ActorSequencedJournalPage snapshot)
     {
-        var readAt = DateTimeOffset.FromUnixTimeMilliseconds(snapshot.AsOf);
+        var readAt = time.GetUtcNow();
+        DateTimeOffset? lastRecordedAt;
+        try
+        {
+            readAt = DateTimeOffset.FromUnixTimeMilliseconds(snapshot.AsOf);
+            lastRecordedAt = snapshot.LastRecordedAt is { } recorded ? DateTimeOffset.FromUnixTimeMilliseconds(recorded) : null;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return Invalid(readAt);
+        }
         if (snapshot.UpperSequence < position.AfterSequence ||
             position.UpperSequence is { } pinned && pinned != snapshot.UpperSequence ||
             snapshot.ScannedThroughSequence < position.AfterSequence || snapshot.ScannedThroughSequence > snapshot.UpperSequence ||
@@ -66,16 +88,19 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
         var events = new List<RuntimeHistoryEventView>();
         var previous = Math.Max(position.AfterSequence, snapshot.RetainedFromSequence - 1);
         var revision = position.LastRevision;
+        var ordinal = position.LastCommitOrdinal;
         var omitted = false;
         try
         {
             foreach (var entry in snapshot.Items)
             {
                 if (entry.Sequence != previous + 1 || entry.Sequence > snapshot.ScannedThroughSequence ||
-                    entry.Revision <= 0 || entry.Revision < revision || entry.CommitOrdinal < 0)
+                    entry.Revision <= 0 || entry.Revision < revision || entry.CommitOrdinal < 0 ||
+                    entry.Revision == revision && entry.CommitOrdinal <= ordinal)
                     return Invalid(readAt);
                 previous = entry.Sequence;
                 revision = entry.Revision;
+                ordinal = entry.CommitOrdinal;
                 if (entry.Entry is null)
                 {
                     omitted = true;
@@ -104,11 +129,14 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
         var coverage = new RuntimeHistoryCoverageView("partial", vocabularyLimitation, KernelHistoryJournal.Policy, 1,
             KernelHistoryJournal.SupportedKinds, CapturedFromStart: false, HasGaps: true, snapshot.RetainedFromSequence,
             snapshot.UpperSequence, snapshot.UpperSequence, Math.Max(0, snapshot.RetainedFromSequence - 1), null,
-            snapshot.LastRecordedAt is { } recorded ? DateTimeOffset.FromUnixTimeMilliseconds(recorded) : null);
-        var next = snapshot.ScannedThroughSequence < snapshot.UpperSequence
-            ? cursor.Seal(query, tenant, workflow, new(snapshot.ScannedThroughSequence, snapshot.UpperSequence, revision))
+            lastRecordedAt);
+        var hasNext = snapshot.ScannedThroughSequence < snapshot.UpperSequence;
+        var next = hasNext
+            ? cursor.Seal(query, tenant, workflow, new(snapshot.ScannedThroughSequence, snapshot.UpperSequence, revision, ordinal))
             : null;
-        var catchUp = cursor.Seal(query, tenant, workflow, new(snapshot.UpperSequence, null));
+        var catchUp = cursor.Seal(query, tenant, workflow, hasNext
+            ? new(snapshot.UpperSequence, null)
+            : new(snapshot.UpperSequence, null, revision, ordinal));
         return new(coverage, events, snapshot.UpperSequence, snapshot.ScannedThroughSequence, snapshot.Items.Count, next, catchUp,
             scopeLimitation is null, scopeLimitation, readAt);
     }
@@ -122,6 +150,9 @@ internal sealed class KernelRuntimeHistoryPageReader(KernelRunReader runs, Kerne
 
     private static RuntimeHistoryPageView Invalid(DateTimeOffset readAt) =>
         Empty("invalid", "The committed journal boundary could not be established.", readAt);
+
+    private RuntimeHistoryPageView Unsupported() =>
+        Empty("unsupported", "The run does not have sequenced structural history on this host.", time.GetUtcNow());
 
     private static RuntimeHistoryPageView Empty(string state, string limitation, DateTimeOffset readAt) =>
         new(new(state, limitation, null, null, [], false, state == "invalid", 0, 0, 0, 0, null, null),

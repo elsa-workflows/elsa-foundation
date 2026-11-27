@@ -96,11 +96,11 @@ internal sealed class KernelActivityTimeline(KernelRuns runs)
         bool Apply(string entry)
         {
             using var json = JsonDocument.Parse(entry);
-            if (NativeStructuralJournal.Read(json.RootElement) is { } record)
+            if (NativeStructuralJournal.Read(json.RootElement, out var record))
             {
                 typedRevision = true;
-                return record.Frame is { } frame && ReadTime(record.At) is { } at &&
-                    ApplyFrame(record.Kind, frame, record.Node, record.Parent, at);
+                return record is { Frame: { } frame } &&
+                    ApplyFrame(record.Kind, frame, record.Node, record.Parent, DateTimeOffset.FromUnixTimeMilliseconds(record.At));
             }
             if (typedRevision || json.RootElement.ValueKind != JsonValueKind.String ||
                 json.RootElement.GetString() is not { Length: > 2 } text || text[1] != ':')
