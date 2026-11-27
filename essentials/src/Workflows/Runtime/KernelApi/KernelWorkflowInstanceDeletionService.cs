@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using System.Text.Json;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
@@ -6,7 +5,6 @@ using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Endpoints;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Services;
-using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.KernelHost;
 using Kernel.Foundation.Contracts;
 using Microsoft.AspNetCore.Http;
@@ -34,20 +32,14 @@ internal sealed class KernelWorkflowInstanceDeletionService(
     public async Task<WorkflowInstanceDeletionView> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        if (httpContext.HttpContext is not { } context || !principals.TryGetNormalizedPrincipal(context.User, out var principal))
+        if (httpContext.HttpContext is not { } context || KernelRunOperatorCaller.Read(context.User, principals) is not { } caller)
             throw new RuntimeResourceMissingSignal();
-
-        var canonicalTenant = SingleTenantClaim(principal, IdentityClaimTypes.TenantId);
-        var legacyTenant = SingleTenantClaim(principal, "tenant_id");
-        if (canonicalTenant is not null && legacyTenant is not null && canonicalTenant != legacyTenant)
-            throw new RuntimeResourceMissingSignal();
-        var tenant = canonicalTenant ?? legacyTenant;
 
         using var deadline = new CancellationTokenSource(DeletionBudget, clock);
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
-            return await DeleteCoreAsync(workflowExecutionId, principal, tenant, budget.Token);
+            return await DeleteCoreAsync(workflowExecutionId, caller, budget.Token);
         }
         catch (Exception error) when (!cancellationToken.IsCancellationRequested &&
             (error is TimeoutException || error is OperationCanceledException && deadline.IsCancellationRequested))
@@ -58,7 +50,7 @@ internal sealed class KernelWorkflowInstanceDeletionService(
     }
 
     private async Task<WorkflowInstanceDeletionView> DeleteCoreAsync(string workflowExecutionId,
-        ClaimsPrincipal principal, string? tenant, CancellationToken cancellationToken)
+        KernelRunOperatorCaller caller, CancellationToken cancellationToken)
     {
         var binding = foundation.Tenant;
         for (var attempt = 0; attempt < 3; attempt++)
@@ -67,9 +59,8 @@ internal sealed class KernelWorkflowInstanceDeletionService(
             if (run.View is not { } view)
                 return await services.GetRequiredService<WorkflowInstanceDeletionService>().DeleteAsync(workflowExecutionId, cancellationToken);
 
-            if (!StringComparer.Ordinal.Equals(tenant ?? PersistenceScope.DefaultValue, binding.Tenant))
-                throw new RuntimeResourceMissingSignal();
-            var permission = new PermissionEvaluationContext(principal, WorkflowRuntimePermissions.WorkflowRuntimeManage, tenant, run.State);
+            if (!caller.Matches(binding)) throw new RuntimeResourceMissingSignal();
+            var permission = new PermissionEvaluationContext(caller.Principal, WorkflowRuntimePermissions.WorkflowRuntimeManage, caller.Tenant, run.State);
             if (!(await authorization.AuthorizeAsync(permission, cancellationToken)).Succeeded)
                 throw new RuntimeResourceMissingSignal();
             if (view.Selection is not { } selection) throw Changed();
@@ -102,14 +93,6 @@ internal sealed class KernelWorkflowInstanceDeletionService(
 
         throw Changed();
     }
-
-    private static string? SingleTenantClaim(ClaimsPrincipal principal, string claimType) =>
-        principal.FindAll(claimType).Take(2).ToArray() switch
-        {
-            [] => null,
-            [var only] when !string.IsNullOrWhiteSpace(only.Value) => only.Value,
-            _ => throw new RuntimeResourceMissingSignal()
-        };
 
     private static RuntimeRunDeletionRejectedSignal Changed() => new(StatusCodes.Status409Conflict,
         "The run changed before deletion. Refresh its status and retry deletion.");
