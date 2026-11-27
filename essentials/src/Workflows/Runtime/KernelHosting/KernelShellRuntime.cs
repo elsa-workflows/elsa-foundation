@@ -81,9 +81,15 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async ValueTask DisposeAsync()
     {
-        if (_lifetime is not null)
-            await _lifetime.DisposeAsync();
-        _client?.Dispose();
+        try
+        {
+            if (_lifetime is not null)
+                await _lifetime.DisposeAsync();
+        }
+        finally
+        {
+            _client?.Dispose();
+        }
     }
 
     private sealed class ScopedScripts(IServiceScopeFactory scopes) : INativeScripts
