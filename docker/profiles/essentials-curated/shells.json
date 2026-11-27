@@ -92,9 +92,6 @@
           "ActivitiesSequence": {},
           "ActivitiesFlowchart": {},
           "ActivitiesControlFlow": {},
-          "ActivitiesHttp": {},
-          "ActivitiesScheduling": {},
-          "ActivitiesDispatchWorkflowRuntime": {},
           "ActivitiesDispatchWorkflowDesign": {},
           "ActivitiesRuntime": {},
           "ActivitiesGraphRuntime": {},
@@ -113,41 +110,11 @@
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsPublishingEntityFrameworkCore": {},
-          "WorkflowsRuntimeEntityFrameworkCore": {
-            "CacheWorkflowExecutables": true,
-            "WorkflowExecutableCacheCapacity": 256,
-            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
-            "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
-          },
           "WorkflowsRuntimeKernelHosting": {
             "Provider": "SQLite",
             "SqlitePath": "/app/data/elsa-kernel.db",
             "Tenant": "default"
           },
-          "WorkflowsRuntimeApi": {
-            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
-            "WorkflowAlterationPayloadProtectionKeys": {
-              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-            }
-          },
-          "WorkflowsRuntimeResumption": {},
-          "WorkflowsRuntimeScheduling": {},
-          "WorkflowsRuntimeRecurringTriggers": {},
-          "WorkflowsRuntimeHttp": {},
-          "WorkflowsRuntimeCheckpointPersistence": {
-            "Mode": "Balanced",
-            "MaxActivitiesPerCommit": 50
-          },
-          "WorkflowsRuntimeHistory": {},
-          "WorkflowsRuntimeTriggers": {},
-          "WorkflowsRuntimeAttention": {},
-          "StandaloneTriggersApi": {},
-          "StandaloneHttpTriggerAuthoring": {},
-          "StandaloneEventTriggerAuthoring": {},
-          "StandaloneScheduleTriggerAuthoring": {},
-          "StandaloneScheduleTriggers": {},
-          "WorkflowsDashboard": {},
-          "WorkflowsDashboardEntityFrameworkCore": {},
           "Secrets": {
             "EncryptionKey": "development-demo-only-secrets-encryption-key"
           },
@@ -182,7 +149,18 @@
           },
           "StudioPreferences": {},
           "StudioPreferencesApi": {},
-          "StudioPreferencesEntityFrameworkCore": {}
+          "StudioPreferencesEntityFrameworkCore": {},
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
+          },
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
+          },
+          "KernelActivitiesScheduling": {},
+          "WorkflowsRuntimePublicationEntityFrameworkCorePersistence": {
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256
+          }
         },
         "Configuration": {
           "WebRouting": {

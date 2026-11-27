@@ -22,15 +22,11 @@
             "Issuer": "https://localhost:7262/",
             "ConnectionString": "Data Source=elsa-identity.db"
           },
-          "WorkflowsRuntimeApi": {
-            "WorkflowAlterationPayloadProtectionActiveKeyId": "configure-via-environment",
-            "WorkflowAlterationPayloadProtectionKeys": {
-              "development-demo-only": ""
-            }
+          "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {
+            "RecoveryContinuationSigningKey": ""
           },
-          "WorkflowsRuntimeEntityFrameworkCore": {
-            "RecoveryContinuationSigningKey": "",
-            "HierarchyCursorSigningKey": ""
+          "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence": {
+            "RecoveryContinuationSigningKey": ""
           }
         }
       }
