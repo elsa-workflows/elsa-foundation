@@ -126,7 +126,7 @@ internal static class RootScheduleControlChecks
             await UntilAsync(async () =>
             {
                 await using var db = Open();
-                return await db.Subscriptions.AnyAsync(subscription => subscription.Key == HeldEventActor.EventKey, token);
+                return await db.Subscriptions.AnyAsync(subscription => subscription.Wait == HeldEventActor.WaitName, token);
             });
             var now = postgres ? await requests!.ReadClockAsync(token) : await sqlite!.ReadClockAsync(token);
             var reply = await ingress.RequestAsync(scope, new Contract.Target.Event(HeldEventActor.EventKey),
@@ -222,6 +222,7 @@ internal static class RootScheduleControlChecks
     private sealed class HeldEventActor : Contract.IActorType
     {
         internal const string EventKey = "managed-profile-event";
+        internal const string WaitName = "managed-profile-held-wait";
         public string Type => WorkflowActor.WorkflowActor.ActorType;
         public bool Withholds(Contract.ActorHeader header) => false;
 
@@ -232,7 +233,7 @@ internal static class RootScheduleControlChecks
                 if (message.Kind == Contract.Kinds.Start)
                 {
                     turn.State = "{}";
-                    turn.Subscribe(EventKey, "held");
+                    turn.Subscribe(EventKey, WaitName);
                 }
                 else if (message.Event is not null)
                     turn.Reply(message, "managed-event", "accepted");
