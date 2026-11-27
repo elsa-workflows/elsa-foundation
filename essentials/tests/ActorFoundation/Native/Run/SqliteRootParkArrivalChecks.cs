@@ -598,7 +598,7 @@ internal static partial class SqliteHostLifetimeChecks
                 await DriveAsync(owner, root, row => row is { Revision: 2, Status: InstanceStatus.Faulted });
                 Require(await admission.SendAsync(scope.Tenant, root, "released-fault", "repark-fault", null, null, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted } &&
-                    await admission.SendAsync(scope.Tenant, root, "later-release", "later-release", null, null, null, token) is
+                    await admission.SendAsync(scope.Tenant, root, "later-release", "later\0release", null, due: 0, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted }, "the first Park admits two arrivals in release order");
                 await DriveAsync(owner, root, row => row is { Revision: 4, Status: InstanceStatus.Faulted });
                 var selection = (await reads.GetAsync(scope, root, token))!.Selection!;
@@ -610,8 +610,8 @@ internal static partial class SqliteHostLifetimeChecks
                 Require(second is { Items: [{ Kind: "repark-fault", State: Contract.DeliveryState.Arrived }], Next: not null } &&
                     second.Items[0].Handle != first.Items[0].Handle, "the next Park inbox page carries the first arrival's own handle");
                 var third = await parkReads.ReadParkInboxAsync(scope, root, selection, second!.Next, token);
-                Require(third is { Items: [{ Kind: "later-release", State: Contract.DeliveryState.Arrived }], Next: null },
-                    "the exact Park inbox stops after the last kept input");
+                Require(third is { Items: [{ Kind: "later\0release", Due: 0, State: Contract.DeliveryState.Arrived }], Next: null },
+                    "the last kept input preserves its escaped kind and explicit epoch");
                 Require(await admission.OperateAsync(scope.Tenant, root, "repark-recover", Kinds.Recover, selection, null, null, token) is
                     { Outcome: Contract.AdmissionOutcome.Accepted }, "the first Park admits a Recover");
                 var repark = await DriveAsync(owner, root, row => row is { Revision: 6, Status: InstanceStatus.Faulted });

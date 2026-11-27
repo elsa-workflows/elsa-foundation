@@ -22,7 +22,7 @@ public static partial class SqliteEmbeddedHosting
         ArgumentOutOfRangeException.ThrowIfEqual(pageSize, int.MaxValue);
         using var file = AcquireFile(databasePath);
         using var db = KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions, qualificationFormat);
-        return new SqliteEmbeddedReads(file.Path, pageSize, qualificationFormat, db.UsesRootParkArrivals);
+        return new SqliteEmbeddedReads(file.Path, pageSize, qualificationFormat, db.UsesRootParkRecovery);
     }
 
     internal static async ValueTask<T> RunRetentionPolicyAsync<T>(string path, StoreFormat? qualificationFormat,

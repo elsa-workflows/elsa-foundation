@@ -18,29 +18,43 @@ internal static class PostgresRootParkOpeningChecks
     private sealed class RecoveryQuoteObservation : DbCommandInterceptor
     {
         internal bool ObserveNext { get; set; }
+        internal bool ObserveParkInbox { get; set; }
         internal int Quoted { get; private set; }
         internal bool SkippedKeptScan { get; private set; }
         internal bool ArrivalsUseKeptIndex { get; private set; }
+        internal bool ParkInboxUsesKeptIndex { get; private set; }
 
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
             CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            if (!ObserveNext || !command.CommandText.Contains("WITH arrivals AS MATERIALIZED", StringComparison.Ordinal))
+            var inbox = ObserveParkInbox && command.CommandText.Contains("CROSS JOIN (VALUES (0::smallint), (1::smallint))", StringComparison.Ordinal);
+            var quote = ObserveNext && command.CommandText.Contains("WITH arrivals AS MATERIALIZED", StringComparison.Ordinal);
+            if (!inbox && !quote)
                 return result;
-            ObserveNext = false;
             await using var explain = ((NpgsqlCommand)command).Clone();
             explain.CommandText = "EXPLAIN (ANALYZE, FORMAT JSON) " + command.CommandText;
             using var plan = JsonDocument.Parse((string)(await explain.ExecuteScalarAsync(cancellationToken))!);
             var nodes = Plans(plan.RootElement[0].GetProperty("Plan")).ToArray();
+            if (inbox)
+            {
+                ObserveParkInbox = false;
+                ParkInboxUsesKeptIndex = nodes.Any(node => UsesKeptIndex(node) &&
+                    node.GetProperty("Index Cond").GetString()!.Contains("Seq", StringComparison.Ordinal) &&
+                    node.GetProperty("Actual Loops").GetInt32() == 2);
+                return result;
+            }
+            ObserveNext = false;
             var arrivals = nodes.Single(node => node.TryGetProperty("Subplan Name", out var name) && name.GetString() == "CTE arrivals");
             Quoted = arrivals.GetProperty("Actual Rows").GetInt32();
-            ArrivalsUseKeptIndex = Plans(arrivals).Any(node =>
-                node.TryGetProperty("Index Name", out var index) && index.GetString() == "IX_FoundationRootInbox_RecoveryKept" &&
-                node.TryGetProperty("Index Cond", out var condition) && condition.GetString() is { } indexCondition &&
-                indexCondition.Contains("Target", StringComparison.Ordinal) && indexCondition.Contains("FoundationKeptBy", StringComparison.Ordinal));
+            ArrivalsUseKeptIndex = Plans(arrivals).Any(UsesKeptIndex);
             SkippedKeptScan = nodes.Any(node => node.TryGetProperty("Relation Name", out var relation) && relation.GetString() == "Messages" &&
                 node.GetProperty("Actual Loops").GetInt32() == 0);
             return result;
+
+            static bool UsesKeptIndex(JsonElement node) =>
+                node.TryGetProperty("Index Name", out var index) && index.GetString() == "IX_FoundationRootInbox_RecoveryKept" &&
+                node.TryGetProperty("Index Cond", out var condition) && condition.GetString() is { } indexCondition &&
+                indexCondition.Contains("Target", StringComparison.Ordinal) && indexCondition.Contains("FoundationKeptBy", StringComparison.Ordinal);
 
             static IEnumerable<JsonElement> Plans(JsonElement node)
             {
@@ -702,6 +716,10 @@ internal static class PostgresRootParkOpeningChecks
                     FROM generate_series(1, 8192) n;
                     ANALYZE "Messages";
                     """, stop);
+            recoveryQuote.ObserveParkInbox = true;
+            var skewedPage = await parkReads.ReadParkInboxAsync(tenant, actor, selection, firstPage.Next, stop);
+            Check(skewedPage?.Items.Count == 1 && recoveryQuote.ParkInboxUsesKeptIndex,
+                "the exact PostgreSQL page seeks both kept reasons by actor and sequence with 8192 earlier pending rows");
             Check(await Send(actor, "recover-page", new(selection)) is { Outcome: Contract.AdmissionOutcome.Accepted }, "ingress admits a recover of the oversized Park");
             recoveryQuote.ObserveNext = true;
             await using (var pager = await Own("recover-page"))

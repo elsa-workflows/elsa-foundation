@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
@@ -59,8 +60,11 @@ internal static class KernelParkInspection
         { return Results.BadRequest(); }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !context.RequestAborted.IsCancellationRequested)
         { return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
-        catch (TimeoutException)
-        { return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+        catch (Exception error) when (error is TimeoutException or DbException { IsTransient: true })
+        {
+            context.RequestAborted.ThrowIfCancellationRequested();
+            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
     }
 }
 

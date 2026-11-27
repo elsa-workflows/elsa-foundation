@@ -42,7 +42,7 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
         var page = rows.Take(_pageSize).Select(row => new ParkInboxEntry(
             cursor.InboxHandle(DurableKeyJson.Write(new { scope.Tenant, Actor = actor.Id, mark, row.Sequence, row.Id, row.Scope })),
             row.Kind, row.Reason == ParkKeepReason.Consumed ? DeliveryState.Consumed : DeliveryState.Arrived,
-            row.Due > 0 ? row.Due : null, row.Attempts)).ToArray();
+            row.Due, row.Attempts)).ToArray();
 
         PageToken? next = null;
         if (rows.Count > _pageSize)
