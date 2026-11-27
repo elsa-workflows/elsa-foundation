@@ -1495,7 +1495,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts,
                 // A released hold is local to the owner that made it. A cold owner requalifies it by trial.
                 suspect: (!row.PersistedHold || row.ReleasedBy is not null) && Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0,
-                cancellationToken: cancellationToken, persistedHold: row.PersistedHold && row.ReleasedBy is null, releasedBy: row.ReleasedBy, replyTenant: row.ReplyTenant);
+                cancellationToken: cancellationToken, persistedHold: row.PersistedHold && row.ReleasedBy is null, releasedBy: row.ReleasedBy,
+                replyTenant: row.ReplyTenant, rootCreator: row.RootCreator);
             if (!LeaseUsable()) return;
         }
         if (ParkDrainMetrics.Enabled)
@@ -1621,7 +1622,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
 
-    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false, string? requestAddress = null, CancellationToken cancellationToken = default, object? starterAmbient = null, bool persistedHold = false, ParkRelease? releasedBy = null, string? replyTenant = null)
+    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false, string? requestAddress = null, CancellationToken cancellationToken = default, object? starterAmbient = null, bool persistedHold = false, ParkRelease? releasedBy = null, string? replyTenant = null, RootCreatorWitness? rootCreator = null)
     {
         if (message.ReplyTo is not null && (message.Kind == Kinds.JobFinished ||
             message.InboxScope == 0 && message.Kind is Kinds.Job or Kinds.Meet or Kinds.Publish or Kinds.JobDeadline))
@@ -1662,6 +1663,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // process. The process can rule out a death for trial accounting, not reconstruct its lost inbox.
         var item = new Delivery(message, seq)
         {
+            RootCreator = rootCreator,
             StarterAmbient = starterAmbient, ReplyTenant = replyTenant, RequestAddress = requestAddress, Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts,
             Again = again, RecoveryOrdering = again, Held = persistedHold, ReleasedBy = releasedBy, Taken = _cancelling.Contains(message.InboxKey),
             ObservedOrder = Interlocked.Increment(ref _observed), ObservedAt = Now
@@ -3428,6 +3430,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             unit.Held.Where(i => i.Durable && conversions?.ContainsKey(i) != true).Select(i => i.Message.InboxKey).ToList(), unit.Delete)
         {
             FoundationHeader = unit.FoundationHeader,
+            RootCreator = unit is { Expected: null, OpensPark: false } &&
+                unit.Consumed is [{ Durable: true, RootCreator: { } witness } source] && ReferenceEquals(source.Message, witness.Envelope)
+                ? witness : null,
             FoundationRootOperator = unit.Consumed is [var qualified] && qualified.Message.Operator is { } command &&
                 (command.RootHeldReply || unit.Row?.FoundationDispatchHeader is not null ||
                     unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null })

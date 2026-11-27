@@ -64,6 +64,7 @@ public sealed partial class EfStore
         byte[]? Wire, long Growth) : QualifiedRootCheckpoint(1)
     {
         internal RootChildEffects? ChildEffects { get; init; }
+        internal (long BirthTableOid, long Sequence)? CreatorSource { get; init; }
 
         internal override async ValueTask CheckBeforeWriteAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -95,6 +96,8 @@ public sealed partial class EfStore
                     DELETE FROM "Messages" m USING "FoundationRootBirths" b
                     WHERE b."Creator" = m."Id" AND b."Actor" = m."Target" AND b."Partition" = m."Partition"
                         AND b."Reference" = {Reference} AND b."Tenant" = {Tenant} AND b."Creation" = 1
+                        AND ({CreatorSource?.BirthTableOid}::bigint IS NULL OR b.tableoid::bigint = {CreatorSource?.BirthTableOid}
+                            AND m."Seq" = {CreatorSource?.Sequence}::bigint)
                         AND m."Id" = {Creator.InboxKey.Id} AND m."InboxScope" = 0 AND NOT m."Done"
                         AND m."KeepUntil" IS NULL AND m."EventMatch" IS NULL
                         AND m."Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
@@ -136,7 +139,7 @@ public sealed partial class EfStore
     private PreparedRoot PrepareFirstRoot(string tenant, string reference, Message creator,
         PartitionFence fence, string? state, int stateVersion, string typeData,
         IReadOnlyDictionary<string, string> labels, string journal, RootJobState? jobState = null, InstanceStatus status = InstanceStatus.Running, long terminalGrowth = 0,
-        string? creatorFault = null)
+        string? creatorFault = null, (long BirthTableOid, long Sequence)? creatorSource = null)
     {
         RequireQualifiedRootWriter();
         if (creator.Start is not { Creation: { Generation: 1, Previous: 0 } } start ||
@@ -154,7 +157,8 @@ public sealed partial class EfStore
             with { NextJobGeneration = jobState?.NextGeneration };
         // BindCheckpointAsync settles the exact, due creator before this same transaction lands.
         var turn = new TurnCommit(row.Id, row, null, [], [], [], [], [], journal);
-        return new(turn, new FirstRootCheckpoint(tenant, reference, creator, row, header, wire, terminalGrowth));
+        return new(turn, new FirstRootCheckpoint(tenant, reference, creator, row, header, wire, terminalGrowth)
+            { CreatorSource = creatorSource });
     }
 
     private static (string? State, string Header) EncodeRootContent(string model, string definition, string? state,

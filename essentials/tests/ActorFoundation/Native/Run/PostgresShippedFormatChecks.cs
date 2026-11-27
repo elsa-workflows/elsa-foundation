@@ -151,6 +151,7 @@ internal static class PostgresShippedFormatChecks
         }
         var neighbor = await StartAsync("waits", "seen-neighbor");
         var neighborActor = (await clock.ResolveAsync(scope.Tenant, neighbor.Id, stop))!.Id;
+        await CheckCreatorWitnessRollbackAsync(Open, store, scope.Tenant, waiting.Id, waitingActor, stop);
         await CheckRootTrialTakeoverAsync(Open, store, waitingActor, neighborActor, stop);
         var escalated = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var service = new PostgresPreviewHostedService(Open, Node, actor, message => escalated.TrySetResult(message),
@@ -550,6 +551,48 @@ internal static class PostgresShippedFormatChecks
             await SwapIfSelectedAsync(command, cancellationToken);
             return result;
         }
+    }
+
+    private static async Task CheckCreatorWitnessRollbackAsync(Func<KernelDb> open, EfStore store, string tenant,
+        string reference, string actor, CancellationToken token)
+    {
+        var leaseTime = TimeSpan.FromSeconds(15);
+        var partition = new InstanceRef(actor).Partition;
+        var lease = await store.TakeAsync(partition, "creator-witness-owner", leaseTime, token)
+            ?? throw new InvalidOperationException("The creator-witness fixture could not take its partition.");
+        var polled = await store.PollAsync(partition, lease.Epoch, TimeSpan.Zero, 8, token);
+        var admitted = polled.Messages.Single(item => item.Message.Target.Id == actor);
+        var creator = admitted.Message;
+        Require(admitted.RootCreator is { } witness && ReferenceEquals(witness.Envelope, creator),
+            "the PostgreSQL poll issues a witness for its exact admitted creator");
+
+        var start = creator.Start!;
+        var header = new FoundationHeaderChange(start.Definition, new Dictionary<string, string>());
+        var row = new InstanceRow(actor, start.Model, start.Definition, InstanceStatus.Running, "null", 1, null,
+            History: start.History, StateVersion: 1, Creation: 1, StartIntent: CreationProtocol.Fingerprint(start, creator.Kind, creator.Payload))
+        {
+            NextJobGeneration = 0,
+            FoundationDispatchHeader = new(tenant, reference, header)
+        };
+        var turn = new TurnCommit(actor, row, null, [creator.InboxKey], [], [], [], [], "[]")
+            { FoundationHeader = header, RootCreator = admitted.RootCreator };
+        var batch = new CommitBatch(partition, lease.Epoch, lease.Position, leaseTime, false, [turn], [], []);
+
+        // The birth fingerprint omits the reply route. Drift after the poll must reach the full envelope comparison.
+        await using var db = open();
+        var source = db.Messages.Where(message => message.Partition == partition && message.Target == actor && message.InboxScope == 0);
+        var changedRoute = ReplyTo.Of("creator-witness-owner", "changed-registration", long.MaxValue);
+        Require(await source.ExecuteUpdateAsync(update => update.SetProperty(message => message.ReplyTo, changedRoute), token) == 1,
+            "the creator's persisted route changes after the poll");
+        var refused = await store.CommitAsync(batch, token);
+        Require(!refused.Landed &&
+            await source.AnyAsync(message => message.Id == creator.InboxKey.Id && !message.Done && message.ReplyTo == changedRoute, token) &&
+            !await db.Instances.AnyAsync(instance => instance.Id == actor, token) &&
+            !await db.Journal.AnyAsync(entry => entry.Instance == actor, token) &&
+            await db.Partitions.Where(part => part.Id == partition).Select(part => part.Position).SingleAsync(token) == lease.Position,
+            "a drifted polled creator rolls back the checkpoint, journal, message deletion and fence position");
+        await source.ExecuteUpdateAsync(update => update.SetProperty(message => message.ReplyTo, creator.ReplyTo), token);
+        await store.ReleaseAsync(partition, lease.Epoch, token);
     }
 
     private static async Task CheckRootTrialTakeoverAsync(Func<KernelDb> open, EfStore store, string actor, string neighbor,

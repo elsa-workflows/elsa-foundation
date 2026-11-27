@@ -105,6 +105,7 @@ public interface ITurnServices
 public sealed class Delivery(Message message, long seq)
 {
     public Message Message { get; internal set; } = message;
+    internal RootCreatorWitness? RootCreator { get; init; }
     internal string? ReplyTenant;
     internal LiveReplyRoute? ReplyRoute => Message.ReplyTo is { } address ? new(address, ReplyTenant) : null;
     internal object? StarterAmbient;    // belongs to this local creator; never written
