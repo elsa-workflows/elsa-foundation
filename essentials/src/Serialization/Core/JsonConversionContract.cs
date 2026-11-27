@@ -178,7 +178,7 @@ public sealed class JsonConversionContract
     private static object ReadEnumName(string name, Type enumType) =>
         Array.Find(Enum.GetNames(enumType), declared => string.Equals(declared, name, StringComparison.Ordinal)) is { } member
             ? Enum.Parse(enumType, member)
-            : throw new JsonException($"'{name}' is not a member of '{enumType.FullName}'. Expected one of: {string.Join(", ", Enum.GetNames(enumType))}.");
+            : throw new JsonException($"The value is not the name of a member of '{enumType.FullName}'. Expected one of: {string.Join(", ", Enum.GetNames(enumType))}.");
 
     private static bool IsBaselineScalar(Type type) => type == typeof(string) || type == typeof(bool) || type == typeof(char) ||
         type == typeof(byte) || type == typeof(sbyte) || type == typeof(short) || type == typeof(ushort) ||
