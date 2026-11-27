@@ -30,6 +30,7 @@ internal static class KernelAuthoredEventChecks
         registry.Add(Producer("publish", "Order", "first", "second"));
         registry.Add(Producer("empty", "miss", "before-wait"));
         registry.Add(NativeWaiter("rollback-wait", "rollback"));
+        registry.Add(Wf.Workflow("detached-parent", Wf.Dispatch("dispatch", "overflow-publish", wait: false)));
         registry.Add(Wf.Workflow("overflow-publish", Wf.Sequence("root",
             Wf.Publish("fits", "rollback", "must-never-deliver"),
             Wf.Publish("too-large", "overflow", new string('x', 6 * 1024 * 1024)))));
@@ -88,14 +89,30 @@ internal static class KernelAuthoredEventChecks
             await UntilAsync(async () => await WaitCountAsync(scope, "overflow") == 3 &&
                 await WaitCountAsync(scope, "rollback") == 1);
             var oversized = await StartAsync(scope, "overflow-publish", "oversized");
-            await UntilAsync(async () => (await ViewAsync(scope, oversized))?.Park is not null);
-            await using (var db = open())
-                Check((await ViewAsync(scope, oversized))?.Header.Fault?.Contains("atomic delivery limit", StringComparison.Ordinal) == true &&
-                      !await db.Events.AnyAsync(e => e.Key == "authored-events_event:overflow" ||
-                          e.Key == "authored-events_event:rollback", token) &&
-                      !await db.Messages.AnyAsync(m => m.Kind == Contract.Kinds.Event &&
-                          m.Start != null && m.Start.Contains("authored-events_event:rollback"), token),
-                    "an oversized fanout Parks the publisher and rolls back an earlier event receipt and exact delivery in the same turn");
+            await CheckParkAndRollbackAsync(oversized);
+
+            var issuingParent = await StartAsync(scope, "detached-parent", "detached");
+            await UntilAsync(async () => (await ViewAsync(scope, issuingParent))?.Header.Status == Contract.ActorStatus.Finished);
+            string? detached = null;
+            await UntilAsync(async () =>
+            {
+                await using var db = open();
+                detached = await db.Database.SqlQuery<string>($"""
+                    SELECT child."FoundationReference" AS "Value"
+                    FROM "Instances" parent
+                    JOIN "Messages" creator ON creator."Sender" = parent."Id" AND creator."InboxScope" = 0
+                        AND creator."Kind" = {Contract.Kinds.Start} AND creator."Done" AND creator."FoundationKeptBy" = 0
+                    JOIN "Instances" child ON child."Id" = creator."Target" AND child."Partition" = creator."Partition"
+                    WHERE parent."FoundationReference" = {issuingParent.Id} AND parent."FoundationTenant" = {scope.Tenant}
+                        AND child."FoundationTenant" = parent."FoundationTenant" AND child."Parent" IS NULL
+                        AND child."FoundationParkAt" IS NOT NULL
+                    """).SingleOrDefaultAsync(token);
+                return detached is not null;
+            });
+            var detachedPublisher = new Contract.ActorRef(detached!);
+            Check((await ViewAsync(scope, detachedPublisher))?.Header.Parent is null,
+                "the detached creator has the exact retained issuing sender and no parent attachment");
+            await CheckParkAndRollbackAsync(detachedPublisher);
             foreach (var waiter in overflowWaits.Append(rolledBack))
                 if ((await ViewAsync(scope, waiter))?.Header.Status != Contract.ActorStatus.Running)
                     throw new InvalidOperationException("The refused publisher woke a member of the rolled-back cohort.");
@@ -122,6 +139,18 @@ internal static class KernelAuthoredEventChecks
                     .ReadTerminalOutputAsync(scope, actor, view!.Header.EndedAt!.Value, includeValues: true, token);
                 Check(output?.Values is { } values && JsonNode.Parse(values)?["seen"]?.GetValue<string>() == value,
                     "the first exact received event carries the authored payload to the committed output");
+            }
+
+            async Task CheckParkAndRollbackAsync(Contract.ActorRef publisher)
+            {
+                await UntilAsync(async () => (await ViewAsync(scope, publisher))?.Park is not null);
+                await using var db = open();
+                Check((await ViewAsync(scope, publisher))?.Header.Fault?.Contains("atomic delivery limit", StringComparison.Ordinal) == true &&
+                      !await db.Events.AnyAsync(e => e.Key == "authored-events_event:overflow" ||
+                          e.Key == "authored-events_event:rollback", token) &&
+                      !await db.Messages.AnyAsync(m => m.Kind == Contract.Kinds.Event &&
+                          m.Start != null && m.Start.Contains("authored-events_event:rollback"), token),
+                    "an oversized fanout Parks the publisher and rolls back an earlier event receipt and exact delivery in the same turn");
             }
 
             async Task<int> WaitCountAsync(Contract.BoundScope tenant, string key)

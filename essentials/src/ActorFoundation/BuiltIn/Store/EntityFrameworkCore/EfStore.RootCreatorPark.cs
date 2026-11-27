@@ -54,9 +54,10 @@ public sealed partial class EfStore
         if (creator.Start is not { } start) return false;
         var parent = start.Parent;
         var effects = park.ChildEffects;
-        if (parent is null
-            ? !db.UsesRootAuthoredEvents || creator.BindFoundationChild || effects is not null
-            : !db.UsesRootChildren || !creator.BindFoundationChild || effects is null) return false;
+        // A detached creator has the issuing actor in the physical Sender but no attached Parent.
+        if (creator.BindFoundationChild != (creator.Sender is not null) || creator.BindFoundationChild && !db.UsesRootChildren ||
+            (parent is null ? !db.UsesRootAuthoredEvents || effects is not null
+                : creator.Sender != parent || effects is null)) return false;
         var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload);
         if (fingerprint is null) return false;
         var family = RootStatePrefix(db);
@@ -69,7 +70,7 @@ public sealed partial class EfStore
                     AND b."Fingerprint" = {fingerprint} AND m."Id" = {creator.InboxKey.Id} AND m."Target" = {creator.Target.Id}
                     AND m."InboxScope" = 0 AND (m."Due" = 0 OR
                         {parent}::text IS NULL AND m."Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint)
-                    AND m."Sender" IS NOT DISTINCT FROM {parent}::text AND NOT m."Done"
+                    AND m."Sender" IS NOT DISTINCT FROM {creator.Sender}::text AND NOT m."Done"
                     AND m."KeepUntil" IS NULL AND m."ReplyTo" IS NOT DISTINCT FROM {creator.ReplyTo}::text
                     AND m."EventMatch" IS NULL AND m."FoundationKeptBy" IS NULL
                 RETURNING m.*
