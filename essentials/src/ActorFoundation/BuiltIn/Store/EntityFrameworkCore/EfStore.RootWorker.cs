@@ -42,6 +42,8 @@ public sealed partial class EfStore
         internal bool TakesLiveEventWaits { get; set; }
         internal bool MeasuresDueBacklog { get; set; }
         internal bool RefusesParkedOperators { get; set; }
+        internal Func<StartSpec, object, bool>? ValidateInlineMaterial { get; set; }
+        internal object? InlineIssuer { get; set; }
         internal bool SettlesEndedMailbox { get; init; }
         internal Func<Contract.ActorHeader, bool>? AuthoredWithholds { get; init; }
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
@@ -85,6 +87,8 @@ public sealed partial class EfStore
         public bool TakesLiveEventWaits => roots.TakesLiveEventWaits;
         public bool RefusesParkedOperators => roots.RefusesParkedOperators;
         public bool SettlesEndedMailbox => roots.SettlesEndedMailbox;
+        public Func<StartSpec, object, bool>? ValidateInlineMaterial => roots.ValidateInlineMaterial;
+        public object? InlineIssuer => roots.InlineIssuer;
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
             throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
@@ -152,6 +156,11 @@ public sealed partial class EfStore
             if (db.UsesRootChildren != (_rootChildReference is not null))
                 throw new StoreFormatException("The root owner must initialize the child capability before binding.");
             scope.RefusesParkedOperators = db.UsesRootParkedOperators;
+            if (_inlineStarts is { } inline && scope.Discover)
+            {
+                scope.ValidateInlineMaterial = inline.Validate;
+                scope.InlineIssuer = inline;
+            }
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
         }
@@ -458,10 +467,10 @@ public sealed partial class EfStore
             batch.Seen.Count + batch.Trial.Count > 0)
             return await CommitAsync(batch with { Seen = [], Trial = [] }, new PostgresMarkPreparation(this, roots, batch), sentAt, cancellationToken);
 
-        (CommitBatch Batch, RootCheckpoints Checkpoints)? prepared;
+        (CommitBatch Batch, RootCheckpoints Checkpoints, IReadOnlySet<string>? InlineRefusals)? prepared;
         try
         {
-            prepared = await PrepareWorkerBatchAsync(roots, batch, cancellationToken);
+            prepared = await PrepareWorkerBatchAsync(roots, batch, sentAt, cancellationToken);
             if (prepared is { } pending && !await ProtectPreparedChildBirthsAsync(pending.Checkpoints, cancellationToken))
                 return new(false, 0, []);
         }
@@ -473,10 +482,13 @@ public sealed partial class EfStore
             if (ReferenceEquals(error, failure)) throw;
             throw failure;
         }
-        return prepared is { } work ? await CommitAsync(work.Batch, work.Checkpoints, sentAt, cancellationToken) : new(false, 0, []);
+        if (prepared is not { } work) return new(false, 0, []);
+        var committed = await CommitAsync(work.Batch, work.Checkpoints, sentAt, cancellationToken);
+        return committed.Landed && work.InlineRefusals is { Count: > 0 }
+            ? committed with { InlineRefusals = work.InlineRefusals } : committed;
     }
 
-    private async Task<(CommitBatch, RootCheckpoints)?> PrepareWorkerBatchAsync(WorkerRoots roots, CommitBatch batch,
+    private async Task<(CommitBatch, RootCheckpoints, IReadOnlySet<string>?)?> PrepareWorkerBatchAsync(WorkerRoots roots, CommitBatch batch, long sentAt,
         CancellationToken cancellationToken)
     {
         var byPartition = batch.Fenced.ToDictionary(f => f.Partition);
@@ -488,16 +500,45 @@ public sealed partial class EfStore
             batch.Turns.Count > 0 && batch.Turns.All(IsOrdinaryFirstTurn);
         await using var db = shareFirstRootScope ? create() : null;
         await using var pinned = db is not null ? await BeginPinnedRootOperationAsync(db, cancellationToken) : null;
-        roots = observed ?? await ResolveWorkerRootsAsync(roots, batch.Turns.Select(t => t.Instance), batch.Seen.Concat(batch.Trial), cancellationToken, db);
+        roots = observed ?? await ResolveWorkerRootsAsync(roots, batch.Turns.Where(t => t.RootCreator is not InlineRootCreatorWitness)
+            .Select(t => t.Instance), batch.Seen.Concat(batch.Trial), cancellationToken, db);
         var commands = PrepareWorkerMarks(roots, batch, byPartition);
         var turns = new List<TurnCommit>();
         var revisions = new Dictionary<string, long>(StringComparer.Ordinal);
         var positions = batch.Fenced.ToDictionary(fence => fence.Partition, fence => fence.Position);
         var deferred = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string>? inlineRefusals = null;
         foreach (var submitted in batch.Turns)
         {
             var creator = observed is not null ? (PostgresCreatorWitness)submitted.RootCreator! : null;
             var turn = submitted.RootCreator is null ? submitted : submitted with { RootCreator = null };
+            if (submitted.RootCreator is InlineRootCreatorWitness inline)
+            {
+                if (_inlineStarts is not { } installed || !ReferenceEquals(installed, inline.Issuer) ||
+                    inline.Creator.FoundationRootBinding is not { } identity || identity.Tenant != installed.Scope.Tenant ||
+                    identity.Actor != turn.Instance || !byPartition.TryGetValue(inline.Creator.Target.Partition, out var fence))
+                    throw RootShape();
+                TimeSpan Remaining()
+                {
+                    var worker = inline.LeaseRemaining();
+                    var commit = batch.Lease - System.Diagnostics.Stopwatch.GetElapsedTime(sentAt);
+                    return worker < commit ? worker : commit;
+                }
+                var promotion = await PrepareInlineCheckpointAsync(installed.Scope, inline.Creator, turn, fence,
+                    installed.ReceiptWindow, installed.Protect, installed, inline, Remaining, cancellationToken);
+                if (promotion is null)
+                {
+                    (inlineRefusals ??= new(StringComparer.Ordinal)).Add(turn.Instance);
+                    continue;
+                }
+                var position = ++positions[fence.Partition];
+                var initial = (InlineRootCheckpoint)promotion.Checkpoint;
+                turns.Add(promotion.JournalTurn!);
+                revisions.Add(turn.Instance, initial.JournalRevision);
+                deferred.Add(turn.Instance);
+                commands.Add(initial with { Position = position });
+                continue;
+            }
             var root = roots.ForActor(turn.Instance);
             var prepared = await PrepareWorkerTurnAsync(root, turn, FenceFor(root), cancellationToken, db, creator);
             if (prepared is null) return null;
@@ -523,12 +564,12 @@ public sealed partial class EfStore
             if (turn.FoundationTerminalOutput is { } output)
                 commands.Add(new RootTerminalOutputCheckpoint(root, checkpoint.JournalRevision, output));
         }
-        return (batch with { Turns = turns, Seen = [], Trial = [] }, WorkerCheckpoints(commands, revisions, deferred));
+        return (batch with { Turns = turns, Seen = [], Trial = [] }, WorkerCheckpoints(commands, revisions, deferred), inlineRefusals);
     }
 
     private static bool IsOrdinaryFirstTurn(TurnCommit turn) =>
         turn is { Expected: null, Row: not null, FoundationRootOperator: null, OpensPark: false, Delete: false } &&
-        turn.FoundationKept is null or { Count: 0 };
+        turn.RootCreator is not InlineRootCreatorWitness && turn.FoundationKept is null or { Count: 0 };
 
     private WorkerRoots? RootsFromCreatorWitnesses(WorkerRoots scope, CommitBatch batch)
     {

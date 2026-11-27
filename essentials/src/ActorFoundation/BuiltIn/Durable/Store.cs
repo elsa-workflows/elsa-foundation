@@ -59,6 +59,8 @@ public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, 
 
 // A provider can carry exact creator evidence from its poll to its own first-checkpoint writer.
 internal abstract record RootCreatorWitness(Message Envelope);
+internal sealed record InlineRootCreatorWitness(object Issuer, Message Creator, Func<TimeSpan> LeaseRemaining)
+    : RootCreatorWitness(Creator);
 
 /// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
 public sealed record SubscriptionRow(
@@ -239,7 +241,7 @@ public sealed record CommitBatch(
     /// </summary>
     public int Positions => Turns.Count(s => s.Journal is not null);
 
-    internal CommitBatch WithoutRetentionJournals(IReadOnlySet<string>? refused) => refused is { Count: > 0 }
+    internal CommitBatch WithoutActorJournals(IReadOnlySet<string>? refused) => refused is { Count: > 0 }
         ? this with
         {
             Turns = [.. Turns.Select(turn => refused.Contains(turn.Instance) ? turn with { Journal = null } : turn)]
@@ -285,6 +287,7 @@ public sealed record Committed(bool Landed, long Now, IReadOnlyList<long> Seqs)
     internal IReadOnlyList<Stored> ParkExpiries { get; init; } = [];
     internal IReadOnlyList<RetiredReply> RetiredReplies { get; init; } = [];
     internal IReadOnlySet<string>? RetentionRefusals { get; init; }
+    internal IReadOnlySet<string>? InlineRefusals { get; init; }
     internal IReadOnlyDictionary<string, IReadOnlyList<InboxKey>>? CascadeRemovals { get; init; }
 }
 

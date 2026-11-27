@@ -74,8 +74,9 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             (IsRootControl(message) || IsRootRecover(message) ||
                 !IsAuxiliary(row.Model) && roots.SupportsChildren && message.Kind == Durable.Kinds.Terminate && MatchesRootChildInput(row, message));
     bool Durable.IActorType.SupportsFoundationInlineStart(string type) => roots is null && type == actor.Type;
-    bool Durable.IActorType.AcceptsQualifiedInlineStart(Durable.StartSpec spec, object material) =>
-        spec.Model == actor.Type && roots?.ValidateInlineMaterial?.Invoke(spec, material) == true;
+    bool Durable.IActorType.AcceptsQualifiedInlineStart(Durable.StartSpec spec, object material, object? issuer) =>
+        spec.Model == actor.Type && ReferenceEquals(roots?.InlineIssuer, issuer) &&
+        roots?.ValidateInlineMaterial?.Invoke(spec, material) == true;
 
     bool Durable.IActorType.SupportsTrialWithdrawal => roots is null;
     Func<CancellationToken, ValueTask<long>>? Durable.IActorType.RootTimedJobPublicationClock => rootTimedJobClock;

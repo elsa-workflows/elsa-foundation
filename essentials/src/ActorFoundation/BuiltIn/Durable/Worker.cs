@@ -129,7 +129,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly HashSet<Delivery> _schedulerRetries = [];
     private sealed record QueuedInlineRoot(long Generation, Message Creator, int Partition, long Epoch, object Material,
         TaskCompletionSource<InlineRootResult> Receipt);
-    private sealed record PendingInlineRoot(int Partition, TaskCompletionSource<InlineRootResult> Receipt);
+    private sealed record PendingInlineRoot(int Partition, TaskCompletionSource<InlineRootResult> Receipt, InlineRootCreatorWitness? Witness);
     private readonly ConcurrentQueue<(long Generation, Message Creator)> _inlineStarts = new();
     private readonly Queue<QueuedInlineRoot> _queuedInlineRoots = new(); // protected by _turnSync with their pending receipts
     private readonly Dictionary<string, PendingInlineRoot> _pendingInlineRoots = new(StringComparer.Ordinal);
@@ -1598,7 +1598,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     // Only a provider that can commit the first promoted checkpoint may register an inline root.
     // The receipt observes the disposition, not placement in the process queue.
-    internal Task<InlineRootResult>? TryQueueQualifiedInlineStart(Message creator, object material)
+    internal Task<InlineRootResult>? TryQueueQualifiedInlineStart(Message creator, object material, object? issuer = null)
     {
         ArgumentNullException.ThrowIfNull(material);
         if (creator.Start is not { Ephemeral: true, Parent: null, Creation: { Generation: 1, Previous: 0 } creation } start ||
@@ -1609,7 +1609,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             creator.Payload != start.Input || creation.Intent != FoundationRootCreator.OperationDigest(creator.Id) ||
             creator is not { Kind: Kinds.Start, TargetCreation: 1, Sender: null, ReplyTo: null, Due: null, KeepUntil: null,
                 Operator: null, ActorAuthored: false, BindFoundationChild: false } ||
-            !_type.AcceptsQualifiedInlineStart(start, material))
+            !_type.AcceptsQualifiedInlineStart(start, material, issuer))
             return null;
         lock (_turnSync)
         {
@@ -1618,10 +1618,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 !_held.TryGetValue(partition, out var fence) || _pendingInlineRoots.Count >= _options.MaxBatch)
                 return null;
             var receipt = new TaskCompletionSource<InlineRootResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-            if (!_pendingInlineRoots.TryAdd(binding.Actor, new(partition, receipt))) return null;
             var local = creator with { Start = start with { FoundationInlineTenant = binding.Tenant } };
+            var witness = issuer is null ? null : new InlineRootCreatorWitness(issuer, local, Remaining);
+            if (!_pendingInlineRoots.TryAdd(binding.Actor, new(partition, receipt, witness))) return null;
             _queuedInlineRoots.Enqueue(new(generation, local, partition, fence.Epoch, material, receipt));
             return receipt.Task;
+
+            TimeSpan Remaining()
+            {
+                lock (_turnSync)
+                    return _held.TryGetValue(partition, out var current) && current.Epoch == fence.Epoch && CanStartGeneration(generation)
+                        ? TimeSpan.FromMilliseconds(Math.Max(0, Volatile.Read(ref _safeUntil) - _options.Monotonic()))
+                        : TimeSpan.Zero;
+            }
         }
     }
 
@@ -3442,7 +3451,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 await FailAsync(units, generation, cancellationToken);      // the fence matched nothing
                 return Outcome.Lost;
             }
-            batch = batch.WithoutRetentionJournals(result.RetentionRefusals);
+            batch = batch.WithoutActorJournals(result.RetentionRefusals);
+            batch = batch.WithoutActorJournals(result.InlineRefusals);
             lock (_turnSync)
             {
                 // A stand-down on another thread may have reset since the check above: the landed result is then nobody's.
@@ -3482,6 +3492,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var fenced = batch.Fenced.Select(f => f.Partition).ToHashSet();
             foreach (var unit in units)
             {
+                if (result.InlineRefusals?.Contains(unit.Instance) == true)
+                {
+                    lock (_turnSync)
+                    {
+                        ForgetInMemory(unit.Instance);
+                        ReleaseJobRestriction(unit);
+                        RemoveSlot(unit.Instance);
+                        CompleteInlineRoot(unit.Instance, new(InlineRootDisposition.Refused));
+                    }
+                    continue;
+                }
                 if (result.RetentionRefusals?.Contains(unit.Instance) == true)
                 {
                     // The durable decision consumed this command without changing the terminal checkpoint.
@@ -3532,6 +3553,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private static bool HasUnissuedPrivateKind(TurnOutcome unit) =>
         unit.Sent.Exists(Kinds.IsUnissuedPrivate);
 
+    private RootCreatorWitness? PendingPromotion(TurnOutcome unit)
+    {
+        if (unit.Expected is not null || unit.Row?.FoundationInlineBirth is null) return null;
+        lock (_turnSync) return _pendingInlineRoots.GetValueOrDefault(unit.Instance)?.Witness;
+    }
+
     private TurnCommit PrepareCommit(TurnOutcome unit)
     {
         var conversions = unit.HeldJobResults;
@@ -3561,9 +3588,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             unit.Held.Where(i => i.Durable && conversions?.ContainsKey(i) != true).Select(i => i.Message.InboxKey).ToList(), unit.Delete)
         {
             FoundationHeader = unit.FoundationHeader,
-            RootCreator = unit is { Expected: null, OpensPark: false } &&
+            RootCreator = PendingPromotion(unit) ?? (unit is { Expected: null, OpensPark: false } &&
                 unit.Consumed is [{ Durable: true, RootCreator: { } witness } source] && ReferenceEquals(source.Message, witness.Envelope)
-                ? witness : null,
+                ? witness : null),
             FoundationRootOperator = unit.Consumed is [var qualified] && qualified.Message.Operator is { } command &&
                 (command.RootHeldReply || unit.Row?.FoundationDispatchHeader is not null ||
                     unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null })

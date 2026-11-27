@@ -154,65 +154,87 @@ internal static class InlineRootPromotionChecks
                 var workflow = new Workflow("inline-native", Wf.Sequence("steps", Wf.WriteLine("before", "volatile work"),
                     Wf.Delay("one", 100), Wf.Delay("two", 100), Wf.Event("wait", "resume"), Wf.WriteLine("after", "cold work")))
                     { ExecutableSelection = "private-125-material" };
-                var registry = new WorkflowRegistry().Add(workflow);
+                var shortWait = new Workflow("inline-wait", Wf.Event("event", "no-message")) { ExecutableSelection = "private-125-wait" };
+                var pure = new Workflow("inline-pure", Wf.WriteLine("pure", "pure work")) { ExecutableSelection = "private-125-pure" };
+                var registry = new WorkflowRegistry().Add(workflow).Add(shortWait).Add(pure);
                 var model = new NativeExecutionModel(registry, new NativeExecutionOptions { UseStructuralJournal = true });
                 var actor = new WorkflowActorType([model]);
                 var spec = WorkflowActorType.Start(NativeExecutionModel.Start(workflow, Modes.Ephemeral));
-                var address = InstanceRef.In(0, scope.Tenant + "_" + Guid.NewGuid().ToString("N"));
-                var reference = FoundationRootCreator.ReferenceFor(key, scope.Tenant, new(address.Id, 1));
-                var operation = RootPreparedStarts.InlineOperation("later-native");
-                var local = FoundationRootCreator.Create(address, operation, FoundationRootCreator.OperationDigest(operation),
-                    new StartSpec(spec.Type, spec.TypeData, spec.Input, Ephemeral: true), null, null)
-                    with { FoundationRootBinding = (address.Id, scope.Tenant, reference) };
-                long now = 10_000;
+                var physical = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
                 long unwrittenRevision = 0;
                 TurnCommit? checkpoint = null;
                 Message? firstCreator = null;
-                var headers = new QualifiedInlineRootCoreChecks.InlineHeaders((requested, material) =>
+                PendingRootStart? offered = null;
+                string? acceptedWait = null;
+                string? refusedWait = null;
+                string? protectionDeadline = null;
+                var protectorCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var preparedBatchActors = new HashSet<string>(StringComparer.Ordinal);
+                await physical.EnableInlinePromotionAsync(scope, (requested, material) =>
                     WorkflowActorType.DescribeStart(requested.Model, requested.Definition) is { } selected &&
-                    model.MatchesInlineMaterial(material, selected.Workflow, selected.Definition, selected.ExecutableSelection));
-                var inMemory = new InMemoryStore(1, () => now);
-                var memoryOptions = new WorkerOptions
+                    model.MatchesInlineMaterial(material, selected.Workflow, selected.Definition, selected.ExecutableSelection),
+                    async (offer, ct) =>
+                    {
+                        if (offer.Actor.Id == protectionDeadline)
+                        {
+                            try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
+                            finally { if (ct.IsCancellationRequested) protectorCancelled.TrySetResult(); }
+                            return true;
+                        }
+                        if (offer.Actor.Id == acceptedWait || offer.Actor.Id == refusedWait)
+                        {
+                            Check(preparedBatchActors.Contains(acceptedWait!) && preparedBatchActors.Contains(refusedWait!),
+                                "the owner prepares both inline promotions together before protecting either one");
+                            return offer.Actor.Id == acceptedWait;
+                        }
+                        offered = offer;
+                        return RootPreparedStarts.Verify(key, scope, offer.Actor, offer.Issuance) is { FirstRevision: 3 } &&
+                            await CreateCanReadPreparationAsync(offer, ct);
+                    }, TimeSpan.FromHours(1), token);
+                var ownerOptions = new WorkerOptions
                 {
-                    Monotonic = () => now,
                     OnKeptInMemory = (_, revision) => unwrittenRevision = revision,
                     OnPreparedCheckpoint = (sealedTurn, _, accepted) =>
                     {
+                        if (accepted?.FoundationRootBinding is { } identity) preparedBatchActors.Add(identity.Reference);
                         checkpoint = sealedTurn;
                         firstCreator = accepted;
                     }
                 };
-                var self = new FoundationSelfIssuer(seed => FoundationSelfSend.Handle(key, seed), SupportsTimers: true);
-                await using var volatileOwner = new Worker("inline-volatile", 0, inMemory, new ActorAdapter(headers, actor, self), memoryOptions);
-                await volatileOwner.TakeAsync(token);
+                await physical.EnableRootSelfSendsAsync(token);
+                await physical.EnableRootJobsAsync(token);
+                await physical.EnableRootChildrenAsync(token);
+                var firstRoots = postgres ? physical.BindWorkerNode(ActorAdapter.RootWithholding(actor, null))
+                    : physical.BindSqliteWorkerNode(ActorAdapter.RootWithholding(actor, null));
+                await using var owner = Worker.ForNode("inline-promoting-owner", physical,
+                    new ActorAdapter(physical.WorkerHeaders(firstRoots), actor, physical.RootSelfIssuer, physical.RootJobHandle,
+                        rootTimedJobClock: physical.ReadRootTimedJobPublicationTimeAsync), ownerOptions);
+                Check(await owner.GainAsync(0, token), "the real provider owner claims the inline partition");
+                var firstPosition = owner.PositionOf(0);
                 var originalTrace = WriteLine.Out;
                 using var trace = new StringWriter();
                 WriteLine.Out = trace;
                 try
                 {
-                    var receipt = volatileOwner.TryQueueQualifiedInlineStart(local, model.CaptureInlineMaterial(workflow)) ??
+                    var admitted = physical.QueueInlineRoot(owner, "later-native", spec, model.CaptureInlineMaterial(workflow)) ??
                         throw new InvalidOperationException("Could not admit the local fixture turn.");
+                    var reference = admitted.Reference.Id;
+                    var receipt = admitted.Outcome;
                     await WaitUnwrittenAsync(1);
                     Check(!receipt.IsCompleted && checkpoint is null && await store.ReadFirstRootAsync(scope.Tenant, reference, token) is null,
                         "the first short Delay has no physical checkpoint or receipt");
-                    now += 100;
                     await WaitUnwrittenAsync(2);
                     Check(!receipt.IsCompleted && checkpoint is null && await store.ReadFirstRootAsync(scope.Tenant, reference, token) is null,
                         "the second short Delay still has no physical checkpoint or receipt");
-                    now += 100;
-                    while (!receipt.IsCompleted)
-                    {
-                        token.ThrowIfCancellationRequested();
-                        await volatileOwner.RunAsync(token);
-                    }
-                    Check(checkpoint?.Row?.Revision == 3 && firstCreator?.InboxKey == local.InboxKey,
-                        "the existing local owner seals the external wait at logical revision three with its original creator");
-                    var promotedFence = await TakeAsync("inline-promoting-owner");
-                    Check(await PromoteAsync(firstCreator!, checkpoint!, promotedFence, (offer, _) =>
-                        ValueTask.FromResult(RootPreparedStarts.Verify(key, scope, new(reference), offer.Issuance) is { FirstRevision: 3 })) is { Landed: true },
-                        "protocol 125 persists the sealed Native wait without running the workflow again");
+                    await WaitForAsync(receipt);
+                    Check(await receipt == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Running) &&
+                        checkpoint?.Row?.Revision == 3 && checkpoint?.RootCreator is InlineRootCreatorWitness &&
+                        firstCreator?.FoundationRootBinding is { } birth && birth.Reference == reference && offered?.Actor.Id == reference,
+                        "the normal owned batch promotes logical revision three under the original authenticated creator");
+                    var local = firstCreator!;
+                    var address = local.Target;
                     var before = await store.ReadRootSequencedJournalAsync(scope.Tenant, reference, 0, null, 64, token);
-                    Check(before is { CapturedFromStart: true, RetainedFromSequence: 1 } &&
+                    Check(before is { CapturedFromStart: true, RetainedFromSequence: 1 } && owner.PositionOf(0) == firstPosition + 1 &&
                         before.Items.Count > 2 && before.Items.All(entry => entry.Revision == 3) &&
                         await CountAsync(local, "Journal", "Instance", token) == 1 &&
                         await CountAsync(local, "Messages", "Target", token) == 0,
@@ -242,8 +264,34 @@ internal static class InlineRootPromotionChecks
                             SELECT "FirstRevision" AS "Value" FROM "FoundationRootBirths" WHERE "Reference" = {reference}
                             """).SingleAsync(token) == 3, "the physical birth protects the authenticated first revision from update");
                     }
-                    await store.ReleaseAsync(promotedFence.Partition, promotedFence.Epoch, token);
-                    await volatileOwner.ReleaseAsync(token);
+                    var beforeMixed = owner.PositionOf(0);
+                    var refused = Queue("refused-inline-wait", shortWait);
+                    var accepted = Queue("accepted-inline-wait", shortWait);
+                    var writeFree = Queue("write-free-inline", pure);
+                    acceptedWait = accepted.Reference.Id;
+                    refusedWait = refused.Reference.Id;
+                    await WaitForAsync(Task.WhenAll(refused.Outcome, accepted.Outcome, writeFree.Outcome));
+                    Check(await refused.Outcome is { Disposition: InlineRootDisposition.Refused } &&
+                        await accepted.Outcome == new InlineRootResult(InlineRootDisposition.Committed, InstanceStatus.Running) &&
+                        await physical.ReadFirstRootAsync(scope.Tenant, refusedWait, token) is null && owner.PositionOf(0) == beforeMixed + 1,
+                        "the accepted sibling alone advances the position when the first promotion is refused");
+                    await using (var db = Open())
+                    {
+                        var written = await db.Database.SqlQuery<long>($"""
+                            SELECT "Position" AS "Value" FROM "Journal" j JOIN "FoundationRootBirths" b ON b."Actor" = j."Instance"
+                            WHERE b."Reference" = {acceptedWait}
+                            """).SingleAsync(token);
+                        var residue = await db.Database.SqlQuery<int>($"""
+                            SELECT CAST(count(*) AS integer) AS "Value" FROM "FoundationPreparedRootStarts"
+                            WHERE "Reference" = {refusedWait} OR "Reference" = {writeFree.Reference.Id}
+                            """).SingleAsync(token);
+                        Check(written == owner.PositionOf(0) && residue == 0 &&
+                            await writeFree.Outcome == new InlineRootResult(InlineRootDisposition.WriteFree, InstanceStatus.Finished) &&
+                            await physical.ReadFirstRootAsync(scope.Tenant, writeFree.Reference.Id, token) is null &&
+                            trace.ToString().Split("pure work", StringSplitOptions.None).Length == 2,
+                            "the committed journal uses the fenced position and pure completion leaves no durable run or preparation");
+                    }
+                    await owner.ReleaseAsync(token);
 
                     var cold = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned };
                     var coldModel = new NativeExecutionModel(new WorkflowRegistry().Add(workflow),
@@ -265,12 +313,12 @@ internal static class InlineRootPromotionChecks
                     });
                     Check(await coldOwner.GainAsync(0, token), "a fresh physical owner claims the promoted root's partition");
                     var input = Durable.Json.Write(new ResumeStimulus("resume"));
-                    var accepted = postgres
+                    var resumed = postgres
                         ? await new PostgresRootAdmission(Open, TimeSpan.FromHours(1)).AdmitDirectAsync(scope.Tenant, reference,
                             "resume-inline", NativeKinds.Resume, input, cancellationToken: token) == true
                         : (await new SqliteRootAdmission(Open, TimeSpan.FromHours(1), sqliteDefinitions).SendAsync(scope.Tenant,
                             new(reference), "resume-inline", NativeKinds.Resume, input, null, null, token)).Outcome == Contract.AdmissionOutcome.Accepted;
-                    Check(accepted, "trusted ordinary ingress admits the cold continuation");
+                    Check(resumed, "trusted ordinary ingress admits the cold continuation");
                     await coldOwner.WokenAsync(address, token);
                     for (var attempt = 0; attempt < 20 &&
                          await cold.ReadFirstRootAsync(scope.Tenant, reference, token) is { Status: InstanceStatus.Running }; attempt++)
@@ -286,16 +334,57 @@ internal static class InlineRootPromotionChecks
                         trace.ToString().Split("volatile work", StringSplitOptions.None).Length == 2 &&
                         trace.ToString().Split("cold work", StringSplitOptions.None).Length == 2,
                         "a restarted owner appends revision four and does not replay the earlier volatile work");
+                    await coldOwner.ReleaseAsync(token);
+
+                    var shortLease = TimeSpan.FromMilliseconds(1_200);
+                    await using var expiringOwner = Worker.ForNode("inline-protection-deadline", physical,
+                        new ActorAdapter(physical.WorkerHeaders(firstRoots), actor, physical.RootSelfIssuer, physical.RootJobHandle,
+                            rootTimedJobClock: physical.ReadRootTimedJobPublicationTimeAsync), new WorkerOptions { Lease = shortLease });
+                    Check(await expiringOwner.GainAsync(0, token), "a fresh owner claims a short physical lease for the protection deadline");
+                    var blocked = Queue("blocked-protection", shortWait, expiringOwner);
+                    protectionDeadline = blocked.Reference.Id;
+                    using var deadlineCheck = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    deadlineCheck.CancelAfter(shortLease * 4);
+                    while (!blocked.Outcome.IsCompleted)
+                        await expiringOwner.RunAsync(deadlineCheck.Token);
+                    await protectorCancelled.Task.WaitAsync(deadlineCheck.Token);
+                    Check(await blocked.Outcome is { Disposition: InlineRootDisposition.Refused or InlineRootDisposition.OwnershipLost } &&
+                        await physical.ReadFirstRootAsync(scope.Tenant, protectionDeadline, token) is null,
+                        "the owner lease bounds an unresponsive protector and no continuation is reported committed");
                 }
                 finally { WriteLine.Out = originalTrace; }
+
+                (Contract.ActorRef Reference, Task<InlineRootResult> Outcome) Queue(string operation, Workflow selected, Worker? target = null) =>
+                    physical.QueueInlineRoot(target ?? owner, operation, WorkflowActorType.Start(NativeExecutionModel.Start(selected, Modes.Ephemeral)),
+                        model.CaptureInlineMaterial(selected)) ?? throw new InvalidOperationException("Could not queue an inline workflow.");
+
+                async Task WaitForAsync(Task receipt)
+                {
+                    while (!receipt.IsCompleted)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        await owner.RunAsync(token);
+                        if (!receipt.IsCompleted) await Task.Delay(5, token);
+                    }
+                }
 
                 async Task WaitUnwrittenAsync(long revision)
                 {
                     while (unwrittenRevision < revision)
                     {
                         token.ThrowIfCancellationRequested();
-                        await volatileOwner.RunAsync(token);
+                        await owner.RunAsync(token);
+                        if (unwrittenRevision < revision) await Task.Delay(5, token);
                     }
+                }
+
+                async ValueTask<bool> CreateCanReadPreparationAsync(PendingRootStart offer, CancellationToken ct)
+                {
+                    await using var db = Open();
+                    return await db.Database.SqlQuery<int>($"""
+                        SELECT CAST(count(*) AS integer) AS "Value" FROM "FoundationPreparedRootStarts"
+                        WHERE "Reference" = {offer.Actor.Id}
+                        """).SingleAsync(ct) == 1 && await store.ReadFirstRootAsync(scope.Tenant, offer.Actor.Id, ct) is null;
                 }
             }
 

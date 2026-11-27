@@ -146,6 +146,16 @@ internal static class RootPreparedStarts
                 AND (SELECT "SourceReady" FROM source)
             """), token, bindSource);
 
+    internal static Task<long?> ReadInlineDeadlineAsync(KernelDb db, PreparedRootStart stage, CancellationToken token,
+        Func<FormattableString, FormattableString>? bindSource) =>
+        db.Database.SqlQuery<long?>(Bind(db, WithFirstRevision(db, stage, $"""
+            WITH source AS MATERIALIZED (/*prepared-start-source*/)
+            SELECT "Deadline" AS "Value" FROM /*prepared-only*/"FoundationPreparedRootStarts", source
+            WHERE "SourceReady" AND "Tenant" = {stage.Tenant} AND "Reference" = {stage.Reference} AND "Actor" = {stage.Actor}
+                AND "Partition" = {stage.Partition} AND "Operation" = {stage.Operation} AND "Fingerprint" = {stage.Fingerprint}
+                /*first-match*/
+            """), bindSource)).SingleOrDefaultAsync(token);
+
     internal static async Task<bool> AdmitInlineBirthAsync(KernelDb db, PreparedRootStart stage, long now, long until,
         CancellationToken token, Func<FormattableString, FormattableString>? bindSource)
     {
