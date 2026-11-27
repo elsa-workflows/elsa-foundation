@@ -256,7 +256,11 @@ public sealed partial class KernelPublishedExecuteTests
         builder.Services.AddScoped<IRuntimeKernelExecutablePinStore>(services => new FixturePins(
             (IRuntimeKernelExecutablePinStore)ActivatorUtilities.CreateInstance(services, pinDescriptor.ImplementationType!), pinBoundary));
         var api = new WorkflowsRuntimeApiFeature();
-        api.ConfigureServices(builder.Services);
+        var mapRetainedRoutes = !directTests && !inline;
+        if (mapRetainedRoutes)
+            WorkflowsRuntimeKernelApiFeature.ConfigureRetainedServices(builder.Services);
+        else
+            api.ConfigureServices(builder.Services);
         if (recordEphemeralTestCompletion is { } record)
             builder.Services.AddPersistenceModeOptions(new PersistenceModeOptions { RecordCompletion = record });
         var kernelHosting = new WorkflowsRuntimeKernelHostingFeature
@@ -320,8 +324,13 @@ public sealed partial class KernelPublishedExecuteTests
         await using var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
-        WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
-        kernelApi.MapEndpoints(app, app.Environment);
+        if (mapRetainedRoutes)
+            WorkflowsRuntimeKernelApiFeature.MapRetainedEndpoints(app);
+        else
+        {
+            WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
+            kernelApi.MapEndpoints(app, app.Environment);
+        }
         kernelHosting.MapEndpoints(app, app.Environment);
         var scopes = app.Services.GetRequiredService<IServiceScopeFactory>();
         await using var publication = await scopes.CreateAsyncScopeAsync(Scope);

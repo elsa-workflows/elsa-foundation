@@ -58,7 +58,10 @@ internal sealed class KernelWorkflowInstanceDeletionService(
             var run = await runs.GetAsync(workflowExecutionId, cancellationToken) ?? throw new RuntimeResourceMissingSignal();
             if (run.IsolatedReads is not null) throw new RuntimeResourceMissingSignal();
             if (run.View is not { } view)
-                return await services.GetRequiredService<WorkflowInstanceDeletionService>().DeleteAsync(workflowExecutionId, cancellationToken);
+            {
+                var legacy = services.GetService<WorkflowInstanceDeletionService>() ?? throw new RuntimeResourceMissingSignal();
+                return await legacy.DeleteAsync(workflowExecutionId, cancellationToken);
+            }
 
             if (!caller.Matches(binding)) throw new RuntimeResourceMissingSignal();
             var permission = new PermissionEvaluationContext(caller.Principal, WorkflowRuntimePermissions.WorkflowRuntimeManage, caller.Tenant, run.State);
