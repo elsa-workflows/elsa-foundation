@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
+using Elsa.Activities.Scheduling.StandaloneTriggers;
 using Elsa.Events;
 using Elsa.Serialization.Core;
 using Elsa.Tasks.Core;
@@ -13,6 +14,7 @@ using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Scheduling;
+using Elsa.Workflows.Runtime.Scheduling.Options;
 using Kernel.Foundation.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -81,13 +83,14 @@ public sealed partial class KernelStandalonePreparedStartTests
                 Assert.Null(services.GetService<IRuntimeCheckpointCommitStore>());
                 Assert.Null(services.GetService<IWorkflowStartDispatcher>());
                 Assert.Null(services.GetService<IRuntimeIngressWaitTarget>());
+                Assert.Null(services.GetService<IStimulusRouter>());
                 await services.GetRequiredService<RuntimeDbContext>().Database.MigrateAsync(token);
                 var activation = await PublishAsync(services, material, 0, clock.GetUtcNow(), token);
                 var ingress = services.GetRequiredService<IRuntimeIngressDeliveryStore>();
                 Assert.True(ingress.SupportsAdmission);
                 var resource = services.GetRequiredService<ITriggerSourceResourceCommitStore>();
                 Assert.True(resource.SupportsActivatedType("event"));
-                await WriteEventAsync(resource, activation);
+                await WriteTriggerAsync(resource, activation, EventId, "event", new { name = EventId });
                 var accepted = await Source(services).AdmitAsync(signal, token);
                 sourceId = accepted.AdmissionId;
                 Assert.False(accepted.Replayed);
@@ -117,7 +120,8 @@ public sealed partial class KernelStandalonePreparedStartTests
                     var replay = await Source(services).AdmitAsync(signal, token);
                     Assert.True(replay.Replayed);
                     Assert.Equal(sourceId, replay.AdmissionId);
-                    var pump = Assert.Single(host.GetServices<IRecurringTask>());
+                    var tasks = host.GetServices<IRecurringTask>().ToArray();
+                    var pump = Assert.Single(tasks, task => task is not RecurringTriggerPumpTask);
                     await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pump.ExecuteAsync(new(canceled: true)));
                     Assert.Equal(RuntimeRecipientPhase.Pending, Progress(await ReadAsync(services, sourceId, token)).Phase);
                     await RunScheduledSweepAsync(pump, token);
@@ -136,6 +140,8 @@ public sealed partial class KernelStandalonePreparedStartTests
                     Assert.Equal("runner-free", output.RootElement.GetProperty("result").GetString());
                     Assert.Equal(0, (await services.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(1), token)).AttemptedCount);
                     Assert.Equal(finished.Header.Ref, Assert.Single((await reads.ListAsync(owner, new(), cancellationToken: token)).Items).Header.Ref);
+                    var recurrence = Assert.Single(tasks.OfType<RecurringTriggerPumpTask>());
+                    await AssertResourceRecurrenceAsync(services, reads, owner, recurrence, pump);
                 }
                 finally { await StopAsync(shell); }
             }
@@ -189,6 +195,9 @@ public sealed partial class KernelStandalonePreparedStartTests
                     new RuntimePublicationEntityFrameworkCoreFeature().ConfigureServices(services);
                     new RuntimePreparedStandaloneEntityFrameworkCoreFeature().ConfigureServices(services);
                     new WorkflowsRuntimePreparedStandaloneSourcePumpFeature().ConfigureServices(services);
+                    new WorkflowsRuntimePreparedStandaloneRecurringTriggersFeature().ConfigureServices(services);
+                    new PreparedStandaloneScheduleTriggersFeature().ConfigureServices(services);
+                    services.Configure<RecurringTriggerPumpOptions>(options => options.MaxSchedulesPerTick = 1);
                 }
                 else
                 {
@@ -213,24 +222,83 @@ public sealed partial class KernelStandalonePreparedStartTests
                 return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             }
 
-            async Task WriteEventAsync(ITriggerSourceResourceCommitStore store, WorkflowActivationSlot activation)
+            async Task AssertResourceRecurrenceAsync(IServiceProvider services, Contract.IActorReads reads, Contract.BoundScope owner,
+                IRecurringTask recurrence, IRecurringTask sourcePump)
+            {
+                const string cronId = "prepared-standalone-cron";
+                var schedules = services.GetRequiredService<IRecurringTriggerScheduleStore>();
+                var slot = await services.GetRequiredService<IWorkflowActivationAuthority>().FindAsync(Definition, KernelServing.DefaultSlotName, token);
+                var resource = services.GetRequiredService<ITriggerSourceResourceCommitStore>();
+                var now = clock.GetUtcNow();
+                var authored = new RecurringTriggerSchedule(RecurringTriggerSchedule.BuildId(material.Identity.ArtifactId, "legacy-timer"),
+                    material.Identity.ArtifactId, "legacy-timer", "Timer", "legacy-timer-hash", RecurringScheduleKind.Interval, "PT1M", now, now);
+                await schedules.SaveAsync(authored, token);
+                await WriteTriggerAsync(resource, Assert.IsType<WorkflowActivationSlot>(slot), TimerId, "timer", new { interval = "PT1M" });
+                await WriteTriggerAsync(resource, slot!, cronId, "cron", new { expression = "* * * * *", timezone = "UTC" });
+
+                var timer = await ReadResourceScheduleAsync(TimerId);
+                var cron = await ReadResourceScheduleAsync(cronId);
+                var sourceIds = new[] { timer, cron }.Select(schedule => RuntimeStandaloneIngressSource.BuildOutboxItemId(
+                    Persistence, Persistence.Value, schedule.Resource!.TriggerId, schedule.Resource.SourceFamily, schedule.BuildOccurrenceKey())).ToArray();
+                clock.Advance(TimeSpan.FromMinutes(2));
+                var ingress = services.GetRequiredService<IRuntimeIngressDeliveryStore>();
+                await recurrence.ExecuteAsync(token);
+                Assert.Single(await ReadAcceptedAsync());
+                await recurrence.ExecuteAsync(token);
+                Assert.Equal(2, (await ReadAcceptedAsync()).Length);
+
+                var untouched = Assert.IsType<RecurringTriggerScheduleObservation>(await schedules.ObserveAsync(authored.ScheduleId, token));
+                Assert.Equal(authored.NextOccurrence, untouched.Schedule.NextOccurrence);
+                Assert.Equal(0, untouched.FailureCount);
+                Assert.Null(untouched.RetryAt);
+                Assert.False(untouched.OccurrenceInFlight);
+                Assert.True((await ReadResourceScheduleAsync(TimerId)).NextOccurrence > clock.GetUtcNow());
+                Assert.True((await ReadResourceScheduleAsync(cronId)).NextOccurrence > clock.GetUtcNow());
+                await sourcePump.ExecuteAsync(token);
+                foreach (var id in sourceIds)
+                {
+                    var delivered = await ReadAsync(services, id, token);
+                    var receipt = Assert.IsType<RuntimeTargetAcceptanceReceipt>(Progress(delivered).Receipt);
+                    Assert.Equal(RuntimeTargetAcceptanceKind.PreparedActorBirth, receipt.Kind);
+                    Assert.Equal(current.Identity, receipt.Material);
+                    await WaitForAsync(reads, owner, new(receipt.EvidenceId),
+                        actor => actor.Header.Status == Contract.ActorStatus.Finished, token);
+                }
+                Assert.Equal(3, (await reads.ListAsync(owner, new(), cancellationToken: token)).Items.Count);
+
+                async ValueTask<RecurringTriggerSchedule> ReadResourceScheduleAsync(string id) =>
+                    Assert.IsType<RecurringTriggerSchedule>(await schedules.FindAsync(
+                        RecurringTriggerSchedule.BuildResourceId(Persistence, id, Persistence.Value), token));
+
+                async Task<RuntimePostCommitOutboxItem[]> ReadAcceptedAsync()
+                {
+                    var accepted = new List<RuntimePostCommitOutboxItem>();
+                    foreach (var id in sourceIds)
+                        if (await ingress.FindDeliveryAsync(DeliveryScope, id, token) is { } item)
+                            accepted.Add(item);
+                    return accepted.ToArray();
+                }
+            }
+
+            async Task WriteTriggerAsync<TConfiguration>(ITriggerSourceResourceCommitStore store, WorkflowActivationSlot activation,
+                string id, string type, TConfiguration configuration)
             {
                 var now = clock.GetUtcNow();
                 var origin = new TriggerManagementOrigin(TriggerManagementKind.Studio);
-                var trigger = new StandaloneTrigger(EventId, EventId, "event", 1, JsonSerializer.SerializeToElement(new { name = EventId }),
+                var trigger = new StandaloneTrigger(id, id, type, 1, JsonSerializer.SerializeToElement(configuration),
                     1, 1, 1, TriggerDesiredState.Enabled, origin, now, now, "qualification", tenantId: Persistence.Value);
-                var subscription = new TriggerSubscription(EventId + "-subscription", EventId, Definition, KernelServing.DefaultSlotName, "native",
-                    1, 1, true, [], origin, new(EventId + "-grant", EventId, EventId + "-subscription", Definition, KernelServing.DefaultSlotName,
-                        "native", "event", 1, TriggerGrantStatus.Granted, "qualification", now));
+                var subscription = new TriggerSubscription(id + "-subscription", id, Definition, KernelServing.DefaultSlotName, "native",
+                    1, 1, true, [], origin, new(id + "-grant", id, id + "-subscription", Definition, KernelServing.DefaultSlotName,
+                        "native", type, 1, TriggerGrantStatus.Granted, "qualification", now));
                 var observedTarget = new TriggerTargetObservation(Definition, activation.SlotName, activation.Revision,
                     activation.ActiveActivationId, RuntimeIngressAdmission.ComputeInputContractFingerprint(material.InputContract!),
                     "native", TriggerTargetState.Available);
                 var receipt = await store.CommitAsync(DeliveryScope,
-                    new("neutral-create", "neutral-create", "qualification", null, trigger, [subscription])
+                    new(id + "-neutral-create", id + "-neutral-create", "qualification", null, trigger, [subscription])
                     {
                         ObservedTargets = [observedTarget]
                     }, [], token);
-                Assert.Equal((EventId, 1L), (receipt.TriggerId, receipt.Revision));
+                Assert.Equal((id, 1L), (receipt.TriggerId, receipt.Revision));
             }
         }
         finally { directory?.Delete(recursive: true); }
