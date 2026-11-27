@@ -66,7 +66,7 @@ public static partial class SqliteEmbeddedHosting
             if (protectRootStart is not { } protect)
                 throw new InvalidOperationException("Configure SQLite root start protection before binding one-way starts.");
             return new BoundProtectedRootStarts(actorType,
-                (operation, spec, token, caller) => admission.StartProtectedOneWayAsync(scope, operation, spec, protect, token, caller));
+                (operation, spec, token, _) => admission.StartProtectedOneWayAsync(scope, operation, spec, protect, token));
         }
 
         internal Task<RootStartProof> ConfirmHeldStartAsync(Contract.BoundScope scope, Contract.ActorRef actor, string issuance,
@@ -153,9 +153,10 @@ public static partial class SqliteEmbeddedHosting
             }
 
             internal Task<Contract.Admission?> StartProtectedOneWayAsync(Contract.BoundScope scope, string operation, StartSpec spec,
-                ProtectRootStartAsync protect, CancellationToken token, CancellationToken caller) =>
-                // Observe the worker's result if the budget expires across its synchronous SQLite COMMIT.
-                OnWriteWorkerAsync(() => StartProtectedAsync(scope.Tenant, operation, spec, null, protect, token), caller);
+                ProtectRootStartAsync protect, CancellationToken token) =>
+                // SQLite's bounded synchronous commands may keep running briefly after cancellation. Await
+                // the worker so the linked token stays registered and a landed COMMIT can still be reported.
+                Task.Run(() => StartProtectedAsync(scope.Tenant, operation, spec, null, protect, token), token);
 
             private async Task<Contract.Admission?> StartProtectedAsync(string tenant, string operation, StartSpec spec,
                 HeldRootRequest? request, ProtectRootStartAsync protect, CancellationToken token)

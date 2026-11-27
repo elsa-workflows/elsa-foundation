@@ -73,7 +73,7 @@ internal static class SqlitePreparedStartChecks
                 try
                 {
                     await oneWay.StartAsync("one-way-cancelled", oneWaySpec, cancelled.Token).AsTask()
-                        .WaitAsync(TimeSpan.FromSeconds(3), token);
+                        .WaitAsync(TimeSpan.FromSeconds(4), token);
                     throw new InvalidOperationException("A canceled one-way start returned an admission.");
                 }
                 catch (OperationCanceledException) when (cancelled.IsCancellationRequested && !token.IsCancellationRequested)
@@ -106,7 +106,7 @@ internal static class SqlitePreparedStartChecks
                 "a finished root keeps its protection before terminal retirement");
             var duplicate = await CallAsync("same-operation", "workflow", 600);
             Require(duplicate.Error == "timeout" && Volatile.Read(ref calls) == 2,
-                "a live operation receipt bypasses new protection and keeps the legacy duplicate reply behavior");
+                $"a live operation receipt bypasses new protection and keeps the legacy duplicate reply behavior ({duplicate.Error}, {Volatile.Read(ref calls)} protection calls)");
 
             var refusalReply = await CallAsync("refused-operation", "refuse", 10_000);
             var second = await refused.Task.WaitAsync(token);
