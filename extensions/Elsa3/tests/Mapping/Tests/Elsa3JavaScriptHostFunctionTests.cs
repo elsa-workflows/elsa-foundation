@@ -1057,20 +1057,116 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     }
 
     /// <summary>
-    /// A source the .NET-usage analysis cannot parse (a legacy octal literal, refused itself) still never lists a .NET type
-    /// name as a component.
+    /// Sloppy-only syntax (a legacy octal literal, refused itself) does not hide .NET usage: the strict parse of the
+    /// .NET-usage analysis fails, and the sloppy script re-analysis then reads the source as Elsa 3 parsed it, so a .NET
+    /// type is still refused as .NET usage and never listed as a component, and the other custom globals still are.
     /// </summary>
     [Theory]
-    [InlineData("(() => { const n = 010; return new StringBuilder().toString(); })()")]
-    [InlineData("(() => { const n = 010; return Uri.EscapeDataString('a') + lookupCustomer(n); })()")]
-    public async Task A_dotnet_type_in_an_unparsable_source_is_no_component(string expression)
+    [InlineData("(() => { const n = 010; return new StringBuilder().toString(); })()", null)]
+    [InlineData("(() => { const n = 010; return Uri.EscapeDataString('a') + lookupCustomer(n); })()", "lookupCustomer")]
+    public async Task A_dotnet_type_next_to_sloppy_only_syntax_is_dotnet_usage_not_a_component(string expression, string? component)
     {
         var result = await ConvertTextAsync(expression);
 
         Assert.False(result.Succeeded);
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape);
-        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing &&
-                                                                diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName] is "StringBuilder" or "Uri");
+        Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
+        var components = result.Diagnostics
+            .Where(diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing)
+            .Select(diagnostic => diagnostic.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName])
+            .ToArray();
+        Assert.Equal(component is null ? [] : [component], components);
+    }
+
+    /// <summary>
+    /// A .NET-style use of a listed component's result is .NET usage too: whatever host function takes the component
+    /// over, its Elsa 4 result has no .NET members. It is refused on every path alike, whatever else the script does.
+    /// </summary>
+    [Theory]
+    [InlineData("lookup(1).Format()", false)]
+    [InlineData("lookup(1).Format() + DateTime.Now", true)]
+    [InlineData("(() => { var c = lookup(1); return c.Name.ToUpper(); })()", false)]
+    public async Task A_dotnet_use_of_a_listed_component_is_dotnet_usage_too(string expression, bool refusesDateTime)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("lookup", missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
+        Assert.Equal(refusesDateTime, result.Diagnostics.Any(diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
+                                                                          diagnostic.Message.Contains("'DateTime'", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData("var c = getCustomer(); return c.Name.ToUpper();", "getCustomer")]
+    [InlineData("return lookup(1).Format();", "lookup")]
+    [InlineData("return lookup(1).Format() + DateTime.Now;", "lookup")]
+    public async Task A_dotnet_use_of_a_listed_component_in_a_script_is_dotnet_usage_too(string script, string component)
+    {
+        var result = await ConvertScriptAsync(script);
+
+        Assert.False(result.Succeeded);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal(component, missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
+    }
+
+    /// <summary>With the component matched to a host function, the .NET-style use of its result is still refused.</summary>
+    [Fact]
+    public async Task A_dotnet_use_of_a_matched_component_is_dotnet_usage()
+    {
+        var result = await ConvertTextAsync("lookup(1).Format()", [new JavaScriptHostFunctionDeclaration("acme.lookup", _ => default)]);
+
+        Assert.False(result.Succeeded);
+        Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.DotNetMemberUsage);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+    }
+
+    /// <summary>
+    /// A generated-getter shape that names no variable or input is the undeclared custom global it was: a change of a
+    /// member of its result is no change of an ambient value, so it is listed as a component, not refused as a mutation.
+    /// </summary>
+    [Theory]
+    [InlineData("(() => { getCustomer().name = 'x'; return 1; })()")]
+    [InlineData("(() => { getCustomer().count++; return 1; })()")]
+    public async Task A_member_change_of_an_unresolved_getter_lists_the_getter(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        AssertUnresolvedGetterChange(result);
+    }
+
+    [Theory]
+    [InlineData("getCustomer().name = 'x'; return 1;")]
+    [InlineData("getCustomer().count++; return 1;")]
+    [InlineData("var c = getCustomer(); c.name = 'x'; return 1;")]
+    public async Task A_member_change_of_an_unresolved_getter_in_a_script_lists_the_getter(string script)
+    {
+        var result = await ConvertScriptAsync(script);
+
+        AssertUnresolvedGetterChange(result);
+    }
+
+    /// <summary>A getter that resolves to a variable is still an ambient value: changing its member in an expression is refused as that.</summary>
+    [Fact]
+    public async Task A_member_change_of_a_resolved_getter_is_an_ambient_mutation()
+    {
+        var result = await ConvertTextAsync("(() => { getCustomer().name = 'x'; return 1; })()",
+            new Elsa3Variable { Id = "v", Name = "Customer", TypeName = "Object" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
+                                                          diagnostic.Message.Contains("ambient value", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+    }
+
+    private static void AssertUnresolvedGetterChange(Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition> result)
+    {
+        Assert.False(result.Succeeded);
+        var missing = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
+        Assert.Equal("getCustomer", missing.Metadata[Elsa3MigrationDiagnosticMetadataKeys.ComponentName]);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Message.Contains("ambient value", StringComparison.Ordinal));
     }
 
     /// <summary>A .NET type Elsa 3 put into the engine is refused as unavailable once, not again as .NET usage, next to another refusal.</summary>
@@ -1357,6 +1453,65 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         var result = await ConvertTextAsync("((helper) => { if (true) { function helper() { return 1; } } return helper; })(2)");
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    /// <summary>
+    /// Annex B with a declaration of the same name in an enclosing scope: Elsa 3 resolved a use outside the block, in the
+    /// enclosing function, to the block's function (or undefined); Elsa 4's strict mode resolves it to the outer
+    /// declaration. The block function is refused with the move.
+    /// </summary>
+    [Theory]
+    [InlineData("(() => { function outer() { if (true) { function h() {} } return h; } var h = 1; return outer(); })()")]
+    [InlineData("(() => { function outer() { if (true) { function h() {} } return h; } let h = 1; return outer(); })()")]
+    [InlineData("(() => { function outer() { if (true) { function h() {} } return () => h; } const h = 1; return outer()(); })()")]
+    [InlineData("(() => { function outer() { if (true) { function h() {} } return h; } function h() {} return outer(); })()")]
+    [InlineData("(() => { function outer() { if (true) { function h() {} } return h; } class h {} return outer(); })()")]
+    [InlineData("(() => { function outer() { let h = 1; { { function h() {} } return h; } } return outer(); })()")]
+    [InlineData("((h) => { function outer() { if (true) { function h() {} } return h; } return outer(); })(1)")]
+    public async Task A_block_function_over_an_outer_declaration_of_its_name_is_refused_with_the_move(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        AssertBlockFunctionOverOuterDeclaration(result);
+    }
+
+    [Theory]
+    [InlineData("function outer(c) { if (c) { function h() {} } return h; } var h = 1; return outer(true);")]
+    [InlineData("function outer(c) { switch (c) { case 1: function h() {} } return h; } let h = 1; return outer(1);")]
+    [InlineData("const h = 1; if (true) { function h() {} } return h;")]
+    public async Task A_block_function_over_an_outer_declaration_in_a_script_is_refused_with_the_move(string script)
+    {
+        var result = await ConvertScriptAsync(script);
+
+        AssertBlockFunctionOverOuterDeclaration(result);
+    }
+
+    /// <summary>A block function used only inside its block is the same function in Elsa 3 and Elsa 4, whatever an outer scope declares.</summary>
+    [Theory]
+    [InlineData("(() => { function outer() { if (true) { function h() { return 1; } return h(); } return 0; } var h = 1; return outer() + h; })()")]
+    [InlineData("(() => { function outer(h) { if (true) { function h() { return 1; } } return h; } var h = 1; return outer(2) + h; })()")]
+    public async Task A_block_function_used_only_inside_its_block_converts_over_an_outer_declaration(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Fact]
+    public async Task A_block_function_used_only_inside_its_block_in_a_script_converts_over_an_outer_declaration()
+    {
+        var result = await ConvertScriptAsync("function outer() { if (true) { function h() { return 1; } return h(); } return 0; } var h = 1; return outer() + h;");
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    private static void AssertBlockFunctionOverOuterDeclaration(Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition> result)
+    {
+        Assert.False(result.Succeeded);
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape);
+        Assert.Contains("'h'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("top of the script", refusal.Guidance, StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.HostFunctionMissing);
     }
 
     /// <summary>A delete operand reads no value: no component (the strict-mode parse refuses the delete itself).</summary>
