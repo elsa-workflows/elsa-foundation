@@ -88,7 +88,10 @@ public sealed record ReusableActivityImportApplyRequest(
     ReusableActivityImportAccessScope? AccessScope = null,
     string? IdempotencyKey = null,
     string? TenantId = null,
-    string? OperationKey = null);
+    string? OperationKey = null)
+{
+    public bool? PublishImportedActivities { get; init; }
+}
 
 /// <param name="Warnings">Conversion warnings of the applied items (runtime differences); the receipt stores them too.</param>
 /// <param name="Publications">The publish phase's states of the reusable versions, also when there is no receipt.</param>
@@ -123,7 +126,10 @@ public sealed record ReusableActivityImportMutation(
     IReadOnlyList<ImportedWorkflow> Workflows,
     ReusableActivityImportAccessScope? AccessScope = null,
     string? IdempotencyKey = null,
-    IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings = null);
+    IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings = null)
+{
+    public bool? PublishImportedActivities { get; init; }
+}
 
 /// <summary>
 /// One reusable Elsa 3 workflow version mapped to a graph activity. <paramref name="Body"/> is the mapped workflow state
@@ -232,6 +238,9 @@ public sealed record ReusableActivityImportReceipt(
     DateTimeOffset CompletedAt,
     IReadOnlyList<ReusableActivityImportSourceReceipt> Sources)
 {
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public bool? PublishImportedActivities { get; init; }
+
     /// <summary>
     /// The conversion warnings of the apply that produced this receipt (runtime differences, spec 236 R-7). Stored with
     /// the receipt, so a replay and a status read return the same warnings (spec 246 D-3).
@@ -265,7 +274,11 @@ public sealed record ReusableActivityImportSourceReceipt(
     ReusableActivityImportResourceDisposition? ActivityDefinitionDisposition,
     ReusableActivityImportResourceDisposition? ActivityVersionDisposition,
     string? ActivityDefinitionNavigationIdentity,
-    string? ActivityVersionNavigationIdentity);
+    string? ActivityVersionNavigationIdentity)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ActivityDraftId { get; init; }
+}
 
 public enum ReusableActivityImportResourceDisposition
 {

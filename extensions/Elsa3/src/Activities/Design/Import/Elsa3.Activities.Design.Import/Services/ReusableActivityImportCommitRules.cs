@@ -9,6 +9,7 @@ namespace Elsa3.Activities.Design.Import.Services;
 public static class ReusableActivityImportCommitRules
 {
     public const string ActivityDefinitionKind = "activityDefinition";
+    public const string DraftReservationKind = "activityDraftPublication";
     public const string ActivityVersionKind = "activityDefinitionVersion";
     public const string WorkflowDefinitionKind = "workflowDefinition";
     public const string WorkflowVersionKind = "workflowDefinitionVersion";
@@ -51,7 +52,7 @@ public static class ReusableActivityImportCommitRules
             x => x.SourceVersionId,
             x => x.SourceDefinitionId,
             StringComparer.Ordinal);
-        return mutation.Workflows.Select(workflow => new ReusableActivityImportDefinitionBinding(
+        var bindings = mutation.Workflows.Select(workflow => new ReusableActivityImportDefinitionBinding(
                 ReusableActivityImportIdentity.DefinitionBinding(WorkflowDefinitionKind, workflow.Definition.Id),
                 WorkflowDefinitionKind,
                 workflow.Definition.Id,
@@ -74,7 +75,13 @@ public static class ReusableActivityImportCommitRules
                     activity.Definition.TenantId,
                     activity.Definition.CreatedAt);
             }))
-            .ToArray();
+            .ToList();
+        if (mutation.PublishImportedActivities.HasValue)
+            foreach (var activity in mutation.Activities)
+                bindings.Add(new(ReusableActivityImportIdentity.DefinitionBinding(DraftReservationKind, activity.Version.DraftId),
+                    DraftReservationKind, activity.Version.DraftId, ActivityVersionKind, activity.Version.Id,
+                    activity.Definition.TenantId, activity.Definition.CreatedAt));
+        return bindings;
     }
 
     /// <summary>
@@ -106,7 +113,10 @@ public static class ReusableActivityImportCommitRules
                 activity is null ? null : Disposition(ActivityDefinitionKind, activity.Definition.Id),
                 activity is null ? null : Disposition(ActivityVersionKind, activity.Version.Id),
                 activity is null ? null : $"/design/activities/definitions/{Uri.EscapeDataString(activity.Definition.Id)}",
-                activity is null ? null : $"/design/activities/versions/{Uri.EscapeDataString(activity.Version.Id)}");
+                activity is null ? null : $"/design/activities/versions/{Uri.EscapeDataString(activity.Version.Id)}")
+            {
+                ActivityDraftId = mutation.PublishImportedActivities.HasValue ? activity?.Version.DraftId : null
+            };
         }).ToArray();
         return new(
             ReusableActivityImportIdentity.Receipt(idempotencyKey, scope),
@@ -117,13 +127,14 @@ public static class ReusableActivityImportCommitRules
                 mutation.CollectionId,
                 mutation.PlanId,
                 mutation.SourceVersionIds,
-                scope),
+                scope, mutation.PublishImportedActivities),
             scope,
             ReusableActivityImportReceiptStatus.Applied,
             completedAt,
             sources)
         {
             // Stored with the receipt, so a replay and a status read return them (spec 246 D-3).
+            PublishImportedActivities = mutation.PublishImportedActivities,
             Warnings = mutation.Warnings is { Count: > 0 } warnings ? warnings : null
         };
 
@@ -146,7 +157,7 @@ public static class ReusableActivityImportCommitRules
             mutation.CollectionId,
             mutation.PlanId,
             mutation.SourceVersionIds,
-            scope);
+            scope, mutation.PublishImportedActivities);
         return StringComparer.Ordinal.Equals(receipt.CollectionHandle, mutation.CollectionId) &&
                StringComparer.Ordinal.Equals(receipt.PlanId, mutation.PlanId) &&
                StringComparer.Ordinal.Equals(receipt.SelectionFingerprint, expectedFingerprint) &&

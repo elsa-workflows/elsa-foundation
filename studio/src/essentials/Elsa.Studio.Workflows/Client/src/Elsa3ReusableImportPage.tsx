@@ -42,7 +42,6 @@ import {
   isElsa3ReusableImportItemSelectable,
   isPublishedImportStatus,
   publicationForSource,
-  summarizeImportPublications,
   startElsa3ReusableImportAnalysis,
   summarizeElsa3ReusableImportSelection,
   type Elsa3ReusableImportAnalysis
@@ -80,6 +79,7 @@ export function Elsa3ReusableImportPage({
   const [expandedSelection, setExpandedSelection] = useState<Set<string>>(new Set());
   const [readiness, setReadiness] = useState<Elsa3ReusableImportSelectionReadiness | null>(null);
   const [selectionStatus, setSelectionStatus] = useState<OperationStatus>("idle");
+  const [publishImportedActivities, setPublishImportedActivities] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [applyStatus, setApplyStatus] = useState<OperationStatus>("idle");
@@ -350,6 +350,7 @@ export function Elsa3ReusableImportPage({
   const openReview = () => {
     if (!analysis || !readiness?.isReady || expandedSelection.size === 0 || applyStatus === "loading" || receipt) return;
     reviewedOperationGeneration.current += 1;
+    setPublishImportedActivities(false);
     setReviewOpen(true);
     setIdempotencyKey(createIdempotencyKey());
     setReceipt(null);
@@ -369,7 +370,9 @@ export function Elsa3ReusableImportPage({
         analysis.collectionHandle,
         analysis.planId,
         [...expandedSelection].sort(),
-        idempotencyKey
+        idempotencyKey,
+        undefined,
+        publishImportedActivities
       );
       showReceipt(result, generation);
     } catch (error) {
@@ -380,6 +383,11 @@ export function Elsa3ReusableImportPage({
       }
       if (isExpiredCollectionError(error)) {
         expireCollection();
+        return;
+      }
+      if (error instanceof StudioHttpError && (error.status === 404 || error.status === 501)) {
+        setApplyStatus("failed");
+        setMessage("This server could not apply the collection as drafts. Check that the server supports draft imports and that the collection is still available.");
         return;
       }
       const rejection = atomicRejection(error);
@@ -412,7 +420,9 @@ export function Elsa3ReusableImportPage({
             analysis.collectionHandle,
             analysis.planId,
             [...expandedSelection].sort(),
-            idempotencyKey
+            idempotencyKey,
+            undefined,
+            publishImportedActivities
           );
           showReceipt(result, generation);
           return;
@@ -651,6 +661,15 @@ export function Elsa3ReusableImportPage({
             <div><dt>Ordinary Workflows</dt><dd>{summary.ordinaryWorkflows}</dd></div>
             <div><dt>Exact reusable rewrites</dt><dd>{summary.rewrites}</dd></div>
           </dl>
+          <p>Open the imported workflow drafts to edit and publish them.</p>
+          {summary.activityDefinitions > 0 ? (
+            <label>
+              <input id="elsa3-publish-imported" type="checkbox" checked={publishImportedActivities}
+                disabled={applyStatus !== "idle" || Boolean(receipt)}
+                onChange={event => setPublishImportedActivities(event.target.checked)} /> Publish imported activities now
+              <span> — Leave this unchecked to review the activity drafts before publishing.</span>
+            </label>
+          ) : null}
           <div className="elsa3-import-actions">
             <StudioButton type="button" variant="primary" onClick={() => void apply()} disabled={applyStatus === "loading" || Boolean(receipt)}>
               {applyStatus === "loading" ? <LoaderCircle size={14} className="wf-spin" /> : <ShieldCheck size={14} />}
@@ -795,9 +814,8 @@ function ImportReceipt({
   receipt: Elsa3ReusableImportReceipt;
   navigate(path: string): void;
 }) {
-  const publicationSummary = summarizeImportPublications(receipt.publications);
   const outcomeLabel = importReceiptOutcomeLabel(receipt);
-  const unpublished = publicationSummary.outcome === "partlyPublished" || publicationSummary.outcome === "nonePublished";
+  const unpublished = importReceiptNeedsResume(receipt);
   return (
     <section
       className={unpublished ? "elsa3-import-partial-receipt" : "elsa3-import-receipt"}
@@ -830,15 +848,19 @@ function ImportReceipt({
                 <strong>{source.sourceDefinitionId} · {source.sourceVersionId}</strong>
                 <span>{importResourceDisposition(source.workflowDisposition)}</span>
               </header>
-              {publication ? <PublicationState publication={publication} /> : null}
+              {publication && (receipt.publishImportedActivities !== false || isPublishedImportStatus(publication.status)) ? <PublicationState publication={publication} /> : null}
               <div className="elsa3-import-actions">
                 <StudioButton
                   type="button"
                   onClick={() => navigate(`/workflows/definitions?definition=${encodeURIComponent(source.workflowDefinitionId)}&version=${encodeURIComponent(source.workflowVersionId)}`)}
                 >
-                  <Network size={14} /> Open {source.activityDefinitionId ? "wrapper " : ""}Workflow
+                  <Network size={14} /> {receipt.publishImportedActivities != null ? "Open workflow draft" : `Open ${source.activityDefinitionId ? "wrapper " : ""}Workflow`}
                 </StudioButton>
-                {source.activityDefinitionId && source.activityDefinitionVersionId ? (
+                {source.activityDefinitionId && source.activityDraftId && !isPublishedImportStatus(publication?.status ?? "") ? (
+                  <StudioButton type="button" onClick={() => navigate(`/workflows/activity-definitions?definition=${encodeURIComponent(source.activityDefinitionId!)}&section=editor&draft=${encodeURIComponent(source.activityDraftId!)}`)}>
+                    <Link2 size={14} /> Open activity draft
+                  </StudioButton>
+                ) : source.activityDefinitionId && source.activityDefinitionVersionId ? (
                   <StudioButton
                     type="button"
                     onClick={() => navigate(`/workflows/activity-definitions?definition=${encodeURIComponent(source.activityDefinitionId!)}&section=versions&version=${encodeURIComponent(source.activityDefinitionVersionId!)}`)}

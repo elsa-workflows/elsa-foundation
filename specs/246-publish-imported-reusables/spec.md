@@ -348,3 +348,11 @@ A user with the import permission but not the publish permission tries to apply 
 - Routing the import through `IElsa3NodeConverter` (#2845).
 - Upgrading stores imported before this change.
 - #2717 (spec 247) and spec 235 (Elsa3JsonReconciliation).
+
+## Studio draft-first import (#6002)
+
+After reviewing the dependency closure, an author can apply the import and open an editable current workflow draft for each imported caller. A workflow usable as an activity produces an active activity definition draft. The review offers **Publish imported activities now**, initially clear. Selecting it publishes reusable activities in dependency order under the existing publication checks. Ordinary workflows remain editable for the author's separate publish decision.
+
+The default Apply receipt identifies each active imported activity draft. Subsequent reviewed publication from the activity editor must use the identity already referenced by imported callers. Both choices preserve user edits, tenant scope and idempotency. A repeated request with a different publication choice conflicts. A host lacking draft-first support must fail before writing anything. Existing callers of the version-based Apply operation retain its commit and publication behavior.
+
+Acceptance uses the unmodified Approval ZIP. Check the draft-only receipt, edit navigation, manual activity publication and workflow publication. Repeat on a fresh store with immediate activity publication. Verify the caller's Approved branch executes in Studio. Check replay, multiple selected versions, named draft conflicts and publication authorization.

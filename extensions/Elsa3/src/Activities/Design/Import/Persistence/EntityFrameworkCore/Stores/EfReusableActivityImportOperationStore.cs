@@ -19,8 +19,20 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
 /// </summary>
 public sealed class EfReusableActivityImportOperationStore(
     Elsa3ImportDbContext db,
-    IPersistenceAccessContextAccessor accessContextAccessor) : IReusableActivityImportOperationStore
+    IPersistenceAccessContextAccessor accessContextAccessor) : IReusableActivityImportOperationStore, IImportedActivityDraftReservations
 {
+    public async ValueTask<string?> FindVersionIdAsync(string draftId, CancellationToken cancellationToken)
+    {
+        var tenant = accessContextAccessor.Current.Scope?.Value;
+        var kind = Services.ReusableActivityImportCommitRules.DraftReservationKind;
+        var id = ReusableActivityImportIdentity.DefinitionBinding(kind, draftId);
+        var tenantKey = Elsa3ImportRecordCodec.TenantKey(tenant);
+        var hash = Elsa3ImportRecordCodec.Hash(id);
+        var record = await db.DefinitionBindings.AsNoTracking().SingleOrDefaultAsync(
+            row => row.TenantKey == tenantKey && row.BindingIdHash == hash, cancellationToken);
+        return record is null ? null : Elsa3ImportRecordCodec.ReadBinding(record, id, tenant).SourceDefinitionId;
+    }
+
     public async ValueTask<bool> TryCreateCollectionAsync(
         ReusableActivityImportCollectionHandle collection,
         CancellationToken cancellationToken = default)

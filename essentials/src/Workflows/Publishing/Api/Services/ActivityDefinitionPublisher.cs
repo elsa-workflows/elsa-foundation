@@ -50,6 +50,12 @@ public sealed record PublishActivityDefinitionResult(
     ActivityVersionDiff? Diff,
     IReadOnlyList<ActivityDiagnostic> Diagnostics);
 
+/// <summary>Resolves a trusted identity reserved for a draft referenced before publication.</summary>
+public interface IActivityDraftPublicationIdentity
+{
+    ValueTask<string?> FindVersionIdAsync(string draftId, CancellationToken cancellationToken);
+}
+
 public interface IActivityDefinitionPublisher
 {
     Task<ActivityPublicationPreflightView> PreflightAsync(
@@ -102,7 +108,8 @@ public sealed class ActivityDefinitionPublisher(
     IActivityPublicationCandidateEvaluator? publicationEvaluator = null,
     IActivityPublicationReadiness? readiness = null,
     IActivityCatalogProjection? catalogProjection = null,
-    IActivityPublicationVersionPolicy? versionPolicy = null) : IActivityDefinitionPublisher
+    IActivityPublicationVersionPolicy? versionPolicy = null,
+    IActivityDraftPublicationIdentity? reservedIdentities = null) : IActivityDefinitionPublisher
 {
     private readonly IActivityPublicationReceiptStore _receiptStore =
         receiptStore ?? new InMemoryActivityPublicationReceiptStore();
@@ -304,7 +311,10 @@ public sealed class ActivityDefinitionPublisher(
         // Publish compiles under the version id it commits. Its evidence must still reproduce the token preflight issued
         // under the stable candidate id, so evidence that shifts with the version id is refused as a stale review.
         // A caller that already references the version (an import's plan) may name its id; preflight never sees it.
-        var versionId = request.RequestedVersionId ?? NewId("activity-ver");
+        var reservedId = reservedIdentities is null ? null : await reservedIdentities.FindVersionIdAsync(draft.Id, cancellationToken);
+        if (reservedId is not null && request.RequestedVersionId is not null && reservedId != request.RequestedVersionId)
+            throw new ActivityPublicationRejectedException("activity.publication.identity-conflict", "This draft has a different reserved version identity.", [], true);
+        var versionId = reservedId ?? request.RequestedVersionId ?? NewId("activity-ver");
         var candidate = await EvaluateCandidateAsync(context, versionId, request.Version, cancellationToken);
         EnsureVersionAccepted(context, candidate);
         if (!StringComparer.Ordinal.Equals(candidate.ReviewToken, request.ReviewToken))

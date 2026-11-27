@@ -108,6 +108,20 @@ public interface IReusableActivityExportFileUpload
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>Applies a reviewed collection as current drafts, optionally publishing its activities.</summary>
+public interface IReusableActivityDraftImport
+{
+    ValueTask<ReusableActivityImportReceipt> ApplyDraftsAsync(
+        string collectionHandle, string planId, IReadOnlyCollection<string> selectedSourceVersionIds, string idempotencyKey,
+        ReusableActivityImportAccessScope accessScope, bool publishImportedActivities, CancellationToken cancellationToken);
+}
+
+/// <summary>Looks up the exact version reserved by an imported activity draft for later publication.</summary>
+public interface IImportedActivityDraftReservations
+{
+    ValueTask<string?> FindVersionIdAsync(string draftId, CancellationToken cancellationToken);
+}
+
 public interface IReusableActivityImportOperationService
 {
     /// <summary>

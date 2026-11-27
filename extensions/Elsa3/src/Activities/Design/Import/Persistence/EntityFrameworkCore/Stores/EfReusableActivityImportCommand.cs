@@ -1,4 +1,8 @@
 using System.Runtime.ExceptionServices;
+using Elsa.Locking.Core;
+using Elsa.Primitives.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Design.Core.Models;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -46,7 +50,8 @@ public sealed class EfReusableActivityImportCommand(
     WorkflowsDesignDbContext workflowsDb,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IPayloadSerializer payloadSerializer,
-    TimeProvider? timeProvider = null) : IReusableActivityImportCommand
+    TimeProvider? timeProvider = null,
+    Func<(IIdentityGenerator Identities, IDistributedLockProvider Locks)>? draftServices = null) : IReusableActivityImportCommand
 {
     private static readonly EfWriteRetry WriteConflicts = new(EfWriteRetry.DefaultMaxAttempts, IsWriteConflict);
     private const int ReconciliationReads = 3;
@@ -81,7 +86,7 @@ public sealed class EfReusableActivityImportCommand(
                 return outcome.Result;
 
             var failure = outcome.Failure!;
-            if (failure is SchemaWriteRefusedException)
+            if (failure is SchemaWriteRefusedException or ReusableActivityImportCollisionException)
                 ExceptionDispatchInfo.Throw(failure);
             if (failure is EfCommitOutcomeUnknownException)
                 return await ReconcileUncertainCommitAsync(mutation, scoped, commitAttemptId, failure, cancellationToken);
@@ -325,11 +330,30 @@ public sealed class EfReusableActivityImportCommand(
                 entry.State == EntityState.Unchanged && StringComparer.Ordinal.Equals(entry.Entity.Id, version.Id)), WorkflowVersionKind, version.Id);
         }
 
+        if (plan.PublishImportedActivities.HasValue)
+        {
+            var drafts = new EfWorkflowDefinitionDraftStore(workflows, payloadSerializer, accessContextAccessor);
+            var services = draftServices?.Invoke() ?? throw new InvalidOperationException("Draft import requires workflow authoring services.");
+            var clone = new EfCloneDraftFromVersionCommand(workflows, accessContextAccessor, workflowWriter, services.Identities, payloadSerializer, services.Locks);
+            foreach (var group in plan.WorkflowVersions.GroupBy(version => version.DefinitionId))
+            {
+                var newest = group.MaxBy(version => Version.Parse(version.Version))!;
+                var current = await drafts.FindByWorkflowDefinitionIdAsync(group.Key, cancellationToken);
+                if (current is not null)
+                {
+                    if (current.SourceVersionId != newest.Id)
+                        throw new ReusableActivityImportCollisionException($"Workflow '{group.Key}' has an existing current draft. Review it before importing another version.");
+                    continue;
+                }
+                await clone.Execute(new DesignOperationKey(ReusableActivityImportIdentity.Create("workflow-draft", newest.DefinitionId, newest.Id)), newest.Id, cancellationToken);
+            }
+        }
+
         // Activities Design rows through the lane's own create command and atomic writer: each new definition with
         // its authoring state and the draft of its first imported version, as Studio creates a definition.
         var activityWriter = new EfDesignAtomicWrite(activities, accessContextAccessor, shared.BeginOperationAsync);
         var projections = new EfActivityManagementProjectionWriter(activities, accessContextAccessor);
-        var activityStores = new EfActivityDesignStores(activities, accessContextAccessor, activityWriter, projections);
+        var activityStores = new EfActivityDesignStores(activities, accessContextAccessor, activityWriter, projections, shared.BeginOperationAsync);
         foreach (var definition in preflight.NewDefinitions)
         {
             var candidate = plan.ActivityFor(definition.Id);
@@ -344,6 +368,25 @@ public sealed class EfReusableActivityImportCommand(
                 activities.Entry(draft).State == EntityState.Unchanged,
                 ActivityDefinitionKind,
                 definition.Id);
+        }
+
+        if (plan.PublishImportedActivities == false)
+        {
+            foreach (var version in plan.Versions)
+            {
+                var existing = await ((IActivityDefinitionDraftStore)activityStores).FindAsync(version.DraftId, cancellationToken);
+                if (existing is not null)
+                {
+                    if (existing.Status == ActivityDefinitionDraftStatus.Discarded ||
+                        !ReusableActivityImportPublishPhase.SameContent(existing, version))
+                        throw new ReusableActivityImportCollisionException($"Activity draft '{version.DraftId}' has changed since import. Review it before importing again.");
+                    continue;
+                }
+                var state = await ((IActivityDefinitionAuthoringStore)activityStores).FindAsync(version.DefinitionId, cancellationToken);
+                var head = state?.HeadVersionId;
+                await activityStores.ExecuteAsync(new CreateActivityDraftRequest(
+                    ReusableActivityImportDrafts.Draft(version, head), ReusableActivityImportDrafts.Layout(version), head), cancellationToken);
+            }
         }
     }
 
@@ -496,7 +539,7 @@ public sealed class EfReusableActivityImportCommand(
                 version => version.Id,
                 version => workflowVersions.First(entry => ReferenceEquals(entry.Version, version)).StateJson,
                 StringComparer.Ordinal),
-            CoalesceBindings(bindings, scoped));
+            CoalesceBindings(bindings, scoped), mutation.PublishImportedActivities);
     }
 
     private TEntity WithTenant<TEntity>(TEntity entity, string tenantId) where TEntity : Elsa.Primitives.Entities.TenantEntity
@@ -1014,7 +1057,8 @@ public sealed class EfReusableActivityImportCommand(
         IReadOnlyList<WorkflowDefinition> WorkflowDefinitions,
         IReadOnlyList<WorkflowDefinitionVersion> WorkflowVersions,
         IReadOnlyDictionary<string, string> WorkflowStateJson,
-        IReadOnlyList<ReusableActivityImportDefinitionBinding> Bindings)
+        IReadOnlyList<ReusableActivityImportDefinitionBinding> Bindings,
+        bool? PublishImportedActivities)
     {
         /// <summary>The definition's lowest selected version: activities are in publish order, ascending per definition.</summary>
         public ImportedActivity ActivityFor(string definitionId) =>

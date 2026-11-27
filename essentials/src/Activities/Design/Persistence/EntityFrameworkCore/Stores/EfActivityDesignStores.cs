@@ -34,7 +34,8 @@ public sealed partial class EfActivityDesignStores(
     ActivitiesDesignDbContext db,
     IPersistenceAccessContextAccessor? accessContextAccessor = null,
     IDesignAtomicWriter? atomicWriter = null,
-    EfActivityManagementProjectionWriter? projectionWriter = null) :
+    EfActivityManagementProjectionWriter? projectionWriter = null,
+    Func<CancellationToken, Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>>? draftTransactionFactory = null) :
     IActivityDefinitionStore,
     IActivityDefinitionVersionStore,
     IActivityDefinitionAuthoringStore,
@@ -811,7 +812,7 @@ public sealed partial class EfActivityDesignStores(
         EnsureDesignAuthoring(authoring, request.Draft.DefinitionId, request.Draft.TenantId);
         if (authoring.HeadVersionId != request.ExpectedDefinitionHeadVersionId) throw new DbUpdateConcurrencyException("Activity definition head is stale.");
         if (await ById(Access(db.ActivityDefinitionDrafts), request.Draft.Id).AnyAsync(cancellationToken) || await ByReference(Access(db.ActivityDefinitionDraftLayouts), nameof(ActivityDefinitionDraftLayout.DraftId), request.Draft.Id).AnyAsync(cancellationToken)) throw new InvalidOperationException("Activity draft already exists.");
-        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+        await using var tx = await (draftTransactionFactory?.Invoke(cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         // Advance only the shadow concurrency token inside the same transaction. This conditional
         // EF update fences the authoring read without changing the public authoring timestamp.
         await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionAuthoringStates, authoring, "Activity definition head is stale.", cancellationToken);

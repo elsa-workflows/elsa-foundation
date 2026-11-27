@@ -36,7 +36,10 @@ public static class ReusableActivityImportApi
 
 public sealed record ReusableActivityImportSelectionRequest(string PlanId, IReadOnlyCollection<string> SelectedSourceVersionIds);
 
-public sealed record ReusableActivityImportApplyHttpRequest(string PlanId, IReadOnlyCollection<string> SelectedSourceVersionIds, string IdempotencyKey);
+public sealed record ReusableActivityImportApplyHttpRequest(string PlanId, IReadOnlyCollection<string> SelectedSourceVersionIds, string IdempotencyKey)
+{
+    public bool PublishImportedActivities { get; init; }
+}
 
 internal static class Elsa3ImportPermissions
 {

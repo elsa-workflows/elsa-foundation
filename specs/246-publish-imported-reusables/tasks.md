@@ -454,3 +454,11 @@ no versions. Nothing publishes yet.
 2. Add US2 (real collections with dependencies and several versions), then US3 (visibility and resume).
 3. US4 and US5 complete the decisions D-3 and D-4.
 4. Polish, then the PR as a draft against `main`, after the maintainer says go.
+
+## Studio current drafts (#6002)
+
+- [ ] Carry draft mode through Apply and durable idempotency.
+- [ ] Commit active activity and workflow drafts with their import, preserving edits and exact identities.
+- [ ] Honor the reserved imported version on later reviewed activity publication.
+- [ ] Add the unchecked review control and receipt links to the actual drafts.
+- [ ] Verify both publication choices, replay and collision cases, legacy Apply, and the composed Approved run.
