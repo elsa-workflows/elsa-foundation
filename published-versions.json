@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "5a473ba624b688a0974c7f4a21713b4838cdba4a",
+  "last_publish_commit": "f3a1ce8d6814635213e11a2da66d32bceec1ba1a",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -1264,8 +1264,8 @@
     },
     {
       "package_id": "Elsa3.Activities.Design.Import",
-      "version": "4.0.30-preview",
-      "commit": "54671c514e66bd303ecae710ad282067ee683e5d"
+      "version": "4.0.31-preview",
+      "commit": "f3a1ce8d6814635213e11a2da66d32bceec1ba1a"
     },
     {
       "package_id": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore",
