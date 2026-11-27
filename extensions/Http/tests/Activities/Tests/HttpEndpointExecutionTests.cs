@@ -36,6 +36,19 @@ public sealed class HttpEndpointExecutionTests
     private const string ActivityExecutionId = "actexec-http-endpoint";
 
     [Fact]
+    public async Task A_mid_flow_binding_of_route_values_needs_the_actor_foundation_runtime()
+    {
+        await using var harness = NewHarness();
+
+        var run = await harness.RunAsync(NewEndpointExecutable("callbacks/{id}",
+            routeValues: new Dictionary<string, string> { ["id"] = "42" }), allowPendingWorkOnTerminalCompletion: false,
+            allowAcceptedButFaulted: true);
+
+        Assert.Equal(WorkflowExecutionStatus.Faulted, run.WorkflowState?.Status);
+        Assert.Empty(await BookmarksAsync(harness));
+    }
+
+    [Fact]
     public async Task SurfacesLiveRequest_WhenStimulusInputIsSeeded()
     {
         await using var harness = NewHarness();
@@ -458,7 +471,8 @@ public sealed class HttpEndpointExecutionTests
     private static WorkflowExecutable NewEndpointExecutable(
         string path,
         IReadOnlyCollection<string>? methods = null,
-        bool? canStartWorkflow = null)
+        bool? canStartWorkflow = null,
+        IReadOnlyDictionary<string, string>? routeValues = null)
     {
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
         {
@@ -471,9 +485,12 @@ public sealed class HttpEndpointExecutionTests
             [nameof(HttpEndpoint.RequestSizeLimit)] = TypedLiteralBinding(nameof(HttpEndpoint.RequestSizeLimit), null, typeof(long)),
             [nameof(HttpEndpoint.ResponseMode)] = TypedLiteralBinding(nameof(HttpEndpoint.ResponseMode), ResponseMode.Sync, typeof(ResponseMode))
         };
+        if (routeValues is not null)
+            inputBindings[nameof(HttpEndpoint.RouteValues)] = TypedLiteralBinding(nameof(HttpEndpoint.RouteValues), routeValues,
+                typeof(IReadOnlyDictionary<string, string>));
 
         var descriptorPayload = ClrConstruction.Payload(Serializer, typeof(HttpEndpoint));
-        var contract = EndpointContract(descriptorPayload);
+        var contract = EndpointContract(descriptorPayload, routeValues is not null);
 
         var node = new ExecutableNode(
             executableNodeId: NodeId,
@@ -567,15 +584,15 @@ public sealed class HttpEndpointExecutionTests
             incidentStrategy: executable.IncidentStrategy);
     }
 
-    private static ActivityContract EndpointContract(JsonElement descriptorPayload) =>
+    private static ActivityContract EndpointContract(JsonElement descriptorPayload, bool hasRouteValues) =>
         new(
             HttpEndpoint.ActivityType,
             "1.0.0",
             ClrConstruction.DescriptorType,
             descriptorPayload,
-            new[]
-            {
+            [
                 InputContract(nameof(HttpEndpoint.Path), typeof(string), isRequired: true),
+                .. hasRouteValues ? new[] { InputContract(nameof(HttpEndpoint.RouteValues), typeof(IReadOnlyDictionary<string, string>)) } : [],
                 InputContract(nameof(HttpEndpoint.SupportedMethods), typeof(ICollection<string>)),
                 InputContract(nameof(HttpEndpoint.CanStartWorkflow), typeof(bool)),
                 InputContract(nameof(HttpEndpoint.Authorize), typeof(bool)),
@@ -587,7 +604,7 @@ public sealed class HttpEndpointExecutionTests
                     typeof(ResponseMode),
                     hasDefault: true,
                     defaultValue: JsonSerializer.SerializeToElement("Sync"))
-            },
+            ],
             new ActivityResultContract(
                 ValueType(typeof(HttpEndpointResult)),
                 isRequired: true,

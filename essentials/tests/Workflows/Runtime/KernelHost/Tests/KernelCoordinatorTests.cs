@@ -746,6 +746,30 @@ public sealed class KernelCoordinatorTests
     }
 
     [Fact]
+    public async Task A_published_wait_needs_a_literal_template_and_cannot_claim_a_start_shape()
+    {
+        var host = new Host();
+        Assert.True((await host.ActivateAsync(Approvals("approvals@1"), "approvals-1")).Succeeded);
+        var computed = ExecutableOf("computed@1", "computed", Sequence("root", Node("wait", Types.HttpEndpoint,
+            [Expression("Path", "JavaScript", "'computed'", "String"), Literal("CanStartWorkflow", false)])));
+
+        var unmappable = await host.ActivateAsync(computed, "computed-1");
+
+        Assert.Equal(WorkflowActivationStep.Mapping, unmappable.FailedStep);
+        Assert.Contains("Set a literal Path", unmappable.Diagnostic, StringComparison.Ordinal);
+
+        var conflicting = ExecutableOf("conflicting@1", "conflicting", Sequence("root", Node("wait", Types.HttpEndpoint,
+            [Literal("Path", "approvals/{key}"), Literal("SupportedMethods", new[] { "POST" }),
+                Literal("RouteValues", new Dictionary<string, string> { ["key"] = "A-7" })])));
+
+        var refused = await host.ActivateAsync(conflicting, "conflicting-1");
+
+        Assert.False(refused.Succeeded);
+        Assert.Contains("are a start and a wait", refused.Diagnostic, StringComparison.Ordinal);
+        Assert.Equal("approvals@1", KernelHttpEdge.Route(host.Serving, "POST", "/approvals/A-7")?.Route?.Workflow);
+    }
+
+    [Fact]
     public async Task The_edge_starts_the_workflow_a_start_route_serves_with_the_request_as_its_trigger()
     {
         var host = new Host(capabilities: StartRoutesOnly);
@@ -765,18 +789,23 @@ public sealed class KernelCoordinatorTests
     }
 
     [Fact]
-    public async Task The_edge_serves_no_wait_route_no_other_method_and_no_unknown_path()
+    public async Task The_edge_resolves_a_served_wait_and_refuses_another_method_or_unknown_path()
     {
-        // A host whose edge would serve waits still maps them; this edge matches start routes only.
         var host = new Host();
         await host.ActivateAsync(Decisions("decisions@1"), "decisions-1");
 
-        Assert.Null(KernelHttpEdge.Route(host.Serving, "POST", "/decisions"));
+        var match = Assert.IsType<Native.NativeHttpRouteMatch>(KernelHttpEdge.Route(host.Serving, "POST", "/decisions"));
+        var request = new Native.HttpRequest("POST", "/workflows/http/decisions");
+        Assert.Equal("http:POST:decisions", KernelHttpEdge.Wait(host.Serving, match, request)?.Key);
         Assert.NotNull(KernelHttpEdge.Route(host.Serving, "POST", "/approvals/A-7"));
         Assert.Null(KernelHttpEdge.Match(host.Serving, new Native.HttpRequest("POST", "/x"), "/decisions"));
         Assert.Null(KernelHttpEdge.Match(host.Serving, new Native.HttpRequest("GET", "/x"), "/approvals/A-7"));
         Assert.Null(KernelHttpEdge.Match(host.Serving, new Native.HttpRequest("POST", "/x"), "/unknown"));
         Assert.Equal(404, KernelHttpEdge.NotFound.StatusCode);
+
+        Assert.True((await host.DeactivateAsync(Decisions("decisions@1"))).Succeeded);
+        Assert.Null(KernelHttpEdge.Wait(host.Serving, match, request));
+        Assert.Null(KernelHttpEdge.Route(host.Serving, "POST", "/decisions"));
     }
 
     [Fact]
