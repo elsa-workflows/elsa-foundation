@@ -11,6 +11,15 @@ public interface IRuntimeKernelScheduleOccurrenceRetirementStore
     ValueTask<IReadOnlyList<RuntimeKernelScheduleMaterializedOccurrence>> ListMaterializedAsync(TriggerScope scope,
         RuntimeKernelScheduleOccurrenceCursor? after, int limit, CancellationToken cancellationToken = default);
 
+    /// <summary>Reads the inclusive end of a retirement pass, or null when there are no materialized pins.</summary>
+    ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadMaterializedTailAsync(TriggerScope scope,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    /// <summary>Reads a page of materialized pins through the end captured at the start of this pass.</summary>
+    ValueTask<IReadOnlyList<RuntimeKernelScheduleMaterializedOccurrence>> ListMaterializedAsync(TriggerScope scope,
+        RuntimeKernelScheduleOccurrenceCursor? after, RuntimeKernelScheduleOccurrenceCursor through, int limit,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
     /// <summary>Removes the pin and scrubs the accepted start when its exact physical retirement is confirmed.</summary>
     /// <param name="occurrence">The immutable accepted occurrence.</param>
     /// <param name="actorReference">The exact materialized actor reference.</param>

@@ -81,12 +81,14 @@ internal sealed class KernelScheduleReconciliationWorker
             do
             {
                 token.ThrowIfCancellationRequested();
-                await ScanPageAsync(controls, ReadControlsAsync, "control scan", token);
+                await ScanPageAsync(controls, ReadControlTailAsync, ReadControlsAsync, "control scan", token);
                 for (var i = 0; i < _occurrenceScopes.Length; i++)
                 {
                     var scope = _occurrenceScopes[i];
-                    await ScanPageAsync(pending[i], (after, ct) => ReadPendingAsync(scope, after, ct), "occurrence delivery scan", token);
-                    await ScanPageAsync(retired[i], (after, ct) => ReadRetirementAsync(scope, after, ct), "occurrence retirement scan", token);
+                    await ScanPageAsync(pending[i], ct => ReadPendingTailAsync(scope, ct),
+                        (after, through, ct) => ReadPendingAsync(scope, after, through, ct), "occurrence delivery scan", token);
+                    await ScanPageAsync(retired[i], ct => ReadMaterializedTailAsync(scope, ct),
+                        (after, through, ct) => ReadRetirementAsync(scope, after, through, ct), "occurrence retirement scan", token);
                 }
             } while (await timer.WaitForNextTickAsync(token));
         }
@@ -94,11 +96,14 @@ internal sealed class KernelScheduleReconciliationWorker
         finally { Volatile.Write(ref _running, 0); }
     }
 
-    private async ValueTask<string?> ReadControlsAsync(string? after, CancellationToken token)
+    private ValueTask<string?> ReadControlTailAsync(CancellationToken token) =>
+        WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleControlReader>().ReadTailAsync(_controlScope, token));
+
+    private async ValueTask<string?> ReadControlsAsync(string? after, string through, CancellationToken token)
     {
         using var read = Limit(token);
         var page = await WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleControlReader>()
-            .ListAsync(_controlScope, after, PageSize, read.Token));
+            .ListAsync(_controlScope, after, through, PageSize, read.Token));
         RequirePage(page.Items.Count);
         foreach (var control in page.Items)
             await VisitAsync(ct => ApplyControlAsync(control, ct), "apply control", control.ScheduleKey, token);
@@ -134,12 +139,15 @@ internal sealed class KernelScheduleReconciliationWorker
             Refused("apply control", control.ScheduleKey, result.Reason);
     }
 
+    private ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadPendingTailAsync(TriggerScope scope, CancellationToken token) =>
+        WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleOccurrenceDeliveryStore>().ReadPendingTailAsync(scope, token));
+
     private async ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadPendingAsync(TriggerScope scope,
-        RuntimeKernelScheduleOccurrenceCursor? after, CancellationToken token)
+        RuntimeKernelScheduleOccurrenceCursor? after, RuntimeKernelScheduleOccurrenceCursor through, CancellationToken token)
     {
         using var read = Limit(token);
         var items = await WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleOccurrenceDeliveryStore>()
-            .ListPendingAsync(scope, after, PageSize, read.Token));
+            .ListPendingAsync(scope, after, through, PageSize, read.Token));
         RequirePage(items.Count);
         foreach (var item in items)
             await VisitAsync(ct => DeliverAsync(scope, item.Occurrence, ct), "admit occurrence", item.Occurrence.Id, token);
@@ -169,12 +177,15 @@ internal sealed class KernelScheduleReconciliationWorker
             .MarkMaterializedAsync(occurrence, actor.Id, token);
     }
 
+    private ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadMaterializedTailAsync(TriggerScope scope, CancellationToken token) =>
+        WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleOccurrenceRetirementStore>().ReadMaterializedTailAsync(scope, token));
+
     private async ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadRetirementAsync(TriggerScope scope,
-        RuntimeKernelScheduleOccurrenceCursor? after, CancellationToken token)
+        RuntimeKernelScheduleOccurrenceCursor? after, RuntimeKernelScheduleOccurrenceCursor through, CancellationToken token)
     {
         using var read = Limit(token);
         var items = await WithRuntimeAsync(services => services.GetRequiredService<IRuntimeKernelScheduleOccurrenceRetirementStore>()
-            .ListMaterializedAsync(scope, after, PageSize, read.Token));
+            .ListMaterializedAsync(scope, after, through, PageSize, read.Token));
         RequirePage(items.Count);
         foreach (var item in items)
             await VisitAsync(ct => RetireAsync(scope, item, ct), "confirm retirement", item.Occurrence.Id, token);
@@ -197,16 +208,23 @@ internal sealed class KernelScheduleReconciliationWorker
                 : ValueTask.FromResult(false);
     }
 
-    private async ValueTask ScanPageAsync<T>(Scan<T> scan, Func<T?, CancellationToken, ValueTask<T?>> page, string operation,
-        CancellationToken token) where T : class
+    private async ValueTask ScanPageAsync<T>(Scan<T> scan, Func<CancellationToken, ValueTask<T?>> tail,
+        Func<T?, T, CancellationToken, ValueTask<T?>> page, string operation, CancellationToken token) where T : class
     {
         if (scan.PausedAt is { } paused && _clock.GetElapsedTime(paused) < scan.Pause) return;
         try
         {
-            var next = await page(scan.After, token);
+            if (scan.Through is null)
+            {
+                using var read = Limit(token);
+                scan.Through = await tail(read.Token);
+            }
+            // Keep the initial tail across pages and retries, so a live append cannot postpone replay indefinitely.
+            var next = scan.Through is { } through ? await page(scan.After, through, token) : null;
             if (next is not null && Equals(scan.After, next))
                 throw new InvalidDataException("A schedule reconciliation cursor did not advance.");
             scan.After = next;
+            if (next is null) scan.Through = null;
             scan.PausedAt = next is null ? _clock.GetTimestamp() : null;
         }
         catch (Exception error) when (!token.IsCancellationRequested)
@@ -271,6 +289,7 @@ internal sealed class KernelScheduleReconciliationWorker
     {
         internal TimeSpan Pause => pause;
         internal T? After { get; set; }
+        internal T? Through { get; set; }
         internal long? PausedAt { get; set; }
     }
 }

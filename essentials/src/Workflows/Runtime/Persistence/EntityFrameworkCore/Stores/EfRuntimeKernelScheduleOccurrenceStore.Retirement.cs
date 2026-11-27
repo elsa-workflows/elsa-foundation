@@ -11,10 +11,25 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore
 {
     private sealed record RetiredOccurrence(string OccurrenceId, string ActorReference, string IntentFingerprint);
 
-    public async ValueTask<IReadOnlyList<RuntimeKernelScheduleMaterializedOccurrence>> ListMaterializedAsync(TriggerScope scope,
-        RuntimeKernelScheduleOccurrenceCursor? after, int limit, CancellationToken cancellationToken = default)
+    public ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadMaterializedTailAsync(TriggerScope scope, CancellationToken cancellationToken = default) =>
+        ReadTailAsync(scope, materialized: true, cancellationToken);
+
+    public ValueTask<IReadOnlyList<RuntimeKernelScheduleMaterializedOccurrence>> ListMaterializedAsync(TriggerScope scope,
+        RuntimeKernelScheduleOccurrenceCursor? after, int limit, CancellationToken cancellationToken = default) =>
+        ReadMaterializedPageAsync(scope, after, null, limit, cancellationToken);
+
+    public ValueTask<IReadOnlyList<RuntimeKernelScheduleMaterializedOccurrence>> ListMaterializedAsync(TriggerScope scope,
+        RuntimeKernelScheduleOccurrenceCursor? after, RuntimeKernelScheduleOccurrenceCursor through, int limit,
+        CancellationToken cancellationToken = default)
     {
-        var page = await ReadPageAsync(scope, after, limit, materialized: true, cancellationToken);
+        ArgumentNullException.ThrowIfNull(through);
+        return ReadMaterializedPageAsync(scope, after, through, limit, cancellationToken);
+    }
+
+    private async ValueTask<IReadOnlyList<RuntimeKernelScheduleMaterializedOccurrence>> ReadMaterializedPageAsync(TriggerScope scope,
+        RuntimeKernelScheduleOccurrenceCursor? after, RuntimeKernelScheduleOccurrenceCursor? through, int limit, CancellationToken token)
+    {
+        var page = await ReadPageAsync(scope, after, through, limit, materialized: true, token);
         return page.Select(row => new RuntimeKernelScheduleMaterializedOccurrence(ReadScoped(row, scope), row.ActorReference!,
             new(row.AcceptedAtUtcTicks, row.Id))).ToArray();
     }

@@ -93,18 +93,22 @@ internal static class KernelScheduleReconciliationChecks
                 "the composed acceptor uses a fresh shell scope and preserves the exact named publication alias");
 
             clock.Advance(TimeSpan.FromMinutes(2));
+            await fixture.BoundedPageFinished.Task.WaitAsync(deadline.Token);
+            clock.Advance(TimeSpan.FromMinutes(2));
             await fixture.RetryPass.Task.WaitAsync(deadline.Token);
             Require(fixture.Admissions.GetValueOrDefault(older.Id) == 2 && fixture.Marks[older.Id] == Birth.Id &&
                     fixture.Marks[named.Id] == Birth.Id && fixture.Admissions.GetValueOrDefault(malformed.Id) == 0,
                 "unknown acknowledgement retries the same durable birth, and a malformed pin does not block its page");
-            Require(fixture.Controls.Take(2).SequenceEqual([(Unqualified, (string?)null), (Unqualified, "second-page")]) &&
-                    fixture.Deliveries.Where(read => read.Scope == Unqualified).All(read => read.After is null),
-                "control continuation advances and later pending scans restart from a null cursor");
+            var deliveryPass = fixture.Deliveries.Where(read => read.Scope == Unqualified).Take(3).ToArray();
+            Require(deliveryPass.Length == 3 && deliveryPass[0].After is null && deliveryPass[1].After is not null &&
+                    deliveryPass[2].After is null &&
+                    deliveryPass[0].Through == deliveryPass[1].Through &&
+                    deliveryPass[2].Through.AcceptedAtUtcTicks > deliveryPass[1].Through.AcceptedAtUtcTicks,
+                "a fixed tail ends a pass despite sustained full live pages and an older failed acknowledgement is retried");
             Require(log.Messages.Any(message => message.Contains("superseded", StringComparison.Ordinal)) &&
                     log.Messages.Any(message => message.Contains("different durable intent", StringComparison.Ordinal)) &&
                     log.Messages.Any(message => message.Contains("tenant or exact target", StringComparison.Ordinal)),
                 "superseded, conflicted and wrong-tenant controls have distinct diagnostics");
-            clock.Advance(TimeSpan.FromMinutes(2));
             await fixture.RepeatControl.Task.WaitAsync(deadline.Token);
             Require(fixture.Controls.Take(3).SequenceEqual([(Unqualified, (string?)null), (Unqualified, "second-page"), (Unqualified, (string?)null)]) &&
                     fixture.ControlAttempts == 2 && fixture.ControlWrites == 1,
@@ -177,17 +181,20 @@ internal static class KernelScheduleReconciliationChecks
         internal RuntimeKernelScheduleOccurrence Released => released;
         internal RuntimeKernelScheduleOccurrence Dependent => dependent;
         internal readonly List<(TriggerScope Scope, string? After)> Controls = [];
-        internal readonly List<(TriggerScope Scope, RuntimeKernelScheduleOccurrenceCursor? After)> Deliveries = [];
+        internal readonly List<(TriggerScope Scope, RuntimeKernelScheduleOccurrenceCursor? After, RuntimeKernelScheduleOccurrenceCursor Through)> Deliveries = [];
         internal readonly HashSet<RuntimeKernelScheduleOccurrence> Proofs = [];
         internal readonly HashSet<RuntimeKernelScheduleOccurrence> Retirements = [];
         internal readonly ConcurrentDictionary<string, int> Admissions = new();
         internal readonly ConcurrentDictionary<string, string> Marks = new();
         internal readonly TaskCompletionSource InitialPass = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly TaskCompletionSource BoundedPageFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource RetryPass = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource RepeatControl = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal ScheduleHeader? Header;
         internal RuntimeKernelScheduleOccurrence? Accepted;
         internal bool LostMark;
+        internal int PendingCount = 33;
+        internal bool SawBoundedPage;
         internal int ControlAttempts;
         internal int ControlWrites;
     }
@@ -200,24 +207,67 @@ internal static class KernelScheduleReconciliationChecks
         public ValueTask<RuntimeKernelScheduleControl?> FindAsync(TriggerScope scope, string scheduleKey, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public ValueTask<string?> ReadTailAsync(TriggerScope scope, CancellationToken cancellationToken = default)
+        {
+            CheckScope(scope);
+            return ValueTask.FromResult<string?>("tail");
+        }
+
         public ValueTask<RuntimeKernelScheduleControlPage> ListAsync(TriggerScope scope, string? after, int limit,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<RuntimeKernelScheduleControlPage> ListAsync(TriggerScope scope, string? after, string through, int limit,
             CancellationToken cancellationToken = default)
         {
             CheckScope(scope);
+            Require(through == "tail", "control pages use the selected tail");
             fixture.Controls.Add((scope, after));
             return ValueTask.FromResult(after is null
                 ? new RuntimeKernelScheduleControlPage([fixture.Active, fixture.Stop, fixture.Foreign], "second-page")
                 : new RuntimeKernelScheduleControlPage([fixture.Stop with { Revision = 2 }], null));
         }
 
-        public ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ListPendingAsync(TriggerScope scope, RuntimeKernelScheduleOccurrenceCursor? after,
-            int limit, CancellationToken cancellationToken = default)
+        public ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadPendingTailAsync(TriggerScope scope, CancellationToken cancellationToken = default)
         {
             CheckScope(scope);
-            fixture.Deliveries.Add((scope, after));
-            RuntimeKernelScheduleOccurrence[] items = scope == Named ? [fixture.NamedOffer] : [fixture.Malformed, fixture.Older];
-            return ValueTask.FromResult<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>>(
-                items.Where(item => !fixture.Marks.ContainsKey(item.Id)).Select(item => new RuntimeKernelScheduleOccurrenceDelivery(item, Cursor(item))).ToArray());
+            if (scope != Named) return ValueTask.FromResult<RuntimeKernelScheduleOccurrenceCursor?>(PendingAt(fixture.PendingCount).Cursor);
+            if (fixture.SawBoundedPage) fixture.BoundedPageFinished.TrySetResult();
+            return ValueTask.FromResult(fixture.Marks.ContainsKey(fixture.NamedOffer.Id) ? null : Cursor(fixture.NamedOffer));
+        }
+
+        public ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ListPendingAsync(TriggerScope scope, RuntimeKernelScheduleOccurrenceCursor? after,
+            int limit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>> ListPendingAsync(TriggerScope scope, RuntimeKernelScheduleOccurrenceCursor? after,
+            RuntimeKernelScheduleOccurrenceCursor through, int limit, CancellationToken cancellationToken = default)
+        {
+            CheckScope(scope);
+            fixture.Deliveries.Add((scope, after, through));
+            if (scope == Named)
+                return ValueTask.FromResult<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>>([new(fixture.NamedOffer, Cursor(fixture.NamedOffer))]);
+
+            fixture.PendingCount += limit;
+            var live = Enumerable.Range(1, fixture.PendingCount).Select(PendingAt)
+                .Where(item => after is null || item.Cursor.AcceptedAtUtcTicks > after.AcceptedAtUtcTicks)
+                .Where(item => !fixture.Marks.ContainsKey(item.Occurrence.Id)).Take(limit).ToArray();
+            var page = live.Where(item => item.Cursor.AcceptedAtUtcTicks <= through.AcceptedAtUtcTicks).ToArray();
+            if (after is not null && page.Length < limit)
+            {
+                Require(live.Length == limit, "an unbounded query would still receive a full page from the changing ledger");
+                fixture.SawBoundedPage = true;
+            }
+            return ValueTask.FromResult<IReadOnlyList<RuntimeKernelScheduleOccurrenceDelivery>>(page);
+        }
+
+        private RuntimeKernelScheduleOccurrenceDelivery PendingAt(int position)
+        {
+            var item = position switch
+            {
+                1 => fixture.Older,
+                2 => fixture.Malformed,
+                _ => fixture.Malformed with { ArmGeneration = 100 + position }
+            };
+            return new(item, new(Now.UtcTicks + position, item.Id));
         }
 
         public ValueTask MarkMaterializedAsync(RuntimeKernelScheduleOccurrence occurrence, string actorReference, CancellationToken cancellationToken = default)
@@ -234,10 +284,22 @@ internal static class KernelScheduleReconciliationChecks
         }
 
         public ValueTask<IReadOnlyList<RuntimeKernelScheduleMaterializedOccurrence>> ListMaterializedAsync(TriggerScope scope,
-            RuntimeKernelScheduleOccurrenceCursor? after, int limit, CancellationToken cancellationToken = default)
+            RuntimeKernelScheduleOccurrenceCursor? after, int limit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadMaterializedTailAsync(TriggerScope scope, CancellationToken cancellationToken = default)
         {
             CheckScope(scope);
             var item = scope == Named ? fixture.Dependent : fixture.Released;
+            return ValueTask.FromResult(fixture.Retirements.Contains(item) ? null : Cursor(item));
+        }
+
+        public ValueTask<IReadOnlyList<RuntimeKernelScheduleMaterializedOccurrence>> ListMaterializedAsync(TriggerScope scope,
+            RuntimeKernelScheduleOccurrenceCursor? after, RuntimeKernelScheduleOccurrenceCursor through, int limit,
+            CancellationToken cancellationToken = default)
+        {
+            CheckScope(scope);
+            var item = scope == Named ? fixture.Dependent : fixture.Released;
+            Require(through == Cursor(item), "retirement pages use the selected tail");
             return ValueTask.FromResult<IReadOnlyList<RuntimeKernelScheduleMaterializedOccurrence>>(
                 fixture.Retirements.Contains(item) ? [] : [new(item, Birth.Id, Cursor(item))]);
         }

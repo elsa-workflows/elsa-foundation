@@ -24,21 +24,50 @@ internal sealed class EfRuntimeKernelScheduleControlStore(RuntimeDbContext conte
         return control;
     }
 
-    public async ValueTask<RuntimeKernelScheduleControlPage> ListAsync(TriggerScope scope, string? after, int limit, CancellationToken cancellationToken = default)
+    public async ValueTask<string?> ReadTailAsync(TriggerScope scope, CancellationToken cancellationToken = default) =>
+        await ScopedControls(scope).OrderByDescending(row => row.Id).Select(row => row.Id).FirstOrDefaultAsync(cancellationToken);
+
+    public ValueTask<RuntimeKernelScheduleControlPage> ListAsync(TriggerScope scope, string? after, int limit, CancellationToken cancellationToken = default) =>
+        ReadPageAsync(scope, after, null, limit, cancellationToken);
+
+    public ValueTask<RuntimeKernelScheduleControlPage> ListAsync(TriggerScope scope, string? after, string through, int limit,
+        CancellationToken cancellationToken = default)
     {
-        Bind(scope);
+        ArgumentNullException.ThrowIfNull(through);
+        return ReadPageAsync(scope, after, through, limit, cancellationToken);
+    }
+
+    private async ValueTask<RuntimeKernelScheduleControlPage> ReadPageAsync(TriggerScope scope, string? after, string? through,
+        int limit, CancellationToken cancellationToken)
+    {
+        var query = ScopedControls(scope);
         RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
-        var scopeHash = Hash(scope.Persistence.Value);
-        var tenantHash = TenantHash(scope);
-        var query = context.KernelScheduleControls.AsNoTracking().Where(row => row.ScopeKeyHash == scopeHash && row.TenantKeyHash == tenantHash);
         if (after is not null)
         {
-            if (after.Length != 64 || after.AsSpan().IndexOfAnyExcept("0123456789ABCDEF") >= 0)
-                throw new ArgumentException("Invalid schedule control cursor.", nameof(after));
+            RequireCursor(after, nameof(after));
             query = query.Where(row => string.Compare(row.Id, after) > 0);
+        }
+        if (through is not null)
+        {
+            RequireCursor(through, nameof(through));
+            query = query.Where(row => string.Compare(row.Id, through) <= 0);
         }
         var page = await query.OrderBy(row => row.Id).Take(limit + 1).ToArrayAsync(cancellationToken);
         return new(page.Take(limit).Select(row => ReadScoped(row, scope)).ToArray(), page.Length > limit ? page[limit - 1].Id : null);
+    }
+
+    private IQueryable<RuntimeKernelScheduleControlEntity> ScopedControls(TriggerScope scope)
+    {
+        Bind(scope);
+        var scopeHash = Hash(scope.Persistence.Value);
+        var tenantHash = TenantHash(scope);
+        return context.KernelScheduleControls.AsNoTracking().Where(row => row.ScopeKeyHash == scopeHash && row.TenantKeyHash == tenantHash);
+    }
+
+    private static void RequireCursor(string cursor, string parameter)
+    {
+        if (cursor.Length != 64 || cursor.AsSpan().IndexOfAnyExcept("0123456789ABCDEF") >= 0)
+            throw new ArgumentException("Invalid schedule control cursor.", parameter);
     }
 
     // Only the activation switch stages these rows, after staging the exact reservation in the same Serializable transaction.
