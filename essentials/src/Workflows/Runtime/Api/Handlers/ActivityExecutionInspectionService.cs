@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
@@ -18,7 +19,15 @@ public sealed class ActivityExecutionInspectionService(
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ActivityExecutionId);
 
         var workflowExecution = await workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
-        if (workflowExecution is null || !await authorization.CanInspectStructureAsync(workflowExecution, cancellationToken))
+        return workflowExecution is null ? null : await GetAsync(workflowExecution, request, cancellationToken);
+    }
+
+    /// <summary>Inspects an activity against an exact run already located by the caller.</summary>
+    public async Task<ActivityExecutionInspectionView?> GetAsync(WorkflowExecutionState workflowExecution, GetActivityExecution request,
+        CancellationToken cancellationToken)
+    {
+        if (workflowExecution.WorkflowExecutionId != request.WorkflowExecutionId ||
+            !await authorization.CanInspectStructureAsync(workflowExecution, cancellationToken))
             return null;
 
         var projection = await inspectionStore.FindAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken);

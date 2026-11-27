@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Activity, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleAlert, CircleCheck, CirclePlay, CircleSlash, Pause, RefreshCw } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { StudioButton, StudioSearchInput } from "@elsa-workflows/studio-ui";
@@ -57,10 +57,14 @@ export function meaningfulActivityOutcomes(execution: ActivityExecutionStateSumm
   return outcomes;
 }
 
-function compareSiblingExecutions(
-  left: { execution: ActivityExecutionStateSummary; index: number },
-  right: { execution: ActivityExecutionStateSummary; index: number }
-): number {
+type IndexedActivityExecution = { execution: ActivityExecutionStateSummary; index: number };
+
+function compareSiblingExecutions(left: IndexedActivityExecution, right: IndexedActivityExecution, orderByExecutionSequence: boolean): number {
+  const leftSeq = left.execution.executionSequence;
+  const rightSeq = right.execution.executionSequence;
+  const sequenceOrder = typeof leftSeq === "number" && typeof rightSeq === "number" ? leftSeq - rightSeq : 0;
+  if (orderByExecutionSequence) return sequenceOrder || left.index - right.index;
+
   const startOrder = compareIsoTimestampTicks(
     left.execution.startedAt ?? left.execution.scheduledAt,
     right.execution.startedAt ?? right.execution.scheduledAt
@@ -70,13 +74,7 @@ function compareSiblingExecutions(
   const scheduledOrder = compareIsoTimestampTicks(left.execution.scheduledAt, right.execution.scheduledAt);
   if (scheduledOrder !== 0) return scheduledOrder;
 
-  const leftSeq = left.execution.executionSequence;
-  const rightSeq = right.execution.executionSequence;
-  if (typeof leftSeq === "number" && typeof rightSeq === "number" && leftSeq !== rightSeq) {
-    return leftSeq - rightSeq;
-  }
-
-  return left.index - right.index;
+  return sequenceOrder || left.index - right.index;
 }
 
 function computeActivitySpans(activities: readonly ActivityExecutionStateSummary[]): ReadonlyMap<string, ActivityTimelineSpan> {
@@ -119,10 +117,10 @@ function computeActivitySpans(activities: readonly ActivityExecutionStateSummary
   return spans;
 }
 
-/** Builds a start-time-ordered hierarchical activity tree (pre-order DFS) with capped depth and relative timing spans. */
-export function buildActivityTimelineEntries(activities: readonly ActivityExecutionStateSummary[]): ActivityTimelineEntry[] {
+/** Builds the hierarchical tree with capped depth and relative timing spans. */
+export function buildActivityTimelineEntries(activities: readonly ActivityExecutionStateSummary[], orderByExecutionSequence = false): ActivityTimelineEntry[] {
   const indexed = activities.map((execution, index) => ({ execution, index }));
-  const byId = new Map<string, { execution: ActivityExecutionStateSummary; index: number }>();
+  const byId = new Map<string, IndexedActivityExecution>();
   for (const item of indexed) byId.set(item.execution.activityExecutionId, item);
 
   // Resolve parent links within the loaded set while guarding against cycles.
@@ -150,8 +148,8 @@ export function buildActivityTimelineEntries(activities: readonly ActivityExecut
     resolvedParent.set(id, cyclic ? null : candidate);
   }
 
-  const childrenByParent = new Map<string, Array<{ execution: ActivityExecutionStateSummary; index: number }>>();
-  const roots: Array<{ execution: ActivityExecutionStateSummary; index: number }> = [];
+  const childrenByParent = new Map<string, IndexedActivityExecution[]>();
+  const roots: IndexedActivityExecution[] = [];
   for (const item of indexed) {
     const parentId = resolvedParent.get(item.execution.activityExecutionId) ?? null;
     if (parentId) {
@@ -163,8 +161,10 @@ export function buildActivityTimelineEntries(activities: readonly ActivityExecut
     }
   }
 
-  roots.sort(compareSiblingExecutions);
-  for (const siblings of childrenByParent.values()) siblings.sort(compareSiblingExecutions);
+  const compare = (left: IndexedActivityExecution, right: IndexedActivityExecution) =>
+    compareSiblingExecutions(left, right, orderByExecutionSequence);
+  roots.sort(compare);
+  for (const siblings of childrenByParent.values()) siblings.sort(compare);
 
   const subtreeStats = new Map<string, { descendants: number; faultedDescendants: number }>();
   const computeStats = (id: string): { descendants: number; faultedDescendants: number } => {
@@ -187,7 +187,7 @@ export function buildActivityTimelineEntries(activities: readonly ActivityExecut
   const result: ActivityTimelineEntry[] = [];
 
   const visit = (
-    item: { execution: ActivityExecutionStateSummary; index: number },
+    item: IndexedActivityExecution,
     rawDepth: number,
     parentId: string | null,
     ancestorIds: readonly string[]
@@ -258,6 +258,7 @@ export function RunActivitiesTimeline({
   context,
   workflowExecutionId,
   activities,
+  activitiesDeferred = false,
   hasMoreFromSummary = false,
   selectedActivityExecutionId,
   labelForActivity,
@@ -268,6 +269,7 @@ export function RunActivitiesTimeline({
   context: StudioEndpointContext;
   workflowExecutionId: string;
   activities: readonly ActivityExecutionStateSummary[];
+  activitiesDeferred?: boolean;
   hasMoreFromSummary?: boolean;
   selectedActivityExecutionId?: string | null;
   labelForActivity(execution: ActivityExecutionStateSummary): string;
@@ -315,17 +317,17 @@ export function RunActivitiesTimeline({
   useEffect(() => () => { abortRef.current?.abort(); }, []);
 
   const mergedActivities = useMemo(() => {
+    const browsed = extraActivities.runId === workflowExecutionId ? extraActivities.items : [];
+    if (activitiesDeferred) return browsed;
     const byId = new Map<string, ActivityExecutionStateSummary>();
     for (const item of activities) byId.set(item.activityExecutionId, item);
-    if (extraActivities.runId === workflowExecutionId) {
-      for (const item of extraActivities.items) {
-        if (!byId.has(item.activityExecutionId)) byId.set(item.activityExecutionId, item);
-      }
+    for (const item of browsed) {
+      if (!byId.has(item.activityExecutionId)) byId.set(item.activityExecutionId, item);
     }
     return [...byId.values()];
-  }, [activities, extraActivities, workflowExecutionId]);
+  }, [activities, activitiesDeferred, extraActivities, workflowExecutionId]);
 
-  const entries = useMemo(() => buildActivityTimelineEntries(mergedActivities), [mergedActivities]);
+  const entries = useMemo(() => buildActivityTimelineEntries(mergedActivities, activitiesDeferred), [activitiesDeferred, mergedActivities]);
   entriesRef.current = entries;
 
   // When selection changes externally (e.g. diagram click or playback), reveal it if an ancestor was collapsed.
@@ -406,10 +408,13 @@ export function RunActivitiesTimeline({
 
   const showQuickFilters = counts.faulted > 0 || counts.waiting > 0 || counts.running > 0;
   const currentExtras = extraActivities.runId === workflowExecutionId ? extraActivities : null;
-  const canLoadMore = hasMoreFromSummary && browsingSupported !== false && !(currentExtras?.exhausted);
+  const hasTimelinePage = !activitiesDeferred || Boolean(currentExtras?.nextCursor || currentExtras?.exhausted);
+  const loadingTimeline = activitiesDeferred && !loadMoreError && (loadingMore || !hasTimelinePage);
+  const canLoadMore = activitiesDeferred
+    ? Boolean(currentExtras?.nextCursor)
+    : hasMoreFromSummary && browsingSupported !== false && !(currentExtras?.exhausted);
 
-  const loadMoreActivities = async () => {
-    if (loadingMore || !canLoadMore) return;
+  const loadActivityPage = useCallback(async (cursor?: string | null, replace = false) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -419,29 +424,36 @@ export function RunActivitiesTimeline({
       const page = await browseActivityExecutions(
         context,
         workflowExecutionId,
-        { limit: 100, ...(currentExtras?.nextCursor ? { cursor: currentExtras.nextCursor } : {}) },
+        { limit: 100, ...(cursor ? { cursor } : {}) },
         controller.signal
       );
       if (controller.signal.aborted) return;
       const loaded = page.items.map(item => item.execution);
+      const nextCursor = activitiesDeferred ? page.previousCursor : page.nextCursor;
       setExtraActivities(previous => {
-        const base = previous.runId === workflowExecutionId ? previous.items : [];
+        const base = !replace && previous.runId === workflowExecutionId ? previous.items : [];
         const byId = new Map(base.map(item => [item.activityExecutionId, item]));
         for (const item of loaded) byId.set(item.activityExecutionId, item);
         return {
           runId: workflowExecutionId,
           items: [...byId.values()],
-          nextCursor: page.nextCursor,
-          exhausted: !page.nextCursor
+          nextCursor,
+          exhausted: !nextCursor
         };
       });
       onExecutionsLoaded?.(loaded);
     } catch {
-      if (!controller.signal.aborted) setLoadMoreError("Could not load more activities.");
+      if (!controller.signal.aborted) setLoadMoreError(replace ? "Could not load activities." : "Could not load more activities.");
     } finally {
       if (!controller.signal.aborted) setLoadingMore(false);
     }
-  };
+  }, [activitiesDeferred, context, onExecutionsLoaded, workflowExecutionId]);
+
+  useEffect(() => {
+    if (!activitiesDeferred) return;
+    void loadActivityPage(undefined, true);
+    return () => abortRef.current?.abort();
+  }, [activitiesDeferred, loadActivityPage]);
 
   return (
     <section className="wf-run-activities" aria-label="Executed activities">
@@ -473,7 +485,10 @@ export function RunActivitiesTimeline({
             className="wf-history-toolbar-btn"
             aria-label="Refresh activities"
             title="Refresh activities"
-            onClick={onRefresh}
+            onClick={() => {
+              onRefresh();
+              if (activitiesDeferred) void loadActivityPage(undefined, true);
+            }}
           >
             <RefreshCw size={14} aria-hidden="true" />
           </StudioButton>
@@ -633,9 +648,10 @@ export function RunActivitiesTimeline({
               );
             })}
           </ol>
-        ) : (
-          <p className="wf-history-empty">
-            {isFiltered ? "No activities match the current filter." : "No activities have been recorded for this run yet."}
+        ) : activitiesDeferred && loadMoreError ? null : (
+          <p className="wf-history-empty" role={loadingTimeline ? "status" : undefined}>
+            {loadingTimeline ? "Loading activities…" : isFiltered
+              ? "No activities match the current filter." : "No activities have been recorded for this run yet."}
           </p>
         )}
 
@@ -646,21 +662,21 @@ export function RunActivitiesTimeline({
             type="button"
             size="sm"
             disabled={loadingMore}
-            onClick={() => { void loadMoreActivities(); }}
+            onClick={() => { void loadActivityPage(currentExtras?.nextCursor); }}
           >
             {loadingMore ? "Loading more activities…" : "Load more activities"}
           </StudioButton>
         ) : null}
       </div>
 
-      <footer className="wf-history-footer">
+      {hasTimelinePage ? <footer className="wf-history-footer">
         <span className="wf-history-count">
           {isFiltered
             ? `${filteredEntries.length} of ${entries.length} ${entries.length === 1 ? "activity" : "activities"}`
             : `${entries.length} ${entries.length === 1 ? "activity" : "activities"}`}
           {canLoadMore ? " · more available" : ""}
         </span>
-      </footer>
+      </footer> : null}
     </section>
   );
 }

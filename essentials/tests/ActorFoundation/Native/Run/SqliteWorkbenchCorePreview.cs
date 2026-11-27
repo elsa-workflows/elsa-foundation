@@ -188,7 +188,8 @@ internal static partial class WorkbenchPostgresPreview
 
             async Task CheckRunDetailsAsync(HttpClient client, string definition, string run)
             {
-                var details = await ReadAsync(client, $"/runtime/workflows/instances/{Uri.EscapeDataString(run)}");
+                var route = $"/runtime/workflows/instances/{Uri.EscapeDataString(run)}";
+                var details = await ReadAsync(client, route);
                 var instance = details.GetProperty("instance");
                 Require(instance.GetProperty("workflowExecutionId").GetString() == run &&
                         instance.GetProperty("definitionId").GetString() == definition &&
@@ -196,6 +197,7 @@ internal static partial class WorkbenchPostgresPreview
                         instance.GetProperty("startedAt").ValueKind == JsonValueKind.String &&
                         instance.GetProperty("completedAt").ValueKind == JsonValueKind.String,
                     $"the standard run details endpoint shows the exact completed SQLite run of '{definition}' and its committed times");
+                await RequireActivityTimelineAsync(client, route, run, token);
             }
 
             async Task<JsonElement> ReadAsync(HttpClient client, string route, object? payload = null)

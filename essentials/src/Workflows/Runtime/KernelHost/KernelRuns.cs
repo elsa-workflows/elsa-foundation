@@ -36,6 +36,13 @@ public sealed class KernelRuns
         return (false, (view, run));
     }
 
+    /// <summary>Reads a committed journal page for this run in the host's tenant.</summary>
+    public async ValueTask<Page<JournalEntry>> TailAsync(ActorRef actor, PageToken? from = null, CancellationToken cancellationToken = default)
+    {
+        var reads = await _reads(cancellationToken);
+        return await reads.TailAsync(Tenant, actor, from, cancellationToken);
+    }
+
     /// <summary>
     /// The workflow runs of the host's tenant, one page after another until the last, filtered by definition when one is
     /// given. Each is the actor's view and what its header says about the run (<see cref="Kernel.WorkflowActor.WorkflowActor.DescribeRun"/>).

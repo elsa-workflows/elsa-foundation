@@ -85,7 +85,14 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
             last.Write(landing);
             next = new(cursor.Seal(context, landing));
         }
-        return new(entries.Select(entry => new JournalEntry(entry.Revision, entry.Entry)).ToArray(), next, snapshot.AsOf);
+        var head = snapshot.Rows.FirstOrDefault();
+        return new(entries.Select(entry => new JournalEntry(entry.Revision, entry.Entry)).ToArray(), next, snapshot.AsOf)
+        {
+            JournalHeadRevision = head?.HeadRevision,
+            JournalCancellation = head is { CancellationRevision: > 0 and var revision, CancellationAt: { } at }
+                ? new JournalCancellation(revision, at)
+                : null
+        };
     }
 
     public async ValueTask<Page<DeliveryView>> InboxAsync(BoundScope scope, ActorRef actor, PageToken? from = null,

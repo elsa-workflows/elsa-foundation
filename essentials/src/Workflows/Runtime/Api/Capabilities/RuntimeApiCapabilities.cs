@@ -1,5 +1,6 @@
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
+using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Services.Alterations;
@@ -63,10 +64,11 @@ public sealed class RuntimeOperationalCapabilitySource(
 }
 
 /// <summary>Advertises browsing only for inspection providers that implement the bounded collection read.</summary>
-public sealed class RuntimeActivityExecutionBrowsingCapabilitySource(IActivityExecutionInspectionStore? inspectionStore = null) : IApiCapabilitySource
+public sealed class RuntimeActivityExecutionBrowsingCapabilitySource(IActivityExecutionInspectionStore? inspectionStore = null,
+    IActivityExecutionBrowseSource? source = null) : IApiCapabilitySource
 {
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>(inspectionStore?.SupportsExecutionBrowsing == true
+        ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>((source?.SupportsExecutionBrowsing ?? inspectionStore?.SupportsExecutionBrowsing) == true
             ? [new(RuntimeApiCapabilities.CapabilityId, 1,
                 [new ApiCapabilityLink("activity-executions", "runtime/workflows/instances/{workflowExecutionId}/activity-executions", templated: true)],
                 $"{RuntimeApiCapabilities.SourceFeatureId}.ExecutionBrowsing")]

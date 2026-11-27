@@ -23,6 +23,12 @@ that registers any other implementation (constitution 2.6.2).
 - **Implementation:** `KernelWorkflowInstanceDetailsService`, scoped. It reads the exact run through `KernelRuns`
   and uses the runtime API's authorization and summary view.
 
+### `IActivityExecutionBrowseSource` and `IActivityExecutionInspectionService` *(API contracts)*
+
+- **Kind:** Replacement (each operation has one serving implementation per shell).
+- **Implementations:** `KernelActivityExecutionBrowseSource` and `KernelActivityExecutionInspectionService`, scoped.
+  They supply the exact run and its Full journal timeline to the normal runtime API browse and point routes.
+
 ## Host-composed state consumed
 
 - `KernelRuns` (`Elsa.Workflows.Runtime.KernelHost`): the foundation's reads and the tenant the host binds them to.

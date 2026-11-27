@@ -389,6 +389,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         if (work.Parent is not null && !_s.Frames.ContainsKey(work.Parent)) return;     // its parent was cancelled meanwhile
         var node = _wf.Nodes[work.Node!];
         var frame = new Frame { Id = work.Frame, Node = node.Id, Parent = work.Parent, Tag = work.Tag, Scope = work.Scope, Attempt = work.Attempt, LiveScope = work.LiveScope, LexicalScope = work.LexicalScope };
+        turn.RecordFrameStart(frame);
         if (work.RetrySource is not null)
         {
             frame.RetrySource = work.RetrySource; frame.OperationKey = work.OperationKey;

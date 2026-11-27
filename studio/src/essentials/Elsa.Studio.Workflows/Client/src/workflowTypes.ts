@@ -916,6 +916,8 @@ export interface WorkflowInstanceDetails {
   /** Missing on older hosts; an empty collection means no captured outputs. */
   outputs?: Record<string, WorkflowOutputValue>;
   activities: ActivityExecutionStateSummary[];
+  /** The run serves its timeline through the activity browse operation. */
+  activitiesDeferred?: boolean;
   /** Present when Runtime bounded the activity summaries and another page is available. */
   activityNextContinuationToken?: string | null;
   incidents?: IncidentStateSummary[] | null;

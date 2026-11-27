@@ -2181,6 +2181,9 @@ internal static class PostgresRootParkedOperatorChecks
             Check(keptEnd.TerminalRevision == keptEnd.Revision && keptEnd.TerminalAt is > 0 &&
                     Outcomes(await set.Cold.ReadJournalOfAsync(0, keptPark.Actor.Id, 0, stop)) is [.., """{"Outcome":"protected","Disposition":"terminated","Operation":"td-kept","Cleared":1}"""],
                 "the protected root is terminated and kept: Cancelled with its terminal mark, journalled as protected");
+            Check(await set.TailAsync(kept) is { JournalHeadRevision: { } head, JournalCancellation: { } cancellation } &&
+                    head == keptEnd.Revision && cancellation.Revision == keptEnd.TerminalRevision && cancellation.At == keptEnd.TerminalAt,
+                "the public PostgreSQL journal exposes the exact retained terminal mark in its committed snapshot");
             set.Answered("td-kept", "terminated and kept");
             set.Probe.Protects.Remove(kept.Id);
             Check(await set.OperateAsync(kept, "td-kept-delete", Contract.Kinds.Delete, await set.SelectionAsync(kept)),
@@ -3330,6 +3333,9 @@ internal static class PostgresRootParkedOperatorChecks
         }
 
         internal async Task<string> SelectionAsync(Contract.ActorRef root) => (await _reads.GetAsync(tenant, root, stop))!.Selection!;
+
+        internal ValueTask<Contract.Page<Contract.JournalEntry>> TailAsync(Contract.ActorRef root) =>
+            _reads.TailAsync(tenant, root, cancellationToken: stop);
         internal bool OpensPark(Contract.ActorRef root, string? selection, FoundationParkMark? expected = null) =>
             PostgresRootSelection.OpenPark(_cursor, selection, tenant.Tenant, root.Id) is { } mark && (expected is null || mark == expected);
         internal bool OpensTerminal(Contract.ActorRef root, string? selection) =>
