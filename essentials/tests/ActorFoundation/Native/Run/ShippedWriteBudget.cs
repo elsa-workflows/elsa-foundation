@@ -315,7 +315,8 @@ internal static class ShippedWriteBudget
             sqliteFile?.Dispose();
             if (directory is not null)
             {
-                SqliteConnection.ClearAllPools();
+                using var observerDb = Observe();
+                SqliteConnection.ClearPool((SqliteConnection)observerDb.Database.GetDbConnection());
                 directory.Delete(recursive: true);
             }
         }
