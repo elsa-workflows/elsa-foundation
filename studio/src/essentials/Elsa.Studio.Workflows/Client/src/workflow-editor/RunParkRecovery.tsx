@@ -30,6 +30,8 @@ export function RunParkRecovery({ context, workflowExecutionId, inspect, refresh
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const action = useRef<AbortController | null>(null);
+  const recoverButton = useRef<HTMLButtonElement | null>(null);
+  const recoveryStatus = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     setFeedback(null);
@@ -39,6 +41,10 @@ export function RunParkRecovery({ context, workflowExecutionId, inspect, refresh
       action.current = null;
     };
   }, [context, workflowExecutionId]);
+
+  useEffect(() => {
+    if (!action.current) setFeedback(null);
+  }, [refreshVersion]);
 
   useEffect(() => {
     if (!inspect || action.current) return;
@@ -62,6 +68,10 @@ export function RunParkRecovery({ context, workflowExecutionId, inspect, refresh
   const parked = current?.park && current.park.status !== "NotParked";
   if (!parked && !feedback && !pending) return null;
 
+  function focusStatusBeforeRemovingAction() {
+    if (document.activeElement === recoverButton.current) recoveryStatus.current?.focus();
+  }
+
   async function recover(path: string, selection: Extract<WorkflowParkRecovery, { status: "Available" }>) {
     if (action.current) return;
     const attempt = new AbortController();
@@ -71,43 +81,61 @@ export function RunParkRecovery({ context, workflowExecutionId, inspect, refresh
     setPending(true);
     setFeedback(null);
     try {
-      await requestWorkflowParkRecovery(context, path, selection.token, signal);
+      try {
+        await requestWorkflowParkRecovery(context, path, selection.token, signal);
+      } catch (error) {
+        if (attempt.signal.aborted) return;
+        if (error instanceof StudioHttpError && [401, 403, 404, 409].includes(error.status)) {
+          const stale = error.status === 409;
+          setFeedback({ tone: "error", text: stale
+            ? "This run changed. Check its current state before recovering it."
+            : "Recovery is unavailable for this run." });
+          const park = stale ? await readWorkflowParkRecovery(context, path, signal).catch(() => null) : null;
+          if (attempt.signal.aborted) return;
+          if (park?.status !== "Available") focusStatusBeforeRemovingAction();
+          setState({ context, path, park });
+        } else if (error instanceof StudioHttpError && error.retryAfterSeconds) {
+          const retry = error.retryAfterSeconds;
+          setFeedback({ tone: "error", text: `Recovery is busy. Try again in ${retry} ${retry === 1 ? "second" : "seconds"}.` });
+        } else {
+          focusStatusBeforeRemovingAction();
+          setState(null);
+          setFeedback({ tone: "error", text: "Recovery could not be confirmed. Refresh the run to check its status." });
+        }
+        return;
+      }
+
       if (attempt.signal.aborted) return;
+      setState({ context, path, park: { status: "Unavailable", parkedAt: selection.parkedAt } });
       setFeedback({ tone: "info", text: "Recovery requested. Waiting for the run to resume." });
       while (!signal.aborted) {
-        const park = await readWorkflowParkRecovery(context, path, signal);
+        const park = await readWorkflowParkRecovery(context, path, signal).catch(() => undefined);
         if (attempt.signal.aborted) return;
-        setState({ context, path, park });
-        if (!park) {
+        if (park === null) {
+          focusStatusBeforeRemovingAction();
+          setState(null);
           setFeedback({ tone: "error", text: "Recovery status is unavailable." });
           return;
         }
-        if (park.status === "NotParked") {
-          setFeedback({ tone: "info", text: "The run is ready to continue." });
+        if (park?.status === "NotParked") {
+          focusStatusBeforeRemovingAction();
+          setState({ context, path, park });
+          setFeedback({ tone: "info", text: "This run is no longer parked." });
           void refreshRun();
           return;
         }
-        if (park.parkedAt !== selection.parkedAt) {
+        if (park && park.parkedAt !== selection.parkedAt) {
+          if (park.status !== "Available") focusStatusBeforeRemovingAction();
+          setState({ context, path, park });
           setFeedback({ tone: "error", text: "The run parked again. Review the current run before recovering it." });
           void refreshRun();
           return;
         }
         await new Promise<void>(resolve => setTimeout(resolve, pollInterval));
       }
-      if (!attempt.signal.aborted) setFeedback({ tone: "error", text: "Recovery could not be confirmed. Refresh the run to check its status." });
-    } catch (error) {
-      if (attempt.signal.aborted) return;
-      if (error instanceof StudioHttpError && [401, 403, 404, 409].includes(error.status)) {
-        setFeedback({ tone: "error", text: error.status === 409
-          ? "This run changed. Check its current state before recovering it."
-          : "Recovery is unavailable for this run." });
-        setState({ context, path, park: null });
-        const park = await readWorkflowParkRecovery(context, path, signal).catch(() => null);
-        if (!attempt.signal.aborted) setState({ context, path, park });
-      } else {
-        const retry = error instanceof StudioHttpError ? error.retryAfterSeconds : null;
-        setFeedback({ tone: "error", text: retry ? `Recovery is busy. Try again in ${retry} ${retry === 1 ? "second" : "seconds"}.`
-          : "Recovery could not be confirmed. Refresh the run to check its status." });
+      if (!attempt.signal.aborted) {
+        focusStatusBeforeRemovingAction();
+        setFeedback({ tone: "error", text: "Recovery could not be confirmed. Refresh the run to check its status." });
       }
     } finally {
       if (action.current === attempt) {
@@ -118,8 +146,10 @@ export function RunParkRecovery({ context, workflowExecutionId, inspect, refresh
   }
 
   return <div className="wf-operator-status" data-tone={feedback?.tone ?? "info"}>
-    <span role="status">{feedback?.text ?? (selected ? "This run is parked. Recover it to accept new work." : "This run is parked and recovery is unavailable.")}</span>
-    {current && selected ? <StudioButton type="button" size="sm" disabled={pending}
-      onClick={() => void recover(current.path, selected)}>Recover</StudioButton> : null}
+    <span ref={recoveryStatus} role="status" tabIndex={-1}>{feedback?.text ?? (selected
+      ? "This run is parked. Recover it to accept new work."
+      : "This run is parked and recovery is unavailable.")}</span>
+    {selected || pending ? <StudioButton ref={recoverButton} type="button" size="sm" aria-disabled={pending}
+      onClick={() => { if (current && selected && !pending) void recover(current.path, selected); }}>Recover</StudioButton> : null}
   </div>;
 }

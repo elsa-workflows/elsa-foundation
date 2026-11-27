@@ -71,14 +71,31 @@ export async function corePreviewParkRecoveryJourney(page: Page, info: TestInfo,
   expect((await stale).status()).toBe(409);
   await expect(page.getByText("This run changed. Check its current state before recovering it.")).toBeVisible();
   await expect(action).toBeEnabled();
+  await expect(action).toBeFocused();
   await capture(page, info, "park-recovery-stale");
   await page.unroute(sameRecovery);
 
+  let submissions = 0;
+  let failedConfirmation = false;
+  await page.route(sameRecovery, async route => {
+    if (route.request().method() === "POST") submissions++;
+    if (route.request().method() === "GET" && submissions > 0 && !failedConfirmation) {
+      failedConfirmation = true;
+      await route.fulfill({ status: 503, headers: {
+        "Access-Control-Allow-Origin": new URL(page.url()).origin, "Access-Control-Allow-Credentials": "true"
+      } });
+    } else await route.continue();
+  });
   const admitted = page.waitForResponse(response => sameRecovery(new URL(response.url())) && response.request().method() === "POST");
   await action.click();
   expect((await admitted).status()).toBe(202);
-  await expect(page.getByText("The run is ready to continue.")).toBeVisible();
+  const cleared = page.getByText("This run is no longer parked.");
+  await expect(cleared).toBeVisible();
+  expect(failedConfirmation).toBe(true);
+  expect(submissions).toBe(1);
   await expect(action).toHaveCount(0);
+  await expect(cleared).toBeFocused();
+  await page.unroute(sameRecovery);
   await capture(page, info, "park-recovered");
   const continued = await continueRun();
   expect(continued.status(), await continued.text()).toBe(200);
@@ -88,8 +105,10 @@ export async function corePreviewParkRecoveryJourney(page: Page, info: TestInfo,
   });
   await page.getByRole("button", { name: "Refresh execution", exact: true }).click();
   await expect(page.getByText("Completed", { exact: true }).first()).toBeVisible();
+  await expect(cleared).toHaveCount(0);
   await capture(page, info, "park-run-completed");
   await receipt(info, "park-recovery.json", { runId: started.workflowExecutionId,
     authorization: "browser visibility after controlled 403; actual server grants qualified by #6039",
-    stale: 409, admitted: 202, committed: "NotParked", continued: responseBody, terminal: "Completed" });
+    stale: 409, admitted: 202, confirmationReadRetried: failedConfirmation, submissions,
+    committed: "NotParked", continued: responseBody, terminal: "Completed" });
 }
