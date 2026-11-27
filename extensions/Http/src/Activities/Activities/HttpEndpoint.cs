@@ -23,7 +23,7 @@ namespace Elsa.Activities.Http.Activities;
 [RefusesSecretBinding(nameof(ResponseMode), SecretBindingRefusalReason.FixedAtPublish)]
 [Activity(Icon = "Webhook")]
 [TriggerActivity]
-[Version("1.1.0")]
+[Version("1.2.0")]
 public sealed class HttpEndpoint :
     StatefulTriggerActivity<HttpEndpointResult, HttpEndpointState, HttpRequestModel>
 {
