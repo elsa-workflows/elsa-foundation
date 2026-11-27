@@ -62,7 +62,8 @@ public static partial class SqliteEmbeddedHosting
 
         public ValueTask<Contract.Page<Contract.ActorView>> ListAsync(Contract.BoundScope scope, Contract.ActorQuery query,
             Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
-            ReadAsync(reads => reads.ListAsync(scope, query, from, cancellationToken), cancellationToken);
+            ReadAsync(reads => reads.ListAsync(scope, query, from, cancellationToken), cancellationToken,
+                normalizeLockTimeout: SupportsSequencedJournal);
 
         public ValueTask<Contract.Page<Contract.JournalEntry>> TailAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>

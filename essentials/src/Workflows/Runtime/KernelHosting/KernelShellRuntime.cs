@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServing serving, IServiceScopeFactory scopes,
     ILoggerFactory logs, PersistenceScope persistenceScope, BoundScope tenant, KernelRetentionActivation retention) : IAsyncDisposable
 {
-    private static readonly TimeSpan RetentionDisposeBudget = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan RetentionStopBudget = TimeSpan.FromSeconds(1);
 
     private IHostedService? _owner;
     private IAsyncDisposable? _lifetime;
@@ -63,7 +63,9 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async Task StopAsync(CancellationToken token)
     {
-        try { await StopRetentionAsync(token); }
+        using var retentionDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        retentionDeadline.CancelAfter(RetentionStopBudget);
+        try { await StopRetentionAsync(retentionDeadline.Token); }
         finally
         {
             if (_owner is not null) await _owner.StopAsync(token);
@@ -116,7 +118,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
 
     public async ValueTask DisposeAsync()
     {
-        using var stop = new CancellationTokenSource(RetentionDisposeBudget);
+        using var stop = new CancellationTokenSource(RetentionStopBudget);
         try
         {
             if (await StopRetentionAsync(stop.Token)) _retentionStop.Dispose();
