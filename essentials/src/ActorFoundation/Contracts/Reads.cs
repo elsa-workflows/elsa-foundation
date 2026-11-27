@@ -31,7 +31,17 @@ public sealed record ActorQuery(
 
 public sealed record ParkView(long At, string? OpenResolution);
 
-public sealed record JournalEntry(long Revision, string Entry);
+public sealed record JournalEntry(long Revision, string Entry)
+{
+    /// <summary>The zero-based entry order within the committed revision, when exposed by the reader.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CommitOrdinal { get; init; }
+
+    // Readers may omit the ordinal. Preserve equality for callers comparing journal contents.
+    public bool Equals(JournalEntry? other) => other is not null && Revision == other.Revision && Entry == other.Entry;
+
+    public override int GetHashCode() => HashCode.Combine(Revision, Entry);
+}
 
 public sealed record JournalCancellation(long Revision, long At);
 

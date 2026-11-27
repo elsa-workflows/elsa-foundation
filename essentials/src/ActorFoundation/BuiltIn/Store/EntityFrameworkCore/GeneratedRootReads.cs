@@ -89,7 +89,7 @@ internal class GeneratedRootReads(EfStore store, FoundationReadCursor cursor, in
 
         PageToken? next = entries.Count > 0 ? Seal(last) : null;
         var head = snapshot.Head;
-        return new(entries.Select(entry => new JournalEntry(entry.Revision, entry.Entry)).ToArray(), next, snapshot.AsOf)
+        return new(entries, next, snapshot.AsOf)
         {
             JournalHeadRevision = head?.Revision,
             JournalCatchUpToken = head is null ? null : Seal(Bookmark.AfterPosition(head.Position)),

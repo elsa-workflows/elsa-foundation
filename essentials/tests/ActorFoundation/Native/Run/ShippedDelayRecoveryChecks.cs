@@ -122,6 +122,12 @@ internal static class ShippedDelayRecoveryChecks
                 Check(nativePrefix is { JournalHeadRevision: > 0, JournalCatchUpToken: not null } &&
                     flowPrefix is { JournalHeadRevision: > 0, JournalCatchUpToken: not null },
                     "both waiting workflows expose the committed journal head and a catch-up bookmark");
+                foreach (var prefix in new[] { nativePrefix, flowPrefix })
+                {
+                    Check(prefix.Items.Count > 0 && prefix.Items.GroupBy(entry => entry.Revision).All(commit =>
+                        commit.Select(entry => entry.CommitOrdinal).SequenceEqual(Enumerable.Range(0, commit.Count()).Select(ordinal => (int?)ordinal))),
+                        "the journal exposes stable per-commit entry ordinals for the authored workflow");
+                }
                 var idle = await reads.TailAsync(scope, nativeRoot, nativePrefix.JournalCatchUpToken, token);
                 Check(idle is { Items.Count: 0, Next: null, JournalCatchUpToken: not null } &&
                     idle.JournalHeadRevision == nativePrefix.JournalHeadRevision,
