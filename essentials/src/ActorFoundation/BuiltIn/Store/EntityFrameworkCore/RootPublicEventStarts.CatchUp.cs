@@ -8,7 +8,9 @@ internal static partial class RootPublicEventStarts
     private sealed record CatchUpStep(bool SourceReady, string? Registration, long? After, long? Through,
         long? Ordinal, long? KeepUntil, string? Occurrence);
 
-    internal static async Task RunMaintenanceAsync(Func<bool, CancellationToken, Task<bool>> step, Action<Exception> report,
+    internal enum MaintenanceWork { Start, Live, Cleanup }
+
+    internal static async Task RunMaintenanceAsync(Func<MaintenanceWork, CancellationToken, Task<bool>> step, Action<Exception> report,
         CancellationToken stop)
     {
         while (!stop.IsCancellationRequested)
@@ -16,8 +18,9 @@ internal static partial class RootPublicEventStarts
             var progressed = false;
             try
             {
-                progressed = await step(false, stop);
-                progressed |= await step(true, stop);
+                progressed = await step(MaintenanceWork.Start, stop);
+                progressed |= await step(MaintenanceWork.Live, stop);
+                progressed |= await step(MaintenanceWork.Cleanup, stop);
             }
             catch (OperationCanceledException) when (stop.IsCancellationRequested) { return; }
             catch (Exception error) { report(error); }
@@ -78,7 +81,7 @@ internal static partial class RootPublicEventStarts
                     AND (SELECT "SourceReady" FROM source)
                 """, bind), token);
             RequireSource(captured == 1);
-            await DispatchAsync(db, target.Tenant!, occurrence, step.KeepUntil!.Value, bind, token);
+            await DispatchAsync(db, target.Tenant!, occurrence, step.KeepUntil!.Value, bind, token, rememberDelivery: true);
         }
         RequireSource(await db.Database.ExecuteSqlInterpolatedAsync(Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)

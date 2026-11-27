@@ -349,6 +349,9 @@ public sealed partial class EfStore
             yield return Index(RootPublicEventStarts.CatchUpIndex, RootPublicEventStarts.Registrations, RootPublicEventStarts.CatchUpColumns);
             yield return Table(RootPublicEventStarts.Targets, RootPublicEventStarts.TargetColumns(sqlite: true));
             yield return Table(RootPublicEventPublications.Table, RootPublicEventPublications.Columns(sqlite: true));
+            yield return Table(RootPublicEventLiveWaits.Table, RootPublicEventLiveWaits.Columns(sqlite: true));
+            yield return Index(RootPublicEventLiveWaits.CatchUpIndex, RootPublicEventLiveWaits.Table, RootPublicEventLiveWaits.CatchUpColumns);
+            yield return Table(RootPublicEventLiveWaits.Receipts, RootPublicEventLiveWaits.ReceiptColumns(sqlite: true));
             yield return Table(RootPublicEventPublications.Horizons, RootPublicEventPublications.HorizonColumns(sqlite: true));
             yield return Index(RootPublicEventPublications.RetainedIndex, RootPublicEventPublications.Table, RootPublicEventPublications.RetainedColumns);
             yield return Index(RootPublicEventPublications.CleanupIndex, RootPublicEventPublications.Table, RootPublicEventPublications.CleanupColumns);

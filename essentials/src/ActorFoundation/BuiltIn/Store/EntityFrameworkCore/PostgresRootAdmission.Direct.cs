@@ -20,8 +20,11 @@ internal sealed partial class PostgresRootAdmission
         IsHeldDirect(value) || IsAuthoredEvent(value) || IsPublicEvent(value);
 
     private static bool IsAuthoredEvent(string? value) => value?.StartsWith(AuthoredEventDirectPrefix, StringComparison.Ordinal) == true;
-    private static bool IsPublicEvent(string? value) => value?.StartsWith(PublicEventDirectPrefix, StringComparison.Ordinal) == true;
-    private static bool IsHeldDirect(string? value) => value?.StartsWith(HeldDirectPrefix, StringComparison.Ordinal) == true;
+    private static bool IsHeldPublicEvent(string? value) => value?.StartsWith(HeldPublicEventDirectPrefix, StringComparison.Ordinal) == true;
+    private static bool IsPublicEvent(string? value) => value?.StartsWith(PublicEventDirectPrefix, StringComparison.Ordinal) == true ||
+        IsHeldPublicEvent(value);
+    private static bool IsHeldDirect(string? value) => value?.StartsWith(HeldDirectPrefix, StringComparison.Ordinal) == true ||
+        IsHeldPublicEvent(value);
 
     internal enum DirectResult { Accepted, Duplicate, Refused, MissingTarget, Expired }
 
@@ -33,11 +36,13 @@ internal sealed partial class PostgresRootAdmission
 
     internal async Task<HeldRootAdmission> PublishRequestAsync(HeldRootRequest request, string key, string? payload, CancellationToken token)
     {
-        if (!RootEventAdmission.IsValid(request, key, payload)) return HeldRootAdmission.Refused;
+        if (!(SupportsPublicEvents() ? RootEventAdmission.IsValidPublicRequest(request, key, payload) :
+            RootEventAdmission.IsValid(request, key, payload))) return HeldRootAdmission.Refused;
         var window = ReceiptWindow(deduplicationWindow, request.KeepFor);
         for (var retry = 0; ; retry++)
         {
             try { return await PublishRequestOnceAsync(request, key, payload, window, token); }
+            catch (RootEventAdmission.HeldPublicEventExpired) { return HeldRootAdmission.Expired; }
             catch (PostgresException error) when (retry < 2 &&
                 error.SqlState is PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.SerializationFailure)
             {
@@ -56,14 +61,20 @@ internal sealed partial class PostgresRootAdmission
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
         var pin = await PinRootNamespaceAsync(db, loadIssuer: false, token) ??
             throw new StoreFormatException("Live event requests require the pinned root source.");
+        if (db.UsesRootPublicEventStarts) await LockPublicEventStartTablesAsync(db, token);
         await RootEventAdmission.LockPostgresKeysAsync(db, [request.Tenant + "_" + key], token);
         var now = await RootEventAdmission.ReadPostgresClockAsync(db, token);
-        var result = await RootEventAdmission.PublishAsync(db, request, key, payload, now, window, attempt, token,
-            query => WithAdmissionSource(query, pin, "/*event-source*/", 5,
-                """('"Events"'), ('"Subscriptions"'), ('"FoundationRootBirths"'), ('"Instances"'), ('"Messages"')"""));
+        var result = db.UsesRootPublicEventStarts
+            ? await RootEventAdmission.PublishHeldPublicAsync(db, request, key, payload, now, window, attempt, Bind, token)
+            : await RootEventAdmission.PublishAsync(db, request, key, payload, now, window, attempt, token, Bind);
         await transaction.CommitAsync(token);
         if (result == HeldRootAdmission.Accepted) attempt?.Committed();
         return result;
+
+        FormattableString Bind(FormattableString query) => query.Format.Contains(RootPublicEventStarts.Source, StringComparison.Ordinal)
+            ? BindPublicEventStarts(query, pin)
+            : WithAdmissionSource(query, pin, "/*event-source*/", 5,
+                """('"Events"'), ('"Subscriptions"'), ('"FoundationRootBirths"'), ('"Instances"'), ('"Messages"')""");
     }
 
     internal static async Task<Func<FormattableString, FormattableString>> PinAuthoredEventSourceAsync(
@@ -363,7 +374,8 @@ internal sealed partial class PostgresRootAdmission
     {
         if (!IsStoredDirect(wire))
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
-        var prefix = publicEvent ? PublicEventDirectPrefix : authoredEvent ? AuthoredEventDirectPrefix :
+        var prefix = publicEvent ? IsHeldPublicEvent(wire) ? HeldPublicEventDirectPrefix : PublicEventDirectPrefix :
+            authoredEvent ? AuthoredEventDirectPrefix :
             IsHeldDirect(wire) ? HeldDirectPrefix : DirectPrefix;
         var header = DurableKeyJson.Read<StoredDirect>(wire![prefix.Length..]);
         if (header is not { Creation: 1 } || !(publicEvent

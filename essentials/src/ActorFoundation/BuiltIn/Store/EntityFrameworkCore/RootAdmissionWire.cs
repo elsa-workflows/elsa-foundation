@@ -24,6 +24,7 @@ internal static class RootAdmissionWire
     internal const string HeldDirectPrefix = "!kernel-held-direct/1:";
     internal const string AuthoredEventDirectPrefix = "!kernel-authored-event/1:";
     internal const string PublicEventDirectPrefix = "!kernel-public-event/1:";
+    internal const string HeldPublicEventDirectPrefix = "!kernel-held-public-event/1:";
 
     internal static string AuthoredEventOccurrence(string reference, string id, string wait) =>
         $"{reference}/{FoundationRootCreator.OperationDigest(id)}/{FoundationRootCreator.OperationDigest(wait)}";
@@ -79,7 +80,8 @@ internal static class RootAdmissionWire
     {
         var escaped = RequiresEnvelope(payload);
         var escapedKind = kind.Contains('\0') ? kind : null;
-        var prefix = eventOccurrence is not null ? PublicEventDirectPrefix : authoredEvent ? AuthoredEventDirectPrefix :
+        var prefix = eventOccurrence is not null ? held ? HeldPublicEventDirectPrefix : PublicEventDirectPrefix :
+            authoredEvent ? AuthoredEventDirectPrefix :
             held ? HeldDirectPrefix : DirectPrefix;
         var header = new StoredDirect(id, creation, escaped, due == 0, escapedKind)
             { EventWait = eventWait, ScheduleControl = scheduleControl, EventOccurrence = eventOccurrence };

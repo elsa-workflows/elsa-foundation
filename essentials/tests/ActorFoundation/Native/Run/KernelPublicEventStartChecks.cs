@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
+using Kernel.EntityFramework;
 using Kernel.Foundation.Sqlite;
 using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -100,6 +101,48 @@ internal static partial class KernelAuthoredEventChecks
                 recreated.Publication.Incarnation != outside.Publication!.Incarnation && fourth.Registration == third.Registration,
                 "reuse after receipt expiry preserves the registration and creates a different event and actor life");
             await VerifyDeliveryAsync(new(fourth.Reference), replacement.Input!, "outside", "second incarnation", "event\0id");
+            const string heldKey = "held-public-start";
+            var heldTarget = new Contract.Target.Event(heldKey);
+            await ingress.SetStartAsync(scope, heldKey, "held", new(model.Type, "held-recipient", "held template"), token);
+            var held = await RequestAsync(heldTarget, "held-id", "held item");
+            Check(held is { Channel: "held-event", Error: null } && held.Item?.ToString() == "held item",
+                "a held Event creates the registered actor and returns its first matching reply");
+            var heldCaptured = (await CapturedAsync()).Single(item => item.Wait == "held" && item.EventId == "held-id");
+            await VerifyDeliveryAsync(new(heldCaptured.Reference), "held template", "held", "held item", "held-id", heldKey);
+            var heldReplay = await ingress.SendAsync(scope, heldTarget, "held-id", "ignored", "different item", cancellationToken: token);
+            Check(heldReplay is { Outcome: Contract.AdmissionOutcome.Duplicate, Publication.EventId: "held-id" },
+                "one-way retry observes the held Event publication receipt without creating another actor");
+            var unmatched = new Contract.Target.Event("unmatched-held-start");
+            var missing = await RequestAsync(unmatched, "unmatched", "discarded");
+            var afterMissing = await ingress.SendAsync(scope, unmatched, "unmatched", "ignored", "accepted later", cancellationToken: token);
+            Check(missing.Error == "no waiter" && afterMissing is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "an unmatched held Event leaves no publication receipt");
+
+            const string selfCatchUp = PublicEventActor.KeepingStartTopic;
+            await ingress.SetStartAsync(scope, selfCatchUp, "kept", new(model.Type, "start-keeps", selfCatchUp), token);
+            var startsKeeper = await ingress.SendAsync(scope, new Contract.Target.Event(selfCatchUp), "already-delivered",
+                "ignored", "same occurrence", options, token);
+            Check(startsKeeper.Outcome == Contract.AdmissionOutcome.Accepted, "a retained publication creates a registered keeping actor");
+            var keepingStart = (await CapturedAsync()).Single(item => item.EventId == "already-delivered");
+            await UntilAsync(async () =>
+            {
+                await using var db = open();
+                return await db.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (
+                        SELECT 1 FROM "FoundationPublicEventLiveWaits" w
+                        JOIN "FoundationRootBirths" b ON b."Actor" = w."Instance"
+                        WHERE b."Reference" = {keepingStart.Reference}
+                            AND w."CatchAfter" = w."CatchThrough" AND w."CatchThrough" > 0
+                            AND (SELECT count(*) FROM "Messages" m WHERE m."Target" = b."Actor" AND m."Kind" = 'event') = 1
+                            AND EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = b."Actor" AND m."Kind" = 'event' AND m."Done")
+                    ) AS "Value"
+                    """).SingleAsync(token);
+            });
+            Check((await reads.GetAsync(scope, new(keepingStart.Reference), token))?.Header.Status == Contract.ActorStatus.Running,
+                "a keeping start's catch-up cursor recognizes the original exact matching input without re-enqueuing it");
+
+            var keeper = await StartAsync("keeper", "cold subscription actor");
+            await UntilAsync(async () => (await reads.GetAsync(scope, keeper, token))?.Header.Status == Contract.ActorStatus.Running);
             if (owner is RuntimeNode postgresOwner) await postgresOwner.StopAsync(token);
             else await ((SqliteEmbeddedHostedService)owner).StopAsync(token);
 
@@ -127,8 +170,27 @@ internal static partial class KernelAuthoredEventChecks
                 Check(owed, "registration durably covers the retained event while replay has an independent deadline");
             }
 
+            const string keeperKey = "retained-for-actor";
+            var keeperEvent = new Contract.Target.Event(keeperKey);
+            var beforeSubscribe = await ingress.SendAsync(scope, keeperEvent, "before-subscribe", "ignored", "cold kept item",
+                new(KeepFor: TimeSpan.FromMinutes(1)), token);
+            var arm = await ingress.SendAsync(scope, new Contract.Target.Ref(keeper), "arm-keep", "arm-keep", keeperKey,
+                cancellationToken: token);
+            Check(beforeSubscribe.Outcome == Contract.AdmissionOutcome.Accepted && arm.Outcome == Contract.AdmissionOutcome.Accepted,
+                "the old owner stops before a retained publication and the subscription command are admitted");
             await Task.Delay(quietOptions.KeepFor!.Value + TimeSpan.FromMilliseconds(100), token);
             await using var successor = await restart(token);
+            await VerifyDeliveryAsync(keeper, "cold subscription actor", "kept", "cold kept item", "before-subscribe", keeperKey);
+            await using (var db = open())
+            {
+                var consumed = await db.Database.SqlQuery<bool>($"""
+                    SELECT count(r."Delivery") = 1 AS "Value"
+                    FROM "FoundationPublicEventPublications" p
+                    JOIN "FoundationPublicEventLiveReceipts" r ON r."Occurrence" = p."Occurrence"
+                    WHERE p."Tenant" = {scope.Tenant} AND p."Key" = {scope.Tenant + "_" + keeperKey}
+                    """).SingleAsync(token);
+                Check(consumed, "the cold owner matched one retained occurrence to the keeping actor's exact wait");
+            }
             CapturedPublicStart? late = null;
             // The first live checkpoint reads the reference before bounded cleanup removes the settled capture record.
             // Query the permanent birth by its receipt identity via the generated actor's public list if cleanup won first.
@@ -190,6 +252,14 @@ internal static partial class KernelAuthoredEventChecks
             }
             return 0;
 
+            async Task<Contract.Reply> RequestAsync(Contract.Target.Event requested, string id, string item)
+            {
+                await using var db = open();
+                var now = provider == "postgres" ? await RootEventAdmission.ReadPostgresClockAsync(db, token)
+                    : await SqliteRootAdmission.ReadClockAsync(db, token);
+                return await ingress.RequestAsync(scope, requested, id, Contract.Kinds.Event, item, null, new(null, now + 6000), token);
+            }
+
             async Task<string> StartPublisherAsync(string operation)
             {
                 var actor = await StartAsync("publisher", operation);
@@ -243,6 +313,7 @@ internal static partial class KernelAuthoredEventChecks
     private sealed class PublicEventActor : Contract.IActorType
     {
         internal const string Key = "event:Orders";
+        internal const string KeepingStartTopic = "retained-start-same-wait";
         public string Type => "public-event-probe";
         public bool Withholds(Contract.ActorHeader header) => false;
 
@@ -254,6 +325,7 @@ internal static partial class KernelAuthoredEventChecks
                 {
                     turn.State = message.Payload;
                     if (turn.Header.TypeData == "live-waiter") turn.Subscribe(Key, "live");
+                    if (turn.Header.TypeData == "start-keeps") turn.Subscribe(KeepingStartTopic, "kept", keep: true);
                     if (turn.Header.TypeData == "publisher")
                     {
                         var id = turn.Publish(Key, "authored payload", TimeSpan.FromMinutes(1));
@@ -261,11 +333,13 @@ internal static partial class KernelAuthoredEventChecks
                         turn.End(Contract.ActorStatus.Finished);
                     }
                 }
+                if (message.Kind == "arm-keep") turn.Subscribe(message.Payload!, "kept", keep: true);
                 if (message.Event is { } published)
                 {
+                    if (turn.Header.TypeData == "held-recipient") turn.Emit("held-event", message.Payload);
                     turn.SetHeader(JsonSerializer.Serialize(new[] { turn.State, published.Key, published.Wait, message.Payload, published.Id }),
                         turn.Header.Labels);
-                    turn.End(Contract.ActorStatus.Finished);
+                    if (turn.State != KeepingStartTopic) turn.End(Contract.ActorStatus.Finished);
                 }
             }
             return ValueTask.CompletedTask;

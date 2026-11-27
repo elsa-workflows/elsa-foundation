@@ -9,6 +9,9 @@ internal static partial class RootPublicEventPublications
         AND NOT EXISTS (SELECT 1 FROM "FoundationPublicEventStarts" r
             WHERE r."Tenant" = p."Tenant" AND r."Key" = p."Key" AND p."KeepUntil" > r."RetainAfter"
                 AND p."CleanupAt" = p."KeepUntil" AND p."Ordinal" > r."CatchAfter" AND p."Ordinal" <= r."CatchThrough")
+        AND NOT EXISTS (SELECT 1 FROM "FoundationPublicEventLiveWaits" r
+            WHERE r."Tenant" = p."Tenant" AND r."Key" = p."Key" AND p."KeepUntil" > r."RetainAfter"
+                AND p."CleanupAt" = p."KeepUntil" AND p."Ordinal" > r."CatchAfter" AND p."Ordinal" <= r."CatchThrough")
         AND NOT EXISTS (SELECT 1 FROM "FoundationPublicEventTargets" t
             WHERE t."Tenant" = p."Tenant" AND t."Publication" = p."Occurrence" AND t."Reference" IS NULL)
         """;
@@ -47,7 +50,15 @@ internal static partial class RootPublicEventPublications
             """, bind)).SingleAsync(token);
         RequireCleanupSource(expired.SourceReady);
         if (expired.Occurrence is null) return false;
-        if (expired.ClosesRetention == true) await AdvanceRetentionAsync(db, target.Tenant!, now, bind, token);
+        if (expired.ClosesRetention == true)
+        {
+            await AdvanceRetentionAsync(db, target.Tenant!, now, bind, token);
+            await db.Database.ExecuteSqlInterpolatedAsync(RootPublicEventStarts.Bind($"""
+                WITH source AS MATERIALIZED (/*public-event-start-source*/)
+                DELETE FROM "FoundationPublicEventLiveReceipts" WHERE "Occurrence" = {expired.Occurrence}
+                    AND (SELECT "SourceReady" FROM source)
+                """, bind), token);
+        }
 
         await db.Database.ExecuteSqlInterpolatedAsync(RootPublicEventStarts.Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)

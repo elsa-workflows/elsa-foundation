@@ -115,6 +115,9 @@ internal static partial class RootEventAdmission
         foreach (var publication in publications)
         {
             var until = checked(now + publication.KeepUntil);
+            var occurrence = db.UsesRootPublicEventStarts
+                ? FoundationRootCreator.OperationDigest(DurableKeyJson.Write(new[] { "authored", publication.Key, publication.Id }))
+                : null;
             var waits = await ReadWaitsAsync(db, publication.FoundationTenant!, publication.Key, BindSource, postgres, token);
             count += waits.Count;
             if (count > FoundationMetadataLimits.MaxTurnSends) throw AuthoredFanoutFull();
@@ -124,12 +127,14 @@ internal static partial class RootEventAdmission
                 if (!FoundationMetadataLimits.FitsLiveWaitName(wait.Wait!))
                     throw new StoreFormatException("A committed event wait has an invalid identity.");
                 var (header, body, kind) = EncodeDirect(publication.Id, 1, Kinds.Event, publication.Payload, null, held: false,
-                    new(publication.Key, wait.Wait!), authoredEvent: true);
+                    new(publication.Key, wait.Wait!), authoredEvent: occurrence is null, eventOccurrence: occurrence);
                 bytes += Encoding.UTF8.GetByteCount(header) + (body is null ? 0 : Encoding.UTF8.GetByteCount(body));
                 if (!FitsEnvelope(header, body) || bytes > FoundationMetadataLimits.MessageContentBytes) throw AuthoredFanoutFull();
                 messages.Add(new MessageEntity
                 {
-                    Id = AuthoredEventOccurrence(wait.Reference!, publication.Id, wait.Wait!),
+                    Id = occurrence is null
+                        ? AuthoredEventOccurrence(wait.Reference!, publication.Id, wait.Wait!)
+                        : PublicEventOccurrence(wait.Reference!, occurrence, publication.Id, wait.Wait!),
                     InboxScope = InboxKey.FoundationOccurrenceScope,
                     Target = wait.Actor!, Partition = wait.Partition!.Value, Kind = kind, Start = header, Payload = body
                 });
@@ -141,20 +146,23 @@ internal static partial class RootEventAdmission
                 count += captured.Count;
                 bytes += captured.Bytes;
             }
-            if (db.UsesRootPublicEventStarts)
+            if (occurrence is not null)
             {
                 if (until > now && !FitsRetainedEventPayload(publication.Payload))
                     throw new RootPublicEventStarts.FanoutExceeded("The retained event exceeds the root delivery envelope limit.");
-                var occurrence = FoundationRootCreator.OperationDigest(DurableKeyJson.Write(new[] { "authored", publication.Key, publication.Id }));
                 var captured = await RootPublicEventStarts.CaptureAsync(db, publication.FoundationTenant!, publication.Key, publication.Id,
                     occurrence, publication.Payload, FoundationMetadataLimits.MaxTurnSends - count, FoundationMetadataLimits.MessageContentBytes - bytes,
                     bindPostgresSource, token);
                 count += captured.Count;
                 bytes += captured.Bytes;
-                if (captured.Count != 0)
-                    await RootPublicEventStarts.DispatchAsync(db, publication.FoundationTenant!, occurrence, until, bindPostgresSource, token);
                 if (captured.Count != 0 || until > now)
                     await RootPublicEventPublications.RememberAuthoredAsync(db, publication, occurrence, until, bindPostgresSource, token);
+                if (captured.Count != 0)
+                    await RootPublicEventStarts.DispatchAsync(db, publication.FoundationTenant!, occurrence, until, bindPostgresSource, token,
+                        rememberDelivery: until > now);
+                if (until > now)
+                    await RootPublicEventLiveWaits.RememberPublishedAsync(db, occurrence, messages.Select(message => message.Id).ToArray(),
+                        bindPostgresSource, token);
             }
             var receipt = await db.Database.ExecuteSqlInterpolatedAsync(BindSource($"""
                 WITH source AS MATERIALIZED (/*event-source*/)
@@ -195,12 +203,17 @@ internal static partial class RootEventAdmission
 
     }
 
+    internal static Task EnqueueRetainedLiveAsync(KernelDb db, MessageEntity message, long until,
+        Func<FormattableString, FormattableString>? bind, CancellationToken token) =>
+        EnqueueAsync(db, [message], null, until, sql => RootPublicEventStarts.Bind(sql, bind), bind is not null, token,
+            RootPublicEventStarts.Source);
+
     private static async Task EnqueueAsync(KernelDb db, List<MessageEntity> messages, string? address, long until,
-        Func<FormattableString, FormattableString> bindSource, bool postgres, CancellationToken token)
+        Func<FormattableString, FormattableString> bindSource, bool postgres, CancellationToken token, string source = "/*event-source*/")
     {
         if (postgres)
         {
-            var inserted = await db.Database.ExecuteSqlInterpolatedAsync(bindSource($"""
+            FormattableString statement = $"""
                 WITH source AS MATERIALIZED (/*event-source*/)
                 INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Kind", "Start", "Payload", "Due", "Seen",
                     "Attempts", "Trial", "Done", "KeepUntil", "ReplyTo", "JobGeneration")
@@ -210,7 +223,11 @@ internal static partial class RootEventAdmission
                     {messages.Select(m => m.Partition).ToArray()}::integer[], {messages.Select(m => m.Start!).ToArray()}::text[])
                     WITH ORDINALITY AS item(id, actor, home, header, position)
                 CROSS JOIN source WHERE "SourceReady" ORDER BY item.position
-                """), token);
+                """;
+            if (source != "/*event-source*/")
+                statement = FormattableStringFactory.Create(statement.Format.Replace("/*event-source*/", source, StringComparison.Ordinal),
+                    statement.GetArguments());
+            var inserted = await db.Database.ExecuteSqlInterpolatedAsync(bindSource(statement), token);
             if (inserted != messages.Count) throw new StoreFormatException("The pinned live event inbox changed during admission.");
         }
         else

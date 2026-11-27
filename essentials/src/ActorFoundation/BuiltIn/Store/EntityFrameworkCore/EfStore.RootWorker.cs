@@ -40,6 +40,7 @@ public sealed partial class EfStore
         internal bool KeepsPrivateParkInputs { get; set; }
         internal bool RecoversPark { get; set; }
         internal bool TakesLiveEventWaits { get; set; }
+        internal bool KeepsEventWaits { get; set; }
         internal bool PublishesAuthoredEvents { get; set; }
         internal bool MeasuresDueBacklog { get; set; }
         internal bool RefusesParkedOperators { get; set; }
@@ -87,6 +88,7 @@ public sealed partial class EfStore
         public bool KeepsPrivateParkInputs => roots.KeepsPrivateParkInputs;
         public bool RecoversPark => roots.RecoversPark;
         public bool TakesLiveEventWaits => roots.TakesLiveEventWaits;
+        public bool KeepsEventWaits => roots.KeepsEventWaits;
         public bool PublishesAuthoredEvents => roots.PublishesAuthoredEvents;
         public bool RefusesParkedOperators => roots.RefusesParkedOperators;
         public bool SettlesEndedMailbox => roots.SettlesEndedMailbox;
@@ -157,6 +159,7 @@ public sealed partial class EfStore
             scope.RecoversPark = db.UsesRootParkRecovery;
             scope.RecoversInlineInitialRoots = db.UsesRootInlinePromotion;
             scope.TakesLiveEventWaits = db.UsesRootLiveEventWaits;
+            scope.KeepsEventWaits = db.UsesRootPublicEventStarts;
             scope.PublishesAuthoredEvents = db.UsesRootAuthoredEvents;
             if (scope.PublishesAuthoredEvents && RootSelfIssuer is null)
                 throw new StoreFormatException("Authored event publication requires the bound root issuer.");
@@ -575,7 +578,7 @@ public sealed partial class EfStore
             {
                 if (_ordinaryRoots?.TakesLiveEventWaits == true &&
                     (turn.Unsubscribe || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0))
-                    journal = RootEventWaits.Lower(root, turn, journal);
+                    journal = RootEventWaits.Lower(root, turn, journal, _ordinaryRoots.KeepsEventWaits);
                 turns.Add(journal);
                 revisions.Add(journal.Instance, checkpoint.JournalRevision);
                 if (journal.Journal is not null)

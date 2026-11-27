@@ -23,6 +23,7 @@ internal interface IRootDispatchHeaders
     bool KeepsPrivateParkInputs { get; }
     bool RecoversPark { get; }
     bool TakesLiveEventWaits => false;
+    bool KeepsEventWaits => false;
     bool PublishesAuthoredEvents => false;
     bool RefusesParkedOperators { get; }
     bool SettlesEndedMailbox { get; }

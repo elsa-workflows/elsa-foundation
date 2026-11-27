@@ -13,7 +13,7 @@ internal sealed partial class PostgresRootAdmission
         return db.UsesRootPublicEventStarts;
     }
 
-    internal async Task<bool> MaintainPublicEventsAsync(bool cleanup, CancellationToken token)
+    internal async Task<bool> MaintainPublicEventsAsync(RootPublicEventStarts.MaintenanceWork work, CancellationToken token)
     {
         await using var db = create();
         db.Database.SetCommandTimeout(TimeSpan.FromSeconds(2));
@@ -22,7 +22,7 @@ internal sealed partial class PostgresRootAdmission
             throw new StoreFormatException("Public event maintenance requires the pinned PostgreSQL store.");
         await LockPublicEventStartTablesAsync(db, token);
         bool changed;
-        if (cleanup)
+        if (work == RootPublicEventStarts.MaintenanceWork.Cleanup)
         {
             var sampled = await RootEventAdmission.ReadPostgresClockAsync(db, token);
             var candidate = await RootPublicEventPublications.FindCleanupAsync(db, sampled, Bind, token);
@@ -30,6 +30,13 @@ internal sealed partial class PostgresRootAdmission
             await RootEventAdmission.LockPostgresKeysAsync(db, [candidate.Key!], token);
             var now = await RootEventAdmission.ReadPostgresClockAsync(db, token);
             changed = await RootPublicEventPublications.CleanupAsync(db, candidate, now, Bind, token);
+        }
+        else if (work == RootPublicEventStarts.MaintenanceWork.Live)
+        {
+            var candidate = await RootPublicEventLiveWaits.FindAsync(db, Bind, token);
+            if (candidate is null) return false;
+            await RootEventAdmission.LockPostgresKeysAsync(db, [candidate.Key!], token);
+            changed = await RootPublicEventLiveWaits.CatchUpAsync(db, candidate, Bind, token);
         }
         else
         {
@@ -102,13 +109,15 @@ internal sealed partial class PostgresRootAdmission
     private static Task LockPublicEventStartTablesAsync(KernelDb db, CancellationToken token) =>
         db.Database.ExecuteSqlRawAsync("""
             LOCK TABLE ONLY "FoundationPublicEventStarts", ONLY "FoundationPublicEventTargets", ONLY "FoundationPublicEventPublications",
-                ONLY "FoundationPublicEventHorizons", ONLY "FoundationRootIssuer", ONLY "FoundationRootBirths", ONLY "Messages" IN ACCESS SHARE MODE
+                ONLY "FoundationPublicEventHorizons", ONLY "FoundationPublicEventLiveWaits", ONLY "FoundationPublicEventLiveReceipts",
+                ONLY "FoundationRootIssuer", ONLY "FoundationRootBirths", ONLY "Instances", ONLY "Subscriptions", ONLY "Messages" IN ACCESS SHARE MODE
             """, token);
 
     private static FormattableString BindPublicEventStarts(FormattableString sql, PinnedRootSource pin) =>
-        WithAdmissionSource(sql, pin, RootPublicEventStarts.Source, 7,
+        WithAdmissionSource(sql, pin, RootPublicEventStarts.Source, 11,
             """
             ('"FoundationPublicEventStarts"'), ('"FoundationPublicEventTargets"'), ('"FoundationPublicEventPublications"'), ('"FoundationPublicEventHorizons"'),
-            ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'), ('"Messages"')
+            ('"FoundationPublicEventLiveWaits"'), ('"FoundationPublicEventLiveReceipts"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
+            ('"Instances"'), ('"Subscriptions"'), ('"Messages"')
             """, requirePermanentDirectRelations: true);
 }

@@ -281,6 +281,7 @@ public static partial class PostgresPreviewHosting
         ArgumentNullException.ThrowIfNull(create);
         PostgresRootAdmission.RequireActorType(actorType);
         requests?.RequireRootStartProtectionBinding(create, actorType);
+        requests?.RequirePublicEventBinding(create, actorType);
         if (authorizeOperator is not null) requests?.RequireOperatorBinding(create, actorType);
         if (requests is not null && deduplicationWindow is { } asked && asked != requests.DeduplicationWindow)
             throw new ArgumentException("Held requests carry their own deduplication window.", nameof(deduplicationWindow));
@@ -371,6 +372,7 @@ public static partial class PostgresPreviewHosting
             throw new ArgumentException("Invalid PostgreSQL node name.", nameof(node));
         PostgresRootAdmission.RequireActorType(actor.Type);
         (replies as PostgresDirectRequests)?.RequireRootStartProtectionBinding(create, actor.Type);
+        (replies as PostgresDirectRequests)?.RequirePublicEventBinding(create, actor.Type);
         if (auxiliaryActor is not null) ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
 
         options ??= new LoopOptions();

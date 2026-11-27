@@ -4,15 +4,23 @@ namespace Kernel.EntityFramework;
 
 internal sealed partial class SqliteRootAdmission
 {
-    internal async Task<bool> MaintainPublicEventsAsync(bool cleanup, CancellationToken token)
+    internal async Task<bool> MaintainPublicEventsAsync(RootPublicEventStarts.MaintenanceWork work, CancellationToken token)
     {
         // An empty maintenance pass takes a read snapshot. Only a candidate needs the SQLite writer.
-        if (cleanup)
+        if (work == RootPublicEventStarts.MaintenanceWork.Cleanup)
         {
             var candidate = await InAdmissionTransactionAsync(async (db, ct) =>
                 await RootPublicEventPublications.FindCleanupAsync(db, await ReadClockAsync(db, ct), bind: null, ct), token, readOnly: true);
             return candidate is not null &&
                 await WriteAsync((db, now, ct) => RootPublicEventPublications.CleanupAsync(db, candidate, now, bind: null, ct), token);
+        }
+
+        if (work == RootPublicEventStarts.MaintenanceWork.Live)
+        {
+            var candidate = await InAdmissionTransactionAsync((db, ct) => RootPublicEventLiveWaits.FindAsync(db, bind: null, ct),
+                token, readOnly: true);
+            return candidate is not null &&
+                await WriteAsync((db, ct) => RootPublicEventLiveWaits.CatchUpAsync(db, candidate, bind: null, ct), token);
         }
 
         var pending = await InAdmissionTransactionAsync((db, ct) => RootPublicEventStarts.FindCatchUpAsync(db, bind: null, ct),

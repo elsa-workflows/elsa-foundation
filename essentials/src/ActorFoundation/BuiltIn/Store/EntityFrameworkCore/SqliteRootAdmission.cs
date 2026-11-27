@@ -250,13 +250,20 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
         };
     }
 
-    internal Task<HeldRootAdmission> PublishRequestAsync(HeldRootRequest request, string key, string? payload,
+    internal async Task<HeldRootAdmission> PublishRequestAsync(HeldRootRequest request, string key, string? payload,
         CancellationToken token, RootAdmissionPressure.Attempt? reserved)
     {
-        if (!RootEventAdmission.IsValid(request, key, payload)) return Task.FromResult(HeldRootAdmission.Refused);
+        using (var profile = create())
+            if (!(profile.UsesRootPublicEventStarts ? RootEventAdmission.IsValidPublicRequest(request, key, payload) :
+                RootEventAdmission.IsValid(request, key, payload))) return HeldRootAdmission.Refused;
         var window = ReceiptWindow(deduplicationWindow, request.KeepFor);
-        return WriteAsync((db, now, ct) => RootEventAdmission.PublishAsync(db, request, key, payload, now, window, reserved, ct),
-            token, reserved);
+        try
+        {
+            return await WriteAsync((db, now, ct) => db.UsesRootPublicEventStarts
+                ? RootEventAdmission.PublishHeldPublicAsync(db, request, key, payload, now, window, reserved, bind: null, ct)
+                : RootEventAdmission.PublishAsync(db, request, key, payload, now, window, reserved, ct), token, reserved);
+        }
+        catch (RootEventAdmission.HeldPublicEventExpired) { return HeldRootAdmission.Expired; }
     }
 
     private async Task<Contract.Admission?> SendCoreAsync(string tenant, Contract.ActorRef reference, string id, string kind, string? payload,

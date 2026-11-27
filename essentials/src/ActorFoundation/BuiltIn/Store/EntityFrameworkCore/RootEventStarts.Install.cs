@@ -27,6 +27,9 @@ internal static partial class RootEventStarts
                 CREATE INDEX IF NOT EXISTS "{RootPublicEventStarts.CatchUpIndex}" ON "{RootPublicEventStarts.Registrations}" {RootPublicEventStarts.CatchUpColumns};
                 CREATE TABLE IF NOT EXISTS "{RootPublicEventStarts.Targets}" ({RootPublicEventStarts.TargetColumns(sqlite: false)});
                 CREATE TABLE IF NOT EXISTS "{RootPublicEventPublications.Table}" ({RootPublicEventPublications.Columns(sqlite: false)});
+                CREATE TABLE IF NOT EXISTS "{RootPublicEventLiveWaits.Table}" ({RootPublicEventLiveWaits.Columns(sqlite: false)});
+                CREATE INDEX IF NOT EXISTS "{RootPublicEventLiveWaits.CatchUpIndex}" ON "{RootPublicEventLiveWaits.Table}" {RootPublicEventLiveWaits.CatchUpColumns};
+                CREATE TABLE IF NOT EXISTS "{RootPublicEventLiveWaits.Receipts}" ({RootPublicEventLiveWaits.ReceiptColumns(sqlite: false)});
                 CREATE TABLE IF NOT EXISTS "{RootPublicEventPublications.Horizons}" ({RootPublicEventPublications.HorizonColumns(sqlite: false)});
                 CREATE INDEX IF NOT EXISTS "{RootPublicEventPublications.RetainedIndex}" ON "{RootPublicEventPublications.Table}" {RootPublicEventPublications.RetainedColumns};
                 CREATE INDEX IF NOT EXISTS "{RootPublicEventPublications.CleanupIndex}" ON "{RootPublicEventPublications.Table}" {RootPublicEventPublications.CleanupColumns};
@@ -40,6 +43,8 @@ internal static partial class RootEventStarts
         var publicRegistrations = "kernel_public_event_reg_" + suffix;
         var publicTargets = "kernel_public_event_target_" + suffix;
         var publicPublications = "kernel_public_event_row_" + suffix;
+        var publicLive = "kernel_public_event_live_" + suffix;
+        var publicLiveReceipts = "kernel_public_event_live_rcpt_" + suffix;
         var publicHorizons = "kernel_public_event_horizon_" + suffix;
         var compareReceipts = receipts ? $"""CREATE INDEX "{targets}_r" ON "{targets}" {ReceiptColumns};""" : "";
         var compareScan = scan ? $"""CREATE INDEX "{targets}_o" ON "{targets}" {ScanColumns};""" : "";
@@ -60,6 +65,9 @@ internal static partial class RootEventStarts
                 CREATE INDEX "{publicRegistrations}_c" ON "{publicRegistrations}" {RootPublicEventStarts.CatchUpColumns};
                 CREATE TABLE "{publicTargets}" ({RootPublicEventStarts.TargetColumns(sqlite: false)});
                 CREATE TABLE "{publicPublications}" ({RootPublicEventPublications.Columns(sqlite: false)});
+                CREATE TABLE "{publicLive}" ({RootPublicEventLiveWaits.Columns(sqlite: false)});
+                CREATE INDEX "{publicLive}_c" ON "{publicLive}" {RootPublicEventLiveWaits.CatchUpColumns};
+                CREATE TABLE "{publicLiveReceipts}" ({RootPublicEventLiveWaits.ReceiptColumns(sqlite: false)});
                 CREATE TABLE "{publicHorizons}" ({RootPublicEventPublications.HorizonColumns(sqlite: false)});
                 CREATE INDEX "{publicPublications}_r" ON "{publicPublications}" {RootPublicEventPublications.RetainedColumns};
                 CREATE INDEX "{publicPublications}_c" ON "{publicPublications}" {RootPublicEventPublications.CleanupColumns};
@@ -73,6 +81,8 @@ internal static partial class RootEventStarts
                        (pg_catalog.to_regclass({publicRegistrations}), pg_catalog.to_regclass('"FoundationPublicEventStarts"')),
                        (pg_catalog.to_regclass({publicTargets}), pg_catalog.to_regclass('"FoundationPublicEventTargets"')),
                        (pg_catalog.to_regclass({publicPublications}), pg_catalog.to_regclass('"FoundationPublicEventPublications"')),
+                       (pg_catalog.to_regclass({publicLive}), pg_catalog.to_regclass('"FoundationPublicEventLiveWaits"')),
+                       (pg_catalog.to_regclass({publicLiveReceipts}), pg_catalog.to_regclass('"FoundationPublicEventLiveReceipts"')),
                        (pg_catalog.to_regclass({publicHorizons}), pg_catalog.to_regclass('"FoundationPublicEventHorizons"'))
             ), shapes AS (
                 SELECT c.oid,
@@ -90,7 +100,7 @@ internal static partial class RootEventStarts
                     AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_inherits i WHERE c.oid IN (i.inhparent, i.inhrelid))
                     AND c.oid IN (SELECT expected FROM pairs UNION SELECT installed FROM pairs)
             )
-            SELECT count(*) = {(publicStarts ? 7 : 3)} AND bool_and(expected.columns = installed.columns AND expected.constraints = installed.constraints
+            SELECT count(*) = {(publicStarts ? 9 : 3)} AND bool_and(expected.columns = installed.columns AND expected.constraints = installed.constraints
                 AND expected.indexes = installed.indexes) AS "Value"
             FROM pairs JOIN shapes expected ON expected.oid = pairs.expected JOIN shapes installed ON installed.oid = pairs.installed
             """).SingleAsync(token);
