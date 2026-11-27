@@ -33,6 +33,21 @@ internal sealed partial class PostgresRootAdmission
     {
         if (!RootEventAdmission.IsValid(request, key, payload)) return HeldRootAdmission.Refused;
         var window = ReceiptWindow(deduplicationWindow, request.KeepFor);
+        for (var retry = 0; ; retry++)
+        {
+            try { return await PublishRequestOnceAsync(request, key, payload, window, token); }
+            catch (PostgresException error) when (retry < 2 &&
+                error.SqlState is PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.SerializationFailure)
+            {
+                // The database rolled back the whole attempt. Keep the caller's original deadline and operation id.
+                await Task.Delay(TimeSpan.FromMilliseconds(10 * (retry + 1)), token);
+            }
+        }
+    }
+
+    private async Task<HeldRootAdmission> PublishRequestOnceAsync(HeldRootRequest request, string key, string? payload,
+        TimeSpan window, CancellationToken token)
+    {
         using var attempt = pressure?.Begin(request.Tenant, RootAdmissionKind.Input);
         await using var db = create();
         RequirePressureProfile(db);

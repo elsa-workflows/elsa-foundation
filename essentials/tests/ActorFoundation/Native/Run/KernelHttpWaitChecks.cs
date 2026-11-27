@@ -87,6 +87,17 @@ internal static class KernelHttpWaitChecks
                         await StateAsync(a) == Contract.ActorStatus.Finished,
                         $"{kind}: an escaped slash and percent are decoded once and the original wait remains independently reachable.");
             }
+            if (provider is not null)
+            {
+                await CheckParkAndScopeAsync();
+                var first = await StartAsync("native", "fanout");
+                var second = await StartAsync("native", "fanout");
+                using var response = await PostAsync("native", "fanout", "cancel");
+                Require(response.StatusCode == HttpStatusCode.OK, "a held request receives the first live reply from the matched waits");
+                await AwaitViewAsync(first, view => view.Header.Status == Contract.ActorStatus.Finished);
+                await AwaitViewAsync(second, view => view.Header.Status == Contract.ActorStatus.Finished);
+                Require(true, "both committed waits on one resolved key receive the held publication");
+            }
         }
         finally
         {
@@ -101,8 +112,9 @@ internal static class KernelHttpWaitChecks
                 .Select(row => row.Header.Ref).ToHashSet();
             using var response = await PostAsync(kind, order, "ship");
             var body = await response.Content.ReadAsStringAsync(token);
-            Require(response.StatusCode == HttpStatusCode.Accepted && body == order,
-                $"{kind}: expected the start to return 202 and '{order}', got {(int)response.StatusCode} '{body}'.");
+            if (response.StatusCode != HttpStatusCode.Accepted || body != order)
+                throw new InvalidOperationException($"{kind}: expected the start to return 202 and '{order}', got {(int)response.StatusCode} '{body}'.");
+            Require(true, $"{kind}: the start returns 202 with the exact route value.");
             return (await reads.ListAsync(scope, new(Status: Contract.ActorStatus.Running), cancellationToken: token)).Items
                 .Single(row => !existing.Contains(row.Header.Ref)).Header.Ref;
         }
@@ -111,6 +123,47 @@ internal static class KernelHttpWaitChecks
             client.PostAsync($"{basePath}/{kind}/orders/{Uri.EscapeDataString(order)}/{action}", null, token);
 
         async Task<Contract.ActorStatus?> StateAsync(Contract.ActorRef actor) => (await reads.GetAsync(scope, actor, token))?.Header.Status;
+
+        async Task<Contract.ActorView> AwaitViewAsync(Contract.ActorRef actor, Func<Contract.ActorView, bool> expected)
+        {
+            while (true)
+            {
+                if (await reads.GetAsync(scope, actor, token) is { } view && expected(view)) return view;
+                await Task.Delay(25, token);
+            }
+        }
+
+        async Task CheckParkAndScopeAsync()
+        {
+            const string order = "park-scope";
+            const string operation = "reusable-held-operation";
+            var reference = await StartAsync("native", order);
+            var match = KernelHttpEdge.Route(serving, "POST", $"/native/orders/{order}/cancel")!;
+            var wait = KernelHttpEdge.Wait(serving, match, new HttpRequest("POST", $"/native/orders/{order}/cancel", null))!;
+            var before = await fixture.EventCount(token);
+            Require((await PublishAsync(ContractScopes.Bind("other-tenant"))).Error == "no waiter" &&
+                await fixture.EventCount(token) == before && await StateAsync(reference) == Contract.ActorStatus.Running,
+                "another tenant cannot publish to the committed wait or leave a receipt");
+            Require(await fixture.Ingress.SendAsync(scope, new Contract.Target.Ref(reference), "park-request", ParkProbe.Fault, cancellationToken: token)
+                is { Outcome: Contract.AdmissionOutcome.Accepted }, "the actor admits the fixture's faulting input");
+            var parked = await AwaitViewAsync(reference, view => view.Park is not null);
+            Require((await PublishAsync(scope)).Error == "no waiter" && await fixture.EventCount(token) == before,
+                "the unresolved Park has no live wait and a held request leaves no durable receipt");
+            Require(await fixture.Ingress.SendAsync(scope, new Contract.Target.Ref(reference), "recover-park", Contract.Kinds.Recover,
+                System.Text.Json.JsonSerializer.Serialize(new Contract.OperatorCommand(parked.Selection)), cancellationToken: token)
+                is { Outcome: Contract.AdmissionOutcome.Accepted }, "the provider admits Recover for the exact Park selection");
+            await AwaitViewAsync(reference, view => view is { Park: null, Header.Status: Contract.ActorStatus.Running });
+            var resumed = await PublishAsync(scope);
+            Require(resumed is { Channel: "response", Error: null } &&
+                KernelHttpEdge.Answer(resumed) is { StatusCode: 200, Body: order },
+                "Recover restores the exact committed wait and the previously unmatched operation can deliver");
+            await AwaitViewAsync(reference, view => view.Header.Status == Contract.ActorStatus.Finished);
+            Require(await fixture.EventCount(token) == before + 1, "only the successfully matched request retains an event receipt");
+
+            async Task<Contract.Reply> PublishAsync(Contract.BoundScope tenant) => await fixture.Ingress.RequestAsync(tenant,
+                new Contract.Target.Event(wait.Key), operation, Contract.Kinds.Event, wait.Payload, null,
+                new(null, await fixture.Clock(token) + 5_000), token);
+        }
 
     }
 
@@ -139,8 +192,9 @@ internal static class KernelHttpWaitChecks
             await cold.CreateAsync(1);
             await cold.InstallPreviewRootSchemaAsync(token);
             var requests = PostgresPreviewHosting.CreateRequests(Open, node, model.Type);
-            var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, model.Type, requests, cancellationToken: token);
-            var owner = await PostgresPreviewHosting.StartAsync(Open, node, model, EndProcess, loop, token, Console.Error.WriteLine,
+            var foundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(Open, model.Type, Authorize,
+                requests, cancellationToken: token);
+            var owner = await PostgresPreviewHosting.StartAsync(Open, node, new ParkProbe(model), EndProcess, loop, token, Console.Error.WriteLine,
                 (IReplyTransport)requests, fenceInBatch: inBatch);
             return new(owner, foundation, foundation, requests.ReadClockAsync, ct => EventCountAsync(Open, ct), () => requests.Pending.All.Count == 0);
         }
@@ -149,9 +203,9 @@ internal static class KernelHttpWaitChecks
         {
             var foundation = SqliteEmbeddedFoundation.ForLiveEventQualification(path!, node, model.Type);
             await foundation.InstallShippedAsync(token);
-            var owner = foundation.CreateHostedService(model, EndProcess, loop, inBatch);
+            var owner = foundation.CreateHostedService(new ParkProbe(model), EndProcess, loop, inBatch);
             await owner.StartAsync(token);
-            var ingress = await foundation.OpenIngressAsync(token);
+            var ingress = await foundation.OpenIngressWithOperatorsAsync(Authorize, token);
             var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
                 { DataSource = path, Pooling = false }.ConnectionString).Options;
             KernelDb Open() => KernelDb.ForSqliteRootShipped(options, StoreFormat.RootLiveEventQualification);
@@ -187,6 +241,9 @@ internal static class KernelHttpWaitChecks
             await using var db = open();
             return await db.Events.CountAsync(token);
         }
+
+        static bool Authorize(Contract.BoundScope scope, Contract.ActorRef _, string kind) =>
+            scope.Tenant == "kernel-http-waits" && kind == Contract.Kinds.Recover;
     }
 
     private sealed class TemporaryDatabase : IDisposable
@@ -210,5 +267,20 @@ internal static class KernelHttpWaitChecks
     private sealed class HttpWaitTransport(Requests requests) : IReplyTransport
     {
         public void Send(string node, Reply reply) => requests.Receive(reply);
+    }
+
+    private sealed class ParkProbe(PublicWorkflow model) : Contract.IActorType
+    {
+        internal const string Fault = "fixture-http-park";
+        public string Type => model.Type;
+        public bool Withholds(Contract.ActorHeader header) => model.Withholds(header);
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token) => model.ExecuteJobAsync(job, token);
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => model.RestoreWaits(header, state);
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => model.TerminalGrowth(header, state);
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => model.ProtectsDeletion(header, state, now);
+
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken token) => turn.Inbox.Any(input => input.Kind == Fault)
+            ? ValueTask.FromException(new InvalidOperationException(Fault))
+            : model.TurnAsync(turn, token);
     }
 }
