@@ -117,7 +117,9 @@ the design side), and converter rules.
 - **State**: kept in the activity's structural state, which commits with each evaluation:
   - the item count;
   - the next item index to schedule;
-  - the set of ended item indexes.
+  - the set of ended item indexes;
+  - the set of item indexes whose `Dispatch` outcome already scheduled a slot, so a second `Dispatch` completion for
+    that pass (an operator's reschedule of the `Dispatch` run) does not run the slot twice.
 - **Ending a pass**: an index is marked ended only when its pass has really ended: after a `Dispatch` outcome with no
   slot to run, or after its slot child completes. Only a newly ended index schedules the next item, so a repeated
   callback cannot exceed the window. There is no recount and no new store method.
@@ -129,7 +131,7 @@ the design side), and converter rules.
     index.
     - A frame belongs to one activity execution, not to an iteration id (`RuntimeContainerScopeService`), so without
       that request `variables.currentItem` fails at run time in the slot, even though publish passes.
-    - A `RetryFaultedActivity` successor gets its frame from the source's frame (`ActivitySuccessorStaging`).
+    - A `RescheduleActivity` (or `RetryFaultedActivity`) successor gets its frame from the source's frame (`ActivitySuccessorStaging`).
   - Complete with `Done` when the set holds every index.
 - **Faults**: no handler. The incident strategy decides. Under ContinueWithIncidents the pass stays open until a
   `RescheduleActivity` of the faulted child, and the successor's completion ends the pass as usual.
@@ -250,7 +252,8 @@ the design side), and converter rules.
   - under ContinueWithIncidents a slot fault is an open incident, other passes go on, `RetryFaultedActivity` is
     refused, and a `RescheduleActivity` ends the pass;
   - a `Dispatch` self-fault follows the strategy (`ChildFaulted` does not run);
-  - the window of 16: never more than 16 passes open, including under repeated callbacks;
+  - the window of 16: never more than 16 passes open, including under repeated callbacks, and a second Dispatch
+    completion for a pass whose slot already runs schedules nothing;
   - publish refuses an empty or wrong `Dispatch` slot (`BulkDispatch/DispatchSlot`);
   - `variables.currentItem` reads in `Dispatch` and in the slots resolve at publish;
   - at run time, `ChildCompleted` and `ChildFaulted` read the right `currentItem` and `currentIndex` for their pass, also

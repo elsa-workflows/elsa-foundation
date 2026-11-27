@@ -557,6 +557,32 @@ public sealed class DispatchWorkflowDesignTests
         Assert.Equal("same", enriched.Metadata["shared-key"]);
     }
 
+    /// <summary>
+    /// Spec 1242 FR-003/SC-004: a DispatchWorkflow in a BulkDispatchWorkflows Dispatch slot is pinned by the unchanged pin
+    /// source like any other dispatch node.
+    /// </summary>
+    [Fact]
+    public async Task Pin_source_pins_a_Dispatch_node_inside_a_bulk_dispatch_slot()
+    {
+        var node = DispatchNode("bulk-dispatch", "child-definition");
+        var bulk = new ExecutableNode(
+            "bulk", "bulk", BulkDispatchWorkflowsConstants.ActivityType, "1.0.0", "test-descriptor",
+            JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(BulkDispatchWorkflowsConstants.DispatchSlotName, [node])]);
+        var executable = Executable("child-artifact", "child-definition", DispatchNode("child-root", "unrelated"));
+        var executables = new InMemoryWorkflowExecutableStore();
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await executables.SaveAsync(executable);
+        await references.SaveAsync(Source("published-source", "child-definition", executable.Identity.ArtifactId));
+        var sourceProvider = new DispatchPinSource(references, executables, InputValidator(), new FakeTimeProvider(Now));
+
+        var contribution = Assert.Single(await sourceProvider.GetMetadataAsync(Context(bulk)));
+        var dependency = Assert.Single((await sourceProvider.GetContributionAsync(CompilationContext(bulk))).Dependencies);
+
+        Assert.Equal(("bulk-dispatch", DispatchWorkflowConstants.PinnedTargetMetadataKey), (contribution.ExecutableNodeId, contribution.Key));
+        Assert.Equal(("bulk-dispatch", executable.Identity.ArtifactId), (dependency.ExecutableNodeId, dependency.ArtifactId));
+    }
+
     private static ExecutableNodeMetadataContext Context(ExecutableNode node, string? tenantId = null)
     {
         var request = new WorkflowExecutableCompileRequest(

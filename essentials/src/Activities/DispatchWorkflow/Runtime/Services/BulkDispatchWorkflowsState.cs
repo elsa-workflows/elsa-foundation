@@ -7,14 +7,17 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 
 /// <summary>
 /// The private structural state of one <c>BulkDispatchWorkflows</c> execution (spec 1242 plan §2): the item count, the
-/// next item index to schedule and the indexes whose passes have ended. It commits with each structural evaluation, so
-/// a repeated callback for an ended pass cannot schedule a further item and exceed the window. The items themselves are
+/// next item index to schedule, the indexes whose passes have ended and the indexes whose Dispatch outcome already
+/// scheduled a slot. It commits with each structural evaluation, so a repeated callback cannot schedule a further item
+/// and exceed the window, and a second Dispatch completion for a pass (for example after an operator reschedules it)
+/// cannot run its slot twice. The items themselves are
 /// not held; they are re-read from the committed <c>Items</c> input.
 /// </summary>
 internal sealed record BulkDispatchWorkflowsState(
     [property: JsonPropertyName("count")] int Count,
     [property: JsonPropertyName("next")] int Next,
-    [property: JsonPropertyName("ended")] IReadOnlyList<int> Ended)
+    [property: JsonPropertyName("ended")] IReadOnlyList<int> Ended,
+    [property: JsonPropertyName("routed")] IReadOnlyList<int> Routed)
 {
     public const string TypeAlias = "Elsa.BulkDispatchWorkflows.State";
     public const int SchemaVersion = 1;
@@ -26,6 +29,12 @@ internal sealed record BulkDispatchWorkflowsState(
     public bool IsEnded(int index) => Ended.Contains(index);
 
     public bool AllEnded => Ended.Count >= Count;
+
+    public bool IsRouted(int index) => Routed.Contains(index);
+
+    /// <summary>Marks <paramref name="index"/> as routed to a slot, keeping the list sorted.</summary>
+    public BulkDispatchWorkflowsState Route(int index) =>
+        this with { Routed = Routed.Append(index).Distinct().Order().ToArray() };
 
     /// <summary>Marks <paramref name="index"/> ended, keeping the list sorted.</summary>
     public BulkDispatchWorkflowsState End(int index)

@@ -316,7 +316,7 @@ and on-completed-callbacks suites pass.
   - that `DispatchFailed` reaches `ChildFaulted` only when the `Dispatch` node waits. A fire-and-forget child that
     fails to start is not seen by the bulk activity;
   - that a slot holding a `Flowchart` or another composite that handles its own child faults reports the fault as the
-    slot's direct child, so the activity to retry is that direct child;
+    slot's direct child, so the activity to reschedule is that direct child;
   - that under ContinueWithIncidents a faulted pass keeps its place in the window of 16 until it is rescheduled, so 16
     open incidents stall the activity.
 

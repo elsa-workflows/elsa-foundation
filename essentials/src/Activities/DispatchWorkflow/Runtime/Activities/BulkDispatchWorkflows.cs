@@ -76,7 +76,7 @@ public sealed class BulkDispatchWorkflows : StructuralActivity, IRuntimeStructur
         for (var index = 0; index < opened; index++)
             Schedule(runtimeContext, dispatch, items, index, "bulk-dispatch.dispatch");
 
-        var state = new BulkDispatchWorkflowsState(items.Count, opened, []);
+        var state = new BulkDispatchWorkflowsState(items.Count, opened, [], []);
         return ValueTask.FromResult(state.Stage(RuntimeStructuralContinuation.Defer));
     }
 
@@ -95,10 +95,14 @@ public sealed class BulkDispatchWorkflows : StructuralActivity, IRuntimeStructur
 
         if (navigator.IsDispatch(context.CompletedChildExecutableNodeId))
         {
+            // The pass's slot already runs: a second Dispatch completion (a rescheduled Dispatch run) changes nothing.
+            if (state.IsRouted(index))
+                return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+
             if (SelectSlot(navigator, context.OutcomeNames) is { } slot)
             {
                 Schedule(runtimeContext, slot, BulkDispatchItems.Resolve(Items), index, "bulk-dispatch.slot");
-                return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+                return ValueTask.FromResult(state.Route(index).Stage(RuntimeStructuralContinuation.Defer));
             }
         }
         else if (!navigator.IsSlot(context.CompletedChildExecutableNodeId))
@@ -112,7 +116,7 @@ public sealed class BulkDispatchWorkflows : StructuralActivity, IRuntimeStructur
 
     // FR-006: Completed runs ChildCompleted; Faulted, Cancelled and DispatchFailed run ChildFaulted; Dispatched (the node
     // did not wait) runs nothing. A missing slot ends the pass.
-    private static ExecutableNode? SelectSlot(BulkDispatchWorkflowsNavigator navigator, IReadOnlyCollection<string> outcomes)
+    internal static ExecutableNode? SelectSlot(BulkDispatchWorkflowsNavigator navigator, IReadOnlyCollection<string> outcomes)
     {
         if (outcomes.Contains(DispatchWorkflowOutcomes.Completed, StringComparer.Ordinal))
             return navigator.ChildCompleted;

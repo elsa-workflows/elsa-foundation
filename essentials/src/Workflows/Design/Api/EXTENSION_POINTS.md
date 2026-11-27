@@ -317,6 +317,7 @@ Known implementations:
 - `BpmnDocumentStructureHandler` (`Elsa.Activities.Bpmn.Design`), singleton for `elsa.bpmn.structure@2.0.0` *(cross-domain — complete XML/native retention, lexical selected-scope projection, all physical native/header ownership; result-order facts remain Unknown and compilation is closed)*.
 - `BpmnDocumentScopeViewHandler` (`Elsa.Activities.Bpmn.Design`), singleton for transient `elsa.bpmn.scope-view@1.0.0` *(cross-domain — pure scope queries/replacement; no authored payload type, physical-source authority or executable support)*. `ActivitiesBpmnDesignFeature` registers both idempotently alongside the schema-1 handler.
 - `CompensationScopeStructureHandler` (`Elsa.Activities.Compensation`) *(cross-domain — implements `ChildrenCompletedBefore`: a handler sees its own step's result first)*.
+- `BulkDispatchWorkflowsStructureHandler` (`Elsa.Activities.DispatchWorkflow.Design`) *(cross-domain — three single slots run concurrently across item passes: every child pair `Unordered`, a result binding between two different children refused, `currentItem`/`currentIndex` as iteration variables; spec 1242)*.
 
 ---
 
