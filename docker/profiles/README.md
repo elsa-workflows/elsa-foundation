@@ -11,7 +11,7 @@ A profile runs `Elsa.Foundation.Host.dll`. `packages.txt` selects the NuGet pack
 
 ## Build Essentials from your checkout
 
-From the repository root in Rider's terminal or a shell, run:
+From the repository root in Rider's terminal or a shell on macOS or Linux, run:
 
 ```sh
 python3 tools/docker-profiles/local-server-profile.py

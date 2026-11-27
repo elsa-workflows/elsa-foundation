@@ -1,7 +1,9 @@
 import importlib.util
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 
 spec = importlib.util.spec_from_file_location(
@@ -17,6 +19,8 @@ class LocalServerProfileTests(unittest.TestCase):
             original = Path(temporary) / "original"
             original.mkdir()
             helper.git(original, "init", "--quiet")
+            helper.git(original, "config", "diff.noprefix", "true")
+            helper.git(original, "config", "color.ui", "always")
             (original / ".gitignore").write_text("ignored\n")
             (original / "edited").write_text("original\n")
             (original / "removed").write_bytes(b"\x00original")
@@ -34,10 +38,14 @@ class LocalServerProfileTests(unittest.TestCase):
             (original / "ignored").write_text("ignored\n")
             initial_head = helper.git(original, "rev-parse", "HEAD")
             initial_status = helper.git(original, "status", "--porcelain")
+            index = original / ".git" / "index"
+            initial_index = index.read_bytes()
 
             snapshot = Path(temporary) / "snapshot"
-            revision = helper.snapshot(original, snapshot)
+            with patch.dict(os.environ, {"GIT_INDEX_FILE": str(index)}):
+                revision = helper.snapshot(original, snapshot)
 
+            self.assertEqual(initial_index, index.read_bytes())
             self.assertNotEqual(initial_head.decode().strip(), revision)
             self.assertEqual("working tree\n", (snapshot / "edited").read_text())
             self.assertEqual(b"\x00new", (snapshot / "new file").read_bytes())
