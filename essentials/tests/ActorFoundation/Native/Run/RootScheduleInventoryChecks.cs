@@ -255,6 +255,11 @@ internal static class RootScheduleInventoryChecks
             await db.Messages.CountAsync(token) == messageCount, "the retired birth replays without recreating its inbox");
         if (db.UsesRootScheduleLineage)
         {
+            var definition = postgres
+                ? """CREATE INDEX "IX_FoundationScheduleLineage_Cohort" ON "FoundationScheduleLineage" ("Tenant", "RootReference", "Retired")"""
+                : await db.Database.SqlQueryRaw<string>("""
+                    SELECT sql AS "Value" FROM sqlite_schema WHERE name = 'IX_FoundationScheduleLineage_Cohort'
+                    """).SingleAsync(token);
             await db.Database.ExecuteSqlRawAsync("""
                 DROP INDEX "IX_FoundationScheduleLineage_Cohort";
                 CREATE INDEX "IX_FoundationScheduleLineage_Cohort"
@@ -268,11 +273,8 @@ internal static class RootScheduleInventoryChecks
             catch (StoreFormatException) { Console.WriteLine("ok cohort retirement refuses an incompatible live-member index"); }
             finally
             {
-                await db.Database.ExecuteSqlRawAsync("""
-                    DROP INDEX "IX_FoundationScheduleLineage_Cohort";
-                    CREATE INDEX "IX_FoundationScheduleLineage_Cohort"
-                        ON "FoundationScheduleLineage" ("Tenant", "RootReference", "Retired");
-                    """, token);
+                await db.Database.ExecuteSqlRawAsync("""DROP INDEX "IX_FoundationScheduleLineage_Cohort" """, token);
+                await db.Database.ExecuteSqlRawAsync(definition, token);
             }
         }
 
