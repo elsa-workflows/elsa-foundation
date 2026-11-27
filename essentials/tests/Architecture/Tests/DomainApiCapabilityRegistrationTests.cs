@@ -53,7 +53,14 @@ public sealed class DomainApiCapabilityRegistrationTests
                 [new("expression-descriptors", "expressions/descriptors"), new("variable-types", "expressions/variable-types")],
                 "ExpressionsApi")
         },
-        { typeof(WorkflowsPublishingApiFeature), PublishingApiCapabilities.StaticDeclaration },
+        {
+            typeof(WorkflowsPublishingApiFeature),
+            PublishingApiCapabilities.StaticDeclaration with
+            {
+                Links = PublishingApiCapabilities.StaticDeclaration.Links
+                    .Where(link => !link.Rel.Contains("test-run", StringComparison.Ordinal)).ToArray()
+            }
+        },
         { typeof(WorkflowsRuntimeApiFeature), RuntimeApiCapabilities.StaticDeclaration }
     };
 
