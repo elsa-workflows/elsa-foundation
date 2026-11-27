@@ -277,7 +277,8 @@ internal sealed partial class ActorAdapter
         {
             if (facts.InlineRetry is { } retry)
                 return issueSelf is { } issuer && Durable.FoundationInlineRetry.Matches(issuer, row, retry);
-            if (!facts.KeepsQueuedCreator) return false;
+            // A first-turn inline Park has no ordinary creator. A later Park can follow a valid null checkpoint.
+            if (facts.Mark?.Revision == 1 && !facts.KeepsQueuedCreator) return false;
         }
         try
         {

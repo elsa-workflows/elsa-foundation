@@ -345,39 +345,55 @@ internal static class PostgresShippedFormatChecks
     {
         var actor = new QueuedCreatorActor();
         var scope = EmbeddedTenant.Bind("queued-creator");
-        var foundation = await PostgresPreviewHosting.OpenFoundationAsync(open, actor.Type, cancellationToken: token);
+        const string node = "queued-creator-owner";
+        var requests = PostgresPreviewHosting.CreateRequests(open, node, actor.Type);
+        var foundation = await PostgresPreviewHosting.OpenFoundationAsync(open, actor.Type, requests, cancellationToken: token);
         var operators = await store.OpenSelectedRootIngressAsync(actor.Type, TimeSpan.FromHours(1),
             (bound, _) => ReferenceEquals(bound, scope), token, (bound, _) => ReferenceEquals(bound, scope));
-        await using var owner = await PostgresPreviewHosting.StartAsync(open, "queued-creator-owner", actor,
+        await using var owner = await PostgresPreviewHosting.StartAsync(open, node, actor,
             reason => throw new InvalidOperationException(reason), new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(20) },
-            token, onFault: null, replies: null, fenceInBatch: inBatch);
+            token, onFault: null, replies: requests, fenceInBatch: inBatch);
 
-        var target = new Contract.Target.Start(new(actor.Type, "ordinary"));
-        async Task<Contract.Admission> StartAsync() =>
-            await foundation.SendAsync(scope, target, "queued-start", Contract.Kinds.Start, cancellationToken: token);
-        var started = await StartAsync();
+        async Task<Contract.Admission> StartAsync(string id) =>
+            await foundation.SendAsync(scope, new Contract.Target.Start(new(actor.Type, id)), id, Contract.Kinds.Start, cancellationToken: token);
+        var started = await StartAsync("queued-start");
         Require(started is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null },
             "the shipped provider admits the queued creator");
         var actorRef = started.Actor!.Value;
-        var parked = await WaitForRevisionAsync(1);
+        var parked = await WaitForRevisionAsync(actorRef, 1);
         Require(parked is { Status: InstanceStatus.Faulted, ParkAt: not null, State: null },
             "the ordinary creator faults before its first state");
         var selection = (await foundation.GetAsync(scope, actorRef, token))!.Selection;
         Require(await operators.SendAsync(scope, new Contract.Target.Ref(actorRef), "recover-queued-creator", Contract.Kinds.Recover,
             JsonSerializer.Serialize(new Contract.OperatorCommand(selection)), cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
             "the exact queued creator Park admits Recover");
-        Require(await WaitForRevisionAsync(2) is { Status: InstanceStatus.Running, ParkAt: null },
+        Require(await WaitForRevisionAsync(actorRef, 2) is { Status: InstanceStatus.Running, ParkAt: null },
             "the queued creator uses the actor's recovery plan in the shared inline-capable format");
         await using var db = open();
         Require(!await db.Messages.AnyAsync(row => row.Target == parked.Actor.Id && row.InboxScope == 0, token) &&
-            await StartAsync() is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var duplicate } && duplicate == actorRef,
+            await StartAsync("queued-start") is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var duplicate } && duplicate == actorRef,
             "queued recovery clears the creator while retaining the original receipt");
 
-        async Task<EfStore.RootImage> WaitForRevisionAsync(long revision)
+        var nullableStart = await StartAsync("save-null");
+        var nullable = nullableStart.Actor!.Value;
+        Require(await WaitForRevisionAsync(nullable, 1) is { Status: InstanceStatus.Running, State: null },
+            "the ordinary creator can commit a null state before later inputs");
+        Require(await foundation.SendAsync(scope, new Contract.Target.Ref(nullable), "fault-later", "fail", cancellationToken: token) is
+            { Outcome: Contract.AdmissionOutcome.Accepted }, "a later input is admitted against the null checkpoint");
+        Require(await WaitForRevisionAsync(nullable, 2) is { Status: InstanceStatus.Faulted, ParkAt: not null, State: null },
+            "a later failure can park the same null checkpoint");
+        var later = (await foundation.GetAsync(scope, nullable, token))!.Selection;
+        Require(await operators.SendAsync(scope, new Contract.Target.Ref(nullable), "recover-later", Contract.Kinds.Recover,
+            JsonSerializer.Serialize(new Contract.OperatorCommand(later)), cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+            "the later null-state Park admits Recover");
+        Require(await WaitForRevisionAsync(nullable, 3) is { Status: InstanceStatus.Running, ParkAt: null },
+            "a later null checkpoint uses its ordinary recovery plan");
+
+        async Task<EfStore.RootImage> WaitForRevisionAsync(Contract.ActorRef reference, long revision)
         {
             while (true)
             {
-                if (await store.ReadFirstRootAsync(scope.Tenant, actorRef.Id, token) is { } row && row.Revision >= revision)
+                if (await store.ReadFirstRootAsync(scope.Tenant, reference.Id, token) is { } row && row.Revision >= revision)
                     return row;
                 await Task.Delay(20, token);
             }
@@ -388,8 +404,12 @@ internal static class PostgresShippedFormatChecks
     {
         public string Type => "queued-creator-fault";
         public bool Withholds(Contract.ActorHeader header) => false;
-        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("The queued fixture faults before committing state.");
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            if (turn.Header.TypeData == "save-null" && turn.Inbox is [{ Kind: Contract.Kinds.Start }])
+                return ValueTask.CompletedTask;
+            throw new InvalidOperationException("The queued fixture faults without changing state.");
+        }
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("The queued fixture has no jobs.");
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
