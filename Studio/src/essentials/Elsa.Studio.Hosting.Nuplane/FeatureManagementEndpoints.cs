@@ -5,6 +5,7 @@ using Elsa.Modularity.Core.Models;
 using Elsa.Studio.Api.Authorization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
+using global::Nuplane.Abstractions.PackageStoreProtection;
 
 namespace Elsa.Studio.Hosting.Nuplane;
 
@@ -23,10 +24,22 @@ internal static class FeatureManagementEndpoints
     public static void Map(IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/modularity/features").WithElsaJsonResponseHeaders();
-        group.MapGet("", async (IFeatureManagementService service, CancellationToken token) => Results.Json(await service.GetCatalogAsync(token), Json))
+        group.MapGet("", CatalogAsync)
             .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementReadPolicyName);
         group.MapPost("/apply", ApplyAsync).Accepts<FeatureApplyRequest>("application/json")
             .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
+    }
+
+    private static async Task<IResult> CatalogAsync(IFeatureManagementService service, HttpContext context)
+    {
+        try
+        {
+            return Results.Json(await service.GetCatalogAsync(context.RequestAborted), Json);
+        }
+        catch (PackageStoreAdmissionException error)
+        {
+            return Unavailable(context, error);
+        }
     }
 
     private static async Task<IResult> ApplyAsync(HttpContext context, IFeatureManagementService service, CancellationToken cancellationToken)
@@ -67,5 +80,20 @@ internal static class FeatureManagementEndpoints
         {
             return Results.Json(new { Error = error.Message }, Json, statusCode: StatusCodes.Status503ServiceUnavailable);
         }
+        catch (PackageStoreAdmissionException error)
+        {
+            return Unavailable(context, error);
+        }
+    }
+
+    /// <summary>
+    /// The catalog reads installed package metadata under Nuplane's admission. An enrolled store's reconciliation cycle holds its
+    /// non-waiting root lock, so a read meanwhile is refused; the client reads again shortly, as for the module registry.
+    /// </summary>
+    private static IResult Unavailable(HttpContext context, PackageStoreAdmissionException error)
+    {
+        context.Response.Headers.RetryAfter = "1";
+        return Results.Json(new { Error = "The feature catalog is temporarily unavailable.", Reason = error.Reason.ToString() },
+            Json, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 }

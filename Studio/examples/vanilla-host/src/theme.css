@@ -3,7 +3,7 @@
  *
  * `@elsa-workflows/studio-ui/tokens.css` defines the *semantic* `--studio-*` vocabulary
  * as aliases onto these lower-level primitives (e.g. `--studio-bg: var(--background)`,
- * `--studio-accent: var(--primary)`). In Elsa.Studio.Web those primitives are (re)written
+ * `--studio-accent: var(--primary)`). In Elsa.Studio.Workbench.Host those primitives are (re)written
  * per theme+mode by the host's ThemeProvider. Outside the host, YOU own them — this file
  * is exactly that: a minimal, self-contained light theme a consuming app supplies so the
  * primitives (and the `--studio-*` aliases layered on top) resolve to real colours.

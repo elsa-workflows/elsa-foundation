@@ -212,11 +212,15 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 || source.Id.Contains(query.Search, StringComparison.OrdinalIgnoreCase));
         var page = allowed.Skip(query.Skip).Take(query.Take + 1).ToArray();
         var budget = new ShapeBudget(query.ShapeLimits.MaximumMembers, query.ShapeLimits.MaximumDepth);
+        // Opted-in Declared members are advisory: they get a budget of their own and never crowd out proven shapes.
+        var declaredBudget = new ShapeBudget(query.ShapeLimits.MaximumMembers, query.ShapeLimits.MaximumDepth);
         var factsBuilder = ImmutableArray.CreateBuilder<ActivityDataSelectionSourceFacts>();
         foreach (var source in page.Take(query.Take))
         {
-            var shape = await Shape(source, document, query.MemberPath, new(query.ShapeLimits.MaximumDepth, budget.Remaining), cancellationToken);
-            shape = budget.Bound(shape);
+            var limits = new ActivitySerializedShapeLimits(query.ShapeLimits.MaximumDepth,
+                source.Version is null && query.IncludeDeclaredMembers ? Math.Max(budget.Remaining, declaredBudget.Remaining) : budget.Remaining);
+            var shape = await Shape(source, document, query.MemberPath, limits, cancellationToken, query.IncludeDeclaredMembers);
+            shape = shape.State == ActivitySerializedShapeState.Declared ? declaredBudget.Bound(shape) : budget.Bound(shape);
             ExpressionParameterBinding? parameter = null;
             if (expressionQuery && source.ParameterSource is { } proposed)
             {
@@ -531,7 +535,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
     };
 
     private async ValueTask<ActivitySerializedShape> Shape(Source source, ActivityDataSelectionDocument document,
-        ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken ct)
+        ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken ct, bool includeDeclaredMembers = false)
     {
         ct.ThrowIfCancellationRequested();
         if (source.ReasonCode == "LegacyRequestPath") return Unknown(null, document.ContractRevision, "LegacyRequestPath");
@@ -547,6 +551,11 @@ internal sealed class ActivityDataSelectionAnalyzer(
             if (owned is not null) throw new InvalidOperationException("More than one serialized-shape source owns the admitted data contract.");
             owned = candidate;
         }
+        // A Declared shape is advisory authoring help. Unless the query opts in, it gets the answer a declared type
+        // had before it was described: unbound, without members, typed only as the whole value.
+        if (owned is { State: ActivitySerializedShapeState.Declared } && !includeDeclaredMembers)
+            owned = Unknown(memberPath.IsDefaultOrEmpty ? owned.Type : null, owned.SourceContractRevision, "activity.shape.serialization-profile-unbound")
+                with { IsSensitive = owned.IsSensitive, IsCredential = owned.IsCredential };
         var shape = owned ?? Unknown(memberPath.IsDefaultOrEmpty ? source.Type : null, document.ContractRevision, "NoMetadataOwner");
         return shape with { IsNullable = memberPath.IsDefaultOrEmpty ? source.IsNullable ?? shape.IsNullable : shape.IsNullable,
             IsSensitive = source.IsSensitive == true ? true : shape.IsSensitive,
@@ -671,7 +680,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
             var element = Child(shape.Element);
             var mapValue = Child(shape.MapValue);
             return shape with { Members = members.ToImmutable(), Element = element, MapValue = mapValue,
-                State = truncated ? ActivitySerializedShapeState.Truncated : shape.State,
+                // A truncated Declared shape stays Declared: its members remain advisory, never trusted as known.
+                State = truncated && shape.State != ActivitySerializedShapeState.Declared ? ActivitySerializedShapeState.Truncated : shape.State,
                 ReasonCode = truncated ? "ResponseLimit" : shape.ReasonCode };
         }
     }

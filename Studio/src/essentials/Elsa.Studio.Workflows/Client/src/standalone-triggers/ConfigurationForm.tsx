@@ -7,8 +7,8 @@ import { preserveConfiguration } from "./configurationValues";
 import type { AdmissionPolicy, ConfigurationField, HttpMode, JsonValue, TriggerTypeDescriptor, TriggerView } from "./types";
 
 export interface ConfigurationDraft { name: string; description: string; configuration: Record<string, JsonValue>; http?: { mode: HttpMode; admissionPolicy?: AdmissionPolicy } }
-export function ConfigurationForm({ descriptor, trigger, initialDraft, editors = [], serverErrors = {}, busy, onCancel, onSubmit }: {
-  descriptor: TriggerTypeDescriptor; trigger?: TriggerView; initialDraft?: ConfigurationDraft; editors?: readonly StudioTriggerConfigurationEditorContribution[]; serverErrors?: Record<string, string[]>; busy?: boolean; onCancel(): void; onSubmit(draft: ConfigurationDraft): void;
+export function ConfigurationForm({ descriptor, trigger, initialDraft, editors = [], serverErrors = {}, busy, hideDescriptorDescription = false, actionsClassName = "studio-page-actions", afterFields, onCancel, onSubmit }: {
+  descriptor: TriggerTypeDescriptor; trigger?: TriggerView; initialDraft?: ConfigurationDraft; editors?: readonly StudioTriggerConfigurationEditorContribution[]; serverErrors?: Record<string, string[]>; busy?: boolean; hideDescriptorDescription?: boolean; actionsClassName?: string; afterFields?: ReactNode; onCancel(): void; onSubmit(draft: ConfigurationDraft): void;
 }) {
   const [name, setName] = useState(initialDraft?.name ?? trigger?.name ?? "");
   const [description, setDescription] = useState(initialDraft?.description ?? trigger?.description ?? "");
@@ -71,7 +71,7 @@ export function ConfigurationForm({ descriptor, trigger, initialDraft, editors =
   return <form className="wf-trigger-form" onSubmit={submit} noValidate>
     <StudioField label="Name" error={displayedErrors.name}><input aria-label="Trigger name" value={name} maxLength={200} disabled={busy} aria-invalid={!!displayedErrors.name} onChange={event => setName(event.currentTarget.value)} /></StudioField>
     <StudioField label="Description" error={displayedErrors.description}><textarea aria-label="Trigger description" value={description} maxLength={2000} disabled={busy} onChange={event => setDescription(event.currentTarget.value)} /></StudioField>
-    <p>{descriptor.description}</p><Findings items={descriptor.findings} />
+    {!hideDescriptorDescription && descriptor.description ? <p>{descriptor.description}</p> : null}<Findings items={descriptor.findings} />
     {fallback ? <StudioAlert tone="warning">{fallback}</StudioAlert> : null}
     {Editor && editor ? <ConfigurationEditorBoundary key={editor.id} onFailure={() => setEditorFailed(true)}><Editor typeKey={descriptor.typeKey} schemaVersion={descriptor.schemaVersion}
       configuration={publicConfiguration!} disabled={!!busy} findings={[...(descriptor.findings ?? []), ...Object.entries(displayedErrors).map(([field, message]) => ({ code: "LocalValidation", field, message }))]} onChange={changeEditor} /></ConfigurationEditorBoundary>
@@ -87,7 +87,8 @@ export function ConfigurationForm({ descriptor, trigger, initialDraft, editors =
       {mode === "WorkflowResponse" ? <p>Exactly one compatible workflow owns the response. A second response owner prevents activation.</p> : mode === "AsyncFanOut" ? <StudioField label="Admission policy" description="This policy belongs to the shared trigger and applies to every request. It governs acceptance; later dispatch and recovery remain independent."><select aria-label="HTTP admission policy" value={policy} disabled={busy} onChange={event => setPolicy(event.currentTarget.value as AdmissionPolicy)}><option value="RequireAll">Require all subscribers</option><option value="AcceptAvailable">Accept available subscribers</option></select><small>{policy === "RequireAll" ? "Refuse the request if any enabled subscriber cannot be accepted." : "Explicitly report partial acceptance and each refused subscriber. Accepting no subscribers fails."}</small></StudioField> : null}
     </> : null}
     {!trigger ? <StudioAlert>The trigger is created paused. Review its subscriptions and enable it when ready.{isHttp ? " An HTTP route is reserved on its first successful enable." : ""}</StudioAlert> : null}
-    <div className="studio-page-actions"><StudioButton type="button" disabled={busy} onClick={onCancel}>Cancel</StudioButton><StudioButton type="submit" variant="primary" disabled={busy || !descriptor.canCreate && !trigger}>{busy ? "Saving…" : trigger ? "Review changes" : "Create trigger"}</StudioButton></div>
+    {afterFields}
+    <div className={actionsClassName}><StudioButton type="button" disabled={busy} onClick={onCancel}>Cancel</StudioButton><StudioButton type="submit" variant="primary" disabled={busy || !descriptor.canCreate && !trigger}>{busy ? "Saving…" : trigger ? "Review changes" : "Create trigger"}</StudioButton></div>
   </form>;
 }
 class ConfigurationEditorBoundary extends Component<{ children: ReactNode; onFailure(): void }, { failed: boolean }> {

@@ -1,0 +1,61 @@
+#nullable enable
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentityPostgreSqlDbContext
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentityPostgreSqlDbContext.OpenIddictIdentityPostgreSqlDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentityPostgreSqlDbContext!>! options) -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentityPostgreSqlDbContextFactory
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentityPostgreSqlDbContextFactory.CreateDbContext(string![]! args) -> Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentityPostgreSqlDbContext!
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentityPostgreSqlDbContextFactory.OpenIddictIdentityPostgreSqlDbContextFactory() -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentitySqlServerDbContext
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentitySqlServerDbContext.OpenIddictIdentitySqlServerDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentitySqlServerDbContext!>! options) -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentitySqlServerDbContextFactory
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentitySqlServerDbContextFactory.CreateDbContext(string![]! args) -> Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentitySqlServerDbContext!
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.OpenIddictIdentitySqlServerDbContextFactory.OpenIddictIdentitySqlServerDbContextFactory() -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.PostgreSql.Migrations.Initial
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.PostgreSql.Migrations.Initial.Initial() -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.SqlServer.Migrations.Initial
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.SqlServer.Migrations.Initial.Initial() -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictEntityFrameworkCoreDefaults
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictEntityFrameworkCoreOptions
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictEntityFrameworkCoreOptions.AutoMigrate.get -> bool
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictEntityFrameworkCoreOptions.AutoMigrate.set -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictEntityFrameworkCoreOptions.ConnectionString.get -> string?
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictEntityFrameworkCoreOptions.ConnectionString.set -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictEntityFrameworkCoreOptions.OpenIddictEntityFrameworkCoreOptions() -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictIdentityDbContext
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictIdentityDbContext.OpenIddictIdentityDbContext(Microsoft.EntityFrameworkCore.DbContextOptions! options) -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictIdentityDbContext.OpenIddictIdentityDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictIdentityDbContext!>! options) -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictPruningOptions
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictPruningOptions.Enabled.get -> bool
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictPruningOptions.Enabled.set -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictPruningOptions.Interval.get -> System.TimeSpan
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictPruningOptions.Interval.set -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictPruningOptions.MinimumAge.get -> System.TimeSpan
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictPruningOptions.MinimumAge.set -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictPruningOptions.OpenIddictPruningOptions() -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictPruningOptions.Timeout.get -> System.TimeSpan
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictPruningOptions.Timeout.set -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictStoreExtensions
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictStoreOptions
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictStoreOptions.OpenIddictStoreOptions() -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictStoreOptions.Provider.get -> string?
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictStoreOptions.Provider.set -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Sqlite.Migrations.Initial
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Sqlite.Migrations.Initial.Initial() -> void
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Sqlite.OpenIddictIdentityDbContextFactory
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Sqlite.OpenIddictIdentityDbContextFactory.CreateDbContext(string![]! args) -> Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictIdentityDbContext!
+Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Sqlite.OpenIddictIdentityDbContextFactory.OpenIddictIdentityDbContextFactory() -> void
+const Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictEntityFrameworkCoreDefaults.DefaultConnectionString = "Data Source=identity.db" -> string!
+const Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictEntityFrameworkCoreDefaults.MigrationsHistoryTable = "__EFMigrationsHistory_OpenIddict" -> string!
+const Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictIdentityDbContext.Schema = "Identity" -> string!
+const Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictPruningOptions.SectionPath = "CShells:Shells:default:Features:FoundationIdentityOpenIddict:Prune" -> string!
+const Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictStoreOptions.SectionPath = "CShells:Shells:default:Features:FoundationIdentityOpenIddict" -> string!
+override Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictIdentityDbContext.OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder! builder) -> void
+static Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictStoreExtensions.AddOpenIddictEntityFrameworkCoreStore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+~override Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.PostgreSql.Migrations.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.PostgreSql.Migrations.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.PostgreSql.Migrations.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.SqlServer.Migrations.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.SqlServer.Migrations.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines.SqlServer.Migrations.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Sqlite.Migrations.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Sqlite.Migrations.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Sqlite.Migrations.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void

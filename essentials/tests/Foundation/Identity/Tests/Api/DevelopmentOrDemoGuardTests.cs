@@ -1,7 +1,7 @@
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
-using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
+using Elsa.Foundation.Identity.Tests.OpenIddict.VendorStore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 using Microsoft.AspNetCore.Builder;

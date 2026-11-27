@@ -23,7 +23,7 @@ namespace Elsa.Workbench.Tests;
 /// runs during a real apply call — not merely a unit-level assertion. Unbindable is also the only verdict the
 /// guard can reach under whatever migrate policy this host happens to run (it is checked before the
 /// AutoMigrate early-return), so this test needs no policy override at all. Workbench ships all four provider
-/// engines (Sqlite, SqlServer, Npgsql, MySql — see Elsa.Workbench.csproj), so a real provider name will not
+/// engines (Sqlite, SqlServer, Npgsql, MySql — see Elsa.Workbench.Host.csproj), so a real provider name will not
 /// do; "Oracle" is not one <c>EfRelationalProviderBinding.Select</c> knows, so it refuses the same way an
 /// engine assembly that failed to load would.
 /// <para>

@@ -11,7 +11,7 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
     public void Inventory_includes_hosts_and_all_Studio_CSharp_roots()
     {
         var projects = ShippingHashAssemblies.Discover(RepoPaths.RepoRoot, Configuration);
-        Assert.Contains(projects, project => project.Path.Replace('\\', '/').Contains("apps/Elsa.Workbench/", StringComparison.Ordinal));
+        Assert.Contains(projects, project => project.Path.Replace('\\', '/').Contains("apps/Elsa.Workbench.Host/", StringComparison.Ordinal));
         Assert.Contains(projects, project => project.Path.Replace('\\', '/').Contains("apps/Elsa.Foundation.Host/", StringComparison.Ordinal));
         Assert.Contains(projects, project => project.Path.Replace('\\', '/').Contains("Studio/src/", StringComparison.Ordinal));
         Assert.Contains(projects, project => project.Path.Replace('\\', '/').Contains("extensions/Connections/studio/", StringComparison.Ordinal));

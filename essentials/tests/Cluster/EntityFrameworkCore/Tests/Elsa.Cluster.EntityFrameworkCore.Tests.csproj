@@ -47,11 +47,13 @@
     start a host's own build output as a child process, over a directory feed holding the fixture, or its release before or after, which
     FoundationHostFeed packs from the fixture's project under the same package id, exactly as an operator runs it. The
     fixture's own release is packed from the build above, and the other two from its restore and its references' builds, so
-    they have to be built first; nothing from the host is loaded into this process.
+    they have to be built first; nothing from the host is loaded into this process. EssentialsHostBootTests starts the
+    Essentials host's build output the same way, over an empty feed (#5713).
   -->
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\..\apps\Elsa.Essentials.Host\Elsa.Essentials.Host.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\..\apps\Elsa.Workbench.Host\Elsa.Workbench.Host.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <!--

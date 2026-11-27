@@ -115,10 +115,11 @@ export function classifyActivityTestRun(
   if (isExpiredActivityTestRun(view)) return "expired";
   if (status === "validationrejected") return "validation-rejected";
   if (status === "dispatchrejected") return "dispatch-rejected";
-  if (status === "dispatchambiguous") return "dispatch-ambiguous";
   if (status === "completed" || status === "finished") return "completed";
   if (status === "faulted" || status === "failed") return "faulted";
   if (status === "cancelled" || status === "canceled") return "cancelled";
+  if (view.commandDispatchStatus?.toLowerCase() === "acceptedbutfaulted") return "faulted";
+  if (status === "dispatchambiguous") return "dispatch-ambiguous";
   if (status === "suspended") return "suspended";
   if (status === "running") return "running";
   if (status === "pending" || status === "scheduled" || status === "dispatchdeferred") return "waiting";

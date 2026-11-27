@@ -1,8 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <RootNamespace>Kernel.Model.Contracts</RootNamespace>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="../Kernel.Foundation.Contracts/Kernel.Foundation.Contracts.csproj" />
-  </ItemGroup>
-</Project>

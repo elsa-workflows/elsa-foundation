@@ -11,6 +11,7 @@
     <PackageReference Include="Testcontainers.MsSql" />
     <PackageReference Include="Testcontainers.MySql" />
     <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Xunit.SkippableFact" />
     <PackageReference Include="xunit" />
@@ -23,11 +24,15 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Foundation\Identity\OpenIddict\EntityFrameworkCore\Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Excludes the finalization tables every module maps from own-table assertions. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestFilter.cs" Link="EfSchemaFinalizationTestFilter.cs" />
     <!-- Interleaves two EF Identity seeders against one database; shared with the SQLite contract tests. -->
     <Compile Include="..\..\..\AspNetCoreIdentity\EntityFrameworkCore\Tests\EfCoreIdentitySeederRace.cs" Link="EfCoreIdentitySeederRace.cs" />
+    <!-- The OpenIddict store's node host and prune scenario of its SQLite tests, so each native engine runs the same scenario (#2201).
+         Set ELSA_OPENIDDICT_EF_REQUIRE_NATIVE_PROVIDERS to make a missing container fail those suites instead of skipping them. -->
+    <Compile Include="..\..\..\Tests\OpenIddict\Store\OpenIddictStoreTestHost.cs;..\..\..\Tests\OpenIddict\Store\OpenIddictPruneScenario.cs" LinkBase="OpenIddictStore" />
   </ItemGroup>
 </Project>

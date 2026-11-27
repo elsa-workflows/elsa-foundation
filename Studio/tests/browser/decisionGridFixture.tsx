@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import { TableEditor } from "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/TableEditor";
 import { DecisionsPage } from "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/DecisionsPage";
-import type { DecisionAsset, Diagnostic } from "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionsApi";
+import type { DecisionAsset, DecisionVersion, Diagnostic } from "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionsApi";
 import { editTable, newDecisionXml, parseTable } from "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionXml";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import "../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/styles.css";
@@ -68,26 +68,73 @@ const recycledAsset: DecisionAsset = { ...composedAsset, revision: "recycled-r1"
 
 export function DecisionPageFixture() {
   const search = new URLSearchParams(window.location.search), page = search.get("page"), initialCollection = page === "collection", recoveryMode = search.get("recovery") === "1";
-  const [route, setRoute] = useState<{ assetId?: string; isNew: boolean }>(() => initialCollection ? { isNew: false } : { assetId: composedAsset.id, isNew: false });
+  const [route, setRoute] = useState<{ assetId?: string; versionId?: string; isNew: boolean }>(() => initialCollection ? { isNew: false } : { assetId: composedAsset.id, isNew: false });
   const state = useRef<"recycled" | "active" | "purged">(initialCollection ? "recycled" : "active");
   const currentAsset = useRef<DecisionAsset>(recoveryMode ? { ...composedAsset, xml: recoveryXml, sourceHash: "invalid-hash" } : composedAsset);
+  const savedVersions = useRef<DecisionVersion[]>([]);
+  const revisionCounter = useRef(1);
   const savedCase = recoveryMode ? { ...composedCase, inputs: { amount: { kind: "number", value: "20" } }, expectedResult: { kind: "string", value: "Approved" } } : composedCase;
   const savedCases = useRef([savedCase]);
   const api = {
     backend: {
       baseUrl: "http://decisions.test/tenant",
       http: {
-        getJson: async (path: string) => path.endsWith("/recycle-bin") ? { items: state.current === "recycled" ? [recycledAsset] : [] }
-          : path.endsWith("/decisions") ? { items: state.current === "active" ? [currentAsset.current] : [] }
-            : path.endsWith("/cases") ? { items: savedCases.current }
-              : path.endsWith("/versions") ? { items: [] }
-                : path.endsWith("/runs") ? { items: [historyRun] }
-                  : path.includes("/runs/") ? historyRun : currentAsset.current,
+        getJson: async (path: string) => {
+          if (path.endsWith("/recycle-bin")) return { items: state.current === "recycled" ? [recycledAsset] : [] };
+          if (path.endsWith("/decisions")) return { items: state.current === "active" ? [currentAsset.current] : [] };
+          if (path.endsWith("/cases")) return { items: savedCases.current };
+          if (path.endsWith("/versions")) return { items: savedVersions.current };
+          if (path.includes("/versions/")) {
+            const id = decodeURIComponent(path.slice(path.lastIndexOf("/") + 1));
+            const found = savedVersions.current.find(item => item.id === id);
+            if (!found) throw new Error("Version not found.");
+            return found;
+          }
+          if (path.endsWith("/runs")) return { items: [historyRun] };
+          if (path.includes("/runs/")) return historyRun;
+          return currentAsset.current;
+        },
         postJson: async (path: string, body?: unknown) => {
           if (path.endsWith("/cases")) {
             const created = { ...(body as typeof savedCase), id: "case-created", revision: "case-revision-2" };
             savedCases.current = [...savedCases.current, created];
             return created;
+          }
+          if (path.endsWith("/publish")) {
+            const nextNumber = savedVersions.current.reduce((max, item) => Math.max(max, item.number), 0) + 1;
+            const createdVersion: DecisionVersion = {
+              id: `version-${nextNumber}`,
+              assetId: currentAsset.current.id,
+              number: nextNumber,
+              name: currentAsset.current.name,
+              xml: currentAsset.current.xml,
+              sourceHash: currentAsset.current.sourceHash,
+              publishedAt: "2026-11-18T11:30:00Z",
+              isSensitive: currentAsset.current.isSensitive
+            };
+            revisionCounter.current += 1;
+            savedVersions.current = [createdVersion, ...savedVersions.current];
+            currentAsset.current = {
+              ...currentAsset.current,
+              revision: `revision-${revisionCounter.current}`,
+              publishedVersionId: createdVersion.id,
+              updatedAt: createdVersion.publishedAt
+            };
+            return createdVersion;
+          }
+          if (path.endsWith("/clone-to-draft")) {
+            const request = body as { versionId?: string };
+            const found = savedVersions.current.find(item => item.id === request.versionId);
+            if (!found) throw new Error("Version not found.");
+            revisionCounter.current += 1;
+            currentAsset.current = {
+              ...currentAsset.current,
+              xml: found.xml,
+              sourceHash: found.sourceHash,
+              revision: `revision-${revisionCounter.current}`,
+              updatedAt: "2026-11-18T12:00:00Z"
+            };
+            return currentAsset.current;
           }
           if (path.endsWith("/test")) {
             if (recoveryMode && currentAsset.current.xml === recoveryXml) throw Object.assign(new Error("Request failed with 400."), { payload: {
@@ -110,7 +157,8 @@ export function DecisionPageFixture() {
             return updated;
           }
           const update = body as Pick<DecisionAsset, "name" | "xml" | "isSensitive"> & Partial<Pick<DecisionAsset, "description">>;
-          currentAsset.current = { ...currentAsset.current, ...update, revision: "revision-2", sourceHash: "hash-2", updatedAt: "2026-11-18T11:00:00Z" };
+          revisionCounter.current += 1;
+          currentAsset.current = { ...currentAsset.current, ...update, revision: `revision-${revisionCounter.current}`, sourceHash: `hash-${revisionCounter.current}`, updatedAt: "2026-11-18T11:00:00Z" };
           return currentAsset.current;
         }
       }
@@ -125,8 +173,8 @@ export function DecisionPageFixture() {
 
   const editor = <DecisionsPage api={api} navigate={path => {
       const target = new URL(path, window.location.href);
-      setRoute({ assetId: target.searchParams.get("decision") ?? undefined, isNew: target.searchParams.get("new") === "1" });
-    }} assetId={route.assetId} isNew={route.isNew} />;
+      setRoute({ assetId: target.searchParams.get("decision") ?? undefined, versionId: target.searchParams.get("version") ?? undefined, isNew: target.searchParams.get("new") === "1" });
+    }} assetId={route.assetId} versionId={route.versionId} isNew={route.isNew} />;
   return page === "full" ? <div className="browser-decision-shell"><main className="content">{editor}</main></div>
     : <main className="browser-decision-grid" style={{ minHeight: "100vh", padding: "1.5rem", background: "var(--studio-surface)", color: "var(--studio-text)" }}>{editor}</main>;
 }

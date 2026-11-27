@@ -1,0 +1,88 @@
+namespace Kernel.Sim;
+
+/// <summary>Passes everything through and counts the commits. <c>beforeRead</c> sees each call that returns tenant payload.</summary>
+public sealed class CountingStore(IKernelStore inner, Action committed, Action<CommitBatch, bool>? observeCommit = null,
+    Func<CommitBatch, ValueTask>? beforeCommit = null, Action? beforeRelease = null, Func<ValueTask>? afterRelease = null,
+    Func<ValueTask>? beforePartitionCount = null, Func<ValueTask>? beforeSetTake = null, Action<string>? beforeRead = null) : IKernelStore, IFoundationSchedulingStore, IDueBacklogStore
+{
+    public Func<long>? FoundationClock => inner.FoundationClock;
+    string? IFoundationSchedulingStore.FoundationScheduleTenant(CreationAddress address) =>
+        (inner as IFoundationSchedulingStore)?.FoundationScheduleTenant(address);
+    ParkDrainSample? IFoundationSchedulingStore.SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere) =>
+        (inner as IFoundationSchedulingStore)?.SampleParkDrains(node, owned, handedOffHere);
+    bool IDueBacklogStore.MeasuresDueBacklog => inner is IDueBacklogStore { MeasuresDueBacklog: true };
+    int IDueBacklogStore.PublishedDueBacklog(int partition) => ((IDueBacklogStore)inner).PublishedDueBacklog(partition);
+    ValueTask<int> IDueBacklogStore.CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken) =>
+        ((IDueBacklogStore)inner).CountDueBacklogAsync(partition, cap, cancellationToken);
+    public bool SupportsCommitWindow => inner.SupportsCommitWindow;
+    bool IKernelStore.SupportsCascadePages => inner.SupportsCascadePages;
+    public bool SupportsJobTrialClear => inner.SupportsJobTrialClear;
+    public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
+    public bool CommitClockAvailable => inner.CommitClockAvailable;
+    /// <summary>False presents a store without owned sets, so a node's host keeps a worker per scope.</summary>
+    public bool? OwnedSets { get; init; }
+    public bool OwnedSetsAvailable => OwnedSets ?? inner.OwnedSetsAvailable;
+    public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
+    {
+        if (beforePartitionCount is not null) await beforePartitionCount();
+        return await inner.PartitionCountAsync(cancellationToken);
+    }
+    public async ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        if (beforeSetTake is not null) await beforeSetTake();
+        return await inner.TakeAsync(partitions, node, lease, cancellationToken);
+    }
+    public async ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default)
+    {
+        beforeRelease?.Invoke();
+        await inner.ReleaseAsync(owned, cancellationToken);
+        if (afterRelease is not null) await afterRelease();
+    }
+    public ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(PollAsync)); return inner.PollAsync(owned, horizon, limit, cancellationToken); }
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, countDeaths, cancellationToken);
+    public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default) => inner.NodeHeartbeatAsync(node, lease, window, cancellationToken);
+    public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
+    {
+        committed();
+        return observeCommit is null && beforeCommit is null ? inner.CommitAsync(batch, cancellationToken) : ObserveAsync(batch, cancellationToken);
+    }
+
+    // False marks a request about to execute. True marks the store's landed result, before the caller sees it.
+    private async ValueTask<Committed> ObserveAsync(CommitBatch batch, CancellationToken cancellationToken)
+    {
+        observeCommit?.Invoke(batch, false);
+        if (beforeCommit is not null) await beforeCommit(batch);
+        var result = await inner.CommitAsync(batch, cancellationToken);
+        if (result.Landed) observeCommit?.Invoke(batch, true);
+        return result;
+    }
+
+    public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) => inner.TakeAsync(partition, node, lease, cancellationToken);
+    public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) => inner.HeartbeatAsync(node, window, cancellationToken);
+    public async ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
+    {
+        beforeRelease?.Invoke();
+        await inner.ReleaseAsync(partition, epoch, cancellationToken);
+        if (afterRelease is not null) await afterRelease();
+    }
+    public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(PollAsync)); return inner.PollAsync(partition, epoch, horizon, limit, cancellationToken); }
+    public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => inner.AddAsync(message, cancellationToken);
+    public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => inner.AddEventAsync(delivery, cancellationToken);
+    public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(LoadAsync)); return inner.LoadAsync(ids, cancellationToken); }
+    public bool HasActorAliases => inner.HasActorAliases;
+    public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(LoadActorsAsync)); return inner.LoadActorsAsync(ids, cancellationToken); }
+    public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => inner.PublishAsync(@event, cancellationToken);
+    public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => inner.SubscribeAsync(subscription, cancellationToken);
+    public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(FindSubscriptionsAsync)); return inner.FindSubscriptionsAsync(key, cancellationToken); }
+    public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(FindEventsAsync)); return inner.FindEventsAsync(keys, cancellationToken); }
+    public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(PublishedMatchesAsync)); return inner.PublishedMatchesAsync(published, cancellationToken); }
+    public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(KeptMatchesAsync)); return inner.KeptMatchesAsync(waits, cancellationToken); }
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(ReadJournalAsync)); return inner.ReadJournalAsync(partition, after, take, cancellationToken); }
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(ReadJournalOfAsync)); return inner.ReadJournalOfAsync(partition, instance, after, cancellationToken); }
+    public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(ProjectedAsync)); return inner.ProjectedAsync(partition, cancellationToken); }
+    public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default) => inner.ProjectAsync(partition, from, to, rows, cancellationToken);
+    public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default) => inner.SweepAsync(cancellationToken);
+    public ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(ReadViewsAsync)); return inner.ReadViewsAsync(instances, cancellationToken); }
+}

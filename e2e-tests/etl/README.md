@@ -14,7 +14,7 @@ an ETL definition, publish native workflow definitions, and execute the resultin
 same immutable ETL selection is invoked from a Sequence and a Flowchart; each parent must finish
 its `RunEtl` activity and run the following `WriteLine` activity.
 
-Build `Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj` with the opt-in ETL module references
+Build `apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj` with the opt-in ETL module references
 and assembly discovery enabled, then run from the repository root:
 
 ```powershell
@@ -83,7 +83,7 @@ private Workbench root and its HTTP fixture logs for diagnosis.
 
 `Test-FiniteFileEtlStudio.ps1` runs the opt-in browser journey in
 `Studio/tests/live/etl-journey.spec.ts`. Build the Workbench with ETL enabled and build
-`Studio/src/apps/Elsa.Studio.Web` with the ETL Studio module before running:
+`Studio/src/apps/Elsa.Studio.Workbench.Host` with the ETL Studio module before running:
 
 ```powershell
 pwsh ./e2e-tests/etl/Test-FiniteFileEtlStudio.ps1

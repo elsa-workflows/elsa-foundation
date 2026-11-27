@@ -39,7 +39,7 @@ public sealed class DerivedDatasetTests : IDisposable
         using var current = new SyntheticRepository { WriteLockFiles = true };
         const string library = "essentials/src/Tasks/Elsa.Tasks.csproj";
         const string extension = "extensions/Weaver/src/Core/Elsa.Weaver.Core.csproj";
-        const string host = "apps/Elsa.Workbench/Elsa.Workbench.csproj";
+        const string host = "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj";
         const string test = "extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj";
         current.AddProject(library);
         current.AddProject(extension, references: [library]);

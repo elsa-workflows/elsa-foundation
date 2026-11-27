@@ -15,7 +15,7 @@ pnpm --version
 dotnet --version
 pnpm install --frozen-lockfile
 pnpm build
-dotnet build src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj
+dotnet build src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj
 ```
 
 You also need Docker running locally. Use the Development/SQLite configuration in Foundation’s [Docker Hub quickstart](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/docker-hub-quickstart.md). It documents the local Development seed `admin` / `Password123!`; do not use that seed outside a local Development host. Check Docker with `docker info` and inspect ports with `lsof -nP -iTCP:5089 -iTCP:5095 -sTCP:LISTEN`. If either port is occupied, stop here and wait until it is free; do not stop another session’s listener. This walkthrough uses the fixed Studio HTTP profile on port 5089.
@@ -191,7 +191,7 @@ Continue only after readiness succeeds. Keep the backend terminal open so its co
 ```bash
 Studio__BackendBaseUrl=http://localhost:5095 \
 Studio__BackendModuleManagementApiKey=elsa-docker-demo-key \
-dotnet run --no-build --project src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj --launch-profile http
+dotnet run --no-build --project src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj --launch-profile http
 ```
 
 Open `http://localhost:5089` and sign in with the Development seed. Keep Studio on this origin because the backend CORS and login return-origin settings name it. No Data Protection certificate is configured here, so this setup makes no encryption-at-rest claim.

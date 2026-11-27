@@ -4,6 +4,9 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+const runWorkbenchStyles = readFileSync(new URL("../workflow-editor/runWorkbench.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+const runHistoryStyles = readFileSync(new URL("../workflow-editor/run-history/runHistory.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+const activityInspectionStyles = readFileSync(new URL("../workflow-editor/activityInspection.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 
 function ruleBody(css: string, selector: string) {
@@ -34,5 +37,33 @@ describe("run workbench responsive layout styles", () => {
     expect(minimap).toMatch(/border:\s*1px solid var\(--studio-border\);/);
     expect(minimap).toMatch(/border-radius:\s*var\(--studio-radius-sm\);/);
     expect(styles).toMatch(/html\[data-theme-material\][\s\S]*\.react-flow__minimap/);
+  });
+
+  it("docks run workbench panes flush without outer rounded borders and uses hairline splitters", () => {
+    const inspector = ruleBody(styles, ".wf-instance-inspector");
+    const canvasShell = ruleBody(runWorkbenchStyles, ".wf-instance-canvas-shell");
+    const dockedHistory = ruleBody(runHistoryStyles, ".wf-instance-detail-workbench.timeline-docked > .wf-run-history-view");
+    const leftHandle = ruleBody(runWorkbenchStyles, ".wf-instance-detail-workbench > .wf-side-resize-handle.left");
+    const rightHandle = ruleBody(runWorkbenchStyles, ".wf-instance-detail-workbench > .wf-side-resize-handle.right");
+
+    for (const pane of [inspector, canvasShell, dockedHistory]) {
+      expect(pane).toMatch(/border:\s*0;/);
+      expect(pane).toMatch(/border-radius:\s*0;/);
+    }
+
+    expect(leftHandle).toMatch(/border-left:\s*1px solid var\(--wf-border\);/);
+    expect(rightHandle).toMatch(/border-right:\s*1px solid var\(--wf-border\);/);
+  });
+
+  it("integrates the selected activity overview header flush inside the inspector", () => {
+    const overview = ruleBody(activityInspectionStyles, ".wf-instance-section.wf-activity-overview");
+    const heading = ruleBody(activityInspectionStyles, ".wf-activity-overview-heading");
+
+    expect(overview).toMatch(/border:\s*0;/);
+    expect(overview).toMatch(/border-bottom:\s*1px solid var\(--studio-border\);/);
+    expect(overview).toMatch(/border-radius:\s*0;/);
+    expect(heading).not.toMatch(/border-bottom:/);
+    expect(activityInspectionStyles.indexOf(".wf-activity-inspection-tab-panel--flush"))
+      .toBeGreaterThan(activityInspectionStyles.indexOf(".wf-activity-inspection-tab-panel {"));
   });
 });
