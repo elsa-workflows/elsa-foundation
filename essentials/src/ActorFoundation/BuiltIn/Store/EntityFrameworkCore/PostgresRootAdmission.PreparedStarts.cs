@@ -53,7 +53,7 @@ internal sealed partial class PostgresRootAdmission
         if (eventTarget is not null)
         {
             await LockEventStartTablesAsync(db, token);
-            bindEvent = sql => BindEventStarts(sql, pin);
+            bindEvent = sql => BindEventStarts(db, sql, pin);
             if (await RootEventStarts.CheckTargetAsync(db, tenant, eventTarget, spec, bindEvent, lockRow: true, token) is { } settled)
             {
                 await RootPreparedStarts.ConsumeAsync(db, stage, token, query => BindPreparedStart(query, pin, source.Table, deadline: null));
@@ -110,7 +110,7 @@ internal sealed partial class PostgresRootAdmission
             async Task<string?> ReadExistingAsync() => eventTarget is null
                 ? await ReadStartReceiptAsync(preparation, pin, tenant, digest, liveOnly: true, token)
                 : await RootEventStarts.CheckTargetAsync(preparation, tenant, eventTarget, spec,
-                    sql => BindEventStarts(sql, pin), lockRow: false, token);
+                    sql => BindEventStarts(preparation, sql, pin), lockRow: false, token);
             if (reply is not null && !await IsBeforeDeadlineAsync(preparation, reply.Deadline, token)) return (null, null);
             var existing = await ReadExistingAsync();
             if (existing is not null) return (new(existing, true), null);

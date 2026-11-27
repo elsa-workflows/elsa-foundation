@@ -91,7 +91,7 @@ internal sealed partial class PostgresRootAdmission
         if (db.UsesRootPublicEventStarts) await LockPublicEventStartTablesAsync(db, token);
         return sql =>
         {
-            if (sql.Format.Contains(RootEventStarts.Source, StringComparison.Ordinal)) return BindEventStarts(sql, pin);
+            if (sql.Format.Contains(RootEventStarts.Source, StringComparison.Ordinal)) return BindEventStarts(db, sql, pin);
             if (sql.Format.Contains(RootPublicEventStarts.Source, StringComparison.Ordinal)) return BindPublicEventStarts(db, sql, pin);
             return WithAdmissionSource(sql, pin, "/*event-source*/", 5,
                 """('"Events"'), ('"Subscriptions"'), ('"FoundationRootBirths"'), ('"Instances"'), ('"Messages"')""");

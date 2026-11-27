@@ -114,8 +114,7 @@ public sealed partial class EfStore
                 if (position.StartsComplete)
                 {
                     if (ticket.Author is null) throw PublicationShape();
-                    var targets = await RootEventStarts.CapturePageAsync(db, publication, _bind, token);
-                    return (position with { ProtectedThrough = targets.Through }, targets.Complete);
+                    return (position, await RootEventStarts.DispatchStagedPageAsync(db, publication, _bind, token));
                 }
                 if (position.LiveComplete)
                 {
@@ -132,7 +131,7 @@ public sealed partial class EfStore
                 return (next with { StartsComplete = true }, !await HasProtectedStartsAsync());
 
                 async Task<bool> HasProtectedStartsAsync() => ticket.Author is not null &&
-                    await RootEventStarts.HasMatchesAsync(db, publication.Tenant, publication.Key, _bind, token);
+                    await RootEventStarts.HasStagedMatchesAsync(db, publication.Occurrence, _bind, token);
             }
 
             Task<bool> ChangeTicketAsync(RootPublicEventTicket.Change change, long? epoch) =>

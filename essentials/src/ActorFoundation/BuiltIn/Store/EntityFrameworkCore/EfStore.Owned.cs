@@ -236,8 +236,16 @@ public sealed partial class EfStore
         {
             if (db.UsesRootPagedPublicEvents)
             {
+                var authorities = FoundationMetadataLimits.MaxTurnSends;
+                long authorityBytes = FoundationMetadataLimits.MessageContentBytes;
                 foreach (var publication in publications)
-                    await RootPublicEventTicket.Authored(publication.Event, publication.Ticket, now).EnqueueAsync(db, bindEventSource, cancellationToken);
+                {
+                    var ticket = RootPublicEventTicket.Authored(publication.Event, publication.Ticket, now);
+                    var staged = await RootEventStarts.StageMatchesAsync(db, ticket, authorities, authorityBytes, bindEventSource, cancellationToken);
+                    authorities -= staged.Count;
+                    authorityBytes -= staged.Bytes;
+                    await ticket.EnqueueAsync(db, bindEventSource, cancellationToken);
+                }
             }
             else
                 await RootEventAdmission.PublishAuthoredAsync(db, publications.Select(publication => publication.Event).ToArray(),

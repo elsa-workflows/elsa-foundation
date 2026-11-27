@@ -125,7 +125,7 @@ internal sealed record RootPublicEventTicket(string Id, InstanceRef Target, stri
             await SqliteRootAdmission.ReadClockAsync(db, token);
         var until = checked(now + (long)AuthoredDeadLetterWindow.TotalMilliseconds);
         // Keep the same ticket and initial body off the actor mailbox so retirement can remove its own residue.
-        return await db.Database.ExecuteSqlInterpolatedAsync(RootPublicEventStarts.Bind($"""
+        var written = await db.Database.ExecuteSqlInterpolatedAsync(RootPublicEventStarts.Bind($"""
             WITH source AS MATERIALIZED (/*public-event-start-source*/)
             UPDATE "Messages" SET "Target" = {Publisher(Target.Partition).Id}, "Start" = {Header(Initial, Target.Id)},
                 "Done" = true, "Trial" = 0, "FoundationKeptBy" = NULL, "KeepUntil" = {until}
@@ -133,7 +133,10 @@ internal sealed record RootPublicEventTicket(string Id, InstanceRef Target, stri
                 AND "Partition" = {Target.Partition} AND "Seq" = {sequence} AND "Attempts" = {attempts}
                 AND "EventMatch" IS NULL AND "Done" = {fromPark} AND (SELECT "SourceReady" FROM source)
                 AND "FoundationKeptBy" IS NOT DISTINCT FROM CAST({(fromPark ? (short?)ParkKeepReason.Consumed : null)} AS SMALLINT)
-            """, bind), token) == 1;
+            """, bind), token);
+        if (written != 1) return false;
+        await RootEventStarts.DiscardStagedMatchesAsync(db, Occurrence, bind, token);
+        return true;
     }
 
     internal enum Change { Reserve, RecordFailure, Materialize, Advance, Settle }
