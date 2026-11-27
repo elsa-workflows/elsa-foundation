@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
@@ -9,7 +10,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore
 {
-    private sealed record RetiredOccurrence(string OccurrenceId, string ActorReference, string IntentFingerprint);
+    private sealed record RetiredOccurrence(string OccurrenceId, string ActorReference, string IntentFingerprint,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? AttemptDeadlineUtcTicks = null);
 
     public ValueTask<RuntimeKernelScheduleOccurrenceCursor?> ReadMaterializedTailAsync(TriggerScope scope, CancellationToken cancellationToken = default) =>
         ReadTailAsync(scope, materialized: true, cancellationToken);
@@ -46,12 +48,12 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore
         var current = await RequireMaterializedAsync();
         if (current.RetiredAtUtcTicks is not null) return true;
         var schemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily,
-            RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion);
-        if (schemaVersion != RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion)
-            throw new NotSupportedException("The active Runtime schema does not support scheduled retirement receipts.");
+            RuntimeKernelScheduleOccurrenceEfModule.RetirementSchemaVersion, current.SchemaVersion);
         if (!await confirmRetired(occurrence, actorReference, cancellationToken)) return false;
 
-        var content = RuntimeArtifactJson.Serialize(new RetiredOccurrence(occurrence.Id, actorReference, IntentFingerprint(occurrence)));
+        _ = Read(current, scope, out var acceptedDeadline);
+        var content = RuntimeArtifactJson.Serialize(new RetiredOccurrence(occurrence.Id, actorReference, IntentFingerprint(occurrence),
+            acceptedDeadline > occurrence.AcceptBefore.UtcTicks ? acceptedDeadline : null));
         var retiredAt = clock.GetUtcNow().UtcTicks;
         var count = await context.KernelScheduleOccurrences.Where(row => row.Id == id && row.Revision == current.Revision &&
                 row.ActorReference == actorReference && row.RetiredAtUtcTicks == null && row.ContentJson == current.ContentJson)
@@ -73,16 +75,17 @@ internal sealed partial class EfRuntimeKernelScheduleOccurrenceStore
     {
         if (row.RetiredAtUtcTicks is null) return Read(row, scope) == occurrence;
         if (row.Revision != 3 || row.RetiredAtUtcTicks <= 0 || !IsReference(row.ActorReference) || row.ArtifactId != string.Empty ||
-            row.SchemaVersion != RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion)
+            row.SchemaVersion is not (RuntimeKernelScheduleOccurrenceEfModule.RetirementSchemaVersion or RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion))
             throw new InvalidDataException("The schedule retirement receipt has an invalid physical state.");
         var retired = RuntimeArtifactJson.Deserialize<RetiredOccurrence>(row.ContentJson);
         var tenant = JsonSerializer.Serialize(occurrence.Scope.TenantId);
         if (retired.ActorReference != row.ActorReference || !IsReference(retired.IntentFingerprint) ||
+            retired.AttemptDeadlineUtcTicks is not null && row.SchemaVersion != RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion ||
             row.Id != CompositeId(scope, retired.OccurrenceId) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             row.TenantKey != Encode(tenant) || row.TenantKeyHash != Hash(tenant))
             throw new InvalidDataException("The schedule retirement receipt differs from its physical identity.");
         return retired.OccurrenceId == occurrence.Id && retired.IntentFingerprint == IntentFingerprint(occurrence) &&
-            row.AcceptedAtUtcTicks >= occurrence.Due.UtcTicks && row.AcceptedAtUtcTicks < occurrence.AcceptBefore.UtcTicks;
+            MatchesAcceptanceTime(row.AcceptedAtUtcTicks, occurrence, retired.AttemptDeadlineUtcTicks);
     }
 
     private static string IntentFingerprint(RuntimeKernelScheduleOccurrence occurrence) =>

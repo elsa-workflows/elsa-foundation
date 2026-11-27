@@ -37,15 +37,16 @@ public sealed class KernelScheduleAuthorityTests
         var offers = new List<RuntimeKernelScheduleOccurrence>();
         var reads = 0;
         var checkedOn = Now.AddSeconds(4);
-        bool? result = true;
+        RuntimeKernelScheduleAttemptOutcome? result = RuntimeKernelScheduleAttemptOutcome.Accepted;
         using var attempt = new CancellationTokenSource();
         var acceptor = new KernelScheduleOccurrenceAcceptor(fixture.Control.Scope, fixture.FoundationTenant, token =>
         {
             Assert.Equal(attempt.Token, token);
             return ValueTask.FromResult(checkedOn.AddSeconds(reads++).ToUnixTimeMilliseconds());
-        }, async (occurrence, readClock, token) =>
+        }, async (occurrence, deadline, readClock, token) =>
         {
             Assert.Equal(attempt.Token, token);
+            Assert.True(deadline >= occurrence.AcceptBefore);
             offers.Add(occurrence);
             if (offers.Count == 1)
             {
@@ -81,8 +82,12 @@ public sealed class KernelScheduleAuthorityTests
         Assert.True(await acceptor.TryAcceptAsync(offer, attempt.Token));
         Assert.Equal(stored, offers[1]);
         Assert.Equal(2, reads);
-        result = false;
+        result = RuntimeKernelScheduleAttemptOutcome.Refused;
         Assert.False(await acceptor.TryAcceptAsync(offer, attempt.Token));
+        result = RuntimeKernelScheduleAttemptOutcome.Retry;
+        await Assert.ThrowsAsync<TimeoutException>(() =>
+            acceptor.TryAcceptAttemptAsync(offer, offer.OfferUntilUnixMilliseconds + 60_000, attempt.Token).AsTask());
+        Assert.Equal(stored, offers[^1]);
         result = null;
         await Assert.ThrowsAsync<IOException>(() => acceptor.TryAcceptAsync(offer, attempt.Token).AsTask());
     }
@@ -118,7 +123,7 @@ public sealed class KernelScheduleAuthorityTests
         var calls = 0;
         var acceptor = new KernelScheduleOccurrenceAcceptor(fixture.Control.Scope, fixture.FoundationTenant,
             _ => throw new InvalidOperationException("A preflight refusal cannot read the Foundation clock."),
-            (_, _, _) => { calls++; return ValueTask.FromResult(true); });
+            (_, _, _, _) => { calls++; return ValueTask.FromResult(RuntimeKernelScheduleAttemptOutcome.Accepted); });
         var payload = JsonNode.Parse(header.Authority!)!.AsObject();
         var pinned = JsonSerializer.Deserialize<StartSpec>(payload["PinnedStart"]!.GetValue<string>())!;
         payload["PinnedStart"] = JsonSerializer.Serialize(pinned with { Input = """{"Mode":"Balanced","TriggerNode":"different"}""" });
@@ -138,7 +143,7 @@ public sealed class KernelScheduleAuthorityTests
 
         Assert.Equal(0, calls);
         Assert.Throws<ArgumentException>(() => new KernelScheduleOccurrenceAcceptor(new(new("tenant-a"), null), ContractScopes.Bind("tenant-a"),
-            _ => ValueTask.FromResult(0L), (_, _, _) => ValueTask.FromResult(true)));
+            _ => ValueTask.FromResult(0L), (_, _, _, _) => ValueTask.FromResult(RuntimeKernelScheduleAttemptOutcome.Accepted)));
     }
 
     [Fact]
@@ -150,10 +155,10 @@ public sealed class KernelScheduleAuthorityTests
         // Configure the host with the explicit default alias. Each committed source carries its own exact alias.
         var configured = control.Scope with { TenantId = PersistenceScope.DefaultValue };
         var acceptor = new KernelScheduleOccurrenceAcceptor(configured, fixture.FoundationTenant,
-            _ => ValueTask.FromResult(Now.ToUnixTimeMilliseconds()), (occurrence, _, _) =>
+            _ => ValueTask.FromResult(Now.ToUnixTimeMilliseconds()), (occurrence, _, _, _) =>
             {
                 offers.Add(occurrence);
-                return ValueTask.FromResult(true);
+                return ValueTask.FromResult(RuntimeKernelScheduleAttemptOutcome.Accepted);
             });
         var revisions = new List<long>();
         var keys = new List<string>();

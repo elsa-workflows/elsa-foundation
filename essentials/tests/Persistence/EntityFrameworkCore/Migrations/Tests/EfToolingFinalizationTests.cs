@@ -145,7 +145,7 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         Assert.Equal(["1.0.0"], scheduleControl.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
         Assert.Equal(JsonValueKind.Null, scheduleControl.GetProperty("finalizedVersion").ValueKind);
         var scheduleOccurrence = families.Single(family => family.GetProperty("family").GetString() == "RuntimeKernelScheduleOccurrence");
-        Assert.Equal(["1.0.0", "1.1.0"], scheduleOccurrence.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
+        Assert.Equal(["1.0.0", "1.1.0", "1.2.0"], scheduleOccurrence.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
         Assert.Equal(JsonValueKind.Null, scheduleOccurrence.GetProperty("finalizedVersion").ValueKind);
         var tasks = families.Single(family => family.GetProperty("family").GetString() == "UserTasks");
         Assert.Equal(["1.0.0"], tasks.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));

@@ -98,7 +98,8 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(RuntimeIngressReservationEntity), nameof(RuntimeIngressReservationEntity.ContentJson))]
 
 [assembly: EfSchemaFamily(RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelScheduleOccurrenceEfModule.SchemaVersion,
-    Entities = [typeof(RuntimeKernelScheduleOccurrenceEntity)], Upcasters = [typeof(RuntimeKernelScheduleOccurrenceV1Upcaster)])]
+    Entities = [typeof(RuntimeKernelScheduleOccurrenceEntity)],
+    Upcasters = [typeof(RuntimeKernelScheduleOccurrenceV1Upcaster), typeof(RuntimeKernelScheduleOccurrenceRetirementUpcaster)])]
 [assembly: EfSchemaContent(RuntimeKernelScheduleOccurrenceEfModule.SchemaFamily, typeof(RuntimeKernelScheduleOccurrenceEntity),
     nameof(RuntimeKernelScheduleOccurrenceEntity.ContentJson))]
 [assembly: EfSchemaFamily(RuntimeKernelScheduleControlEfModule.SchemaFamily, "Workflows.Runtime", RuntimeKernelScheduleControlEfModule.SchemaVersion,

@@ -52,7 +52,7 @@ public sealed record ScheduleHeader(RecurringSchedule Schedule, string StartKey,
 /// <summary>Disarms a managed schedule through this durable control revision.</summary>
 public sealed record ScheduleStop(long Revision);
 
-/// <summary>The immutable offer from one committed managed schedule timer.</summary>
+/// <summary>The immutable offer from one committed managed schedule timer, including its first attempt's deadline.</summary>
 public sealed record ScheduleOccurrence(string Tenant, ActorRef Schedule, long ArmGeneration, string TimerDeliveryId,
     long DueAtUnixMilliseconds, long OfferUntilUnixMilliseconds, string Authority);
 
@@ -61,9 +61,14 @@ public interface IScheduleOccurrenceAcceptor
 {
     /// <summary>
     /// True means the exact offer was accepted, including a replay of a prior acceptance. False is a definitive refusal.
-    /// An unknown outcome must throw. The next attempt uses the same offer and deadline.
+    /// An unknown outcome must throw. A retry preserves the original offer.
     /// </summary>
     ValueTask<bool> TryAcceptAsync(ScheduleOccurrence occurrence, CancellationToken cancellationToken = default);
+
+    /// <summary>Decides the original offer within the current provider-issued job deadline.</summary>
+    /// <remarks>Expiry without an authoritative answer must throw so the actor can renew the attempt.</remarks>
+    ValueTask<bool> TryAcceptAttemptAsync(ScheduleOccurrence occurrence, long attemptDeadline, CancellationToken cancellationToken = default) =>
+        TryAcceptAsync(occurrence, cancellationToken);
 }
 
 /// <summary>
@@ -96,7 +101,7 @@ public sealed class ScheduleActor : IActorType
     /// <summary>The wait name of a schedule's start registration.</summary>
     public const string StartWait = "schedule";
 
-    /// <summary>How long an occurrence's publication waits for its start: a minute.</summary>
+    /// <summary>The bounded duration of one managed acceptance window or a legacy start publication.</summary>
     public static readonly TimeSpan PublicationWindow = TimeSpan.FromMinutes(1);
 
     private const string AcceptJob = "schedule.accept";
@@ -255,21 +260,23 @@ public sealed class ScheduleActor : IActorType
                 }
                 case RetryKind when state is { Stopped: false, Pending: { Superseded: false, RetryTimer.Length: > 0 } pending } &&
                     IsTimer(turn, message, pending.RetryTimer, pending.RetryAt):
-                    if (turn.Now >= pending.Deadline)
-                        state = AfterAcceptance(turn, header, state);
-                    else
+                {
+                    var attempt = pending with
                     {
-                        StartAcceptance(turn, pending);
-                        state = state with { Pending = pending with { RetryTimer = "", RetryAt = 0 } };
-                    }
+                        Deadline = turn.Now < pending.Deadline ? pending.Deadline : checked(turn.Now + (long)PublicationWindow.TotalMilliseconds),
+                        RetryTimer = "",
+                        RetryAt = 0
+                    };
+                    StartAcceptance(turn, attempt);
+                    state = state with { Pending = attempt };
                     break;
+                }
                 case Kinds.JobFinished when state?.Pending is { RetryTimer.Length: 0 } pending &&
                     message.Sender == turn.Header.Ref && ReadMessage<JobFinished>(message) is { Key: AcceptJob } outcome:
                     if (!state.Stopped && !pending.Superseded &&
-                        (outcome.Error is not null || outcome.Result is not ("true" or "false")) &&
-                        turn.Now < pending.Deadline)
+                        (outcome.Error is not null || outcome.Result is not ("true" or "false")))
                     {
-                        var retryAt = Math.Min(checked(turn.Now + RetryDelayMilliseconds), pending.Deadline);
+                        var retryAt = checked(turn.Now + RetryDelayMilliseconds);
                         var id = turn.Send(turn.Header.Ref, RetryKind, DuePayload(retryAt), retryAt);
                         state = state with { Pending = pending with { RetryTimer = id, RetryAt = retryAt } };
                     }
@@ -361,10 +368,10 @@ public sealed class ScheduleActor : IActorType
         var offer = JsonSerializer.Deserialize<ScheduleOccurrence>(arguments);
         if (offer is not { ArmGeneration: > 0, TimerDeliveryId.Length: > 0, Authority.Length: > 0 } ||
             offer.Schedule != job.Actor || offer.OfferUntilUnixMilliseconds <= offer.DueAtUnixMilliseconds ||
-            offer.OfferUntilUnixMilliseconds != job.Deadline)
+            job.Deadline is not { } deadline || deadline < offer.OfferUntilUnixMilliseconds)
             throw new InvalidOperationException("The occurrence does not match its schedule job.");
         cancellationToken.ThrowIfCancellationRequested();
-        return await _occurrences.TryAcceptAsync(offer, cancellationToken);
+        return await _occurrences.TryAcceptAttemptAsync(offer, deadline, cancellationToken);
     }
 
     public RestorePlan RestoreWaits(ActorHeader header, string state)
