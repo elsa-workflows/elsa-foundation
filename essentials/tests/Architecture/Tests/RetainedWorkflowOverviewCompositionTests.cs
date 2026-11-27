@@ -12,8 +12,8 @@ using Elsa.Api.Capabilities.Contracts;
 using Elsa.Attention.Api;
 using Elsa.Attention.Core;
 using Elsa.Events;
+using Elsa.Foundation.Identity;
 using Elsa.Foundation.Identity.Core.Authorization;
-using Elsa.Foundation.Identity.Extensions;
 using Elsa.Locking.Core;
 using Elsa.Modularity.Api.Attention;
 using Elsa.Serialization.SystemText;
@@ -114,28 +114,33 @@ public sealed class RetainedWorkflowOverviewCompositionTests
         const string features = "CShells:Shells:default:Features";
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
+            ["CShells:Shells:default:Name"] = Tenant,
+            ["CShells:Shells:default:Configuration:WebRouting:Path"] = "",
             [$"{features}:WorkflowsDashboardRetained"] = null,
             [$"{features}:WorkflowsDashboardPortfolioEntityFrameworkCore"] = null,
             [$"{features}:WorkflowsRuntimeRetainedAttention"] = null,
             [$"{features}:ModularityAttention"] = null,
+            [$"{features}:FoundationIdentityAbstractions"] = null,
             [$"{features}:Serialization"] = null,
             [$"{features}:WorkflowsDesignEntityFrameworkCore:ConnectionString"] = $"Data Source={Path.Combine(directory, "design.db")};Pooling=False",
             [$"{features}:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:ConnectionString"] = $"Data Source={Path.Combine(directory, "runtime.db")};Pooling=False",
             [$"{features}:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey"] = "retained-overview-fixture-signing-key"
         });
         builder.Services.AddSingleton<IDistributedLockProvider, OverviewLockProvider>();
-        builder.Services.AddAuthentication(Scheme).AddScheme<AuthenticationSchemeOptions, OverviewAuthentication>(Scheme, _ => { });
-        builder.Services.AddAuthorization();
-        builder.Services.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string> { Scheme });
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(typeof(WorkflowsDashboardRetainedFeature).Assembly, typeof(WorkflowsDashboardPortfolioEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsRuntimeRetainedAttentionFeature).Assembly, typeof(WorkflowsRuntimeApiFeature).Assembly,
                 typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly, typeof(WorkflowsDesignEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsDesignApiFeature).Assembly, typeof(WorkflowDesignValidationsFeature).Assembly, typeof(TasksFeature).Assembly,
                 typeof(EventsFeature).Assembly, typeof(SerializationFeature).Assembly, typeof(ApiCapabilitiesFeature).Assembly,
+                typeof(FoundationIdentityAbstractionsFeature).Assembly,
                 typeof(AttentionApiFeature).Assembly, typeof(ModularityAttentionFeature).Assembly)
             .WithConfigurationProvider(builder.Configuration)
+            .WithWebRouting(options => options.EnablePathRouting = true)
             .WithAuthenticationAndAuthorization());
+        builder.Services.AddAuthentication(Scheme).AddScheme<AuthenticationSchemeOptions, OverviewAuthentication>(Scheme, _ => { });
+        builder.Services.AddAuthorization();
+        builder.Services.Configure<FoundationIdentityOptions>(options => options.NormalizedAuthenticationTypes = new HashSet<string> { Scheme });
 
         var app = builder.Build();
         try
