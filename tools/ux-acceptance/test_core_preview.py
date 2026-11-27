@@ -66,6 +66,17 @@ class CorePreviewCompositionTests(unittest.TestCase):
                           "Elsa__CorePreview__Tenant": acceptance.TENANT,
                           "ConnectionStrings__KernelCorePreview": "Host=127.0.0.1;Port=1;Database=x"}, env)
 
+    def test_sqlite_uses_only_its_owned_database(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "kernel.sqlite"
+            env = acceptance.kernel_environment(sqlite_path=path)
+            self.assertEqual({"Elsa__CorePreview__Enabled": "true", "Elsa__CorePreview__Publications": "true",
+                              "Elsa__CorePreview__Tenant": acceptance.TENANT, "Elsa__CorePreview__Provider": "SQLite",
+                              "Elsa__CorePreview__SqlitePath": str(path)}, env)
+            with self.assertRaises(acceptance.sqlite3.OperationalError):
+                acceptance.sqlite_markers(path)
+            self.assertFalse(path.exists())
+
     def test_kernel_serving_is_the_serving_line_and_its_failures_are_named(self):
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "backend.log"
