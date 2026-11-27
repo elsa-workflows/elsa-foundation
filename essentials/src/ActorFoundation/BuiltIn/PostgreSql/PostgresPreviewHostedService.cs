@@ -52,11 +52,18 @@ public sealed class PostgresPreviewHostedService : IHostedService, IAsyncDisposa
             { RetentionWindow = retentionWindow };
     }
 
-    internal static PostgresPreviewHostedService CreateInlineQualification(Func<KernelDb> create, string node, IActorType actor,
+    /// <summary>Creates the PostgreSQL owner for the private inline start qualification profile.</summary>
+    public static PostgresPreviewHostedService CreateInlineQualification(Func<KernelDb> create, string node, IActorType actor,
         IActorType? auxiliaryActor, PostgresDirectRequests requests, ProtectChildBirthsAsync protectChildren, InlineRootRequests inlineStarts,
-        Action<string> endProcess, Func<ActorHeader, TimeSpan?> retentionWindow, ILogger<PostgresPreviewHostedService> logger) =>
-        new(create, node, actor, endProcess, null, logger, requests, auxiliaryActor, protectChildren, inlineStarts)
-        { RetentionWindow = retentionWindow };
+        Action<string> endProcess, Func<ActorHeader, TimeSpan?> retentionWindow, ILogger<PostgresPreviewHostedService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(protectChildren);
+        ArgumentNullException.ThrowIfNull(inlineStarts);
+        if (auxiliaryActor is not null) Kernel.Durable.ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
+        return new(create, node, actor, endProcess, null, logger, requests, auxiliaryActor, protectChildren, inlineStarts)
+            { RetentionWindow = retentionWindow };
+    }
 
     /// <summary>Confirms an exact protected child using the same installed store as the owner.</summary>
     public static ValueTask<FoundationChildBirthProof> ConfirmChildBirthAsync(Func<KernelDb> create, BoundScope scope,

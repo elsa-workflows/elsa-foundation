@@ -72,8 +72,13 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return new(databasePath, node, actorType, StoreFormat.RootPreparedStartsQualification, protectRootStart);
     }
 
-    internal static SqliteEmbeddedFoundation ForInlineStartsQualification(string databasePath, string node, string actorType,
-        ProtectRootStartAsync protectRootStart) => new(databasePath, node, actorType, StoreFormat.RootInlinePromotionQualification, protectRootStart);
+    /// <summary>Binds the private SQLite inline start qualification profile with its executable protection.</summary>
+    public static SqliteEmbeddedFoundation ForInlineStartsQualification(string databasePath, string node, string actorType,
+        ProtectRootStartAsync protectRootStart)
+    {
+        ArgumentNullException.ThrowIfNull(protectRootStart);
+        return new(databasePath, node, actorType, StoreFormat.RootInlinePromotionQualification, protectRootStart);
+    }
 
     private SqliteEmbeddedFoundation(string databasePath, string node, string actorType, StoreFormat? qualificationFormat,
         ProtectRootStartAsync? protectRootStart = null)
@@ -138,10 +143,16 @@ public sealed partial class SqliteEmbeddedFoundation : Contract.IActorRetentionP
         return CreateHostedServiceCore(actor, endProcess, retentionWindow, options, fenceInBatch, logger, auxiliaryActor, protectChildBirths);
     }
 
-    internal SqliteEmbeddedHostedService CreateInlineQualification(Contract.IActorType actor, Contract.IActorType? auxiliaryActor,
+    /// <summary>Creates the SQLite owner for the private inline start qualification profile.</summary>
+    public SqliteEmbeddedHostedService CreateInlineQualification(Contract.IActorType actor, Contract.IActorType? auxiliaryActor,
         ProtectChildBirthsAsync protectChildren, InlineRootRequests inlineStarts, Action<string> endProcess,
-        Func<Contract.ActorHeader, TimeSpan?> retentionWindow, ILogger<SqliteEmbeddedHostedService> logger) =>
-        CreateHostedServiceCore(actor, endProcess, retentionWindow, null, true, logger, auxiliaryActor, protectChildren, inlineStarts);
+        Func<Contract.ActorHeader, TimeSpan?> retentionWindow, ILogger<SqliteEmbeddedHostedService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(protectChildren);
+        ArgumentNullException.ThrowIfNull(inlineStarts);
+        if (auxiliaryActor is not null) Kernel.Durable.ActorAdapter.RequireAuxiliaryActor(actor, auxiliaryActor);
+        return CreateHostedServiceCore(actor, endProcess, retentionWindow, null, true, logger, auxiliaryActor, protectChildren, inlineStarts);
+    }
 
     private SqliteEmbeddedHostedService CreateHostedServiceCore(Contract.IActorType actor, Action<string> endProcess,
         Func<Contract.ActorHeader, TimeSpan?>? retentionWindow, LoopOptions? options, bool fenceInBatch,

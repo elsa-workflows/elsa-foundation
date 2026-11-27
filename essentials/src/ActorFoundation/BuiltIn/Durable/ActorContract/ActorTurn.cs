@@ -316,7 +316,8 @@ internal sealed partial class ActorAdapter
                     outcome.Held.Count == 0 && outcome.Consumed.TrueForAll(item => !item.Durable))
                     return outcome;
 
-                if (!ended && outcome.Held.Count == 0 && _turn.CanWaitInMemory(until) && _turn.CanKeepInlineMailbox())
+                if (!ended && outcome.Held.Count == 0 && _turn.CanWaitInMemory(until) &&
+                    (_roots?.SupportsInlineStarts != true || _turn.CanKeepInlineMailbox()))
                 {
                     _turn.WaitInMemory();
                     outcome.InMemory = true;

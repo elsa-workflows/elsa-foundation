@@ -9,7 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHosting" />
-    <InternalsVisibleTo Include="Kernel.Native.Run" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Native.RetentionFixture" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Native.Migration.Run" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Native.Migration.SqliteFixture" />

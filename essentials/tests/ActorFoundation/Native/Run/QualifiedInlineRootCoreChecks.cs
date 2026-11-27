@@ -26,6 +26,9 @@ internal static class QualifiedInlineRootCoreChecks
         shortWait = new Workflow(shortWait.Id, shortWait.Root) { ExecutableSelection = "exact-short-wait" };
         var model = new NativeExecutionModel(new WorkflowRegistry().Add(alternate).Add(waiting).Add(shortWait));
         var actor = new WorkflowActorType([model]);
+        var permittedStarts = new[] { pure, waiting, shortWait }.ToDictionary(
+            workflow => WorkflowActorType.Start(NativeExecutionModel.Start(workflow, Modes.Ephemeral)).TypeData,
+            StringComparer.Ordinal);
 
         using var trace = new StringWriter();
         var previous = WriteLine.Out;
@@ -112,8 +115,8 @@ internal static class QualifiedInlineRootCoreChecks
         finally { WriteLine.Out = previous; }
 
         bool MatchesMaterial(StartSpec start, object material) =>
-            WorkflowActorType.DescribeStart(start.Model, start.Definition) is { Model: NativeExecutionModel.ModelKey } requested &&
-            model.MatchesInlineMaterial(material, requested.Workflow, requested.Definition, requested.ExecutableSelection);
+            start.Model == WorkflowActorType.ActorType && permittedStarts.TryGetValue(start.Definition, out var selected) &&
+            model.MatchesInlineMaterial(material, selected.Id, selected.Definition, selected.ExecutableSelection);
 
         Message Creator(Workflow workflow, int partition = 0)
         {

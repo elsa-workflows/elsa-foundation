@@ -3,13 +3,15 @@ using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Foundation.Hosting;
 
-internal enum InlineStartDisposition { Volatile, Committed, Refused, Unavailable, Unknown }
+/// <summary>The owner's observed outcome for a qualified inline root start.</summary>
+public enum InlineStartDisposition { Volatile, Committed, Refused, Unavailable, Unknown }
 
-internal readonly record struct InlineStartOutcome(InlineStartDisposition Disposition,
+/// <summary>A qualified inline start receipt. Only a committed start includes an actor reference.</summary>
+public readonly record struct InlineStartOutcome(InlineStartDisposition Disposition,
     Contract.ActorRef? Actor = null, Contract.ActorStatus? Status = null);
 
-// This edge belongs to one installed owner, one tenant, and one host activation.
-internal sealed class InlineRootRequests(Contract.BoundScope scope, string actorType,
+/// <summary>Binds qualified inline starts to one installed owner, tenant, and host activation.</summary>
+public sealed class InlineRootRequests(Contract.BoundScope scope, string actorType,
     Func<Contract.StartSpec, object, bool> validate, ProtectRootStartAsync protect)
 {
     private readonly object _gate = new();
@@ -30,7 +32,8 @@ internal sealed class InlineRootRequests(Contract.BoundScope scope, string actor
         }
     }
 
-    internal void Close()
+    /// <summary>Stops new inline starts while the owner drains already admitted work.</summary>
+    public void Close()
     {
         lock (_gate)
         {
@@ -39,7 +42,8 @@ internal sealed class InlineRootRequests(Contract.BoundScope scope, string actor
         }
     }
 
-    internal async ValueTask<InlineStartOutcome> StartAsync(string operationId, Contract.StartSpec start, object material,
+    /// <summary>Offers an exact start and its trusted local material to this owner, then observes its outcome.</summary>
+    public async ValueTask<InlineStartOutcome> StartAsync(string operationId, Contract.StartSpec start, object material,
         CancellationToken token)
     {
         token.ThrowIfCancellationRequested();

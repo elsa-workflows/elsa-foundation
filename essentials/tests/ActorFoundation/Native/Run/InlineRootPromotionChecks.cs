@@ -192,8 +192,14 @@ internal static class InlineRootPromotionChecks
                 mixedJob.Inputs.Add("Milliseconds", 100);
                 var mixedMailbox = new Workflow("inline-mixed-mailbox", Wf.Parallel("parallel", null, Wf.Delay("independent-timer", 350), mixedJob))
                     { ExecutableSelection = "private-125-mixed-mailbox" };
-                var registry = new WorkflowRegistry().Add(workflow).Add(shortWait).Add(pure).Add(longTimer).Add(earlyTimers).Add(timedJob).Add(terminal)
-                    .Add(parent).Add(selectedChild).Add(parkWorkflow).Add(initialParkWorkflow).Add(orderedParkWorkflow).Add(volatileJobWorkflow).Add(mixedMailbox);
+                Workflow[] inlineWorkflows = [workflow, shortWait, pure, longTimer, earlyTimers, timedJob, terminal, parent,
+                    parkWorkflow, initialParkWorkflow, orderedParkWorkflow, volatileJobWorkflow, mixedMailbox];
+                var permittedStarts = inlineWorkflows.ToDictionary(
+                    selected => WorkflowActorType.Start(NativeExecutionModel.Start(selected, Modes.Ephemeral)).TypeData,
+                    StringComparer.Ordinal);
+                var registry = new WorkflowRegistry().Add(selectedChild);
+                foreach (var inlineWorkflow in inlineWorkflows) registry.Add(inlineWorkflow);
+                var childStart = WorkflowActorType.Start(NativeExecutionModel.Start(selectedChild));
                 var model = new NativeExecutionModel(registry, new NativeExecutionOptions { UseStructuralJournal = true });
                 var actor = new WorkflowActorType([model]);
                 var spec = WorkflowActorType.Start(NativeExecutionModel.Start(workflow, Modes.Ephemeral));
@@ -215,8 +221,8 @@ internal static class InlineRootPromotionChecks
                 string? refusedParent = null;
                 var physical = new EfStore(Open, postgres, fenceInBatch) { CommitSql = CommitSql.Owned, ProtectChildBirths = ProtectChildrenAsync };
                 await physical.EnableInlinePromotionAsync(scope, (requested, material) =>
-                    WorkflowActorType.DescribeStart(requested.Model, requested.Definition) is { } selected &&
-                    model.MatchesInlineMaterial(material, selected.Workflow, selected.Definition, selected.ExecutableSelection),
+                    requested.Model == WorkflowActorType.ActorType && permittedStarts.TryGetValue(requested.Definition, out var selected) &&
+                    model.MatchesInlineMaterial(material, selected.Id, selected.Definition, selected.ExecutableSelection),
                     async (offer, ct) =>
                     {
                         if (offer.Actor.Id == protectionDeadline)
@@ -757,7 +763,7 @@ internal static class InlineRootPromotionChecks
                         throw new InvalidOperationException("The inline owner issued an unexpected child.");
                     var parentReference = FoundationRootCreator.ReferenceFor(key, scope.Tenant, new(issue.Parent, 1));
                     if (offered is not { } offer || offer.Actor.Id != parentReference ||
-                        WorkflowActorType.DescribeStart(child.Type, child.TypeData) is not { ExecutableSelection: "private-125-child" })
+                        child.Type != childStart.Type || child.TypeData != childStart.TypeData)
                         throw new InvalidOperationException("The child material did not follow its exact parent protection.");
                     await using var db = Open();
                     db.Database.SetCommandTimeout(1);
