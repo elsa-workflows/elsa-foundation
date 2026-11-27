@@ -23,7 +23,6 @@ internal sealed class Elsa3BulkDispatchChildRewrite : IElsa3NodeRewrite
     private const string ChildFaultedSlot = "BulkDispatchWorkflows.ChildFaulted";
     private const string CurrentItem = "currentItem";
     private const string DefaultItemKey = "Item";
-    private const string ItemParameter = "item";
 
     private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null, JsonBaseline.Options);
 
@@ -315,7 +314,8 @@ internal sealed class Elsa3BulkDispatchChildRewrite : IElsa3NodeRewrite
     /// FR-016: the Dispatch node's per-item <c>Inputs</c>, an Elsa 4 expression bound to the bulk node's
     /// <c>currentItem</c>. In order: the static entries; then a map item's members that the target declares, matched in any
     /// letter case and passed in the declared spelling, or any other item under the item key when the target declares it.
-    /// The item wins a clash. Declared names appear as literals, and item members are read only through
+    /// The item wins a clash. The item is read as the pinned variable <c>variables.currentItem</c>, as the lowerer writes a
+    /// variable read. Declared names appear as literals, and item members are read only through
     /// <c>Object.entries</c>, never by computed member access, which the read analysis treats as possible state access.
     /// </summary>
     private static JsonElement InputsExpression(
@@ -339,7 +339,7 @@ internal sealed class Elsa3BulkDispatchChildRewrite : IElsa3NodeRewrite
             .Append("return [match[0], match[1][0][1]]; }); } ")
             .Append(key is null ? string.Empty : $"else {{ picked = [[{Json(key)}, item]]; }} ")
             .Append("return Object.assign({}, ").Append(FixedObject(fixedInputs)).Append(", Object.fromEntries(picked)); })")
-            .Append($"(args.{ItemParameter})")
+            .Append($"(variables.{CurrentItem})")
             .ToString();
         var expression = new ExpressionDefinition(
             "JavaScript",
@@ -347,7 +347,7 @@ internal sealed class Elsa3BulkDispatchChildRewrite : IElsa3NodeRewrite
             inputsType,
             new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal)
             {
-                [ItemParameter] = new VariableExpressionParameterBinding(bulkId, CurrentItem)
+                [ExpressionParameterSurfaces.VariablesKey(CurrentItem)] = new VariableExpressionParameterBinding(bulkId, CurrentItem, ExpressionParameterSurfaces.Variables)
             },
             JsonSerializer.SerializeToElement(new { }, JsonBaseline.Options),
             ExpressionCapabilityProfiles.BindingReadonlyV1);

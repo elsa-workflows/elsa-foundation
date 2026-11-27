@@ -446,6 +446,45 @@ public sealed class Elsa3BulkDispatchConversionTests
         Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.BulkDispatchOuterWrite);
     }
 
+    // ── Publish validation ──────────────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task The_converted_bulk_dispatch_passes_value_flow_validation()
+    {
+        // The Dispatch node's Inputs and CorrelationId read the bulk node's currentItem, which its structure handler
+        // projects, and the branches read a variable of the workflow.
+        var branch = Activity("done-branch", "Elsa.WriteLine", ("text", Expression("JavaScript", "return 'done ' + getLines();")));
+        var result = await ConvertAsync(Bulk(
+            ("correlationIdFunction", Expression("JavaScript", "return 'order-17' + getItem().suffix;")),
+            ("childCompleted", Port(branch))));
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddLogging();
+        new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
+        new Elsa.Activities.DispatchWorkflow.Design.DispatchWorkflowDesignFeature().ConfigureServices(services);
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
+        new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
+        services.AddSingleton<Elsa.Activities.Design.Core.Contracts.IActivityDefinitionLookup>(RealActivityCatalog.Create());
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var validator = ActivatorUtilities.CreateInstance<Elsa.Workflows.Design.Validations.Validators.ValueFlowValidator>(scope.ServiceProvider);
+
+        var errors = (await validator.Validate(new Draft(result.Value!.State), CancellationToken.None)).ToArray();
+
+        Assert.True(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(error => $"{error.Type} at {error.Path}: {error.Message}")));
+    }
+
+    private sealed class Draft(WorkflowDefinitionState state) : Elsa.Workflows.Design.Core.Contracts.IWorkflowDefinitionDraft
+    {
+        public string Id => "draft";
+        public string WorkflowDefinitionId => "workflow";
+        public WorkflowDefinitionState State { get; } = state;
+        public DateTimeOffset CreatedAt => DateTimeOffset.UnixEpoch;
+        public DateTimeOffset LastModifiedAt => DateTimeOffset.UnixEpoch;
+    }
+
     // ── Target declarations (FR-016, Q2) ────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -562,7 +601,7 @@ public sealed class Elsa3BulkDispatchConversionTests
     }
 
     private static Task<JsonElement> EvaluateInputsAsync(ExpressionDefinition inputs, string itemJson) =>
-        PortableJavaScript.EvaluateAsync(inputs, new Dictionary<string, JsonElement> { ["item"] = JsonDocument.Parse(itemJson).RootElement.Clone() });
+        PortableJavaScript.EvaluateAsync(inputs, new Dictionary<string, JsonElement> { ["currentItem"] = JsonDocument.Parse(itemJson).RootElement.Clone() });
 
     private static ExpressionDefinition ReadExpression(ArgumentState argument) =>
         (argument.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(argument.Value.Value))
