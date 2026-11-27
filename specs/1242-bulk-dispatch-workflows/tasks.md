@@ -35,7 +35,7 @@ converter) needs the activity in the catalog.
 
 - [ ] T008 [US3] Map entry for the CLR key `Elsa.Activities.DispatchWorkflow.Runtime.Activities.BulkDispatchWorkflows`:
   - `Items` (FR-014), and the two ports as `Structure(…, Port)`, added to the surface fixture as ports;
-  - every dispatch member as `Structure`;
+  - every dispatch member as `Structure(…, Elsa3MemberKind.Input)`;
   - `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` as the entry's behaviour warning (FR-011, FR-020). Add that code here.
 - [ ] T009 [US3] The one rewrite, `BulkDispatchChild`, builds the `{elsa3NodeId}.dispatch` child as a ready-made plan, attached to the bulk node's
   `Activities` and `Slots` under `Dispatch`,

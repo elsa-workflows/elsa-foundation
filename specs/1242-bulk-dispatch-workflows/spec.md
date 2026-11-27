@@ -291,10 +291,10 @@ and on-completed-callbacks suites pass.
     raises those as plain exceptions, so they cannot be told apart, and absorbing them would hide recoverable errors.
 - **FR-009**: The activity has one outcome, `Done`.
 - **FR-010**: A slot reads its item as `variables.currentItem` and `variables.currentIndex`. Reading the dispatched
-  child's result in a slot is not part of this spec (Out of Scope). Publish MUST refuse a direct, unscoped slot
-  binding to the `Dispatch` node's result (`ValueFlow/EarlierProducerRun` for an optional binding,
-  `ValueFlow/UnavailableProducer` for a required one): passes run concurrently, so such a binding cannot tell which
-  item's `Dispatch` run it reads. Result bindings between activities inside one slot are not affected. Bindings that declare a scope, and script expression parameters,
+  child's result in a slot is not part of this spec (Out of Scope). Publish MUST refuse a direct, unscoped result
+  binding between two different children of the bulk node (`Dispatch`, `ChildCompleted`, `ChildFaulted`, in any
+  direction), with `ValueFlow/EarlierProducerRun` for an optional binding and `ValueFlow/UnavailableProducer` for a
+  required one. Passes run concurrently, so such a binding cannot tell which item's run it reads. Result bindings between activities inside one slot are not affected. Bindings that declare a scope, and script expression parameters,
   keep their existing rules (#4056).
 - **FR-010a**: Passes run concurrently, so `Dispatch` and both slots are unordered with themselves across passes.
   - A variable write under the bulk node, from `Dispatch` (an output capture) or from either slot, raises spec 266's

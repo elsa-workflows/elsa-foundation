@@ -72,19 +72,14 @@ the design side), and converter rules.
   - **`CompletesAfterItsChildren`** returns true, as `If` and `LoopStructureHandler` do, so spec 266's unordered-write
     analysis does not report false findings around the bulk node.
   - **`AssessChildResult`**, per pair:
-    - **Producer `Dispatch`, consumer `ChildCompleted` or `ChildFaulted`**: `Unknown`, with
-      `MayRunConcurrently = true` and `EarlierProducerRunCanReachConsumer = true`, so a slot binding to the `Dispatch`
-      node's result is refused (spec FR-010).
+    - **Two different children** (`Dispatch`, `ChildCompleted`, `ChildFaulted`, in any direction): `Unknown`, with
+      `MayRunConcurrently = true` and `EarlierProducerRunCanReachConsumer = true`, so a result binding between them is
+      refused (spec FR-010). Passes run concurrently, and the resolver hides other iterations' results
+      (`CausalActivityResultResolver`), so such a binding would read another item's result or always null.
     - **A child paired with itself** (the graph asks every container above the common one about its child's
       self-pair): `EarlierProducerRunCanReachConsumer = false`, as `LoopStructureHandler` answers. The bulk activity
       schedules each pass itself, and the runtime resolves results by causal history. So a result binding between two
       activities inside one slot (for example inside a `Sequence` or `Flowchart`) still publishes.
-    - **`ChildCompleted` and `ChildFaulted`, either way round**: answered as for `Dispatch` → slot
-      (`MayRunConcurrently = true`, `EarlierProducerRunCanReachConsumer = true`), so such a binding is refused. The
-      two slots never run in the same pass, so the resolver, which hides other iterations' results
-      (`CausalActivityResultResolver`), would always resolve the binding to null.
-    - **Slot → `Dispatch`**: never reachable, because `Dispatch` runs before its pass's slot. Answered as `If`
-      answers an unreachable pair.
   - **`RelateChildren`** answers `Unordered` for every pair, including a child paired with itself. `Dispatch` and both
     slots run concurrently across passes. If's "never overlap" facts would feed spec 266's concurrency checks false
     ordering.
@@ -141,7 +136,7 @@ the design side), and converter rules.
   - **Bulk-entry members**: `Items` (`Carry`, `NullUnbound`, FR-014). `ChildCompleted` and `ChildFaulted` are
     `Structure(…, Elsa3MemberKind.Port)`, not `Slot()`: `ApplyMembers` would add a `Slot()` port as a child before
     the rewrite runs. The rewrite calls `context.AddChild` for each branch itself, unless the wait is a literal false.
-    Every dispatch member is `Structure` (R7) on
+    Every dispatch member is `Structure(…, Elsa3MemberKind.Input)` (R7) on
     the bulk entry: `WorkflowDefinitionId`, `Input`, `DefaultItemInputKey`, `CorrelationIdFunction`,
     `WaitForCompletion`, `StartNewTrace` and `ChannelName`. The coverage test requires targeted keys to be inputs of
     the entry's own type, and the bulk node has only `Items`.
@@ -257,7 +252,8 @@ the design side), and converter rules.
   - a slot binding to the `Dispatch` node's result is refused at publish: an optional binding with
     `ValueFlow/EarlierProducerRun`, a required one with `ValueFlow/UnavailableProducer`;
   - a result binding between two activities inside one slot `Sequence` publishes;
-  - a binding from a node in `ChildFaulted` to a node in `ChildCompleted` is refused.
+  - a binding from a node in `ChildFaulted` to a node in `ChildCompleted` is refused, and so is an optional binding from a
+    `Dispatch` input to a node inside `ChildCompleted`.
 - **Converter** (`Elsa3BulkDispatchConversionTests`): every member rule; each FR-017 and FR-019 row; an item key
   that clashes with a workflow variable (the item wins in `Inputs`, and the variable wins in the correlation function,
   as in Elsa 3); the item-read
