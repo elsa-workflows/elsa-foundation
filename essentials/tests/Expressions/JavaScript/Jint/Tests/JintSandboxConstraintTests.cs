@@ -65,6 +65,34 @@ public class JintSandboxConstraintTests
         Assert.Equal(1, result!.Value.GetInt32());
     }
 
+    // Issue #5818: a script that waits by polling the clock creates a little garbage on every pass and keeps none of it.
+    // How much garbage depends on how fast the machine runs the loop, so a short wait must not fault on the default limits.
+    [Fact]
+    public async Task GarbageTheScriptDropsDoesNotCountAgainstTheMemoryLimit()
+    {
+        await using var provider = JintTestHost.Build();
+        using var scope = provider.CreateScope();
+
+        // About 100 MB of strings, each dropped on the next pass: the script never holds more than one.
+        var result = await EvaluateAsync(
+            scope.ScriptEvaluator(),
+            "var last = ''; for (var i = 0; i < 50000; i++) { last = 'x'.repeat(1000) + i; } return last.length;");
+
+        Assert.Equal(1005, result!.Value.GetInt32());
+    }
+
+    // The same strings, kept: the script holds more than the limit and faults.
+    [Fact]
+    public async Task MemoryTheScriptHoldsBeyondTheLimitFaults()
+    {
+        await using var provider = JintTestHost.Build(f => f.ExecutionTimeout = null);
+        using var scope = provider.CreateScope();
+
+        await Assert.ThrowsAsync<MemoryLimitExceededException>(() => EvaluateAsync(
+            scope.ScriptEvaluator(),
+            "var keep = []; for (var i = 0; i < 50000; i++) { keep.push('x'.repeat(1000) + i); } return keep.length;").AsTask());
+    }
+
     [Fact]
     public async Task RecursionLimitAborts()
     {
