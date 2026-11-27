@@ -57,6 +57,12 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
     /// <summary>Private opt-in for qualifying standalone Event and recurring workflow starts.</summary>
     public bool PreparedStandaloneStarts { get; set; }
 
+    /// <summary>Private opt-in for qualifying standalone asynchronous HTTP fan-out.</summary>
+    internal bool PreparedStandaloneHttpFanOut { get; set; }
+
+    /// <summary>Private opt-in for qualifying responses to standalone HTTP sources.</summary>
+    internal bool PreparedStandaloneHttpResponses { get; set; }
+
     [ManifestSetting(DisplayName = "Finished retention (seconds)", Description = "Minimum age for automatic deletion of finished runs. Leave empty to keep them.", Category = "Retention")]
     public int? FinishedRetentionSeconds { get; set; }
 
@@ -77,6 +83,10 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
 
     internal void ConfigureServices(IServiceCollection services, KernelShellStorage storage, bool protectChildExecutables = false)
     {
+        if ((PreparedStandaloneHttpFanOut || PreparedStandaloneHttpResponses) && !PreparedStandaloneStarts)
+            throw new InvalidOperationException("Protected standalone HTTP requires the source-owned standalone handoff.");
+        if ((PreparedStandaloneHttpFanOut || PreparedStandaloneHttpResponses) && !storage.TakesRetainedHttpResponse)
+            throw new InvalidOperationException("Protected standalone HTTP qualification requires the private retained response profile.");
         if (PreparedStandaloneStarts && !storage.TakesPreparedStarts)
             throw new InvalidOperationException("Prepared standalone starts require Foundation's protected root admission capability.");
         var tenant = EmbeddedTenant.Bind(Tenant);
@@ -121,7 +131,13 @@ public sealed class WorkflowsRuntimeKernelHostingFeature : IWebShellFeature
                 sp.GetRequiredService<KernelShellRuntime>().StandaloneStarts));
             services.AddScoped<IRuntimePreparedStandaloneRecipient>(sp => new KernelStandalonePreparedStartHandoff(
                 sp.GetRequiredService<IServiceScopeFactory>(), persistenceScope, tenant,
-                sp.GetRequiredService<KernelServing>().Capabilities, sp.GetRequiredService<KernelShellRuntime>().StandaloneStarts));
+                sp.GetRequiredService<KernelServing>().Capabilities, sp.GetRequiredService<KernelShellRuntime>().StandaloneStarts,
+                PreparedStandaloneHttpFanOut || PreparedStandaloneHttpResponses ? sp.GetRequiredService<KernelServing>() : null,
+                PreparedStandaloneHttpFanOut, PreparedStandaloneHttpResponses));
+            if (PreparedStandaloneHttpResponses)
+                services.AddScoped<IRuntimeStandaloneHttpResponseReader>(sp => new KernelStandaloneHttpResponseReader(persistenceScope, tenant,
+                    sp.GetRequiredService<IRuntimeIngressDeliveryStore>(), sp.GetRequiredService<IRuntimePreparedStandaloneRecipient>(),
+                    sp.GetRequiredService<KernelShellRuntime>().StandaloneStarts));
         }
         if (storage.TakesPreparedStarts)
             services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutionStartService>(sp =>

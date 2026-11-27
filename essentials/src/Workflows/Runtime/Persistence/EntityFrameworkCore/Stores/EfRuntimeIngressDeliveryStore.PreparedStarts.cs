@@ -39,7 +39,10 @@ internal sealed partial class EfRuntimeIngressDeliveryStore : IRuntimePreparedSt
     {
         RequirePreparedStarts();
         var recipient = committed.Recipient;
-        if (committed.Item.StandaloneIngress is null || committed.Item.SubscriptionDelivery?.WaitDelivery is not null ||
+        var item = committed.Item;
+        if (item.StandaloneIngress is not { } source ||
+            (item.SubscriptionDelivery?.WaitDelivery is not null || PreparedStandaloneHttp.IsHttp(source)) &&
+                !PreparedStandaloneHttp.HasVerifiedEmptyWaits(item) ||
             recipient.ModelKey != "native" || recipient.ModelProtocol is not null ||
             recipient.Partition.Value != recipient.StartIdentity.Scope.Value)
             throw new NotSupportedException("Prepared start qualification requires standalone Native dispatch without an ordinary wait cohort.");

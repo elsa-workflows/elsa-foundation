@@ -15,13 +15,18 @@ namespace Elsa.Workflows.Runtime.KernelHosting;
 
 /// <summary>Qualifies a private source-owned start without registering a live standalone target.</summary>
 internal sealed class KernelStandalonePreparedStartHandoff(IServiceScopeFactory scopes, PersistenceScope persistence,
-    BoundScope actors, KernelHostCapabilities capabilities, Func<IPreparedRootStartHandoff> foundation) : IRuntimePreparedStandaloneRecipient
+    BoundScope actors, KernelHostCapabilities capabilities, Func<IPreparedRootStartHandoff> foundation,
+    KernelServing? standaloneHttpRoutes = null, bool httpFanOut = false, bool httpResponses = false) : IRuntimePreparedStandaloneRecipient
 {
     public bool Selects(RuntimeStandaloneIngressSource source, RuntimeSubscriptionRecipient recipient) =>
         source.Scope == persistence && (source.TenantId ?? PersistenceScope.DefaultValue) == actors.Tenant &&
         recipient.ModelKey == "native" && recipient.ModelProtocol is null &&
-        source.CanonicalPayload.TryGetProperty("trigger", out var trigger) && trigger.ValueKind == JsonValueKind.Object &&
-        trigger.TryGetProperty("typeKey", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() is "event" or "timer" or "cron";
+        (SelectsHttp(source) ||
+            source.CanonicalPayload.TryGetProperty("trigger", out var trigger) && trigger.ValueKind == JsonValueKind.Object &&
+            trigger.TryGetProperty("typeKey", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() is "event" or "timer" or "cron");
+
+    private bool SelectsHttp(RuntimeStandaloneIngressSource source) =>
+        httpFanOut && PreparedStandaloneHttp.IsAsyncFanOut(source) || httpResponses && PreparedStandaloneHttp.IsWorkflowResponse(source);
 
     public async ValueTask<RuntimePostCommitOutboxItem> DeliverAsync(RuntimeDeliverySourceContext source, string recipientId,
         CancellationToken token)
@@ -31,9 +36,17 @@ internal sealed class KernelStandalonePreparedStartHandoff(IServiceScopeFactory 
         await using var runtime = await scopes.CreateAsyncScopeAsync(persistence);
         var services = runtime.ServiceProvider;
         var handoff = RequireHandoff(services);
+        var deliveryStore = services.GetRequiredService<IRuntimeIngressDeliveryStore>();
+        if (source.Claim.Item.StandaloneIngress is { } standalone && PreparedStandaloneHttp.IsHttp(standalone))
+        {
+            var accepted = await deliveryStore.ReadSourceAsync(source, token);
+            if (!SelectsHttp(standalone) || standaloneHttpRoutes is null || PreparedStandaloneHttp.AcceptedRoute(accepted) is not { } route ||
+                Progress(accepted).Seal is null && standaloneHttpRoutes.MatchHttp(route.Method, "/" + route.Path.TrimStart('/')) is not null)
+                throw new NotSupportedException("The standalone HTTP source does not have a qualified independent route.");
+        }
         var committed = await handoff.CommitPreparedStartAsync(source, recipientId, token);
         if (committed is null)
-            return await services.GetRequiredService<IRuntimeIngressDeliveryStore>().ReadSourceAsync(source, token);
+            return await deliveryStore.ReadSourceAsync(source, token);
         var recipient = committed.Recipient;
         if ((recipient.TenantId ?? PersistenceScope.DefaultValue) != actors.Tenant)
             throw new InvalidOperationException("The standalone recipient is outside this Foundation owner's tenant.");
@@ -71,7 +84,9 @@ internal sealed class KernelStandalonePreparedStartHandoff(IServiceScopeFactory 
         var input = new JsonObject();
         foreach (var (name, value) in validated.NormalizedInputs) input.Add(name, JsonNode.Parse(value.GetRawText()));
         var workflow = NativeExecutableMapper.Map(material, capabilities, recipient.LogicalDefinitionId);
-        var start = WorkflowActor.Start(NativeExecutionModel.Start(workflow, mode.ToString(), input));
+        var retainsHttpResponse = item.StandaloneIngress is { } selectedSource && PreparedStandaloneHttp.IsWorkflowResponse(selectedSource);
+        var start = WorkflowActor.Start(NativeExecutionModel.Start(workflow, mode.ToString(), input), null,
+            retainedResponseKey: retainsHttpResponse ? seal.Fingerprint : null);
         var previous = attempt?.Generation ?? 0L;
         var operation = RuntimeDeliveryFingerprint.Compute("elsa.kernel.standalone-prepared-attempt.v1",
             new { sealFingerprint = seal.Fingerprint, generation = checked(previous + 1) });
@@ -79,7 +94,7 @@ internal sealed class KernelStandalonePreparedStartHandoff(IServiceScopeFactory 
         var recorded = await handoff.ReadPreparedStartAttemptAsync(authority, token);
         return recorded is { } receipt
             ? await handoff.ReconcilePreparedStartAsync(source, authority, receipt.Generation, token)
-            : await services.GetRequiredService<IRuntimeIngressDeliveryStore>().ReadSourceAsync(source, token);
+            : await deliveryStore.ReadSourceAsync(source, token);
 
         RuntimeRecipientProgress Progress(RuntimePostCommitOutboxItem current) =>
             current.SubscriptionDelivery!.Progress.Single(progress => progress.RecipientId == recipientId);

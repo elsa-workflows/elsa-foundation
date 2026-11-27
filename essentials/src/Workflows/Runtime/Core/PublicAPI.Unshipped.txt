@@ -13162,3 +13162,26 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRecipient.Select
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRecipient.DeliverAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceContext! source, string! recipientId, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem!>
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRunReader
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePreparedStandaloneRunReader.ReadAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, Elsa.Workflows.Runtime.Core.Models.RuntimeSubscriptionRecipient! recipient, Elsa.Workflows.Runtime.Core.Models.RuntimeTargetAcceptanceReceipt! receipt, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState?>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStandaloneHttpResponseReader
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStandaloneHttpResponseReader.ReadAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! sourceOutboxItemId, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse!>
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.RuntimeStandaloneHttpResponse(Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState State, string? ActorReference = null, int StatusCode = 0, string? ContentType = null, System.Text.Json.JsonElement? Body = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? Headers = null) -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.Deconstruct(out Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState State, out string? ActorReference, out int StatusCode, out string? ContentType, out System.Text.Json.JsonElement? Body, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>? Headers) -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.State.get -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.State.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.ActorReference.get -> string?
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.ActorReference.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.StatusCode.get -> int
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.StatusCode.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.ContentType.get -> string?
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.ContentType.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.Body.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.Body.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.Headers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponse.Headers.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Legacy = 0 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Pending = 1 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Missing = 2 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.TooLarge = 3 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState
+Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState.Ready = 4 -> Elsa.Workflows.Runtime.Core.Contracts.RuntimeStandaloneHttpResponseState

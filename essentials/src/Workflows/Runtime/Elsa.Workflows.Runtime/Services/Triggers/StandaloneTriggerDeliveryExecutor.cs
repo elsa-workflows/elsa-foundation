@@ -14,7 +14,8 @@ internal sealed class StandaloneTriggerDeliveryExecutor(IRuntimeIngressDeliveryS
     {
         var item = await store.ReadSourceAsync(source, cancellationToken);
         var selection = item.SubscriptionDelivery ?? throw new InvalidDataException("A standalone source has no accepted cohort.");
-        var blocksOrdinaryWaits = selection.WaitDelivery is not null && selection.Recipients.Any(recipient =>
+        var blocksOrdinaryWaits = selection.WaitDelivery is not null && !PreparedStandaloneHttp.HasVerifiedEmptyWaits(item) &&
+            selection.Recipients.Any(recipient =>
             UsesPrepared(item, recipient, selection.Progress.Single(progress => progress.RecipientId == recipient.RecipientId)));
         var failures = new List<Exception>();
         foreach (var recipient in selection.Recipients)
