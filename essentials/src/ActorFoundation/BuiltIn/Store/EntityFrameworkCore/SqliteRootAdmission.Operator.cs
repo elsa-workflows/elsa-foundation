@@ -59,8 +59,8 @@ internal sealed partial class SqliteRootAdmission
                 : terminal is not null ? target.Terminal && await MatchesTerminalAsync(db, tenant, reference.Id, target, terminal, ct)
                 : target.Status == (int)InstanceStatus.Running ||
                     thenDelete && target.Terminal && await MatchesTerminalAsync(db, tenant, reference.Id, target, null, ct);
-            if (prior is not null || !eligible || policy is not null && (target.Model is null || target.Status is not { } status ||
-                !policy.Allows(target.Model, (InstanceStatus)status, terminal!.At)))
+            if (prior is not null || !eligible || policy is not null && (target.Status is not { } status ||
+                !policy.Allows(target.Header, (InstanceStatus)status, terminal!.At)))
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
             attempt?.RequireCapacity();
             if (reply is not null && await EfStore.SqliteHeldOperatorCapacityReachedAsync(db, target.Actor, target.Partition, ct))

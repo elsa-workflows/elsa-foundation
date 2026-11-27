@@ -10,7 +10,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
 {
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record StartAdmission(long Now, string? Reference, byte[]? Key, int? Partitions);
-    private sealed record Target(string Actor, int Partition, bool HasCheckpoint, int? Status, bool Terminal, bool Pending, bool Parked, string? Model);
+    private sealed record Target(string Actor, int Partition, bool HasCheckpoint, int? Status, bool Terminal, bool Pending, bool Parked, string? Header);
 
     internal Task<int> VerifyAsync(CancellationToken token) => WriteAsync(async (db, _, ct) =>
     {
@@ -227,7 +227,7 @@ internal sealed partial class SqliteRootAdmission(Func<KernelDb> create, TimeSpa
                 EXISTS (SELECT 1 FROM "Messages" m
                     WHERE m."Id" = b."Creator" AND m."Target" = b."Actor" AND m."Partition" = b."Partition"
                         AND m."InboxScope" = 0 AND NOT m."Done") AS "Pending",
-                i."FoundationParkAt" IS NOT NULL AS "Parked", i."Model"
+                i."FoundationParkAt" IS NOT NULL AS "Parked", i."FoundationHeader" AS "Header"
             FROM "FoundationRootBirths" b
             LEFT JOIN "Instances" i ON i."Id" = b."Actor"
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1

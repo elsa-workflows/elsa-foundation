@@ -7,16 +7,17 @@ public sealed partial class EfStore
 {
     internal sealed record RetentionAdmissionPolicy(ActorRetentionPolicy Policy, string? EncodedType, long AsOf)
     {
-        internal bool Allows(string model, InstanceStatus status, long endedAt) =>
-            EncodedType == EncodeRetentionActorType(model) && Elapsed(RetentionMillis.From(Policy.Windows), status, endedAt, AsOf);
+        internal bool Allows(string? header, InstanceStatus status, long endedAt) =>
+            header is not null && EncodedType == EncodeRetentionActorType(DurableKeyJson.Read<RootHeader>(header).Model) &&
+            Elapsed(RetentionMillis.From(Policy.Windows), status, endedAt, AsOf);
     }
 
-    internal sealed record RetentionAdmissionTarget(string Model, InstanceStatus Status);
+    internal sealed record RetentionAdmissionTarget(string? Header, InstanceStatus Status);
 
     internal static async Task<RetentionAdmissionPolicy> ReadRetentionAdmissionPolicyAsync(KernelDb db, string tenant,
         long? marker, long? now, CancellationToken token)
     {
-        if (db.UsesSqliteRootRuntime)
+        if (db.Database.IsSqlite())
         {
             var key = await SqliteRootAdmission.ReadRootIssuerKeyAsync(db, token);
             var row = await ReadSqliteRetentionPolicyRowAsync(db, tenant, token);

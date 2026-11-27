@@ -172,7 +172,7 @@ internal sealed partial class PostgresRootAdmission
             var terminalTarget = terminal is null ? null :
                 await LockRootDeleteSelectionAsync(db, address, tenant, reference, terminal, retentionMarker, token);
             var exactTerminal = terminalTarget is not null &&
-                (retentionPolicy is null || retentionPolicy.Allows(terminalTarget.Model, terminalTarget.Status, terminal!.At));
+                (retentionPolicy is null || retentionPolicy.Allows(terminalTarget.Header, terminalTarget.Status, terminal!.At));
             // S5b-2: a Terminate, or a Delete, that names the Park is refused while its Park is being cleared.
             var exactPark = park is not null && await LocksRootParkSelectionAsync(db, address, tenant, reference, park, recover, token) &&
                 (recover && !db.UsesRootComposedParkRecovery || !await ClearsRootParkAsync(db, address, token));
@@ -278,7 +278,7 @@ internal sealed partial class PostgresRootAdmission
     private static Task<EfStore.RetentionAdmissionTarget?> LockRootDeleteSelectionAsync(KernelDb db, CreationAddress address, string tenant,
         string reference, FoundationTerminalStamp mark, long? marker, CancellationToken token) =>
         db.Database.SqlQuery<EfStore.RetentionAdmissionTarget>($"""
-            SELECT i."Model", i."Status" FROM "Instances" i
+            SELECT i."FoundationHeader" AS "Header", i."Status" FROM "Instances" i
             WHERE i."Id" = {address.Id} AND i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference}
                 AND i."Status" <> {(int)InstanceStatus.Running} AND NOT i."Retired"
                 AND i."FoundationTerminalRevision" = {mark.Revision} AND i."FoundationTerminalAt" = {mark.At}
