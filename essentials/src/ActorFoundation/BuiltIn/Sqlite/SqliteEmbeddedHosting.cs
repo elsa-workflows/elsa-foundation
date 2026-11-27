@@ -84,12 +84,12 @@ public static partial class SqliteEmbeddedHosting
                 retentionWindow: retentionWindow,
                 rootTerminalOutputLimit: terminalOutputLimit, auxiliaryActor: auxiliaryActor),
             actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests,
-            hostsAuxiliaryActor: auxiliaryActor is not null, protectChildBirths: protectChildBirths);
+            auxiliaryActorType: auxiliaryActor?.Type, protectChildBirths: protectChildBirths);
     }
 
     private static async Task<RuntimeNode> StartCoreAsync(string databasePath, string node, Func<EfStore, int, IActorType> createActor,
         string? rootType, Action<string> endProcess, LoopOptions? options, bool fenceInBatch, CancellationToken cancellationToken,
-        Action<Exception>? onFault, SqliteDirectRequests? requests, bool hostsAuxiliaryActor = false,
+        Action<Exception>? onFault, SqliteDirectRequests? requests, string? auxiliaryActorType = null,
         ProtectChildBirthsAsync? protectChildBirths = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
@@ -117,13 +117,13 @@ public static partial class SqliteEmbeddedHosting
             await using (var db = Open())
             {
                 selfSends = db.UsesRootSelfProtocol;
-                if (hostsAuxiliaryActor && (!db.UsesRootScheduleInventory || !db.UsesRootTimedJobSettlement))
+                if (auxiliaryActorType is not null && (!db.UsesRootScheduleInventory || !db.UsesRootTimedJobSettlement))
                     throw new NotSupportedException("This SQLite root profile does not host an auxiliary actor.");
                 terminalOutputLimit = db.UsesRootTerminalOutput ? EfStore.RootContentBytes : 0;
                 if (shipped)
                 {
                     var admission = new SqliteRootAdmission(Open, TimeSpan.Zero, file.AdmissionDefinitions);
-                    partitions = await admission.VerifyAsync(cancellationToken);
+                    partitions = await admission.VerifyOwnerAsync(auxiliaryActorType, cancellationToken);
                 }
                 else
                 {
@@ -132,8 +132,6 @@ public static partial class SqliteEmbeddedHosting
                     if (partitions == 0)
                         throw new InvalidOperationException("The SQLite kernel database has no installed partitions.");
                 }
-                if (!hostsAuxiliaryActor) await RootScheduleControls.RequireOwnerIfScheduledAsync(db, cancellationToken);
-
                 await UseWalAsync(db, cancellationToken);
             }
 

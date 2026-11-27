@@ -13,6 +13,7 @@ internal sealed partial class PostgresRootAdmission
         if (!db.UsesRootScheduleControls) throw new NotSupportedException("The profile does not admit trusted schedule controls.");
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
         var pin = await PinScheduleStoreAsync(db, writing: true, token);
+        await RequireScheduleOwnerAsync(db, pin, actorType, token);
         try { await db.Database.ExecuteSqlRawAsync("""LOCK TABLE "FoundationScheduleControls" IN ROW EXCLUSIVE MODE""", token); }
         catch (Npgsql.PostgresException error) when (IsUnavailableSelectedSchema(error))
         {

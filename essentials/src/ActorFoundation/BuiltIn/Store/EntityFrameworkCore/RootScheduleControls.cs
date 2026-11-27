@@ -49,18 +49,6 @@ internal static class RootScheduleControls
     internal const string Table = "FoundationScheduleControls";
     internal const long InboxRetentionMilliseconds = 3_600_000;
 
-    internal static async Task RequireOwnerIfScheduledAsync(KernelDb db, CancellationToken token)
-    {
-        if (!db.UsesRootScheduleControls) return;
-        // Standalone Foundation stores can share the shipped schema. Once configured for schedules, all owners must
-        // serve the same auxiliary actor alongside the primary model.
-        if (db.RequiredFormat != StoreFormat.RootShipped || await db.Database.SqlQueryRaw<bool>("""
-            SELECT (EXISTS (SELECT 1 FROM "FoundationScheduleRoots")
-                OR EXISTS (SELECT 1 FROM "FoundationScheduleControls" WHERE "Kind" = 'set')) AS "Value"
-            """).SingleAsync(token))
-            throw new NotSupportedException("This root store requires a schedule owner.");
-    }
-
     internal static string Columns(bool sqlite)
     {
         var text = sqlite ? "TEXT COLLATE BINARY" : """text COLLATE "C" """;

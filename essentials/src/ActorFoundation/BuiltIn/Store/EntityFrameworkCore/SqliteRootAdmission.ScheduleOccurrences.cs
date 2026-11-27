@@ -33,6 +33,7 @@ internal sealed partial class SqliteRootAdmission
         return await WriteAsync<Contract.Admission>(async (db, ct) =>
         {
             if (!db.UsesRootScheduleSettlement) throw new NotSupportedException("The profile does not admit scheduled workflow occurrences.");
+            if (RootScheduleOwnerMode.Applies(db)) await RootScheduleOwnerMode.RequireAsync(db, actorType, ct);
             if (await RootScheduleInventory.FindAsync(db, tenant, occurrence.Schedule, actorType, ct) != occurrence.ScheduleReference)
                 return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
 

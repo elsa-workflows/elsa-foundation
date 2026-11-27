@@ -104,6 +104,42 @@ internal sealed partial class PostgresRootAdmission
         return pin;
     }
 
+    internal static async Task BindScheduleOwnerAsync(KernelDb db, string? auxiliaryActor, CancellationToken token)
+    {
+        if (!RootScheduleOwnerMode.Applies(db))
+        {
+            if (db.UsesRootScheduleControls && auxiliaryActor is null)
+                throw new NotSupportedException("This PostgreSQL root profile requires a schedule owner.");
+            return;
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
+        var pin = await PinRootNamespaceAsync(db, loadIssuer: false, token)
+            ?? throw new StoreFormatException("Binding the schedule owner mode requires a pinned root store.");
+        await LockScheduleOwnerModeAsync(db, token);
+        await RootScheduleOwnerMode.BindAsync(db, auxiliaryActor, token, sql => BindScheduleOwnerSource(sql, pin));
+        await transaction.CommitAsync(token);
+    }
+
+    private static async Task RequireScheduleOwnerAsync(KernelDb db, PinnedRootSource pin, string actorType, CancellationToken token)
+    {
+        if (!RootScheduleOwnerMode.Applies(db)) return;
+        await LockScheduleOwnerModeAsync(db, token);
+        await RootScheduleOwnerMode.RequireAsync(db, actorType, token, sql => BindScheduleOwnerSource(sql, pin));
+    }
+
+    private static async Task LockScheduleOwnerModeAsync(KernelDb db, CancellationToken token)
+    {
+        try { await db.Database.ExecuteSqlRawAsync("""LOCK TABLE "FoundationScheduleOwnerMode" IN ACCESS SHARE MODE""", token); }
+        catch (Npgsql.PostgresException error) when (IsUnavailableSelectedSchema(error))
+        {
+            throw new StoreFormatException("The schedule owner mode is unreadable.", error);
+        }
+    }
+
+    private static FormattableString BindScheduleOwnerSource(FormattableString sql, PinnedRootSource pin) =>
+        WithAdmissionSource(sql, pin, "/*schedule-source*/", 1, """('"FoundationScheduleOwnerMode"')""");
+
     private static FormattableString BindScheduleSource(FormattableString sql, PinnedRootSource pin) =>
         WithAdmissionSource(sql, pin, "/*schedule-source*/", 3,
             """('"FoundationScheduleRoots"'), ('"FoundationRootBirths"'), ('"Messages"')""");

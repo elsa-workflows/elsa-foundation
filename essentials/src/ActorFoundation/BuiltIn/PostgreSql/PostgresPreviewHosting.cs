@@ -392,8 +392,8 @@ public static partial class PostgresPreviewHosting
             if (db.UsesRootSequencedJournal) await EfStore.RequirePostgresSequencedJournalAsync(db, cancellationToken);
             if (db.UsesRootPlaybackDescendants) await EfStore.RequirePostgresPlaybackAsync(db, cancellationToken);
             if (db.UsesRootScheduleControls) await RootScheduleControls.RequirePostgresDefinitionsAsync(db, cancellationToken);
-            if (auxiliaryActor is null) await RootScheduleControls.RequireOwnerIfScheduledAsync(db, cancellationToken);
             partitions = await PostgresRootAdmission.ReadInstalledPartitionCountAsync(db, cancellationToken);
+            await PostgresRootAdmission.BindScheduleOwnerAsync(db, auxiliaryActor?.Type, cancellationToken);
         }
 
         var pressure = (replies as PostgresDirectRequests)?.Pressure;

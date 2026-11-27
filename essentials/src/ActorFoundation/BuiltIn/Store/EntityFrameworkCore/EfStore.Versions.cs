@@ -434,8 +434,8 @@ internal static class StoreDefinitionsRevision
     private const int SqliteSequencedJournalRevision = 14;
     private const int PostgreSqlLiveEventRevision = 11;
     private const int SqliteLiveEventRevision = 14;
-    private const int PostgreSqlShippedRevision = PostgreSqlPreparedStartsRevision;
-    private const int SqliteShippedRevision = SqlitePreparedStartsRevision;
+    private const int PostgreSqlShippedRevision = 20;
+    private const int SqliteShippedRevision = 23;
     private const int PostgreSqlPlaybackRevision = 12;
     private const int SqlitePlaybackRevision = 15;
     private const int PostgreSqlPlaybackDescendantsRevision = 14;

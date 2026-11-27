@@ -225,8 +225,8 @@ internal static class ProfileCapabilityChecks
                 RootCapabilities.Playback | RootCapabilities.PlaybackDescendants | RootCapabilities.ScheduleInventory |
                 RootCapabilities.ScheduleSettlement | RootCapabilities.ScheduleControls | RootCapabilities.ScheduleLineage | RootCapabilities.PreparedStarts) &&
             sharedSqlite.Capabilities == sharedPostgres.Capabilities &&
-            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, MessageProtocol: 19, JournalCodec: 0 } &&
-            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, MessageProtocol: 22, JournalCodec: 0 },
+            StoreDefinitionsRevision.Seed(sharedPostgres) is { StoreSchema: 1, MessageProtocol: 20, JournalCodec: 0 } &&
+            StoreDefinitionsRevision.Seed(sharedSqlite) is { StoreSchema: 2, MessageProtocol: 23, JournalCodec: 0 },
             "the shared shipped format composes managed schedules and prepared starts with the previous provider capabilities");
         using var sequencedPostgres = KernelDb.ForPostgresRootSequencedJournalQualification(options);
         using var sequencedSqlite = KernelDb.ForSqliteRootRuntime(sqliteOptions, new SqliteAdmissionDefinitions(),
