@@ -52,6 +52,23 @@ internal static class VersionTakeChecks
                     await profile.Messages.AnyAsync(message => message.Id == inputId),
                     "the same SQLite owner commits after restoring the supported marker");
 
+                await using (var borrowed = new SqliteConnection(profile.Database.GetConnectionString()))
+                {
+                    borrowed.CreateFunction<long, int?, int?, int?, int>("kernel_require_owned_format", (_, _, _, _) => 42);
+                    var borrowedOptions = new DbContextOptionsBuilder<KernelDb>().UseSqlite(borrowed).Options;
+                    var borrower = new EfStore(() => new KernelDb(borrowedOptions), postgres: false, fenceInBatch: observed.FenceInBatch)
+                    {
+                        Engine = observed.Engine
+                    };
+                    var empty = batch with { Turns = [] };
+                    Check((await borrower.CommitAsync(empty)).Landed && (await borrower.CommitAsync(empty)).Landed,
+                        "the owner can commit repeatedly over a borrowed closed connection");
+                    await borrowed.OpenAsync();
+                    await using var lookup = borrowed.CreateCommand();
+                    lookup.CommandText = "SELECT kernel_require_owned_format(1, NULL, NULL, NULL)";
+                    Check(Convert.ToInt32(await lookup.ExecuteScalarAsync()) == 42, "the commit preserves the caller's SQLite function");
+                }
+
                 await profile.Database.OpenConnectionAsync();
                 var connection = profile.Database.GetDbConnection();
                 var options = new DbContextOptionsBuilder<KernelDb>().UseSqlite(connection).Options;

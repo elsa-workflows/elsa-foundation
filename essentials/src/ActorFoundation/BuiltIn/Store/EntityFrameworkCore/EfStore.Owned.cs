@@ -1,4 +1,5 @@
 using System.Data;
+using System.Runtime.CompilerServices;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -45,15 +46,17 @@ public sealed partial class EfStore
         if (root is not null) await CheckRootBeforeWriteAsync(root, db, cancellationToken);
         db.Database.AutoSavepointsEnabled = false;
         // An already-open connection can have a caller's active reader, which prevents unregistering a temporary function.
-        var inlineSqliteFormat = db.Database.IsSqlite() && !db.UsesSqliteShippedInstall &&
-            db.RequiredFormat == StoreFormat.Current && db.Database.GetDbConnection().State == ConnectionState.Closed;
+        var formatFunction = db.Database.IsSqlite() && !db.UsesSqliteShippedInstall &&
+            db.RequiredFormat == StoreFormat.Current &&
+            db.Database.GetDbConnection() is SqliteConnection { State: ConnectionState.Closed } connection
+            ? SqliteOwnedFormat.NameFor(connection) : null;
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        if (!inlineSqliteFormat) await RequireSqliteOperationalFormatAsync(db, cancellationToken);
+        if (formatFunction is null) await RequireSqliteOperationalFormatAsync(db, cancellationToken);
         if (db.Database.IsNpgsql() && (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement))
             await PinRootNamespaceForCommitAsync(db, cancellationToken);
         var commands = new List<OwnedCommand>();
         var c = new OwnedCommand(dialect) { HasFence = true };
-        if (inlineSqliteFormat) c.Statement(SqliteOwnedFormat.Check, Expect.Skip);
+        if (formatFunction is not null) c.Statement(SqliteOwnedFormat.Check(formatFunction), Expect.Skip);
         var window = batch.Window;
         // The fence is the first write (E9: the partition rows are locked first, k of them in ascending partition id).
         // The checked mode sends other writes after the fence holds. The in-batch mode sends them with the fence.
@@ -175,7 +178,7 @@ public sealed partial class EfStore
         foreach (var command in commands)
         {
             Ran result;
-            using (var sqliteFormat = inlineSqliteFormat && command.HasFence ? new SqliteOwnedFormat(db) : null)
+            using (var sqliteFormat = formatFunction is not null && command.HasFence ? new SqliteOwnedFormat(db, formatFunction) : null)
                 result = await RunAsync(db, dialect, command, cancellationToken, sqliteFormat);
             if (!result.Landed)
             {
@@ -306,20 +309,27 @@ public sealed partial class EfStore
 
     private sealed class SqliteOwnedFormat : IDisposable
     {
-        private const string Function = "kernel_require_owned_format";
-        internal static readonly string Check = $"""
-            SELECT {Function}(COUNT(*), MIN("StoreSchema"), MIN("MessageProtocol"), MIN("JournalCodec"))
+        // Microsoft.Data.Sqlite keeps a registration entry even after removing a function. Reuse one private name per connection.
+        private static readonly ConditionalWeakTable<SqliteConnection, string> Names = new();
+
+        internal static string NameFor(SqliteConnection connection) =>
+            Names.GetValue(connection, static _ => $"kernel_require_owned_format_{Guid.NewGuid():N}");
+
+        internal static string Check(string function) => $"""
+            SELECT {function}(COUNT(*), MIN("StoreSchema"), MIN("MessageProtocol"), MIN("JournalCodec"))
             FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
             """;
 
         private readonly SqliteConnection connection;
+        private readonly string function;
         internal Exception? Refusal { get; private set; }
 
-        internal SqliteOwnedFormat(KernelDb db)
+        internal SqliteOwnedFormat(KernelDb db, string function)
         {
+            this.function = function;
             connection = (SqliteConnection)db.Database.GetDbConnection();
             // The in-batch check aborts inside SQLite before the driver can step the fence or a later write.
-            connection.CreateFunction<long, int?, int?, int?, int>(Function, (count, schema, protocol, codec) =>
+            connection.CreateFunction<long, int?, int?, int?, int>(function, (count, schema, protocol, codec) =>
             {
                 if (count > 1)
                 {
@@ -336,7 +346,7 @@ public sealed partial class EfStore
             });
         }
 
-        public void Dispose() => connection.CreateFunction<long, int?, int?, int?, int>(Function, null);
+        public void Dispose() => connection.CreateFunction<long, int?, int?, int?, int>(function, null);
     }
 
     // ---- K1: the set operations over an owned set of virtual partitions, each one statement (PARTITIONS.md) --------------
