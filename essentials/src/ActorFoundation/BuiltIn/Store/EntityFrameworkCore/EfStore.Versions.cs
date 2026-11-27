@@ -206,7 +206,6 @@ internal static class RootProfiles
         [StoreFormat.RootParkArrivals] = ParkInspection | RootCapabilities.ParkArrivals,
         // Recover composes with the Park capabilities and admits only its own operator occurrence.
         [StoreFormat.RootParkRecovery] = ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery | RootCapabilities.OperatorProtocol,
-        [StoreFormat.RootPreparedStartsQualification] = PreparedStartsQualification,
         [StoreFormat.RootShipped] = Shipped
     };
 
