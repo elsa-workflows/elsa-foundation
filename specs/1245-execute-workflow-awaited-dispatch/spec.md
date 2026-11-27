@@ -394,7 +394,8 @@ faults.
       top-level Execute Workflow (`CrossFrameReference`);
     - the node does not come before the read in node order (`UnresolvableReferenceShape`).
 
-    The `.Output` rows read only the variable and are not affected.
+    `.Status` keeps the same two checks, because `"Finished"` holds only once the node has run (added in the
+    implementation, PR #5999). The `.Output` rows read only the variable and are not affected.
   - For those same rows, a read where the dispatch has not definitely run before it is left to publish. The converter
     computes no availability, and publish already refuses a non-definite activity-output read
     (`ValueFlow/UnavailableProducer`). Elsa 3 read `V`'s earlier value there.
@@ -415,6 +416,9 @@ faults.
     `getV().Output.X` and `.SubStatus` read `undefined`. The converted reads return the child's value and
     `"Finished"`.
   - An output read must match the output name's case.
+  - A `.Status` read binds no node output, so publish cannot refuse it on a path where the node may not have run (after
+    a branch that skips it). It reads `"Finished"` there, where Elsa 3 read `V`'s earlier value (added in the
+    implementation, PR #5999).
 - **FR-011a**: Spec 236's member map (`specs/236-elsa3-activity-map/member-map.md`) MUST be amended in place for the
   `DispatchWorkflow.Result`, `DispatchWorkflow outcome Done` and `ExecuteWorkflow → DispatchWorkflow` rows, and the
   null-member row for `ExecuteWorkflow.WaitForCompletion`, citing spec 1245, as spec 258 amended the Event row.
