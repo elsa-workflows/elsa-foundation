@@ -2,6 +2,7 @@ using Elsa.ActorFoundation.TestSupport;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
+using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
@@ -10,11 +11,12 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresChildWorkflowChecks
 {
-    internal static async Task<int> RunAsync()
+    internal static async Task<int> RunAsync(bool? fenceInBatch = null)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(70));
         var token = deadline.Token;
         const string node = "child-workflow-check";
+        const string creatorFaultChild = "creator-fault-child";
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(
             Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ??
             throw new InvalidOperationException("Supply an empty dedicated PostgreSQL fixture.")).Options;
@@ -38,24 +40,28 @@ internal static class PostgresChildWorkflowChecks
             .Add(Wf.Workflow("cascade-parent", Wf.Parallel("cascade", null,
                 Wf.Dispatch("left", "child", wait: true), Wf.Dispatch("right", "child", wait: true))))
             .Add(Wf.Workflow("nested-parent", Wf.Dispatch("dispatch", "parent", wait: true)))
+            .Add(Wf.Workflow("creator-fault-parent", Wf.Dispatch("dispatch", creatorFaultChild, wait: true)))
+            .Add(Wf.Workflow(creatorFaultChild, Wf.SetOutput("finish", "child-value", "unused")))
             .Add(Wf.Workflow("job-parent", Wf.Dispatch("dispatch", "job-child", wait: true)))
             .Add(Wf.Workflow("job-child", Wf.Http("fetch", "https://partner.example/stuck", timeout: TimeSpan.FromMinutes(2))))
             .Add(Wf.Workflow("bulk-parent", Wf.Node<ReleaseChild>("wait")));
         var partner = new BlockingPartner();
         using var http = new HttpClient(partner);
         var actor = new ChildFixtureActor(new WorkflowActor.WorkflowActor([new NativeExecutionModel(aliases,
-            new NativeExecutionOptions { Http = new NativeHttpOptions { Client = http } })]));
-        var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, actor.Type,
+            new NativeExecutionOptions { Http = new NativeHttpOptions { Client = http } })]), creatorFaultChild);
+        var scope = EmbeddedTenant.Bind("workflow-children");
+        var foundation = await PostgresPreviewHosting.OpenFoundationWithOperatorsAsync(Open, actor.Type,
+            (bound, _, kind) => ReferenceEquals(bound, scope) && kind == Contract.Kinds.Recover,
             PostgresPreviewHosting.CreateRequests(Open, node, actor.Type), cancellationToken: token);
         await using var service = StartService(node, foundation.Requests);
-        var scope = EmbeddedTenant.Bind("workflow-children");
+        await using var db = Open();
         await service.StartAsync(token);
+        await CheckCreatorParkAsync();
         var result = await foundation.SendAsync(scope, new Contract.Target.Start(
             WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("parent"))), "parent-1", Contract.Kinds.Start, cancellationToken: token);
         Check(result.Outcome == Contract.AdmissionOutcome.Accepted && result.Actor is not null, "the authored parent was admitted");
         var reference = result.Actor!.Value;
         var waiting = await WaitForAsync(reference, image => image.Children is not null, service);
-        await using var db = Open();
         string? childRef;
         while ((childRef = await db.Database.SqlQuery<string>($"""
             SELECT "FoundationReference" AS "Value" FROM "Instances"
@@ -187,9 +193,69 @@ internal static class PostgresChildWorkflowChecks
         }
         finally { await successor.StopAsync(CancellationToken.None); }
 
-        PostgresPreviewHostedService StartService(string name, PostgresDirectRequests? requests) =>
-            new(Open, name, actor, message => throw new InvalidOperationException(message),
-                new() { PollInterval = TimeSpan.FromMilliseconds(15) }, requests: requests);
+        PostgresPreviewHostedService StartService(string name, PostgresDirectRequests? requests)
+        {
+            var loop = new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(15) };
+            return new(Open, name, actor, Escalate, loop, requests: requests)
+            {
+                StartNode = fenceInBatch is null ? null : (onFault, stop) =>
+                    PostgresPreviewHosting.StartAsync(Open, name, actor, Escalate, loop, stop, onFault,
+                        (IReplyTransport?)requests, fenceInBatch)
+            };
+
+            static void Escalate(string message) => throw new InvalidOperationException(message);
+        }
+
+        async Task CheckCreatorParkAsync()
+        {
+            var (parent, parkedRef, creatorId) = await ParkCreatorAsync("terminate");
+            Check((await foundation.SendAsync(scope, new Contract.Target.Ref(parent), "terminate-faulted-creator",
+                ChildFixtureActor.TerminateChild, parkedRef.Id, cancellationToken: token)).Outcome == Contract.AdmissionOutcome.Accepted,
+                "the original owner accepts the parent's exact request to terminate the child's Park");
+            await WaitForAsync(parkedRef, row => row is { Revision: 2, Status: InstanceStatus.Cancelled, ParkAt: null }, service);
+            await WaitForAsync(parent, row => row.Children is null, service);
+            Check(!await db.Messages.AnyAsync(row => row.InboxScope == 0 && row.Id == creatorId, token),
+                "terminal settlement removes the retained child creator and closes the parent registry");
+
+            (parent, parkedRef, creatorId) = await ParkCreatorAsync("recover");
+            var parkedView = await foundation.GetAsync(scope, parkedRef, token);
+            Check(parkedView?.Selection is { } selection && await foundation.SendAsync(scope, new Contract.Target.Ref(parkedRef),
+                "recover-creator", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)), cancellationToken: token)
+                is { Outcome: Contract.AdmissionOutcome.Accepted }, "the first owner admits selected Recover for the creator Park");
+            var afterRecovery = await WaitForAsync(parkedRef, row => row.Revision == 2, service);
+            var refusedRecovery = Json.Write(new { Outcome = "refused", Operation = "recover-creator", Reason = "plan" });
+            Check(afterRecovery is { Status: InstanceStatus.Faulted, ParkAt: not null } &&
+                await db.Messages.AnyAsync(row => row.InboxScope == 0 && row.Id == creatorId && row.Done, token) &&
+                await db.Journal.AnyAsync(row => row.Instance == afterRecovery.Actor.Id && row.Revision == 2 &&
+                    row.Entries == refusedRecovery, token),
+                "Recover records a plan refusal and retains the creator when Native has no committed state");
+            Check(await foundation.SendAsync(scope, new Contract.Target.Ref(parent), "terminate-recovery-refused-child",
+                ChildFixtureActor.TerminateChild, parkedRef.Id, cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "the parent can terminate the child after the recovery refusal");
+            await WaitForAsync(parkedRef, row => row is { Revision: 3, Status: InstanceStatus.Cancelled, ParkAt: null }, service);
+            await WaitForAsync(parent, row => row.Children is null, service);
+
+            async Task<(Contract.ActorRef Parent, Contract.ActorRef Child, string CreatorId)> ParkCreatorAsync(string operation)
+            {
+                var admitted = await foundation.SendAsync(scope, new Contract.Target.Start(
+                    WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start("creator-fault-parent"))),
+                    operation + "-creator-fault-parent", Contract.Kinds.Start, cancellationToken: token);
+                Check(admitted is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "the first owner admits the creator-fault parent");
+                var target = admitted.Actor!.Value;
+                var registered = await WaitForAsync(target, row => row.Children is not null, service);
+                var exactChild = ChildRegistry.Read(registered.Children).Single();
+                Contract.ActorRef address = new(await ReferenceAsync(exactChild));
+                var parked = await WaitForAsync(address, row => row is { Revision: 1, ParkAt: not null }, service);
+                var noticed = await WaitForAsync(target, row => row.Revision == 2, service);
+                var creator = "root:" + parked.Actor.Id;
+                Check(parked.Parent == registered.Actor.Id && noticed is { Status: InstanceStatus.Running, Children: not null } &&
+                    await db.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "Id" = {creator} AND "Target" = {parked.Actor.Id}
+                            AND "InboxScope" = 0 AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}) AS "Value"
+                        """).SingleAsync(token), "the first child checkpoint retains the failed creator and commits the non-final parent notice");
+                return (target, address, creator);
+            }
+        }
 
         async Task CheckRegistryGuardAsync()
         {

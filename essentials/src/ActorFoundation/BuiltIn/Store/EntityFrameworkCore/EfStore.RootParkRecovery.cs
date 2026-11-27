@@ -14,6 +14,12 @@ public sealed partial class EfStore
     private static string ParkInputPredicate(KernelDb db, string column) => db.UsesRootPrivateParkInputs
         ? $"{column} IN ({ParkInputScopes(db)})" : $"{column} = {InboxKey.FoundationOccurrenceScope}";
 
+    private static string PostgresKeptParkInput(KernelDb db, string row)
+    {
+        var ordinary = ParkInputPredicate(db, $"""{row}."InboxScope" """.TrimEnd());
+        return db.UsesRootChildren ? $"({ordinary} OR {KeptChildCreator(row)})" : ordinary;
+    }
+
     private static string WithParkInputScopes(KernelDb db, string sql) =>
         sql.Replace("/*park-input-scopes*/", ParkInputScopes(db), StringComparison.Ordinal);
 
@@ -244,7 +250,7 @@ public sealed partial class EfStore
             SELECT k."Id", k."InboxScope" AS "Scope", k."FoundationKeptBy" AS "KeptBy", {KeptDigest(db)} AS "Digest",
                 {KeptEnvelopeDigest(db)} AS "Envelope", {KeptBytes(db)} AS "Bytes"
             FROM "Messages" k WHERE k."Target" = {"{0}"} AND k."Partition" = {"{1}"}
-                AND {ParkInputPredicate(db, """k."InboxScope" """.TrimEnd())} AND k."EventMatch" IS NULL AND k."Done" AND k."FoundationKeptBy" IS NOT NULL
+                AND {PostgresKeptParkInput(db, "k")} AND k."EventMatch" IS NULL AND k."Done" AND k."FoundationKeptBy" IS NOT NULL
             ORDER BY k."Seq", k."Id" COLLATE "C" {(limit < int.MaxValue ? $"LIMIT {limit}" : "")} {(lockRows ? "FOR UPDATE" : "")}
             """, actor, partition).ToListAsync(token);
 
@@ -263,13 +269,14 @@ public sealed partial class EfStore
     {
         var filter = $"""
             k."Target" COLLATE "C" = {"{0}"} AND k."Partition" = {"{1}"}
-            AND {ParkInputPredicate(db, """k."InboxScope" """.TrimEnd())} AND k."EventMatch" IS NULL AND k."Done"
+            AND k."EventMatch" IS NULL AND k."Done"
             """;
+        var ordinary = ParkInputPredicate(db, """k."InboxScope" """.TrimEnd());
         var arrived = $"""k."FoundationKeptBy" = {(short)ParkKeepReason.Arrived}""";
         var rows = await db.Database.SqlQueryRaw<PostgresRecoveryRow>($"""
             WITH arrivals AS MATERIALIZED (
                 SELECT {KeptBytes(db)} AS "Bytes"
-                FROM "Messages" k WHERE {filter} AND {arrived}
+                FROM "Messages" k WHERE {filter} AND {ordinary} AND {arrived}
                 ORDER BY k."Seq", k."Id" COLLATE "C" LIMIT {InMemoryStore.ParkPageLimit + 1}
             ), quote AS MATERIALIZED (
                 SELECT count(*) <= {InMemoryStore.ParkPageLimit}
@@ -281,7 +288,7 @@ public sealed partial class EfStore
                         ELSE encode(sha256(convert_to(ROW(k."Seq", k."Kind", k."Due", k."KeepUntil")::text, 'UTF8')), 'hex') END AS "Digest",
                     CASE WHEN {arrived} THEN {KeptEnvelopeDigest(db)} ELSE '' END AS "Envelope",
                     CASE WHEN {arrived} THEN {KeptBytes(db)} ELSE 0 END AS "Bytes"
-                FROM "Messages" k WHERE (SELECT "Fits" FROM quote) AND {filter}
+                FROM "Messages" k WHERE (SELECT "Fits" FROM quote) AND {filter} AND {PostgresKeptParkInput(db, "k")}
                     AND k."FoundationKeptBy" IN ({(short)ParkKeepReason.Consumed}, {(short)ParkKeepReason.Arrived})
                 {(lockRows ? "FOR UPDATE OF k" : "")}
             )
@@ -582,8 +589,7 @@ public sealed partial class EfStore
         foreach (var scope in rows.GroupBy(row => row.Scope))
         {
             var ids = scope.Select(row => row.Id).ToArray();
-            var self = scope.Key == RootSelfScope;
-            FormattableString update = self ? (FormattableString)$"""
+            FormattableString update = scope.Key is 0 or RootSelfScope ? (FormattableString)$"""
                 DELETE FROM "Messages" WHERE "Id" = ANY({ids}) AND "Target" = {root.Actor} AND "Partition" = {root.Partition}
                     AND "InboxScope" = {scope.Key} AND "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" IS NOT NULL
                 """ : $"""
@@ -604,7 +610,7 @@ public sealed partial class EfStore
         foreach (var scope in rows.GroupBy(row => row.Scope))
         {
             var ids = scope.Select(row => row.Id).ToArray();
-            var expected = scope.Key == RootSelfScope ? 0 : ids.Length;
+            var expected = scope.Key is 0 or RootSelfScope ? 0 : ids.Length;
             if (!await db.Database.SqlQuery<bool>($"""
                 SELECT count(*) FILTER (WHERE "FoundationKeptBy" IS NULL AND "Done" AND "Payload" IS NULL AND "Start" IS NULL
                     AND "ReplyTo" IS NULL AND "KeepUntil" = floor(extract(epoch from transaction_timestamp()) * 1000)::bigint + {window}) = {expected}
