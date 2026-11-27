@@ -325,10 +325,17 @@ internal sealed partial class PostgresRootAdmission
         IN ACCESS SHARE MODE
         """;
 
-    internal static async Task PinRootNamespaceAsync(KernelDb db, CancellationToken token)
+    internal static Task PinRootNamespaceAsync(KernelDb db, CancellationToken token) => PinRootNamespaceAsync(db, false, token);
+
+    private static async Task<Issuer?> PinRootNamespaceAsync(KernelDb db, bool loadIssuer, CancellationToken token)
     {
         EfStore.RefuseSqliteShippedRuntime(db);
-        try { await PinRootSourceAsync(db, token); }
+        try
+        {
+            if (db.UsesRootParkOpening) return await PinRootParkSourcesAsync(db, loadIssuer, token);
+            await PinRootSourceAsync(db, token);
+            return null;
+        }
         catch (PostgresException error) when (IsUnavailableSelectedSchema(error))
         {
             throw new StoreFormatException("The qualified root store schema is unreadable.", error);
@@ -337,11 +344,6 @@ internal sealed partial class PostgresRootAdmission
 
     private static async Task PinRootSourceAsync(KernelDb db, CancellationToken token)
     {
-        if (db.UsesRootParkOpening)
-        {
-            await PinRootParkSourcesAsync(db, token);
-            return;
-        }
         var namespaceQuery = new NpgsqlBatchCommand("""
             SELECT ns.nspname
             FROM "KernelStoreVersions" v
@@ -377,7 +379,7 @@ internal sealed partial class PostgresRootAdmission
             throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");
     }
 
-    private static Task PinRootParkSourcesAsync(KernelDb db, CancellationToken token)
+    private static Task<Issuer?> PinRootParkSourcesAsync(KernelDb db, bool loadIssuer, CancellationToken token)
     {
         // Every Park set that admits operator commands, Recover or a composed one, pins their receipts too.
         var receipts = db.UsesRootOperatorProtocol;
@@ -414,7 +416,9 @@ internal sealed partial class PostgresRootAdmission
 
         // Resolve lock targets after setting the local search path. The batch contains only reads and locks.
         // Before sending any business SQL, confirm the locked relations belong to the same physical marker.
-        return ReadGuardedAdmissionAsync<bool>(db, [pin, new(lockTables), validate], async (reader, marker, ct) =>
+        List<NpgsqlBatchCommand> commands = [pin, new(lockTables), validate];
+        if (loadIssuer) commands.Add(new("""SELECT issuer."Key", issuer."Partitions", marker.oid """ + RootIssuerSource));
+        return ReadGuardedAdmissionAsync<Issuer?>(db, commands, async (reader, marker, ct) =>
         {
             if (!await reader.ReadAsync(ct) || reader.GetFieldValue<uint>(1) != marker)
                 throw new StoreFormatException("The kernel store version marker schema is unreadable.");
@@ -424,7 +428,12 @@ internal sealed partial class PostgresRootAdmission
                 throw new StoreFormatException(childLedger
                     ? "The child profile requires its source tables in the marker schema."
                     : "Park requires the source tables in the marker schema.");
-            return true;
+            if (!loadIssuer) return null;
+            if (!await reader.NextResultAsync(ct) || !await reader.ReadAsync(ct))
+                throw new StoreFormatException(RootIssuerMissing);
+            if (reader.GetFieldValue<uint>(2) != marker)
+                throw new StoreFormatException("The kernel store version marker changed its physical table.");
+            return ReadIssuer(reader);
         }, token);
     }
 

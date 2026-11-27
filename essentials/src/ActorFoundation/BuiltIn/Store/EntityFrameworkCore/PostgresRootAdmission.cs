@@ -230,8 +230,9 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         await using var db = create();
         RequirePressureProfile(db);
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+        Issuer? issuer = null;
         if (db.RequiresPinnedRootNamespace)
-            await PinRootNamespaceAsync(db, cancellationToken);
+            issuer = await PinRootNamespaceAsync(db, loadIssuer: reply is null, cancellationToken);
         if (reply is not null)
         {
             if (!db.UsesRootReplyProtocol) throw new NotSupportedException("This profile does not hold requests.");
@@ -244,7 +245,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                 return null;
             }
         }
-        var issuer = await ReadIssuerAsync(db, cancellationToken);
+        issuer ??= await ReadIssuerAsync(db, cancellationToken);
         var preferred = InstanceRef.Spread(name, issuer.Partitions);
         var actor = InstanceRef.In(attempt?.Place(preferred, issuer.Partitions) ?? preferred, name);
         try { attempt?.Require(actor.Partition); }
@@ -328,9 +329,11 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             return await db.Database.SqlQueryRaw<Issuer>("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """).SingleAsync(token);
 
         var issuer = await ReadGuardedAdmissionAsync(db, new("""SELECT issuer."Key", issuer."Partitions" """ + RootIssuerSource),
-            static reader => new Issuer(reader.GetFieldValue<byte[]>(0), reader.GetInt32(1)), token);
-        return issuer ?? throw new StoreFormatException("The root issuer is missing from the checkpoint's store schema.");
+            ReadIssuer, token);
+        return issuer ?? throw new StoreFormatException(RootIssuerMissing);
     }
+
+    private static Issuer ReadIssuer(NpgsqlDataReader reader) => new(reader.GetFieldValue<byte[]>(0), reader.GetInt32(1));
 
     private static Task<TRow?> ReadGuardedAdmissionAsync<TRow>(KernelDb db, NpgsqlBatchCommand lookup,
         Func<NpgsqlDataReader, TRow> read, CancellationToken token) where TRow : class =>
@@ -424,6 +427,12 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     {
         await using var db = create();
         await using var pinned = await EfStore.BeginPinnedRootOperationAsync(db, cancellationToken);
+        return await ReadPendingCreatorAsync(db, tenant, reference, cancellationToken);
+    }
+
+    internal static async Task<Message?> ReadPendingCreatorAsync(KernelDb db, string tenant, string reference,
+        CancellationToken cancellationToken)
+    {
         var row = await db.Messages.FromSqlInterpolated($"""
             SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b
             ON b."Creator" = m."Id" AND m."InboxScope" = 0 AND b."Actor" = m."Target"
