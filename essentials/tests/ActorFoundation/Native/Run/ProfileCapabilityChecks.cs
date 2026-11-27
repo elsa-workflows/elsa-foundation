@@ -475,6 +475,7 @@ internal static class ProfileCapabilityChecks
             [RootCapabilities.EventStarts] = RootCapabilities.AuthoredEvents | RootCapabilities.PreparedStarts,
             [RootCapabilities.EventStartReceipts] = RootCapabilities.EventStarts,
             [RootCapabilities.EventStartScan] = RootCapabilities.EventStartReceipts,
+            [RootCapabilities.PublicEventStarts] = RootCapabilities.EventStartScan,
             [RootCapabilities.DirectTestRuns] = RootCapabilities.PreparedStarts | RootCapabilities.LiveEventWaits,
             [RootCapabilities.Playback] = RootCapabilities.SequencedJournal,
             [RootCapabilities.PlaybackDescendants] = RootCapabilities.Playback,
