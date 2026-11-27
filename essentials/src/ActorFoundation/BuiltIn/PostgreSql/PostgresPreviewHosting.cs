@@ -236,10 +236,11 @@ public static class PostgresPreviewHosting
             throw new ArgumentException("Configure positive millisecond loop intervals and a membership window of at least two balance rounds.", nameof(options));
 
         int partitions;
-        bool nativeJobs, selfSends;
+        bool nativeJobs, selfSends, shipped;
         await using (var db = create())
         {
             nativeJobs = db.UsesRootJobProtocol;
+            shipped = db.RequiredFormat == StoreFormat.RootShipped;
             selfSends = db.UsesRootSelfProtocol;
             if (!db.Database.IsNpgsql() || !(db.SupportsCorePreview || db.UsesRootReplyProtocol))
                 throw new NotSupportedException("Hosting requires a PostgreSQL Core Preview format.");
@@ -265,24 +266,64 @@ public static class PostgresPreviewHosting
         // A store error a drain retried is reported as a loop error of the node made below: counted, and reported once per
         // distinct error per window, so a drain the deadline kills shows why it made no progress.
         RuntimeNode? reporter = null;
+        var edge = shipped ? replies as PostgresDirectRequests : null;
+        var relay = edge is null ? null : await edge.OpenLiveRepliesAsync(create,
+            error => Volatile.Read(ref reporter)?.RecordLoopError(error), cancellationToken);
         var workers = new WorkerOptions
         {
             Partitions = partitions, Backlog = pressure?.Backlog,
             OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error)
         };
         var host = DurableHost.ForNode(node, watched, adapter, partitions, replies is null ? workers : workers with { Transport = replies });
-        var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
-            beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault);
+        var relayStop = relay is null ? null : new CancellationTokenSource();
+        Task? relaying = null;
+        var relayStopping = 0;
+        var runtime = new RuntimeNode(node, watched, partitions, options, beside: RunBesideAsync,
+            beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault)
+        {
+            AfterReleaseAsync = relay is null ? null : relay.FlushAsync
+        };
         Volatile.Write(ref reporter, runtime);
         try
         {
+            if (relay is not null)
+            {
+                edge!.AttachLiveReplies(relay);
+                relaying = Task.Run(() => relay.RunAsync(relayStop!.Token), CancellationToken.None);
+                await relay.ReadyAsync(cancellationToken);
+            }
             await runtime.StartAsync(host, cancellationToken);
             return runtime;
         }
         catch
         {
+            StopRelay();
             await runtime.KillAsync();
             throw;
+        }
+
+        async Task RunBesideAsync(CancellationToken stop)
+        {
+            try { await watchdog.RunAsync(stop); }
+            finally { StopRelay(); }
+        }
+
+        void StopRelay()
+        {
+            if (relay is null || Interlocked.Exchange(ref relayStopping, 1) != 0) return;
+            edge!.DetachLiveReplies(relay);
+            // The relay does not own durable work. Its connection cancellation must never hold up the watchdog.
+            if (relaying is { } running) _ = StopRelayAsync(relayStop!, running);
+            else relayStop!.Dispose();
+        }
+
+        async Task StopRelayAsync(CancellationTokenSource stop, Task relaying)
+        {
+            using (stop)
+            {
+                try { await Task.WhenAll(stop.CancelAsync(), relaying); }
+                catch (Exception error) { Volatile.Read(ref reporter)?.RecordLoopError(error); }
+            }
         }
     }
 }

@@ -19,6 +19,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
 {
     private readonly PostgresRootAdmission admission;
     private readonly HeldRootRequests edge;
+    private PostgresReplyRelay? _liveReplies;
 
     internal PostgresDirectRequests(PostgresRootAdmission admission, EfStore store, string node, string? startType = null)
     {
@@ -44,7 +45,24 @@ public sealed class PostgresDirectRequests : IReplyTransport
     internal ValueTask<bool> ReceiveAsync(string destination, Reply reply, CancellationToken stop) =>
         edge.ReceiveAsync(destination, reply, stop);
 
-    void IReplyTransport.Send(string destination, Reply reply) => edge.Send(destination, reply);
+    void IReplyTransport.Send(string destination, Reply reply)
+    {
+        if (destination == Node) edge.Send(destination, reply);
+        // Only a reset on the receiving node ends its wait. The durable route can follow a remote handoff.
+        else if (reply is not { Key: "lost", Channel: null, Error: "lost" })
+            Volatile.Read(ref _liveReplies)?.Send(destination, reply);
+    }
+
+    internal Task<PostgresReplyRelay> OpenLiveRepliesAsync(Func<KernelDb> create, Action<Exception> onFault, CancellationToken token) =>
+        PostgresReplyRelay.OpenAsync(create, Node, reply => edge.Send(Node, reply), onFault, token);
+
+    internal void AttachLiveReplies(PostgresReplyRelay relay)
+    {
+        if (Interlocked.CompareExchange(ref _liveReplies, relay, null) is not null)
+            throw new InvalidOperationException("The PostgreSQL reply edge already has a listening owner.");
+    }
+
+    internal void DetachLiveReplies(PostgresReplyRelay relay) => Interlocked.CompareExchange(ref _liveReplies, null, relay);
 
     internal Func<CancellationToken, ValueTask<long>> ReplyClock
     {
