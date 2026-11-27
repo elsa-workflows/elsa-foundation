@@ -72,7 +72,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     }
 
     private const string RootIssuerSource = """
-        FROM "FoundationRootIssuer" issuer
+        FROM ONLY "FoundationRootIssuer" issuer
         JOIN pg_catalog.pg_class i ON i.oid = issuer.tableoid AND i.relkind = 'r'
         JOIN pg_catalog.pg_class source ON source.oid = pg_catalog.to_regclass('"Instances"')
             AND source.relnamespace = i.relnamespace AND source.relkind = 'r'
