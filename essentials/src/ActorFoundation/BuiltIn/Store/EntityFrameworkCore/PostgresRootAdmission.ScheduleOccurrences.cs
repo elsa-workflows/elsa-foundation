@@ -6,6 +6,12 @@ namespace Kernel.EntityFramework;
 
 internal sealed partial class PostgresRootAdmission
 {
+    internal static async Task VerifyScheduleOccurrenceStoreAsync(KernelDb db, CancellationToken token)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
+        await PinScheduleStoreAsync(db, writing: false, token, loadIssuer: true);
+    }
+
     internal async Task<bool> IsScheduledOccurrenceRetiredAsync(string tenant, RootScheduleOccurrence occurrence, StartSpec pinnedWorkflow,
         string actorReference, CancellationToken token)
     {

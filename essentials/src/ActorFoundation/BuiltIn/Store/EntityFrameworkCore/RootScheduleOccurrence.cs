@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
 
@@ -6,6 +7,21 @@ namespace Kernel.EntityFramework;
 internal sealed record RootScheduleOccurrence(ScheduleRootKey Schedule, string ScheduleReference, long ArmGeneration,
     string TimerDelivery, long Due)
 {
+    internal static RootScheduleOccurrence FromContract(Contract.AcceptedScheduleOccurrence occurrence)
+    {
+        ArgumentNullException.ThrowIfNull(occurrence);
+        return new(new(occurrence.DefinitionId, occurrence.ScheduleKey), occurrence.Schedule.Id, occurrence.ArmGeneration,
+            occurrence.TimerDeliveryId, occurrence.DueAtUnixMilliseconds);
+    }
+
+    internal static StartSpec WorkflowStart(Contract.StartSpec workflow, string workflowType)
+    {
+        ArgumentNullException.ThrowIfNull(workflow);
+        if (workflow.Type != workflowType || workflow.Ephemeral || !Enum.IsDefined(workflow.History))
+            throw new ArgumentException("An occurrence must start the configured durable workflow actor type.", nameof(workflow));
+        return new(workflow.Type, workflow.TypeData, workflow.Input, History: (History)workflow.History);
+    }
+
     internal void Validate()
     {
         Schedule.Validate();
