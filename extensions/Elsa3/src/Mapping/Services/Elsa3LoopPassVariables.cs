@@ -38,10 +38,16 @@ internal sealed record Elsa3PassRead(Elsa3PassReadKind Kind, string Name, string
 /// <item>A name is looked up scope by scope from the reader up, and within a scope in declaration order: a container's own
 /// variables, declared when it started, come before a block added to it later; a body container, created per pass, holds
 /// the pass's block before its own variables.</item>
-/// <item>An inner loop that declares the same name overwrites the outer loop's block.</item>
+/// <item>Every loop that reaches a block writes it: an inner loop that declares the same name, a loop inside a reusable
+/// workflow (which runs inline), and a loop that may run alongside the read (<c>Parallel</c>, <c>Fork</c>, unconnected
+/// <c>Flowchart</c> branches).</item>
+/// <item>Nothing removes a block: a loop whose body is no container leaves its last pass's variable in the enclosing
+/// container, where a later read finds it.</item>
+/// <item>A declared variable whose id is <c>{camelName}Variable</c> shares the block.</item>
 /// </list>
 /// The read binds to the loop only where the pass value wins on every run; where a variable of that name wins on every
-/// run, the read keeps today's handling; anything else is refused rather than guessed.
+/// run, the read keeps today's handling; anything else is refused rather than guessed. A reusable activity anywhere in the
+/// owning loop's body is refused, as its contents are not visible here.
 /// </summary>
 internal static class Elsa3LoopPassVariables
 {
@@ -58,7 +64,18 @@ internal static class Elsa3LoopPassVariables
         var path = Ancestors(plan, read);
         var declaring = path.Where(node => PassVariable(plan, node, name) is not null).ToArray();
         if (declaring.Length == 0)
+        {
+            // Outside every loop that declares the name, a finished loop whose body is no container left its last pass's
+            // variable in an enclosing container, where the read finds it once that loop has run.
+            foreach (var loop in plan.Nodes.Keys.Where(node => PassVariable(plan, node, name) is not null))
+            {
+                var (container, fresh) = Location(plan, loop);
+                if (!fresh && (container is null || path.Contains(container)) && PassWins(plan, read, path, container, fresh: false, name))
+                    return Ambiguous(name, $"loop '{NodeId(loop)}' leaves its last pass's '{name}' in {(container is null ? "the workflow" : $"'{NodeId(container)}'")}, where the read finds it once that loop has run");
+            }
+
             return Elsa3PassRead.None(name);
+        }
 
         var owner = declaring[0];
         var loopVariable = PassVariable(plan, owner, name)!;

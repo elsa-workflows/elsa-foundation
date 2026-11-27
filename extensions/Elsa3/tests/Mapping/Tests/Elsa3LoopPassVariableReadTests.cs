@@ -189,6 +189,103 @@ public sealed class Elsa3LoopPassVariableReadTests
     }
 
     [Fact]
+    public async Task A_read_while_a_fork_branch_loop_shares_its_variable_is_refused()
+    {
+        // Fork runs its branches concurrently; both bodies are no container, so both passes share one block in 'root'.
+        var fork = Activity("fork", "Elsa.Fork", ("joinMode", JsonSerializer.SerializeToElement("WaitAll")));
+        fork.AdditionalProperties["branches"] = JsonSerializer.SerializeToElement(new[]
+        {
+            Port(ForEach("first", Read("getVariable('CurrentValue')"))),
+            Port(ForEach("second", Activity("second-node", "Elsa.WriteLine", ("text", Literal("acme"))))),
+        });
+
+        var result = await ConvertAsync(Sequence("root", fork));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'second'", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Flowchart_branches_share_a_pass_only_when_no_connection_orders_them(bool connected)
+    {
+        // Both bodies are no container: both passes land in the flowchart. Unconnected branches may run interleaved.
+        var start = Activity("start", "Elsa.WriteLine", ("text", Literal("acme")));
+        start.CustomProperties = new Elsa3ActivityCustomProperties { CanStartWorkflow = true };
+        var chart = Activity("root", "Elsa.Flowchart");
+        chart.Activities =
+        [
+            start,
+            ForEach("first", Read("getVariable('CurrentValue')")),
+            ForEach("second", Activity("second-node", "Elsa.WriteLine", ("text", Literal("acme")))),
+        ];
+        chart.Connections = connected
+            ? [Connect("start", "Done", "first"), Connect("first", "Done", "second")]
+            : [Connect("start", "Done", "first"), Connect("start", "Done", "second")];
+
+        var result = await ConvertAsync(chart);
+
+        if (connected)
+        {
+            Assert.True(result.Succeeded, Describe(result.Diagnostics));
+            AssertReadsLoop(result, "first", "currentItem");
+        }
+        else
+        {
+            Assert.False(result.Succeeded);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'second'", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public async Task A_read_while_a_reusable_activity_may_run_alongside_is_refused()
+    {
+        var parallel = Activity("parallel", "Elsa.Parallel");
+        parallel.Activities = [ForEach("loop", Read("getVariable('CurrentValue')")), Activity("acme-child", "Acme.ChildWorkflow")];
+        var replacements = new Dictionary<string, Elsa3.Mapping.Mappings.Elsa3ActivityExactReplacement>(StringComparer.Ordinal)
+        {
+            ["acme-child"] = new("acme-child-v1", [], new HashSet<string>(StringComparer.Ordinal)),
+        };
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Sequence("root", parallel)), replacements: replacements);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'acme-child'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_variable_with_the_per_pass_variables_elsa3_id_is_refused()
+    {
+        // Elsa 3 gave the per-pass CurrentValue the id 'currentValueVariable'; a declared variable with that id shares it.
+        var clash = new Elsa3Variable { Id = "currentValueVariable", Name = "AcmeOther", TypeName = "String" };
+
+        var result = await ConvertAsync(Sequence("root", ForEach("loop", Read("getVariable('CurrentValue')"))), clash);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'currentValueVariable'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_read_after_a_loop_that_left_its_pass_variable_behind_is_refused()
+    {
+        // The body is no container: the last pass's CurrentValue stays in 'root', where Elsa 3 found it before the workflow
+        // variable once the loop had run.
+        var result = await ConvertAsync(
+            Sequence("root", ForEach("loop", Activity("loop-node", "Elsa.WriteLine", ("text", Literal("acme")))), Read("getVariable('CurrentValue')")),
+            WorkflowCurrentValue);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference && diagnostic.Message.Contains("'loop'", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_read_after_a_reusable_activity_in_the_body_is_refused()
     {
         // A reusable workflow runs inline in Elsa 3; a loop inside it would overwrite the pass's CurrentValue.
@@ -236,7 +333,8 @@ public sealed class Elsa3LoopPassVariableReadTests
     public async Task A_read_in_the_loops_own_inputs_is_not_owned_by_the_loop()
     {
         var loop = Activity("loop", "Elsa.ForEach", ("items", Expression("JavaScript", "[getVariable('CurrentValue')]", "Object")));
-        loop.AdditionalProperties["body"] = Port(Activity("node", "Elsa.WriteLine", ("text", Literal("acme"))));
+        // A body container holds the passes' variables, so none is left where the loop's own input could find it.
+        loop.AdditionalProperties["body"] = Port(Sequence("body", Activity("node", "Elsa.WriteLine", ("text", Literal("acme")))));
 
         var result = await ConvertAsync(Sequence("root", loop), WorkflowCurrentValue);
 
@@ -285,6 +383,9 @@ public sealed class Elsa3LoopPassVariableReadTests
         Assert.Contains(result.Diagnostics, diagnostic =>
             diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability && diagnostic.Message.Contains("a loop's current value", StringComparison.Ordinal));
     }
+
+    private static Elsa3Connection Connect(string source, string port, string target) =>
+        new() { Source = new Elsa3Endpoint { Activity = source, Port = port }, Target = new Elsa3Endpoint { Activity = target, Port = "In" } };
 
     private static Elsa3Activity Read(string read) =>
         Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", read)));
